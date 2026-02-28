@@ -20,6 +20,10 @@ export interface ElectronAPI {
   // File system
   validatePath: (path: string) => Promise<boolean>
   selectDirectory: () => Promise<string | null>
+
+  // Status events
+  onWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void
+  offWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void
 }
 
 declare global {

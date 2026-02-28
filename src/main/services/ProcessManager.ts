@@ -130,6 +130,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
+   * 获取 StatusDetector 实例（供 StatusPoller 使用）
+   */
+  getStatusDetector(): IStatusDetector {
+    return this.statusDetector;
+  }
+
+  /**
    * 订阅状态变化事件，返回取消订阅函数
    */
   subscribeStatusChange(callback: (pid: number, status: WindowStatus) => void): () => void {

@@ -4,11 +4,13 @@ import { existsSync, accessSync, constants } from 'fs';
 import { randomUUID } from 'crypto';
 import { execSync } from 'child_process';
 import { ProcessManager } from './services/ProcessManager';
+import { StatusPoller } from './services/StatusPoller';
 import { TerminalConfig } from './types/process';
 import { WindowStatus } from '../renderer/types/window';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
+let statusPoller: StatusPoller | null = null;
 let windowCounter = 0; // 用于生成唯一的窗口编号
 
 // 获取默认 shell，带回退逻辑
@@ -67,11 +69,17 @@ function createWindow() {
 app.whenReady().then(() => {
   // 初始化 ProcessManager
   processManager = new ProcessManager();
-  
+
   // 注册 IPC handlers
   registerIPCHandlers();
-  
+
   createWindow();
+
+  // 初始化 StatusPoller（需要 mainWindow 已创建）
+  if (mainWindow) {
+    statusPoller = new StatusPoller(processManager.getStatusDetector(), mainWindow);
+    statusPoller.startPolling();
+  }
 
   // macOS 特定: 点击 Dock 图标时重新创建窗口
   app.on('activate', () => {
@@ -83,6 +91,8 @@ app.whenReady().then(() => {
 
 // 所有窗口关闭时退出应用 (macOS 除外)
 app.on('window-all-closed', () => {
+  statusPoller?.stopPolling();
+  processManager?.destroy();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -145,6 +155,9 @@ function registerIPCHandlers() {
         createdAt: new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
       };
+
+      // 将新窗口添加到 StatusPoller
+      statusPoller?.addWindow(windowId, handle.pid);
 
       return window;
     } catch (error) {
@@ -276,6 +289,8 @@ function registerIPCHandlers() {
         }
       }
       // TODO: 移除窗口配置（Story 6.x 工作区持久化时实现）
+      // 从 StatusPoller 移除窗口
+      statusPoller?.removeWindow(windowId);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to delete window:', error);
