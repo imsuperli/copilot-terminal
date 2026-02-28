@@ -406,6 +406,19 @@ function registerIPCHandlers() {
     }
   });
 
+  // 打开文件夹
+  ipcMain.handle('open-folder', async (_event, { path }: { path: string }) => {
+    try {
+      const { shell } = require('electron');
+      await shell.openPath(path);
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to open folder:', error);
+      }
+      throw error;
+    }
+  });
+
   // PTY 数据写入（用户输入 → PTY 进程）
   ipcMain.handle('pty-write', async (_event, { windowId, data }: { windowId: string; data: string }) => {
     try {

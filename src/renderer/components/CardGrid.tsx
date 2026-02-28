@@ -4,7 +4,6 @@ import { useWindowStore } from '../stores/windowStore';
 import { sortWindows } from '../utils/sortWindows';
 import { WindowCard } from './WindowCard';
 import { NewWindowCard } from './NewWindowCard';
-import { WindowContextMenu } from './WindowContextMenu';
 import { Window } from '../types/window';
 
 interface CardGridProps {
@@ -33,27 +32,29 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
   );
 
   const handleCloseWindow = useCallback(async (windowId: string) => {
-    const window = windows.find(w => w.id === windowId);
-    if (window && window.pid && window.electronAPI) {
-      try {
-        await window.electronAPI.closeWindow(windowId);
-      } catch (error) {
-        console.error('Failed to close window:', error);
-      }
+    try {
+      await window.electronAPI.closeWindow(windowId);
+    } catch (error) {
+      console.error('Failed to close window:', error);
     }
-  }, [windows]);
+  }, []);
 
   const handleDeleteWindow = useCallback(async (windowId: string) => {
-    const window = windows.find(w => w.id === windowId);
-    if (window && window.electronAPI) {
-      try {
-        await window.electronAPI.deleteWindow(windowId);
-        removeWindow(windowId);
-      } catch (error) {
-        console.error('Failed to delete window:', error);
-      }
+    try {
+      await window.electronAPI.deleteWindow(windowId);
+      removeWindow(windowId);
+    } catch (error) {
+      console.error('Failed to delete window:', error);
     }
-  }, [windows, removeWindow]);
+  }, [removeWindow]);
+
+  const handleOpenFolder = useCallback(async (workingDirectory: string) => {
+    try {
+      await window.electronAPI.openFolder(workingDirectory);
+    } catch (error) {
+      console.error('Failed to open folder:', error);
+    }
+  }, []);
 
   if (windows.length === 0) {
     return null;
@@ -66,17 +67,14 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
           data-testid="card-grid"
           className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3 p-6"
         >
-          {sortedWindows.map((window) => (
-            <WindowContextMenu
-              key={window.id}
-              onClose={() => handleCloseWindow(window.id)}
-              onDelete={() => handleDeleteWindow(window.id)}
-            >
-              <WindowCard
-                window={window}
-                onClick={() => handleCardClick(window)}
-              />
-            </WindowContextMenu>
+          {sortedWindows.map((win) => (
+            <WindowCard
+              key={win.id}
+              window={win}
+              onClick={() => handleCardClick(win)}
+              onOpenFolder={() => handleOpenFolder(win.workingDirectory)}
+              onDelete={() => handleDeleteWindow(win.id)}
+            />
           ))}
           <NewWindowCard onClick={onCreateWindow ?? (() => {})} />
         </div>

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File system
   validatePath: (path: string) => ipcRenderer.invoke('validate-path', path),
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
+  openFolder: (path: string) => ipcRenderer.invoke('open-folder', { path }),
 
   // Status events
   onWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => {

@@ -21,6 +21,7 @@ export interface ElectronAPI {
   // File system
   validatePath: (path: string) => Promise<boolean>
   selectDirectory: () => Promise<string | null>
+  openFolder: (path: string) => Promise<void>
 
   // Status events
   onWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void

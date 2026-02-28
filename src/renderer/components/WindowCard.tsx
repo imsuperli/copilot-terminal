@@ -2,20 +2,47 @@ import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import { FolderOpen, Trash2 } from 'lucide-react';
 import { Window } from '../types/window';
 import { getStatusColor, getStatusLabel } from '../utils/statusHelpers';
 
 interface WindowCardProps {
   window: Window;
   onClick?: () => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
+  onOpenFolder?: () => void;
+  onDelete?: () => void;
+}
+
+/**
+ * 智能截断路径，保留前后部分，中间用...替代
+ * @param path 完整路径
+ * @param maxLength 最大显示长度
+ */
+function truncatePath(path: string, maxLength: number = 35): string {
+  if (path.length <= maxLength) {
+    return path;
+  }
+
+  // 计算前后保留的字符数
+  const prefixLength = Math.floor(maxLength * 0.4);
+  const suffixLength = Math.floor(maxLength * 0.4);
+
+  const prefix = path.substring(0, prefixLength);
+  const suffix = path.substring(path.length - suffixLength);
+
+  return `${prefix}...${suffix}`;
 }
 
 /**
  * WindowCard 组件
  * 显示单个窗口的关键信息和状态
  */
-export const WindowCard = React.memo<WindowCardProps>(({ window, onClick, onContextMenu }) => {
+export const WindowCard = React.memo<WindowCardProps>(({
+  window,
+  onClick,
+  onOpenFolder,
+  onDelete
+}) => {
   // 缓存状态色和标签
   const statusColor = useMemo(() => getStatusColor(window.status), [window.status]);
   const statusLabel = useMemo(() => getStatusLabel(window.status), [window.status]);
@@ -35,6 +62,12 @@ export const WindowCard = React.memo<WindowCardProps>(({ window, onClick, onCont
     }
   }, [window.lastActiveAt]);
 
+  // 缓存截断后的路径
+  const truncatedPath = useMemo(
+    () => truncatePath(window.workingDirectory),
+    [window.workingDirectory]
+  );
+
   // 缓存 aria-label
   const ariaLabel = useMemo(
     () => `${window.name}, 状态: ${statusLabel}, 工作目录: ${window.workingDirectory}`,
@@ -52,15 +85,23 @@ export const WindowCard = React.memo<WindowCardProps>(({ window, onClick, onCont
     [onClick]
   );
 
+  // 阻止按钮点击事件冒泡
+  const handleButtonClick = useCallback(
+    (e: React.MouseEvent, action: () => void) => {
+      e.stopPropagation();
+      action();
+    },
+    []
+  );
+
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={onClick}
-      onContextMenu={onContextMenu}
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
-      className="min-w-[280px] h-40 bg-zinc-800 rounded-lg overflow-hidden cursor-pointer transition-colors hover:bg-zinc-750 active:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="min-w-[280px] h-48 bg-zinc-800 rounded-lg overflow-hidden cursor-pointer transition-colors hover:bg-zinc-750 active:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex flex-col"
     >
       {/* 圆弧形彩色顶部线条 (4px 高度) */}
       <div
@@ -68,8 +109,8 @@ export const WindowCard = React.memo<WindowCardProps>(({ window, onClick, onCont
         className={`h-[4px] rounded-t-lg ${statusColor}`}
       />
 
-      {/* 卡片内容 */}
-      <div className="p-4 space-y-2">
+      {/* 卡片内容 - 占据剩余空间 */}
+      <div className="flex-1 p-4 space-y-2 flex flex-col">
         {/* 第一行：窗口名称 + 状态标签 */}
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-zinc-100 truncate flex-1">
@@ -80,15 +121,15 @@ export const WindowCard = React.memo<WindowCardProps>(({ window, onClick, onCont
           </span>
         </div>
 
-        {/* 第二行：工作目录路径 */}
+        {/* 第二行：工作目录路径（智能截断） */}
         <Tooltip.Provider>
           <Tooltip.Root delayDuration={500}>
             <Tooltip.Trigger asChild>
               <p
                 data-testid="working-directory"
-                className="text-sm font-mono text-zinc-400 truncate"
+                className="text-sm font-mono text-zinc-400"
               >
-                {window.workingDirectory}
+                {truncatedPath}
               </p>
             </Tooltip.Trigger>
             <Tooltip.Portal>
@@ -106,11 +147,11 @@ export const WindowCard = React.memo<WindowCardProps>(({ window, onClick, onCont
         <div className="border-t border-zinc-700" />
 
         {/* 第三行：最新输出摘要 */}
-        <p className="text-sm text-zinc-400 truncate">
+        <p className="text-sm text-zinc-400 truncate flex-1">
           {window.lastOutput || '无输出'}
         </p>
 
-        {/* 第四行：使用模型 + 最后活跃时间 */}
+        {/* 第四行：最后活跃时间 */}
         <div className="flex items-center justify-between">
           <span className="text-xs text-zinc-400 truncate flex-1">
             {window.model || '未知模型'}
@@ -119,6 +160,26 @@ export const WindowCard = React.memo<WindowCardProps>(({ window, onClick, onCont
             {formattedTime}
           </span>
         </div>
+      </div>
+
+      {/* 底部按钮栏 */}
+      <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900 border-t border-zinc-700">
+        <button
+          onClick={(e) => handleButtonClick(e, onOpenFolder || (() => {}))}
+          className="flex items-center gap-1 px-3 py-1.5 text-xs text-zinc-300 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="打开文件夹"
+        >
+          <FolderOpen size={14} />
+          <span>打开文件夹</span>
+        </button>
+        <button
+          onClick={(e) => handleButtonClick(e, onDelete || (() => {}))}
+          className="flex items-center gap-1 px-3 py-1.5 text-xs text-red-400 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+          aria-label="删除窗口"
+        >
+          <Trash2 size={14} />
+          <span>删除</span>
+        </button>
       </div>
     </div>
   );
