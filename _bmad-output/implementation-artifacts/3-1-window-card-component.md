@@ -1,6 +1,6 @@
 # Story 3.1: 窗口卡片组件（WindowCard）
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -54,57 +54,57 @@ So that 可以快速识别窗口身份和当前状态。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: 创建 WindowCard 组件基础结构 (AC: 1-5, 9)
-  - [ ] 1.1 创建 `src/renderer/components/WindowCard.tsx`
-  - [ ] 1.2 定义 Props 接口：`WindowCardProps { window: Window, onClick?: () => void, onContextMenu?: () => void }`
-  - [ ] 1.3 实现卡片容器：使用 Tailwind CSS 设置最小宽度 280px，高度约 160px
-  - [ ] 1.4 实现圆弧形彩色顶部线条（4px 高度，圆角与卡片一致，状态色）
-  - [ ] 1.5 实现第一行：窗口名称（左对齐，加粗）+ 状态标签（右对齐，小号字体）
-  - [ ] 1.6 实现第二行：工作目录路径（等宽字体，灰色）
-  - [ ] 1.7 添加分割线（极细、低对比度）
-  - [ ] 1.8 实现第三行：最新输出摘要（灰色，截断）
-  - [ ] 1.9 实现第四行：使用模型（左）+ 最后活跃时间（右，小号字体）
+- [x] Task 1: 创建 WindowCard 组件基础结构 (AC: 1-5, 9)
+  - [x] 1.1 创建 `src/renderer/components/WindowCard.tsx`
+  - [x] 1.2 定义 Props 接口：`WindowCardProps { window: Window, onClick?: () => void, onContextMenu?: () => void }`
+  - [x] 1.3 实现卡片容器：使用 Tailwind CSS 设置最小宽度 280px，高度约 160px
+  - [x] 1.4 实现圆弧形彩色顶部线条（4px 高度，圆角与卡片一致，状态色）
+  - [x] 1.5 实现第一行：窗口名称（左对齐，加粗）+ 状态标签（右对齐，小号字体）
+  - [x] 1.6 实现第二行：工作目录路径（等宽字体，灰色）
+  - [x] 1.7 添加分割线（极细、低对比度）
+  - [x] 1.8 实现第三行：最新输出摘要（灰色，截断）
+  - [x] 1.9 实现第四行：使用模型（左）+ 最后活跃时间（右，小号字体）
 
-- [ ] Task 2: 实现状态色映射系统 (AC: 6)
-  - [ ] 2.1 在 `src/renderer/styles/theme.ts` 或 Tailwind config 中定义状态色变量
-  - [ ] 2.2 状态色定义：running=蓝色（#3B82F6），waiting=黄色/琥珀色（#F59E0B），completed=绿色（#10B981），error=红色（#EF4444），restoring=灰色（#6B7280）
-  - [ ] 2.3 创建 `getStatusColor(status: WindowStatus)` 工具函数，返回对应的 Tailwind 类名
-  - [ ] 2.4 创建 `getStatusLabel(status: WindowStatus)` 工具函数，返回中文状态标签
-  - [ ] 2.5 在 WindowCard 中应用状态色到顶部线条
+- [x] Task 2: 实现状态色映射系统 (AC: 6)
+  - [x] 2.1 在 `src/renderer/styles/theme.ts` 或 Tailwind config 中定义状态色变量
+  - [x] 2.2 状态色定义：running=蓝色（#3B82F6），waiting=黄色/琥珀色（#F59E0B），completed=绿色（#10B981），error=红色（#EF4444），restoring=灰色（#6B7280）
+  - [x] 2.3 创建 `getStatusColor(status: WindowStatus)` 工具函数，返回对应的 Tailwind 类名
+  - [x] 2.4 创建 `getStatusLabel(status: WindowStatus)` 工具函数，返回中文状态标签
+  - [x] 2.5 在 WindowCard 中应用状态色到顶部线条
 
-- [ ] Task 3: 实现交互状态（hover, focus, active） (AC: 7, 8)
-  - [ ] 3.1 添加 hover 状态：背景色从 `bg-zinc-800` 变为 `bg-zinc-750`（微变）
-  - [ ] 3.2 添加 active/pressed 状态：背景色再深一级 `bg-zinc-700`
-  - [ ] 3.3 添加 focus 状态：2px 实线焦点环，高对比度颜色（`ring-2 ring-blue-500`）
-  - [ ] 3.4 设置 `role="button"` 和 `tabIndex={0}`，使卡片可通过键盘导航
-  - [ ] 3.5 添加 `aria-label`，包含窗口名称、状态、工作目录信息
-  - [ ] 3.6 支持 Enter/Space 键激活（触发 onClick）
+- [x] Task 3: 实现交互状态（hover, focus, active） (AC: 7, 8)
+  - [x] 3.1 添加 hover 状态：背景色从 `bg-zinc-800` 变为 `bg-zinc-750`（微变）
+  - [x] 3.2 添加 active/pressed 状态：背景色再深一级 `bg-zinc-700`
+  - [x] 3.3 添加 focus 状态：2px 实线焦点环，高对比度颜色（`ring-2 ring-blue-500`）
+  - [x] 3.4 设置 `role="button"` 和 `tabIndex={0}`，使卡片可通过键盘导航
+  - [x] 3.5 添加 `aria-label`，包含窗口名称、状态、工作目录信息
+  - [x] 3.6 支持 Enter/Space 键激活（触发 onClick）
 
-- [ ] Task 4: 实现工作目录路径截断与 Tooltip (AC: 10)
-  - [ ] 4.1 使用 Radix UI Tooltip 组件包裹工作目录路径
-  - [ ] 4.2 路径文本使用 `truncate` 或 `line-clamp-1` 截断
-  - [ ] 4.3 Tooltip 内容显示完整路径
-  - [ ] 4.4 Tooltip 样式匹配深色主题（bg-zinc-900, text-zinc-100）
-  - [ ] 4.5 Tooltip 延迟 500ms 显示，避免误触
+- [x] Task 4: 实现工作目录路径截断与 Tooltip (AC: 10)
+  - [x] 4.1 使用 Radix UI Tooltip 组件包裹工作目录路径
+  - [x] 4.2 路径文本使用 `truncate` 或 `line-clamp-1` 截断
+  - [x] 4.3 Tooltip 内容显示完整路径
+  - [x] 4.4 Tooltip 样式匹配深色主题（bg-zinc-900, text-zinc-100）
+  - [x] 4.5 Tooltip 延迟 500ms 显示，避免误触
 
-- [ ] Task 5: 集成到 CardGrid 并测试 (AC: 1-10)
-  - [ ] 5.1 在 `src/renderer/components/CardGrid.tsx` 中导入 WindowCard
-  - [ ] 5.2 从 Zustand store 读取 windows 数组
-  - [ ] 5.3 使用 `windows.map()` 渲染 WindowCard 列表
-  - [ ] 5.4 传递 onClick 回调（切换到终端视图）
-  - [ ] 5.5 传递 onContextMenu 回调（打开右键菜单，Story 2.4 已实现）
-  - [ ] 5.6 测试不同状态的卡片渲染（running, waiting, completed, error, restoring）
-  - [ ] 5.7 测试 hover, focus, active 交互状态
-  - [ ] 5.8 测试路径截断和 Tooltip 显示
+- [x] Task 5: 集成到 CardGrid 并测试 (AC: 1-10)
+  - [x] 5.1 在 `src/renderer/components/CardGrid.tsx` 中导入 WindowCard
+  - [x] 5.2 从 Zustand store 读取 windows 数组
+  - [x] 5.3 使用 `windows.map()` 渲染 WindowCard 列表
+  - [x] 5.4 传递 onClick 回调（切换到终端视图）
+  - [x] 5.5 传递 onContextMenu 回调（打开右键菜单，Story 2.4 已实现）
+  - [x] 5.6 测试不同状态的卡片渲染（running, waiting, completed, error, restoring）
+  - [x] 5.7 测试 hover, focus, active 交互状态
+  - [x] 5.8 测试路径截断和 Tooltip 显示
 
-- [ ] Task 6: 编写单元测试 (AC: 1-10)
-  - [ ] 6.1 创建 `src/renderer/components/__tests__/WindowCard.test.tsx`
-  - [ ] 6.2 测试卡片渲染：验证窗口名称、状态标签、工作目录、输出摘要、模型、时间显示
-  - [ ] 6.3 测试状态色映射：验证不同状态对应的顶部线条颜色
-  - [ ] 6.4 测试交互状态：验证 hover, focus, active 类名应用
-  - [ ] 6.5 测试键盘导航：验证 Enter/Space 键触发 onClick
-  - [ ] 6.6 测试无障碍：验证 role, aria-label, tabIndex 属性
-  - [ ] 6.7 测试 Tooltip：验证路径截断和完整路径显示
+- [x] Task 6: 编写单元测试 (AC: 1-10)
+  - [x] 6.1 创建 `src/renderer/components/__tests__/WindowCard.test.tsx`
+  - [x] 6.2 测试卡片渲染：验证窗口名称、状态标签、工作目录、输出摘要、模型、时间显示
+  - [x] 6.3 测试状态色映射：验证不同状态对应的顶部线条颜色
+  - [x] 6.4 测试交互状态：验证 hover, focus, active 类名应用
+  - [x] 6.5 测试键盘导航：验证 Enter/Space 键触发 onClick
+  - [x] 6.6 测试无障碍：验证 role, aria-label, tabIndex 属性
+  - [x] 6.7 测试 Tooltip：验证路径截断和完整路径显示
 
 ## Dev Notes
 
@@ -343,10 +343,49 @@ src/
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Sonnet 4.6
 
 ### Debug Log References
 
+无
+
 ### Completion Notes List
 
+✅ **Task 1-4 完成** (2026-02-28)
+- 创建了 WindowCard 组件，实现了所有 UI 元素：圆弧形状态线条、窗口名称、状态标签、工作目录、输出摘要、模型和时间
+- 创建了状态辅助工具函数 (getStatusColor, getStatusLabel)
+- 实现了所有交互状态：hover, focus, active
+- 实现了键盘导航支持 (Enter/Space)
+- 实现了工作目录路径截断和 Tooltip
+- 使用 React.memo 优化性能
+- 使用 useMemo 和 useCallback 缓存计算结果和回调函数
+- 安装了 date-fns 用于时间格式化
+- 扩展了 Tailwind 配置，添加了 zinc-750 颜色
+
+✅ **Task 5 完成** (2026-02-28)
+- 创建了 CardGrid 组件，集成 WindowCard
+- 从 Zustand store 读取 windows 数组
+- 实现了响应式网格布局
+- 传递了 onClick 和 onContextMenu 回调
+- 更新了 App.tsx，根据窗口数量显示 CardGrid 或 EmptyState
+
+✅ **Task 6 完成** (2026-02-28)
+- 创建了 WindowCard 单元测试 (19 个测试用例)
+- 创建了 CardGrid 集成测试 (4 个测试用例)
+- 所有测试通过
+- 测试覆盖：渲染、状态色、交互状态、键盘导航、无障碍、Tooltip
+
 ### File List
+
+新建文件：
+- src/renderer/components/WindowCard.tsx
+- src/renderer/components/CardGrid.tsx
+- src/renderer/utils/statusHelpers.ts
+- src/renderer/components/__tests__/WindowCard.test.tsx
+- src/renderer/components/__tests__/CardGrid.test.tsx
+
+修改文件：
+- src/renderer/App.tsx
+- tailwind.config.js
+- package.json (添加 date-fns 依赖)
+- package-lock.json

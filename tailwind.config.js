@@ -25,6 +25,11 @@ export default {
 
         // 边框色
         'border-subtle': '#2a2a2a',
+
+        // Zinc 色系扩展（用于 WindowCard）
+        zinc: {
+          750: '#323238',
+        },
       },
       spacing: {
         'unit': '8px',

@@ -51,11 +51,11 @@ development_status:
   2-1-process-management-service-infrastructure: ready-for-dev
   2-2-create-new-task-window: review
   2-3-window-list-state-management: in-progress
-  2-4-close-and-delete-window: ready-for-dev
+  2-4-close-and-delete-window: done
   epic-2-retrospective: optional
 
   epic-3: in-progress
-  3-1-window-card-component: ready-for-dev
+  3-1-window-card-component: review
   3-2-responsive-card-grid-layout: ready-for-dev
   3-3-status-bar: ready-for-dev
   3-4-empty-state-and-new-window-entry: ready-for-dev
