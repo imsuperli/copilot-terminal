@@ -2,6 +2,8 @@ import { EventEmitter } from 'events';
 import { platform } from 'os';
 import { existsSync } from 'fs';
 import { IProcessManager, TerminalConfig, ProcessHandle, ProcessInfo, ProcessStatus } from '../types/process';
+import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
+import { WindowStatus } from '../../renderer/types/window';
 
 /**
  * ProcessManager - 终端进程管理服务
@@ -14,11 +16,14 @@ import { IProcessManager, TerminalConfig, ProcessHandle, ProcessInfo, ProcessSta
 export class ProcessManager extends EventEmitter implements IProcessManager {
   private processes: Map<number, ProcessInfo>;
   private nextPid: number;
+  private statusDetector: IStatusDetector;
 
   constructor() {
     super();
     this.processes = new Map();
     this.nextPid = 1000;  // Start from 1000 for mock PIDs
+    this.statusDetector = new StatusDetectorImpl();
+    this.statusDetector.startPolling();
   }
 
   /**
@@ -48,6 +53,18 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     };
     this.processes.set(pid, processInfo);
 
+    // Start tracking this PID before registering listeners (avoids race condition)
+    this.statusDetector.trackPid(pid);
+
+    // Register PTY listeners for status detection
+    mockPty.onData((data: string) => {
+      this.statusDetector.onPtyData(pid, data);
+    });
+
+    mockPty.onExit((exitCode: number) => {
+      this.statusDetector.onProcessExit(pid, exitCode);
+    });
+
     // Emit process-created event
     this.emit('process-created', processInfo);
 
@@ -74,12 +91,16 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     processInfo.status = ProcessStatus.Exited;
     processInfo.exitCode = 0;
 
+    // Notify status detector of exit
+    this.statusDetector.onProcessExit(pid, 0);
+
     // Emit process-exited event
     this.emit('process-exited', processInfo);
 
     // Clean up after a delay
     setTimeout(() => {
       this.processes.delete(pid);
+      this.statusDetector.untrackPid(pid);
     }, 1000);
   }
 
@@ -95,6 +116,32 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    */
   listProcesses(): ProcessInfo[] {
     return Array.from(this.processes.values());
+  }
+
+  /**
+   * 获取窗口状态（通过 windowId）
+   */
+  async getWindowStatus(windowId: string): Promise<WindowStatus> {
+    const processInfo = Array.from(this.processes.values()).find(p => p.windowId === windowId);
+    if (!processInfo) {
+      throw new Error(`Window not found: ${windowId}`);
+    }
+    return this.statusDetector.detectStatus(processInfo.pid);
+  }
+
+  /**
+   * 订阅状态变化事件，返回取消订阅函数
+   */
+  subscribeStatusChange(callback: (pid: number, status: WindowStatus) => void): () => void {
+    return this.statusDetector.subscribeStatusChange(callback);
+  }
+
+  /**
+   * 销毁 ProcessManager，释放资源
+   */
+  destroy(): void {
+    this.statusDetector.destroy();
+    this.processes.clear();
   }
 
   /**

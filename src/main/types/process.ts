@@ -35,4 +35,7 @@ export interface IProcessManager {
   killProcess(pid: number): Promise<void>;
   getProcessStatus(pid: number): ProcessInfo | null;
   listProcesses(): ProcessInfo[];
+  getWindowStatus(windowId: string): Promise<import('../../renderer/types/window').WindowStatus>;
+  subscribeStatusChange(callback: (pid: number, status: import('../../renderer/types/window').WindowStatus) => void): void;
+  destroy(): void;
 }

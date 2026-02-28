@@ -1,6 +1,6 @@
 # Story 4.1: 状态检测服务（StatusDetector）
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -52,71 +52,71 @@ So that 系统可以自动识别窗口的运行状态。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: 创建 StatusDetector 服务基础架构 (AC: 1-4)
-  - [ ] 1.1 创建 `src/main/services/StatusDetector.ts`
-  - [ ] 1.2 定义 StatusDetector 接口：`detectStatus(pid: number): Promise<WindowStatus>`
-  - [ ] 1.3 定义 StatusDetector 接口：`subscribeStatusChange(callback: (pid: number, status: WindowStatus) => void): void`
-  - [ ] 1.4 实现 StatusDetectorImpl 类
-  - [ ] 1.5 添加 `lastOutputTime: Map<number, number>` 存储最后输出时间
-  - [ ] 1.6 添加 `cpuUsage: Map<number, number>` 存储 CPU 使用率
-  - [ ] 1.7 添加 `exitCodes: Map<number, number>` 存储进程退出码
+- [x] Task 1: 创建 StatusDetector 服务基础架构 (AC: 1-4)
+  - [x] 1.1 创建 `src/main/services/StatusDetector.ts`
+  - [x] 1.2 定义 StatusDetector 接口：`detectStatus(pid: number): Promise<WindowStatus>`
+  - [x] 1.3 定义 StatusDetector 接口：`subscribeStatusChange(callback: (pid: number, status: WindowStatus) => void): void`
+  - [x] 1.4 实现 StatusDetectorImpl 类
+  - [x] 1.5 添加 `lastOutputTime: Map<number, number>` 存储最后输出时间
+  - [x] 1.6 添加 `cpuUsage: Map<number, number>` 存储 CPU 使用率
+  - [x] 1.7 添加 `exitCodes: Map<number, number>` 存储进程退出码
 
-- [ ] Task 2: 实现进程存活检测 (AC: 1)
-  - [ ] 2.1 实现 `isProcessAlive(pid: number): boolean` 方法
-  - [ ] 2.2 使用 Node.js 的 `process.kill(pid, 0)` 检测进程是否存活
-  - [ ] 2.3 捕获异常，返回 false 表示进程不存活
+- [x] Task 2: 实现进程存活检测 (AC: 1)
+  - [x] 2.1 实现 `isProcessAlive(pid: number): boolean` 方法
+  - [x] 2.2 使用 Node.js 的 `process.kill(pid, 0)` 检测进程是否存活
+  - [x] 2.3 捕获异常，返回 false 表示进程不存活
 
-- [ ] Task 3: 集成 pidusage 库获取 CPU 使用率 (AC: 2)
-  - [ ] 3.1 安装 pidusage 库：`npm install pidusage`
-  - [ ] 3.2 安装类型定义：`npm install --save-dev @types/pidusage`
-  - [ ] 3.3 实现 `getCpuUsage(pid: number): Promise<number>` 方法
-  - [ ] 3.4 使用 pidusage 获取进程 CPU 使用率
-  - [ ] 3.5 缓存 CPU 使用率到 `cpuUsage` Map
+- [x] Task 3: 集成 pidusage 库获取 CPU 使用率 (AC: 2)
+  - [x] 3.1 安装 pidusage 库：`npm install pidusage`
+  - [x] 3.2 安装类型定义：`npm install --save-dev @types/pidusage`
+  - [x] 3.3 实现 `getCpuUsage(pid: number): Promise<number>` 方法
+  - [x] 3.4 使用 pidusage 获取进程 CPU 使用率
+  - [x] 3.5 缓存 CPU 使用率到 `cpuUsage` Map
 
-- [ ] Task 4: 监听 PTY 输出事件 (AC: 3-4)
-  - [ ] 4.1 在 ProcessManager 中暴露 PTY 实例或输出事件
-  - [ ] 4.2 实现 `onPtyData(pid: number, data: string): void` 方法
-  - [ ] 4.3 监听 PTY 的 `data` 事件
-  - [ ] 4.4 更新 `lastOutputTime` Map，记录当前时间戳
+- [x] Task 4: 监听 PTY 输出事件 (AC: 3-4)
+  - [x] 4.1 在 ProcessManager 中暴露 PTY 实例或输出事件
+  - [x] 4.2 实现 `onPtyData(pid: number, data: string): void` 方法
+  - [x] 4.3 监听 PTY 的 `data` 事件
+  - [x] 4.4 更新 `lastOutputTime` Map，记录当前时间戳
 
-- [ ] Task 5: 实现状态检测逻辑 (AC: 5-8)
-  - [ ] 5.1 实现 `detectStatus(pid: number): Promise<WindowStatus>` 方法
-  - [ ] 5.2 检查进程是否存活，不存活则返回 Completed 或 Error
-  - [ ] 5.3 获取进程 CPU 使用率
-  - [ ] 5.4 获取最后输出时间，计算距离当前时间的间隔
-  - [ ] 5.5 判断状态：CPU > 1% 或最近 5s 内有输出 → Running
-  - [ ] 5.6 判断状态：CPU < 1% 且最近 5s 内无输出 → WaitingForInput
-  - [ ] 5.7 判断状态：进程退出且退出码 = 0 → Completed
-  - [ ] 5.8 判断状态：进程退出且退出码 ≠ 0 → Error
+- [x] Task 5: 实现状态检测逻辑 (AC: 5-8)
+  - [x] 5.1 实现 `detectStatus(pid: number): Promise<WindowStatus>` 方法
+  - [x] 5.2 检查进程是否存活，不存活则返回 Completed 或 Error
+  - [x] 5.3 获取进程 CPU 使用率
+  - [x] 5.4 获取最后输出时间，计算距离当前时间的间隔
+  - [x] 5.5 判断状态：CPU > 1% 或最近 5s 内有输出 → Running
+  - [x] 5.6 判断状态：CPU < 1% 且最近 5s 内无输出 → WaitingForInput
+  - [x] 5.7 判断状态：进程退出且退出码 = 0 → Completed
+  - [x] 5.8 判断状态：进程退出且退出码 ≠ 0 → Error
 
-- [ ] Task 6: 实现状态变化订阅机制 (AC: 9)
-  - [ ] 6.1 添加 `statusChangeCallbacks: Array<(pid: number, status: WindowStatus) => void>`
-  - [ ] 6.2 实现 `subscribeStatusChange(callback)` 方法
-  - [ ] 6.3 实现定期轮询机制（每 1s 检测一次）
-  - [ ] 6.4 比较新旧状态，状态变化时触发回调
-  - [ ] 6.5 确保轮询不阻塞主进程
+- [x] Task 6: 实现状态变化订阅机制 (AC: 9)
+  - [x] 6.1 添加 `statusChangeCallbacks: Array<(pid: number, status: WindowStatus) => void>`
+  - [x] 6.2 实现 `subscribeStatusChange(callback)` 方法
+  - [x] 6.3 实现定期轮询机制（每 1s 检测一次）
+  - [x] 6.4 比较新旧状态，状态变化时触发回调
+  - [x] 6.5 确保轮询不阻塞主进程
 
-- [ ] Task 7: 性能优化 (AC: 9-10)
-  - [ ] 7.1 实现活跃窗口检测间隔 1s，非活跃窗口检测间隔 5s
-  - [ ] 7.2 使用异步操作，避免阻塞主进程
-  - [ ] 7.3 限制 pidusage 调用频率，避免性能开销
-  - [ ] 7.4 测试状态检测延迟，确保 < 1s
+- [x] Task 7: 性能优化 (AC: 9-10)
+  - [x] 7.1 实现活跃窗口检测间隔 1s，非活跃窗口检测间隔 5s
+  - [x] 7.2 使用异步操作，避免阻塞主进程
+  - [x] 7.3 限制 pidusage 调用频率，避免性能开销
+  - [x] 7.4 测试状态检测延迟，确保 < 1s
 
-- [ ] Task 8: 集成到 ProcessManager (AC: 1-10)
-  - [ ] 8.1 修改 `src/main/services/ProcessManager.ts`
-  - [ ] 8.2 在 ProcessManager 中创建 StatusDetector 实例
-  - [ ] 8.3 进程创建时，注册 PTY 输出监听
-  - [ ] 8.4 进程退出时，记录退出码
-  - [ ] 8.5 暴露 `getWindowStatus(windowId: string): Promise<WindowStatus>` 方法
+- [x] Task 8: 集成到 ProcessManager (AC: 1-10)
+  - [x] 8.1 修改 `src/main/services/ProcessManager.ts`
+  - [x] 8.2 在 ProcessManager 中创建 StatusDetector 实例
+  - [x] 8.3 进程创建时，注册 PTY 输出监听
+  - [x] 8.4 进程退出时，记录退出码
+  - [x] 8.5 暴露 `getWindowStatus(windowId: string): Promise<WindowStatus>` 方法
 
-- [ ] Task 9: 编写单元测试 (AC: 1-10)
-  - [ ] 9.1 创建 `src/main/services/__tests__/StatusDetector.test.ts`
-  - [ ] 9.2 测试进程存活检测：验证 isProcessAlive 正确性
-  - [ ] 9.3 测试 CPU 使用率获取：验证 getCpuUsage 正确性
-  - [ ] 9.4 测试 PTY 输出监听：验证 onPtyData 更新 lastOutputTime
-  - [ ] 9.5 测试状态检测逻辑：验证 Running, WaitingForInput, Completed, Error 状态判断
-  - [ ] 9.6 测试状态变化订阅：验证回调被正确触发
-  - [ ] 9.7 测试性能：验证状态检测延迟 < 1s
+- [x] Task 9: 编写单元测试 (AC: 1-10)
+  - [x] 9.1 创建 `src/main/services/__tests__/StatusDetector.test.ts`
+  - [x] 9.2 测试进程存活检测：验证 isProcessAlive 正确性
+  - [x] 9.3 测试 CPU 使用率获取：验证 getCpuUsage 正确性
+  - [x] 9.4 测试 PTY 输出监听：验证 onPtyData 更新 lastOutputTime
+  - [x] 9.5 测试状态检测逻辑：验证 Running, WaitingForInput, Completed, Error 状态判断
+  - [x] 9.6 测试状态变化订阅：验证回调被正确触发
+  - [x] 9.7 测试性能：验证状态检测延迟 < 1s
 
 ## Dev Notes
 
@@ -354,10 +354,40 @@ npm install --save-dev @types/pidusage
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-4-6
 
 ### Debug Log References
 
+None
+
 ### Completion Notes List
 
+- 安装了 pidusage 和 @types/pidusage 依赖
+- 创建了 StatusDetectorImpl 服务，实现所有 AC 要求的状态检测逻辑
+- 修改了 ProcessManager 集成 StatusDetector，注册 PTY 数据和进程退出事件
+- 新增 getWindowStatus 和 subscribeStatusChange 方法到 ProcessManager
+- 编写了 22 个单元测试，覆盖所有状态检测场景
+
+### Code Review Notes (2026-02-28)
+
+**审查者:** claude-sonnet-4-6
+**结果:** 通过（修复后）
+
+**修复的问题：**
+- [H1] 所有 Tasks/Subtasks 标记更新为 [x]（文档与实现不符）
+- [H2] 修复 ProcessManager 中 trackPid 调用顺序：改为在注册 PTY 监听器之前调用，消除竞态条件
+- [H3] getWindowStatus 找不到 windowId 时改为抛出异常，而非错误返回 WindowStatus.Error
+- [M1] 更新 File List，补充 package.json 和 package-lock.json
+- [M2] detectStatus 中进程崩溃（无退出码记录）时默认返回 Error 而非 Completed
+- [M3] 更新 IProcessManager 接口，补充 getWindowStatus、subscribeStatusChange、destroy 方法声明
+- [M4] subscribeStatusChange 改为返回取消订阅函数，防止内存泄漏
+- 新增 2 个测试用例：进程崩溃返回 Error、取消订阅功能验证（共 22 个测试）
+
 ### File List
+
+- src/main/services/StatusDetector.ts (新建)
+- src/main/services/ProcessManager.ts (修改)
+- src/main/services/__tests__/StatusDetector.test.ts (新建)
+- src/main/types/process.ts (修改 - 更新 IProcessManager 接口)
+- package.json (修改 - 添加 pidusage 依赖)
+- package-lock.json (修改 - 锁定 pidusage 依赖)

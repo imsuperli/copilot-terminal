@@ -62,7 +62,7 @@ development_status:
   epic-3-retrospective: optional
 
   epic-4: in-progress
-  4-1-status-detector-service: ready-for-dev
+  4-1-status-detector-service: done
   4-2-real-time-status-update-mechanism: ready-for-dev
   epic-4-retrospective: optional
 
