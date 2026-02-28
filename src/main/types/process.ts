@@ -4,6 +4,7 @@ export interface TerminalConfig {
   command?: string;  // 可选,默认打开 shell
   env?: Record<string, string>;
   name?: string;  // 窗口名称
+  windowId?: string;  // 关联的窗口 ID
 }
 
 // 进程句柄
@@ -25,6 +26,7 @@ export interface ProcessInfo {
   exitCode?: number;
   workingDirectory: string;
   command?: string;
+  windowId?: string;  // 关联的窗口 ID
 }
 
 // ProcessManager 接口

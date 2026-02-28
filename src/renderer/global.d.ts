@@ -13,6 +13,10 @@ export interface ElectronAPI {
   getTerminalStatus: (pid: number) => Promise<string>
   listTerminals: () => Promise<any[]>
 
+  // Window management
+  closeWindow: (windowId: string) => Promise<void>
+  deleteWindow: (windowId: string) => Promise<void>
+
   // File system
   validatePath: (path: string) => Promise<boolean>
   selectDirectory: () => Promise<string | null>

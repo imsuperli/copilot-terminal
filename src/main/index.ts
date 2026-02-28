@@ -111,6 +111,9 @@ function registerIPCHandlers() {
         throw new Error('工作目录无访问权限');
       }
 
+      // 生成 UUID 作为窗口 ID
+      const windowId = randomUUID();
+
       // 获取默认 shell
       const defaultShell = getDefaultShell();
       const command = config.command || defaultShell;
@@ -119,15 +122,13 @@ function registerIPCHandlers() {
       const handle = await processManager.spawnTerminal({
         workingDirectory: config.workingDirectory,
         command: command,
+        windowId: windowId,
       });
 
       // 验证进程启动成功
       if (!handle.pid || handle.pid <= 0) {
         throw new Error('终端进程启动失败');
       }
-
-      // 生成 UUID 作为窗口 ID
-      const windowId = randomUUID();
 
       // 使用独立计数器生成窗口编号
       windowCounter++;
@@ -225,6 +226,61 @@ function registerIPCHandlers() {
       }
     } catch (error) {
       return false;
+    }
+  });
+
+  // 关闭窗口（终止进程）
+  ipcMain.handle('close-window', async (_event, { windowId }: { windowId: string }) => {
+    try {
+      if (!processManager) {
+        throw new Error('ProcessManager not initialized');
+      }
+      // 查找对应进程并终止
+      const processes = processManager.listProcesses();
+      const found = processes.find(p => p.windowId === windowId);
+      if (found) {
+        try {
+          await processManager.killProcess(found.pid);
+        } catch (error) {
+          // 进程已退出，忽略错误
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Process ${found.pid} already exited`);
+          }
+        }
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to close window:', error);
+      }
+      throw error;
+    }
+  });
+
+  // 删除窗口（终止进程 + 移除配置）
+  ipcMain.handle('delete-window', async (_event, { windowId }: { windowId: string }) => {
+    try {
+      if (!processManager) {
+        throw new Error('ProcessManager not initialized');
+      }
+      // 查找对应进程并终止
+      const processes = processManager.listProcesses();
+      const found = processes.find(p => p.windowId === windowId);
+      if (found) {
+        try {
+          await processManager.killProcess(found.pid);
+        } catch (error) {
+          // 进程已退出，忽略错误
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Process ${found.pid} already exited`);
+          }
+        }
+      }
+      // TODO: 移除窗口配置（Story 6.x 工作区持久化时实现）
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to delete window:', error);
+      }
+      throw error;
     }
   });
 

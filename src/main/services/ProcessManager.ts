@@ -44,6 +44,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       status: ProcessStatus.Alive,
       workingDirectory: config.workingDirectory,
       command,
+      windowId: config.windowId,
     };
     this.processes.set(pid, processInfo);
 

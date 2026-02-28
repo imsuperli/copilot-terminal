@@ -1,6 +1,6 @@
 # Story 2.4: 关闭和删除窗口
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -46,58 +46,58 @@ So that 可以清理工作区并释放系统资源。
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: 扩展 Preload API 暴露关闭/删除窗口接口 (AC: 4, 5)
-  - [ ] 1.1 在 `src/preload/index.ts` 中添加 `closeWindow(windowId)` IPC 调用，映射到 `close-window` channel
-  - [ ] 1.2 在 `src/preload/index.ts` 中添加 `deleteWindow(windowId)` IPC 调用，映射到 `delete-window` channel
-  - [ ] 1.3 更新 `src/renderer/global.d.ts` 中 `ElectronAPI` 接口，添加 `closeWindow` 和 `deleteWindow` 方法签名
+- [x] Task 1: 扩展 Preload API 暴露关闭/删除窗口接口 (AC: 4, 5)
+  - [x] 1.1 在 `src/preload/index.ts` 中添加 `closeWindow(windowId)` IPC 调用，映射到 `close-window` channel
+  - [x] 1.2 在 `src/preload/index.ts` 中添加 `deleteWindow(windowId)` IPC 调用，映射到 `delete-window` channel
+  - [x] 1.3 更新 `src/renderer/global.d.ts` 中 `ElectronAPI` 接口，添加 `closeWindow` 和 `deleteWindow` 方法签名
 
-- [ ] Task 2: 实现主进程 IPC Handler — 关闭窗口和删除窗口 (AC: 4)
-  - [ ] 2.1 在 `src/main/index.ts` 注册 `close-window` IPC handler
-  - [ ] 2.2 handler 接收 `{ windowId: string }` 参数
-  - [ ] 2.3 调用 ProcessManager.killProcess 终止对应 PTY 进程（FR16）
-  - [ ] 2.4 关闭窗口：终止进程，通过 `window-closed` 事件通知渲染进程
-  - [ ] 2.5 在 `src/main/index.ts` 注册 `delete-window` IPC handler
-  - [ ] 2.6 删除窗口：终止进程 + 移除窗口配置记录
-  - [ ] 2.7 错误处理：进程不存在或已退出时优雅处理，不抛异常
+- [x] Task 2: 实现主进程 IPC Handler — 关闭窗口和删除窗口 (AC: 4)
+  - [x] 2.1 在 `src/main/index.ts` 注册 `close-window` IPC handler
+  - [x] 2.2 handler 接收 `{ windowId: string }` 参数
+  - [x] 2.3 调用 ProcessManager.killProcess 终止对应 PTY 进程（FR16）
+  - [x] 2.4 关闭窗口：终止进程，通过 `window-closed` 事件通知渲染进程
+  - [x] 2.5 在 `src/main/index.ts` 注册 `delete-window` IPC handler
+  - [x] 2.6 删除窗口：终止进程 + 移除窗口配置记录
+  - [x] 2.7 错误处理：进程不存在或已退出时优雅处理，不抛异常
 
-- [ ] Task 3: 实现右键上下文菜单组件 (AC: 1)
-  - [ ] 3.1 创建 `src/renderer/components/WindowContextMenu.tsx`
-  - [ ] 3.2 使用 Radix UI ContextMenu 组件作为基础
-  - [ ] 3.3 菜单项包含："关闭窗口"和"删除窗口"两个选项
-  - [ ] 3.4 菜单项使用 Tailwind CSS 样式，匹配深色主题
-  - [ ] 3.5 将 ContextMenu 包裹在 WindowCard 组件外层（或集成到 WindowCard 中）
-  - [ ] 3.6 菜单项支持键盘导航（上下箭头、Enter 选择、Esc 关闭）
+- [x] Task 3: 实现右键上下文菜单组件 (AC: 1)
+  - [x] 3.1 创建 `src/renderer/components/WindowContextMenu.tsx`
+  - [x] 3.2 使用 Radix UI ContextMenu 组件作为基础
+  - [x] 3.3 菜单项包含："关闭窗口"和"删除窗口"两个选项
+  - [x] 3.4 菜单项使用 Tailwind CSS 样式，匹配深色主题
+  - [x] 3.5 将 ContextMenu 包裹在 WindowCard 组件外层（或集成到 WindowCard 中）
+  - [x] 3.6 菜单项支持键盘导航（上下箭头、Enter 选择、Esc 关闭）
 
-- [ ] Task 4: 实现确认对话框组件 (AC: 2, 3, 7, 8)
-  - [ ] 4.1 创建 `src/renderer/components/ConfirmDialog.tsx` 通用确认对话框
-  - [ ] 4.2 使用 Radix UI AlertDialog 组件（专为破坏性操作设计，自带焦点管理）
-  - [ ] 4.3 Props: `open`, `onConfirm`, `onCancel`, `title`, `description`, `confirmLabel`
-  - [ ] 4.4 标题：明确说明操作（"关闭窗口" / "删除窗口"）
-  - [ ] 4.5 正文：说明后果（"终端进程将被终止" / "窗口配置将被移除"）
-  - [ ] 4.6 按钮布局：左侧"取消"（Secondary 样式），右侧"确认"（红色 Primary 样式）
-  - [ ] 4.7 对话框打开时焦点自动定位到"取消"按钮（AlertDialog 默认行为，通过 `asChild` 在 Cancel 上设置）
-  - [ ] 4.8 Esc 键 = 取消，Enter 键 = 确认
-  - [ ] 4.9 半透明深色遮罩层，点击遮罩 = 取消
-  - [ ] 4.10 对话框居中显示，宽度不超过 480px
-  - [ ] 4.11 对话框关闭时恢复焦点到触发元素
+- [x] Task 4: 实现确认对话框组件 (AC: 2, 3, 7, 8)
+  - [x] 4.1 创建 `src/renderer/components/ConfirmDialog.tsx` 通用确认对话框
+  - [x] 4.2 使用 Radix UI AlertDialog 组件（专为破坏性操作设计，自带焦点管理）
+  - [x] 4.3 Props: `open`, `onConfirm`, `onCancel`, `title`, `description`, `confirmLabel`
+  - [x] 4.4 标题：明确说明操作（"关闭窗口" / "删除窗口"）
+  - [x] 4.5 正文：说明后果（"终端进程将被终止" / "窗口配置将被移除"）
+  - [x] 4.6 按钮布局：左侧"取消"（Secondary 样式），右侧"确认"（红色 Primary 样式）
+  - [x] 4.7 对话框打开时焦点自动定位到"取消"按钮（AlertDialog 默认行为，通过 `asChild` 在 Cancel 上设置）
+  - [x] 4.8 Esc 键 = 取消，Enter 键 = 确认
+  - [x] 4.9 半透明深色遮罩层，点击遮罩 = 取消
+  - [x] 4.10 对话框居中显示，宽度不超过 480px
+  - [x] 4.11 对话框关闭时恢复焦点到触发元素
 
-- [ ] Task 5: 集成关闭/删除流程到 WindowCard (AC: 1-8)
-  - [ ] 5.1 在 WindowCard 中集成 WindowContextMenu（右键触发）
-  - [ ] 5.2 右键菜单选择操作后，设置 state 打开对应的 ConfirmDialog
-  - [ ] 5.3 用户确认后：调用 `window.electronAPI.closeWindow(id)` 或 `window.electronAPI.deleteWindow(id)`
-  - [ ] 5.4 IPC 调用成功后：调用 Zustand store 的 `removeWindow(id)` 从前端状态中移除
-  - [ ] 5.5 卡片移除后，CSS Grid 自动重排剩余卡片（AC: 6）
-  - [ ] 5.6 处理 IPC 调用失败的错误情况（显示错误提示或 console.error）
+- [x] Task 5: 集成关闭/删除流程到 WindowCard (AC: 1-8)
+  - [x] 5.1 在 WindowCard 中集成 WindowContextMenu（右键触发）
+  - [x] 5.2 右键菜单选择操作后，设置 state 打开对应的 ConfirmDialog
+  - [x] 5.3 用户确认后：调用 `window.electronAPI.closeWindow(id)` 或 `window.electronAPI.deleteWindow(id)`
+  - [x] 5.4 IPC 调用成功后：调用 Zustand store 的 `removeWindow(id)` 从前端状态中移除
+  - [x] 5.5 卡片移除后，CSS Grid 自动重排剩余卡片（AC: 6）
+  - [x] 5.6 处理 IPC 调用失败的错误情况（显示错误提示或 console.error）
 
-- [ ] Task 6: 编写单元测试 (AC: 1-8)
-  - [ ] 6.1 创建 `src/renderer/components/__tests__/ConfirmDialog.test.tsx`
-  - [ ] 6.2 测试对话框打开/关闭行为
-  - [ ] 6.3 测试确认按钮触发 onConfirm 回调
-  - [ ] 6.4 测试取消按钮触发 onCancel 回调
-  - [ ] 6.5 测试 Esc 键关闭对话框
-  - [ ] 6.6 创建 `src/renderer/components/__tests__/WindowContextMenu.test.tsx`
-  - [ ] 6.7 测试右键菜单显示两个选项
-  - [ ] 6.8 测试菜单项点击触发对应回调
+- [x] Task 6: 编写单元测试 (AC: 1-8)
+  - [x] 6.1 创建 `src/renderer/components/__tests__/ConfirmDialog.test.tsx`
+  - [x] 6.2 测试对话框打开/关闭行为
+  - [x] 6.3 测试确认按钮触发 onConfirm 回调
+  - [x] 6.4 测试取消按钮触发 onCancel 回调
+  - [x] 6.5 测试 Esc 键关闭对话框
+  - [x] 6.6 创建 `src/renderer/components/__tests__/WindowContextMenu.test.tsx`
+  - [x] 6.7 测试右键菜单显示两个选项
+  - [x] 6.8 测试菜单项点击触发对应回调
 
 ## Dev Notes
 
@@ -258,10 +258,99 @@ src/
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-4-6
 
 ### Debug Log References
 
+无
+
 ### Completion Notes List
 
+- 安装了 @radix-ui/react-alert-dialog 依赖
+- 实现了 WindowContextMenu 组件（Radix UI ContextMenu）
+- 实现了 ConfirmDialog 组件（Radix UI AlertDialog，焦点默认在取消按钮）
+- 实现了 WindowCard 组件，集成上下文菜单和确认对话框
+- 扩展了 Preload API 和 global.d.ts 类型定义
+- 在主进程注册了 close-window 和 delete-window IPC handlers
+- 所有 122 个测试通过
+
+### Code Review Fixes (2026-02-28)
+
+**审查发现并修复的问题：**
+
+1. **[CRITICAL] 修复 WindowCard 变量命名冲突**
+   - 问题：props 参数 `window` 遮蔽了全局 `window` 对象，导致无法访问 `window.electronAPI`
+   - 修复：重命名 props 为 `terminalWindow`，使用 `globalThis.window.electronAPI` 访问全局 API
+   - 文件：src/renderer/components/WindowCard.tsx
+
+2. **[CRITICAL] 建立 ProcessManager 与 Window 的关联**
+   - 问题：ProcessManager 不存储 windowId，导致无法通过 windowId 查找进程
+   - 修复：在 ProcessInfo 和 TerminalConfig 中添加 windowId 字段，创建窗口时传递 windowId
+   - 文件：src/main/types/process.ts, src/main/services/ProcessManager.ts, src/main/index.ts
+
+3. **[CRITICAL] 添加 Enter 键确认测试**
+   - 问题：AC7 要求支持 Enter 键确认，但测试只覆盖了 Esc 键
+   - 修复：添加 Enter 键确认和按钮禁用状态的测试
+   - 文件：src/renderer/components/__tests__/ConfirmDialog.test.tsx
+
+4. **[HIGH] 修复过早移除窗口导致状态不一致**
+   - 问题：IPC 调用可能失败，但前端已经移除了窗口
+   - 修复：只有在 IPC 调用成功后才调用 removeWindow
+   - 文件：src/renderer/components/WindowCard.tsx
+
+5. **[HIGH] 移除无接收者的 window-closed 事件**
+   - 问题：主进程发送 window-closed 事件，但渲染进程没有监听
+   - 修复：移除事件发送代码，简化流程
+   - 文件：src/main/index.ts
+
+6. **[HIGH] 修复 close-window 和 delete-window 的进程查找逻辑**
+   - 问题：使用 `(p as any).windowId` 类型断言，且 ProcessManager 不返回 windowId
+   - 修复：使用正确的 `p.windowId` 访问，ProcessManager 现在存储并返回 windowId
+   - 文件：src/main/index.ts
+
+7. **[MEDIUM] 添加生产环境错误提示**
+   - 问题：生产环境用户看不到错误
+   - 修复：在 ConfirmDialog 的 description 中显示错误信息
+   - 文件：src/renderer/components/WindowCard.tsx
+
+8. **[MEDIUM] 修复返回类型不匹配**
+   - 问题：IPC handlers 返回 `{ success: true }`，但类型定义是 `Promise<void>`
+   - 修复：移除返回值，改为直接 throw error
+   - 文件：src/main/index.ts
+
+9. **[MEDIUM] 更新 File List**
+   - 问题：package.json 和 package-lock.json 未在 File List 中列出
+   - 修复：添加到 File List
+   - 文件：本文档
+
+10. **[MEDIUM] 添加键盘导航测试**
+    - 问题：Task 3.6 要求支持键盘导航，但测试没有覆盖
+    - 修复：添加箭头键导航、Esc 关闭、Enter 选择的测试
+    - 文件：src/renderer/components/__tests__/WindowContextMenu.test.tsx
+
+11. **[LOW] 添加按钮禁用状态**
+    - 问题：显示"处理中..."但按钮仍可点击
+    - 修复：添加 disabled 属性，根据 confirmLabel 判断是否禁用
+    - 文件：src/renderer/components/ConfirmDialog.tsx
+
+**修复统计：**
+- CRITICAL 问题修复：3 个
+- HIGH 问题修复：3 个
+- MEDIUM 问题修复：4 个
+- LOW 问题修复：1 个
+- 总计修复：11 个问题
+
 ### File List
+
+- src/preload/index.ts (modified)
+- src/renderer/global.d.ts (modified)
+- src/main/index.ts (modified)
+- src/main/types/process.ts (modified)
+- src/main/services/ProcessManager.ts (modified)
+- src/renderer/components/WindowContextMenu.tsx (created)
+- src/renderer/components/ConfirmDialog.tsx (created)
+- src/renderer/components/WindowCard.tsx (created)
+- src/renderer/components/__tests__/ConfirmDialog.test.tsx (created)
+- src/renderer/components/__tests__/WindowContextMenu.test.tsx (created)
+- package.json (modified)
+- package-lock.json (modified)

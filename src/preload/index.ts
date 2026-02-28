@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTerminalStatus: (pid: number) => ipcRenderer.invoke('get-terminal-status', pid),
   listTerminals: () => ipcRenderer.invoke('list-terminals'),
   
+  // Window management
+  closeWindow: (windowId: string) => ipcRenderer.invoke('close-window', { windowId }),
+  deleteWindow: (windowId: string) => ipcRenderer.invoke('delete-window', { windowId }),
+
   // File system
   validatePath: (path: string) => ipcRenderer.invoke('validate-path', path),
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
