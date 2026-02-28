@@ -7,6 +7,7 @@ import { TerminalView } from './components/TerminalView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
+import { useWorkspaceRestore } from './hooks/useWorkspaceRestore';
 import { subscribeToWindowStatusChange } from './api/events';
 import { Window } from './types/window';
 
@@ -14,6 +15,9 @@ function App() {
   const windows = useWindowStore((state) => state.windows);
   const updateWindowStatus = useWindowStore((state) => state.updateWindowStatus);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // 工作区恢复
+  useWorkspaceRestore();
 
   const {
     currentView,

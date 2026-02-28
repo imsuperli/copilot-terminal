@@ -289,13 +289,18 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const shell = this.getDefaultShell();
     const command = config.command || shell;
 
+    // 清理环境变量，移除可能导致冲突的变量
+    const cleanEnv = { ...process.env };
+    delete cleanEnv.CLAUDECODE; // 移除 Claude Code 环境变量，避免嵌套会话检测
+    delete cleanEnv.VSCODE_INJECTION; // 移除 VS Code 注入变量
+
     // 创建真实的 PTY 进程
     const ptyProcess = pty.spawn(shell, [], {
       name: 'xterm-256color',
       cols: 80,
       rows: 30,
       cwd: config.workingDirectory,
-      env: process.env,
+      env: cleanEnv,
     });
 
     return ptyProcess;
