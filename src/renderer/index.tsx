@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './global.css';
+import './index.css';
 import App from './App';
 
 // 获取 root 容器

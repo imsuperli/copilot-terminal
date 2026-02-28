@@ -1,0 +1,32 @@
+:root {
+  /* 状态色 */
+  --color-running: #3b82f6;
+  --color-waiting: #f59e0b;
+  --color-completed: #10b981;
+  --color-error: #ef4444;
+  --color-restoring: #6b7280;
+
+  /* 背景色 */
+  --bg-app: #0a0a0a;
+  --bg-card: #1a1a1a;
+  --bg-card-hover: #2a2a2a;
+
+  /* 文字色 */
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --text-disabled: #737373;
+
+  /* 边框色 */
+  --border-subtle: #2a2a2a;
+
+  /* 间距 */
+  --spacing-unit: 8px;
+  --spacing-card-padding: 16px;
+  --spacing-card-gap: 12px;
+  --spacing-section-gap: 24px;
+
+  /* 圆角 */
+  --radius-card: 8px;
+  --radius-button: 6px;
+  --radius-input: 4px;
+}

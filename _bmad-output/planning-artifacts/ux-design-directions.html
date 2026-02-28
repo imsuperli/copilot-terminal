@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ausome-terminal - Design Directions</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; background: #0a0a0b; color: #c8c5be; }
+.nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: #0a0a0b; border-bottom: 1px solid #1e1e20; padding: 16px 32px; display: flex; gap: 12px; align-items: center; }
+.nav h1 { font-size: 16px; color: #e8e5de; margin-right: 24px; }
+.nav button { padding: 8px 16px; border: 1px solid #2a2a2d; border-radius: 8px; background: transparent; color: #c8c5be; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+.nav button:hover { border-color: #4a4a4d; color: #e8e5de; }
+.nav button.active { background: #1a1a1d; border-color: #3b82f6; color: #e8e5de; }
+.container { padding-top: 72px; }
+.direction { display: none; padding: 32px; min-height: 100vh; }
+.direction.active { display: block; }
+.direction-title { font-size: 20px; color: #e8e5de; margin-bottom: 8px; }
+.direction-desc { font-size: 14px; color: #8a8780; margin-bottom: 24px; }
+</style>
+</head>
+<body>
+<div class="nav">
+  <h1>ausome-terminal</h1>
+  <button class="active" onclick="show(0)">方向 A: 网格卡片</button>
+  <button onclick="show(1)">方向 B: 紧凑列表</button>
+  <button onclick="show(2)">方向 C: 混合布局</button>
+  <button onclick="show(3)">方向 D: 看板分组</button>
+</div>
+<div class="container" id="container"></div>
+<script>
+const statusColors = { running: '#3b82f6', waiting: '#f59e0b', done: '#22c55e', error: '#ef4444' };
+const statusLabels = { running: '运行中', waiting: '等待输入', done: '已完成', error: '出错' };
+const tasks = [
+  { name: 'project-a-bugfix', dir: 'D:\\projects\\client-a\\bugfix-auth', status: 'waiting', model: 'Claude Opus' },
+  { name: 'project-b-feature', dir: 'D:\\projects\\client-b\\feature-payment', status: 'running', model: 'Claude Opus' },
+  { name: 'project-c-review', dir: 'D:\\projects\\client-c\\code-review', status: 'done', model: 'Claude Sonnet' },
+  { name: 'personal-blog', dir: 'D:\\projects\\personal\\blog-redesign', status: 'running', model: 'Claude Opus' },
+  { name: 'api-refactor', dir: 'D:\\projects\\client-a\\api-refactor', status: 'running', model: 'Claude Opus' },
+  { name: 'db-migration', dir: 'D:\\projects\\client-b\\db-migration', status: 'error', model: 'Claude Sonnet' },
+  { name: 'auth-service', dir: 'D:\\projects\\microservices\\auth', status: 'waiting', model: 'Claude Opus' },
+  { name: 'order-service', dir: 'D:\\projects\\microservices\\order', status: 'running', model: 'Claude Sonnet' },
+  { name: 'perf-optimize', dir: 'D:\\projects\\client-c\\performance', status: 'done', model: 'Claude Opus' },
+  { name: 'security-audit', dir: 'D:\\projects\\infra\\security-audit', status: 'running', model: 'Claude Opus' },
+  { name: 'ci-pipeline', dir: 'D:\\projects\\infra\\ci-cd', status: 'done', model: 'Claude Sonnet' },
+  { name: 'docs-update', dir: 'D:\\projects\\client-a\\documentation', status: 'waiting', model: 'Claude Sonnet' },
+];
+
+function cardA(t) {
+  const timeAgo = ['3 分钟前', '12 分钟前', '1 小时前', '25 分钟前', '8 分钟前', '45 分钟前', '2 分钟前', '18 分钟前', '2 小时前', '30 分钟前', '3 小时前', '5 分钟前'];
+  const idx = tasks.indexOf(t);
+  const lastOutput = {
+    waiting: '⏳ 等待你的输入...',
+    running: '⚙️ 正在处理中...',
+    done: '✅ 任务已完成',
+    error: '❌ 进程异常退出 (code 1)'
+  };
+  return `<div style="background:#141416;border-radius:10px;overflow:hidden;cursor:pointer;transition:background 0.15s;border:1px solid #1e1e20;min-height:160px;display:flex;flex-direction:column;" onmouseover="this.style.background='#1a1a1d'" onmouseout="this.style.background='#141416'">
+    <div style="height:4px;background:${statusColors[t.status]};border-radius:10px 10px 0 0;flex-shrink:0;"></div>
+    <div style="padding:16px 18px;flex:1;display:flex;flex-direction:column;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-size:14px;color:#e8e5de;font-weight:600;">${t.name}</span>
+        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${statusColors[t.status]}22;color:${statusColors[t.status]};">${statusLabels[t.status]}</span>
+      </div>
+      <div style="font-size:12px;color:#6a6760;font-family:'Cascadia Code','Fira Code',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:12px;">${t.dir}</div>
+      <div style="flex:1;"></div>
+      <div style="border-top:1px solid #1e1e20;padding-top:10px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:12px;color:#8a8780;">${lastOutput[t.status]}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span style="font-size:11px;color:#4a4a4d;">${t.model}</span>
+        <span style="font-size:11px;color:#4a4a4d;">${timeAgo[idx]}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function directionA() {
+  const statusCounts = { running: 0, waiting: 0, done: 0, error: 0 };
+  tasks.forEach(t => statusCounts[t.status]++);
+  return `<div class="direction active">
+    <div class="direction-title">方向 A: 网格卡片布局（完整界面）</div>
+    <div class="direction-desc">完整应用框架：顶部工具栏 + 状态统计 + 网格卡片 + 新建窗口入口。</div>
+    <div style="background:#0e0e10;border-radius:12px;border:1px solid #1e1e20;overflow:hidden;min-height:calc(100vh - 180px);">
+      <!-- Title Bar -->
+      <div style="background:#111113;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1e1e20;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:15px;color:#e8e5de;font-weight:600;">ausome-terminal</span>
+          <span style="font-size:12px;color:#4a4a4d;">v0.1.0</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:12px;height:12px;border-radius:50%;background:#ef4444;opacity:0.8;"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#f59e0b;opacity:0.8;"></div>
+          <div style="width:12px;height:12px;border-radius:50%;background:#22c55e;opacity:0.8;"></div>
+        </div>
+      </div>
+      <!-- Toolbar -->
+      <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1a1a1d;">
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;"></div>
+            <span style="font-size:12px;color:#8a8780;">运行中 ${statusCounts.running}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#f59e0b;"></div>
+            <span style="font-size:12px;color:#8a8780;">等待输入 ${statusCounts.waiting}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;"></div>
+            <span style="font-size:12px;color:#8a8780;">已完成 ${statusCounts.done}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#ef4444;"></div>
+            <span style="font-size:12px;color:#8a8780;">出错 ${statusCounts.error}</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button style="padding:6px 14px;border-radius:6px;border:1px solid #2a2a2d;background:transparent;color:#8a8780;font-size:12px;cursor:pointer;">⚙️ 设置</button>
+          <button style="padding:6px 14px;border-radius:6px;border:none;background:#3b82f6;color:#fff;font-size:12px;cursor:pointer;font-weight:500;">+ 新建窗口</button>
+        </div>
+      </div>
+      <!-- Grid -->
+      <div style="padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+        ${tasks.map(t => cardA(t)).join('')}
+        <!-- New Window Card -->
+        <div style="background:transparent;border-radius:10px;overflow:hidden;cursor:pointer;border:2px dashed #2a2a2d;min-height:160px;display:flex;align-items:center;justify-content:center;transition:border-color 0.15s;" onmouseover="this.style.borderColor='#4a4a4d'" onmouseout="this.style.borderColor='#2a2a2d'">
+          <div style="text-align:center;">
+            <div style="font-size:28px;color:#4a4a4d;margin-bottom:8px;">+</div>
+            <div style="font-size:13px;color:#4a4a4d;">新建窗口</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function directionB() {
+  const rows = tasks.map(t => `<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:#141416;border-radius:8px;border:1px solid #1e1e20;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#1a1a1d'" onmouseout="this.style.background='#141416'">
+    <div style="width:4px;height:32px;border-radius:2px;background:${statusColors[t.status]};flex-shrink:0;"></div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:14px;color:#e8e5de;font-weight:500;width:180px;flex-shrink:0;">${t.name}</span>
+        <span style="font-size:12px;color:#6a6760;font-family:'Cascadia Code','Fira Code',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${t.dir}</span>
+        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${statusColors[t.status]}22;color:${statusColors[t.status]};flex-shrink:0;">${statusLabels[t.status]}</span>
+      </div>
+    </div>
+  </div>`).join('');
+  return `<div class="direction">
+    <div class="direction-title">方向 B: 紧凑列表布局</div>
+    <div class="direction-desc">每行一个窗口，左侧竖向彩色条标识状态。信息密度最高，适合管理大量窗口。</div>
+    <div style="display:flex;flex-direction:column;gap:6px;">${rows}</div>
+  </div>`;
+}
+
+function directionC() {
+  const list = tasks.map((t,i) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;${i===0?'background:#1a1a1d;border:1px solid #3b82f6;':'border:1px solid transparent;'}" onmouseover="if(${i}!==0)this.style.background='#141416'" onmouseout="if(${i}!==0)this.style.background='transparent'">
+    <div style="width:8px;height:8px;border-radius:50%;background:${statusColors[t.status]};flex-shrink:0;"></div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;color:#e8e5de;">${t.name}</div>
+      <div style="font-size:11px;color:#6a6760;">${statusLabels[t.status]}</div>
+    </div>
+  </div>`).join('');
+
+  return `<div class="direction">
+    <div class="direction-title">方向 C: 混合布局（列表 + 预览）</div>
+    <div class="direction-desc">左侧窗口列表，右侧显示选中窗口的终端预览。适合需要快速预览窗口内容的场景。</div>
+    <div style="display:flex;gap:16px;height:calc(100vh - 160px);">
+      <div style="width:280px;flex-shrink:0;background:#111113;border-radius:10px;border:1px solid #1e1e20;padding:12px;overflow-y:auto;">
+        <div style="font-size:12px;color:#8a8780;margin-bottom:12px;padding:0 12px;">窗口列表 (${tasks.length})</div>
+        ${list}
+      </div>
+      <div style="flex:1;background:#111113;border-radius:10px;border:1px solid #1e1e20;overflow:hidden;">
+        <div style="height:4px;background:${statusColors[tasks[0].status]};border-radius:10px 10px 0 0;"></div>
+        <div style="padding:16px;border-bottom:1px solid #1e1e20;display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:15px;color:#e8e5de;font-weight:500;">${tasks[0].name}</div>
+            <div style="font-size:12px;color:#6a6760;font-family:monospace;margin-top:4px;">${tasks[0].dir}</div>
+          </div>
+          <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:${statusColors[tasks[0].status]}22;color:${statusColors[tasks[0].status]};">${statusLabels[tasks[0].status]}</span>
+        </div>
+        <div style="padding:16px;font-family:'Cascadia Code','Fira Code',monospace;font-size:13px;color:#8a8780;line-height:1.8;">
+          <div style="color:#6a6760;">$ claude</div>
+          <div style="color:#c8c5be;">╭──────────────────────────────────────╮</div>
+          <div style="color:#c8c5be;">│  Claude Code  v1.0.0                │</div>
+          <div style="color:#c8c5be;">╰──────────────────────────────────────╯</div>
+          <div style="margin-top:8px;color:#f59e0b;">⏳ Waiting for your input...</div>
+          <div style="margin-top:8px;color:#6a6760;">> Fix the authentication bug in login</div>
+          <div style="color:#6a6760;">> flow. The session token is not being</div>
+          <div style="color:#6a6760;">> refreshed correctly after expiry.</div>
+          <div style="margin-top:12px;color:#f59e0b;animation:blink 1.2s infinite;">█</div>
+        </div>
+      </div>
+    </div>
+    <style>@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}</style>
+  </div>`;
+}
+
+function directionD() {
+  const groups = { waiting: [], running: [], done: [], error: [] };
+  tasks.forEach(t => groups[t.status].push(t));
+  const groupLabels = { waiting: '等待输入', running: '运行中', done: '已完成', error: '出错' };
+
+  const cols = Object.keys(groups).map(s => {
+    const cards = groups[s].map(t => `<div style="background:#141416;border-radius:8px;padding:12px;border:1px solid #1e1e20;cursor:pointer;transition:background 0.15s;" onmouseover="this.style.background='#1a1a1d'" onmouseout="this.style.background='#141416'">
+      <div style="font-size:13px;color:#e8e5de;margin-bottom:6px;">${t.name}</div>
+      <div style="font-size:11px;color:#6a6760;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.dir}</div>
+    </div>`).join('');
+    return `<div style="flex:1;min-width:220px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="height:3px;flex:1;background:${statusColors[s]};border-radius:2px;"></div>
+        <span style="font-size:12px;color:${statusColors[s]};">${groupLabels[s]} (${groups[s].length})</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">${cards}</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="direction">
+    <div class="direction-title">方向 D: 看板分组布局</div>
+    <div class="direction-desc">按状态分组排列，类似 Auto-Claude 的看板风格。直观展示各状态的窗口数量分布。</div>
+    <div style="display:flex;gap:16px;align-items:flex-start;">${cols}</div>
+  </div>`;
+}
+
+document.getElementById('container').innerHTML = directionA() + directionB() + directionC() + directionD();
+
+function show(idx) {
+  document.querySelectorAll('.direction').forEach((d,i) => {
+    d.classList.toggle('active', i === idx);
+  });
+  document.querySelectorAll('.nav button').forEach((b,i) => {
+    b.classList.toggle('active', i === idx);
+  });
+}
+</script>
+</body>
+</html>
