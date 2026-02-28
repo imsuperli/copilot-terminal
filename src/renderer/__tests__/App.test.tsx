@@ -1,52 +1,52 @@
-import { describe, it, expect } from 'vitest';
-import { render } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import App from '../App';
 
-describe('Design System Integration', () => {
-  it('renders App component with design system', () => {
+describe('App - Main Window and Basic Layout', () => {
+  it('renders main layout with toolbar and content area', () => {
     const { container } = render(<App />);
-    expect(container.querySelector('.min-h-screen')).toBeDefined();
+    const mainLayout = container.querySelector('.h-screen');
+    expect(mainLayout).toBeDefined();
+    expect(mainLayout?.className).toContain('flex');
+    expect(mainLayout?.className).toContain('flex-col');
+    expect(mainLayout?.className).toContain('bg-bg-app');
   });
 
-  it('displays design system title', () => {
-    const { getByText } = render(<App />);
-    expect(getByText('ausome-terminal')).toBeDefined();
-    expect(getByText('UI 设计系统基础集成')).toBeDefined();
+  it('displays application name in toolbar', () => {
+    render(<App />);
+    expect(screen.getByText('ausome-terminal')).toBeInTheDocument();
   });
 
-  it('renders button components section', () => {
-    const { getByText } = render(<App />);
-    expect(getByText('按钮组件')).toBeDefined();
-    expect(getByText('Primary Button')).toBeDefined();
-    expect(getByText('Secondary Button')).toBeDefined();
-    expect(getByText('Ghost Button')).toBeDefined();
+  it('displays version number in toolbar', () => {
+    render(<App />);
+    expect(screen.getByText('v0.1.0')).toBeInTheDocument();
   });
 
-  it('renders dialog component section', () => {
-    const { getByText } = render(<App />);
-    expect(getByText('对话框组件')).toBeDefined();
-    expect(getByText('打开对话框')).toBeDefined();
+  it('renders empty state with guidance message', () => {
+    render(<App />);
+    expect(screen.getByText('创建你的第一个任务窗口')).toBeInTheDocument();
   });
 
-  it('renders tooltip component section', () => {
-    const { getByText } = render(<App />);
-    expect(getByText('提示组件')).toBeDefined();
-    expect(getByText('悬停查看提示')).toBeDefined();
+  it('renders create window button', () => {
+    render(<App />);
+    const button = screen.getByRole('button', { name: /新建窗口/i });
+    expect(button).toBeInTheDocument();
   });
 
-  it('renders status colors section', () => {
-    const { getByText } = render(<App />);
-    expect(getByText('状态色展示')).toBeDefined();
-    expect(getByText('运行中')).toBeDefined();
-    expect(getByText('等待')).toBeDefined();
-    expect(getByText('完成')).toBeDefined();
-    expect(getByText('出错')).toBeDefined();
-    expect(getByText('恢复中')).toBeDefined();
+  it('logs to console when create window button is clicked', () => {
+    const consoleSpy = vi.spyOn(console, 'log');
+    render(<App />);
+    
+    const button = screen.getByRole('button', { name: /新建窗口/i });
+    button.click();
+    
+    expect(consoleSpy).toHaveBeenCalledWith('创建新窗口');
+    consoleSpy.mockRestore();
   });
 
-  it('applies Tailwind CSS classes', () => {
+  it('applies dark theme background color', () => {
     const { container } = render(<App />);
-    const mainDiv = container.querySelector('.min-h-screen');
-    expect(mainDiv?.className).toContain('p-8');
+    const mainLayout = container.querySelector('.bg-bg-app');
+    expect(mainLayout).toBeDefined();
   });
 });
