@@ -112,7 +112,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       onClick={onClick}
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
-      className="min-w-[280px] h-56 bg-zinc-800 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:bg-zinc-750 hover:shadow-lg active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-blue-500 flex flex-col border border-zinc-700"
+      className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:bg-[rgb(var(--card))]/80 hover:shadow-lg active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] flex flex-col border border-[rgb(var(--border))]"
     >
       {/* 圆弧形彩色顶部线条 (4px 高度) */}
       <div
@@ -124,10 +124,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
       <div className="flex-1 p-4 space-y-2 flex flex-col min-h-0">
         {/* 第一行：窗口名称 + 状态标签 */}
         <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-zinc-100 truncate flex-1">
+          <h3 className="text-base font-semibold text-[rgb(var(--foreground))] truncate flex-1">
             {window.name}
           </h3>
-          <span className="text-xs text-zinc-400 ml-2 flex-shrink-0">
+          <span className="text-xs text-[rgb(var(--muted-foreground))] ml-2 flex-shrink-0">
             {statusLabel}
           </span>
         </div>
@@ -138,14 +138,14 @@ export const WindowCard = React.memo<WindowCardProps>(({
             <Tooltip.Trigger asChild>
               <p
                 data-testid="working-directory"
-                className="text-sm font-mono text-zinc-400"
+                className="text-sm font-mono text-[rgb(var(--muted-foreground))]"
               >
                 {truncatedPath}
               </p>
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Content
-                className="bg-zinc-900 text-zinc-100 px-3 py-2 rounded-lg text-sm max-w-md break-all z-50 shadow-xl border border-zinc-700"
+                className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-3 py-2 rounded-lg text-sm max-w-md break-all z-50 shadow-xl border border-[rgb(var(--border))]"
                 sideOffset={5}
               >
                 {window.workingDirectory}
@@ -155,29 +155,29 @@ export const WindowCard = React.memo<WindowCardProps>(({
         </Tooltip.Provider>
 
         {/* 分割线 */}
-        <div className="border-t border-zinc-700" />
+        <div className="border-t border-[rgb(var(--border))]" />
 
         {/* 第三行：最新输出摘要 */}
-        <p className="text-sm text-zinc-400 truncate flex-1">
+        <p className="text-sm text-[rgb(var(--muted-foreground))] truncate flex-1">
           {window.lastOutput || '无输出'}
         </p>
 
         {/* 第四行：最后活跃时间 */}
         <div className="flex items-center justify-between">
-          <span className="text-xs text-zinc-500 truncate flex-1">
+          <span className="text-xs text-[rgb(var(--muted-foreground))] truncate flex-1">
             {window.model || '未知模型'}
           </span>
-          <span className="text-xs text-zinc-500 ml-2 flex-shrink-0">
+          <span className="text-xs text-[rgb(var(--muted-foreground))] ml-2 flex-shrink-0">
             {formattedTime}
           </span>
         </div>
       </div>
 
       {/* 底部按钮栏 */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-zinc-900 border-t border-zinc-700 flex-shrink-0">
+      <div className="flex items-center gap-2 px-4 py-3 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
         <button
           onClick={(e) => handleButtonClick(e, onOpenFolder || (() => {}))}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-300 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
           aria-label="打开文件夹"
         >
           <FolderOpen size={14} />
@@ -185,7 +185,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
         </button>
         <button
           onClick={(e) => handleButtonClick(e, onDelete || (() => {}))}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-400 bg-zinc-800 rounded hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
           aria-label="删除窗口"
         >
           <Trash2 size={14} />

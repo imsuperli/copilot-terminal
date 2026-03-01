@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Auto-Claude inspired color scheme - Oscura Midnight Theme */
+@layer base {
+  :root {
+    /* Dark Mode - Primary theme */
+    --background: 11 11 15; /* #0B0B0F */
+    --foreground: 230 230 230; /* #E6E6E6 */
+
+    --card: 18 18 22; /* #121216 */
+    --card-foreground: 230 230 230;
+
+    --primary: 214 216 118; /* #D6D876 - Yellow accent */
+    --primary-foreground: 11 11 15;
+
+    --secondary: 26 26 31; /* #1A1A1F */
+    --secondary-foreground: 230 230 230;
+
+    --muted: 26 26 31;
+    --muted-foreground: 134 143 151; /* #868F97 */
+
+    --accent: 42 42 31; /* #2A2A1F */
+    --accent-foreground: 214 216 118;
+
+    --destructive: 255 92 92; /* #FF5C5C */
+    --destructive-foreground: 11 11 15;
+
+    --border: 35 35 35; /* #232323 */
+    --input: 35 35 35;
+    --ring: 214 216 118;
+
+    --sidebar: 14 14 18; /* #0E0E12 */
+    --sidebar-foreground: 230 230 230;
+
+    --success: 78 190 150; /* #4EBE96 */
+    --warning: 210 215 20; /* #D2D714 */
+    --info: 71 159 250; /* #479FFA */
+    --error: 255 92 92;
+
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--muted));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted-foreground) / 0.5);
+}

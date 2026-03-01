@@ -32,35 +32,35 @@ export const StatusBar = React.memo(function StatusBar() {
       className="space-y-2"
     >
       {/* 运行中 */}
-      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800">
+      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-green-400" aria-hidden="true" />
-          <span className="text-xs text-zinc-400">运行中</span>
+          <Activity className="w-4 h-4 text-[rgb(var(--success))]" aria-hidden="true" />
+          <span className="text-xs text-[rgb(var(--muted-foreground))]">运行中</span>
         </div>
-        <span className="text-sm font-semibold text-green-400">
+        <span className="text-sm font-semibold text-[rgb(var(--success))]">
           {statusCounts.running}
         </span>
       </div>
 
       {/* 等待输入 */}
-      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800">
+      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
         <div className="flex items-center gap-2">
-          <Pause className="w-4 h-4 text-blue-400" aria-hidden="true" />
-          <span className="text-xs text-zinc-400">等待输入</span>
+          <Pause className="w-4 h-4 text-[rgb(var(--info))]" aria-hidden="true" />
+          <span className="text-xs text-[rgb(var(--muted-foreground))]">等待输入</span>
         </div>
-        <span className="text-sm font-semibold text-blue-400">
+        <span className="text-sm font-semibold text-[rgb(var(--info))]">
           {statusCounts.waiting}
         </span>
       </div>
 
       {/* 已完成 */}
       {statusCounts.completed > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800">
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
           <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-zinc-400" aria-hidden="true" />
-            <span className="text-xs text-zinc-400">已完成</span>
+            <CheckCircle className="w-4 h-4 text-[rgb(var(--muted-foreground))]" aria-hidden="true" />
+            <span className="text-xs text-[rgb(var(--muted-foreground))]">已完成</span>
           </div>
-          <span className="text-sm font-semibold text-zinc-400">
+          <span className="text-sm font-semibold text-[rgb(var(--muted-foreground))]">
             {statusCounts.completed}
           </span>
         </div>
@@ -68,12 +68,12 @@ export const StatusBar = React.memo(function StatusBar() {
 
       {/* 出错 */}
       {statusCounts.error > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-800">
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
           <div className="flex items-center gap-2">
-            <XCircle className="w-4 h-4 text-red-400" aria-hidden="true" />
-            <span className="text-xs text-zinc-400">出错</span>
+            <XCircle className="w-4 h-4 text-[rgb(var(--error))]" aria-hidden="true" />
+            <span className="text-xs text-[rgb(var(--muted-foreground))]">出错</span>
           </div>
-          <span className="text-sm font-semibold text-red-400">
+          <span className="text-sm font-semibold text-[rgb(var(--error))]">
             {statusCounts.error}
           </span>
         </div>
@@ -81,4 +81,5 @@ export const StatusBar = React.memo(function StatusBar() {
     </div>
   );
 });
+
 
