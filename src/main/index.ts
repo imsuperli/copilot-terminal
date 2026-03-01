@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, globalShortcut } from 'electron';
 import path from 'path';
 import { existsSync, accessSync, constants } from 'fs';
 import { randomUUID } from 'crypto';
@@ -71,10 +71,22 @@ function createWindow() {
   // 开发环境加载 dev server,生产环境加载打包文件
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:5173'); // Vite dev server
-    mainWindow.webContents.openDevTools(); // 开发模式自动打开开发者工具
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
+
+  // F12 切换开发者工具
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' && input.type === 'keyDown') {
+      if (mainWindow) {
+        if (mainWindow.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow.webContents.openDevTools();
+        }
+      }
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
