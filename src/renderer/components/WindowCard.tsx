@@ -15,29 +15,46 @@ interface WindowCardProps {
 
 /**
  * 智能截断路径，保留完整的文件夹名称，中间用...替代
+ * 根据路径长度动态调整保留的层级数
  * @param path 完整路径
- * @param maxSegments 最大显示的路径段数（前后各保留的段数）
  */
-function truncatePath(path: string, maxSegments: number = 3): string {
+function truncatePath(path: string): string {
   // 统一使用正斜杠分割路径
-  const normalizedPath = path.replace(/\\/g, '/');
+  const normalizedPath = path.replace(/\/g, '/');
   const segments = normalizedPath.split('/').filter(s => s.length > 0);
-
-  // 如果路径段数不超过限制，直接返回
-  if (segments.length <= maxSegments * 2) {
-    return path;
-  }
-
-  // 保留前 maxSegments 段和后 maxSegments 段
-  const prefix = segments.slice(0, maxSegments).join('/');
-  const suffix = segments.slice(-maxSegments).join('/');
 
   // 检测是否是 Windows 路径（包含盘符）
   const isWindowsPath = /^[A-Za-z]:/.test(path);
 
+  // 如果路径段数较少，直接返回
+  if (segments.length <= 4) {
+    return path;
+  }
+
+  // 根据路径长度动态调整保留的层级数
+  const pathLength = path.length;
+  let keepSegments = 2; // 默认前后各保留2层
+
+  if (pathLength > 100) {
+    keepSegments = 2; // 很长的路径，前后各保留2层
+  } else if (pathLength > 70) {
+    keepSegments = 2; // 中等长度，前后各保留2层
+  } else {
+    keepSegments = 3; // 较短路径，前后各保留3层
+  }
+
+  // 如果段数不超过保留数的两倍，直接返回
+  if (segments.length <= keepSegments * 2) {
+    return path;
+  }
+
+  // 保留前 keepSegments 段和后 keepSegments 段
+  const prefix = segments.slice(0, keepSegments).join('/');
+  const suffix = segments.slice(-keepSegments).join('/');
+
   if (isWindowsPath) {
     // Windows 路径：保持反斜杠格式
-    return `${prefix.replace(/\//g, '\\')}\\...\\${suffix.replace(/\//g, '\\')}`;
+    return `${prefix.replace(/\//g, '\\')}\...\${suffix.replace(/\//g, '\\')}`;
   } else {
     // Unix 路径：使用正斜杠
     return `${prefix}/.../${suffix}`;
@@ -132,13 +149,13 @@ export const WindowCard = React.memo<WindowCardProps>(({
           </span>
         </div>
 
-        {/* 第二行：工作目录路径（智能截断） */}
+        {/* 第二行：工作目录路径（智能截断，支持换行最多2行） */}
         <Tooltip.Provider>
           <Tooltip.Root delayDuration={500}>
             <Tooltip.Trigger asChild>
               <p
                 data-testid="working-directory"
-                className="text-sm font-mono text-[rgb(var(--muted-foreground))]"
+                className="text-sm font-mono text-[rgb(var(--muted-foreground))] break-all line-clamp-2 pr-1"
               >
                 {truncatedPath}
               </p>
