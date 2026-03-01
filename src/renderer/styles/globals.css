@@ -12,7 +12,7 @@
     --card: 18 18 22; /* #121216 */
     --card-foreground: 230 230 230;
 
-    --primary: 214 216 118; /* #D6D876 - Yellow accent */
+    --primary: 168 170 88; /* #A8AA58 - Darker, more muted yellow */
     --primary-foreground: 11 11 15;
 
     --secondary: 26 26 31; /* #1A1A1F */
@@ -22,14 +22,14 @@
     --muted-foreground: 134 143 151; /* #868F97 */
 
     --accent: 42 42 31; /* #2A2A1F */
-    --accent-foreground: 214 216 118;
+    --accent-foreground: 168 170 88;
 
     --destructive: 255 92 92; /* #FF5C5C */
     --destructive-foreground: 11 11 15;
 
     --border: 35 35 35; /* #232323 */
     --input: 35 35 35;
-    --ring: 214 216 118;
+    --ring: 168 170 88;
 
     --sidebar: 14 14 18; /* #0E0E12 */
     --sidebar-foreground: 230 230 230;

@@ -50,7 +50,7 @@ export function Sidebar({
               onClick={() => onTabChange?.('active')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
                 currentTab === 'active'
-                  ? 'bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium'
+                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
@@ -64,7 +64,7 @@ export function Sidebar({
               onClick={() => onTabChange?.('archived')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
                 currentTab === 'archived'
-                  ? 'bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium'
+                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
@@ -101,7 +101,7 @@ export function Sidebar({
           {/* New Terminal button */}
           <button
             onClick={onCreateWindow}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
           >
             <Plus className="h-4 w-4" />
             <span>新建终端</span>
