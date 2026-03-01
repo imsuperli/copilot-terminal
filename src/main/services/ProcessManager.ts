@@ -53,9 +53,19 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const shell = this.getDefaultShell();
     const command = config.command || shell;
 
-    // Mock PTY creation (will be replaced with real node-pty when available)
-    const pid = this.nextPid++;
-    const mockPty = this.createMockPty(pid, config);
+    // 创建 PTY 进程（真实或 mock）
+    let ptyProcess: any;
+    let pid: number;
+
+    if (pty) {
+      // 使用真实的 node-pty
+      ptyProcess = this.createRealPty(config);
+      pid = ptyProcess.pid;
+    } else {
+      // 使用 mock PTY
+      pid = this.nextPid++;
+      ptyProcess = this.createMockPty(pid, config);
+    }
 
     // Store process info
     const processInfo: ProcessInfo = {
@@ -66,17 +76,17 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       windowId: config.windowId,
     };
     this.processes.set(pid, processInfo);
-    this.ptys.set(pid, mockPty);
+    this.ptys.set(pid, ptyProcess);
 
     // Start tracking this PID before registering listeners (avoids race condition)
     this.statusDetector.trackPid(pid);
 
     // Register PTY listeners for status detection
-    mockPty.onData((data: string) => {
+    ptyProcess.onData((data: string) => {
       this.statusDetector.onPtyData(pid, data);
     });
 
-    mockPty.onExit((exitCode: number) => {
+    ptyProcess.onExit((exitCode: number) => {
       this.statusDetector.onProcessExit(pid, exitCode);
     });
 
@@ -85,7 +95,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     return {
       pid,
-      pty: mockPty,
+      pty: ptyProcess,
     };
   }
 
@@ -235,15 +245,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 创建终端 PTY 进程
+   * 创建 Mock PTY 进程（仅在 node-pty 不可用时使用）
    */
   private createMockPty(pid: number, config: TerminalConfig): any {
-    // 如果 node-pty 可用，使用真实实现
-    if (pty) {
-      return this.createRealPty(config);
-    }
-
-    // 否则使用 mock 实现
+    // Mock 实现
     const dataCallbacks: Array<(data: string) => void> = [];
     const exitCallbacks: Array<(exitCode: number) => void> = [];
 
