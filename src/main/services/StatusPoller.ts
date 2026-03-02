@@ -35,6 +35,7 @@ export class StatusPoller {
     this.pollingInterval = setInterval(() => {
       this.poll();
     }, 1000);
+    this.pollingInterval.unref(); // 不阻止进程退出
   }
 
   /**

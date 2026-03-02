@@ -143,6 +143,13 @@ function createWindow() {
       event.preventDefault();
       isQuitting = true;
 
+      // 顶级安全定时器：3 秒后强制退出
+      const safetyTimer = setTimeout(() => {
+        console.log('[ELECTRON] Safety timeout reached, forcing exit');
+        process.exit(0);
+      }, 3000);
+      safetyTimer.unref(); // 不阻止进程退出
+
       try {
         // 立即保存工作区
         if (autoSaveManager && currentWorkspace) {
@@ -171,10 +178,33 @@ function createWindow() {
         mainWindow.destroy();
       }
 
-      // 强制退出（增加超时时间）
+      // 清理所有 IPC handlers
+      ipcMain.removeHandler('ping');
+      ipcMain.removeHandler('create-window');
+      ipcMain.removeHandler('start-window');
+      ipcMain.removeHandler('close-window');
+      ipcMain.removeHandler('delete-window');
+      ipcMain.removeHandler('pty-write');
+      ipcMain.removeHandler('pty-resize');
+      ipcMain.removeHandler('get-pty-history');
+      ipcMain.removeHandler('open-folder');
+      ipcMain.removeHandler('save-workspace');
+      ipcMain.removeHandler('load-workspace');
+      ipcMain.removeHandler('get-window-status');
+      ipcMain.removeHandler('create-terminal');
+      ipcMain.removeHandler('kill-terminal');
+      ipcMain.removeHandler('get-terminal-status');
+      ipcMain.removeHandler('list-terminals');
+      ipcMain.removeHandler('validate-path');
+      ipcMain.removeHandler('select-directory');
+      ipcMain.removeHandler('switch-to-terminal-view');
+      ipcMain.removeHandler('switch-to-unified-view');
+      ipcMain.removeHandler('recover-from-backup');
+
+      // 强制退出（缩短超时时间）
       setTimeout(() => {
         process.exit(0);
-      }, 1000);
+      }, 300); // 从 1000ms 改为 300ms
     }
   });
 }
@@ -251,7 +281,7 @@ app.whenReady().then(async () => {
 // 所有窗口关闭时退出应用 (macOS 除外)
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    app.quit();
+    app.exit(0); // 使用 app.exit(0) 而不是 app.quit()
   }
 });
 

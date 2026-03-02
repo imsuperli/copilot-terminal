@@ -119,6 +119,7 @@ export class StatusDetectorImpl implements IStatusDetector {
     this.pollingInterval = setInterval(() => {
       this.pollAll();
     }, 1000);
+    this.pollingInterval.unref(); // 不阻止进程退出
   }
 
   /**

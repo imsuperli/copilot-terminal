@@ -138,11 +138,12 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.emit('process-exited', processInfo);
 
     // Clean up after a delay
-    setTimeout(() => {
+    const cleanupTimer = setTimeout(() => {
       this.processes.delete(pid);
       this.ptys.delete(pid);
       this.statusDetector.untrackPid(pid);
     }, 1000);
+    cleanupTimer.unref(); // 不阻止进程退出
   }
 
   /**
@@ -240,7 +241,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
             // 设置超时，防止永久等待
             const timeout = setTimeout(() => {
               resolve();
-            }, 1000);
+            }, 500); // 从 1000ms 改为 500ms
+            timeout.unref(); // 不阻止进程退出
 
             // 监听退出事件
             pty.onExit(() => {
