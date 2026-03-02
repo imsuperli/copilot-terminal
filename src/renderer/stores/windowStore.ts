@@ -178,6 +178,13 @@ export const useWindowStore = create<WindowStore>()(
 
     // 关闭窗格
     closePaneInWindow: (windowId, paneId) => {
+      // 先调用 IPC 关闭 PTY 进程
+      if (window.electronAPI) {
+        window.electronAPI.closePane(windowId, paneId).catch((error) => {
+          console.error('Failed to close pane:', error);
+        });
+      }
+
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
         if (window) {

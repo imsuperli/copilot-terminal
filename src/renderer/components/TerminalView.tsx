@@ -110,12 +110,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       const activePaneId = terminalWindow.activePaneId;
       if (!activePaneId) return;
 
+      // 获取当前激活窗格的信息
+      const { getPaneById } = useWindowStore.getState();
+      const activePane = getPaneById(terminalWindow.id, activePaneId);
+      const currentCwd = activePane?.cwd || 'D:\\';
+      const currentCommand = activePane?.command || 'pwsh.exe';
+
       // 创建新窗格
       const newPaneId = uuidv4();
       const newPane: Pane = {
         id: newPaneId,
-        cwd: 'D:\\', // 默认工作目录，后续可以改为当前窗格的 cwd
-        command: 'pwsh.exe',
+        cwd: currentCwd, // 使用当前窗格的工作目录
+        command: currentCommand, // 使用当前窗格的命令
         status: WindowStatus.Paused,
         pid: null,
       };
