@@ -389,14 +389,28 @@ function registerIPCHandlers() {
       const folderName = pathParts[pathParts.length - 1] || 'Terminal';
       const defaultName = folderName;
 
-      // 返回符合 Window 接口的对象
-      const window = {
-        id: windowId,
-        name: config.name || defaultName,
-        workingDirectory: config.workingDirectory,
+      // 创建 Pane 对象
+      const pane = {
+        id: paneId,
+        cwd: config.workingDirectory,
         command: command,
         status: WindowStatus.Running as WindowStatus,
         pid: handle.pid,
+      };
+
+      // 创建布局树（单个窗格）
+      const layout = {
+        type: 'pane' as const,
+        id: paneId,
+        pane: pane,
+      };
+
+      // 返回符合新 Window 接口的对象
+      const window = {
+        id: windowId,
+        name: config.name || defaultName,
+        layout: layout,
+        activePaneId: paneId,
         createdAt: new Date().toISOString(),
         lastActiveAt: new Date().toISOString(),
       };
@@ -404,13 +418,13 @@ function registerIPCHandlers() {
       // 将新窗口添加到 StatusPoller
       statusPoller?.addWindow(windowId, handle.pid);
 
-      // 初始化输出缓存
-      ptyOutputCache.set(windowId, []);
+      // 初始化输出缓存（使用 paneId）
+      ptyOutputCache.set(paneId, []);
 
       // 订阅 PTY 数据，推送到渲染进程并缓存
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
         // 缓存输出
-        const cache = ptyOutputCache.get(windowId);
+        const cache = ptyOutputCache.get(paneId);
         if (cache) {
           cache.push(data);
           // 限制缓存大小
@@ -421,7 +435,7 @@ function registerIPCHandlers() {
 
         // 推送到渲染进程
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('pty-data', { windowId, data });
+          mainWindow.webContents.send('pty-data', { windowId, paneId, data });
         }
       });
 
@@ -477,20 +491,22 @@ function registerIPCHandlers() {
       // 将窗口添加到 StatusPoller
       statusPoller?.addWindow(windowId, handle.pid);
 
-      // 初始化输出缓存（如果还没有）
-      if (!ptyOutputCache.has(windowId)) {
-        ptyOutputCache.set(windowId, []);
+      // 初始化输出缓存（如果还没有，使用 paneId）
+      if (paneId && !ptyOutputCache.has(paneId)) {
+        ptyOutputCache.set(paneId, []);
       }
 
       // 订阅 PTY 数据，推送到渲染进程并缓存
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
         // 缓存输出
-        const cache = ptyOutputCache.get(windowId);
-        if (cache) {
-          cache.push(data);
-          // 限制缓存大小
-          if (cache.length > MAX_CACHE_SIZE) {
-            cache.shift();
+        if (paneId) {
+          const cache = ptyOutputCache.get(paneId);
+          if (cache) {
+            cache.push(data);
+            // 限制缓存大小
+            if (cache.length > MAX_CACHE_SIZE) {
+              cache.shift();
+            }
           }
         }
 
@@ -603,19 +619,20 @@ function registerIPCHandlers() {
         ptyDataUnsubscribers.delete(windowId);
       }
 
-      // 清理输出缓存
-      ptyOutputCache.delete(windowId);
-
-      // 查找对应进程并终止
+      // 查找对应进程并终止，同时清理缓存
       const processes = processManager.listProcesses();
-      const found = processes.find(p => p.windowId === windowId);
-      if (found) {
+      const windowProcesses = processes.filter(p => p.windowId === windowId);
+      for (const proc of windowProcesses) {
+        // 清理每个窗格的输出缓存
+        if (proc.paneId) {
+          ptyOutputCache.delete(proc.paneId);
+        }
         try {
-          await processManager.killProcess(found.pid);
+          await processManager.killProcess(proc.pid);
         } catch (error) {
           // 进程已退出，忽略错误
           if (process.env.NODE_ENV === 'development') {
-            console.log(`Process ${found.pid} already exited`);
+            console.log(`Process ${proc.pid} already exited`);
           }
         }
       }
@@ -633,16 +650,20 @@ function registerIPCHandlers() {
       if (!processManager) {
         throw new Error('ProcessManager not initialized');
       }
-      // 查找对应进程并终止
+      // 查找对应进程并终止，同时清理缓存
       const processes = processManager.listProcesses();
-      const found = processes.find(p => p.windowId === windowId);
-      if (found) {
+      const windowProcesses = processes.filter(p => p.windowId === windowId);
+      for (const proc of windowProcesses) {
+        // 清理每个窗格的输出缓存
+        if (proc.paneId) {
+          ptyOutputCache.delete(proc.paneId);
+        }
         try {
-          await processManager.killProcess(found.pid);
+          await processManager.killProcess(proc.pid);
         } catch (error) {
           // 进程已退出，忽略错误
           if (process.env.NODE_ENV === 'development') {
-            console.log(`Process ${found.pid} already exited`);
+            console.log(`Process ${proc.pid} already exited`);
           }
         }
       }
@@ -653,9 +674,6 @@ function registerIPCHandlers() {
         unsubscribe();
         ptyDataUnsubscribers.delete(windowId);
       }
-
-      // 清理 PTY 输出缓存
-      ptyOutputCache.delete(windowId);
 
       // TODO: 移除窗口配置（Story 6.x 工作区持久化时实现）
       // 从 StatusPoller 移除窗口
@@ -722,9 +740,9 @@ function registerIPCHandlers() {
   });
 
   // 获取 PTY 历史输出
-  ipcMain.handle('get-pty-history', async (_event, { windowId }: { windowId: string }) => {
+  ipcMain.handle('get-pty-history', async (_event, { paneId }: { paneId: string }) => {
     try {
-      const cache = ptyOutputCache.get(windowId);
+      const cache = ptyOutputCache.get(paneId);
       return cache || [];
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
@@ -756,6 +774,10 @@ function registerIPCHandlers() {
       if (!processManager) {
         throw new Error('ProcessManager not initialized');
       }
+
+      // 清理输出缓存
+      ptyOutputCache.delete(paneId);
+
       const processes = processManager.listProcesses();
       const found = processes.find(p => p.windowId === windowId && p.paneId === paneId);
       if (found) {

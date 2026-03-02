@@ -103,7 +103,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       window.electronAPI.onPtyData(handlePtyData);
 
       // 加载历史输出（如果有）
-      window.electronAPI.getPtyHistory(windowId).then((history) => {
+      window.electronAPI.getPtyHistory(paneId).then((history) => {
         if (history && history.length > 0) {
           for (const data of history) {
             terminal.write(data);
