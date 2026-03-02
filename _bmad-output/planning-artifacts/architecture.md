@@ -166,7 +166,12 @@ _本文档通过协作式架构决策流程逐步构建，记录 ausome-terminal
 | ScrollArea | 15+ 窗口滚动 | Radix UI |
 | WindowCard | 窗口状态卡片 | 自定义 |
 | StatusBar | 状态统计栏 | 自定义 |
-| TerminalView | 终端视图 | 自定义 |
+| TerminalView | 终端视图（支持多窗格） | 自定义 |
+| TerminalPane | 单个终端窗格 | 自定义 |
+| SplitLayout | 窗格拆分布局容器 | 自定义 + react-resizable-panels |
+| Sidebar | 侧边栏窗口列表 | 自定义 |
+| QuickSwitcher | 快速切换器 | 自定义 |
+| TabSwitcher | Tab 循环切换器 | 自定义 |
 
 ### 状态管理：Zustand
 
@@ -590,6 +595,255 @@ class ViewSwitcherImpl implements ViewSwitcher {
 
 **性能目标：** 视图切换 < 100ms（纯 UI 切换，无外部窗口操作）
 
+### 窗口切换系统架构
+
+ausome-terminal 提供了多种窗口切换方式，满足不同场景的需求：
+
+#### 1. Sidebar（侧边栏）
+
+**职责：** 在终端视图中提供持久可见的窗口列表
+
+**特性：**
+- 默认折叠状态（32px 宽），仅显示状态指示点
+- 展开状态（150-400px 可调整），显示窗口名称和路径
+- 支持拖拽调整宽度
+- 分为"活跃终端"和"归档终端"两个标签页
+- 点击窗口项立即切换
+
+**实现：**
+```typescript
+interface SidebarState {
+  isExpanded: boolean;           // 是否展开
+  width: number;                 // 展开时的宽度（150-400px）
+  currentTab: 'active' | 'archived';  // 当前标签页
+}
+
+// 切换展开/折叠
+function toggleSidebar(): void {
+  sidebarState.isExpanded = !sidebarState.isExpanded;
+}
+
+// 调整宽度
+function resizeSidebar(newWidth: number): void {
+  sidebarState.width = Math.max(150, Math.min(400, newWidth));
+}
+```
+
+**快捷键：**
+- `Ctrl+B`: 切换侧边栏展开/折叠
+- `Ctrl+1~9`: 切换到第 N 个窗口
+
+#### 2. QuickSwitcher（快速切换器）
+
+**职责：** 提供模糊搜索的快速窗口切换
+
+**特性：**
+- 模糊搜索窗口名称和路径
+- 键盘导航（↑↓ 或 Ctrl+N/P）
+- 高亮匹配字符
+- 显示所有窗口（包括归档）
+- 当前窗口排在第一位
+
+**实现：**
+```typescript
+interface QuickSwitcherState {
+  isOpen: boolean;
+  query: string;                 // 搜索关键词
+  selectedIndex: number;         // 当前选中的索引
+  filteredWindows: Window[];     // 过滤后的窗口列表
+}
+
+// 模糊匹配算法
+function fuzzyMatch(query: string, text: string): boolean {
+  const queryLower = query.toLowerCase();
+  const textLower = text.toLowerCase();
+  let queryIndex = 0;
+
+  for (let i = 0; i < textLower.length && queryIndex < queryLower.length; i++) {
+    if (textLower[i] === queryLower[queryIndex]) {
+      queryIndex++;
+    }
+  }
+
+  return queryIndex === queryLower.length;
+}
+
+// 过滤窗口
+function filterWindows(query: string, windows: Window[]): Window[] {
+  return windows
+    .filter(w => fuzzyMatch(query, w.name) || fuzzyMatch(query, getCwd(w)))
+    .sort((a, b) => {
+      // 当前窗口排在最前面
+      if (a.id === currentWindowId) return -1;
+      if (b.id === currentWindowId) return 1;
+      return 0;
+    });
+}
+```
+
+**快捷键：**
+- `Ctrl+P`: 打开快速切换器
+- `↑↓` 或 `Ctrl+N/P`: 选择窗口
+- `Enter`: 切换到选中窗口
+- `Esc`: 关闭
+
+#### 3. TabSwitcher（Tab 循环切换）
+
+**职责：** 基于 MRU（Most Recently Used）顺序的快速切换
+
+**特性：**
+- 按 MRU 顺序显示最近使用的窗口
+- 按住 Ctrl 键，按 Tab 循环切换
+- 松开 Ctrl 键确认切换
+- 水平显示最近 8 个窗口的预览
+- 类似 Alt+Tab 的交互体验
+
+**实现：**
+```typescript
+interface TabSwitcherState {
+  isOpen: boolean;
+  selectedIndex: number;         // 当前选中的索引
+  direction: 'forward' | 'backward';  // 切换方向
+}
+
+// MRU 列表管理
+interface MRUManager {
+  mruList: string[];             // 窗口 ID 列表，按最近使用排序
+
+  // 更新 MRU 列表（窗口切换时调用）
+  updateMRU(windowId: string): void {
+    // 移除旧位置
+    this.mruList = this.mruList.filter(id => id !== windowId);
+    // 添加到最前面
+    this.mruList.unshift(windowId);
+  }
+
+  // 获取 MRU 窗口列表
+  getMRUWindows(): Window[] {
+    return this.mruList
+      .map(id => getWindowById(id))
+      .filter(w => w !== null);
+  }
+}
+
+// Tab 切换逻辑
+function handleTabSwitch(direction: 'forward' | 'backward'): void {
+  const mruWindows = getMRUWindows();
+
+  if (direction === 'forward') {
+    selectedIndex = (selectedIndex + 1) % mruWindows.length;
+  } else {
+    selectedIndex = (selectedIndex - 1 + mruWindows.length) % mruWindows.length;
+  }
+}
+
+// Ctrl 键释放时确认切换
+function handleCtrlRelease(): void {
+  const selectedWindow = mruWindows[selectedIndex];
+  if (selectedWindow) {
+    switchToWindow(selectedWindow.id);
+  }
+  closeTabSwitcher();
+}
+```
+
+**快捷键：**
+- `Ctrl+Tab`: 向前循环
+- `Ctrl+Shift+Tab`: 向后循环
+- 松开 `Ctrl`: 确认切换
+
+#### 4. 键盘快捷键系统
+
+**实现：**
+```typescript
+interface KeyboardShortcuts {
+  onCtrlTab: () => void;         // Ctrl+Tab
+  onCtrlShiftTab: () => void;    // Ctrl+Shift+Tab
+  onCtrlP: () => void;           // Ctrl+P
+  onCtrlB: () => void;           // Ctrl+B
+  onCtrlNumber: (num: number) => void;  // Ctrl+1~9
+  onEscape: () => void;          // Esc
+  enabled: boolean;              // 是否启用
+}
+
+// 快捷键监听
+function useKeyboardShortcuts(shortcuts: KeyboardShortcuts): void {
+  useEffect(() => {
+    if (!shortcuts.enabled) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Tab
+      if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
+        e.preventDefault();
+        shortcuts.onCtrlTab();
+      }
+
+      // Ctrl+Shift+Tab
+      if (e.ctrlKey && e.key === 'Tab' && e.shiftKey) {
+        e.preventDefault();
+        shortcuts.onCtrlShiftTab();
+      }
+
+      // Ctrl+P
+      if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        shortcuts.onCtrlP();
+      }
+
+      // Ctrl+B
+      if (e.ctrlKey && e.key === 'b') {
+        e.preventDefault();
+        shortcuts.onCtrlB();
+      }
+
+      // Ctrl+1~9
+      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const num = parseInt(e.key);
+        shortcuts.onCtrlNumber(num);
+      }
+
+      // Esc
+      if (e.key === 'Escape') {
+        shortcuts.onEscape();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [shortcuts]);
+}
+```
+
+**特殊处理：**
+- 在终端输入时，`Ctrl+Enter` 和 `Shift+Enter` 插入换行符（用于 Claude Code 等多行输入场景）
+- 快速切换器和 Tab 切换器打开时，禁用其他快捷键
+- Esc 键优先级：关闭切换器 > 返回统一视图
+
+#### 窗口切换性能优化
+
+**目标：** 所有切换方式响应时间 < 100ms
+
+**优化策略：**
+1. **TerminalView 组件保持挂载**
+   - 所有窗口的 TerminalView 始终挂载
+   - 使用 CSS `display: none` 隐藏非活跃窗口
+   - 避免 xterm.js 重新初始化导致的双光标问题
+
+2. **MRU 列表缓存**
+   - MRU 列表存储在 Zustand store 中
+   - 窗口切换时立即更新
+   - 持久化到 workspace.json
+
+3. **模糊搜索优化**
+   - 使用简单的字符匹配算法（O(n)）
+   - 限制搜索结果数量（最多 50 个）
+   - 防抖输入（debounce 100ms）
+
+4. **虚拟滚动**
+   - 侧边栏窗口列表超过 20 个时使用虚拟滚动
+   - 仅渲染可见区域的窗口项
+
 ## 关键技术决策
 
 ### 决策 1：终端集成方式
@@ -744,6 +998,141 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
 - 10 个窗口：< 3s
 - 15 个窗口：< 5s
 
+### 决策 5：窗格拆分实现
+
+**问题：** 如何在单个窗口内支持多个终端窗格？
+
+**方案对比：**
+
+| 方案 | 优势 | 劣势 | 结论 |
+|------|------|------|------|
+| 多个独立窗口 | 实现简单，窗口管理由 OS 负责 | 无法在单个逻辑窗口内管理多个终端，布局不灵活 | ❌ 不符合需求 |
+| Tab 标签页 | 实现简单，类似浏览器 | 无法同时查看多个终端，不支持分屏 | ❌ 功能不足 |
+| 树形布局 + 递归拆分 | 灵活，支持任意复杂布局，可持久化 | 实现复杂，需要布局算法 | ✅ 最佳选择 |
+
+**最终决策：** 使用树形布局结构 + 递归拆分
+
+**核心设计：**
+
+1. **布局树结构**
+   ```typescript
+   // 叶子节点：窗格
+   interface PaneNode {
+     type: 'pane';
+     id: string;
+     pane: Pane;  // 包含 PTY 进程信息
+   }
+
+   // 分支节点：拆分
+   interface SplitNode {
+     type: 'split';
+     direction: 'horizontal' | 'vertical';
+     sizes: number[];  // 子节点大小比例
+     children: LayoutNode[];
+   }
+
+   type LayoutNode = PaneNode | SplitNode;
+   ```
+
+2. **拆分操作**
+   ```typescript
+   function splitPane(
+     windowId: string,
+     paneId: string,
+     direction: 'horizontal' | 'vertical'
+   ): void {
+     // 1. 找到要拆分的窗格节点
+     const paneNode = findPaneNode(layout, paneId);
+
+     // 2. 创建新窗格（继承当前窗格的 cwd 和 command）
+     const newPane = createPane({
+       cwd: paneNode.pane.cwd,
+       command: paneNode.pane.command,
+     });
+
+     // 3. 创建拆分节点，替换原窗格节点
+     const splitNode: SplitNode = {
+       type: 'split',
+       direction,
+       sizes: [0.5, 0.5],  // 默认均分
+       children: [paneNode, newPaneNode],
+     };
+
+     // 4. 更新布局树
+     replaceNode(layout, paneId, splitNode);
+
+     // 5. 启动新窗格的 PTY 进程
+     spawnPTY(newPane);
+   }
+   ```
+
+3. **关闭窗格操作**
+   ```typescript
+   function closePane(windowId: string, paneId: string): void {
+     // 1. 找到窗格节点的父节点
+     const parent = findParentNode(layout, paneId);
+
+     // 2. 如果父节点是拆分节点，移除该窗格
+     if (parent.type === 'split') {
+       const siblings = parent.children.filter(c => c.id !== paneId);
+
+       // 3. 如果只剩一个子节点，提升该节点替换父节点
+       if (siblings.length === 1) {
+         replaceNode(layout, parent.id, siblings[0]);
+       } else {
+         // 4. 重新分配大小比例
+         parent.children = siblings;
+         redistributeSizes(parent);
+       }
+     }
+
+     // 5. 终止窗格的 PTY 进程
+     killPTY(paneId);
+   }
+   ```
+
+4. **布局渲染**
+   ```typescript
+   function renderLayout(node: LayoutNode): React.ReactNode {
+     if (node.type === 'pane') {
+       // 渲染终端窗格
+       return <TerminalPane pane={node.pane} />;
+     }
+
+     if (node.type === 'split') {
+       // 递归渲染拆分布局
+       return (
+         <SplitContainer direction={node.direction} sizes={node.sizes}>
+           {node.children.map(child => renderLayout(child))}
+         </SplitContainer>
+       );
+     }
+   }
+   ```
+
+5. **大小调整**
+   - 使用 `react-resizable-panels` 库实现拖拽调整
+   - 拖拽时实时更新 `sizes` 数组
+   - 调整后触发 xterm.js 的 `fit()` 重新计算终端大小
+
+**实现要点：**
+- 每个窗格对应一个独立的 PTY 进程
+- 每个窗格有独立的 xterm.js 实例
+- 布局树持久化到 workspace.json
+- 支持任意深度的嵌套拆分
+- 最后一个窗格不允许关闭
+
+**性能优化：**
+- 非活跃窗格的 xterm.js 实例保持挂载，使用 CSS 隐藏
+- 拖拽调整时使用 `requestAnimationFrame` 优化渲染
+- 限制最大窗格数量（建议不超过 6 个）
+
+**用户体验：**
+- 拆分时新窗格继承当前窗格的工作目录和命令
+- 活跃窗格有明显的视觉高亮（蓝色边框）
+- 点击窗格激活，支持键盘导航
+- 窗格工具栏显示状态和关闭按钮
+
 ## 数据模型设计
 
 ### 核心实体
@@ -894,12 +1283,19 @@ enum WindowStatus {
 
 ```typescript
 interface Workspace {
-  version: string;               // 数据格式版本（如 "1.0"）
+  version: string;               // 数据格式版本（如 "2.0"）
   windows: Window[];             // 窗口列表
+  mruList: string[];             // MRU 窗口 ID 列表（Most Recently Used）
   settings: Settings;            // 全局设置
   lastSavedAt: string;           // 最后保存时间
 }
 ```
+
+**MRU 列表说明：**
+- 记录窗口的最近使用顺序
+- 用于 Ctrl+Tab 切换时的排序
+- 窗口切换时自动更新
+- 持久化到 workspace.json
 
 #### Settings（设置）
 
@@ -1005,6 +1401,38 @@ ipcRenderer.invoke('delete-window', { windowId: string }): Promise<void>
 ```
 
 删除窗口（终止进程并移除配置）。
+
+---
+
+```typescript
+ipcRenderer.invoke('split-pane', {
+  workingDirectory: string,
+  command: string,
+  windowId: string,
+  paneId: string
+}): Promise<{ pid: number }>
+```
+
+拆分窗格，创建新的 PTY 进程。
+
+**参数：**
+- `workingDirectory`: 新窗格的工作目录
+- `command`: 新窗格的启动命令
+- `windowId`: 所属窗口 ID
+- `paneId`: 新窗格 ID
+
+**返回：** 新窗格的进程 PID
+
+---
+
+```typescript
+ipcRenderer.invoke('close-pane', {
+  windowId: string,
+  paneId: string
+}): Promise<void>
+```
+
+关闭窗格，终止 PTY 进程。
 
 ---
 
@@ -1653,7 +2081,8 @@ npm run electron:build
 | 终端集成 | node-pty | 1.x |
 | 终端渲染 | xterm.js | 5.x |
 | 文件操作 | fs-extra | 11.x |
-| 进程监控 | pidusage | 3.x |
+| 进程监控 | pidusage | 3.x |\n| 布局拆分 | react-resizable-panels | 2.x |
+| UUID 生成 | uuid | 9.x |
 | 测试框架 | Jest + React Testing Library | latest |
 
 ### 参考资料

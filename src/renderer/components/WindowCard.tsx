@@ -226,7 +226,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       {/* 底部按钮栏 */}
       <div className="flex items-center gap-1.5 px-4 py-3 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
         {/* 启动/暂停按钮 */}
-        {window.status === WindowStatus.Paused && (
+        {aggregatedStatus === WindowStatus.Paused && (
           <Tooltip.Provider>
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
@@ -250,7 +250,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             </Tooltip.Root>
           </Tooltip.Provider>
         )}
-        {window.status === WindowStatus.Restoring && (
+        {aggregatedStatus === WindowStatus.Restoring && (
           <button
             disabled
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--muted-foreground))] bg-[rgb(var(--card))] rounded cursor-not-allowed opacity-60 whitespace-nowrap"
@@ -260,7 +260,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             <span>启动中</span>
           </button>
         )}
-        {(window.status === WindowStatus.Running || window.status === WindowStatus.WaitingForInput) && (
+        {(aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
           <Tooltip.Provider>
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
