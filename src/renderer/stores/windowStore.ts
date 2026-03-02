@@ -45,6 +45,7 @@ interface WindowStore {
   addWindow: (window: Window) => void;
   removeWindow: (id: string) => void;
   updateWindow: (id: string, updates: Partial<Window>) => void;
+  updateWindowStatus: (id: string, status: WindowStatus) => void; // 兼容旧代码
   archiveWindow: (id: string) => void;
   unarchiveWindow: (id: string) => void;
   setActiveWindow: (id: string | null) => void;
@@ -121,6 +122,24 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       // 触发自动保存，传递最新的窗口列表
+      const windows = get().windows;
+      triggerAutoSave(windows);
+    },
+
+    // 更新窗口状态（兼容旧代码，更新所有窗格的状态）
+    updateWindowStatus: (id, status) => {
+      set((state) => {
+        const window = state.windows.find(w => w.id === id);
+        if (window) {
+          // 更新所有窗格的状态
+          const panes = getAllPanes(window.layout);
+          panes.forEach(pane => {
+            window.layout = updatePaneInLayout(window.layout, pane.id, { status });
+          });
+          window.lastActiveAt = new Date().toISOString();
+        }
+      });
+      // 触发自动保存
       const windows = get().windows;
       triggerAutoSave(windows);
     },
