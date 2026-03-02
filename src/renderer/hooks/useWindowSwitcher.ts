@@ -29,8 +29,15 @@ export function useWindowSwitcher(onSwitchView: (windowId: string) => void) {
           updatePane(win.id, pane.id, { status: WindowStatus.Restoring });
         }
 
-        // 等待一小段时间让 UI 更新，显示"启动中"动画
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // 使用 requestAnimationFrame 确保 UI 已经更新
+        await new Promise(resolve => {
+          requestAnimationFrame(() => {
+            // 再等待一帧，确保渲染完成
+            requestAnimationFrame(() => {
+              setTimeout(resolve, 50); // 额外等待 50ms 确保动画可见
+            });
+          });
+        });
 
         // 启动所有窗格
         for (const pane of panes) {
@@ -50,7 +57,7 @@ export function useWindowSwitcher(onSwitchView: (windowId: string) => void) {
         }
 
         // 等待一小段时间让终端初始化
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise(resolve => setTimeout(resolve, 200));
       } catch (error) {
         console.error('Failed to start window:', error);
         // 恢复所有窗格状态为 Paused
