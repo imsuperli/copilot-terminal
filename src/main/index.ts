@@ -154,41 +154,56 @@ function createWindow() {
       safetyTimer.unref(); // 不阻止进程退出
 
       try {
+        console.log('[ELECTRON] Starting cleanup...');
+
         // 立即保存工作区
         if (autoSaveManager && currentWorkspace) {
+          console.log('[ELECTRON] Saving workspace...');
           await autoSaveManager.saveImmediately();
+          console.log('[ELECTRON] Workspace saved');
         }
 
         // 停止自动保存
+        console.log('[ELECTRON] Stopping auto-save...');
         autoSaveManager?.stopAutoSave();
 
         // 停止状态轮询
+        console.log('[ELECTRON] Stopping status polling...');
         statusPoller?.stopPolling();
 
         // 取消所有 PTY 数据订阅
+        console.log('[ELECTRON] Unsubscribing PTY data...');
         for (const [windowId, unsubscribe] of ptyDataUnsubscribers.entries()) {
           unsubscribe();
         }
         ptyDataUnsubscribers.clear();
         ptyOutputCache.clear();
+        console.log('[ELECTRON] PTY data unsubscribed');
 
         // 清理所有 PTY 进程（等待进程完全终止）
         if (processManager) {
+          console.log('[ELECTRON] Destroying process manager...');
           await processManager.destroy();
+          console.log('[ELECTRON] Process manager destroyed');
         }
 
         // 等待一小段时间确保所有清理完成
+        console.log('[ELECTRON] Waiting for final cleanup...');
         await new Promise(resolve => setTimeout(resolve, 200));
+        console.log('[ELECTRON] Final cleanup completed');
       } catch (error) {
-        console.error('Error during cleanup:', error);
+        console.error('[ELECTRON] Error during cleanup:', error);
       }
 
       // 销毁窗口
+      console.log('[ELECTRON] Destroying window...');
       if (mainWindow) {
         mainWindow.destroy();
       }
+      console.log('[ELECTRON] Window destroyed');
 
       // 清理所有 IPC handlers
+      console.log('[ELECTRON] Cleaning up IPC handlers...');
       ipcMain.removeHandler('ping');
       ipcMain.removeHandler('create-window');
       ipcMain.removeHandler('start-window');
@@ -210,9 +225,12 @@ function createWindow() {
       ipcMain.removeHandler('switch-to-terminal-view');
       ipcMain.removeHandler('switch-to-unified-view');
       ipcMain.removeHandler('recover-from-backup');
+      console.log('[ELECTRON] IPC handlers cleaned up');
 
       // 强制退出（缩短超时时间）
+      console.log('[ELECTRON] Scheduling force exit in 300ms...');
       setTimeout(() => {
+        console.log('[ELECTRON] Force exit timeout reached, exiting now');
         process.exit(0);
       }, 300); // 从 1000ms 改为 300ms
     }

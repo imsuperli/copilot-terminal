@@ -253,6 +253,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    * 销毁 ProcessManager，释放资源
    */
   async destroy(): Promise<void> {
+    console.log('[ProcessManager] Starting destroy...');
+
     // 先停止状态检测器，避免在清理过程中触发检测
     this.statusDetector.destroy();
 
@@ -268,57 +270,28 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     }
     this.ptyDisposables.clear();
 
-    // 收集所有需要终止的 PTY 进程
-    const killPromises: Promise<void>[] = [];
-
+    // 强制终止所有 PTY 进程，不等待
     for (const [pid, pty] of this.ptys.entries()) {
       if (pty && typeof pty.kill === 'function') {
-        const killPromise = new Promise<void>((resolve) => {
-          try {
-            // 设置超时，防止永久等待
-            const timeout = setTimeout(() => {
-              resolve();
-            }, 500); // 从 1000ms 改为 500ms
-            timeout.unref(); // 不阻止进程退出
-
-            // 监听退出事件
-            const onExitDisposable = pty.onExit(() => {
-              clearTimeout(timeout);
-              resolve();
-            });
-
-            // Windows 上使用 SIGKILL 强制终止，其他平台使用 SIGTERM
-            const signal = process.platform === 'win32' ? 'SIGKILL' : 'SIGTERM';
-            pty.kill(signal);
-
-            // 清理 onExit 监听器
-            if (onExitDisposable && typeof onExitDisposable.dispose === 'function') {
-              setTimeout(() => {
-                try {
-                  onExitDisposable.dispose();
-                } catch (error) {
-                  // 忽略
-                }
-              }, 600);
-            }
-          } catch (error) {
-            // 忽略错误，因为进程可能已经退出
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`PTY process ${pid} already exited or kill failed`);
-            }
-            resolve();
+        try {
+          // Windows 上使用 SIGKILL 强制终止
+          const signal = process.platform === 'win32' ? 'SIGKILL' : 'SIGTERM';
+          pty.kill(signal);
+          console.log(`[ProcessManager] Killed PTY process ${pid}`);
+        } catch (error) {
+          // 忽略错误，因为进程可能已经退出
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[ProcessManager] PTY process ${pid} already exited or kill failed`);
           }
-        });
-
-        killPromises.push(killPromise);
+        }
       }
     }
 
-    // 等待所有进程终止
-    await Promise.all(killPromises);
-
+    // 不等待进程退出，直接清理
     this.processes.clear();
     this.ptys.clear();
+
+    console.log('[ProcessManager] Destroy completed');
   }
 
   /**
