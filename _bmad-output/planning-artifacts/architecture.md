@@ -5,8 +5,8 @@ workflowType: 'architecture'
 project_name: 'ausome-terminal'
 user_name: '立哥'
 date: '2026-02-28'
-lastModified: '2026-02-28'
-majorChanges: ['技术栈从 Tauri + Rust 改为 Electron + Node.js']
+lastModified: '2026-03-02'
+majorChanges: ['技术栈从 Tauri + Rust 改为 Electron + Node.js', '新增窗格拆分功能', '新增多种窗口切换方式（Sidebar/QuickSwitcher/TabSwitcher）']
 ---
 
 # Architecture Decision Document - ausome-terminal
@@ -28,6 +28,8 @@ _本文档通过协作式架构决策流程逐步构建，记录 ausome-terminal
 - 智能状态追踪（运行中/等待输入/已完成/出错）
 - 工作区持久化（关闭后自动恢复）
 - 快速窗口切换（< 500ms）
+- 窗格拆分（支持水平和垂直拆分，单窗口多终端）
+- 多种切换方式（侧边栏、快速切换器、Tab 循环）
 
 ## 架构决策概览
 
@@ -45,6 +47,8 @@ _本文档通过协作式架构决策流程逐步构建，记录 ausome-terminal
 2. **状态感知** — 自动检测窗口状态（运行中/等待输入/已完成/出错）
 3. **窗口切换** — 快速切换到指定终端窗口（< 500ms）
 4. **工作区恢复** — 启动时快速恢复 10+ 窗口（< 5s）
+5. **窗格拆分** — 单窗口内支持多终端窗格，动态布局管理
+6. **布局持久化** — 保存和恢复复杂的窗格拆分布局
 
 ## 技术栈选型
 
@@ -744,20 +748,133 @@ async function restoreWorkspace(workspace: Workspace): Promise<void> {
 
 ### 核心实体
 
+#### Pane（窗格）
+
+```typescript
+interface Pane {
+  id: string;                    // UUID
+  cwd: string;                   // 工作目录路径
+  command: string;               // 启动命令（如 "pwsh.exe"）
+  status: WindowStatus;          // 当前状态
+  pid: number | null;            // 进程 PID
+  lastOutput?: string;           // 最新输出摘要（前 100 字符）
+}
+```
+
+**说明：** 窗格是终端的最小单位，每个窗格对应一个独立的 PTY 进程。窗口可以包含多个窗格（通过拆分）。
+
+#### LayoutNode（布局节点）
+
+布局采用树形结构，支持递归拆分：
+
+```typescript
+// 窗格节点（叶子节点）
+interface PaneNode {
+  type: 'pane';
+  id: string;                    // 窗格 ID
+  pane: Pane;                    // 窗格数据
+}
+
+// 拆分节点（分支节点）
+interface SplitNode {
+  type: 'split';
+  direction: 'horizontal' | 'vertical';  // 拆分方向
+  sizes: number[];               // 每个子节点的大小比例（总和为 1）
+  children: LayoutNode[];        // 子节点列表
+}
+
+// 布局节点类型（递归）
+type LayoutNode = PaneNode | SplitNode;
+```
+
+**布局示例：**
+
+```
+单窗格：
+{ type: 'pane', id: 'pane-1', pane: {...} }
+
+水平拆分（左右）：
+{
+  type: 'split',
+  direction: 'horizontal',
+  sizes: [0.5, 0.5],
+  children: [
+    { type: 'pane', id: 'pane-1', pane: {...} },
+    { type: 'pane', id: 'pane-2', pane: {...} }
+  ]
+}
+
+复杂嵌套拆分：
+{
+  type: 'split',
+  direction: 'horizontal',
+  sizes: [0.5, 0.5],
+  children: [
+    { type: 'pane', id: 'pane-1', pane: {...} },
+    {
+      type: 'split',
+      direction: 'vertical',
+      sizes: [0.5, 0.5],
+      children: [
+        { type: 'pane', id: 'pane-2', pane: {...} },
+        { type: 'pane', id: 'pane-3', pane: {...} }
+      ]
+    }
+  ]
+}
+```
+
 #### Window（窗口）
 
 ```typescript
 interface Window {
   id: string;                    // UUID
   name: string;                  // 窗口名称（用户可自定义）
-  workingDirectory: string;      // 工作目录路径
-  command: string;               // 启动命令（如 "claude"）
-  status: WindowStatus;          // 当前状态
-  pid: number | null;            // 进程 PID
+  layout: LayoutNode;            // 布局树（根节点）
+  activePaneId: string;          // 当前激活的窗格 ID
   createdAt: string;             // 创建时间（ISO 8601）
   lastActiveAt: string;          // 最后活跃时间
-  model?: string;                // 使用的 AI 模型（如 "Claude Opus 4.6"）
-  lastOutput?: string;           // 最新输出摘要（前 100 字符）
+  archived?: boolean;            // 是否已归档
+}
+```
+
+**重要变更：** 窗口不再直接包含单个终端的信息（workingDirectory、command、status、pid），而是通过 `layout` 树管理多个窗格。这支持了窗格拆分功能。
+
+**向后兼容：** 旧版单窗格窗口会在加载时自动迁移为新的布局结构：
+
+```typescript
+// 旧版窗口
+interface LegacyWindow {
+  id: string;
+  name: string;
+  workingDirectory: string;
+  command: string;
+  status: WindowStatus;
+  pid: number | null;
+  // ...
+}
+
+// 迁移逻辑
+function migrateLegacyWindow(legacy: LegacyWindow): Window {
+  return {
+    id: legacy.id,
+    name: legacy.name,
+    layout: {
+      type: 'pane',
+      id: uuidv4(),
+      pane: {
+        id: uuidv4(),
+        cwd: legacy.workingDirectory,
+        command: legacy.command,
+        status: legacy.status,
+        pid: legacy.pid,
+      }
+    },
+    activePaneId: /* pane id */,
+    createdAt: legacy.createdAt,
+    lastActiveAt: legacy.lastActiveAt,
+    archived: legacy.archived,
+  };
 }
 ```
 

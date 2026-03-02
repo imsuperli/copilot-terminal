@@ -40,14 +40,9 @@ export const useWorkspaceRestore = () => {
     // 先清空现有窗口，避免重复
     clearWindows();
 
-    // 将所有窗口设置为暂停状态（不启动 PTY 进程）
+    // 将所有窗口添加到 store（窗口已经包含正确的 layout 结构）
     for (const window of workspace.windows) {
-      const pausedWindow: Window = {
-        ...window,
-        status: WindowStatus.Paused,
-        pid: null, // 暂停状态下没有 PID
-      };
-      addWindow(pausedWindow);
+      addWindow(window);
     }
 
     // 立即启用自动保存

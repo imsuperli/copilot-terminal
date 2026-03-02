@@ -75,6 +75,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
    * 加载工作区配置
    * 如果文件不存在或损坏，尝试从备份恢复
    * 自动迁移旧版数据结构到新版
+   * 加载后将所有窗格重置为暂停状态
    */
   async loadWorkspace(): Promise<Workspace> {
     try {
@@ -90,9 +91,9 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
             const migratedWorkspace = this.migrateWorkspace(workspace);
             // 保存迁移后的数据
             await this.saveWorkspace(migratedWorkspace);
-            return migratedWorkspace;
+            return this.resetPaneStates(migratedWorkspace);
           }
-          return workspace;
+          return this.resetPaneStates(workspace);
         }
 
         // 校验失败，尝试从备份恢复
@@ -113,6 +114,47 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         return this.getDefaultWorkspace();
       }
     }
+  }
+
+  /**
+   * 重置所有窗格状态为暂停
+   * 在加载工作区后调用，确保所有窗格都是暂停状态（不启动 PTY 进程）
+   */
+  private resetPaneStates(workspace: Workspace): Workspace {
+    const resetWindows = workspace.windows.map(window => {
+      const resetLayout = this.resetLayoutPaneStates(window.layout);
+      return {
+        ...window,
+        layout: resetLayout,
+      };
+    });
+
+    return {
+      ...workspace,
+      windows: resetWindows,
+    };
+  }
+
+  /**
+   * 递归重置布局树中所有窗格的状态
+   */
+  private resetLayoutPaneStates(layout: any): any {
+    if (layout.type === 'pane') {
+      return {
+        ...layout,
+        pane: {
+          ...layout.pane,
+          status: 'Paused',
+          pid: null,
+        },
+      };
+    } else if (layout.type === 'split') {
+      return {
+        ...layout,
+        children: layout.children.map((child: any) => this.resetLayoutPaneStates(child)),
+      };
+    }
+    return layout;
   }
 
   /**

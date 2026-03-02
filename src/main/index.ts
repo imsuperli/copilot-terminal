@@ -335,6 +335,31 @@ app.whenReady().then(async () => {
 
 // 所有窗口关闭时退出应用 (macOS 除外)
 app.on('window-all-closed', () => {
+  // 清理所有资源
+  console.log('[Main] Cleaning up resources before exit...');
+
+  // 停止状态轮询
+  if (statusPoller) {
+    statusPoller.stopPolling();
+  }
+
+  // 终止所有 PTY 进程
+  if (processManager) {
+    const processes = processManager.listProcesses();
+    console.log(`[Main] Terminating ${processes.length} PTY processes...`);
+    for (const proc of processes) {
+      try {
+        processManager.killProcess(proc.pid);
+      } catch (error) {
+        console.error(`[Main] Failed to kill process ${proc.pid}:`, error);
+      }
+    }
+  }
+
+  // 清理缓存
+  ptyOutputCache.clear();
+  ptyDataUnsubscribers.clear();
+
   if (process.platform !== 'darwin') {
     app.exit(0); // 使用 app.exit(0) 而不是 app.quit()
   }
