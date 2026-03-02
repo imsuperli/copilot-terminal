@@ -363,8 +363,9 @@ function registerIPCHandlers() {
         throw new Error('工作目录无访问权限');
       }
 
-      // 生成 UUID 作为窗口 ID
+      // 生成 UUID 作为窗口 ID 和窗格 ID
       const windowId = randomUUID();
+      const paneId = randomUUID();
 
       // 获取默认 shell
       const defaultShell = getDefaultShell();
@@ -375,6 +376,7 @@ function registerIPCHandlers() {
         workingDirectory: config.workingDirectory,
         command: command,
         windowId: windowId,
+        paneId: paneId,
       });
 
       // 验证进程启动成功
