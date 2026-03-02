@@ -227,9 +227,23 @@ function createWindow() {
       ipcMain.removeHandler('recover-from-backup');
       console.log('[ELECTRON] IPC handlers cleaned up');
 
-      // 直接强制退出，不等待
+      // 多种方式强制退出
       console.log('[ELECTRON] Exiting process now...');
-      process.exit(0);
+
+      // 方式1: 使用 app.exit (Electron 推荐)
+      app.exit(0);
+
+      // 方式2: 如果 app.exit 失败，使用 process.exit
+      setTimeout(() => {
+        console.log('[ELECTRON] app.exit failed, using process.exit...');
+        process.exit(0);
+      }, 100);
+
+      // 方式3: 最后的保险 - 强制杀死进程
+      setTimeout(() => {
+        console.log('[ELECTRON] process.exit failed, killing process...');
+        process.kill(process.pid, 'SIGKILL');
+      }, 200);
     }
   });
 }
