@@ -25,8 +25,8 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
   // 只显示未归档的窗口
   const activeWindows = useMemo(() => windows.filter(w => !w.archived), [windows]);
 
-  // 按 lastActiveAt 降序排序，缓存结果避免每次渲染都排序
-  const sortedWindows = useMemo(() => sortWindows(activeWindows, 'lastActiveAt'), [activeWindows]);
+  // 按 createdAt 降序排序（最后创建的在最前面），缓存结果避免每次渲染都排序
+  const sortedWindows = useMemo(() => sortWindows(activeWindows, 'createdAt'), [activeWindows]);
 
   const handleCardClick = useCallback(
     async (win: Window) => {

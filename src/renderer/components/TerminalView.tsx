@@ -38,7 +38,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWind
   const { toggleSidebar, getActiveWindows } = useWindowStore();
   const activeWindows = getActiveWindows();
 
-  // 快捷键处理
+  // 快捷键处理（只在当前激活的窗口响应）
   useKeyboardShortcuts({
     onCtrlTab: () => {
       setTabSwitchDirection('forward');
@@ -55,7 +55,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWind
       toggleSidebar();
     },
     onCtrlNumber: (num) => {
-      // 切换到第 N 个窗口
       if (num > 0 && num <= activeWindows.length) {
         const targetWindow = activeWindows[num - 1];
         if (targetWindow) {
@@ -64,17 +63,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWind
       }
     },
     onEscape: () => {
-      // 如果有打开的面板，先关闭面板
       if (quickSwitcherOpen) {
         setQuickSwitcherOpen(false);
       } else if (tabSwitcherOpen) {
         setTabSwitcherOpen(false);
       } else {
-        // 否则返回统一视图
         onReturn();
       }
     },
-    enabled: !quickSwitcherOpen, // 快速切换面板打开时禁用部分快捷键
+    // 只有激活的窗口才响应快捷键，避免多个 TerminalView 实例同时响应
+    enabled: isActive && !quickSwitcherOpen,
   });
 
   // 处理 Tab 切换面板的窗口选择
@@ -146,7 +144,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWind
       }
     });
 
-    // 拦截 Ctrl+Enter 和 Shift+Enter，转换为换行符
+    // 拦截特定快捷键，防止它们被发送到终端
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       // Ctrl+Enter 或 Shift+Enter：插入换行符
       if (event.type === 'keydown' && event.key === 'Enter' && (event.ctrlKey || event.shiftKey)) {
@@ -155,6 +153,36 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWind
         // 阻止 xterm.js 的默认处理
         return false;
       }
+
+      // 拦截应用快捷键，让它们冒泡到 window 事件监听器
+      if (event.type === 'keydown' && event.ctrlKey) {
+        // Ctrl+P: 快速切换面板
+        if (event.key === 'p') {
+          return false;
+        }
+        // Ctrl+B: 切换侧边栏
+        if (event.key === 'b') {
+          return false;
+        }
+        // Ctrl+Tab / Ctrl+Shift+Tab: Tab 切换
+        if (event.key === 'Tab') {
+          return false;
+        }
+        // Ctrl+1~9: 切换到第 N 个窗口
+        if (event.key >= '1' && event.key <= '9') {
+          return false;
+        }
+        // Ctrl+N: Vim 风格向下导航（在 QuickSwitcher 中使用）
+        if (event.key === 'n') {
+          return false;
+        }
+      }
+
+      // Escape: 关闭面板或返回
+      if (event.type === 'keydown' && event.key === 'Escape') {
+        return false;
+      }
+
       // 其他按键正常处理
       return true;
     });
@@ -181,7 +209,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWind
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [terminalWindow.id, onReturn]);
+  }, [terminalWindow.id]);
 
   // 右键粘贴
   const handleContextMenu = useCallback((e: React.MouseEvent) => {

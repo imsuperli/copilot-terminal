@@ -80,8 +80,14 @@ function App() {
 
   return (
     <>
-      {/* 统一视图 */}
-      <div style={{ display: currentView === 'unified' ? 'block' : 'none' }}>
+      {/* 统一视图 - 淡入淡出 */}
+      <div
+        className="transition-opacity duration-300"
+        style={{
+          display: currentView === 'unified' ? 'block' : 'none',
+          opacity: currentView === 'unified' ? 1 : 0,
+        }}
+      >
         <MainLayout
           sidebar={
             <Sidebar
@@ -107,12 +113,14 @@ function App() {
         </MainLayout>
       </div>
 
-      {/* 终端视图：为每个窗口保持一个 TerminalView 实例 */}
+      {/* 终端视图：为每个窗口保持一个 TerminalView 实例 - 淡入淡出 */}
       {windows.map((win) => (
         <div
           key={win.id}
+          className="transition-opacity duration-300"
           style={{
             display: currentView === 'terminal' && activeWindowId === win.id ? 'block' : 'none',
+            opacity: currentView === 'terminal' && activeWindowId === win.id ? 1 : 0,
             position: 'fixed',
             top: 0,
             left: 0,

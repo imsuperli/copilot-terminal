@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       ref={sidebarRef}
-      className="flex flex-shrink-0 bg-zinc-900 border-r border-zinc-800"
+      className="flex flex-shrink-0 bg-zinc-900 border-r border-zinc-800 transition-all duration-250 ease-in-out"
       style={{ width: sidebarExpanded ? `${sidebarWidth}px` : '32px' }}
     >
       {/* 侧边栏内容 */}
@@ -75,17 +75,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="h-10 flex items-center justify-center border-b border-zinc-800 flex-shrink-0">
           <button
             onClick={toggleSidebar}
-            className="w-8 h-8 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-all duration-200"
             aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
             title={sidebarExpanded ? '折叠侧边栏 (Ctrl+B)' : '展开侧边栏 (Ctrl+B)'}
           >
-            <Menu size={16} />
+            <Menu size={16} className="transition-transform duration-200" />
           </button>
         </div>
 
-        {/* 标题（仅展开时显示） */}
+        {/* 标题（仅展开时显示） - 淡入淡出 */}
         {sidebarExpanded && (
-          <div className="px-3 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 flex-shrink-0">
+          <div
+            className={`px-3 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 flex-shrink-0 transition-opacity duration-200 ${
+              sidebarExpanded ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
             窗口
           </div>
         )}
@@ -112,16 +116,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className={`
                   w-full px-3 py-2 flex items-center gap-2
                   text-xs font-semibold text-zinc-400 uppercase tracking-wider
-                  hover:bg-zinc-700 transition-colors
+                  hover:bg-zinc-700 transition-all duration-200
                   ${!sidebarExpanded ? 'justify-center' : ''}
                 `}
                 title={sidebarExpanded ? undefined : `归档 (${archivedWindows.length})`}
               >
                 {sidebarExpanded ? (
                   <>
-                    {showArchived ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                    <span>归档</span>
-                    <span className="ml-auto text-zinc-500">({archivedWindows.length})</span>
+                    <ChevronDown
+                      size={14}
+                      className={`transition-transform duration-200 ${
+                        showArchived ? 'rotate-0' : '-rotate-90'
+                      }`}
+                    />
+                    <span className="transition-opacity duration-200">归档</span>
+                    <span className="ml-auto text-zinc-500 transition-opacity duration-200">
+                      ({archivedWindows.length})
+                    </span>
                   </>
                 ) : (
                   <div className="relative">

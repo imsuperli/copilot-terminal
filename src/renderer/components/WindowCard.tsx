@@ -137,7 +137,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       onClick={onClick}
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
-      className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:bg-[rgb(var(--card))]/80 hover:shadow-lg active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] flex flex-col border border-[rgb(var(--border))]"
+      className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-lg overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border border-[rgb(var(--border))]"
     >
       {/* 圆弧形彩色顶部线条 (4px 高度) */}
       <div
