@@ -1,33 +1,37 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { ArrowLeft } from 'lucide-react';
-import { Window } from '../types/window';
+import React, { useCallback, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react';
+import { Window, Pane, WindowStatus } from '../types/window';
+import { getAggregatedStatus, getPaneCount } from '../utils/layoutHelpers';
 import { getStatusLabel, getStatusTextColor } from '../utils/statusHelpers';
 import { Sidebar } from './Sidebar';
 import { QuickSwitcher } from './QuickSwitcher';
 import { TabSwitcher } from './TabSwitcher';
+import { SplitLayout } from './SplitLayout';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import '../styles/xterm.css';
 
 export interface TerminalViewProps {
   window: Window;
   onReturn: () => void;
   onWindowSwitch: (windowId: string) => void;
-  isActive: boolean; // 当前窗口是否激活
+  isActive: boolean;
 }
 
 /**
  * TerminalView 组件
- * 切入窗口后的 CLI 全屏视图，集成 xterm.js 渲染终端
+ * 支持多窗格拆分的终端视图
  */
-export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWindow, onReturn, onWindowSwitch, isActive }) => {
-  const terminalContainerRef = useRef<HTMLDivElement>(null);
-  const terminalRef = useRef<Terminal | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
-  const statusLabel = getStatusLabel(terminalWindow.status);
-  const statusTextColor = getStatusTextColor(terminalWindow.status);
+export const TerminalView: React.FC<TerminalViewProps> = ({
+  window: terminalWindow,
+  onReturn,
+  onWindowSwitch,
+  isActive,
+}) => {
+  const aggregatedStatus = getAggregatedStatus(terminalWindow.layout);
+  const statusLabel = getStatusLabel(aggregatedStatus);
+  const statusTextColor = getStatusTextColor(aggregatedStatus);
+  const paneCount = getPaneCount(terminalWindow.layout);
 
   // 切换面板状态
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
@@ -35,10 +39,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWind
   const [tabSwitchDirection, setTabSwitchDirection] = useState<'forward' | 'backward'>('forward');
 
   // Store
-  const { toggleSidebar, getActiveWindows } = useWindowStore();
+  const {
+    toggleSidebar,
+    getActiveWindows,
+    splitPaneInWindow,
+    closePaneInWindow,
+    setActivePane,
+  } = useWindowStore();
   const activeWindows = getActiveWindows();
 
-  // 快捷键处理（只在当前激活的窗口响应）
+  // 快捷键处理
   useKeyboardShortcuts({
     onCtrlTab: () => {
       setTabSwitchDirection('forward');
@@ -71,277 +81,169 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ window: terminalWind
         onReturn();
       }
     },
-    // 只有激活的窗口才响应快捷键，避免多个 TerminalView 实例同时响应
     enabled: isActive && !quickSwitcherOpen,
   });
 
-  // 处理 Tab 切换面板的窗口选择
-  const handleTabSwitcherSelect = useCallback((windowId: string) => {
-    setTabSwitcherOpen(false);
-    onWindowSwitch(windowId);
-  }, [onWindowSwitch]);
+  // 处理窗格激活
+  const handlePaneActivate = useCallback(
+    (paneId: string) => {
+      setActivePane(terminalWindow.id, paneId);
+    },
+    [terminalWindow.id, setActivePane]
+  );
 
-  // 处理快速切换面板的窗口选择
-  const handleQuickSwitcherSelect = useCallback((windowId: string) => {
-    setQuickSwitcherOpen(false);
-    onWindowSwitch(windowId);
-  }, [onWindowSwitch]);
-
-  // 初始化 xterm.js
-  useEffect(() => {
-    if (!terminalContainerRef.current) return;
-
-    const terminal = new Terminal({
-      cols: 80,
-      rows: 30,
-      theme: {
-        background: '#0f0f0f',
-        foreground: '#e0e0e0',
-        cursor: '#e0e0e0',
-        selectionBackground: '#0087ff',
-      },
-      fontFamily: '"Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace',
-      fontSize: 16,
-      lineHeight: 1.2,
-      cursorBlink: true,
-      allowTransparency: false,
-    });
-
-    const fitAddon = new FitAddon();
-    terminal.loadAddon(fitAddon);
-    terminal.open(terminalContainerRef.current);
-
-    terminalRef.current = terminal;
-    fitAddonRef.current = fitAddon;
-
-    // 等待容器渲染完成后调整尺寸
-    requestAnimationFrame(() => {
-      if (!fitAddonRef.current || !terminalRef.current) return;
-
-      // 调整终端尺寸以适应容器
-      fitAddonRef.current.fit();
-      const { cols, rows } = terminalRef.current;
-
-      // 同步尺寸到 PTY
-      window.electronAPI?.ptyResize(terminalWindow.id, cols, rows);
-
-      // 加载历史输出
-      window.electronAPI?.getPtyHistory(terminalWindow.id).then((history) => {
-        if (history && history.length > 0 && terminalRef.current) {
-          for (const data of history) {
-            terminalRef.current.write(data);
-          }
-        }
-      }).catch(() => {
-        // 忽略错误，继续正常流程
-      });
-    });
-
-    // 划选复制：选中文本自动复制到剪贴板
-    terminal.onSelectionChange(() => {
-      const selection = terminal.getSelection();
-      if (selection && navigator.clipboard) {
-        navigator.clipboard.writeText(selection).catch(() => {});
+  // 处理窗格关闭
+  const handlePaneClose = useCallback(
+    (paneId: string) => {
+      // 如果只有一个窗格，不允许关闭
+      if (paneCount <= 1) {
+        return;
       }
-    });
+      closePaneInWindow(terminalWindow.id, paneId);
+    },
+    [terminalWindow.id, paneCount, closePaneInWindow]
+  );
 
-    // 拦截特定快捷键，防止它们被发送到终端
-    terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-      // Ctrl+Enter 或 Shift+Enter：插入换行符
-      if (event.type === 'keydown' && event.key === 'Enter' && (event.ctrlKey || event.shiftKey)) {
-        // 发送换行符到 PTY
-        window.electronAPI?.ptyWrite(terminalWindow.id, '\n');
-        // 阻止 xterm.js 的默认处理
-        return false;
+  // 处理拆分窗格
+  const handleSplitPane = useCallback(
+    async (direction: 'horizontal' | 'vertical') => {
+      const activePaneId = terminalWindow.activePaneId;
+      if (!activePaneId) return;
+
+      // 创建新窗格
+      const newPaneId = uuidv4();
+      const newPane: Pane = {
+        id: newPaneId,
+        cwd: 'D:\\', // 默认工作目录，后续可以改为当前窗格的 cwd
+        command: 'pwsh.exe',
+        status: WindowStatus.Paused,
+        pid: null,
+      };
+
+      // 调用 IPC 创建新的 PTY 进程
+      try {
+        if (window.electronAPI) {
+          const result = await window.electronAPI.splitPane({
+            workingDirectory: newPane.cwd,
+            command: newPane.command,
+            windowId: terminalWindow.id,
+            paneId: newPaneId,
+          });
+          newPane.pid = result.pid;
+          newPane.status = WindowStatus.Running;
+        }
+      } catch (error) {
+        console.error('Failed to split pane:', error);
+        return;
       }
 
-      // 拦截应用快捷键，让它们冒泡到 window 事件监听器
-      if (event.type === 'keydown' && event.ctrlKey) {
-        // Ctrl+P: 快速切换面板
-        if (event.key === 'p') {
-          return false;
-        }
-        // Ctrl+B: 切换侧边栏
-        if (event.key === 'b') {
-          return false;
-        }
-        // Ctrl+Tab / Ctrl+Shift+Tab: Tab 切换
-        if (event.key === 'Tab') {
-          return false;
-        }
-        // Ctrl+1~9: 切换到第 N 个窗口
-        if (event.key >= '1' && event.key <= '9') {
-          return false;
-        }
-        // Ctrl+N: Vim 风格向下导航（在 QuickSwitcher 中使用）
-        if (event.key === 'n') {
-          return false;
-        }
-      }
+      // 更新布局
+      splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+    },
+    [terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow]
+  );
 
-      // Escape: 关闭面板或返回
-      if (event.type === 'keydown' && event.key === 'Escape') {
-        return false;
-      }
+  // 处理 Tab 切换
+  const handleTabSwitcherSelect = useCallback(
+    (windowId: string) => {
+      setTabSwitcherOpen(false);
+      onWindowSwitch(windowId);
+    },
+    [onWindowSwitch]
+  );
 
-      // 其他按键正常处理
-      return true;
-    });
-
-    // 用户输入 → PTY
-    terminal.onData((data: string) => {
-      window.electronAPI?.ptyWrite(terminalWindow.id, data);
-    });
-
-    // PTY 输出 → 终端
-    const ptyDataHandler = (_event: unknown, payload: { windowId: string; data: string }) => {
-      if (payload.windowId === terminalWindow.id) {
-        terminal.write(payload.data);
-      }
-    };
-    window.electronAPI?.onPtyData(ptyDataHandler);
-
-    // 聚焦终端
-    terminal.focus();
-
-    return () => {
-      window.electronAPI?.offPtyData(ptyDataHandler);
-      terminal.dispose();
-      terminalRef.current = null;
-      fitAddonRef.current = null;
-    };
-  }, [terminalWindow.id]);
-
-  // 右键粘贴
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    if (navigator.clipboard) {
-      navigator.clipboard.readText().then((text) => {
-        if (text && terminalRef.current) {
-          window.electronAPI?.ptyWrite(terminalWindow.id, text);
-        }
-      }).catch(() => {});
-    }
-  }, [terminalWindow.id]);
-
-  // ResizeObserver 监听容器大小变化
-  useEffect(() => {
-    if (!terminalContainerRef.current) return;
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (fitAddonRef.current && terminalRef.current) {
-        try {
-          fitAddonRef.current.fit();
-          const { cols, rows } = terminalRef.current;
-          window.electronAPI?.ptyResize(terminalWindow.id, cols, rows);
-        } catch {
-          // fit() may throw if terminal is not yet ready
-        }
-      }
-    });
-
-    resizeObserver.observe(terminalContainerRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [terminalWindow.id]);
-
-  // 监听窗口激活状态，重新调整尺寸和聚焦
-  useEffect(() => {
-    if (isActive && terminalRef.current && fitAddonRef.current) {
-      // 窗口变为可见时，重新调整尺寸
-      requestAnimationFrame(() => {
-        if (!fitAddonRef.current || !terminalRef.current) return;
-
-        try {
-          fitAddonRef.current.fit();
-          const { cols, rows } = terminalRef.current;
-          window.electronAPI?.ptyResize(terminalWindow.id, cols, rows);
-
-          // 聚焦终端
-          terminalRef.current.focus();
-        } catch {
-          // 忽略错误
-        }
-      });
-    }
-  }, [isActive, terminalWindow.id]); // 依赖 isActive，当窗口激活时触发
+  // 处理快速切换
+  const handleQuickSwitcherSelect = useCallback(
+    (windowId: string) => {
+      setQuickSwitcherOpen(false);
+      onWindowSwitch(windowId);
+    },
+    [onWindowSwitch]
+  );
 
   return (
-    <>
-      <div
-        className="flex h-full bg-zinc-900"
-        data-testid="terminal-view"
-        tabIndex={-1}
-      >
-        {/* 侧边栏 */}
-        <Sidebar
-          activeWindowId={terminalWindow.id}
-          onWindowSelect={onWindowSwitch}
-        />
+    <div className="flex h-screen w-screen bg-zinc-900 overflow-hidden">
+      {/* 侧边栏 */}
+      <Sidebar
+        activeWindowId={terminalWindow.id}
+        onWindowSelect={onWindowSwitch}
+      />
 
-        {/* 主内容区 */}
-        <div className="flex flex-col flex-1 min-w-0">
-          {/* 顶部窄条 (40px) */}
-          <div
-            className="flex items-center gap-2 px-2 py-2 bg-zinc-900 border-b border-zinc-800 flex-shrink-0"
-            style={{ height: '40px' }}
-            data-testid="terminal-topbar"
-          >
+      {/* 主内容区 */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* 顶部工具栏 */}
+        <div className="h-12 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
             {/* 返回按钮 */}
             <button
               onClick={onReturn}
-              aria-label="返回统一视图"
-              className="flex items-center justify-center w-8 h-8 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors flex-shrink-0"
-              data-testid="return-button"
+              className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              title="返回统一视图 (Esc)"
             >
               <ArrowLeft size={16} />
+              <span className="text-sm">返回</span>
             </button>
 
             {/* 窗口名称 */}
-            <span
-              className="text-base font-semibold text-zinc-100 truncate flex-1"
-              data-testid="window-name"
-            >
-              {terminalWindow.name}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-100 font-medium">{terminalWindow.name}</span>
+              <span className="text-xs text-zinc-500">({paneCount} 个窗格)</span>
+            </div>
 
-            {/* 状态标签 */}
-            <span
-              className={`text-xs flex-shrink-0 ${statusTextColor}`}
-              data-testid="status-label"
-            >
-              {statusLabel}
-            </span>
+            {/* 状态 */}
+            <div className={`text-sm ${statusTextColor}`}>{statusLabel}</div>
           </div>
 
-          {/* 终端内容区 */}
-          <div
-            ref={terminalContainerRef}
-            onContextMenu={handleContextMenu}
-            className="flex-1 overflow-hidden px-4 py-2"
-            data-testid="terminal-container"
-            style={{ minHeight: 0 }}
+          {/* 拆分按钮 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleSplitPane('horizontal')}
+              className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              title="左右拆分 (Ctrl+Shift+D)"
+            >
+              <SplitSquareVertical size={16} />
+              <span className="text-sm">左右拆分</span>
+            </button>
+            <button
+              onClick={() => handleSplitPane('vertical')}
+              className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              title="上下拆分 (Ctrl+Shift+E)"
+            >
+              <SplitSquareHorizontal size={16} />
+              <span className="text-sm">上下拆分</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 终端布局区域 */}
+        <div className="flex-1 overflow-hidden">
+          <SplitLayout
+            windowId={terminalWindow.id}
+            layout={terminalWindow.layout}
+            activePaneId={terminalWindow.activePaneId}
+            onPaneActivate={handlePaneActivate}
+            onPaneClose={handlePaneClose}
           />
         </div>
       </div>
 
-      {/* 快速切换面板 (Ctrl+P) */}
-      <QuickSwitcher
-        isOpen={quickSwitcherOpen}
-        onClose={() => setQuickSwitcherOpen(false)}
-        onSelect={handleQuickSwitcherSelect}
-        currentWindowId={terminalWindow.id}
-      />
+      {/* 快速切换面板 */}
+      {quickSwitcherOpen && (
+        <QuickSwitcher
+          onSelect={handleQuickSwitcherSelect}
+          onClose={() => setQuickSwitcherOpen(false)}
+        />
+      )}
 
-      {/* Tab 切换面板 (Ctrl+Tab) */}
-      <TabSwitcher
-        isOpen={tabSwitcherOpen}
-        onSelect={handleTabSwitcherSelect}
-        direction={tabSwitchDirection}
-      />
-    </>
+      {/* Tab 切换面板 */}
+      {tabSwitcherOpen && (
+        <TabSwitcher
+          direction={tabSwitchDirection}
+          onSelect={handleTabSwitcherSelect}
+          onClose={() => setTabSwitcherOpen(false)}
+        />
+      )}
+    </div>
   );
 };
 

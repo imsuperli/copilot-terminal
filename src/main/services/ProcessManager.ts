@@ -275,14 +275,45 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // 收集所有 PTY 进程的 PID
     const pidsToKill: number[] = [];
+
+    // 第一步：尝试优雅终止（SIGTERM）
     for (const [pid, pty] of this.ptys.entries()) {
       pidsToKill.push(pid);
       if (pty && typeof pty.kill === 'function') {
         try {
-          // Windows 上使用 SIGKILL 强制终止
-          const signal = process.platform === 'win32' ? 'SIGKILL' : 'SIGTERM';
-          pty.kill(signal);
-          console.log(`[ProcessManager] Killed PTY process ${pid}`);
+          // 先使用 SIGTERM 优雅终止
+          pty.kill('SIGTERM');
+          console.log(`[ProcessManager] Sent SIGTERM to PTY process ${pid}`);
+        } catch (error) {
+          // 忽略错误，因为进程可能已经退出
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[ProcessManager] PTY process ${pid} already exited or kill failed`);
+          }
+        }
+      }
+    }
+
+    // 等待 300ms 让进程有机会优雅退出
+    if (pidsToKill.length > 0) {
+      console.log('[ProcessManager] Waiting 300ms for graceful shutdown...');
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    // 第二步：Windows 上使用 taskkill 强制终止仍在运行的进程
+    if (process.platform === 'win32' && pidsToKill.length > 0) {
+      const { execSync } = require('child_process');
+      console.log('[ProcessManager] Force killing remaining processes with taskkill...');
+      for (const pid of pidsToKill) {
+        try {
+          // /F 强制终止, /T 终止子进程树
+          execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+          console.log(`[ProcessManager] Force killed process tree ${pid}`);
+        } catch (error) {
+          // 进程可能已经优雅退出，忽略错误
+          console.log(`[ProcessManager] Process ${pid} already exited (graceful shutdown succeeded)`);
+        }
+      }
+    }
         } catch (error) {
           // 忽略错误，因为进程可能已经退出
           if (process.env.NODE_ENV === 'development') {
