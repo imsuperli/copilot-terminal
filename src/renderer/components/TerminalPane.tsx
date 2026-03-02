@@ -87,6 +87,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     // 监听 PTY 数据输出
     const handlePtyData = (_event: unknown, payload: { windowId: string; paneId?: string; data: string }) => {
+      console.log('[TerminalPane] Received PTY data:', {
+        payloadWindowId: payload.windowId,
+        payloadPaneId: payload.paneId,
+        expectedWindowId: windowId,
+        expectedPaneId: pane.id,
+        dataLength: payload.data.length,
+      });
       if (payload.windowId === windowId && payload.paneId === pane.id) {
         terminal.write(payload.data);
       }
@@ -94,6 +101,17 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     if (window.electronAPI) {
       window.electronAPI.onPtyData(handlePtyData);
+
+      // 加载历史输出（如果有）
+      window.electronAPI.getPtyHistory(windowId).then((history) => {
+        if (history && history.length > 0) {
+          for (const data of history) {
+            terminal.write(data);
+          }
+        }
+      }).catch((error) => {
+        console.error('Failed to load PTY history:', error);
+      });
     }
 
     // 窗口大小变化时重新调整终端大小
