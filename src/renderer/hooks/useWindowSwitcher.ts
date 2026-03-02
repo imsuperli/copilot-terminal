@@ -29,6 +29,9 @@ export function useWindowSwitcher(onSwitchView: (windowId: string) => void) {
           updatePane(win.id, pane.id, { status: WindowStatus.Restoring });
         }
 
+        // 等待一小段时间让 UI 更新，显示"启动中"动画
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         // 启动所有窗格
         for (const pane of panes) {
           const result = await window.electronAPI.startWindow({
