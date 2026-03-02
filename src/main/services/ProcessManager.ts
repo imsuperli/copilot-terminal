@@ -273,8 +273,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     }
     this.ptyDisposables.clear();
 
-    // 强制终止所有 PTY 进程，不等待
+    // 收集所有 PTY 进程的 PID
+    const pidsToKill: number[] = [];
     for (const [pid, pty] of this.ptys.entries()) {
+      pidsToKill.push(pid);
       if (pty && typeof pty.kill === 'function') {
         try {
           // Windows 上使用 SIGKILL 强制终止
@@ -286,6 +288,20 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
           if (process.env.NODE_ENV === 'development') {
             console.log(`[ProcessManager] PTY process ${pid} already exited or kill failed`);
           }
+        }
+      }
+    }
+
+    // Windows 特殊处理：使用 taskkill 强制终止所有子进程
+    if (process.platform === 'win32' && pidsToKill.length > 0) {
+      const { execSync } = require('child_process');
+      for (const pid of pidsToKill) {
+        try {
+          // /F 强制终止, /T 终止子进程树
+          execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+          console.log(`[ProcessManager] Force killed process tree ${pid} with taskkill`);
+        } catch (error) {
+          // 进程可能已经不存在，忽略错误
         }
       }
     }
