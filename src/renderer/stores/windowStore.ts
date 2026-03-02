@@ -30,6 +30,9 @@ interface WindowStore {
   // 状态
   windows: Window[];
   activeWindowId: string | null;
+  mruList: string[]; // 最近使用列表（窗口 ID）
+  sidebarExpanded: boolean; // 侧边栏是否展开
+  sidebarWidth: number; // 侧边栏宽度
 
   // Actions
   addWindow: (window: Window) => void;
@@ -40,6 +43,14 @@ interface WindowStore {
   unarchiveWindow: (id: string) => void;
   setActiveWindow: (id: string | null) => void;
   clearWindows: () => void; // 清空所有窗口（用于工作区恢复）
+
+  // MRU 相关
+  updateMRU: (windowId: string) => void;
+  getMRUWindows: () => Window[];
+
+  // 侧边栏相关
+  toggleSidebar: () => void;
+  setSidebarWidth: (width: number) => void;
 
   // 辅助方法
   getWindowById: (id: string) => Window | undefined;
@@ -57,11 +68,16 @@ export const useWindowStore = create<WindowStore>()(
     // 初始状态
     windows: [],
     activeWindowId: null,
+    mruList: [],
+    sidebarExpanded: false, // 默认折叠
+    sidebarWidth: 200, // 默认宽度
 
     // 添加窗口
     addWindow: (window) => {
       set((state) => {
         state.windows.push(window);
+        // 添加到 MRU 列表首位
+        state.mruList = [window.id, ...state.mruList.filter(id => id !== window.id)];
       });
       // 触发自动保存，传递最新的窗口列表
       const windows = get().windows;
@@ -75,6 +91,8 @@ export const useWindowStore = create<WindowStore>()(
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
         }
+        // 从 MRU 列表移除
+        state.mruList = state.mruList.filter(wid => wid !== id);
       });
       // 触发自动保存，传递最新的窗口列表
       const windows = get().windows;
@@ -150,6 +168,8 @@ export const useWindowStore = create<WindowStore>()(
           if (window) {
             window.lastActiveAt = new Date().toISOString();
           }
+          // 更新 MRU 列表
+          state.mruList = [id, ...state.mruList.filter(wid => wid !== id)];
         }
       });
       // 触发自动保存，传递最新的窗口列表
@@ -162,8 +182,39 @@ export const useWindowStore = create<WindowStore>()(
       set((state) => {
         state.windows = [];
         state.activeWindowId = null;
+        state.mruList = [];
       });
       // 不触发自动保存，因为这是恢复过程的一部分
+    },
+
+    // 更新 MRU 列表
+    updateMRU: (windowId) => {
+      set((state) => {
+        state.mruList = [windowId, ...state.mruList.filter(id => id !== windowId)];
+      });
+    },
+
+    // 获取按 MRU 排序的窗口列表
+    getMRUWindows: () => {
+      const { windows, mruList } = get();
+      const windowMap = new Map(windows.map(w => [w.id, w]));
+      return mruList
+        .map(id => windowMap.get(id))
+        .filter((w): w is Window => w !== undefined && !w.archived);
+    },
+
+    // 切换侧边栏展开/折叠
+    toggleSidebar: () => {
+      set((state) => {
+        state.sidebarExpanded = !state.sidebarExpanded;
+      });
+    },
+
+    // 设置侧边栏宽度
+    setSidebarWidth: (width) => {
+      set((state) => {
+        state.sidebarWidth = Math.max(150, Math.min(400, width));
+      });
     },
 
     // 根据 ID 查找窗口

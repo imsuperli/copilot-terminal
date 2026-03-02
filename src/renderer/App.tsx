@@ -8,6 +8,7 @@ import { TerminalView } from './components/TerminalView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
+import { useWindowSwitcher } from './hooks/useWindowSwitcher';
 import { useWorkspaceRestore } from './hooks/useWorkspaceRestore';
 import { subscribeToWindowStatusChange } from './api/events';
 import { Window } from './types/window';
@@ -15,6 +16,7 @@ import { Window } from './types/window';
 function App() {
   const windows = useWindowStore((state) => state.windows);
   const updateWindowStatus = useWindowStore((state) => state.updateWindowStatus);
+  const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active');
 
@@ -31,11 +33,16 @@ function App() {
 
   const {
     currentView,
-    activeWindowId,
     switchToTerminalView,
     switchToUnifiedView,
     error
   } = useViewSwitcher();
+
+  // 使用统一的窗口切换逻辑
+  const { switchToWindow } = useWindowSwitcher(switchToTerminalView);
+
+  // 使用 store 的 activeWindowId，确保状态一致
+  const activeWindowId = storeActiveWindowId;
 
   // 订阅主进程推送的窗口状态变化事件
   useEffect(() => {
@@ -56,8 +63,12 @@ function App() {
   }, []);
 
   const handleEnterTerminal = useCallback((win: Window) => {
-    switchToTerminalView(win.id);
-  }, [switchToTerminalView]);
+    switchToWindow(win.id);
+  }, [switchToWindow]);
+
+  const handleWindowSwitch = useCallback((windowId: string) => {
+    switchToWindow(windowId);
+  }, [switchToWindow]);
 
   const handleTabChange = useCallback((tab: 'active' | 'archived') => {
     setCurrentTab(tab);
@@ -113,6 +124,8 @@ function App() {
           <TerminalView
             window={win}
             onReturn={switchToUnifiedView}
+            onWindowSwitch={handleWindowSwitch}
+            isActive={currentView === 'terminal' && activeWindowId === win.id}
           />
         </div>
       ))}

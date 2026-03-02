@@ -152,12 +152,16 @@ function createWindow() {
         // 停止自动保存
         autoSaveManager?.stopAutoSave();
 
-        // 清理资源
+        // 停止状态轮询
         statusPoller?.stopPolling();
-        processManager?.destroy();
 
-        // 等待一小段时间让进程清理完成
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // 清理所有 PTY 进程（等待进程完全终止）
+        if (processManager) {
+          await processManager.destroy();
+        }
+
+        // 等待一小段时间确保所有清理完成
+        await new Promise(resolve => setTimeout(resolve, 200));
       } catch (error) {
         console.error('Error during cleanup:', error);
       }
@@ -167,10 +171,10 @@ function createWindow() {
         mainWindow.destroy();
       }
 
-      // 强制退出
+      // 强制退出（增加超时时间）
       setTimeout(() => {
         process.exit(0);
-      }, 500);
+      }, 1000);
     }
   });
 }

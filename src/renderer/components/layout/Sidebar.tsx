@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Settings, Terminal, HelpCircle, Archive } from 'lucide-react';
+import { Plus, Settings, Terminal, HelpCircle, Archive, Pause } from 'lucide-react';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
 import { useWindowStore } from '../../stores/windowStore';

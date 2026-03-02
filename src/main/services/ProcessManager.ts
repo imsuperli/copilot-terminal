@@ -221,25 +221,51 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   /**
    * 销毁 ProcessManager，释放资源
    */
-  destroy(): void {
+  async destroy(): Promise<void> {
     // 先停止状态检测器，避免在清理过程中触发检测
     this.statusDetector.destroy();
 
-    // 终止所有 PTY 进程（node-pty 会自动终止子进程树）
+    // 收集所有需要终止的 PTY 进程
+    const killPromises: Promise<void>[] = [];
+
     for (const [pid, pty] of this.ptys.entries()) {
-      try {
-        if (pty && typeof pty.kill === 'function') {
-          // Windows 上使用 SIGKILL 强制终止，其他平台使用 SIGTERM
-          const signal = process.platform === 'win32' ? 'SIGKILL' : 'SIGTERM';
-          pty.kill(signal);
-        }
-      } catch (error) {
-        // 忽略错误，因为进程可能已经退出
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`PTY process ${pid} already exited or kill failed`);
-        }
+      if (pty && typeof pty.kill === 'function') {
+        const killPromise = new Promise<void>((resolve) => {
+          try {
+            // 监听进程退出事件
+            const exitHandler = () => {
+              resolve();
+            };
+
+            // 设置超时，防止永久等待
+            const timeout = setTimeout(() => {
+              resolve();
+            }, 1000);
+
+            // 监听退出事件
+            pty.onExit(() => {
+              clearTimeout(timeout);
+              resolve();
+            });
+
+            // Windows 上使用 SIGKILL 强制终止，其他平台使用 SIGTERM
+            const signal = process.platform === 'win32' ? 'SIGKILL' : 'SIGTERM';
+            pty.kill(signal);
+          } catch (error) {
+            // 忽略错误，因为进程可能已经退出
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`PTY process ${pid} already exited or kill failed`);
+            }
+            resolve();
+          }
+        });
+
+        killPromises.push(killPromise);
       }
     }
+
+    // 等待所有进程终止
+    await Promise.all(killPromises);
 
     this.processes.clear();
     this.ptys.clear();

@@ -30,40 +30,10 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
 
   const handleCardClick = useCallback(
     async (win: Window) => {
-      // 如果窗口是暂停状态，先启动窗口
-      if (win.status === WindowStatus.Paused) {
-        try {
-          // 更新状态为 Restoring
-          updateWindow(win.id, { status: WindowStatus.Restoring });
-
-          // 启动窗口
-          const result = await window.electronAPI.startWindow({
-            windowId: win.id,
-            name: win.name,
-            workingDirectory: win.workingDirectory,
-            command: win.command,
-          });
-
-          // 更新窗口信息
-          updateWindow(win.id, {
-            pid: result.pid,
-            status: result.status,
-          });
-
-          // 等待一小段时间让终端初始化
-          await new Promise(resolve => setTimeout(resolve, 300));
-        } catch (error) {
-          console.error('Failed to start window:', error);
-          updateWindow(win.id, { status: WindowStatus.Paused });
-          return;
-        }
-      }
-
-      // 进入终端视图
-      setActiveWindow(win.id);
+      // 直接调用 onEnterTerminal，让上层处理启动逻辑
       onEnterTerminal?.(win);
     },
-    [setActiveWindow, onEnterTerminal, updateWindow]
+    [onEnterTerminal]
   );
 
   const handleStartWindow = useCallback(async (win: Window) => {

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Activity, Pause, CheckCircle, XCircle } from 'lucide-react';
+import { Activity, Terminal, Pause } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { WindowStatus } from '../types/window';
 
@@ -10,18 +10,19 @@ import { WindowStatus } from '../types/window';
 export const StatusBar = React.memo(function StatusBar() {
   const windows = useWindowStore((state) => state.windows);
 
-  // 缓存状态计数
+  // 缓存状态计数（只统计未归档的窗口）
+  const activeWindows = useMemo(() => windows.filter(w => !w.archived), [windows]);
+
   const statusCounts = useMemo(() => ({
-    running: windows.filter((w) => w.status === WindowStatus.Running).length,
-    waiting: windows.filter((w) => w.status === WindowStatus.WaitingForInput).length,
-    completed: windows.filter((w) => w.status === WindowStatus.Completed).length,
-    error: windows.filter((w) => w.status === WindowStatus.Error).length,
-  }), [windows]);
+    running: activeWindows.filter((w) => w.status === WindowStatus.Running).length,
+    waiting: activeWindows.filter((w) => w.status === WindowStatus.WaitingForInput).length,
+    paused: activeWindows.filter((w) => w.status === WindowStatus.Paused).length,
+  }), [activeWindows]);
 
   // 缓存 aria-label
   const ariaLabel = useMemo(
     () =>
-      `窗口状态统计：运行中 ${statusCounts.running} 个，等待输入 ${statusCounts.waiting} 个，已完成 ${statusCounts.completed} 个，出错 ${statusCounts.error} 个`,
+      `窗口状态统计：运行中 ${statusCounts.running} 个，等待输入 ${statusCounts.waiting} 个，暂停 ${statusCounts.paused} 个`,
     [statusCounts]
   );
 
@@ -34,10 +35,10 @@ export const StatusBar = React.memo(function StatusBar() {
       {/* 运行中 */}
       <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-[rgb(var(--success))]" aria-hidden="true" />
+          <Activity className="w-4 h-4 text-green-500" aria-hidden="true" />
           <span className="text-xs text-[rgb(var(--muted-foreground))]">运行中</span>
         </div>
-        <span className="text-sm font-semibold text-[rgb(var(--success))]">
+        <span className="text-sm font-semibold text-green-500">
           {statusCounts.running}
         </span>
       </div>
@@ -45,41 +46,24 @@ export const StatusBar = React.memo(function StatusBar() {
       {/* 等待输入 */}
       <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
         <div className="flex items-center gap-2">
-          <Pause className="w-4 h-4 text-[rgb(var(--info))]" aria-hidden="true" />
+          <Terminal className="w-4 h-4 text-blue-500" aria-hidden="true" />
           <span className="text-xs text-[rgb(var(--muted-foreground))]">等待输入</span>
         </div>
-        <span className="text-sm font-semibold text-[rgb(var(--info))]">
+        <span className="text-sm font-semibold text-blue-500">
           {statusCounts.waiting}
         </span>
       </div>
 
-      {/* 已完成 */}
-      {statusCounts.completed > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-[rgb(var(--muted-foreground))]" aria-hidden="true" />
-            <span className="text-xs text-[rgb(var(--muted-foreground))]">已完成</span>
-          </div>
-          <span className="text-sm font-semibold text-[rgb(var(--muted-foreground))]">
-            {statusCounts.completed}
-          </span>
+      {/* 暂停 */}
+      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
+        <div className="flex items-center gap-2">
+          <Pause className="w-4 h-4 text-gray-500" aria-hidden="true" />
+          <span className="text-xs text-[rgb(var(--muted-foreground))]">暂停</span>
         </div>
-      )}
-
-      {/* 出错 */}
-      {statusCounts.error > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
-          <div className="flex items-center gap-2">
-            <XCircle className="w-4 h-4 text-[rgb(var(--error))]" aria-hidden="true" />
-            <span className="text-xs text-[rgb(var(--muted-foreground))]">出错</span>
-          </div>
-          <span className="text-sm font-semibold text-[rgb(var(--error))]">
-            {statusCounts.error}
-          </span>
-        </div>
-      )}
+        <span className="text-sm font-semibold text-gray-500">
+          {statusCounts.paused}
+        </span>
+      </div>
     </div>
   );
 });
-
-
