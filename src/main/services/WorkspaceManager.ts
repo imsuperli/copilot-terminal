@@ -407,8 +407,11 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       if (typeof pane.id !== 'string' ||
           typeof pane.cwd !== 'string' ||
           typeof pane.command !== 'string' ||
-          typeof pane.status !== 'string' ||
-          (pane.pid !== null && typeof pane.pid !== 'number')) {
+          typeof pane.status !== 'string') {
+        return false;
+      }
+      // pid 字段可以不存在、为 null 或为 number
+      if (pane.pid !== undefined && pane.pid !== null && typeof pane.pid !== 'number') {
         return false;
       }
       return true;
