@@ -143,18 +143,24 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
           data-testid="card-grid"
           className="grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4 p-8"
         >
-          {sortedWindows.map((win) => (
-            <WindowCard
-              key={win.id}
-              window={win}
-              onClick={() => handleCardClick(win)}
-              onOpenFolder={() => handleOpenFolder(win.workingDirectory)}
-              onDelete={() => handleDeleteWindow(win.id)}
-              onStart={() => handleStartWindow(win)}
-              onPause={() => handlePauseWindow(win)}
-              onArchive={() => handleArchiveWindow(win)}
-            />
-          ))}
+          {sortedWindows.map((win) => {
+            // 从布局树中获取第一个窗格的工作目录
+            const panes = getAllPanes(win.layout);
+            const firstPaneCwd = panes.length > 0 ? panes[0].cwd : '';
+
+            return (
+              <WindowCard
+                key={win.id}
+                window={win}
+                onClick={() => handleCardClick(win)}
+                onOpenFolder={() => handleOpenFolder(firstPaneCwd)}
+                onDelete={() => handleDeleteWindow(win.id)}
+                onStart={() => handleStartWindow(win)}
+                onPause={() => handlePauseWindow(win)}
+                onArchive={() => handleArchiveWindow(win)}
+              />
+            );
+          })}
           <NewWindowCard onClick={onCreateWindow ?? (() => {})} />
         </div>
       </ScrollArea.Viewport>

@@ -8,6 +8,7 @@ import { StatusPoller } from './services/StatusPoller';
 import { ViewSwitcherImpl } from './services/ViewSwitcher';
 import { WorkspaceManagerImpl } from './services/WorkspaceManager';
 import { AutoSaveManagerImpl } from './services/AutoSaveManager';
+import { PtySubscriptionManager } from './services/PtySubscriptionManager';
 // import { WorkspaceRestorerImpl } from './services/WorkspaceRestorer';
 import { TerminalConfig } from './types/process';
 import { WindowStatus } from '../renderer/types/window';
@@ -20,16 +21,14 @@ let statusPoller: StatusPoller | null = null;
 let viewSwitcher: ViewSwitcherImpl | null = null;
 let workspaceManager: WorkspaceManagerImpl | null = null;
 let autoSaveManager: AutoSaveManagerImpl | null = null;
+let ptySubscriptionManager: PtySubscriptionManager | null = null;
 // let workspaceRestorer: WorkspaceRestorerImpl | null = null;
 let windowCounter = 0; // 用于生成唯一的窗口编号
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 
-// PTY 输出缓存：windowId -> 输出历史数组
+// PTY 输出缓存：paneId -> 输出历史数组
 const ptyOutputCache = new Map<string, string[]>();
-const MAX_CACHE_SIZE = 1000; // 每个窗口最多缓存 1000 条输出
-
-// PTY 数据订阅清理函数：windowId -> 清理函数
-const ptyDataUnsubscribers = new Map<string, () => void>();
+const MAX_CACHE_SIZE = 1000; // 每个窗格最多缓存 1000 条输出
 
 // 退出标志，防止重复执行退出逻辑
 let isQuitting = false;
@@ -189,10 +188,9 @@ function createWindow() {
 
         // 取消所有 PTY 数据订阅
         console.log('[ELECTRON] Unsubscribing PTY data...');
-        for (const [windowId, unsubscribe] of ptyDataUnsubscribers.entries()) {
-          unsubscribe();
+        if (ptySubscriptionManager) {
+          ptySubscriptionManager.clear();
         }
-        ptyDataUnsubscribers.clear();
         ptyOutputCache.clear();
         console.log('[ELECTRON] PTY data unsubscribed');
 
@@ -277,6 +275,9 @@ app.whenReady().then(async () => {
   // 初始化 ProcessManager
   processManager = new ProcessManager();
 
+  // 初始化 PtySubscriptionManager
+  ptySubscriptionManager = new PtySubscriptionManager();
+
   // 注册 IPC handlers
   registerIPCHandlers();
 
@@ -358,7 +359,6 @@ app.on('window-all-closed', () => {
 
   // 清理缓存
   ptyOutputCache.clear();
-  ptyDataUnsubscribers.clear();
 
   if (process.platform !== 'darwin') {
     app.exit(0); // 使用 app.exit(0) 而不是 app.quit()
@@ -464,8 +464,10 @@ function registerIPCHandlers() {
         }
       });
 
-      // 保存清理函数
-      ptyDataUnsubscribers.set(windowId, unsubscribe);
+      // 使用 PtySubscriptionManager 管理订阅
+      if (ptySubscriptionManager) {
+        ptySubscriptionManager.add(paneId, unsubscribe);
+      }
 
       return window;
     } catch (error) {
@@ -541,9 +543,10 @@ function registerIPCHandlers() {
         }
       });
 
-      // 保存清理函数（使用 windowId-paneId 作为键）
-      const key = paneId ? `${windowId}-${paneId}` : windowId;
-      ptyDataUnsubscribers.set(key, unsubscribe);
+      // 使用 PtySubscriptionManager 管理订阅
+      if (ptySubscriptionManager && paneId) {
+        ptySubscriptionManager.add(paneId, unsubscribe);
+      }
 
       return {
         pid: handle.pid,
@@ -641,15 +644,12 @@ function registerIPCHandlers() {
       const processes = processManager.listProcesses();
       const windowProcesses = processes.filter(p => p.windowId === windowId);
 
-      for (const proc of windowProcesses) {
-        // 取消订阅 PTY 数据（使用 windowId-paneId 作为键）
-        const key = proc.paneId ? `${windowId}-${proc.paneId}` : windowId;
-        const unsubscribe = ptyDataUnsubscribers.get(key);
-        if (unsubscribe) {
-          unsubscribe();
-          ptyDataUnsubscribers.delete(key);
-        }
+      // 使用 PtySubscriptionManager 批量清理窗口的所有订阅
+      if (ptySubscriptionManager) {
+        ptySubscriptionManager.removeByWindow(windowId, processManager);
+      }
 
+      for (const proc of windowProcesses) {
         // 清理每个窗格的输出缓存
         if (proc.paneId) {
           ptyOutputCache.delete(proc.paneId);
@@ -686,6 +686,12 @@ function registerIPCHandlers() {
       // 查找对应进程并终止，同时清理缓存
       const processes = processManager.listProcesses();
       const windowProcesses = processes.filter(p => p.windowId === windowId);
+
+      // 使用 PtySubscriptionManager 批量清理窗口的所有订阅
+      if (ptySubscriptionManager) {
+        ptySubscriptionManager.removeByWindow(windowId, processManager);
+      }
+
       for (const proc of windowProcesses) {
         // 清理每个窗格的输出缓存
         if (proc.paneId) {
@@ -699,13 +705,6 @@ function registerIPCHandlers() {
             console.log(`Process ${proc.pid} already exited`);
           }
         }
-      }
-
-      // 取消订阅 PTY 数据
-      const unsubscribe = ptyDataUnsubscribers.get(windowId);
-      if (unsubscribe) {
-        unsubscribe();
-        ptyDataUnsubscribers.delete(windowId);
       }
 
       // TODO: 移除窗口配置（Story 6.x 工作区持久化时实现）
@@ -792,6 +791,41 @@ function registerIPCHandlers() {
         throw new Error('ProcessManager not initialized');
       }
       const handle = await processManager.spawnTerminal(config);
+
+      // 初始化输出缓存
+      if (config.paneId) {
+        ptyOutputCache.set(config.paneId, []);
+      }
+
+      // 订阅 PTY 数据（修复：之前缺少这部分逻辑）
+      const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
+        // 缓存输出
+        if (config.paneId) {
+          const cache = ptyOutputCache.get(config.paneId);
+          if (cache) {
+            cache.push(data);
+            // 限制缓存大小
+            if (cache.length > MAX_CACHE_SIZE) {
+              cache.shift();
+            }
+          }
+        }
+
+        // 推送到渲染进程
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('pty-data', {
+            windowId: config.windowId,
+            paneId: config.paneId,
+            data
+          });
+        }
+      });
+
+      // 使用 PtySubscriptionManager 管理订阅
+      if (ptySubscriptionManager && config.paneId) {
+        ptySubscriptionManager.add(config.paneId, unsubscribe);
+      }
+
       return { pid: handle.pid };
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
@@ -810,6 +844,11 @@ function registerIPCHandlers() {
 
       // 清理输出缓存
       ptyOutputCache.delete(paneId);
+
+      // 清理 PTY 订阅（修复：之前缺少这部分逻辑）
+      if (ptySubscriptionManager) {
+        ptySubscriptionManager.remove(paneId);
+      }
 
       const processes = processManager.listProcesses();
       const found = processes.find(p => p.windowId === windowId && p.paneId === paneId);
