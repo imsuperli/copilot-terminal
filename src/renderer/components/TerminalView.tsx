@@ -258,6 +258,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* 快速切换面板 */}
       {quickSwitcherOpen && (
         <QuickSwitcher
+          isOpen={quickSwitcherOpen}
+          currentWindowId={terminalWindow.id}
           onSelect={handleQuickSwitcherSelect}
           onClose={() => setQuickSwitcherOpen(false)}
         />
@@ -266,6 +268,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* Tab 切换面板 */}
       {tabSwitcherOpen && (
         <TabSwitcher
+          isOpen={tabSwitcherOpen}
           direction={tabSwitchDirection}
           onSelect={handleTabSwitcherSelect}
           onClose={() => setTabSwitcherOpen(false)}
