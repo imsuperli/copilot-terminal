@@ -1,4 +1,5 @@
 import React from 'react';
+import { Activity, Keyboard, Pause } from 'lucide-react';
 import { WindowStatus } from '../types/window';
 
 export interface StatusDotProps {
@@ -9,16 +10,10 @@ export interface StatusDotProps {
 }
 
 /**
- * 根据窗格状态获取状态圆点的背景颜色
+ * 根据窗格状态获取状态圆点的背景颜色（用于非图标状态）
  */
 function getStatusDotColor(status: WindowStatus): string {
   switch (status) {
-    case WindowStatus.Running:
-      return 'bg-green-500';
-    case WindowStatus.WaitingForInput:
-      return 'bg-blue-500';
-    case WindowStatus.Paused:
-      return 'bg-zinc-600';
     case WindowStatus.Error:
       return 'bg-red-500';
     case WindowStatus.Completed:
@@ -27,6 +22,22 @@ function getStatusDotColor(status: WindowStatus): string {
       return 'bg-yellow-500';
     default:
       return 'bg-zinc-600';
+  }
+}
+
+/**
+ * 根据窗格状态获取图标颜色
+ */
+function getStatusIconColor(status: WindowStatus): string {
+  switch (status) {
+    case WindowStatus.Running:
+      return 'text-green-500';
+    case WindowStatus.WaitingForInput:
+      return 'text-blue-500';
+    case WindowStatus.Paused:
+      return 'text-zinc-500';
+    default:
+      return 'text-zinc-600';
   }
 }
 
@@ -48,7 +59,7 @@ function getStatusAnimation(status: WindowStatus): string {
 
 /**
  * StatusDot 组件
- * 显示状态圆点，支持不同状态的颜色和动画效果
+ * 显示状态图标或圆点，支持不同状态的颜色和动画效果
  */
 export const StatusDot: React.FC<StatusDotProps> = ({
   status,
@@ -56,13 +67,47 @@ export const StatusDot: React.FC<StatusDotProps> = ({
   className = '',
   title,
 }) => {
-  const sizeClass = size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2';
-  const colorClass = getStatusDotColor(status);
+  const iconSize = size === 'sm' ? 12 : 14;
+  const dotSizeClass = size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2';
+  const iconColor = getStatusIconColor(status);
+  const dotColor = getStatusDotColor(status);
   const animationClass = getStatusAnimation(status);
 
+  // 使用图标的状态
+  if (status === WindowStatus.Running) {
+    return (
+      <Activity
+        size={iconSize}
+        className={`${iconColor} ${animationClass} ${className}`}
+        title={title}
+      />
+    );
+  }
+
+  if (status === WindowStatus.WaitingForInput) {
+    return (
+      <Keyboard
+        size={iconSize}
+        className={`${iconColor} ${animationClass} ${className}`}
+        title={title}
+      />
+    );
+  }
+
+  if (status === WindowStatus.Paused) {
+    return (
+      <Pause
+        size={iconSize}
+        className={`${iconColor} ${animationClass} ${className}`}
+        title={title}
+      />
+    );
+  }
+
+  // 其他状态继续使用圆点
   return (
     <div
-      className={`rounded-full ${sizeClass} ${colorClass} ${animationClass} ${className}`}
+      className={`rounded-full ${dotSizeClass} ${dotColor} ${animationClass} ${className}`}
       title={title}
     />
   );

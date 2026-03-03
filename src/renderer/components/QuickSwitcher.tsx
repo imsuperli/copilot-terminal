@@ -3,7 +3,8 @@ import { Search } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { QuickSwitcherItem } from './QuickSwitcherItem';
 import { fuzzyMatch } from '../utils/fuzzySearch';
-import { Window } from '../types/window';
+import { Window, WindowStatus } from '../types/window';
+import { getAggregatedStatus } from '../utils/layoutHelpers';
 
 interface QuickSwitcherProps {
   isOpen: boolean;
@@ -30,18 +31,52 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
   const [isAnimating, setIsAnimating] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
 
-  // 过滤窗口并排序：当前窗口放在第一位
+  // 获取窗口的排序优先级
+  const getWindowPriority = (window: Window): number => {
+    // 归档窗口优先级最低
+    if (window.archived) return 4;
+
+    // 获取窗口的聚合状态
+    const status = getAggregatedStatus(window.layout);
+
+    // 根据状态返回优先级（数字越小优先级越高）
+    switch (status) {
+      case WindowStatus.WaitingForInput:
+        return 1; // 等待输入 - 最高优先级
+      case WindowStatus.Running:
+        return 2; // 运行中
+      case WindowStatus.Paused:
+        return 3; // 暂停
+      default:
+        return 3; // 其他状态按暂停处理
+    }
+  };
+
+  // 过滤窗口并排序
   const filteredWindows = windows
     .filter((window) => {
       const matchName = fuzzyMatch(query, window.name);
-      const matchCwd = fuzzyMatch(query, window.workingDirectory);
+      // 获取第一个窗格的工作目录进行匹配
+      const panes = window.layout.type === 'pane' ? [window.layout.pane] : [];
+      const cwd = panes[0]?.cwd || '';
+      const matchCwd = fuzzyMatch(query, cwd);
       return matchName || matchCwd;
     })
     .sort((a, b) => {
       // 当前窗口排在最前面
       if (a.id === currentWindowId) return -1;
       if (b.id === currentWindowId) return 1;
-      return 0;
+
+      // 按优先级排序
+      const priorityA = getWindowPriority(a);
+      const priorityB = getWindowPriority(b);
+
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+
+      // 优先级相同时，按最后活跃时间排序（最近的在前）
+      return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime();
     });
 
   // 重置状态和处理动画

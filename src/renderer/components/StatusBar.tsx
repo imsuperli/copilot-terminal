@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Activity, Terminal, Pause } from 'lucide-react';
+import { Activity, Keyboard, Pause } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { WindowStatus } from '../types/window';
 
@@ -46,7 +46,7 @@ export const StatusBar = React.memo(function StatusBar() {
       {/* 等待输入 */}
       <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[rgb(var(--card))] border border-[rgb(var(--border))]">
         <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-blue-500" aria-hidden="true" />
+          <Keyboard className="w-4 h-4 text-blue-500" aria-hidden="true" />
           <span className="text-xs text-[rgb(var(--muted-foreground))]">等待输入</span>
         </div>
         <span className="text-sm font-semibold text-blue-500">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Terminal, Pause, XCircle } from 'lucide-react';
+import { Activity, Keyboard, Pause, XCircle } from 'lucide-react';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
 
@@ -19,7 +19,7 @@ function getStatusIcon(status: WindowStatus) {
     case WindowStatus.Running:
       return Activity; // 运行中：心电图图标
     case WindowStatus.WaitingForInput:
-      return Terminal; // 等待输入：终端图标
+      return Keyboard; // 等待输入：键盘图标
     case WindowStatus.Paused:
       return Pause; // 暂停：暂停图标
     case WindowStatus.Error:
