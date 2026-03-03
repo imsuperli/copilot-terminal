@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
+import { successResponse, errorResponse } from './HandlerResponse';
 
 /**
  * 注册 PTY 通信相关的 IPC handlers
@@ -17,13 +18,13 @@ export function registerPtyHandlers(ctx: HandlerContext) {
       const found = processes.find(p =>
         p.windowId === windowId && (paneId ? p.paneId === paneId : true)
       );
-      if (found) {
-        processManager.writeToPty(found.pid, data);
+      if (!found) {
+        throw new Error(`Process not found for windowId: ${windowId}, paneId: ${paneId}`);
       }
+      processManager.writeToPty(found.pid, data);
+      return successResponse();
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to write to PTY:', error);
-      }
+      return errorResponse(error);
     }
   });
 
@@ -37,13 +38,13 @@ export function registerPtyHandlers(ctx: HandlerContext) {
       const found = processes.find(p =>
         p.windowId === windowId && (paneId ? p.paneId === paneId : true)
       );
-      if (found) {
-        processManager.resizePty(found.pid, cols, rows);
+      if (!found) {
+        throw new Error(`Process not found for windowId: ${windowId}, paneId: ${paneId}`);
       }
+      processManager.resizePty(found.pid, cols, rows);
+      return successResponse();
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to resize PTY:', error);
-      }
+      return errorResponse(error);
     }
   });
 
@@ -51,12 +52,9 @@ export function registerPtyHandlers(ctx: HandlerContext) {
   ipcMain.handle('get-pty-history', async (_event, { paneId }: { paneId: string }) => {
     try {
       const cache = ptyOutputCache.get(paneId);
-      return cache || [];
+      return successResponse(cache || []);
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to get PTY history:', error);
-      }
-      return [];
+      return errorResponse(error);
     }
   });
 }

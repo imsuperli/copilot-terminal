@@ -1,16 +1,27 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
+import { successResponse, errorResponse } from './HandlerResponse';
 
 export function registerViewHandlers(ctx: HandlerContext) {
   const { viewSwitcher } = ctx;
 
   ipcMain.handle('switch-to-terminal-view', (_event, { windowId }: { windowId: string }) => {
-    if (!viewSwitcher) throw new Error('ViewSwitcher not initialized');
-    viewSwitcher.switchToTerminalView(windowId);
+    try {
+      if (!viewSwitcher) throw new Error('ViewSwitcher not initialized');
+      viewSwitcher.switchToTerminalView(windowId);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
   });
 
   ipcMain.handle('switch-to-unified-view', () => {
-    if (!viewSwitcher) throw new Error('ViewSwitcher not initialized');
-    viewSwitcher.switchToUnifiedView();
+    try {
+      if (!viewSwitcher) throw new Error('ViewSwitcher not initialized');
+      viewSwitcher.switchToUnifiedView();
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
   });
 }

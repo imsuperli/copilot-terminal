@@ -36,13 +36,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // 处理宽度调整
   useEffect(() => {
-    if (!isResizing) return;
+    if (!isResizing) return undefined;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (sidebarRef.current) {
-        const newWidth = e.clientX;
-        setSidebarWidth(newWidth);
-      }
+      const newWidth = Math.max(150, Math.min(400, e.clientX));
+      setSidebarWidth(newWidth);
     };
 
     const handleMouseUp = () => {

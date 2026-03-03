@@ -9,6 +9,7 @@ interface TrackedPane {
   isActive: boolean;
   lastStatus: WindowStatus;
   lastCheckTime: number;
+  failureCount?: number; // 连续失败次数
 }
 
 /**
@@ -161,8 +162,20 @@ export class StatusPoller {
           tracked.lastStatus = newStatus;
           this.notifyStatusChange(tracked.windowId, paneId, newStatus);
         }
-      }).catch(() => {
-        // 检测失败时忽略，下次轮询重试
+        // 重置失败计数
+        tracked.failureCount = 0;
+      }).catch((error) => {
+        // 检测失败时记录错误，下次轮询重试
+        if (process.env.NODE_ENV === 'development') {
+          console.error(`[StatusPoller] Failed to detect status for pid ${tracked.pid}:`, error);
+        }
+        // 如果连续失败超过 3 次，标记为 Error
+        tracked.failureCount = (tracked.failureCount || 0) + 1;
+        if (tracked.failureCount >= 3) {
+          console.warn(`[StatusPoller] Process ${tracked.pid} failed status detection 3 times, marking as Error`);
+          tracked.lastStatus = WindowStatus.Error;
+          this.notifyStatusChange(tracked.windowId, paneId, WindowStatus.Error);
+        }
       });
     }
   }
