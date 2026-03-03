@@ -234,14 +234,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
               title="左右拆分 (Ctrl+Shift+D)"
             >
-              <SplitSquareVertical size={14} />
+              <SplitSquareHorizontal size={14} />
             </button>
             <button
               onClick={() => handleSplitPane('vertical')}
               className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
               title="上下拆分 (Ctrl+Shift+E)"
             >
-              <SplitSquareHorizontal size={14} />
+              <SplitSquareVertical size={14} />
             </button>
           </div>
         </div>
