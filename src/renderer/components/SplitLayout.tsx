@@ -22,6 +22,12 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   onPaneActivate,
   onPaneClose,
 }) => {
+  // 防御性检查：如果 layout 为 undefined 或 null，返回空
+  if (!layout) {
+    console.error('[SplitLayout] Layout is undefined or null');
+    return <div className="flex items-center justify-center h-full text-zinc-500">布局数据无效</div>;
+  }
+
   // 计算窗格总数
   const totalPaneCount = getPaneCount(layout);
 

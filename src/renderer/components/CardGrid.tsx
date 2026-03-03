@@ -49,7 +49,7 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
 
         try {
           // 启动窗格
-          const result = await window.electronAPI.startWindow({
+          const response = await window.electronAPI.startWindow({
             windowId: win.id,
             paneId: pane.id,
             name: win.name,
@@ -57,11 +57,15 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
             command: pane.command,
           });
 
-          // 立即更新窗格状态
-          updatePane(win.id, pane.id, {
-            pid: result.pid,
-            status: result.status,
-          });
+          // 检查响应格式并立即更新窗格状态
+          if (response && response.success && response.data) {
+            updatePane(win.id, pane.id, {
+              pid: response.data.pid,
+              status: response.data.status,
+            });
+          } else {
+            throw new Error(response?.error || '启动窗格失败');
+          }
         } catch (paneError) {
           console.error(`Failed to start pane ${pane.id}:`, paneError);
           // 单个窗格启动失败，恢复为暂停状态

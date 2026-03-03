@@ -39,8 +39,12 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
     setIsValidating(true)
     const timer = setTimeout(async () => {
       try {
-        const isValid = await window.electronAPI.validatePath(workingDirectory)
-        setPathError(isValid ? '' : '路径不存在')
+        const response = await window.electronAPI.validatePath(workingDirectory)
+        if (response && response.success) {
+          setPathError(response.data ? '' : '路径不存在')
+        } else {
+          setPathError('验证失败')
+        }
       } catch (error) {
         setPathError('验证失败')
       } finally {
@@ -53,9 +57,9 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
 
   const handleSelectDirectory = async () => {
     try {
-      const selectedPath = await window.electronAPI.selectDirectory()
-      if (selectedPath) {
-        setWorkingDirectory(selectedPath)
+      const response = await window.electronAPI.selectDirectory()
+      if (response && response.success && response.data) {
+        setWorkingDirectory(response.data)
       }
     } catch (error) {
       console.error('Failed to select directory:', error)
@@ -73,15 +77,20 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
     setIsCreating(true)
     setCreateError('')
     try {
-      const windowData = await window.electronAPI.createWindow({
+      const response = await window.electronAPI.createWindow({
         name: name || undefined,
         workingDirectory,
         command: command || undefined,
       })
 
-      addWindow(windowData)
-      onOpenChange(false)
-      resetForm()
+      // 检查响应格式
+      if (response && response.success && response.data) {
+        addWindow(response.data)
+        onOpenChange(false)
+        resetForm()
+      } else {
+        throw new Error(response?.error || '创建窗口失败')
+      }
     } catch (error) {
       // 显示用户友好的错误信息
       const errorMessage = (error as Error).message || '创建窗口失败，请重试'

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Activity, Keyboard, Pause, XCircle } from 'lucide-react';
 import { Window, WindowStatus } from '../types/window';
-import { getAggregatedStatus } from '../utils/layoutHelpers';
+import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 
 interface SidebarWindowItemProps {
   window: Window;
@@ -95,6 +95,12 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
   const statusAnimation = getStatusAnimation(aggregatedStatus);
   const bgColor = getWindowBackgroundColor(aggregatedStatus, isActive);
 
+  // 从第一个窗格获取工作目录
+  const workingDirectory = useMemo(() => {
+    const panes = getAllPanes(terminalWindow.layout);
+    return panes.length > 0 ? panes[0].cwd : '';
+  }, [terminalWindow.layout]);
+
   // 折叠状态：只显示图标
   if (!isExpanded) {
     return (
@@ -106,7 +112,7 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
           transition-colors
           ${bgColor}
         `}
-        title={`${terminalWindow.name}\n${terminalWindow.cwd}`}
+        title={`${terminalWindow.name}\n${workingDirectory}`}
         aria-label={terminalWindow.name}
       >
         <StatusIcon className={`h-4 w-4 ${iconColor} ${statusAnimation}`} />
@@ -138,7 +144,7 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
 
         {/* 工作目录 */}
         <div className="text-xs text-zinc-400 truncate">
-          {terminalWindow.cwd}
+          {workingDirectory}
         </div>
       </div>
     </button>

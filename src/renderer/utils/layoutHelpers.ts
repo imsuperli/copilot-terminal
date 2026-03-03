@@ -99,6 +99,12 @@ export function findPaneNode(
  * 获取布局树中的所有窗格
  */
 export function getAllPanes(layout: LayoutNode): Pane[] {
+  // 防御性检查：如果 layout 为 undefined 或 null，返回空数组
+  if (!layout) {
+    console.warn('[getAllPanes] Layout is undefined or null');
+    return [];
+  }
+
   if (layout.type === 'pane') {
     return [layout.pane];
   }
@@ -224,6 +230,12 @@ export function updatePaneInLayout(
  * 获取窗口的聚合状态（基于所有窗格的状态）
  */
 export function getAggregatedStatus(layout: LayoutNode): WindowStatus {
+  // 防御性检查：如果 layout 为 undefined 或 null，返回暂停状态
+  if (!layout) {
+    console.warn('[getAggregatedStatus] Layout is undefined or null');
+    return WindowStatus.Paused;
+  }
+
   const panes = getAllPanes(layout);
 
   // 如果有任何窗格在运行，则窗口状态为运行中

@@ -93,13 +93,15 @@ export const WindowCard = React.memo<WindowCardProps>(({
   const statusColor = useMemo(() => getStatusColor(aggregatedStatus), [aggregatedStatus]);
   const statusLabel = useMemo(() => getStatusLabel(aggregatedStatus), [aggregatedStatus]);
 
-  // 缓存格式化的时间
-  const formattedTime = useMemo(() => {
+  // 缓存格式化的上次运行时间（移除"不到"、"大约"等字样）
+  const formattedLastActiveTime = useMemo(() => {
     try {
-      return formatDistanceToNow(new Date(window.lastActiveAt), {
+      const timeStr = formatDistanceToNow(new Date(window.lastActiveAt), {
         addSuffix: true,
         locale: zhCN
       });
+      // 移除"不到"、"大约"等字样
+      return timeStr.replace(/不到|大约/g, '').trim();
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to format time:', error, 'lastActiveAt:', window.lastActiveAt);
@@ -107,6 +109,23 @@ export const WindowCard = React.memo<WindowCardProps>(({
       return '未知';
     }
   }, [window.lastActiveAt]);
+
+  // 缓存格式化的创建时间
+  const formattedCreatedTime = useMemo(() => {
+    try {
+      const timeStr = formatDistanceToNow(new Date(window.createdAt), {
+        addSuffix: true,
+        locale: zhCN
+      });
+      // 移除"不到"、"大约"等字样
+      return timeStr.replace(/不到|大约/g, '').trim();
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to format created time:', error, 'createdAt:', window.createdAt);
+      }
+      return '未知';
+    }
+  }, [window.createdAt]);
 
   // 缓存截断后的路径
   const truncatedPath = useMemo(
@@ -230,19 +249,24 @@ export const WindowCard = React.memo<WindowCardProps>(({
         {/* 分割线 */}
         <div className="border-t border-[rgb(var(--border))]" />
 
-        {/* 第三行：最新输出摘要 */}
-        <p className="text-sm text-[rgb(var(--muted-foreground))] truncate flex-1">
-          {window.lastOutput || '无输出'}
-        </p>
-
-        {/* 第四行：最后活跃时间 */}
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-[rgb(var(--muted-foreground))] truncate flex-1">
-            {window.model || '未知模型'}
-          </span>
-          <span className="text-xs text-[rgb(var(--muted-foreground))] ml-2 flex-shrink-0">
-            {formattedTime}
-          </span>
+        {/* 第三行：时间信息 */}
+        <div className="flex flex-col gap-1 flex-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[rgb(var(--muted-foreground))]">
+              创建时间:
+            </span>
+            <span className="text-xs text-[rgb(var(--muted-foreground))] flex-shrink-0">
+              {formattedCreatedTime}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[rgb(var(--muted-foreground))]">
+              上次运行:
+            </span>
+            <span className="text-xs text-[rgb(var(--muted-foreground))] flex-shrink-0">
+              {formattedLastActiveTime}
+            </span>
+          </div>
         </div>
       </div>
 

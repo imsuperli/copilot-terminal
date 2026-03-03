@@ -135,14 +135,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       // 调用 IPC 创建新的 PTY 进程
       try {
         if (window.electronAPI) {
-          const result = await window.electronAPI.splitPane({
+          const response = await window.electronAPI.splitPane({
             workingDirectory: newPane.cwd,
             command: newPane.command,
             windowId: terminalWindow.id,
             paneId: newPaneId,
           });
-          newPane.pid = result.pid;
-          newPane.status = WindowStatus.Running;
+
+          if (response && response.success && response.data) {
+            newPane.pid = response.data.pid;
+            newPane.status = WindowStatus.Running;
+          } else {
+            throw new Error(response?.error || '拆分窗格失败');
+          }
         }
       } catch (error) {
         console.error('Failed to split pane:', error);
