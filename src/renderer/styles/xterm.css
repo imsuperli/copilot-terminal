@@ -15,3 +15,30 @@
   padding-left: 4px !important;
   padding-right: 8px !important;
 }
+
+/* 自定义 xterm.js 的滚动条样式 - 细线风格，悬浮时变宽 */
+.xterm .xterm-scrollable-element > .scrollbar {
+  width: 3px !important; /* 默认宽度 - 超细线 */
+  background: transparent !important;
+  transition: width 0.2s ease !important; /* 宽度变化动画 */
+}
+
+/* 悬浮时滚动条变宽 */
+.xterm .xterm-scrollable-element > .scrollbar:hover {
+  width: 12px !important; /* 悬浮时宽度 */
+}
+
+.xterm .xterm-scrollable-element > .scrollbar > .slider {
+  background: rgba(255, 255, 255, 0.2) !important; /* 滚动条颜色 */
+  border-radius: 3px !important;
+  width: 100% !important; /* 占满滚动条宽度 */
+  transition: background 0.2s ease !important;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar > .slider:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar > .slider:active {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
