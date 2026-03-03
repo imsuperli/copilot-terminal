@@ -10,7 +10,8 @@
   overflow-y: auto;
 }
 
-/* 终端内容区域只保留右侧少量边距 */
+/* 终端内容区域左右保留少量边距 */
 .xterm .xterm-screen {
+  padding-left: 4px !important;
   padding-right: 8px !important;
 }
