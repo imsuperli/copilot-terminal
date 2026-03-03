@@ -212,8 +212,11 @@ app.whenReady().then(async () => {
     // 启动自动保存
     if (autoSaveManager && workspaceManager) {
       autoSaveManager.startAutoSave(workspaceManager, () => {
-        // 返回当前工作区状态
-        return currentWorkspace || workspaceManager!.loadWorkspace() as any;
+        // 返回当前工作区状态（必须同步返回，所以依赖缓存的 currentWorkspace）
+        if (!currentWorkspace) {
+          throw new Error('Current workspace not available');
+        }
+        return currentWorkspace;
       });
     }
 
