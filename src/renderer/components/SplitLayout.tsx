@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { LayoutNode, SplitNode } from '../types/window';
 import { TerminalPane } from './TerminalPane';
+import { getPaneCount } from '../utils/layoutHelpers';
 
 export interface SplitLayoutProps {
   windowId: string;
@@ -21,9 +22,13 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   onPaneActivate,
   onPaneClose,
 }) => {
+  // 计算窗格总数
+  const totalPaneCount = getPaneCount(layout);
+
   // 如果是窗格节点，直接渲染 TerminalPane
   if (layout.type === 'pane') {
-    const canClose = true; // 在父组件中判断是否可以关闭
+    // 只有多个窗格时才允许关闭
+    const canClose = totalPaneCount > 1;
     return (
       <TerminalPane
         windowId={windowId}
@@ -154,7 +159,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
             <div
               className={`
                 ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'}
-                bg-zinc-800 hover:bg-blue-500 transition-colors flex-shrink-0
+                bg-transparent hover:bg-blue-500 transition-colors flex-shrink-0
                 ${isResizing && resizingIndex === index ? 'bg-blue-500' : ''}
               `}
               onMouseDown={handleMouseDown(index)}

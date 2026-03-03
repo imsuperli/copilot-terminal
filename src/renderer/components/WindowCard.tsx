@@ -6,6 +6,7 @@ import { FolderOpen, Trash2, Play, Pause, Loader2, Archive, ArchiveRestore } fro
 import { Window, WindowStatus } from '../types/window';
 import { getStatusColor, getStatusLabel } from '../utils/statusHelpers';
 import { getAllPanes, getAggregatedStatus, getPaneCount } from '../utils/layoutHelpers';
+import { StatusDot } from './StatusDot';
 
 interface WindowCardProps {
   window: Window;
@@ -168,7 +169,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
 
       {/* 卡片内容 - 占据剩余空间 */}
       <div className="flex-1 p-4 space-y-2 flex flex-col min-h-0">
-        {/* 第一行：窗口名称 + 窗格数量 + 状态标签 */}
+        {/* 第一行：窗口名称 + 窗格数量 + 状态 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <h3 className="text-base font-semibold text-[rgb(var(--foreground))] truncate">
@@ -180,9 +181,31 @@ export const WindowCard = React.memo<WindowCardProps>(({
               </span>
             )}
           </div>
-          <span className="text-xs text-[rgb(var(--muted-foreground))] ml-2 flex-shrink-0">
-            {statusLabel}
-          </span>
+          {/* 始终显示每个窗格的状态圆点 */}
+          <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+            {panes.map((pane, index) => (
+              <Tooltip.Provider key={pane.id}>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <div>
+                      <StatusDot
+                        status={pane.status}
+                        size="sm"
+                      />
+                    </div>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      sideOffset={5}
+                    >
+                      窗格 {index + 1}: {getStatusLabel(pane.status)}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            ))}
+          </div>
         </div>
 
         {/* 第二行：工作目录路径（智能截断，支持换行最多2行） */}

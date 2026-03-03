@@ -166,7 +166,7 @@ export const useWindowStore = create<WindowStore>()(
           const newLayout = splitPaneInLayout(window.layout, targetPaneId, direction, newPane);
           if (newLayout) {
             window.layout = newLayout;
-            window.activePaneId = newPane.id; // 激活新窗格
+            // 保持当前激活的窗格不变，不自动切换到新窗格
             window.lastActiveAt = new Date().toISOString();
           }
         }

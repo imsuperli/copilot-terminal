@@ -1,10 +1,54 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { X } from 'lucide-react';
-import { Pane } from '../types/window';
-import { getStatusLabel, getStatusTextColor } from '../utils/statusHelpers';
+import { Pane, WindowStatus } from '../types/window';
+import { StatusDot } from './StatusDot';
 import '../styles/xterm.css';
+
+/**
+ * 根据窗格状态获取顶部边框颜色
+ */
+function getStatusBorderColor(status: WindowStatus): string {
+  switch (status) {
+    case WindowStatus.Running:
+      return 'border-t-green-500';
+    case WindowStatus.WaitingForInput:
+      return 'border-t-blue-500';
+    case WindowStatus.Paused:
+      return 'border-t-zinc-600';
+    case WindowStatus.Error:
+      return 'border-t-red-500';
+    case WindowStatus.Completed:
+      return 'border-t-zinc-500';
+    case WindowStatus.Restoring:
+      return 'border-t-yellow-500';
+    default:
+      return 'border-t-zinc-600';
+  }
+}
+
+/**
+ * 根据窗格状态获取选中时的边框颜色
+ */
+function getStatusRingColor(status: WindowStatus): string {
+  switch (status) {
+    case WindowStatus.Running:
+      return 'ring-green-500';
+    case WindowStatus.WaitingForInput:
+      return 'ring-blue-500';
+    case WindowStatus.Paused:
+      return 'ring-zinc-600';
+    case WindowStatus.Error:
+      return 'ring-red-500';
+    case WindowStatus.Completed:
+      return 'ring-zinc-500';
+    case WindowStatus.Restoring:
+      return 'ring-yellow-500';
+    default:
+      return 'ring-zinc-600';
+  }
+}
 
 export interface TerminalPaneProps {
   windowId: string;
@@ -29,8 +73,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const isActiveRef = useRef(isActive); // 使用 ref 跟踪 isActive 状态
-  const statusLabel = getStatusLabel(pane.status);
-  const statusTextColor = getStatusTextColor(pane.status);
+  const [isHovered, setIsHovered] = useState(false);
+  const borderColor = getStatusBorderColor(pane.status);
+  const ringColor = getStatusRingColor(pane.status);
 
   // 更新 isActive ref
   useEffect(() => {
@@ -155,30 +200,31 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   return (
     <div
-      className={`flex flex-col h-full bg-[#0f0f0f] ${
-        isActive ? 'ring-2 ring-blue-500' : 'ring-1 ring-zinc-800'
+      className={`relative flex flex-col h-full bg-[#0f0f0f] ${
+        isActive ? `ring-1 ${ringColor}` : ''
       }`}
       onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 窗格工具栏 */}
-      <div className="h-8 flex items-center justify-between px-3 bg-zinc-900 border-b border-zinc-800 flex-shrink-0">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-zinc-400">窗格</span>
-          <span className={`${statusTextColor}`}>{statusLabel}</span>
-        </div>
-        {onClose && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="w-6 h-6 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-colors"
-            title="关闭窗格"
-          >
-            <X size={14} />
-          </button>
-        )}
+      {/* 状态圆点 - 始终显示 */}
+      <div className="absolute top-1 right-1 z-10">
+        <StatusDot status={pane.status} size="sm" title="窗格状态" />
       </div>
+
+      {/* 悬浮时显示的关闭按钮 */}
+      {onClose && isHovered && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="absolute top-1 right-1 z-10 w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+          title="关闭窗格"
+        >
+          <X size={14} />
+        </button>
+      )}
 
       {/* 终端容器 */}
       <div ref={terminalContainerRef} className="flex-1 overflow-hidden p-2" />

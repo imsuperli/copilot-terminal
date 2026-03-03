@@ -1,13 +1,15 @@
 import React, { useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
-import { getAggregatedStatus, getPaneCount } from '../utils/layoutHelpers';
+import { getAggregatedStatus, getPaneCount, getAllPanes } from '../utils/layoutHelpers';
 import { getStatusLabel, getStatusTextColor } from '../utils/statusHelpers';
 import { Sidebar } from './Sidebar';
 import { QuickSwitcher } from './QuickSwitcher';
 import { TabSwitcher } from './TabSwitcher';
 import { SplitLayout } from './SplitLayout';
+import { StatusDot } from './StatusDot';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 
@@ -32,6 +34,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const statusLabel = getStatusLabel(aggregatedStatus);
   const statusTextColor = getStatusTextColor(aggregatedStatus);
   const paneCount = getPaneCount(terminalWindow.layout);
+  const panes = getAllPanes(terminalWindow.layout);
 
   // 切换面板状态
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
@@ -178,45 +181,64 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 */}
-        <div className="h-12 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 flex-shrink-0">
+        <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 flex-shrink-0">
           <div className="flex items-center gap-3">
             {/* 返回按钮 */}
-            <button
-              onClick={onReturn}
-              className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              title="返回统一视图 (Esc)"
-            >
-              <ArrowLeft size={16} />
-              <span className="text-sm">返回</span>
-            </button>
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={onReturn}
+                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  >
+                    <ArrowLeft size={14} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                    sideOffset={5}
+                  >
+                    返回统一视图 (Esc)
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
 
             {/* 窗口名称 */}
             <div className="flex items-center gap-2">
-              <span className="text-zinc-100 font-medium">{terminalWindow.name}</span>
+              <span className="text-zinc-100 font-medium text-sm">{terminalWindow.name}</span>
               <span className="text-xs text-zinc-500">({paneCount} 个窗格)</span>
             </div>
 
-            {/* 状态 */}
-            <div className={`text-sm ${statusTextColor}`}>{statusLabel}</div>
+            {/* 状态 - 始终显示圆点 */}
+            <div className="flex items-center gap-1.5">
+              {panes.map((pane, index) => (
+                <StatusDot
+                  key={pane.id}
+                  status={pane.status}
+                  size="sm"
+                  title={`窗格 ${index + 1}: ${getStatusLabel(pane.status)}`}
+                />
+              ))}
+            </div>
           </div>
 
           {/* 拆分按钮 */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => handleSplitPane('horizontal')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
               title="左右拆分 (Ctrl+Shift+D)"
             >
-              <SplitSquareVertical size={16} />
-              <span className="text-sm">左右拆分</span>
+              <SplitSquareVertical size={14} />
             </button>
             <button
               onClick={() => handleSplitPane('vertical')}
-              className="flex items-center gap-2 px-3 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
               title="上下拆分 (Ctrl+Shift+E)"
             >
-              <SplitSquareHorizontal size={16} />
-              <span className="text-sm">上下拆分</span>
+              <SplitSquareHorizontal size={14} />
             </button>
           </div>
         </div>

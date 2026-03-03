@@ -42,6 +42,20 @@ export default {
         'button': '6px',
         'input': '4px',
       },
+      animation: {
+        'blink': 'blink 1s ease-in-out infinite',
+        'breathe': 'breathe 2s ease-in-out infinite',
+      },
+      keyframes: {
+        blink: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.3' },
+        },
+        breathe: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.4' },
+        },
+      },
     },
   },
   plugins: [],
