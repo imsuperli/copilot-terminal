@@ -108,12 +108,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       console.error('Failed to load workspace:', error);
 
       // 尝试从备份恢复
-      try {
-        return await this.restoreFromBackup();
-      } catch (backupError) {
-        console.error('Failed to restore from backup:', backupError);
-        return this.getDefaultWorkspace();
-      }
+      return await this.restoreFromBackup();
     }
   }
 
@@ -297,10 +292,15 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
           const workspace = await fs.readJson(backupPath);
 
           if (this.validateWorkspace(workspace)) {
-            // 恢复到主文件
-            await fs.copy(backupPath, this.workspacePath);
-            console.log(`Restored workspace from backup.${i}`);
-            return workspace;
+            // 恢复到主文件（使用 writeJson 而不是 copy，避免文件系统竞态）
+            try {
+              await fs.writeJson(this.workspacePath, workspace, { spaces: 2 });
+              console.log(`Restored workspace from backup.${i}`);
+              return this.resetPaneStates(workspace);
+            } catch (writeError) {
+              console.error(`Failed to write restored workspace from backup.${i}:`, writeError);
+              // 继续尝试下一个备份
+            }
           }
         } catch (error) {
           console.error(`Failed to restore from backup.${i}:`, error);
@@ -309,7 +309,8 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     }
 
     // 所有备份都失败，返回默认工作区
-    throw new Error('All backup restoration attempts failed');
+    console.warn('All backup restoration attempts failed, using default workspace');
+    return this.getDefaultWorkspace();
   }
 
   /**
