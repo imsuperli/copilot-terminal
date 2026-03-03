@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import * as ScrollArea from '@radix-ui/react-scroll-area';
 import { useWindowStore } from '../stores/windowStore';
 import { sortWindows } from '../utils/sortWindows';
+import { getAllPanes } from '../utils/layoutHelpers';
 import { WindowCard } from './WindowCard';
 import { NewWindowCard } from './NewWindowCard';
 import { Window, WindowStatus } from '../types/window';
@@ -19,7 +20,7 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
   const windows = useWindowStore((state) => state.windows);
   const setActiveWindow = useWindowStore((state) => state.setActiveWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
-  const updateWindow = useWindowStore((state) => state.updateWindow);
+  const updatePane = useWindowStore((state) => state.updatePane);
   const archiveWindow = useWindowStore((state) => state.archiveWindow);
 
   // 只显示未归档的窗口
@@ -38,36 +39,54 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
 
   const handleStartWindow = useCallback(async (win: Window) => {
     try {
-      // 更新状态为 Restoring
-      updateWindow(win.id, { status: WindowStatus.Restoring });
+      // 获取所有窗格
+      const panes = getAllPanes(win.layout);
 
-      // 启动窗口（不进入终端视图）
-      const result = await window.electronAPI.startWindow({
-        windowId: win.id,
-        name: win.name,
-        workingDirectory: win.workingDirectory,
-        command: win.command,
-      });
+      // 为每个窗格启动 PTY 进程
+      for (const pane of panes) {
+        // 更新窗格状态为 Restoring
+        updatePane(win.id, pane.id, { status: WindowStatus.Restoring });
 
-      // 更新窗口信息
-      updateWindow(win.id, {
-        pid: result.pid,
-        status: result.status,
-      });
+        try {
+          // 启动窗格
+          const result = await window.electronAPI.startWindow({
+            windowId: win.id,
+            paneId: pane.id,
+            name: win.name,
+            workingDirectory: pane.cwd,
+            command: pane.command,
+          });
+
+          // 立即更新窗格状态
+          updatePane(win.id, pane.id, {
+            pid: result.pid,
+            status: result.status,
+          });
+        } catch (paneError) {
+          console.error(`Failed to start pane ${pane.id}:`, paneError);
+          // 单个窗格启动失败，恢复为暂停状态
+          updatePane(win.id, pane.id, { status: WindowStatus.Paused });
+        }
+      }
     } catch (error) {
       console.error('Failed to start window:', error);
-      // 启动失败，恢复为暂停状态
-      updateWindow(win.id, { status: WindowStatus.Paused });
+      // 整体启动失败，恢复所有窗格为暂停状态
+      const panes = getAllPanes(win.layout);
+      for (const pane of panes) {
+        updatePane(win.id, pane.id, { status: WindowStatus.Paused });
+      }
     }
-  }, [updateWindow]);
+  }, [updatePane]);
 
   const handlePauseWindow = useCallback(async (win: Window) => {
     try {
-      if (win.pid) {
-        // 关闭窗口（终止 PTY 进程）
-        await window.electronAPI.closeWindow(win.id);
-        // 更新状态为暂停
-        updateWindow(win.id, {
+      // 关闭窗口（终止所有 PTY 进程）
+      await window.electronAPI.closeWindow(win.id);
+
+      // 立即更新所有窗格状态为 Paused
+      const panes = getAllPanes(win.layout);
+      for (const pane of panes) {
+        updatePane(win.id, pane.id, {
           status: WindowStatus.Paused,
           pid: null
         });
@@ -75,14 +94,12 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
     } catch (error) {
       console.error('Failed to pause window:', error);
     }
-  }, [updateWindow]);
+  }, [updatePane]);
 
   const handleArchiveWindow = useCallback(async (win: Window) => {
     try {
-      // 如果窗口正在运行，先暂停
-      if (win.pid) {
-        await window.electronAPI.closeWindow(win.id);
-      }
+      // 先关闭窗口（如果有运行中的进程）
+      await window.electronAPI.closeWindow(win.id);
       // 归档窗口
       archiveWindow(win.id);
     } catch (error) {

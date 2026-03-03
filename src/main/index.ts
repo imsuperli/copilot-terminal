@@ -637,21 +637,24 @@ function registerIPCHandlers() {
         throw new Error('ProcessManager not initialized');
       }
 
-      // 取消订阅 PTY 数据
-      const unsubscribe = ptyDataUnsubscribers.get(windowId);
-      if (unsubscribe) {
-        unsubscribe();
-        ptyDataUnsubscribers.delete(windowId);
-      }
-
       // 查找对应进程并终止，同时清理缓存
       const processes = processManager.listProcesses();
       const windowProcesses = processes.filter(p => p.windowId === windowId);
+
       for (const proc of windowProcesses) {
+        // 取消订阅 PTY 数据（使用 windowId-paneId 作为键）
+        const key = proc.paneId ? `${windowId}-${proc.paneId}` : windowId;
+        const unsubscribe = ptyDataUnsubscribers.get(key);
+        if (unsubscribe) {
+          unsubscribe();
+          ptyDataUnsubscribers.delete(key);
+        }
+
         // 清理每个窗格的输出缓存
         if (proc.paneId) {
           ptyOutputCache.delete(proc.paneId);
         }
+
         try {
           await processManager.killProcess(proc.pid);
         } catch (error) {
@@ -660,6 +663,11 @@ function registerIPCHandlers() {
             console.log(`Process ${proc.pid} already exited`);
           }
         }
+      }
+
+      // 从 StatusPoller 中移除窗口的所有窗格
+      if (statusPoller) {
+        statusPoller.removeWindow(windowId);
       }
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
