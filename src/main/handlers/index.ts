@@ -1,0 +1,40 @@
+import { HandlerContext } from './HandlerContext';
+import { registerWindowHandlers } from './windowHandlers';
+import { registerPaneHandlers } from './paneHandlers';
+import { registerPtyHandlers } from './ptyHandlers';
+import { registerWorkspaceHandlers } from './workspaceHandlers';
+import { registerViewHandlers } from './viewHandlers';
+import { registerFileHandlers } from './fileHandlers';
+import { registerProcessHandlers } from './processHandlers';
+import { registerMiscHandlers } from './miscHandlers';
+
+/**
+ * 注册所有 IPC handlers
+ *
+ * 将 IPC handlers 按功能分类到不同的模块中，提高代码可维护性
+ */
+export function registerAllHandlers(ctx: HandlerContext) {
+  // 窗口管理 (create-window, start-window, close-window, delete-window)
+  registerWindowHandlers(ctx);
+
+  // 窗格管理 (split-pane, close-pane)
+  registerPaneHandlers(ctx);
+
+  // PTY 通信 (pty-write, pty-resize, get-pty-history)
+  registerPtyHandlers(ctx);
+
+  // 工作区管理 (save-workspace, load-workspace, recover-from-backup)
+  registerWorkspaceHandlers(ctx);
+
+  // 视图切换 (switch-to-terminal-view, switch-to-unified-view)
+  registerViewHandlers(ctx);
+
+  // 文件系统 (validate-path, select-directory, open-folder)
+  registerFileHandlers(ctx);
+
+  // 进程管理 (create-terminal, kill-terminal, get-terminal-status, list-terminals)
+  registerProcessHandlers(ctx);
+
+  // 其他 (ping)
+  registerMiscHandlers(ctx);
+}
