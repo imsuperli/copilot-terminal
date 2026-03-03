@@ -27,9 +27,6 @@ const ptyOutputCache = new Map<string, string[]>();
 // 退出标志，防止重复执行退出逻辑
 let isQuitting = false;
 
-// 当前视图状态：unified 或 terminal
-let currentView: 'unified' | 'terminal' = 'unified';
-
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1024,
@@ -123,11 +120,13 @@ function createWindow() {
 
   // 窗口关闭前处理
   mainWindow.on('close', async (event) => {
+    // 检查当前视图状态（从 ViewSwitcher 获取）
+    const currentViewState = viewSwitcher?.getCurrentView() || 'unified';
+
     // 如果在终端视图，返回统一视图而不是关闭窗口
-    if (currentView === 'terminal' && !isQuitting) {
+    if (currentViewState === 'terminal' && !isQuitting) {
       event.preventDefault();
-      mainWindow?.webContents.send('view-changed', { view: 'unified' });
-      currentView = 'unified';
+      viewSwitcher?.switchToUnifiedView();
       return;
     }
 
