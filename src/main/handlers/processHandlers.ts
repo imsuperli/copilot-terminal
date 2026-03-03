@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
 import { TerminalConfig } from '../types/process';
+import { successResponse, errorResponse } from './HandlerResponse';
 
 /**
  * 注册进程管理相关的 IPC handlers
@@ -15,9 +16,9 @@ export function registerProcessHandlers(ctx: HandlerContext) {
         throw new Error('ProcessManager not initialized');
       }
       const handle = await processManager.spawnTerminal(config);
-      return { success: true, data: handle };
+      return successResponse(handle);
     } catch (error) {
-      return { success: false, error: (error as Error).message };
+      return errorResponse(error);
     }
   });
 
@@ -28,9 +29,9 @@ export function registerProcessHandlers(ctx: HandlerContext) {
         throw new Error('ProcessManager not initialized');
       }
       await processManager.killProcess(pid);
-      return { success: true };
+      return successResponse();
     } catch (error) {
-      return { success: false, error: (error as Error).message };
+      return errorResponse(error);
     }
   });
 
@@ -41,9 +42,9 @@ export function registerProcessHandlers(ctx: HandlerContext) {
         throw new Error('ProcessManager not initialized');
       }
       const status = processManager.getProcessStatus(pid);
-      return { success: true, data: status };
+      return successResponse(status);
     } catch (error) {
-      return { success: false, error: (error as Error).message };
+      return errorResponse(error);
     }
   });
 
@@ -54,9 +55,9 @@ export function registerProcessHandlers(ctx: HandlerContext) {
         throw new Error('ProcessManager not initialized');
       }
       const processes = processManager.listProcesses();
-      return { success: true, data: processes };
+      return successResponse(processes);
     } catch (error) {
-      return { success: false, error: (error as Error).message };
+      return errorResponse(error);
     }
   });
 }

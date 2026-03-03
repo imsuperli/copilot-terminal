@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { HandlerContext, MAX_CACHE_SIZE } from './HandlerContext';
 import { TerminalConfig } from '../types/process';
+import { successResponse, errorResponse } from './HandlerResponse';
 
 /**
  * 注册窗格管理相关的 IPC handlers
@@ -55,12 +56,9 @@ export function registerPaneHandlers(ctx: HandlerContext) {
         ptySubscriptionManager.add(config.paneId, unsubscribe);
       }
 
-      return { pid: handle.pid };
+      return successResponse({ pid: handle.pid });
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to split pane:', error);
-      }
-      throw error;
+      return errorResponse(error);
     }
   });
 
@@ -84,11 +82,10 @@ export function registerPaneHandlers(ctx: HandlerContext) {
       if (found) {
         await processManager.killProcess(found.pid);
       }
+
+      return successResponse();
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to close pane:', error);
-      }
-      throw error;
+      return errorResponse(error);
     }
   });
 }
