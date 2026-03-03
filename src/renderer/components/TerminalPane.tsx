@@ -113,7 +113,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         brightWhite: '#ffffff',
       },
       fontFamily: '"Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
-      fontSize: 16,
+      fontSize: 15,
       lineHeight: 1.2,
       cursorBlink: true,
       cursorStyle: 'block',
