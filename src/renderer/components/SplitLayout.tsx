@@ -27,15 +27,13 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
 
   // 如果是窗格节点，直接渲染 TerminalPane
   if (layout.type === 'pane') {
-    // 只有多个窗格时才允许关闭
-    const canClose = totalPaneCount > 1;
     return (
       <TerminalPane
         windowId={windowId}
         pane={layout.pane}
         isActive={layout.id === activePaneId}
         onActivate={() => onPaneActivate(layout.id)}
-        onClose={canClose ? () => onPaneClose(layout.id) : undefined}
+        onClose={() => onPaneClose(layout.id)}
       />
     );
   }

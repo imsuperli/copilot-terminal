@@ -72,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 侧边栏内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部：切换按钮 */}
-        <div className={`h-10 flex items-center border-b border-zinc-800 flex-shrink-0 ${sidebarExpanded ? 'justify-start px-2' : 'justify-center'}`}>
+        <div className={`h-10 flex items-center border-b border-zinc-800 flex-shrink-0 ${sidebarExpanded ? 'justify-start pl-1' : 'justify-center'}`}>
           <button
             onClick={toggleSidebar}
             className="w-8 h-8 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-all duration-200"

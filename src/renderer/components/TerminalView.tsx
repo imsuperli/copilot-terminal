@@ -184,8 +184,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 */}
-        <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-4 flex-shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0">
+          <div className="flex items-center gap-2">
             {/* 返回按钮 */}
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>

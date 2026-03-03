@@ -223,10 +223,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 状态圆点 - 始终显示 */}
-      <div className="absolute top-1 right-1 z-10">
-        <StatusDot status={pane.status} size="sm" title="窗格状态" />
-      </div>
+      {/* 状态圆点 - 非悬停时显示 */}
+      {!isHovered && (
+        <div className="absolute top-1 right-1 z-10">
+          <StatusDot status={pane.status} size="sm" title="窗格状态" />
+        </div>
+      )}
 
       {/* 悬浮时显示的关闭按钮 */}
       {onClose && isHovered && (
@@ -235,7 +237,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
             e.stopPropagation();
             onClose();
           }}
-          className="absolute top-1 right-1 z-10 w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+          className="absolute top-1 right-1 z-20 w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
           title="关闭窗格"
         >
           <X size={14} />
