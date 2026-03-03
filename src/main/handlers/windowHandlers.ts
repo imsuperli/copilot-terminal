@@ -4,6 +4,7 @@ import { execSync } from 'child_process';
 import { HandlerContext, MAX_CACHE_SIZE } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
 import { WindowStatus } from '../../renderer/types/window';
+import { successResponse, errorResponse } from './HandlerResponse';
 
 /**
  * 获取默认 shell，带回退逻辑
@@ -138,14 +139,9 @@ export function registerWindowHandlers(ctx: HandlerContext) {
         ptySubscriptionManager.add(paneId, unsubscribe);
       }
 
-      return window;
+      return successResponse(window);
     } catch (error) {
-      const errorMessage = (error as Error).message;
-      // 不在生产环境记录敏感路径信息
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to create window:', error);
-      }
-      throw new Error(errorMessage);
+      return errorResponse(error);
     }
   });
 
@@ -218,16 +214,12 @@ export function registerWindowHandlers(ctx: HandlerContext) {
         ptySubscriptionManager.add(paneId, unsubscribe);
       }
 
-      return {
+      return successResponse({
         pid: handle.pid,
         status: WindowStatus.WaitingForInput,
-      };
+      });
     } catch (error) {
-      const errorMessage = (error as Error).message;
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to start window:', error);
-      }
-      throw new Error(errorMessage);
+      return errorResponse(error);
     }
   });
 
@@ -267,11 +259,10 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       if (statusPoller) {
         statusPoller.removeWindow(windowId);
       }
+
+      return successResponse();
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to close window:', error);
-      }
-      throw error;
+      return errorResponse(error);
     }
   });
 
@@ -308,11 +299,10 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       // TODO: 移除窗口配置（Story 6.x 工作区持久化时实现）
       // 从 StatusPoller 移除窗口
       statusPoller?.removeWindow(windowId);
+
+      return successResponse();
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to delete window:', error);
-      }
-      throw error;
+      return errorResponse(error);
     }
   });
 }
