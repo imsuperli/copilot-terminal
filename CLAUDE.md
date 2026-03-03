@@ -62,10 +62,10 @@ Windows restored from workspace start in **paused state** (status: `Paused`, no 
 ### Shell Selection Priority (Windows)
 
 1. `pwsh.exe` (PowerShell 7+) - preferred
-2. `cmd.exe` - fallback
-3. **Never** use `powershell.exe` (legacy PowerShell 5.1)
+2. `powershell.exe` (PowerShell 5.1) - fallback
+3. `cmd.exe` - final fallback
 
-Rationale: PowerShell 7+ has better Unicode support and performance. See `getDefaultShell()` in `src/main/index.ts`.
+Rationale: PowerShell 7+ has better Unicode support and performance. If not available, use PowerShell 5.1 which is pre-installed on most Windows systems. See `getDefaultShell()` in `src/main/utils/shell.ts`.
 
 ### Status Detection
 

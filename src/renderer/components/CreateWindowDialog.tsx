@@ -186,17 +186,17 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
           )}
         </div>
 
-        {/* 启动命令 */}
+        {/* Shell 程序 */}
         <div className="mb-6">
           <label htmlFor="command" className="block text-sm font-medium text-text-primary mb-2">
-            启动命令（可选）
+            Shell 程序（可选）
           </label>
           <input
             id="command"
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
-            placeholder="默认打开 shell"
+            placeholder="默认使用系统 shell（pwsh/cmd/bash）"
             className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
           />
         </div>
