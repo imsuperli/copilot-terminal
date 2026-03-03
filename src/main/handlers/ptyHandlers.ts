@@ -19,7 +19,8 @@ export function registerPtyHandlers(ctx: HandlerContext) {
         p.windowId === windowId && (paneId ? p.paneId === paneId : true)
       );
       if (!found) {
-        throw new Error(`Process not found for windowId: ${windowId}, paneId: ${paneId}`);
+        // 窗口可能处于 Paused 状态（没有 PTY 进程），这是正常的，静默忽略
+        return successResponse();
       }
       processManager.writeToPty(found.pid, data);
       return successResponse();
@@ -39,7 +40,8 @@ export function registerPtyHandlers(ctx: HandlerContext) {
         p.windowId === windowId && (paneId ? p.paneId === paneId : true)
       );
       if (!found) {
-        throw new Error(`Process not found for windowId: ${windowId}, paneId: ${paneId}`);
+        // 窗口可能处于 Paused 状态（没有 PTY 进程），这是正常的，静默忽略
+        return successResponse();
       }
       processManager.resizePty(found.pid, cols, rows);
       return successResponse();
