@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
 import { Window } from '../../renderer/types/window';
+import { successResponse, errorResponse } from './HandlerResponse';
 
 export function registerWorkspaceHandlers(ctx: HandlerContext) {
   const { workspaceManager, setCurrentWorkspace } = ctx;
@@ -12,10 +13,9 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       workspace.windows = windows;
       await workspaceManager.saveWorkspace(workspace);
       setCurrentWorkspace(workspace);
-      return { success: true };
+      return successResponse();
     } catch (error) {
-      console.error('Failed to save workspace:', error);
-      return { success: false, error: (error as Error).message };
+      return errorResponse(error);
     }
   });
 
@@ -24,10 +24,9 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       if (!workspaceManager) throw new Error('WorkspaceManager not initialized');
       const workspace = await workspaceManager.loadWorkspace();
       setCurrentWorkspace(workspace);
-      return { success: true, data: workspace };
+      return successResponse(workspace);
     } catch (error) {
-      console.error('Failed to load workspace:', error);
-      return { success: false, error: (error as Error).message };
+      return errorResponse(error);
     }
   });
 
@@ -36,10 +35,9 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       if (!workspaceManager) throw new Error('WorkspaceManager not initialized');
       const workspace = await workspaceManager.loadWorkspace();
       setCurrentWorkspace(workspace);
-      return { success: true, data: workspace };
+      return successResponse(workspace);
     } catch (error) {
-      console.error('Failed to recover from backup:', error);
-      return { success: false, error: (error as Error).message };
+      return errorResponse(error);
     }
   });
 }
