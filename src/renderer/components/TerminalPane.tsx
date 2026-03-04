@@ -84,11 +84,28 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     isActiveRef.current = isActive;
   }, [isActive]);
 
+  // 根据激活状态动态更新光标样式
+  useEffect(() => {
+    if (!terminalRef.current) return;
+
+    const shouldShowCursor = isActive && isWindowActive;
+
+    if (shouldShowCursor) {
+      terminalRef.current.options.cursorBlink = true;
+      terminalRef.current.options.cursorStyle = 'block';
+    } else {
+      terminalRef.current.options.cursorBlink = false;
+      terminalRef.current.options.cursorStyle = 'underline';
+    }
+  }, [isActive, isWindowActive]);
+
   // 当窗格激活且窗口激活时，自动聚焦到终端
   useEffect(() => {
     const shouldFocus = isActive && isWindowActive;
 
-    if (shouldFocus && terminalRef.current) {
+    if (!terminalRef.current) return;
+
+    if (shouldFocus) {
       requestAnimationFrame(() => {
         if (!terminalRef.current) return;
 
@@ -103,6 +120,17 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           console.error(`[TerminalPane] Error focusing pane ${pane.id}:`, error);
         }
       });
+    } else {
+      // 非激活窗格：失焦并隐藏光标
+      try {
+        terminalRef.current.blur();
+        const textarea = terminalContainerRef.current?.querySelector('textarea');
+        if (textarea) {
+          (textarea as HTMLTextAreaElement).blur();
+        }
+      } catch (error) {
+        console.error(`[TerminalPane] Error blurring pane ${pane.id}:`, error);
+      }
     }
   }, [isActive, isWindowActive, pane.id]);
 
@@ -143,6 +171,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       cursorStyle: 'block',
       scrollback: 10000,
       allowProposedApi: true,
+      scrollOnUserInput: true,
+      smoothScrollDuration: 0, // 禁用平滑滚动，减少晃动
     });
 
     const fitAddon = new FitAddon();
@@ -153,16 +183,30 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
+    // 根据激活状态设置光标可见性
+    if (!isActive || !isWindowActive) {
+      terminal.options.cursorBlink = false;
+      terminal.options.cursorStyle = 'underline';
+    }
+
     // 告诉 xterm.js 忽略应用级快捷键
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      // Ctrl+Enter：插入换行符（用于多行输入）
+      if (e.ctrlKey && e.key === 'Enter' && !e.shiftKey) {
+        // 直接在终端显示换行
+        terminal.write('\r\n');
+        return false; // 阻止 xterm.js 处理
+      }
+
       if (e.ctrlKey) {
+        // 应用级快捷键：不让 xterm 处理
         if (e.key === 'p' || e.key === 'b' || e.key === 'Tab' ||
             (e.key >= '1' && e.key <= '9')) {
           console.log('[TerminalPane] xterm ignoring shortcut:', e.key);
           return false; // xterm 不处理，让事件正常传播
         }
       }
-      // ESC 键让 xterm.js 正常处理，发送到终端应用程序
+      // 其他按键（包括普通 Enter、Shift+Enter）让 xterm.js 正常处理
       return true;
     });
 

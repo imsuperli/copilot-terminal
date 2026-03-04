@@ -4,16 +4,28 @@
 /* 移除 xterm.js 默认的 padding，让终端占满容器 */
 .xterm {
   padding: 0 !important;
+  overflow: hidden !important; /* 防止内容溢出导致晃动 */
+  max-width: 100% !important; /* 防止被撑大 */
 }
 
 .xterm .xterm-viewport {
   overflow-y: auto;
+  overflow-x: hidden !important; /* 防止横向溢出 */
+  max-width: 100% !important;
 }
 
 /* 终端内容区域左右保留少量边距 */
 .xterm .xterm-screen {
   padding-left: 4px !important;
-  padding-right: 8px !important;
+  padding-right: 20px !important; /* 适度增加右侧padding，给输入法留空间但不影响显示 */
+  overflow: hidden !important; /* 防止内容溢出 */
+  max-width: 100% !important;
+}
+
+/* 防止输入法导致的横向滚动 */
+.xterm .xterm-rows {
+  overflow: hidden !important;
+  max-width: 100% !important;
 }
 
 /* 自定义 xterm.js 的滚动条样式 - 细线风格，悬浮时变宽 */
