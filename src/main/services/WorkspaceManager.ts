@@ -48,6 +48,34 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
    */
   async saveWorkspace(workspace: Workspace): Promise<void> {
     try {
+      // 🔥 保存前检查：如果新数据明显少于旧数据，创建紧急备份
+      if (await fs.pathExists(this.workspacePath)) {
+        try {
+          const oldWorkspace = await fs.readJson(this.workspacePath);
+          const oldWindowCount = oldWorkspace.windows?.length || 0;
+          const newWindowCount = workspace.windows?.length || 0;
+
+          // 如果旧数据有窗口，但新数据为空，创建紧急备份
+          if (oldWindowCount > 0 && newWindowCount === 0) {
+            console.warn(`[WorkspaceManager] Attempting to save empty workspace (old: ${oldWindowCount} windows), creating emergency backup`);
+            const emergencyBackupPath = `${this.workspacePath}.emergency.${Date.now()}`;
+            await fs.copy(this.workspacePath, emergencyBackupPath);
+            console.log(`[WorkspaceManager] Emergency backup created: ${emergencyBackupPath}`);
+          }
+
+          // 如果新数据比旧数据少很多（超过 50%），也创建警告备份
+          if (oldWindowCount > 5 && newWindowCount < oldWindowCount * 0.5) {
+            console.warn(`[WorkspaceManager] Significant data loss detected (old: ${oldWindowCount}, new: ${newWindowCount}), creating warning backup`);
+            const warningBackupPath = `${this.workspacePath}.warning.${Date.now()}`;
+            await fs.copy(this.workspacePath, warningBackupPath);
+            console.log(`[WorkspaceManager] Warning backup created: ${warningBackupPath}`);
+          }
+        } catch (error) {
+          // 读取旧数据失败不应该阻止保存
+          console.error('[WorkspaceManager] Failed to read old workspace for comparison:', error);
+        }
+      }
+
       // 创建副本并添加时间戳（避免修改输入参数）
       const workspaceToSave = {
         ...workspace,

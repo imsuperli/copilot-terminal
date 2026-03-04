@@ -90,30 +90,111 @@ export class AutoSaveManagerImpl implements IAutoSaveManager {
   private async performSave(): Promise<void> {
     try {
       const workspace = this.getWorkspace?.();
-      if (workspace && this.workspaceManager) {
-        // 去重：根据窗口 ID 去重，保留最新的窗口状态
-        const uniqueWindows = Array.from(
-          new Map(workspace.windows.map(w => [w.id, w])).values()
-        );
-
-        // 规范化窗口数据：确保所有 pane 都有 pid 字段
-        const normalizedWindows = uniqueWindows.map(window => ({
-          ...window,
-          layout: this.normalizeLayout(window.layout),
-        }));
-
-        const deduplicatedWorkspace = {
-          ...workspace,
-          windows: normalizedWindows,
-        };
-
-        await this.workspaceManager.saveWorkspace(deduplicatedWorkspace);
-        console.log(`[AutoSave] Workspace saved successfully at ${new Date().toISOString()} (${normalizedWindows.length} windows)`);
+      if (!workspace || !this.workspaceManager) {
+        return;
       }
+
+      // 🔥 数据完整性校验：防止保存损坏的数据
+      if (!this.validateWorkspaceData(workspace)) {
+        console.error('[AutoSave] Invalid workspace data, skipping save');
+        return;
+      }
+
+      // 去重：根据窗口 ID 去重，保留最新的窗口状态
+      const uniqueWindows = Array.from(
+        new Map(workspace.windows.map(w => [w.id, w])).values()
+      );
+
+      // 规范化窗口数据：确保所有 pane 都有 pid 字段
+      const normalizedWindows = uniqueWindows.map(window => ({
+        ...window,
+        layout: this.normalizeLayout(window.layout),
+      }));
+
+      const deduplicatedWorkspace = {
+        ...workspace,
+        windows: normalizedWindows,
+      };
+
+      await this.workspaceManager.saveWorkspace(deduplicatedWorkspace);
+      console.log(`[AutoSave] Workspace saved successfully at ${new Date().toISOString()} (${normalizedWindows.length} windows)`);
     } catch (error) {
       // 保存失败时记录错误日志，不影响应用运行
       console.error('[AutoSave] Failed to save workspace:', error instanceof Error ? error.message : String(error));
     }
+  }
+
+  /**
+   * 校验工作区数据完整性
+   * 防止保存损坏或不完整的数据
+   */
+  private validateWorkspaceData(workspace: Workspace): boolean {
+    // 检查基本结构
+    if (!workspace.version || !workspace.settings) {
+      console.error('[AutoSave] Missing version or settings');
+      return false;
+    }
+
+    // 检查窗口数据
+    if (!Array.isArray(workspace.windows)) {
+      console.error('[AutoSave] Windows is not an array');
+      return false;
+    }
+
+    // 检查每个窗口的必需字段
+    for (const window of workspace.windows) {
+      if (!window.id || !window.name || !window.layout) {
+        console.error('[AutoSave] Invalid window data:', {
+          id: window.id,
+          name: window.name,
+          hasLayout: !!window.layout,
+        });
+        return false;
+      }
+
+      // 检查 layout 结构
+      if (!this.validateLayout(window.layout)) {
+        console.error('[AutoSave] Invalid layout for window:', window.id);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * 校验布局结构
+   */
+  private validateLayout(layout: any): boolean {
+    if (!layout || typeof layout !== 'object') {
+      return false;
+    }
+
+    if (layout.type === 'pane') {
+      // 检查 pane 节点
+      if (!layout.id || !layout.pane) {
+        return false;
+      }
+      const pane = layout.pane;
+      if (!pane.id || typeof pane.cwd !== 'string' || typeof pane.command !== 'string') {
+        return false;
+      }
+      return true;
+    } else if (layout.type === 'split') {
+      // 检查 split 节点
+      if (!Array.isArray(layout.children) || !Array.isArray(layout.sizes)) {
+        return false;
+      }
+      // 递归检查子节点
+      for (const child of layout.children) {
+        if (!this.validateLayout(child)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    return false;
   }
 
   /**

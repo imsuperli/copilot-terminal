@@ -21,8 +21,21 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
         return;
       }
 
-      // 加载当前工作区配置（获取 settings 等其他字段）
-      const currentWorkspace = await workspaceManager.loadWorkspace();
+      // 🔥 关键修复：不要重新加载，直接使用缓存的 currentWorkspace
+      // 避免竞态条件：如果磁盘文件损坏，重新加载会得到空数据
+      const currentWorkspace = ctx.currentWorkspace;
+      if (!currentWorkspace) {
+        console.error('[WorkspaceHandlers] Current workspace not available');
+        return;
+      }
+
+      // 🔥 数据校验：防止保存空数据覆盖现有数据
+      if (!windows || windows.length === 0) {
+        if (currentWorkspace.windows.length > 0) {
+          console.warn('[WorkspaceHandlers] Rejecting empty windows array (current workspace has data)');
+          return;
+        }
+      }
 
       // 更新窗口列表
       currentWorkspace.windows = windows;
