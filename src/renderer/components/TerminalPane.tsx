@@ -75,6 +75,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const isActiveRef = useRef(isActive); // 使用 ref 跟踪 isActive 状态
+  const lastCtrlEnterTimeRef = useRef(0); // 记录上次 Ctrl+Enter 的时间戳
   const [isHovered, setIsHovered] = useState(false);
   const borderColor = getStatusBorderColor(pane.status);
   const ringColor = getStatusRingColor(pane.status);
@@ -194,6 +195,15 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       // Ctrl+Enter：发送换行符到 PTY（用于多行输入）
       if (e.ctrlKey && e.key === 'Enter' && !e.shiftKey) {
         console.log('[TerminalPane] Ctrl+Enter pressed in attachCustomKeyEventHandler');
+
+        // 防抖：50ms 内的重复事件直接忽略
+        const now = Date.now();
+        if (now - lastCtrlEnterTimeRef.current < 50) {
+          console.log('[TerminalPane] Ignoring duplicate Ctrl+Enter (debounce)');
+          return false;
+        }
+        lastCtrlEnterTimeRef.current = now;
+
         // 只发送到 PTY，让应用程序自己处理显示
         if (window.electronAPI && isActiveRef.current) {
           console.log('[TerminalPane] Sending \\n to PTY via ptyWrite');
