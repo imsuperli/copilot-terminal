@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Activity, Keyboard, Pause, Archive } from 'lucide-react';
+import { Activity, Keyboard, Pause, Archive, Folder } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { Window, WindowStatus } from '../types/window';
@@ -183,6 +183,14 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   const cwdHighlights = highlightMatches(workingDirectory, query);
   const folderHighlights = highlightMatches(folderName, query);
 
+  // 打开文件夹
+  const handleOpenFolder = (e: React.MouseEvent) => {
+    e.stopPropagation(); // 阻止事件冒泡，避免触发窗口切换
+    if (workingDirectory && window.electronAPI?.openFolder) {
+      window.electronAPI.openFolder(workingDirectory);
+    }
+  };
+
   return (
     <div
       className={`
@@ -200,7 +208,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
         {/* 左列：窗口信息 */}
         <div className="flex-1 min-w-0 space-y-1">
           {/* 窗口名称 */}
-          <div>
+          <div className="flex items-center gap-2">
             <span className="text-base font-semibold text-zinc-100">
               {nameHighlights.map((part, index) => (
                 <span
@@ -211,6 +219,16 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
                 </span>
               ))}
             </span>
+            {/* 文件夹图标 */}
+            {workingDirectory && (
+              <button
+                onClick={handleOpenFolder}
+                className="flex-shrink-0 p-1 rounded hover:bg-zinc-600/50 transition-colors group"
+                title={`打开文件夹: ${workingDirectory}`}
+              >
+                <Folder size={16} className="text-zinc-400 group-hover:text-zinc-200" />
+              </button>
+            )}
           </div>
 
           {/* 完整路径 */}
