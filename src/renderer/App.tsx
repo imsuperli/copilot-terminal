@@ -20,6 +20,7 @@ function App() {
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active');
+  const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
 
   // 工作区恢复
   useWorkspaceRestore();
@@ -99,6 +100,8 @@ function App() {
               onDialogChange={handleDialogChange}
               currentTab={currentTab}
               onTabChange={handleTabChange}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
             />
           }
         >
@@ -106,7 +109,7 @@ function App() {
             activeWindows.length === 0 ? (
               <EmptyState onCreateWindow={handleCreateWindow} />
             ) : (
-              <CardGrid onCreateWindow={handleCreateWindow} onEnterTerminal={handleEnterTerminal} />
+              <CardGrid onEnterTerminal={handleEnterTerminal} searchQuery={searchQuery} />
             )
           ) : (
             <ArchivedView onEnterTerminal={handleEnterTerminal} />
