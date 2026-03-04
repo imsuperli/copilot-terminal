@@ -217,7 +217,7 @@ export const CardGrid = React.memo<CardGridProps>(({ onCreateWindow, onEnterTerm
           <div className="flex items-center gap-2 ml-auto">
             <button
               onClick={onCreateWindow}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 rounded-md transition-opacity"
               title="新建终端"
             >
               <Plus size={16} />
