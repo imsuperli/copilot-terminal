@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical } from 'lucide-react';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getPaneCount, getAllPanes } from '../utils/layoutHelpers';
 import { getStatusLabel, getStatusTextColor } from '../utils/statusHelpers';
@@ -174,6 +174,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow]
   );
 
+  // 处理打开文件夹
+  const handleOpenFolder = useCallback(async () => {
+    try {
+      // 获取第一个窗格的工作目录
+      const firstPane = panes[0];
+      if (firstPane && window.electronAPI) {
+        await window.electronAPI.openFolder(firstPane.cwd);
+      }
+    } catch (error) {
+      console.error('Failed to open folder:', error);
+    }
+  }, [panes]);
+
   // 处理 Tab 切换
   const handleTabSwitcherSelect = useCallback(
     (windowId: string) => {
@@ -246,8 +259,32 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </div>
           </div>
 
-          {/* 拆分按钮 */}
+          {/* 右侧按钮组 */}
           <div className="flex items-center gap-2">
+            {/* 打开文件夹按钮 */}
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={handleOpenFolder}
+                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                    title="打开文件夹"
+                  >
+                    <Folder size={14} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                    sideOffset={5}
+                  >
+                    打开文件夹
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
+
+            {/* 左右拆分按钮 */}
             <button
               onClick={() => handleSplitPane('horizontal')}
               className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
@@ -255,6 +292,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             >
               <SplitSquareHorizontal size={14} />
             </button>
+
+            {/* 上下拆分按钮 */}
             <button
               onClick={() => handleSplitPane('vertical')}
               className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
