@@ -25,7 +25,26 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       const opts = optionsRef.current;
       const enabled = opts.enabled !== false; // 默认 true
 
-      console.log('[Shortcuts] keydown:', e.key, 'ctrl:', e.ctrlKey, 'enabled:', enabled, 'target:', (e.target as HTMLElement)?.tagName);
+      // 如果事件来自 xterm.js 的 textarea，只处理明确的快捷键
+      const target = e.target as HTMLElement;
+      const isXtermTextarea = target?.classList?.contains('xterm-helper-textarea');
+
+      console.log('[Shortcuts] keydown:', e.key, 'ctrl:', e.ctrlKey, 'enabled:', enabled, 'target:', target?.tagName, 'isXterm:', isXtermTextarea);
+
+      if (isXtermTextarea) {
+        // 在 xterm textarea 中，只处理明确的快捷键，其他一律放行
+        const isShortcut =
+          (e.ctrlKey && e.key === 'Tab') ||
+          (e.ctrlKey && e.key === 'p') ||
+          (e.ctrlKey && e.key === 'b') ||
+          (e.ctrlKey && e.key >= '1' && e.key <= '9') ||
+          (e.key === 'Escape');
+
+        if (!isShortcut) {
+          console.log('[Shortcuts] Not a shortcut in xterm, allowing propagation');
+          return; // 不是快捷键，直接放行
+        }
+      }
 
       if (!enabled) return;
 
@@ -87,12 +106,12 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       }
     };
 
-    console.log('[Shortcuts] Registering keydown listener (capture phase)');
-    // 使用捕获阶段监听，确保在 xterm.js 之前处理快捷键
-    window.addEventListener('keydown', handleKeyDown, true);
+    console.log('[Shortcuts] Registering keydown listener (bubble phase)');
+    // 改为冒泡阶段监听，避免干扰 xterm.js 的输入处理
+    window.addEventListener('keydown', handleKeyDown, false);
     return () => {
       console.log('[Shortcuts] Removing keydown listener');
-      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keydown', handleKeyDown, false);
     };
   }, []); // 空依赖数组：listener 只注册一次，通过 ref 读取最新值
 }

@@ -307,6 +307,19 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     // 告诉 xterm.js 忽略应用级快捷键
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      // 调试日志：记录 @ 键和 Shift 键的事件
+      if (e.key === '@' || e.key === '2' || (e.shiftKey && e.key === '@')) {
+        console.log('[TerminalPane] Special key event:', {
+          key: e.key,
+          code: e.code,
+          ctrlKey: e.ctrlKey,
+          shiftKey: e.shiftKey,
+          altKey: e.altKey,
+          target: (e.target as HTMLElement)?.className,
+          timestamp: Date.now(),
+        });
+      }
+
       // Ctrl+Enter：发送换行符到 PTY（用于多行输入）
       if (e.ctrlKey && e.key === 'Enter' && !e.shiftKey) {
         // 忽略键盘重复触发
@@ -335,7 +348,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           return false; // xterm 不处理，让事件正常传播
         }
       }
-      // 其他按键（包括普通 Enter、Shift+Enter）让 xterm.js 正常处理
+      // 其他按键（包括普通 Enter、Shift+Enter、@ 等）让 xterm.js 正常处理
       return true;
     });
 
