@@ -255,7 +255,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   /**
    * 销毁 ProcessManager，释放资源
    */
-  async destroy(): Promise<void> {
+  async destroy(progressCallback?: (current: number, total: number) => void): Promise<void> {
     console.log('[ProcessManager] Starting destroy...');
 
     // 先停止状态检测器，避免在清理过程中触发检测
@@ -293,6 +293,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       }
     }
 
+    const totalProcesses = pidsToKill.length;
+
     // 等待 300ms 让进程有机会优雅退出
     if (pidsToKill.length > 0) {
       console.log('[ProcessManager] Waiting 300ms for graceful shutdown...');
@@ -303,6 +305,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     if (process.platform === 'win32' && pidsToKill.length > 0) {
       const { execSync } = require('child_process');
       console.log('[ProcessManager] Force killing remaining processes with taskkill...');
+      let processedCount = 0;
       for (const pid of pidsToKill) {
         try {
           // /F 强制终止, /T 终止子进程树
@@ -311,6 +314,11 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         } catch (error) {
           // 进程可能已经优雅退出，忽略错误
           console.log(`[ProcessManager] Process ${pid} already exited (graceful shutdown succeeded)`);
+        }
+        processedCount++;
+        // 通知进度
+        if (progressCallback) {
+          progressCallback(processedCount, totalProcesses);
         }
       }
     }

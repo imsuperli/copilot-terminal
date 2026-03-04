@@ -54,6 +54,11 @@ export class ShutdownManager {
     this.isShuttingDown = true;
     console.log('[ShutdownManager] Starting shutdown sequence');
 
+    // 通知渲染进程开始清理
+    if (context.mainWindow && !context.mainWindow.isDestroyed()) {
+      context.mainWindow.webContents.send('cleanup-started');
+    }
+
     // 设置安全超时 - 如果 3 秒内未完成，强制退出
     const safetyTimer = setTimeout(() => {
       console.error('[ShutdownManager] Safety timeout reached, forcing exit');
@@ -165,7 +170,13 @@ export class ShutdownManager {
    */
   private async destroyProcesses(context: ShutdownContext): Promise<void> {
     if (context.processManager) {
-      await context.processManager.destroy();
+      // 发送进度更新到渲染进程
+      const progressCallback = (current: number, total: number) => {
+        if (context.mainWindow && !context.mainWindow.isDestroyed()) {
+          context.mainWindow.webContents.send('cleanup-progress', { current, total });
+        }
+      };
+      await context.processManager.destroy(progressCallback);
     }
   }
 }

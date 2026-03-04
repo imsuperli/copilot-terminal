@@ -107,4 +107,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   recoverFromBackup: () =>
     ipcRenderer.invoke('recover-from-backup'),
+
+  // Cleanup progress
+  onCleanupStarted: (callback: () => void) => {
+    ipcRenderer.on('cleanup-started', callback);
+  },
+  offCleanupStarted: (callback: () => void) => {
+    ipcRenderer.removeListener('cleanup-started', callback);
+  },
+  onCleanupProgress: (callback: (event: unknown, payload: { current: number; total: number }) => void) => {
+    ipcRenderer.on('cleanup-progress', callback);
+  },
+  offCleanupProgress: (callback: (event: unknown, payload: { current: number; total: number }) => void) => {
+    ipcRenderer.removeListener('cleanup-progress', callback);
+  },
 });

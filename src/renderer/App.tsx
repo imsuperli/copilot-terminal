@@ -6,6 +6,7 @@ import { CardGrid } from './components/CardGrid';
 import { ArchivedView } from './components/ArchivedView';
 import { TerminalView } from './components/TerminalView';
 import { ViewSwitchError } from './components/ViewSwitchError';
+import { CleanupOverlay } from './components/CleanupOverlay';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
@@ -139,6 +140,9 @@ function App() {
       ))}
 
       {error && <ViewSwitchError message={error} />}
+
+      {/* 清理进度覆盖层 */}
+      <CleanupOverlay />
     </>
   );
 }

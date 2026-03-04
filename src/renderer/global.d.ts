@@ -60,6 +60,15 @@ export interface ElectronAPI {
   onWorkspaceRestoreError: (callback: (event: unknown, error: { error: string }) => void) => void
   offWorkspaceRestoreError: (callback: (event: unknown, error: { error: string }) => void) => void
   recoverFromBackup: () => Promise<{ success: boolean; data?: Workspace; error?: string }>
+
+  // Renderer ready notification
+  notifyRendererReady: () => void
+
+  // Cleanup progress
+  onCleanupStarted: (callback: () => void) => void
+  offCleanupStarted: (callback: () => void) => void
+  onCleanupProgress: (callback: (event: unknown, payload: { current: number; total: number }) => void) => void
+  offCleanupProgress: (callback: (event: unknown, payload: { current: number; total: number }) => void) => void
 }
 
 declare global {
