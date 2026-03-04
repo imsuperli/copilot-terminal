@@ -3,6 +3,7 @@ import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Ter
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
+import { ConfirmDialog } from '../ConfirmDialog';
 import { useWindowStore } from '../../stores/windowStore';
 
 interface SidebarProps {
@@ -34,6 +35,7 @@ export function Sidebar({
   const activeWindows = windows.filter(w => !w.archived);
   const archivedWindows = windows.filter(w => w.archived);
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
 
   const handleBatchCreate = async (selectedPaths: string[]) => {
     for (const path of selectedPaths) {
@@ -54,10 +56,6 @@ export function Sidebar({
   };
 
   const handleClearAllWindows = async () => {
-    if (!window.confirm('确定要删除所有窗口吗？此操作不可恢复。')) {
-      return;
-    }
-
     try {
       for (const win of activeWindows) {
         await window.electronAPI.closeWindow(win.id);
@@ -186,7 +184,7 @@ export function Sidebar({
                 <span>批量添加</span>
               </button>
               <button
-                onClick={handleClearAllWindows}
+                onClick={() => setIsConfirmDialogOpen(true)}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
                 title="清空所有终端"
               >
@@ -207,6 +205,17 @@ export function Sidebar({
         open={isBatchDialogOpen}
         onOpenChange={setIsBatchDialogOpen}
         onConfirm={handleBatchCreate}
+      />
+
+      <ConfirmDialog
+        open={isConfirmDialogOpen}
+        onOpenChange={setIsConfirmDialogOpen}
+        title="清空所有终端"
+        description={`确定要删除所有 ${activeWindows.length} 个窗口吗？此操作不可恢复。`}
+        confirmText="删除"
+        cancelText="取消"
+        onConfirm={handleClearAllWindows}
+        variant="danger"
       />
     </>
   );
