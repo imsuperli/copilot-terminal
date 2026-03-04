@@ -9,7 +9,7 @@ export interface ElectronAPI {
     name?: string
     workingDirectory: string
     command?: string
-  }) => Promise<TerminalWindow>
+  }) => Promise<{ success: boolean; data?: TerminalWindow; error?: string }>
   killTerminal: (pid: number) => Promise<void>
   getTerminalStatus: (pid: number) => Promise<string>
   listTerminals: () => Promise<any[]>
@@ -21,6 +21,7 @@ export interface ElectronAPI {
   // File system
   validatePath: (path: string) => Promise<boolean>
   selectDirectory: () => Promise<string | null>
+  selectAndScanFolder: () => Promise<{ success: boolean; data?: { folders: Array<{ name: string; path: string }>; parentPath: string | null }; error?: string }>
   openFolder: (path: string) => Promise<void>
 
   // Status events

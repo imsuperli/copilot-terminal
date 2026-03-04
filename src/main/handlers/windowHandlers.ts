@@ -1,8 +1,9 @@
-import { ipcMain } from 'electron';
+import { ipcMain, dialog } from 'electron';
 import { randomUUID } from 'crypto';
 import { HandlerContext } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
 import { getDefaultShell } from '../utils/shell';
+import { scanSubfolders } from '../utils/folderScanner';
 import { WindowStatus } from '../../shared/types/window';
 import { successResponse, errorResponse } from './HandlerResponse';
 
@@ -239,6 +240,34 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       statusPoller?.removeWindow(windowId);
 
       return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  // 选择文件夹并扫描子文件夹
+  ipcMain.handle('select-and-scan-folder', async () => {
+    try {
+      if (!mainWindow) {
+        throw new Error('Main window not initialized');
+      }
+
+      // 打开文件夹选择对话框
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory'],
+        title: '选择要扫描的文件夹',
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return successResponse({ folders: [], parentPath: null });
+      }
+
+      const parentPath = result.filePaths[0];
+
+      // 扫描子文件夹
+      const folders = scanSubfolders(parentPath);
+
+      return successResponse({ folders, parentPath });
     } catch (error) {
       return errorResponse(error);
     }

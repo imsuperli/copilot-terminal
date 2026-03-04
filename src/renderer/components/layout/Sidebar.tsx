@@ -1,7 +1,8 @@
-import React from 'react';
-import { Plus, Settings, Terminal, HelpCircle, Archive, Pause } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Settings, Terminal, HelpCircle, Archive, FolderPlus } from 'lucide-react';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
+import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
 import { useWindowStore } from '../../stores/windowStore';
 
 interface SidebarProps {
@@ -24,8 +25,28 @@ export function Sidebar({
   onTabChange,
 }: SidebarProps) {
   const windows = useWindowStore((state) => state.windows);
+  const addWindow = useWindowStore((state) => state.addWindow);
   const activeWindows = windows.filter(w => !w.archived);
   const archivedWindows = windows.filter(w => w.archived);
+  const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
+
+  const handleBatchCreate = async (selectedPaths: string[]) => {
+    for (const path of selectedPaths) {
+      try {
+        const result = await window.electronAPI.createWindow({
+          workingDirectory: path,
+        });
+
+        if (result.success && result.data) {
+          addWindow(result.data);
+        } else if (result.error) {
+          console.error(`Failed to create window for ${path}:`, result.error);
+        }
+      } catch (error) {
+        console.error(`Failed to create window for ${path}:`, error);
+      }
+    }
+  };
 
   return (
     <>
@@ -98,20 +119,35 @@ export function Sidebar({
             </button>
           </div>
 
-          {/* New Terminal button */}
-          <button
-            onClick={onCreateWindow}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
-          >
-            <Plus className="h-4 w-4" />
-            <span>新建终端</span>
-          </button>
+          {/* New Terminal buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={onCreateWindow}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
+            >
+              <Plus className="h-4 w-4" />
+              <span>新建终端</span>
+            </button>
+            <button
+              onClick={() => setIsBatchDialogOpen(true)}
+              className="flex items-center justify-center px-3 py-2.5 rounded-lg bg-[rgb(var(--accent))] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]/80 transition-colors"
+              title="批量添加"
+            >
+              <FolderPlus className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </aside>
 
       <CreateWindowDialog
         open={isDialogOpen}
         onOpenChange={onDialogChange ?? (() => {})}
+      />
+
+      <BatchCreateWindowDialog
+        open={isBatchDialogOpen}
+        onOpenChange={setIsBatchDialogOpen}
+        onConfirm={handleBatchCreate}
       />
     </>
   );
