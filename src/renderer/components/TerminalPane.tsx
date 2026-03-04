@@ -194,11 +194,20 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       // Ctrl+Enter：发送换行符到 PTY（用于多行输入）
       if (e.ctrlKey && e.key === 'Enter' && !e.shiftKey) {
-        console.log('[TerminalPane] Ctrl+Enter pressed in attachCustomKeyEventHandler');
+        console.log('[TerminalPane] Ctrl+Enter pressed, paneId:', pane.id, 'repeat:', e.repeat);
 
-        // 防抖：50ms 内的重复事件直接忽略
+        // 忽略键盘重复触发
+        if (e.repeat) {
+          console.log('[TerminalPane] Ignoring key repeat');
+          return false;
+        }
+
+        // 防抖：200ms 内的重复事件直接忽略（增加防抖时间）
         const now = Date.now();
-        if (now - lastCtrlEnterTimeRef.current < 50) {
+        const timeSinceLastPress = now - lastCtrlEnterTimeRef.current;
+        console.log('[TerminalPane] Time since last Ctrl+Enter:', timeSinceLastPress, 'ms');
+
+        if (timeSinceLastPress < 200) {
           console.log('[TerminalPane] Ignoring duplicate Ctrl+Enter (debounce)');
           return false;
         }
