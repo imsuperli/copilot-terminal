@@ -194,31 +194,22 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
       // Ctrl+Enter：发送换行符到 PTY（用于多行输入）
       if (e.ctrlKey && e.key === 'Enter' && !e.shiftKey) {
-        console.log('[TerminalPane] Ctrl+Enter pressed, paneId:', pane.id, 'repeat:', e.repeat);
-
         // 忽略键盘重复触发
         if (e.repeat) {
-          console.log('[TerminalPane] Ignoring key repeat');
           return false;
         }
 
-        // 防抖：200ms 内的重复事件直接忽略（增加防抖时间）
+        // 防抖：200ms 内的重复事件直接忽略
         const now = Date.now();
-        const timeSinceLastPress = now - lastCtrlEnterTimeRef.current;
-        console.log('[TerminalPane] Time since last Ctrl+Enter:', timeSinceLastPress, 'ms');
-
-        if (timeSinceLastPress < 200) {
-          console.log('[TerminalPane] Ignoring duplicate Ctrl+Enter (debounce)');
+        if (now - lastCtrlEnterTimeRef.current < 200) {
           return false;
         }
         lastCtrlEnterTimeRef.current = now;
 
         // 只发送到 PTY，让应用程序自己处理显示
         if (window.electronAPI && isActiveRef.current) {
-          console.log('[TerminalPane] Sending \\n to PTY via ptyWrite');
           window.electronAPI.ptyWrite(windowId, pane.id, '\n');
         }
-        console.log('[TerminalPane] Returning false to block xterm.js');
         return false; // 阻止 xterm.js 处理
       }
 
@@ -226,7 +217,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         // 应用级快捷键：不让 xterm 处理
         if (e.key === 'p' || e.key === 'b' || e.key === 'Tab' ||
             (e.key >= '1' && e.key <= '9')) {
-          console.log('[TerminalPane] xterm ignoring shortcut:', e.key);
           return false; // xterm 不处理，让事件正常传播
         }
       }
@@ -236,9 +226,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     // 监听用户输入
     const disposable = terminal.onData((data) => {
-      console.log('[TerminalPane] onData triggered, data:', JSON.stringify(data), 'length:', data.length);
       if (window.electronAPI && isActiveRef.current) {
-        console.log('[TerminalPane] Sending data to PTY via onData');
         window.electronAPI.ptyWrite(windowId, pane.id, data);
       }
     });
@@ -246,7 +234,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     // 监听 PTY 数据输出
     const handlePtyData = (_event: unknown, payload: { windowId: string; paneId?: string; data: string }) => {
       if (payload.windowId === windowId && payload.paneId === pane.id) {
-        console.log('[TerminalPane] Received PTY data:', JSON.stringify(payload.data), 'length:', payload.data.length);
         terminal.write(payload.data);
       }
     };
