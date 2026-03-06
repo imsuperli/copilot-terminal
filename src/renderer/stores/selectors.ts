@@ -1,4 +1,4 @@
-import { Window, WindowStatus } from '../types/window';
+import { Window } from '../types/window';
 
 /**
  * Store Selectors
@@ -19,27 +19,5 @@ export const selectActiveWindow = (state: WindowStoreState) => {
   return state.windows.find((w) => w.id === state.activeWindowId) || null;
 };
 
-// 按状态筛选窗口
-export const selectWindowsByStatus = (status: WindowStatus) => (state: WindowStoreState) => {
-  return state.windows.filter((w) => w.status === status);
-};
-
 // 获取窗口总数
 export const selectWindowCount = (state: WindowStoreState) => state.windows.length;
-
-// 获取各状态窗口数量统计
-export const selectStatusCounts = (state: WindowStoreState) => {
-  const counts = {
-    running: 0,
-    waiting: 0,
-    completed: 0,
-    error: 0,
-    restoring: 0,
-  };
-
-  state.windows.forEach((w) => {
-    counts[w.status]++;
-  });
-
-  return counts;
-};
