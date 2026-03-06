@@ -1,8 +1,6 @@
 import { useEffect, useRef } from 'react';
 
 interface KeyboardShortcutsOptions {
-  onCtrlTab?: () => void;
-  onCtrlShiftTab?: () => void;
   onCtrlP?: () => void;
   onCtrlB?: () => void;
   onCtrlNumber?: (num: number) => void;
@@ -34,7 +32,6 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       if (isXtermTextarea) {
         // 在 xterm textarea 中，只处理明确的快捷键，其他一律放行
         const isShortcut =
-          (e.ctrlKey && e.key === 'Tab') ||
           (e.ctrlKey && e.key === 'p') ||
           (e.ctrlKey && e.key === 'b') ||
           (e.ctrlKey && e.key >= '1' && e.key <= '9') ||
@@ -47,22 +44,6 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       }
 
       if (!enabled) return;
-
-      // Ctrl+Tab: 切换到下一个窗口
-      if (e.ctrlKey && e.key === 'Tab' && !e.shiftKey) {
-        console.log('[Shortcuts] Ctrl+Tab triggered');
-        e.preventDefault();
-        opts.onCtrlTab?.();
-        return;
-      }
-
-      // Ctrl+Shift+Tab: 切换到上一个窗口
-      if (e.ctrlKey && e.shiftKey && e.key === 'Tab') {
-        console.log('[Shortcuts] Ctrl+Shift+Tab triggered');
-        e.preventDefault();
-        opts.onCtrlShiftTab?.();
-        return;
-      }
 
       // Ctrl+P: 打开快速切换面板
       if (e.ctrlKey && e.key === 'p') {
@@ -88,7 +69,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
         return;
       }
 
-      // Escape: 关闭打开的面板（QuickSwitcher、TabSwitcher）
+      // Escape: 关闭打开的面板（QuickSwitcher）
       if (e.key === 'Escape') {
         console.log('[Shortcuts] Escape triggered');
         // 调用回调，如果返回 true 表示已处理，阻止事件传播

@@ -354,7 +354,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       if (e.ctrlKey) {
         // 应用级快捷键：不让 xterm 处理
-        if (e.key === 'p' || e.key === 'b' || e.key === 'Tab' ||
+        if (e.key === 'p' || e.key === 'b' ||
             (e.key >= '1' && e.key <= '9')) {
           return false; // xterm 不处理，让事件正常传播
         }
