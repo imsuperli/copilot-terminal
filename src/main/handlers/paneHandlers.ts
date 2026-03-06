@@ -23,12 +23,16 @@ export function registerPaneHandlers(ctx: HandlerContext) {
 
       // 订阅 PTY 数据
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
-        // 推送到渲染进程
+        // 使用 setImmediate 让 IPC 发送完全异步化，避免阻塞 PTY 数据流
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('pty-data', {
-            windowId: config.windowId,
-            paneId: config.paneId,
-            data
+          setImmediate(() => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('pty-data', {
+                windowId: config.windowId,
+                paneId: config.paneId,
+                data
+              });
+            }
           });
         }
       });

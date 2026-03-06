@@ -241,8 +241,18 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const pty = this.ptys.get(pid);
     if (!pty) return () => {};
 
+    // 包装回调，添加错误处理，防止回调异常中断 PTY 数据流
+    const safeCallback = (data: string) => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error(`[ProcessManager] PTY data callback error for pid ${pid}:`, error);
+        // 不要让错误中断 PTY 数据流
+      }
+    };
+
     // node-pty 的 onData 返回一个 disposable 对象
-    const disposable = pty.onData(callback);
+    const disposable = pty.onData(safeCallback);
 
     // 返回清理函数
     return () => {
