@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { EmptyState } from './components/EmptyState';
@@ -77,8 +77,14 @@ function App() {
   }, []);
 
   // 获取当前活跃窗口
-  const activeWindow = windows.find((w) => w.id === activeWindowId);
-  const activeWindows = windows.filter(w => !w.archived);
+  const activeWindow = useMemo(
+    () => windows.find((w) => w.id === activeWindowId),
+    [windows, activeWindowId]
+  );
+  const hasActiveWindows = useMemo(
+    () => windows.some(w => !w.archived),
+    [windows]
+  );
 
   return (
     <>
@@ -106,7 +112,7 @@ function App() {
           }
         >
           {currentTab === 'active' ? (
-            activeWindows.length === 0 ? (
+            !hasActiveWindows ? (
               <EmptyState onCreateWindow={handleCreateWindow} />
             ) : (
               <CardGrid onEnterTerminal={handleEnterTerminal} onCreateWindow={handleCreateWindow} searchQuery={searchQuery} />

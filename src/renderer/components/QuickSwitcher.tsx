@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { QuickSwitcherItem } from './QuickSwitcherItem';
@@ -53,31 +53,34 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
   };
 
   // 过滤窗口并排序
-  const filteredWindows = windows
-    .filter((window) => {
-      const matchName = fuzzyMatch(query, window.name);
-      // 获取第一个窗格的工作目录进行匹配
-      const panes = window.layout.type === 'pane' ? [window.layout.pane] : [];
-      const cwd = panes[0]?.cwd || '';
-      const matchCwd = fuzzyMatch(query, cwd);
-      return matchName || matchCwd;
-    })
-    .sort((a, b) => {
-      // 当前窗口排在最前面
-      if (a.id === currentWindowId) return -1;
-      if (b.id === currentWindowId) return 1;
+  const filteredWindows = useMemo(() =>
+    windows
+      .filter((window) => {
+        const matchName = fuzzyMatch(query, window.name);
+        // 获取第一个窗格的工作目录进行匹配
+        const panes = window.layout.type === 'pane' ? [window.layout.pane] : [];
+        const cwd = panes[0]?.cwd || '';
+        const matchCwd = fuzzyMatch(query, cwd);
+        return matchName || matchCwd;
+      })
+      .sort((a, b) => {
+        // 当前窗口排在最前面
+        if (a.id === currentWindowId) return -1;
+        if (b.id === currentWindowId) return 1;
 
-      // 按优先级排序
-      const priorityA = getWindowPriority(a);
-      const priorityB = getWindowPriority(b);
+        // 按优先级排序
+        const priorityA = getWindowPriority(a);
+        const priorityB = getWindowPriority(b);
 
-      if (priorityA !== priorityB) {
-        return priorityA - priorityB;
-      }
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
 
-      // 优先级相同时，按最后活跃时间排序（最近的在前）
-      return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime();
-    });
+        // 优先级相同时，按最后活跃时间排序（最近的在前）
+        return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime();
+      }),
+    [windows, query, currentWindowId]
+  );
 
   // 重置状态和处理动画
   useEffect(() => {

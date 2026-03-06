@@ -98,7 +98,10 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
   const { enabledIDEs } = useIDESettings();
 
   // 获取窗口的聚合状态
-  const aggregatedStatus = getAggregatedStatus(terminalWindow.layout);
+  const aggregatedStatus = useMemo(
+    () => getAggregatedStatus(terminalWindow.layout),
+    [terminalWindow.layout]
+  );
   const StatusIcon = getStatusIcon(aggregatedStatus);
   const iconColor = getStatusIconColor(aggregatedStatus);
   const statusAnimation = getStatusAnimation(aggregatedStatus);

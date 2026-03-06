@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Pause } from 'lucide-react';
@@ -32,11 +32,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   isActive,
 }) => {
   const { enabledIDEs } = useIDESettings();
-  const aggregatedStatus = getAggregatedStatus(terminalWindow.layout);
+  const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
   const statusLabel = getStatusLabel(aggregatedStatus);
   const statusTextColor = getStatusTextColor(aggregatedStatus);
-  const paneCount = getPaneCount(terminalWindow.layout);
-  const panes = getAllPanes(terminalWindow.layout);
+  const paneCount = useMemo(() => getPaneCount(terminalWindow.layout), [terminalWindow.layout]);
+  const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
 
   // 切换面板状态
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
