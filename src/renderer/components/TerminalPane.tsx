@@ -499,7 +499,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       {/* 终端容器 */}
       <div
         ref={terminalContainerRef}
-        className="flex-1 overflow-hidden"
+        className="flex-1 overflow-hidden px-1"
         onContextMenu={handleContextMenu}
       />
     </div>

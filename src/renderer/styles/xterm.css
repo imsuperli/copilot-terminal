@@ -14,10 +14,9 @@
   max-width: 100% !important;
 }
 
-/* 终端内容区域左右保留少量边距 */
+/* 移除 xterm-screen 的 padding，避免 FitAddon 计算列数时出现偏差 */
 .xterm .xterm-screen {
-  padding-left: 4px !important;
-  padding-right: 20px !important; /* 适度增加右侧padding，给输入法留空间但不影响显示 */
+  padding: 0 !important;
   overflow: hidden !important; /* 防止内容溢出 */
   max-width: 100% !important;
 }
