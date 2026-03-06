@@ -8,13 +8,14 @@ import { Window, WindowStatus } from '../types/window';
 
 interface ArchivedViewProps {
   onEnterTerminal?: (window: Window) => void;
+  searchQuery?: string;
 }
 
 /**
  * ArchivedView 组件
  * 显示所有已归档的窗口
  */
-export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal }) => {
+export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, searchQuery = '' }) => {
   const windows = useWindowStore((state) => state.windows);
   const setActiveWindow = useWindowStore((state) => state.setActiveWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
@@ -27,6 +28,25 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal }) 
 
   // 按 lastActiveAt 降序排序
   const sortedWindows = useMemo(() => sortWindows(archivedWindows, 'lastActiveAt'), [archivedWindows]);
+
+  // 根据搜索关键词过滤窗口
+  const filteredWindows = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return sortedWindows;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    return sortedWindows.filter((win) => {
+      // 搜索窗口名称
+      if (win.name.toLowerCase().includes(query)) {
+        return true;
+      }
+
+      // 搜索窗口路径
+      const panes = getAllPanes(win.layout);
+      return panes.some((pane) => pane.cwd.toLowerCase().includes(query));
+    });
+  }, [sortedWindows, searchQuery]);
 
   const handleCardClick = useCallback(
     async (win: Window) => {
@@ -141,6 +161,17 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal }) 
     );
   }
 
+  if (searchQuery && filteredWindows.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-lg text-[rgb(var(--muted-foreground))]">未找到匹配的窗口</p>
+          <p className="text-sm text-[rgb(var(--muted-foreground))] mt-2">尝试使用其他关键词搜索</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <ScrollArea.Root className="h-full" data-testid="archived-view-scroll-root">
       <ScrollArea.Viewport className="h-full w-full">
@@ -148,7 +179,7 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal }) 
           data-testid="archived-view"
           className="grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4 p-8"
         >
-          {sortedWindows.map((win) => {
+          {filteredWindows.map((win) => {
             // 从布局树中获取第一个窗格的工作目录
             const panes = getAllPanes(win.layout);
             const firstPaneCwd = panes.length > 0 ? panes[0].cwd : '';

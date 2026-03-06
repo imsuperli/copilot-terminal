@@ -112,7 +112,7 @@ function App() {
               <CardGrid onEnterTerminal={handleEnterTerminal} onCreateWindow={handleCreateWindow} searchQuery={searchQuery} />
             )
           ) : (
-            <ArchivedView onEnterTerminal={handleEnterTerminal} />
+            <ArchivedView onEnterTerminal={handleEnterTerminal} searchQuery={searchQuery} />
           )}
         </MainLayout>
       </div>

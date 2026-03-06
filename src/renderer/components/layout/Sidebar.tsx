@@ -69,6 +69,18 @@ export function Sidebar({
     }
   };
 
+  const handleClearArchivedWindows = async () => {
+    try {
+      for (const win of archivedWindows) {
+        await window.electronAPI.closeWindow(win.id);
+        await window.electronAPI.deleteWindow(win.id);
+        removeWindow(win.id);
+      }
+    } catch (error) {
+      console.error('Failed to clear archived windows:', error);
+    }
+  };
+
   return (
     <>
       <aside className="w-64 h-screen bg-[rgb(var(--sidebar))] border-r border-[rgb(var(--border))] flex flex-col">
@@ -76,7 +88,7 @@ export function Sidebar({
         <div className="h-4" />
 
         {/* 搜索框 */}
-        {currentTab === 'active' && activeWindows.length > 0 && (
+        {((currentTab === 'active' && activeWindows.length > 0) || (currentTab === 'archived' && archivedWindows.length > 0)) && (
           <div className="px-4 pb-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
@@ -184,7 +196,7 @@ export function Sidebar({
             <span>批量添加</span>
           </button>
 
-          {/* Clear button - only show when there are active windows */}
+          {/* Clear button - show for both active and archived tabs */}
           {currentTab === 'active' && activeWindows.length > 0 && (
             <button
               onClick={() => setIsConfirmDialogOpen(true)}
@@ -193,6 +205,16 @@ export function Sidebar({
             >
               <Trash2 className="h-4 w-4" />
               <span>清空终端</span>
+            </button>
+          )}
+          {currentTab === 'archived' && archivedWindows.length > 0 && (
+            <button
+              onClick={() => setIsConfirmDialogOpen(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
+              title="清空所有归档终端"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>清空归档</span>
             </button>
           )}
         </div>
@@ -212,11 +234,15 @@ export function Sidebar({
       <ConfirmDialog
         open={isConfirmDialogOpen}
         onOpenChange={setIsConfirmDialogOpen}
-        title="清空所有终端"
-        description={`确定要删除所有 ${activeWindows.length} 个窗口吗？此操作不可恢复。`}
+        title={currentTab === 'active' ? '清空所有终端' : '清空所有归档终端'}
+        description={
+          currentTab === 'active'
+            ? `确定要删除所有 ${activeWindows.length} 个窗口吗？此操作不可恢复。`
+            : `确定要删除所有 ${archivedWindows.length} 个归档窗口吗？此操作不可恢复。`
+        }
         confirmText="删除"
         cancelText="取消"
-        onConfirm={handleClearAllWindows}
+        onConfirm={currentTab === 'active' ? handleClearAllWindows : handleClearArchivedWindows}
         variant="danger"
       />
 
