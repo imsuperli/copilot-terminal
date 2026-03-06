@@ -188,13 +188,13 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
               <WindowCard
                 key={win.id}
                 window={win}
-                onClick={handleCardClick}
-                onOpenFolder={handleOpenFolder}
-                onDelete={handleDeleteWindow}
-                onStart={handleStartWindow}
-                onPause={handlePauseWindow}
-                onUnarchive={handleUnarchiveWindow}
-                onOpenInIDE={handleOpenInIDE}
+                onClick={() => handleCardClick(win)}
+                onOpenFolder={() => handleOpenFolder(firstPaneCwd)}
+                onDelete={() => handleDeleteWindow(win.id)}
+                onStart={() => handleStartWindow(win)}
+                onPause={() => handlePauseWindow(win)}
+                onUnarchive={() => handleUnarchiveWindow(win)}
+                onOpenInIDE={(ide) => handleOpenInIDE(ide, firstPaneCwd)}
               />
             );
           })}

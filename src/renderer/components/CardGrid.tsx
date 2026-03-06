@@ -191,13 +191,13 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWi
               <WindowCard
                 key={win.id}
                 window={win}
-                onClick={handleCardClick}
-                onOpenFolder={handleOpenFolder}
-                onDelete={handleDeleteWindow}
-                onStart={handleStartWindow}
-                onPause={handlePauseWindow}
-                onArchive={handleArchiveWindow}
-                onOpenInIDE={handleOpenInIDE}
+                onClick={() => handleCardClick(win)}
+                onOpenFolder={() => handleOpenFolder(firstPaneCwd)}
+                onDelete={() => handleDeleteWindow(win.id)}
+                onStart={() => handleStartWindow(win)}
+                onPause={() => handlePauseWindow(win)}
+                onArchive={() => handleArchiveWindow(win)}
+                onOpenInIDE={(ide) => handleOpenInIDE(ide, firstPaneCwd)}
               />
             );
           })}
