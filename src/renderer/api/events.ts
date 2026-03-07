@@ -66,12 +66,15 @@ export function subscribeToWindowGitBranchChange(
   callback: (windowId: string, gitBranch: string | undefined) => void
 ): () => void {
   const handler = (_event: unknown, payload: WindowGitBranchChangedPayload) => {
+    console.log('[Events] Received window-git-branch-changed event:', payload);
     callback(payload.windowId, payload.gitBranch);
   };
 
+  console.log('[Events] Adding git branch change listener');
   window.electronAPI.onWindowGitBranchChanged(handler);
 
   return () => {
+    console.log('[Events] Removing git branch change listener');
     window.electronAPI.offWindowGitBranchChanged(handler);
   };
 }
