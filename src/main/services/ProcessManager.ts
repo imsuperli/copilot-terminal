@@ -45,7 +45,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.paneIndex = new Map();
     this.nextPid = 1000;  // Start from 1000 for mock PIDs
     this.statusDetector = new StatusDetectorImpl();
-    this.statusDetector.startPolling();
+    // 注意：不再启动 StatusDetector 的内部轮询，由 StatusPoller 统一管理轮询
   }
 
   /**

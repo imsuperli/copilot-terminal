@@ -10,8 +10,6 @@ export interface IStatusDetector {
   untrackPid(pid: number): void;
   onPtyData(pid: number, data: string): void;
   onProcessExit(pid: number, exitCode: number): void;
-  startPolling(): void;
-  stopPolling(): void;
   destroy(): void;
 }
 
@@ -19,7 +17,7 @@ export interface IStatusDetector {
  * StatusDetectorImpl - 智能状态检测服务
  *
  * 通过 CPU 使用率、PTY 输出时间、进程退出码综合判断窗口状态。
- * 使用事件驱动 + 定期轮询混合模式，确保状态检测延迟 < 1s。
+ * 使用事件驱动模式，由 StatusPoller 定期调用 detectStatus() 进行状态检测。
  */
 export class StatusDetectorImpl implements IStatusDetector {
   /** 最后一次 PTY 输出时间戳 (pid -> ms) */
@@ -32,8 +30,6 @@ export class StatusDetectorImpl implements IStatusDetector {
   private trackedPids = new Set<number>();
   /** 状态变化订阅回调列表 */
   private subscribers: Array<(pid: number, status: WindowStatus) => void> = [];
-  /** 轮询定时器 */
-  private pollingInterval: ReturnType<typeof setInterval> | null = null;
 
   /**
    * 检测指定 PID 的当前状态
@@ -106,37 +102,15 @@ export class StatusDetectorImpl implements IStatusDetector {
    */
   onProcessExit(pid: number, exitCode: number): void {
     this.exitCodes.set(pid, exitCode);
-    // 立即触发状态更新，无需等待下次轮询
+    // 立即触发状态更新，无需等待 StatusPoller 下次轮询
     const newStatus = exitCode === 0 ? WindowStatus.Completed : WindowStatus.Error;
     this.updateStatus(pid, newStatus);
-  }
-
-  /**
-   * 启动轮询（每 1s 检测一次所有追踪的 PID）
-   */
-  startPolling(): void {
-    if (this.pollingInterval) return;
-    this.pollingInterval = setInterval(() => {
-      this.pollAll();
-    }, 1000);
-    this.pollingInterval.unref(); // 不阻止进程退出
-  }
-
-  /**
-   * 停止轮询
-   */
-  stopPolling(): void {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-    }
   }
 
   /**
    * 销毁服务，释放所有资源
    */
   destroy(): void {
-    this.stopPolling();
     this.trackedPids.clear();
     this.lastOutputTime.clear();
     this.exitCodes.clear();
@@ -153,19 +127,6 @@ export class StatusDetectorImpl implements IStatusDetector {
       return true;
     } catch {
       return false;
-    }
-  }
-
-  /**
-   * 轮询所有追踪的 PID
-   */
-  private pollAll(): void {
-    for (const pid of this.trackedPids) {
-      this.detectStatus(pid).then(newStatus => {
-        this.updateStatus(pid, newStatus);
-      }).catch(() => {
-        // 检测失败时忽略，下次轮询重试
-      });
     }
   }
 

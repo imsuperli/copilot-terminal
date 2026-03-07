@@ -2,16 +2,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { StatusDetectorImpl } from '../StatusDetector';
 import { WindowStatus } from '../../../shared/types/window';
 
-// Mock pidusage
-vi.mock('pidusage', () => ({
-  default: vi.fn(),
-}));
-
-import pidusage from 'pidusage';
-
-const mockStats = (cpu: number, pid = 12345) =>
-  ({ cpu, memory: 0, pid, ctime: 0, elapsed: 0, timestamp: 0 } as any);
-
 describe('StatusDetectorImpl', () => {
   let detector: StatusDetectorImpl;
   const mockPid = 12345;
@@ -40,7 +30,6 @@ describe('StatusDetectorImpl', () => {
   describe('onPtyData', () => {
     it('updates lastOutputTime so detectStatus returns Running', async () => {
       vi.spyOn(process, 'kill').mockReturnValue(true as any);
-      vi.mocked(pidusage).mockResolvedValue(mockStats(0));
       detector.onPtyData(mockPid, 'some output');
       const status = await detector.detectStatus(mockPid);
       expect(status).toBe(WindowStatus.Running);
@@ -68,22 +57,14 @@ describe('StatusDetectorImpl', () => {
   });
 
   describe('detectStatus', () => {
-    it('Running when CPU > 1%', async () => {
+    it('Running when recent PTY output within 2s', async () => {
       vi.spyOn(process, 'kill').mockReturnValue(true as any);
-      vi.mocked(pidusage).mockResolvedValue(mockStats(5));
-      expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.Running);
-    });
-
-    it('Running when recent PTY output within 5s', async () => {
-      vi.spyOn(process, 'kill').mockReturnValue(true as any);
-      vi.mocked(pidusage).mockResolvedValue(mockStats(0));
       detector.onPtyData(mockPid, 'output');
       expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.Running);
     });
 
-    it('WaitingForInput when CPU < 1% and no recent output', async () => {
+    it('WaitingForInput when no recent output', async () => {
       vi.spyOn(process, 'kill').mockReturnValue(true as any);
-      vi.mocked(pidusage).mockResolvedValue(mockStats(0));
       expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.WaitingForInput);
     });
 
@@ -97,14 +78,6 @@ describe('StatusDetectorImpl', () => {
       vi.spyOn(process, 'kill').mockImplementation(() => { throw new Error('ESRCH'); });
       detector.onProcessExit(mockPid, 2);
       expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.Error);
-    });
-
-    it('falls back to cached CPU when pidusage throws', async () => {
-      vi.spyOn(process, 'kill').mockReturnValue(true as any);
-      vi.mocked(pidusage).mockResolvedValueOnce(mockStats(5));
-      await detector.detectStatus(mockPid); // cache cpu=5
-      vi.mocked(pidusage).mockRejectedValueOnce(new Error('fail'));
-      expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.Running);
     });
   });
 
@@ -160,7 +133,6 @@ describe('StatusDetectorImpl', () => {
 
     it('untrackPid cleans up all data for pid', async () => {
       vi.spyOn(process, 'kill').mockReturnValue(true as any);
-      vi.mocked(pidusage).mockResolvedValue(mockStats(0));
       detector.trackPid(mockPid);
       detector.onPtyData(mockPid, 'data');
       detector.untrackPid(mockPid);
@@ -169,23 +141,9 @@ describe('StatusDetectorImpl', () => {
     });
   });
 
-  describe('polling', () => {
-    it('startPolling and stopPolling do not throw', () => {
-      expect(() => detector.startPolling()).not.toThrow();
-      expect(() => detector.stopPolling()).not.toThrow();
-    });
-
-    it('calling startPolling twice does not create duplicate intervals', () => {
-      detector.startPolling();
-      detector.startPolling(); // should be a no-op
-      expect(() => detector.stopPolling()).not.toThrow();
-    });
-  });
-
   describe('performance', () => {
     it('detectStatus completes in under 1s', async () => {
       vi.spyOn(process, 'kill').mockReturnValue(true as any);
-      vi.mocked(pidusage).mockResolvedValue(mockStats(0));
       const start = Date.now();
       await detector.detectStatus(mockPid);
       expect(Date.now() - start).toBeLessThan(1000);
@@ -193,9 +151,8 @@ describe('StatusDetectorImpl', () => {
   });
 
   describe('destroy', () => {
-    it('clears all state and stops polling', () => {
+    it('clears all state', () => {
       detector.trackPid(mockPid);
-      detector.startPolling();
       expect(() => detector.destroy()).not.toThrow();
     });
   });

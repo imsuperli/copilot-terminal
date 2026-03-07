@@ -10,9 +10,9 @@
 |------|------|--------|------|------|
 | 第一批（无风险） | ✅ 已完成 | 5/5 | 100% | #2, #4, #6, #8, #10 |
 | 第二批（低风险） | ⚠️ 部分完成 | 2/3 | 67% | #3, #11 已完成；#7 已回滚 |
-| 第三批（中风险） | 🚧 进行中 | 1/4 | 25% | #1 已完成；#5, #9, #12 待做 |
+| 第三批（中风险） | 🚧 进行中 | 2/4 | 50% | #1, #9 已完成；#5, #12 待做 |
 
-**总进度**: 8/12 已完成（67%），1 项已回滚，3 项待做
+**总进度**: 9/12 已完成（75%），1 项已回滚，2 项待做
 
 ---
 
@@ -58,7 +58,7 @@
 ### 第三批 - 中风险优化（1/4）
 
 #### ✅ #1 - PTY write/resize 线性扫描进程列表
-- **提交**: 待提交
+- **提交**: `5ffe0ff` - perf(main): 优化 PTY write/resize 性能，使用索引替代线性查找
 - **效果**: 每次按键从 O(N) 降到 O(1)，窗口越多收益越大
 - **实现方案**:
   - 在 ProcessManager 中添加 `paneIndex: Map<string, number>` 索引
@@ -66,17 +66,26 @@
   - 在 `spawnTerminal` 和 `killProcess` 中维护索引
   - ptyHandlers 使用索引查找，索引未命中时降级到线性查找（防御性编程）
 
+#### ✅ #9 - StatusDetector + StatusPoller 双重轮询
+- **提交**: 待提交
+- **效果**: 减少 50% 的状态检测开销，降低 CPU 占用
+- **实现方案**:
+  - 移除 StatusDetector 的内部轮询（startPolling/stopPolling/pollAll）
+  - 保留 StatusDetector 的状态检测逻辑和订阅机制
+  - 只由 StatusPoller 统一管理轮询
+  - 更新测试，移除 pidusage 相关的过时测试
+
 ---
 
 ## 待实施的优化 ⏸️
 
-### 第三批 - 中风险优化（剩余 3/4）
+### 第三批 - 中风险优化（剩余 2/4）
 
 以下优化按**预期收益**排序：
 
-## HIGH — 持续后台轮询
+## LOW — 影响较小
 
-### 9. StatusDetector + StatusPoller 双重轮询
+### 5. getActiveWindows() 作为方法调用而非 selector 订阅
 
 **文件**: `src/renderer/components/TerminalView.tsx:54`, `src/renderer/components/Sidebar.tsx:35-36`
 

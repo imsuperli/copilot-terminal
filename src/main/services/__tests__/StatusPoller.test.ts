@@ -28,8 +28,6 @@ function makeMockDetector(defaultStatus = WindowStatus.Running) {
     untrackPid: vi.fn(),
     onPtyData: vi.fn(),
     onProcessExit: vi.fn(),
-    startPolling: vi.fn(),
-    stopPolling: vi.fn(),
     destroy: vi.fn(),
   };
 }
@@ -114,7 +112,7 @@ describe('StatusPoller', () => {
   });
 
   // Task 2: IPC event push on status change
-  it('sends window-status-changed IPC event when status changes', async () => {
+  it('sends pane-status-changed IPC event when status changes', async () => {
     detector.detectStatus.mockResolvedValue(WindowStatus.WaitingForInput);
     poller.addWindow('win-1', 1001);
     poller.setActiveWindow('win-1');
@@ -124,9 +122,10 @@ describe('StatusPoller', () => {
     await flushPromises();
 
     expect(mainWindow.webContents.send).toHaveBeenCalledWith(
-      'window-status-changed',
+      'pane-status-changed',
       expect.objectContaining({
         windowId: 'win-1',
+        paneId: 'win-1',
         status: WindowStatus.WaitingForInput,
         timestamp: expect.any(String),
       })
