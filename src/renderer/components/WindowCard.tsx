@@ -12,14 +12,14 @@ import { useIDESettings } from '../hooks/useIDESettings';
 
 interface WindowCardProps {
   window: Window;
-  onClick?: () => void;
-  onOpenFolder?: () => void;
-  onDelete?: () => void;
-  onStart?: () => void;
-  onPause?: () => void;
-  onArchive?: () => void;
-  onUnarchive?: () => void;
-  onOpenInIDE?: (ide: string) => void;
+  onClick?: (window: Window) => void;
+  onOpenFolder?: (workingDirectory: string) => void;
+  onDelete?: (windowId: string) => void;
+  onStart?: (window: Window) => void;
+  onPause?: (window: Window) => void;
+  onArchive?: (window: Window) => void;
+  onUnarchive?: (window: Window) => void;
+  onOpenInIDE?: (ide: string, workingDirectory: string) => void;
 }
 
 /**
@@ -150,10 +150,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
     (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        onClick?.();
+        onClick?.(window);
       }
     },
-    [onClick]
+    [onClick, window]
   );
 
   // 阻止按钮点击事件冒泡
@@ -191,7 +191,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
     <div
       role="button"
       tabIndex={0}
-      onClick={onClick}
+      onClick={() => onClick?.(window)}
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
       className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-lg overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border border-[rgb(var(--border))] relative"
@@ -338,7 +338,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
                 <button
-                  onClick={(e) => handleButtonClick(e, onStart || (() => {}))}
+                  onClick={(e) => handleButtonClick(e, () => onStart?.(window))}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap"
                   aria-label="启动窗口"
                 >
@@ -372,7 +372,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
                 <button
-                  onClick={(e) => handleButtonClick(e, onPause || (() => {}))}
+                  onClick={(e) => handleButtonClick(e, () => onPause?.(window))}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] whitespace-nowrap"
                   aria-label="暂停窗口"
                 >
@@ -400,7 +400,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id))}
+                    onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id, workingDirectory))}
                     className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-0 border-0"
                   >
                     <IDEIcon icon={ide.icon || ''} size={ide.command === 'code' ? 24 : 16} />
@@ -422,7 +422,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
                 <button
-                  onClick={(e) => handleButtonClick(e, onOpenFolder || (() => {}))}
+                  onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(workingDirectory))}
                   className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
                   aria-label="打开文件夹"
                 >
@@ -445,7 +445,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={(e) => handleButtonClick(e, onArchive || (() => {}))}
+                    onClick={(e) => handleButtonClick(e, () => onArchive?.(window))}
                     className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
                     aria-label="归档窗口"
                   >
@@ -467,7 +467,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={(e) => handleButtonClick(e, onUnarchive || (() => {}))}
+                    onClick={(e) => handleButtonClick(e, () => onUnarchive?.(window))}
                     className="flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
                     aria-label="取消归档"
                   >
@@ -490,7 +490,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
                 <button
-                  onClick={(e) => handleButtonClick(e, onDelete || (() => {}))}
+                  onClick={(e) => handleButtonClick(e, () => onDelete?.(window.id))}
                   className="flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
                   aria-label="删除窗口"
                 >

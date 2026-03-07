@@ -82,6 +82,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const suppressNativePasteUntilRef = useRef(0); // 短时间屏蔽原生 paste，避免与手动 Ctrl+V 粘贴重复
   const lastCtrlEnterTimeRef = useRef(0); // 记录上次 Ctrl+Enter 的时间戳
   const ptyDataHandlerRef = useRef<((event: unknown, payload: { windowId: string; paneId?: string; data: string }) => void) | null>(null); // 存储 PTY 数据处理器的引用
+  const lastStatusRef = useRef<WindowStatus>(pane.status); // 跟踪上一次的状态
   const [isHovered, setIsHovered] = useState(false);
   const borderColor = getStatusBorderColor(pane.status);
   const ringColor = getStatusRingColor(pane.status);
@@ -138,6 +139,47 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   useEffect(() => {
     isActiveRef.current = isActive;
   }, [isActive]);
+
+  // 监听窗格状态变化：从 Paused 恢复时重置尺寸缓存，强制下次 resize
+  useEffect(() => {
+    const prevStatus = lastStatusRef.current;
+    const currentStatus = pane.status;
+
+    // 从 Paused 状态恢复到 Running/WaitingForInput 时，重置尺寸缓存
+    if (
+      prevStatus === WindowStatus.Paused &&
+      (currentStatus === WindowStatus.Running || currentStatus === WindowStatus.WaitingForInput || currentStatus === WindowStatus.Restoring)
+    ) {
+      // 重置尺寸缓存，强制下次 resize 执行
+      lastContainerSizeRef.current = { width: 0, height: 0 };
+
+      // 立即触发 resize
+      if (terminalRef.current && fitAddonRef.current && terminalContainerRef.current) {
+        requestAnimationFrame(() => {
+          const container = terminalContainerRef.current;
+          const terminal = terminalRef.current;
+          const fitAddon = fitAddonRef.current;
+
+          if (!container || !terminal || !fitAddon) return;
+
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+
+          if (width > 0 && height > 0) {
+            lastContainerSizeRef.current = { width, height };
+            fitAddon.fit();
+
+            if (window.electronAPI) {
+              const { cols, rows } = terminal;
+              window.electronAPI.ptyResize(windowId, pane.id, cols, rows);
+            }
+          }
+        });
+      }
+    }
+
+    lastStatusRef.current = currentStatus;
+  }, [pane.status, windowId, pane.id]);
 
   // 当窗格激活且窗口激活时，自动聚焦到终端
   useEffect(() => {
