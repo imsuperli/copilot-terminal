@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { MainLayout } from './components/layout/MainLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { EmptyState } from './components/EmptyState';
@@ -7,6 +7,7 @@ import { ArchivedView } from './components/ArchivedView';
 import { TerminalView } from './components/TerminalView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
+import { QuickNavPanel } from './components/QuickNavPanel';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
@@ -22,6 +23,7 @@ function App() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
+  const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
 
   // 工作区恢复
   useWorkspaceRestore();
@@ -32,6 +34,31 @@ function App() {
       window.electronAPI.notifyRendererReady();
     }, 100);
     return () => clearTimeout(timer);
+  }, []);
+
+  // 全局快捷键：双击 Shift 唤出快捷导航
+  const lastShiftPressTime = useRef<number>(0);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 检测 Shift 键按下
+      if (e.key === 'Shift') {
+        const now = Date.now();
+        const timeSinceLastPress = now - lastShiftPressTime.current;
+
+        // 如果两次按下 Shift 的时间间隔小于 300ms，则触发面板
+        if (timeSinceLastPress < 300 && timeSinceLastPress > 0) {
+          e.preventDefault();
+          setIsQuickNavOpen(prev => !prev);
+          lastShiftPressTime.current = 0; // 重置，避免连续触发
+        } else {
+          lastShiftPressTime.current = now;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const {
@@ -59,10 +86,14 @@ function App() {
 
   // 订阅主进程推送的 git 分支变化事件
   useEffect(() => {
+    console.log('[App] Setting up git branch change subscription');
     const unsubscribe = subscribeToWindowGitBranchChange((windowId, gitBranch) => {
+      console.log(`[App] Git branch changed for window ${windowId}: ${gitBranch}`);
       updateWindow(windowId, { gitBranch });
+      console.log(`[App] After update, window ${windowId} gitBranch should be:`, gitBranch);
     });
     return () => {
+      console.log('[App] Cleaning up git branch change subscription');
       unsubscribe();
     };
   }, [updateWindow]);
@@ -179,6 +210,12 @@ function App() {
 
       {/* 清理进度覆盖层 */}
       <CleanupOverlay />
+
+      {/* 快捷导航面板 */}
+      <QuickNavPanel
+        open={isQuickNavOpen}
+        onClose={() => setIsQuickNavOpen(false)}
+      />
     </>
   );
 }

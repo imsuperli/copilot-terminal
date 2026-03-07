@@ -50,10 +50,18 @@ class ProjectConfigWatcher {
           try {
             console.log(`[ProjectConfigWatcher] Reloading config for window ${windowId}`);
             const config = await readProjectConfig(projectPath);
-            onUpdate(config);
+
+            // 只有成功读取到配置时才更新
+            // 如果 config 为 null（JSON 语法错误或格式验证失败），则保持原有配置不变
+            if (config !== null) {
+              onUpdate(config);
+            } else {
+              console.warn(`[ProjectConfigWatcher] Invalid config for window ${windowId}, keeping existing config`);
+            }
           } catch (error) {
+            // 捕获异常但不更新配置，保持原有配置不变
             console.error('[ProjectConfigWatcher] Failed to reload project config:', error);
-            onUpdate(null);
+            console.warn('[ProjectConfigWatcher] Keeping existing config due to error');
           }
         } else if (event === 'unlink') {
           console.log(`[ProjectConfigWatcher] copilot.json deleted for window ${windowId}`);
