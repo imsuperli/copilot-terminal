@@ -1,16 +1,22 @@
-import chokidar from 'chokidar';
 import path from 'path';
 import fs from 'fs';
 import { ProjectConfig } from '../../shared/types/project-config';
 import { readProjectConfig } from '../utils/project-config';
+import { FileWatcherService } from './FileWatcherService';
 
 /**
  * 项目配置文件监听器
  * 监听 copilot.json 文件变化，自动重新加载配置
+ *
+ * 重构后基于 FileWatcherService 实现
  */
 class ProjectConfigWatcher {
-  private watchers: Map<string, chokidar.FSWatcher> = new Map();
-  private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private fileWatcher: FileWatcherService;
+  private unwatchers: Map<string, () => void> = new Map(); // windowId -> unwatch
+
+  constructor(fileWatcher: FileWatcherService) {
+    this.fileWatcher = fileWatcher;
+  }
 
   /**
    * 开始监听窗口的 copilot.json
@@ -36,77 +42,44 @@ class ProjectConfigWatcher {
 
     console.log(`[ProjectConfigWatcher] Start watching ${configPath} for window ${windowId}`);
 
-    // 创建防抖的更新函数（500ms）
-    const debouncedUpdate = () => {
-      // 清除之前的定时器
-      const existingTimer = this.debounceTimers.get(windowId);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
-      }
-
-      // 设置新的定时器
-      const timer = setTimeout(async () => {
-        try {
-          console.log(`[ProjectConfigWatcher] Reloading config for window ${windowId}`);
-          const config = await readProjectConfig(projectPath);
-          onUpdate(config);
-        } catch (error) {
-          console.error('[ProjectConfigWatcher] Failed to reload project config:', error);
+    // 监听文件变化
+    const unwatch = this.fileWatcher.watch(
+      configPath,
+      async (event) => {
+        if (event === 'change' || event === 'add') {
+          try {
+            console.log(`[ProjectConfigWatcher] Reloading config for window ${windowId}`);
+            const config = await readProjectConfig(projectPath);
+            onUpdate(config);
+          } catch (error) {
+            console.error('[ProjectConfigWatcher] Failed to reload project config:', error);
+            onUpdate(null);
+          }
+        } else if (event === 'unlink') {
+          console.log(`[ProjectConfigWatcher] copilot.json deleted for window ${windowId}`);
           onUpdate(null);
-        } finally {
-          this.debounceTimers.delete(windowId);
         }
-      }, 500);
-
-      this.debounceTimers.set(windowId, timer);
-    };
-
-    // 创建文件监听器
-    const watcher = chokidar.watch(configPath, {
-      persistent: true,
-      ignoreInitial: true, // 忽略初始扫描
-      awaitWriteFinish: {
-        stabilityThreshold: 200, // 文件稳定 200ms 后才触发
-        pollInterval: 100
+      },
+      {
+        debounce: 500, // 500ms 防抖
+        ignoreInitial: true,
+        awaitWriteFinish: true,
+        stabilityThreshold: 200,
       }
-    });
+    );
 
-    watcher
-      .on('change', () => {
-        console.log(`[ProjectConfigWatcher] copilot.json changed for window ${windowId}`);
-        debouncedUpdate();
-      })
-      .on('add', () => {
-        console.log(`[ProjectConfigWatcher] copilot.json created for window ${windowId}`);
-        debouncedUpdate();
-      })
-      .on('unlink', () => {
-        console.log(`[ProjectConfigWatcher] copilot.json deleted for window ${windowId}`);
-        onUpdate(null);
-      })
-      .on('error', (error) => {
-        console.error(`[ProjectConfigWatcher] Watcher error for window ${windowId}:`, error);
-      });
-
-    this.watchers.set(windowId, watcher);
+    this.unwatchers.set(windowId, unwatch);
   }
 
   /**
    * 停止监听指定窗口
    */
   stopWatching(windowId: string): void {
-    const watcher = this.watchers.get(windowId);
-    if (watcher) {
+    const unwatch = this.unwatchers.get(windowId);
+    if (unwatch) {
       console.log(`[ProjectConfigWatcher] Stop watching for window ${windowId}`);
-      watcher.close();
-      this.watchers.delete(windowId);
-    }
-
-    // 清除防抖定时器
-    const timer = this.debounceTimers.get(windowId);
-    if (timer) {
-      clearTimeout(timer);
-      this.debounceTimers.delete(windowId);
+      unwatch();
+      this.unwatchers.delete(windowId);
     }
   }
 
@@ -115,25 +88,29 @@ class ProjectConfigWatcher {
    */
   stopAll(): void {
     console.log('[ProjectConfigWatcher] Stopping all watchers');
-    for (const [windowId, watcher] of this.watchers) {
-      watcher.close();
+    for (const [windowId, unwatch] of this.unwatchers) {
+      unwatch();
     }
-    this.watchers.clear();
-
-    // 清除所有防抖定时器
-    for (const [windowId, timer] of this.debounceTimers) {
-      clearTimeout(timer);
-    }
-    this.debounceTimers.clear();
+    this.unwatchers.clear();
   }
 
   /**
    * 获取当前监听的窗口数量
    */
   getWatcherCount(): number {
-    return this.watchers.size;
+    return this.unwatchers.size;
   }
 }
 
-// 导出单例
-export const projectConfigWatcher = new ProjectConfigWatcher();
+// 导出工厂函数，需要传入 FileWatcherService 实例
+export function createProjectConfigWatcher(fileWatcher: FileWatcherService): ProjectConfigWatcher {
+  return new ProjectConfigWatcher(fileWatcher);
+}
+
+// 为了向后兼容，保留旧的导出方式
+// 但现在需要在主进程中手动初始化
+export let projectConfigWatcher: ProjectConfigWatcher;
+
+export function initProjectConfigWatcher(fileWatcher: FileWatcherService): void {
+  projectConfigWatcher = new ProjectConfigWatcher(fileWatcher);
+}

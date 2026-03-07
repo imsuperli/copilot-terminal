@@ -5,6 +5,7 @@ import { ViewSwitcherImpl } from '../services/ViewSwitcher';
 import { WorkspaceManagerImpl } from '../services/WorkspaceManager';
 import { AutoSaveManagerImpl } from '../services/AutoSaveManager';
 import { PtySubscriptionManager } from '../services/PtySubscriptionManager';
+import { GitBranchWatcher } from '../services/GitBranchWatcher';
 import { Workspace } from '../types/workspace';
 
 /**
@@ -19,6 +20,7 @@ export interface HandlerContext {
   workspaceManager: WorkspaceManagerImpl | null;
   autoSaveManager: AutoSaveManagerImpl | null;
   ptySubscriptionManager: PtySubscriptionManager | null;
+  gitBranchWatcher: GitBranchWatcher | null;
   currentWorkspace: Workspace | null;
   getCurrentWorkspace: () => Workspace | null;
   setCurrentWorkspace: (workspace: Workspace | null) => void;

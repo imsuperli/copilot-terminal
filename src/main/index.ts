@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeTheme } from 'electron';
 import path from 'path';
 import { ProcessManager } from './services/ProcessManager';
 import { StatusPoller } from './services/StatusPoller';
@@ -7,6 +7,9 @@ import { WorkspaceManagerImpl } from './services/WorkspaceManager';
 import { AutoSaveManagerImpl } from './services/AutoSaveManager';
 import { PtySubscriptionManager } from './services/PtySubscriptionManager';
 import { ShutdownManager, ShutdownContext } from './services/ShutdownManager';
+import { FileWatcherService } from './services/FileWatcherService';
+import { GitBranchWatcher } from './services/GitBranchWatcher';
+import { initProjectConfigWatcher } from './services/ProjectConfigWatcher';
 import { Workspace } from './types/workspace';
 import { registerAllHandlers } from './handlers';
 import { HandlerContext } from './handlers/HandlerContext';
@@ -19,6 +22,8 @@ let workspaceManager: WorkspaceManagerImpl | null = null;
 let autoSaveManager: AutoSaveManagerImpl | null = null;
 let ptySubscriptionManager: PtySubscriptionManager | null = null;
 let shutdownManager: ShutdownManager | null = null;
+let fileWatcherService: FileWatcherService | null = null;
+let gitBranchWatcher: GitBranchWatcher | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 
 // 退出标志，防止重复执行退出逻辑
@@ -157,6 +162,9 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // 强制使用暗色主题（包括标题栏）
+  nativeTheme.themeSource = 'dark';
+
   // 初始化 WorkspaceManager
   workspaceManager = new WorkspaceManagerImpl();
 
@@ -175,13 +183,22 @@ app.whenReady().then(async () => {
   // 初始化 ShutdownManager
   shutdownManager = new ShutdownManager();
 
+  // 初始化 FileWatcherService（通用文件监听服务）
+  fileWatcherService = new FileWatcherService();
+
+  // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
+  initProjectConfigWatcher(fileWatcherService);
+
   createWindow();
 
-  // 初始化 StatusPoller 和 ViewSwitcher（需要 mainWindow 已创建）
+  // 初始化 StatusPoller、ViewSwitcher 和 GitBranchWatcher（需要 mainWindow 已创建）
   if (mainWindow) {
     statusPoller = new StatusPoller(processManager.getStatusDetector(), mainWindow);
     statusPoller.startPolling();
     viewSwitcher = new ViewSwitcherImpl(mainWindow);
+
+    // 初始化 GitBranchWatcher（基于 FileWatcherService）
+    gitBranchWatcher = new GitBranchWatcher(fileWatcherService);
 
     // 初始化 WorkspaceRestorer
     // workspaceRestorer = new WorkspaceRestorerImpl(processManager, mainWindow);
@@ -196,6 +213,7 @@ app.whenReady().then(async () => {
     workspaceManager,
     autoSaveManager,
     ptySubscriptionManager,
+    gitBranchWatcher,
     currentWorkspace,
     getCurrentWorkspace: () => currentWorkspace,
     setCurrentWorkspace: (workspace) => { currentWorkspace = workspace; },

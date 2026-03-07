@@ -18,6 +18,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
     processManager,
     statusPoller,
     ptySubscriptionManager,
+    gitBranchWatcher,
   } = ctx;
 
   // 创建窗口
@@ -96,7 +97,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       };
 
       // 将新窗格添加到 StatusPoller
-      statusPoller?.addWindow(windowId, handle.pid, paneId, safePath);
+      statusPoller?.addWindow(windowId, handle.pid, paneId);
 
       // 订阅 PTY 数据，推送到渲染进程
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
@@ -124,6 +125,19 @@ export function registerWindowHandlers(ctx: HandlerContext) {
           });
         }
       });
+
+      // 启动 git 分支监听
+      if (gitBranchWatcher) {
+        gitBranchWatcher.watch(windowId, safePath, (gitBranch) => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('window-git-branch-changed', {
+              windowId,
+              gitBranch,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        });
+      }
 
       return successResponse(window);
     } catch (error) {
@@ -168,7 +182,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       }
 
       // 将窗格添加到 StatusPoller
-      statusPoller?.addWindow(windowId, handle.pid, paneId, safePath);
+      statusPoller?.addWindow(windowId, handle.pid, paneId);
 
       // 订阅 PTY 数据，推送到渲染进程
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {

@@ -1,18 +1,14 @@
 import { BrowserWindow } from 'electron';
 import { IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
-import { GitDetector } from './GitDetector';
 
 interface TrackedPane {
   windowId: string;
   paneId: string;
   pid: number;
-  cwd: string; // 工作目录
   isActive: boolean;
   lastStatus: WindowStatus;
   lastCheckTime: number;
-  lastGitCheckTime: number; // 上次 git 检测时间
-  lastGitBranch?: string; // 上次检测到的 git 分支
   failureCount?: number; // 连续失败次数
 }
 
@@ -21,18 +17,15 @@ interface TrackedPane {
  *
  * 管理所有窗格的状态轮询，活跃窗格每 1s 检测，非活跃窗格每 5s 检测。
  * 状态变化时通过 IPC 推送 pane-status-changed 事件到渲染进程。
- * 同时检测 git 分支变化（每 3s 检测一次）。
  */
 export class StatusPoller {
   private trackedPanes = new Map<string, TrackedPane>(); // key: paneId
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
   private statusDetector: IStatusDetector;
-  private gitDetector: GitDetector;
   private mainWindow: BrowserWindow;
 
   constructor(statusDetector: IStatusDetector, mainWindow: BrowserWindow) {
     this.statusDetector = statusDetector;
-    this.gitDetector = new GitDetector();
     this.mainWindow = mainWindow;
   }
 
@@ -61,17 +54,14 @@ export class StatusPoller {
   /**
    * 添加窗格到轮询列表
    */
-  addPane(windowId: string, paneId: string, pid: number, cwd?: string): void {
-    const now = Date.now();
+  addPane(windowId: string, paneId: string, pid: number): void {
     this.trackedPanes.set(paneId, {
       windowId,
       paneId,
       pid,
-      cwd: cwd || '',
       isActive: false,
       lastStatus: WindowStatus.Restoring,
-      lastCheckTime: now,
-      lastGitCheckTime: now,
+      lastCheckTime: Date.now(),
     });
   }
 
@@ -117,9 +107,9 @@ export class StatusPoller {
    * 兼容旧接口：添加窗口（实际上是添加窗格）
    * @deprecated 使用 addPane 代替
    */
-  addWindow(windowId: string, pid: number, paneId?: string, cwd?: string): void {
+  addWindow(windowId: string, pid: number, paneId?: string): void {
     const actualPaneId = paneId || windowId; // 如果没有 paneId，使用 windowId 作为 paneId
-    this.addPane(windowId, actualPaneId, pid, cwd);
+    this.addPane(windowId, actualPaneId, pid);
   }
 
   /**
@@ -187,26 +177,6 @@ export class StatusPoller {
           this.notifyStatusChange(tracked.windowId, paneId, WindowStatus.Error);
         }
       });
-
-      // Git 分支检测（每 3s 检测一次）
-      if (tracked.cwd && now - tracked.lastGitCheckTime >= 3000) {
-        tracked.lastGitCheckTime = now;
-
-        try {
-          const gitBranch = this.gitDetector.detectBranch(tracked.cwd);
-
-          // 只有当分支发生变化时才通知
-          if (gitBranch !== tracked.lastGitBranch) {
-            tracked.lastGitBranch = gitBranch;
-            this.notifyGitBranchChange(tracked.windowId, gitBranch);
-          }
-        } catch (error) {
-          // Git 检测失败不影响主流程，静默忽略
-          if (process.env.NODE_ENV === 'development') {
-            console.error(`[StatusPoller] Failed to detect git branch for ${tracked.cwd}:`, error);
-          }
-        }
-      }
     }
   }
 
@@ -221,20 +191,6 @@ export class StatusPoller {
       windowId,
       paneId,
       status,
-      timestamp: new Date().toISOString(),
-    });
-  }
-
-  /**
-   * 通过 IPC 推送 git 分支变化事件到渲染进程
-   */
-  private notifyGitBranchChange(windowId: string, gitBranch: string | undefined): void {
-    if (this.mainWindow.isDestroyed()) return;
-
-    // 发送 window-git-branch-changed 事件
-    this.mainWindow.webContents.send('window-git-branch-changed', {
-      windowId,
-      gitBranch,
       timestamp: new Date().toISOString(),
     });
   }
