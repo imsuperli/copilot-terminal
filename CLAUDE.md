@@ -41,6 +41,7 @@ npm test
    - `WindowCard`: Displays window status, controls (start/pause/archive/delete)
    - `Sidebar`: Collapsible window list in terminal view
    - `QuickSwitcher`: Ctrl+Tab search panel for quick window switching
+   - `QuickNavPanel`: Ctrl+K quick navigation panel for URLs and folders
 
 ### Key Data Flow
 
@@ -146,6 +147,31 @@ Projects can include a `copilot.json` file in their root directory to define qui
 - Rendered in `WindowCard` component with ExternalLink icons
 
 See `docs/project-config.md` for detailed documentation and examples.
+
+### Quick Navigation (Global)
+
+Global quick navigation panel for frequently accessed URLs and folders:
+
+- **Activation**:
+  - Keyboard shortcut: Double-tap `Shift` key (works in both unified and terminal views)
+  - Sidebar button: Compass icon in main sidebar
+- **Purpose**: Quick access to frequently used websites and project folders
+- **UI**: Card-based grid layout with auto-detected icons (Globe for URLs, Folder for paths)
+- **Configuration**: Managed in Settings Panel → Quick Navigation tab
+- **Storage**: Saved in `%APPDATA%/copilot-terminal/settings.json` under `quickNav.items`
+
+**Features**:
+- Auto-detect type (URL vs folder path)
+- Auto-extract name from URL domain or folder path
+- Manual name editing
+- Click to open in browser (URLs) or file explorer (folders)
+
+**Implementation**:
+- Component: `src/renderer/components/QuickNavPanel.tsx`
+- Type definitions: `src/shared/types/quick-nav.ts`
+- Settings integration: `src/renderer/components/SettingsPanel.tsx` (Tabs component)
+
+See `docs/quick-nav-feature.md` for detailed documentation.
 
 ## Important File Paths
 

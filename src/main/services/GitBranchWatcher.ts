@@ -42,8 +42,6 @@ export class GitBranchWatcher {
         return;
       }
 
-      console.log(`[GitBranchWatcher] Start watching ${headPath} for window ${windowId}`);
-
       // 立即读取一次当前分支
       const initialBranch = this.parseBranch(headPath);
       onBranchChange(initialBranch);
@@ -54,7 +52,6 @@ export class GitBranchWatcher {
         (event) => {
           if (event === 'change' || event === 'add') {
             const branch = this.parseBranch(headPath);
-            console.log(`[GitBranchWatcher] Branch changed for window ${windowId}: ${branch}`);
             onBranchChange(branch);
           } else if (event === 'unlink') {
             // HEAD 文件被删除（极少见）
@@ -69,7 +66,6 @@ export class GitBranchWatcher {
 
       this.unwatchers.set(windowId, unwatch);
     } catch (error) {
-      console.error(`[GitBranchWatcher] Failed to watch ${cwd}:`, error);
       onBranchChange(undefined);
     }
   }
@@ -80,7 +76,6 @@ export class GitBranchWatcher {
   unwatch(windowId: string): void {
     const unwatch = this.unwatchers.get(windowId);
     if (unwatch) {
-      console.log(`[GitBranchWatcher] Stop watching for window ${windowId}`);
       unwatch();
       this.unwatchers.delete(windowId);
     }
@@ -90,7 +85,6 @@ export class GitBranchWatcher {
    * 停止所有监听
    */
   unwatchAll(): void {
-    console.log('[GitBranchWatcher] Stopping all watchers');
     for (const [windowId, unwatch] of this.unwatchers) {
       unwatch();
     }
@@ -131,7 +125,7 @@ export class GitBranchWatcher {
           return existsSync(headPath) ? headPath : null;
         }
       } catch (error) {
-        console.error(`[GitBranchWatcher] Failed to read .git file:`, error);
+        // 忽略错误
       }
     }
 
@@ -161,7 +155,6 @@ export class GitBranchWatcher {
       // 其他情况（不应该出现）
       return undefined;
     } catch (error) {
-      console.error(`[GitBranchWatcher] Failed to parse HEAD file:`, error);
       return undefined;
     }
   }

@@ -1,0 +1,35 @@
+{
+  "ides": [],
+  "quickNav": {
+    "items": [
+      {
+        "id": "1",
+        "name": "GitHub",
+        "type": "url",
+        "path": "https://github.com",
+        "order": 0
+      },
+      {
+        "id": "2",
+        "name": "项目文档",
+        "type": "folder",
+        "path": "D:\\Projects\\MyApp\\docs",
+        "order": 1
+      },
+      {
+        "id": "3",
+        "name": "Stack Overflow",
+        "type": "url",
+        "path": "https://stackoverflow.com",
+        "order": 2
+      },
+      {
+        "id": "4",
+        "name": "工作目录",
+        "type": "folder",
+        "path": "D:\\Workspace",
+        "order": 3
+      }
+    ]
+  }
+}

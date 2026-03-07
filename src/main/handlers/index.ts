@@ -8,6 +8,7 @@ import { registerFileHandlers } from './fileHandlers';
 import { registerProcessHandlers } from './processHandlers';
 import { registerMiscHandlers } from './miscHandlers';
 import { registerSettingsHandlers } from './settingsHandlers';
+import { registerStatusLineHandlers } from './statusLineHandlers';
 
 /**
  * 注册所有 IPC handlers
@@ -38,6 +39,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // 设置管理 (get-settings, update-settings, scan-ides, etc.)
   registerSettingsHandlers(ctx);
+
+  // StatusLine 管理 (statusline-configure, statusline-remove, etc.)
+  registerStatusLineHandlers(ctx);
 
   // 其他 (ping)
   registerMiscHandlers(ctx);

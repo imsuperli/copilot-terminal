@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal } from 'lucide-react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass } from 'lucide-react';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { SettingsPanel } from '../SettingsPanel';
+import { QuickNavPanel } from '../QuickNavPanel';
 import { useWindowStore } from '../../stores/windowStore';
 
 interface SidebarProps {
@@ -38,6 +39,7 @@ export function Sidebar({
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [isQuickNavPanelOpen, setIsQuickNavPanelOpen] = useState(false);
 
   const handleBatchCreate = async (selectedPaths: string[]) => {
     for (const path of selectedPaths) {
@@ -171,6 +173,13 @@ export function Sidebar({
             </button>
             <button
               className="flex items-center justify-center w-9 h-9 rounded-lg text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
+              onClick={() => setIsQuickNavPanelOpen(true)}
+              title="快捷导航"
+            >
+              <Compass className="h-4 w-4" />
+            </button>
+            <button
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
               onClick={() => {}}
             >
               <HelpCircle className="h-4 w-4" />
@@ -249,6 +258,11 @@ export function Sidebar({
       <SettingsPanel
         open={isSettingsPanelOpen}
         onClose={() => setIsSettingsPanelOpen(false)}
+      />
+
+      <QuickNavPanel
+        open={isQuickNavPanelOpen}
+        onClose={() => setIsQuickNavPanelOpen(false)}
       />
     </>
   );

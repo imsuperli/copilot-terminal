@@ -387,50 +387,14 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     // 第二步：强制终止所有进程及其子进程树
     if (pidsToKill.length > 0) {
       console.log('[ProcessManager] Force killing remaining processes and their children...');
-      let processedCount = 0;
 
       if (platform() === 'win32') {
-        // Windows: 收集所有进程树中的 PID
-        const allPidsToKill = new Set<number>();
-        for (const pid of pidsToKill) {
-          const treePids = this.getAllProcessTreePidsWindows(pid);
-          treePids.forEach(p => allPidsToKill.add(p));
-        }
-
-        console.log(`[ProcessManager] Found ${allPidsToKill.size} processes in tree (including children)`);
-
-        // 强制终止所有进程
-        for (const pid of allPidsToKill) {
-          try {
-            execSync(`taskkill /F /PID ${pid}`, { stdio: 'ignore' });
-            console.log(`[ProcessManager] Force killed process ${pid}`);
-          } catch (error) {
-            // 进程可能已经优雅退出，忽略错误
-            console.log(`[ProcessManager] Process ${pid} already exited`);
-          }
-          processedCount++;
-          // 通知进度（基于原始 PTY 进程数量）
-          if (progressCallback) {
-            progressCallback(Math.min(processedCount, totalProcesses), totalProcesses);
-          }
-        }
+        // Windows: 使用 taskkill /T 一次性终止进程树，避免递归查询
+        // 这比逐个查询子进程快得多，且不会阻塞主线程太久
+        await this.killProcessTreesBatch(pidsToKill, progressCallback, totalProcesses);
       } else {
-        // Unix: 使用 SIGKILL 强制终止
-        for (const pid of pidsToKill) {
-          const pty = this.ptys.get(pid);
-          if (pty && typeof pty.kill === 'function') {
-            try {
-              pty.kill('SIGKILL');
-              console.log(`[ProcessManager] Sent SIGKILL to process ${pid}`);
-            } catch (error) {
-              console.log(`[ProcessManager] Process ${pid} already exited`);
-            }
-          }
-          processedCount++;
-          if (progressCallback) {
-            progressCallback(processedCount, totalProcesses);
-          }
-        }
+        // Unix/macOS: 使用进程组终止子进程
+        await this.killProcessTreesUnix(pidsToKill, progressCallback, totalProcesses);
       }
     }
 
@@ -440,6 +404,134 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.paneIndex.clear();
 
     console.log('[ProcessManager] Destroy completed');
+  }
+
+  /**
+   * 批量终止进程树（Windows）
+   * 使用 taskkill /T 一次性终止进程树，避免递归查询子进程
+   */
+  private async killProcessTreesBatch(
+    pids: number[],
+    progressCallback?: (current: number, total: number) => void,
+    total?: number
+  ): Promise<void> {
+    const totalProcesses = total || pids.length;
+    let processedCount = 0;
+
+    // 分批处理，每批最多 10 个进程，避免命令行过长
+    const batchSize = 10;
+    for (let i = 0; i < pids.length; i += batchSize) {
+      const batch = pids.slice(i, i + batchSize);
+
+      // 使用 Promise.all 并行终止多个进程树
+      await Promise.all(
+        batch.map(async (pid) => {
+          try {
+            // 使用 taskkill /F /T 强制终止进程树
+            // /F: 强制终止
+            // /T: 终止进程及其所有子进程
+            await new Promise<void>((resolve) => {
+              // 使用 setImmediate 将 execSync 放到下一个事件循环，避免阻塞 UI
+              setImmediate(() => {
+                try {
+                  execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
+                  console.log(`[ProcessManager] Killed process tree for PID ${pid}`);
+                } catch (error) {
+                  // 进程可能已经退出，忽略错误
+                  console.log(`[ProcessManager] Process ${pid} already exited`);
+                }
+                resolve();
+              });
+            });
+          } catch (error) {
+            console.log(`[ProcessManager] Failed to kill process ${pid}`);
+          }
+        })
+      );
+
+      // 更新进度（每批处理完后更新一次，减少 IPC 调用频率）
+      processedCount += batch.length;
+      if (progressCallback) {
+        progressCallback(Math.min(processedCount, totalProcesses), totalProcesses);
+      }
+
+      // 每批之间短暂延迟，让 UI 有机会更新
+      if (i + batchSize < pids.length) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
+  }
+
+  /**
+   * 批量终止进程树（Unix/macOS）
+   * 使用进程组 (PGID) 终止整个进程树
+   */
+  private async killProcessTreesUnix(
+    pids: number[],
+    progressCallback?: (current: number, total: number) => void,
+    total?: number
+  ): Promise<void> {
+    const totalProcesses = total || pids.length;
+    let processedCount = 0;
+
+    // 分批处理，每批最多 10 个进程
+    const batchSize = 10;
+    for (let i = 0; i < pids.length; i += batchSize) {
+      const batch = pids.slice(i, i + batchSize);
+
+      // 使用 Promise.all 并行终止多个进程树
+      await Promise.all(
+        batch.map(async (pid) => {
+          try {
+            await new Promise<void>((resolve) => {
+              setImmediate(() => {
+                try {
+                  // 方法1: 尝试终止进程组（负 PID 表示进程组）
+                  // 这会终止该进程及其所有子进程
+                  try {
+                    process.kill(-pid, 'SIGKILL');
+                    console.log(`[ProcessManager] Killed process group -${pid}`);
+                  } catch (pgidError) {
+                    // 如果进程组终止失败，尝试直接终止进程
+                    try {
+                      process.kill(pid, 'SIGKILL');
+                      console.log(`[ProcessManager] Killed process ${pid}`);
+                    } catch (pidError) {
+                      console.log(`[ProcessManager] Process ${pid} already exited`);
+                    }
+                  }
+
+                  // 方法2: 使用 pkill 终止子进程（备用方案）
+                  // pkill -P <pid> 会终止所有父进程为 <pid> 的子进程
+                  try {
+                    execSync(`pkill -9 -P ${pid}`, { stdio: 'ignore' });
+                    console.log(`[ProcessManager] Killed children of process ${pid}`);
+                  } catch (error) {
+                    // 忽略错误，可能没有子进程
+                  }
+                } catch (error) {
+                  console.log(`[ProcessManager] Failed to kill process ${pid}`);
+                }
+                resolve();
+              });
+            });
+          } catch (error) {
+            console.log(`[ProcessManager] Failed to kill process ${pid}`);
+          }
+        })
+      );
+
+      // 更新进度（每批处理完后更新一次，减少 IPC 调用频率）
+      processedCount += batch.length;
+      if (progressCallback) {
+        progressCallback(Math.min(processedCount, totalProcesses), totalProcesses);
+      }
+
+      // 每批之间短暂延迟，让 UI 有机会更新
+      if (i + batchSize < pids.length) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+    }
   }
 
   /**
@@ -454,57 +546,6 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       // 进程可能已经退出，忽略错误
       console.log(`[ProcessManager] Process ${pid} already exited or kill failed`);
     }
-  }
-
-  /**
-   * 获取进程的所有子进程 PID（Windows）
-   */
-  private getChildProcessesWindows(parentPid: number): number[] {
-    try {
-      // 使用 wmic 查询子进程
-      const output = execSync(
-        `wmic process where (ParentProcessId=${parentPid}) get ProcessId`,
-        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }
-      );
-
-      // 解析输出，提取 PID
-      const lines = output.split('\n').map(line => line.trim()).filter(line => line);
-      const pids: number[] = [];
-
-      for (let i = 1; i < lines.length; i++) { // 跳过标题行
-        const pid = parseInt(lines[i], 10);
-        if (!isNaN(pid)) {
-          pids.push(pid);
-        }
-      }
-
-      return pids;
-    } catch (error) {
-      // 查询失败，返回空数组
-      return [];
-    }
-  }
-
-  /**
-   * 递归获取进程树中的所有 PID（Windows）
-   */
-  private getAllProcessTreePidsWindows(rootPid: number): number[] {
-    const allPids = new Set<number>([rootPid]);
-    const toProcess = [rootPid];
-
-    while (toProcess.length > 0) {
-      const currentPid = toProcess.shift()!;
-      const children = this.getChildProcessesWindows(currentPid);
-
-      for (const childPid of children) {
-        if (!allPids.has(childPid)) {
-          allPids.add(childPid);
-          toProcess.push(childPid);
-        }
-      }
-    }
-
-    return Array.from(allPids);
   }
 
   /**
@@ -591,6 +632,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const cleanEnv = { ...latestEnv };
     delete cleanEnv.CLAUDECODE; // 移除 Claude Code 环境变量，避免嵌套会话检测
     delete cleanEnv.VSCODE_INJECTION; // 移除 VS Code 注入变量
+
+    // 注入窗口 ID 环境变量（供 statusLine 插件使用）
+    cleanEnv.AUSOME_TERMINAL_WINDOW_ID = config.windowId;
 
     // 创建真实的 PTY 进程
     const ptyProcess = pty.spawn(shell, [], {

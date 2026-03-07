@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteWindow: (windowId: string) => ipcRenderer.invoke('delete-window', { windowId }),
   startWindow: (config: { windowId: string; paneId?: string; name: string; workingDirectory: string; command: string }) =>
     ipcRenderer.invoke('start-window', config),
+  startGitWatch: (windowId: string, cwd: string) => ipcRenderer.invoke('start-git-watch', { windowId, cwd }),
+  stopGitWatch: (windowId: string) => ipcRenderer.invoke('stop-git-watch', { windowId }),
 
   // File system
   validatePath: (path: string) => ipcRenderer.invoke('validate-path', path),
@@ -34,6 +36,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateIDEConfig: (ideConfig: unknown) => ipcRenderer.invoke('update-ide-config', ideConfig),
   deleteIDEConfig: (ideId: string) => ipcRenderer.invoke('delete-ide-config', ideId),
   getIDEIcon: (iconPath: string) => ipcRenderer.invoke('get-ide-icon', iconPath),
+
+  // StatusLine
+  statusLineCheckClaudeInstalled: () => ipcRenderer.invoke('statusline-check-claude-installed'),
+  statusLineCheckConfigured: () => ipcRenderer.invoke('statusline-check-configured'),
+  statusLineConfigure: () => ipcRenderer.invoke('statusline-configure'),
+  statusLineRemove: () => ipcRenderer.invoke('statusline-remove'),
+  statusLineRestore: () => ipcRenderer.invoke('statusline-restore'),
 
   // Status events
   onWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => {
@@ -58,6 +67,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   offProjectConfigUpdated: (callback: (event: unknown, payload: { windowId: string; projectConfig: unknown }) => void) => {
     ipcRenderer.removeListener('project-config-updated', callback);
+  },
+
+  // Claude model updates
+  onClaudeModelUpdated: (callback: (event: unknown, payload: { windowId: string; model?: string; modelId?: string; contextPercentage?: number; cost?: number }) => void) => {
+    ipcRenderer.on('claude-model-updated', callback);
+  },
+  offClaudeModelUpdated: (callback: (event: unknown, payload: { windowId: string; model?: string; modelId?: string; contextPercentage?: number; cost?: number }) => void) => {
+    ipcRenderer.removeListener('claude-model-updated', callback);
   },
 
   // PTY I/O

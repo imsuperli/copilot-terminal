@@ -8,11 +8,13 @@ interface CleanupProgress {
 export const CleanupOverlay: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [progress, setProgress] = useState<CleanupProgress>({ current: 0, total: 0 });
+  const [smoothProgress, setSmoothProgress] = useState(0); // 平滑进度条
 
   useEffect(() => {
     const handleCleanupStarted = () => {
       setIsVisible(true);
       setProgress({ current: 0, total: 0 });
+      setSmoothProgress(0);
     };
 
     const handleCleanupProgress = (_event: unknown, payload: CleanupProgress) => {
@@ -27,6 +29,34 @@ export const CleanupOverlay: React.FC = () => {
       window.electronAPI.offCleanupProgress(handleCleanupProgress);
     };
   }, []);
+
+  // 平滑进度条动画
+  useEffect(() => {
+    if (progress.total === 0) return;
+
+    const targetPercentage = Math.round((progress.current / progress.total) * 100);
+
+    // 使用 requestAnimationFrame 实现平滑过渡
+    let animationFrame: number;
+    const animate = () => {
+      setSmoothProgress((prev) => {
+        const diff = targetPercentage - prev;
+        if (Math.abs(diff) < 0.5) {
+          return targetPercentage;
+        }
+        return prev + diff * 0.2; // 缓动系数
+      });
+      animationFrame = requestAnimationFrame(animate);
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+      }
+    };
+  }, [progress]);
 
   if (!isVisible) {
     return null;
@@ -54,8 +84,8 @@ export const CleanupOverlay: React.FC = () => {
               </div>
               <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-blue-500 h-full transition-all duration-300 ease-out"
-                  style={{ width: `${percentage}%` }}
+                  className="bg-blue-500 h-full transition-all duration-200 ease-out"
+                  style={{ width: `${smoothProgress}%` }}
                 />
               </div>
             </div>

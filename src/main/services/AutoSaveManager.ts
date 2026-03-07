@@ -96,7 +96,6 @@ export class AutoSaveManagerImpl implements IAutoSaveManager {
 
       // 🔥 数据完整性校验：防止保存损坏的数据
       if (!this.validateWorkspaceData(workspace)) {
-        console.error('[AutoSave] Invalid workspace data, skipping save');
         return;
       }
 
@@ -117,10 +116,8 @@ export class AutoSaveManagerImpl implements IAutoSaveManager {
       };
 
       await this.workspaceManager.saveWorkspace(deduplicatedWorkspace);
-      console.log(`[AutoSave] Workspace saved successfully at ${new Date().toISOString()} (${normalizedWindows.length} windows)`);
     } catch (error) {
       // 保存失败时记录错误日志，不影响应用运行
-      console.error('[AutoSave] Failed to save workspace:', error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -131,30 +128,22 @@ export class AutoSaveManagerImpl implements IAutoSaveManager {
   private validateWorkspaceData(workspace: Workspace): boolean {
     // 检查基本结构
     if (!workspace.version || !workspace.settings) {
-      console.error('[AutoSave] Missing version or settings');
       return false;
     }
 
     // 检查窗口数据
     if (!Array.isArray(workspace.windows)) {
-      console.error('[AutoSave] Windows is not an array');
       return false;
     }
 
     // 检查每个窗口的必需字段
     for (const window of workspace.windows) {
       if (!window.id || !window.name || !window.layout) {
-        console.error('[AutoSave] Invalid window data:', {
-          id: window.id,
-          name: window.name,
-          hasLayout: !!window.layout,
-        });
         return false;
       }
 
       // 检查 layout 结构
       if (!this.validateLayout(window.layout)) {
-        console.error('[AutoSave] Invalid layout for window:', window.id);
         return false;
       }
     }

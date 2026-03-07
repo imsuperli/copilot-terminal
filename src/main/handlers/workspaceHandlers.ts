@@ -8,8 +8,6 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
 
   // 监听自动保存触发事件
   ipcMain.on('trigger-auto-save', async (_event, windows: Window[]) => {
-    console.log(`[WorkspaceHandlers] Received trigger-auto-save event with ${windows?.length || 0} windows`);
-
     try {
       if (!autoSaveManager) {
         console.warn('[WorkspaceHandlers] AutoSaveManager not initialized');
@@ -42,13 +40,8 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       // 更新全局 currentWorkspace
       setCurrentWorkspace(currentWorkspace);
 
-      // 打印归档窗口信息
-      const archivedCount = windows.filter(w => w.archived).length;
-      console.log(`[WorkspaceHandlers] Updated workspace with ${windows.length} windows (${archivedCount} archived)`);
-
       // 触发自动保存（带防抖）
       autoSaveManager.triggerSave();
-      console.log('[WorkspaceHandlers] Auto-save triggered');
     } catch (error) {
       console.error('[WorkspaceHandlers] Failed to trigger auto-save:', error);
     }

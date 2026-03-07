@@ -1,6 +1,7 @@
 import { existsSync } from 'fs';
 
 // 动态导入 chokidar（ES Module）
+// 使用 eval 绕过 TypeScript 编译，保持真正的动态 import
 let chokidar: any = null;
 let chokidarPromise: Promise<any> | null = null;
 
@@ -8,7 +9,8 @@ async function getChokidar() {
   if (chokidar) return chokidar;
   if (chokidarPromise) return chokidarPromise;
 
-  chokidarPromise = import('chokidar').then(module => {
+  // 使用 eval 来保持真正的动态 import，避免被 TypeScript 编译成 require
+  chokidarPromise = (0, eval)("import('chokidar')").then((module: any) => {
     chokidar = module.default || module;
     return chokidar;
   });
@@ -116,11 +118,10 @@ export class FileWatcherService {
         .on('add', () => this.handleEvent(filePath, 'add'))
         .on('unlink', () => this.handleEvent(filePath, 'unlink'))
         .on('error', (error: any) => {
-          console.error(`[FileWatcherService] Watcher error for ${filePath}:`, error);
+          // 忽略错误
         });
 
       this.watchers.set(filePath, watcherInfo);
-      console.log(`[FileWatcherService] Created watcher for ${filePath}`);
     }
 
     // 增加引用计数
@@ -151,10 +152,6 @@ export class FileWatcherService {
     // 注册回调
     watcherInfo.callbacks.set(callbackId, wrappedCallback);
 
-    console.log(
-      `[FileWatcherService] Added callback for ${filePath} (refCount: ${watcherInfo.refCount})`
-    );
-
     // 返回取消监听函数
     return () => this.unwatch(filePath, callbackId);
   }
@@ -177,15 +174,10 @@ export class FileWatcherService {
     watcherInfo.callbacks.delete(callbackId);
     watcherInfo.refCount--;
 
-    console.log(
-      `[FileWatcherService] Removed callback for ${filePath} (refCount: ${watcherInfo.refCount})`
-    );
-
     // 如果没有订阅者了，关闭 watcher
     if (watcherInfo.refCount === 0) {
       watcherInfo.watcher.close();
       this.watchers.delete(filePath);
-      console.log(`[FileWatcherService] Closed watcher for ${filePath}`);
     }
   }
 
@@ -201,7 +193,7 @@ export class FileWatcherService {
       try {
         callback(event, filePath);
       } catch (error) {
-        console.error(`[FileWatcherService] Callback error for ${filePath}:`, error);
+        // 忽略回调错误
       }
     }
   }
@@ -217,7 +209,6 @@ export class FileWatcherService {
    * 销毁所有监听器
    */
   destroy(): void {
-    console.log('[FileWatcherService] Destroying all watchers');
     for (const [filePath, watcherInfo] of this.watchers) {
       // 清除所有防抖定时器
       for (const timer of watcherInfo.debounceTimers.values()) {

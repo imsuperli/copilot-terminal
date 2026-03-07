@@ -75,6 +75,9 @@ interface WindowStore {
   getPaneById: (windowId: string, paneId: string) => Pane | undefined;
   getActiveWindows: () => Window[]; // 获取未归档的窗口
   getArchivedWindows: () => Window[]; // 获取已归档的窗口
+
+  // Claude 模型相关
+  updateClaudeModel: (windowId: string, model?: string, modelId?: string, contextPercentage?: number, cost?: number) => void;
 }
 
 /**
@@ -367,6 +370,21 @@ export const useWindowStore = create<WindowStore>()(
     // 获取已归档的窗口
     getArchivedWindows: () => {
       return get().windows.filter(w => w.archived);
+    },
+
+    // 更新 Claude 模型信息
+    updateClaudeModel: (windowId, model, modelId, contextPercentage, cost) => {
+      set((state) => {
+        const window = state.windows.find(w => w.id === windowId);
+        if (window) {
+          window.claudeModel = model;
+          window.claudeModelId = modelId;
+          window.claudeContextPercentage = contextPercentage;
+          window.claudeCost = cost;
+        }
+      });
+      // 触发自动保存
+      triggerAutoSave(get().windows);
     },
   }))
 );

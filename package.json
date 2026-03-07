@@ -1,6 +1,6 @@
 {
   "name": "copilot-terminal",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "description": "A modern terminal window manager built with Electron",
   "main": "dist/main/index.js",
   "scripts": {
@@ -8,7 +8,9 @@
     "dev:renderer": "vite",
     "dev:main": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "dev:electron": "wait-on http://localhost:5173 dist/main/index.js && cross-env NODE_ENV=development electron .",
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "npm run build:main && npm run build:statusline && vite build",
+    "build:main": "tsc -p tsconfig.json",
+    "build:statusline": "tsc -p src/statusline/tsconfig.json",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
     "test": "vitest"
@@ -55,6 +57,7 @@
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-switch": "^1.2.6",
+    "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@xterm/addon-fit": "file:../xterm.js-master/addons/addon-fit/xterm-addon-fit-0.11.0-custom.tgz",
     "@xterm/xterm": "file:../xterm.js-master/xterm-xterm-6.0.0-custom.tgz",

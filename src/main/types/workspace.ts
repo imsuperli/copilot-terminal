@@ -13,6 +13,21 @@ export interface IDEConfig {
 }
 
 /**
+ * Claude Code StatusLine 配置
+ */
+export interface StatusLineConfig {
+  enabled: boolean;                    // 是否启用插件
+  displayLocation: 'cli' | 'card' | 'both';  // 展示位置
+  cliFormat: 'full' | 'compact';       // CLI 状态栏格式
+  cardFormat: 'full' | 'compact' | 'badge';  // WindowCard 格式
+  showModel: boolean;                  // 显示模型名称
+  showContext: boolean;                // 显示上下文百分比
+  showCost: boolean;                   // 显示成本
+  showTime: boolean;                   // 显示会话时长
+  showTokens: boolean;                 // 显示 Token 统计
+}
+
+/**
  * 工作区设置
  */
 export interface Settings {
@@ -21,6 +36,7 @@ export interface Settings {
   autoSave: boolean;
   autoSaveInterval: number;  // 自动保存间隔（分钟）
   ides: IDEConfig[];         // IDE 配置列表
+  statusLine?: StatusLineConfig;  // Claude Code StatusLine 配置
 }
 
 /**

@@ -244,6 +244,7 @@ app.whenReady().then(async () => {
         // 通知渲染进程工作区已加载（显示为暂停状态，不启动进程）
         mainWindow?.webContents.send('workspace-loaded', workspace);
         console.log('[Main] Workspace loaded, windows in paused state (not auto-started)');
+        // 注意：不再为所有窗口启动 git 监听，只在窗口激活时才监听
       });
     }
   } catch (error) {

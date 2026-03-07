@@ -61,6 +61,23 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         setActivePane(terminalWindow.id, panes[0].id);
       }
     }
+
+    // 窗口激活时，启动 git 分支监听
+    const firstPane = panes[0];
+    if (firstPane && firstPane.cwd && window.electronAPI?.startGitWatch) {
+      window.electronAPI.startGitWatch(terminalWindow.id, firstPane.cwd).catch((error: any) => {
+        // 忽略错误
+      });
+    }
+
+    // 窗口失活时，停止 git 分支监听
+    return () => {
+      if (window.electronAPI?.stopGitWatch) {
+        window.electronAPI.stopGitWatch(terminalWindow.id).catch((error: any) => {
+          // 忽略错误
+        });
+      }
+    };
   }, [isActive, terminalWindow.activePaneId, terminalWindow.id, panes, setActivePane]);
 
   // 快捷键处理

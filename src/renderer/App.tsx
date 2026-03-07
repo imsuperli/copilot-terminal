@@ -19,6 +19,7 @@ function App() {
   const windows = useWindowStore((state) => state.windows);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
+  const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active');
@@ -109,6 +110,22 @@ function App() {
       window.electronAPI?.offProjectConfigUpdated?.(handleProjectConfigUpdate);
     };
   }, [updateWindow]);
+
+  // 订阅主进程推送的 Claude 模型更新事件
+  useEffect(() => {
+    if (!window.electronAPI?.onClaudeModelUpdated) return;
+
+    const handleClaudeModelUpdate = (_event: unknown, payload: { windowId: string; model?: string; modelId?: string; contextPercentage?: number; cost?: number }) => {
+      console.log('[App] Claude model updated for window:', payload.windowId, payload);
+      updateClaudeModel(payload.windowId, payload.model, payload.modelId, payload.contextPercentage, payload.cost);
+    };
+
+    window.electronAPI.onClaudeModelUpdated(handleClaudeModelUpdate);
+
+    return () => {
+      window.electronAPI?.offClaudeModelUpdated?.(handleClaudeModelUpdate);
+    };
+  }, []);
 
   const handleCreateWindow = useCallback(() => {
     setIsDialogOpen(true);

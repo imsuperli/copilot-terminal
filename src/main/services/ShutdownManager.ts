@@ -45,7 +45,7 @@ interface ShutdownStep {
  */
 export class ShutdownManager {
   private isShuttingDown = false;
-  private readonly shutdownTimeout = 3000; // 3秒安全超时
+  private readonly shutdownTimeout = 5000; // 5秒安全超时（从3秒增加到5秒）
 
   /**
    * 执行关闭流程
@@ -64,7 +64,7 @@ export class ShutdownManager {
       context.mainWindow.webContents.send('cleanup-started');
     }
 
-    // 设置安全超时 - 如果 3 秒内未完成，强制退出
+    // 设置安全超时 - 如果 5 秒内未完成，强制退出
     const safetyTimer = setTimeout(() => {
       console.error('[ShutdownManager] Safety timeout reached, forcing exit');
       process.exit(1);
@@ -114,7 +114,7 @@ export class ShutdownManager {
       {
         name: 'Destroy processes',
         fn: () => this.destroyProcesses(context),
-        timeout: 2000,
+        timeout: 3000, // 增加到 3 秒（原来是 2 秒）
       },
     ];
 
