@@ -29,39 +29,33 @@ export function useWindowSwitcher(onSwitchView: (windowId: string) => void) {
           updatePane(win.id, pane.id, { status: WindowStatus.Restoring });
         }
 
-        // 使用 requestAnimationFrame 确保 UI 已经更新
+        // 使用 requestAnimationFrame 确保 UI 已经更新（避免固定 200ms 阻塞）
         await new Promise(resolve => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              setTimeout(resolve, 200);
-            });
-          });
+          requestAnimationFrame(() => resolve(undefined));
         });
 
-        // 启动所有窗格
-        for (const pane of panes) {
-          const response = await window.electronAPI.startWindow({
-            windowId: win.id,
-            paneId: pane.id,
-            name: win.name,
-            workingDirectory: pane.cwd,
-            command: pane.command,
-          });
-
-          // 修复：正确访问响应数据
-          if (response && response.success && response.data) {
-            updatePane(win.id, pane.id, {
-              pid: response.data.pid,
-              status: response.data.status,
+        // 并发启动所有窗格，减少多窗格场景下的切换卡顿
+        await Promise.all(
+          panes.map(async (pane) => {
+            const response = await window.electronAPI.startWindow({
+              windowId: win.id,
+              paneId: pane.id,
+              name: win.name,
+              workingDirectory: pane.cwd,
+              command: pane.command,
             });
-          } else {
-            console.error(`Failed to start pane ${pane.id}:`, response);
-            updatePane(win.id, pane.id, { status: WindowStatus.Paused });
-          }
-        }
 
-        // 等待一小段时间让终端初始化
-        await new Promise(resolve => setTimeout(resolve, 200));
+            if (response && response.success && response.data) {
+              updatePane(win.id, pane.id, {
+                pid: response.data.pid,
+                status: response.data.status,
+              });
+            } else {
+              console.error(`Failed to start pane ${pane.id}:`, response);
+              updatePane(win.id, pane.id, { status: WindowStatus.Paused });
+            }
+          })
+        );
       } catch (error) {
         console.error('Failed to start window:', error);
         // 恢复所有窗格状态为 Paused

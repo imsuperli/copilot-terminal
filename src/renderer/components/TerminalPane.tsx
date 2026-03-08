@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { Pane, WindowStatus } from '../types/window';
 import { StatusDot } from './StatusDot';
 import { useI18n } from '../i18n';
+import { subscribeToPanePtyData } from '../api/ptyDataBus';
 import '../styles/xterm.css';
 
 /**
@@ -83,7 +84,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const isActiveRef = useRef(isActive); // 使用 ref 跟踪 isActive 状态
   const suppressNativePasteUntilRef = useRef(0); // 短时间屏蔽原生 paste，避免与手动 Ctrl+V 粘贴重复
   const lastCtrlEnterTimeRef = useRef(0); // 记录上次 Ctrl+Enter 的时间戳
-  const ptyDataHandlerRef = useRef<((event: unknown, payload: { windowId: string; paneId?: string; data: string }) => void) | null>(null); // 存储 PTY 数据处理器的引用
   const lastStatusRef = useRef<WindowStatus>(pane.status); // 跟踪上一次的状态
   const [isHovered, setIsHovered] = useState(false);
   const borderColor = getStatusBorderColor(pane.status);
@@ -432,25 +432,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       void writeClipboardText(selection);
     });
 
-    // 监听 PTY 数据输出
-    const handlePtyData = (_event: unknown, payload: { windowId: string; paneId?: string; data: string }) => {
-      if (payload.windowId === windowId && payload.paneId === pane.id) {
-        queueOutput(payload.data);
-      }
-    };
-
-    if (window.electronAPI) {
-      // 先移除可能存在的旧监听器（使用 ref 中保存的旧引用）
-      const oldHandler = ptyDataHandlerRef.current;
-      if (oldHandler) {
-        window.electronAPI.offPtyData(oldHandler);
-      }
-
-      window.electronAPI.onPtyData(handlePtyData);
-
-      // 保存新的处理器引用，用于清理
-      ptyDataHandlerRef.current = handlePtyData;
-    }
+    const unsubscribePtyData = subscribeToPanePtyData(windowId, pane.id, queueOutput);
 
     // 窗口大小变化时重新调整终端大小
     const handleResize = () => scheduleResize();
@@ -473,10 +455,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     return () => {
       disposable.dispose();
       selectionDisposable.dispose();
-      if (window.electronAPI && ptyDataHandlerRef.current) {
-        window.electronAPI.offPtyData(ptyDataHandlerRef.current);
-        ptyDataHandlerRef.current = null;
-      }
+      unsubscribePtyData();
       window.removeEventListener('resize', handleResize);
       resizeObserver.disconnect();
       window.clearTimeout(initResizeTimer);

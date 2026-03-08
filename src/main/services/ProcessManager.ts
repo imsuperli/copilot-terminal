@@ -35,6 +35,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private paneIndex: Map<string, number>; // "windowId:paneId" → pid 索引，用于 O(1) 查找
   private nextPid: number;
   private statusDetector: IStatusDetector;
+  private cachedDefaultShell: string | null;
+  private cachedSpawnEnv: NodeJS.ProcessEnv | null;
+  private cachedSpawnEnvAt: number;
+  private readonly SPAWN_ENV_CACHE_TTL_MS = 30000;
 
   constructor() {
     super();
@@ -45,6 +49,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.paneIndex = new Map();
     this.nextPid = 1000;  // Start from 1000 for mock PIDs
     this.statusDetector = new StatusDetectorImpl();
+    this.cachedDefaultShell = null;
+    this.cachedSpawnEnv = null;
+    this.cachedSpawnEnvAt = 0;
     // 注意：不再启动 StatusDetector 的内部轮询，由 StatusPoller 统一管理轮询
   }
 
@@ -52,6 +59,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    * 创建新的终端进程
    */
   async spawnTerminal(config: TerminalConfig): Promise<ProcessHandle> {
+    const spawnStartAt = Date.now();
+
     // Validate working directory
     if (!existsSync(config.workingDirectory)) {
       throw new Error(`Working directory does not exist: ${config.workingDirectory}`);
@@ -136,6 +145,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // Emit process-created event
     this.emit('process-created', processInfo);
+
+    const spawnDuration = Date.now() - spawnStartAt;
+    if (spawnDuration > 400 && process.env.NODE_ENV === 'development') {
+      console.warn(
+        `[ProcessManager] Slow spawn detected (${spawnDuration}ms) for windowId=${config.windowId ?? 'unknown'}, paneId=${config.paneId ?? 'unknown'}`
+      );
+    }
 
     return {
       pid,
@@ -552,27 +568,54 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    * 获取平台默认 shell
    */
   private getDefaultShell(): string {
+    if (this.cachedDefaultShell) {
+      return this.cachedDefaultShell;
+    }
+
+    let shell: string;
     const currentPlatform = platform();
 
     if (currentPlatform === 'win32') {
       // Windows: 使用 where 命令查找 pwsh.exe (PowerShell 7+)
       try {
         execSync('where pwsh.exe', { stdio: 'ignore' });
-        return 'pwsh.exe';
+        shell = 'pwsh.exe';
       } catch {
         // 回退到 cmd.exe，不使用旧版 powershell.exe
-        return 'cmd.exe';
+        shell = 'cmd.exe';
       }
     } else if (currentPlatform === 'darwin') {
       // macOS: 优先 zsh, 降级到 bash
       if (existsSync('/bin/zsh')) {
-        return '/bin/zsh';
+        shell = '/bin/zsh';
+      } else {
+        shell = '/bin/bash';
       }
-      return '/bin/bash';
     } else {
       // Linux: bash
-      return '/bin/bash';
+      shell = '/bin/bash';
     }
+
+    this.cachedDefaultShell = shell;
+    return shell;
+  }
+
+  /**
+   * 获取用于创建 PTY 的环境变量（带短期缓存）
+   * 说明：Windows 下读取注册表是同步命令，缓存可显著降低卡顿概率。
+   */
+  private getSpawnEnvironment(): NodeJS.ProcessEnv {
+    const now = Date.now();
+    if (
+      this.cachedSpawnEnv &&
+      now - this.cachedSpawnEnvAt < this.SPAWN_ENV_CACHE_TTL_MS
+    ) {
+      return this.cachedSpawnEnv;
+    }
+
+    this.cachedSpawnEnv = getLatestEnvironmentVariables();
+    this.cachedSpawnEnvAt = now;
+    return this.cachedSpawnEnv;
   }
 
   /**
@@ -626,7 +669,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const command = config.command || shell;
 
     // 获取最新的系统环境变量（Windows 从注册表读取，macOS/Linux 使用 process.env）
-    const latestEnv = getLatestEnvironmentVariables();
+    const latestEnv = this.getSpawnEnvironment();
 
     // 清理环境变量，移除可能导致冲突的变量
     const cleanEnv = { ...latestEnv };
