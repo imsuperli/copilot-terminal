@@ -27,6 +27,14 @@
   max-width: 100% !important;
 }
 
+/*
+ * Force deterministic dim color across Windows/Electron versions.
+ * xterm's default dim uses alpha blending, which can render too bright on some Win10 setups.
+ */
+.xterm .xterm-rows .xterm-dim {
+  color: #8f96a3 !important;
+}
+
 /* 自定义 xterm.js 的滚动条样式 - 细线风格，悬浮时变宽 */
 .xterm .xterm-scrollable-element > .scrollbar {
   width: 3px !important; /* 默认宽度 - 超细线 */
