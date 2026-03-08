@@ -680,13 +680,20 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     cleanEnv.AUSOME_TERMINAL_WINDOW_ID = config.windowId;
 
     // 创建真实的 PTY 进程
-    const ptyProcess = pty.spawn(shell, [], {
+    const ptySpawnOptions: Record<string, unknown> = {
       name: 'xterm-256color',
       cols: 80,
       rows: 30,
       cwd: config.workingDirectory,
       env: cleanEnv,
-    });
+    };
+
+    if (platform() === 'win32') {
+      ptySpawnOptions.useConpty = true;
+      ptySpawnOptions.useConptyDll = true;
+    }
+
+    const ptyProcess = pty.spawn(shell, [], ptySpawnOptions);
 
     return ptyProcess;
   }

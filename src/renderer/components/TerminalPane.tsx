@@ -268,59 +268,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
-    let dimColorRemapActive = false;
-
-    // 部分 Windows/Electron 组合下 CSI 2m(faint) 可视效果不稳定，重写为显式灰色确保一致性
-    const normalizeDimAnsi = (text: string): string => {
-      return text.replace(/\x1b\[([0-9;]*)m/g, (seq, rawParams: string) => {
-        let params = rawParams.length > 0
-          ? rawParams.split(';').filter((p) => p.length > 0)
-          : ['0'];
-
-        if (params.length === 0) {
-          params = ['0'];
-        }
-
-        const hasReset = params.includes('0');
-        const hasForeground = params.some((p) =>
-          p === '39' || p === '38' || /^3[0-7]$/.test(p) || /^9[0-7]$/.test(p)
-        );
-        const hasDim = params.includes('2');
-        const hasNotFaint = params.includes('22');
-
-        if (hasReset) {
-          dimColorRemapActive = false;
-        }
-
-        let changed = false;
-
-        // 仅在未指定前景色时，将 faint 映射为 bright black(90)
-        if (hasDim && !hasForeground) {
-          params = params.filter((p) => p !== '2');
-          params.push('90');
-          dimColorRemapActive = true;
-          changed = true;
-        }
-
-        // 若前面做过 dim->90 映射，则把 22 映射为 39，避免灰色泄漏
-        if (hasNotFaint && dimColorRemapActive && !hasForeground) {
-          params = params.filter((p) => p !== '22');
-          params.push('39');
-          dimColorRemapActive = false;
-          changed = true;
-        }
-
-        if (!changed) {
-          if (hasForeground || hasReset) {
-            dimColorRemapActive = false;
-          }
-          return seq;
-        }
-
-        return `\x1b[${params.join(';')}m`;
-      });
-    };
-
     // 批量刷新 PTY 输出：每帧最多写一次，降低高频输出时的重绘抖动
     const flushOutput = () => {
       outputFlushFrameRef.current = null;
@@ -331,7 +278,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       }
 
       outputBufferRef.current = '';
-      terminalRef.current.write(normalizeDimAnsi(pending));
+      terminalRef.current.write(pending);
     };
 
     const queueOutput = (data: string) => {
