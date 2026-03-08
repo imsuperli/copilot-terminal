@@ -14,3 +14,4 @@ _bmad-output/
 .sisyphus/
 Auto-Claude-2.7.6/
 xterm.js-6.0.0/
+.npm-cache/
