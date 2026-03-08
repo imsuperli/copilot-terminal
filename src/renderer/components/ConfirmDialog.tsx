@@ -1,6 +1,7 @@
 import React from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { AlertTriangle } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -18,11 +19,13 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmText = '确定',
-  cancelText = '取消',
+  confirmText,
+  cancelText,
   onConfirm,
   variant = 'danger',
 }: ConfirmDialogProps) {
+  const { t } = useI18n();
+
   const handleConfirm = () => {
     onConfirm();
     onOpenChange(false);
@@ -71,13 +74,13 @@ export function ConfirmDialog({
                   onClick={() => onOpenChange(false)}
                   className="px-4 py-2 rounded-md text-sm font-medium bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
                 >
-                  {cancelText}
+                  {cancelText ?? t('common.cancel')}
                 </button>
                 <button
                   onClick={handleConfirm}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${styles.button}`}
                 >
-                  {confirmText}
+                  {confirmText ?? t('common.create')}
                 </button>
               </div>
             </div>

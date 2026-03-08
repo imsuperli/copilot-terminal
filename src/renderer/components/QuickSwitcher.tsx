@@ -5,6 +5,7 @@ import { QuickSwitcherItem } from './QuickSwitcherItem';
 import { fuzzyMatch } from '../utils/fuzzySearch';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
+import { useI18n } from '../i18n';
 
 interface QuickSwitcherProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
   onSelect,
   currentWindowId,
 }) => {
+  const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -200,12 +202,12 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
                   setQuery(e.target.value);
                   setSelectedIndex(0);
                 }}
-                placeholder="搜索窗口（名称、路径）..."
+                placeholder={t('quickSwitcher.searchPlaceholder')}
                 className="flex-1 bg-transparent text-zinc-100 placeholder-zinc-500 outline-none text-base"
               />
               {query && (
                 <span className="text-xs text-zinc-500">
-                  {filteredWindows.length} 个结果
+                  {t('quickSwitcher.resultsCount', { count: filteredWindows.length })}
                 </span>
               )}
             </div>
@@ -222,9 +224,9 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
           >
             {filteredWindows.length === 0 ? (
               <div className="px-6 py-12 text-center">
-                <div className="text-zinc-400 text-sm mb-2">没有找到匹配的窗口</div>
+                <div className="text-zinc-400 text-sm mb-2">{t('quickSwitcher.noResults')}</div>
                 <div className="text-zinc-600 text-xs">
-                  {query ? '尝试使用不同的关键词搜索' : '创建一个新窗口开始使用'}
+                  {query ? t('quickSwitcher.noResultsHint') : t('quickSwitcher.emptyHint')}
                 </div>
               </div>
             ) : (
@@ -251,19 +253,19 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1">
                 <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">↑↓</kbd>
-                <span>选择</span>
+                <span>{t('quickSwitcher.select')}</span>
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">Enter</kbd>
-                <span>切换</span>
+                <span>{t('quickSwitcher.switch')}</span>
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">Esc</kbd>
-                <span>取消</span>
+                <span>{t('quickSwitcher.cancel')}</span>
               </span>
             </div>
             <div className="text-zinc-600">
-              Ctrl+Tab 快速切换
+              {t('quickSwitcher.shortcutHint')}
             </div>
           </div>
         </div>

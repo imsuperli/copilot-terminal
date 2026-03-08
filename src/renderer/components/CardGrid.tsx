@@ -7,6 +7,7 @@ import { getAllPanes } from '../utils/layoutHelpers';
 import { WindowCard } from './WindowCard';
 import { NewWindowCard } from './NewWindowCard';
 import { Window, WindowStatus } from '../types/window';
+import { useI18n } from '../i18n';
 
 interface CardGridProps {
   onEnterTerminal?: (window: Window) => void;
@@ -19,6 +20,7 @@ interface CardGridProps {
  * 以响应式 CSS Grid 网格布局显示所有窗口卡片
  */
 export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWindow, searchQuery = '' }) => {
+  const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const setActiveWindow = useWindowStore((state) => state.setActiveWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
@@ -203,8 +205,8 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWi
         {searchQuery && filteredWindows.length === 0 && (
           <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
             <Search size={48} className="mb-4 opacity-50" />
-            <p className="text-lg">未找到匹配的窗口</p>
-            <p className="text-sm mt-2">尝试使用其他关键词搜索</p>
+            <p className="text-lg">{t('common.noMatchingWindows')}</p>
+            <p className="text-sm mt-2">{t('common.tryDifferentSearch')}</p>
           </div>
         )}
       </ScrollArea.Viewport>

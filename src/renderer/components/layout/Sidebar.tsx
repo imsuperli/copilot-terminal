@@ -6,7 +6,9 @@ import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { SettingsPanel } from '../SettingsPanel';
 import { QuickNavPanel } from '../QuickNavPanel';
+import { AboutPanel } from '../AboutPanel';
 import { useWindowStore } from '../../stores/windowStore';
+import { useI18n } from '../../i18n';
 
 interface SidebarProps {
   appName?: string;
@@ -31,6 +33,7 @@ export function Sidebar({
   searchQuery = '',
   onSearchChange,
 }: SidebarProps) {
+  const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const addWindow = useWindowStore((state) => state.addWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
@@ -40,6 +43,7 @@ export function Sidebar({
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [isQuickNavPanelOpen, setIsQuickNavPanelOpen] = useState(false);
+  const [isAboutPanelOpen, setIsAboutPanelOpen] = useState(false);
 
   const handleBatchCreate = async (selectedPaths: string[]) => {
     for (const path of selectedPaths) {
@@ -98,14 +102,14 @@ export function Sidebar({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchChange?.(e.target.value)}
-                placeholder="搜索窗口..."
+                placeholder={t('common.searchWindows')}
                 className="w-full pl-8 pr-7 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
               />
               {searchQuery && (
                 <button
                   onClick={() => onSearchChange?.('')}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
-                  title="清除搜索"
+                  title={t('common.clearSearch')}
                 >
                   <X size={12} />
                 </button>
@@ -117,7 +121,7 @@ export function Sidebar({
         {/* 状态统计 */}
         <div className="px-4 py-4 border-b border-[rgb(var(--border))]">
           <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider mb-3">
-            状态统计
+            {t('sidebar.section.statusSummary')}
           </h3>
           <StatusBar />
         </div>
@@ -125,7 +129,7 @@ export function Sidebar({
         {/* 窗格管理 */}
         <div className="flex-1 px-4 py-4 overflow-y-auto border-b border-[rgb(var(--border))]">
           <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider mb-3">
-            窗格管理
+            {t('sidebar.section.windowManagement')}
           </h3>
           {/* Tab buttons */}
           <div className="flex flex-col gap-2">
@@ -138,7 +142,7 @@ export function Sidebar({
               }`}
             >
               <Terminal className="h-4 w-4" />
-              <span>工作区终端</span>
+              <span>{t('sidebar.tab.active')}</span>
               {activeWindows.length > 0 && (
                 <span className="ml-auto text-xs">{activeWindows.length}</span>
               )}
@@ -152,7 +156,7 @@ export function Sidebar({
               }`}
             >
               <Archive className="h-4 w-4" />
-              <span>归档终端</span>
+              <span>{t('sidebar.tab.archived')}</span>
               {archivedWindows.length > 0 && (
                 <span className="ml-auto text-xs">{archivedWindows.length}</span>
               )}
@@ -169,18 +173,20 @@ export function Sidebar({
               onClick={() => setIsSettingsPanelOpen(true)}
             >
               <Settings className="h-4 w-4" />
-              <span>设置</span>
+              <span>{t('settings.title')}</span>
             </button>
             <button
               className="flex items-center justify-center w-9 h-9 rounded-lg text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
               onClick={() => setIsQuickNavPanelOpen(true)}
-              title="快捷导航"
+              title={t('quickNav.title')}
             >
               <Compass className="h-4 w-4" />
             </button>
             <button
               className="flex items-center justify-center w-9 h-9 rounded-lg text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
-              onClick={() => {}}
+              onClick={() => setIsAboutPanelOpen(true)}
+              title={t('about.title')}
+              aria-label={t('about.title')}
             >
               <HelpCircle className="h-4 w-4" />
             </button>
@@ -192,17 +198,17 @@ export function Sidebar({
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
           >
             <Plus className="h-4 w-4" />
-            <span>新建终端</span>
+            <span>{t('common.newTerminal')}</span>
           </button>
 
           {/* Batch button - always show */}
           <button
             onClick={() => setIsBatchDialogOpen(true)}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
-            title="批量添加"
+            title={t('sidebar.batchAdd')}
           >
             <FolderPlus className="h-4 w-4" />
-            <span>批量添加</span>
+            <span>{t('sidebar.batchAdd')}</span>
           </button>
 
           {/* Clear button - show for both active and archived tabs */}
@@ -210,20 +216,20 @@ export function Sidebar({
             <button
               onClick={() => setIsConfirmDialogOpen(true)}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
-              title="清空所有终端"
+              title={t('sidebar.confirmClearActiveTitle')}
             >
               <Trash2 className="h-4 w-4" />
-              <span>清空终端</span>
+              <span>{t('sidebar.clearActive')}</span>
             </button>
           )}
           {currentTab === 'archived' && archivedWindows.length > 0 && (
             <button
               onClick={() => setIsConfirmDialogOpen(true)}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
-              title="清空所有归档终端"
+              title={t('sidebar.confirmClearArchivedTitle')}
             >
               <Trash2 className="h-4 w-4" />
-              <span>清空归档</span>
+              <span>{t('sidebar.clearArchived')}</span>
             </button>
           )}
         </div>
@@ -243,14 +249,14 @@ export function Sidebar({
       <ConfirmDialog
         open={isConfirmDialogOpen}
         onOpenChange={setIsConfirmDialogOpen}
-        title={currentTab === 'active' ? '清空所有终端' : '清空所有归档终端'}
+        title={currentTab === 'active' ? t('sidebar.confirmClearActiveTitle') : t('sidebar.confirmClearArchivedTitle')}
         description={
           currentTab === 'active'
-            ? `确定要删除所有 ${activeWindows.length} 个窗口吗？此操作不可恢复。`
-            : `确定要删除所有 ${archivedWindows.length} 个归档窗口吗？此操作不可恢复。`
+            ? t('sidebar.confirmClearActiveDescription', { count: activeWindows.length })
+            : t('sidebar.confirmClearArchivedDescription', { count: archivedWindows.length })
         }
-        confirmText="删除"
-        cancelText="取消"
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         onConfirm={currentTab === 'active' ? handleClearAllWindows : handleClearArchivedWindows}
         variant="danger"
       />
@@ -263,6 +269,13 @@ export function Sidebar({
       <QuickNavPanel
         open={isQuickNavPanelOpen}
         onClose={() => setIsQuickNavPanelOpen(false)}
+      />
+
+      <AboutPanel
+        open={isAboutPanelOpen}
+        onClose={() => setIsAboutPanelOpen(false)}
+        appName={appName}
+        version={version}
       />
     </>
   );

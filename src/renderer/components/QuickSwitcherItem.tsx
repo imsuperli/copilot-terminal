@@ -1,13 +1,12 @@
 import React, { useMemo } from 'react';
 import { Activity, Keyboard, Pause, Archive, Folder, ExternalLink } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
 import { Window, WindowStatus } from '../types/window';
 import { highlightMatches } from '../utils/fuzzySearch';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
 import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
+import { formatRelativeTime, useI18n, TranslationParams, TranslationKey } from '../i18n';
 
 interface QuickSwitcherItemProps {
   window: Window;
@@ -50,18 +49,18 @@ function getStatusIconColor(status: WindowStatus): string {
 /**
  * 获取状态标签
  */
-function getStatusLabel(status: WindowStatus): string {
+function getStatusLabel(status: WindowStatus, t: (key: TranslationKey, params?: TranslationParams) => string): string {
   switch (status) {
     case WindowStatus.Running:
-      return '运行中';
+      return t('status.running');
     case WindowStatus.WaitingForInput:
-      return '等待输入';
+      return t('status.waitingInput');
     case WindowStatus.Paused:
-      return '暂停';
+      return t('status.paused');
     case WindowStatus.Restoring:
-      return '启动中';
+      return t('status.restoring');
     default:
-      return '未知';
+      return t('common.unknown');
   }
 }
 
@@ -112,16 +111,21 @@ function getFolderName(cwd: string | undefined): string {
 /**
  * 获取上下文信息
  */
-function getContextInfo(status: WindowStatus, archived: boolean, lastOutput?: string): string {
-  if (archived) return '已归档';
-  if (status === WindowStatus.Paused) return '未启动';
+function getContextInfo(
+  status: WindowStatus,
+  archived: boolean,
+  lastOutput: string | undefined,
+  t: (key: TranslationKey, params?: TranslationParams) => string,
+): string {
+  if (archived) return t('status.archived');
+  if (status === WindowStatus.Paused) return t('status.notStarted');
   if (lastOutput) {
     // 截断到 50 字符
     return lastOutput.length > 50
       ? lastOutput.substring(0, 50) + '...'
       : lastOutput;
   }
-  return '无输出';
+  return t('status.noOutput');
 }
 
 /**
@@ -133,6 +137,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   query,
 }) => {
   const { enabledIDEs } = useIDESettings();
+  const { language, t } = useI18n();
 
   // 获取窗口的聚合状态和所有窗格
   const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
@@ -145,42 +150,37 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
 
   const StatusIcon = getStatusIcon(aggregatedStatus);
   const iconColor = getStatusIconColor(aggregatedStatus);
-  const statusLabel = terminalWindow.archived ? '归档' : getStatusLabel(aggregatedStatus);
+  const statusLabel = terminalWindow.archived ? t('status.archived') : getStatusLabel(aggregatedStatus, t);
   const statusLabelColor = terminalWindow.archived ? 'text-orange-500 bg-orange-500/10' : getStatusLabelColor(aggregatedStatus);
   const borderColor = getSelectedBorderColor(aggregatedStatus, terminalWindow.archived || false);
-  const contextInfo = getContextInfo(aggregatedStatus, terminalWindow.archived || false, lastOutput);
+  const contextInfo = getContextInfo(aggregatedStatus, terminalWindow.archived || false, lastOutput, t);
   const iconAnimation = aggregatedStatus === WindowStatus.Running ? 'animate-pulse' : '';
   const folderName = getFolderName(workingDirectory);
 
   // 格式化相对时间（移除"大约"）
   const relativeTime = useMemo(() => {
     try {
-      const time = formatDistanceToNow(new Date(terminalWindow.lastActiveAt), {
-        addSuffix: true,
-        locale: zhCN
-      });
-      // 移除"大约"两个字
-      return time.replace('大约', '');
+      return formatRelativeTime(terminalWindow.lastActiveAt, language);
     } catch {
       return '';
     }
-  }, [terminalWindow.lastActiveAt]);
+  }, [language, terminalWindow.lastActiveAt]);
 
   // 格式化创建时间
   const createdTime = useMemo(() => {
     try {
       const date = new Date(terminalWindow.createdAt);
-      return date.toLocaleString('zh-CN', {
+      return new Intl.DateTimeFormat(language, {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit'
-      });
+      }).format(date);
     } catch {
       return '';
     }
-  }, [terminalWindow.createdAt]);
+  }, [language, terminalWindow.createdAt]);
 
   // 高亮匹配
   const nameHighlights = highlightMatches(terminalWindow.name, query);
@@ -258,7 +258,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
               <button
                 onClick={handleOpenFolder}
                 className="flex-shrink-0 p-1 rounded hover:bg-zinc-600/50 transition-colors group"
-                title={`打开文件夹: ${workingDirectory}`}
+                title={t('quickSwitcher.openFolderTitle', { path: workingDirectory })}
               >
                 <Folder size={16} className="text-zinc-400 group-hover:text-zinc-200" />
               </button>
@@ -282,26 +282,26 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
         <div className="flex-shrink-0 space-y-1 text-xs">
           {/* 创建时间 */}
           <div className="flex items-center gap-2">
-            <span className="text-zinc-500">创建时间：</span>
+            <span className="text-zinc-500">{t('quickSwitcher.createdAt')}</span>
             <span className="text-zinc-300">{createdTime}</span>
           </div>
 
           {/* 上次运行 */}
           <div className="flex items-center gap-2">
-            <span className="text-zinc-500">上次运行：</span>
+            <span className="text-zinc-500">{t('quickSwitcher.lastRun')}</span>
             <span className="text-zinc-300">{relativeTime}</span>
           </div>
 
           {/* 窗格状态 */}
           <div className="flex items-center gap-2">
-            <span className="text-zinc-500">窗格状态：</span>
+            <span className="text-zinc-500">{t('quickSwitcher.paneStatus')}</span>
             <div className="flex items-center gap-1.5">
               {panes.map((pane, index) => (
                 <StatusDot
                   key={pane.id}
                   status={pane.status}
                   size="sm"
-                  title={`窗格 ${index + 1}: ${getStatusLabel(pane.status)}`}
+                  title={t('quickSwitcher.pane', { index: index + 1, status: getStatusLabel(pane.status, t) })}
                 />
               ))}
             </div>
@@ -338,7 +338,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
                     key={ide.id}
                     onClick={(e) => handleOpenInIDE(e, ide.id)}
                     className="flex items-center justify-center w-4 h-4 hover:opacity-70 transition-opacity cursor-pointer"
-                    title={`在 ${ide.name} 中打开`}
+                    title={t('common.openInIDE', { name: ide.name })}
                   >
                     <IDEIcon icon={ide.icon || ''} size={12} />
                   </button>

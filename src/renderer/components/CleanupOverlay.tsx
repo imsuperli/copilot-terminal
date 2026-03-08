@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useI18n } from '../i18n';
 
 interface CleanupProgress {
   current: number;
@@ -9,6 +10,7 @@ export const CleanupOverlay: React.FC = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [progress, setProgress] = useState<CleanupProgress>({ current: 0, total: 0 });
   const [smoothProgress, setSmoothProgress] = useState(0); // 平滑进度条
+  const { t } = useI18n();
 
   useEffect(() => {
     const handleCleanupStarted = () => {
@@ -72,14 +74,14 @@ export const CleanupOverlay: React.FC = () => {
         </div>
 
         <h2 className="text-xl font-semibold text-center mb-4 text-zinc-100">
-          正在清理子进程
+          {t('cleanup.title')}
         </h2>
 
         {progress.total > 0 && (
           <>
             <div className="mb-4">
               <div className="flex justify-between text-sm text-zinc-400 mb-2">
-                <span>进度</span>
+                <span>{t('cleanup.progress')}</span>
                 <span>{progress.current} / {progress.total}</span>
               </div>
               <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
@@ -91,14 +93,14 @@ export const CleanupOverlay: React.FC = () => {
             </div>
 
             <p className="text-center text-sm text-zinc-400">
-              {percentage}% 完成
+              {t('cleanup.completed', { percentage })}
             </p>
           </>
         )}
 
         {progress.total === 0 && (
           <p className="text-center text-sm text-zinc-400">
-            正在准备清理...
+            {t('cleanup.preparing')}
           </p>
         )}
       </div>

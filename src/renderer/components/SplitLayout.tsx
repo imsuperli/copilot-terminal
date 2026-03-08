@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { LayoutNode, SplitNode } from '../types/window';
 import { TerminalPane } from './TerminalPane';
 import { getPaneCount } from '../utils/layoutHelpers';
+import { useI18n } from '../i18n';
 
 export interface SplitLayoutProps {
   windowId: string;
@@ -24,10 +25,12 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   onPaneActivate,
   onPaneClose,
 }) => {
+  const { t } = useI18n();
+
   // 防御性检查：如果 layout 为 undefined 或 null，返回空
   if (!layout) {
     console.error('[SplitLayout] Layout is undefined or null');
-    return <div className="flex items-center justify-center h-full text-zinc-500">布局数据无效</div>;
+    return <div className="flex items-center justify-center h-full text-zinc-500">{t('splitLayout.invalid')}</div>;
   }
 
   const totalPaneCount = getPaneCount(layout);

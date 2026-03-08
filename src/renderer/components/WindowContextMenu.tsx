@@ -1,5 +1,6 @@
 import React from 'react'
 import * as ContextMenu from '@radix-ui/react-context-menu'
+import { useI18n } from '../i18n'
 
 interface WindowContextMenuProps {
   children: React.ReactNode
@@ -8,6 +9,8 @@ interface WindowContextMenuProps {
 }
 
 export function WindowContextMenu({ children, onClose, onDelete }: WindowContextMenuProps) {
+  const { t } = useI18n()
+
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger asChild>
@@ -21,13 +24,13 @@ export function WindowContextMenu({ children, onClose, onDelete }: WindowContext
             className="flex items-center px-3 py-2 text-sm text-text-primary rounded cursor-pointer hover:bg-bg-card-hover focus:bg-bg-card-hover outline-none"
             onSelect={onClose}
           >
-            关闭窗口
+            {t('common.closeWindow')}
           </ContextMenu.Item>
           <ContextMenu.Item
             className="flex items-center px-3 py-2 text-sm text-status-error rounded cursor-pointer hover:bg-bg-card-hover focus:bg-bg-card-hover outline-none"
             onSelect={onDelete}
           >
-            删除窗口
+            {t('common.deleteWindow')}
           </ContextMenu.Item>
         </ContextMenu.Content>
       </ContextMenu.Portal>

@@ -4,6 +4,7 @@ import { app } from 'electron';
 import { randomUUID } from 'crypto';
 import { Workspace, Settings } from '../types/workspace';
 import { LayoutNode, PaneNode, SplitNode, WindowStatus } from '../../shared/types/window';
+import { AppLanguage, DEFAULT_LANGUAGE, normalizeLanguage } from '../../shared/i18n';
 import { scanInstalledIDEs } from '../utils/ideScanner';
 import { readProjectConfig } from '../utils/project-config';
 
@@ -124,7 +125,13 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
             await this.saveWorkspace(migratedWorkspace);
             return this.resetPaneStates(migratedWorkspace);
           }
-          return this.resetPaneStates(workspace);
+
+          const hydratedWorkspace = this.hydrateWorkspace(workspace);
+          if (JSON.stringify(hydratedWorkspace.settings) !== JSON.stringify(workspace.settings)) {
+            await this.saveWorkspace(hydratedWorkspace);
+          }
+
+          return this.resetPaneStates(hydratedWorkspace);
         }
 
         // 校验失败，尝试从备份恢复
@@ -253,13 +260,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     return {
       version: '2.0',
       windows: migratedWindows,
-      settings: oldWorkspace.settings || {
-        notificationsEnabled: true,
-        theme: 'dark' as const,
-        autoSave: true,
-        autoSaveInterval: 5,
-        ides: scanInstalledIDEs(),
-      },
+      settings: this.normalizeSettings(oldWorkspace.settings),
       lastSavedAt: oldWorkspace.lastSavedAt || new Date().toISOString(),
     };
   }
@@ -503,14 +504,49 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     return {
       version: '2.0',
       windows: [],
-      settings: {
-        notificationsEnabled: true,
-        theme: 'dark',
-        autoSave: true,
-        autoSaveInterval: 5,
-        ides: scanInstalledIDEs(), // 自动扫描已安装的 IDE
-      },
+      settings: this.getDefaultSettings(),
       lastSavedAt: '',
     };
+  }
+
+  private hydrateWorkspace(workspace: Workspace): Workspace {
+    return {
+      ...workspace,
+      settings: this.normalizeSettings(workspace.settings),
+    };
+  }
+
+  private normalizeSettings(settings?: Partial<Settings>): Settings {
+    const defaults = this.getDefaultSettings();
+
+    return {
+      ...defaults,
+      ...settings,
+      language: this.resolveLanguage(settings?.language),
+      ides: settings?.ides ?? defaults.ides,
+    };
+  }
+
+  private getDefaultSettings(): Settings {
+    return {
+      notificationsEnabled: true,
+      theme: 'dark',
+      autoSave: true,
+      autoSaveInterval: 5,
+      language: this.resolveLanguage(),
+      ides: scanInstalledIDEs(),
+    };
+  }
+
+  private resolveLanguage(language?: AppLanguage | string | null): AppLanguage {
+    if (typeof language === 'string') {
+      return normalizeLanguage(language);
+    }
+
+    try {
+      return normalizeLanguage(app.getLocale?.());
+    } catch {
+      return DEFAULT_LANGUAGE;
+    }
   }
 }

@@ -9,7 +9,12 @@ import { Workspace } from '../../types/workspace';
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/mock/user/data'),
+    getLocale: vi.fn(() => 'zh-CN'),
   },
+}));
+
+vi.mock('../../utils/ideScanner', () => ({
+  scanInstalledIDEs: vi.fn(() => []),
 }));
 
 describe('WorkspaceManager', () => {
@@ -26,6 +31,7 @@ describe('WorkspaceManager', () => {
 
     // Mock app.getPath to return test directory
     vi.mocked(app.getPath).mockReturnValue(testDir);
+    vi.mocked(app.getLocale).mockReturnValue('zh-CN');
 
     // Initialize WorkspaceManager
     workspaceManager = new WorkspaceManagerImpl();
@@ -184,34 +190,49 @@ describe('WorkspaceManager', () => {
       // Load workspace
       const loaded = await workspaceManager.loadWorkspace();
 
-      expect(loaded.version).toBe('1.0');
+      expect(loaded.version).toBe('2.0');
       expect(loaded.windows).toHaveLength(1);
       expect(loaded.windows[0].id).toBe('test-1');
+      expect(loaded.settings.language).toBe('zh-CN');
+
+      const persisted = await fs.readJson(workspacePath);
+      expect(persisted.version).toBe('2.0');
+      expect(persisted.settings.language).toBe('zh-CN');
     });
 
     it('should return default workspace if file does not exist', async () => {
       const loaded = await workspaceManager.loadWorkspace();
 
-      expect(loaded.version).toBe('1.0');
+      expect(loaded.version).toBe('2.0');
       expect(loaded.windows).toHaveLength(0);
       expect(loaded.settings.notificationsEnabled).toBe(true);
       expect(loaded.settings.theme).toBe('dark');
       expect(loaded.settings.autoSave).toBe(true);
       expect(loaded.settings.autoSaveInterval).toBe(5);
+      expect(loaded.settings.language).toBe('zh-CN');
+      expect(loaded.settings.ides).toEqual([]);
     });
 
     it('should restore from backup if main file is corrupted', async () => {
       // Create a valid backup
       const validWorkspace: Workspace = {
-        version: '1.0',
+        version: '2.0',
         windows: [
           {
             id: 'backup-1',
             name: 'Backup Window',
-            workingDirectory: '/backup/dir',
-            command: 'claude',
-            status: 'running' as any,
-            pid: 5678,
+            layout: {
+              type: 'pane',
+              id: 'backup-1-pane',
+              pane: {
+                id: 'backup-1-pane',
+                cwd: '/backup/dir',
+                command: 'claude',
+                status: 'running' as any,
+                pid: 5678,
+              },
+            },
+            activePaneId: 'backup-1-pane',
             createdAt: '2026-02-28T10:00:00Z',
             lastActiveAt: '2026-02-28T12:00:00Z',
           },
@@ -240,7 +261,7 @@ describe('WorkspaceManager', () => {
 
     it('should validate workspace version', async () => {
       const invalidWorkspace = {
-        version: '2.0',  // Unsupported version
+        version: '3.0',  // Unsupported version
         windows: [],
         settings: {
           notificationsEnabled: true,
@@ -255,7 +276,17 @@ describe('WorkspaceManager', () => {
 
       // Should return default workspace due to version mismatch
       const loaded = await workspaceManager.loadWorkspace();
+      expect(loaded.version).toBe('2.0');
       expect(loaded.windows).toHaveLength(0);
+    });
+
+    it('should use system locale to determine default language', async () => {
+      vi.mocked(app.getLocale).mockReturnValue('en-US');
+
+      const manager = new WorkspaceManagerImpl();
+      const loaded = await manager.loadWorkspace();
+
+      expect(loaded.settings.language).toBe('en-US');
     });
 
     it('should validate workspace structure', async () => {
@@ -383,15 +414,23 @@ describe('WorkspaceManager', () => {
     it('should restore from backup if temp file is corrupted', async () => {
       // Create a valid backup
       const validWorkspace: Workspace = {
-        version: '1.0',
+        version: '2.0',
         windows: [
           {
             id: 'backup-recovered',
             name: 'Backup Recovered',
-            workingDirectory: '/backup/dir',
-            command: 'claude',
-            status: 'running' as any,
-            pid: 7777,
+            layout: {
+              type: 'pane',
+              id: 'backup-recovered-pane',
+              pane: {
+                id: 'backup-recovered-pane',
+                cwd: '/backup/dir',
+                command: 'claude',
+                status: 'running' as any,
+                pid: 7777,
+              },
+            },
+            activePaneId: 'backup-recovered-pane',
             createdAt: '2026-02-28T10:00:00Z',
             lastActiveAt: '2026-02-28T12:00:00Z',
           },

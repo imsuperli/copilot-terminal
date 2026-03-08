@@ -1,4 +1,5 @@
 import { Window } from '../../shared/types/window';
+import { AppLanguage } from '../../shared/i18n';
 
 /**
  * IDE 配置
@@ -35,6 +36,7 @@ export interface Settings {
   theme: 'dark' | 'light';
   autoSave: boolean;
   autoSaveInterval: number;  // 自动保存间隔（分钟）
+  language?: AppLanguage;
   ides: IDEConfig[];         // IDE 配置列表
   statusLine?: StatusLineConfig;  // Claude Code StatusLine 配置
 }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, FolderOpen, Check } from 'lucide-react';
+import { useI18n } from '../i18n';
 
 interface BatchCreateWindowDialogProps {
   open: boolean;
@@ -18,6 +19,7 @@ export function BatchCreateWindowDialog({
   onOpenChange,
   onConfirm,
 }: BatchCreateWindowDialogProps) {
+  const { t } = useI18n();
   const [folders, setFolders] = useState<ScannedFolder[]>([]);
   const [parentPath, setParentPath] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -34,12 +36,12 @@ export function BatchCreateWindowDialog({
           setFolders(scannedFolders.map(f => ({ ...f, selected: true })));
           setParentPath(path);
         } else {
-          alert('未找到子文件夹');
+          alert(t('batchCreate.noSubfoldersFound'));
         }
       }
     } catch (error) {
       console.error('Failed to scan folder:', error);
-      alert('扫描文件夹失败');
+      alert(t('batchCreate.scanFailed'));
     } finally {
       setIsScanning(false);
     }
@@ -62,7 +64,7 @@ export function BatchCreateWindowDialog({
       .map(f => f.path);
 
     if (selectedPaths.length === 0) {
-      alert('请至少选择一个文件夹');
+      alert(t('batchCreate.selectAtLeastOne'));
       return;
     }
 
@@ -86,7 +88,7 @@ export function BatchCreateWindowDialog({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[rgb(var(--border))]">
           <h2 className="text-lg font-semibold text-[rgb(var(--foreground))]">
-            批量添加终端窗口
+            {t('batchCreate.title')}
           </h2>
           <button
             onClick={handleClose}
@@ -105,12 +107,12 @@ export function BatchCreateWindowDialog({
                 <FolderOpen className="h-10 w-10 text-[rgb(var(--primary))]" />
               </div>
               <h3 className="text-xl font-semibold text-[rgb(var(--foreground))] mb-3">
-                批量创建终端窗口
+                {t('batchCreate.heading')}
               </h3>
               <p className="text-sm text-[rgb(var(--muted-foreground))] text-center max-w-md mb-8 leading-relaxed">
-                选择一个父文件夹，系统将自动扫描其中的所有一级子文件夹
+                {t('batchCreate.description')}
                 <br />
-                <span className="text-xs">(不包括以 . 开头的隐藏文件夹)</span>
+                <span className="text-xs">({t('batchCreate.hiddenFolderNote')})</span>
               </p>
               <button
                 onClick={handleSelectFolder}
@@ -118,7 +120,7 @@ export function BatchCreateWindowDialog({
                 className="flex items-center gap-2 px-8 py-3 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-all disabled:opacity-50 shadow-lg shadow-[rgb(var(--primary))]/20"
               >
                 <FolderOpen className="h-5 w-5" />
-                <span>{isScanning ? '扫描中...' : '选择文件夹'}</span>
+                <span>{isScanning ? t('common.loading') : t('batchCreate.chooseFolder')}</span>
               </button>
             </div>
           ) : (
@@ -129,7 +131,7 @@ export function BatchCreateWindowDialog({
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-1">
-                      扫描路径
+                      {t('batchCreate.scanPath')}
                     </p>
                     <p className="text-sm font-mono text-[rgb(var(--foreground))] break-all">
                       {parentPath}
@@ -140,7 +142,7 @@ export function BatchCreateWindowDialog({
                     disabled={isScanning}
                     className="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-md bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:opacity-90 transition-opacity disabled:opacity-50"
                   >
-                    {isScanning ? '扫描中...' : '重新选择'}
+                    {isScanning ? t('common.loading') : t('batchCreate.reselect')}
                   </button>
                 </div>
               </div>
@@ -150,17 +152,17 @@ export function BatchCreateWindowDialog({
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-[rgb(var(--primary))]"></div>
                   <p className="text-sm font-medium text-[rgb(var(--foreground))]">
-                    找到 {folders.length} 个文件夹
+                    {t('batchCreate.foundFolders', { count: folders.length })}
                   </p>
                   <span className="text-xs text-[rgb(var(--muted-foreground))]">
-                    已选择 {selectedCount} 个
+                    {t('batchCreate.selectedFolders', { count: selectedCount })}
                   </span>
                 </div>
                 <button
                   onClick={handleToggleAll}
                   className="text-sm font-medium text-[rgb(var(--primary))] hover:underline"
                 >
-                  {folders.every(f => f.selected) ? '取消全选' : '全选'}
+                  {folders.every(f => f.selected) ? t('batchCreate.deselectAll') : t('batchCreate.selectAll')}
                 </button>
               </div>
 
@@ -201,14 +203,14 @@ export function BatchCreateWindowDialog({
             onClick={handleClose}
             className="px-4 py-2 rounded-lg text-sm font-medium text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleConfirm}
             disabled={selectedCount === 0}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            创建 {selectedCount} 个窗口
+            {t('batchCreate.createWindows', { count: selectedCount })}
           </button>
         </div>
       </div>

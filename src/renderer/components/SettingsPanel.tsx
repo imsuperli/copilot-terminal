@@ -7,6 +7,8 @@ import { X, Plus, Trash2, Search, Check, ChevronDown, Globe, Folder, Edit2, Grip
 import { IDEIcon } from './icons/IDEIcons';
 import { notifyIDESettingsUpdated } from '../hooks/useIDESettings';
 import { QuickNavItem } from '../../shared/types/quick-nav';
+import { useI18n } from '../i18n';
+import { AppLanguage } from '../../shared/i18n';
 
 interface IDEConfig {
   id: string;
@@ -23,6 +25,7 @@ interface SettingsPanelProps {
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) => {
+  const { language, setLanguage, t } = useI18n();
   const [ides, setIDEs] = useState<IDEConfig[]>([]);
   const [supportedIDENames, setSupportedIDENames] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
@@ -33,7 +36,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const [quickNavItems, setQuickNavItems] = useState<QuickNavItem[]>([]);
   const [editingNavItem, setEditingNavItem] = useState<QuickNavItem | null>(null);
   const [showNavDialog, setShowNavDialog] = useState(false);
-  const [currentTab, setCurrentTab] = useState<'ide' | 'quicknav' | 'statusline'>('ide');
+  const [currentTab, setCurrentTab] = useState<'general' | 'ide' | 'quicknav' | 'statusline'>('general');
 
   // StatusLine 配置状态
   const [statusLineConfig, setStatusLineConfig] = useState({
@@ -339,6 +342,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     }
   };
 
+  const handleLanguageChange = useCallback(async (nextLanguage: string) => {
+    await setLanguage(nextLanguage as AppLanguage);
+  }, [setLanguage]);
+
   return (
     <Dialog.Root open={open} onOpenChange={onClose}>
       <Dialog.Portal>
@@ -347,7 +354,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
           {/* 标题栏 */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur flex-shrink-0">
             <Dialog.Title className="text-xl font-semibold text-zinc-100">
-              设置
+              {t('settings.title')}
             </Dialog.Title>
             <Dialog.Close asChild>
               <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors">
@@ -359,30 +366,75 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
           {/* 主内容区域：左侧 Tab + 右侧内容 */}
           <div className="flex-1 flex overflow-hidden">
             {/* 左侧 Tab 列表 */}
-            <Tabs.Root value={currentTab} onValueChange={(value) => setCurrentTab(value as 'ide' | 'quicknav' | 'statusline')} className="flex flex-1 overflow-hidden">
+            <Tabs.Root value={currentTab} onValueChange={(value) => setCurrentTab(value as 'general' | 'ide' | 'quicknav' | 'statusline')} className="flex flex-1 overflow-hidden">
               <Tabs.List className="flex flex-col w-48 border-r border-zinc-800 bg-zinc-900/30 flex-shrink-0">
+                <Tabs.Trigger
+                  value="general"
+                  className="px-6 py-4 text-left text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 data-[state=active]:text-zinc-100 data-[state=active]:bg-zinc-800 data-[state=active]:border-r-2 data-[state=active]:border-blue-500 transition-colors"
+                >
+                  {t('settings.tab.general')}
+                </Tabs.Trigger>
                 <Tabs.Trigger
                   value="ide"
                   className="px-6 py-4 text-left text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 data-[state=active]:text-zinc-100 data-[state=active]:bg-zinc-800 data-[state=active]:border-r-2 data-[state=active]:border-blue-500 transition-colors"
                 >
-                  IDE 设置
+                  {t('settings.tab.ide')}
                 </Tabs.Trigger>
                 <Tabs.Trigger
                   value="quicknav"
                   className="px-6 py-4 text-left text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 data-[state=active]:text-zinc-100 data-[state=active]:bg-zinc-800 data-[state=active]:border-r-2 data-[state=active]:border-blue-500 transition-colors"
                 >
-                  快捷导航
+                  {t('settings.tab.quickNav')}
                 </Tabs.Trigger>
                 <Tabs.Trigger
                   value="statusline"
                   className="px-6 py-4 text-left text-sm font-medium text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/50 data-[state=active]:text-zinc-100 data-[state=active]:bg-zinc-800 data-[state=active]:border-r-2 data-[state=active]:border-blue-500 transition-colors"
                 >
-                  Claude StatusLine
+                  {t('settings.tab.statusLine')}
                 </Tabs.Trigger>
               </Tabs.List>
 
               {/* 右侧内容区域 */}
               <div className="flex-1 overflow-hidden flex flex-col">
+                <Tabs.Content value="general" className="flex-1 overflow-y-auto p-6 data-[state=inactive]:hidden">
+                  <div className="max-w-xl space-y-6">
+                    <div className="p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
+                      <div className="mb-4">
+                        <h3 className="text-sm font-semibold text-zinc-100 mb-1">{t('settings.general.languageTitle')}</h3>
+                        <p className="text-xs text-zinc-400">{t('settings.general.languageDescription')}</p>
+                      </div>
+
+                      <Select.Root value={language} onValueChange={handleLanguageChange}>
+                        <Select.Trigger className="w-full flex items-center justify-between px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 focus:outline-none focus:border-blue-500 transition-colors">
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={16} className="text-zinc-400" />
+                          </Select.Icon>
+                        </Select.Trigger>
+
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className="z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden bg-zinc-900 border border-zinc-700 rounded-lg shadow-2xl"
+                          >
+                            <Select.Viewport className="p-1">
+                              <Select.Item value="zh-CN" className="px-3 py-2 rounded-md text-zinc-100 hover:bg-zinc-800 outline-none cursor-pointer">
+                                <Select.ItemText>{t('settings.language.zhCN')}</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="en-US" className="px-3 py-2 rounded-md text-zinc-100 hover:bg-zinc-800 outline-none cursor-pointer">
+                                <Select.ItemText>{t('settings.language.enUS')}</Select.ItemText>
+                              </Select.Item>
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </div>
+                  </div>
+                </Tabs.Content>
+
                 {/* IDE 设置 Tab */}
                 <Tabs.Content value="ide" className="flex-1 overflow-y-auto p-6 data-[state=inactive]:hidden">
                   {/* 扫描按钮 */}
@@ -393,14 +445,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors font-medium"
               >
                 <Search size={16} />
-                {scanning ? '扫描中...' : '自动扫描已安装的 IDE'}
+                {scanning ? t('common.loading') : t('settings.ide.scan')}
               </button>
               <button
                 onClick={handleAddIDE}
                 className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg transition-colors font-medium"
               >
                 <Plus size={16} />
-                添加自定义 IDE
+                {t('settings.ide.addCustom')}
               </button>
             </div>
 
@@ -408,8 +460,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
             <div className="space-y-3">
               {ides.length === 0 ? (
                 <div className="text-center py-12 text-zinc-500">
-                  <p className="text-lg mb-2">暂无 IDE 配置</p>
-                  <p className="text-sm">点击"自动扫描"或"添加自定义 IDE"开始配置</p>
+                  <p className="text-lg mb-2">{t('settings.ide.emptyTitle')}</p>
+                  <p className="text-sm">{t('settings.ide.emptyDescription')}</p>
                 </div>
               ) : (
                 ides.map((ide) => (
@@ -428,12 +480,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <h3 className="text-sm font-semibold text-zinc-100">{ide.name}</h3>
                         {ide.path && (
                           <span className="text-xs px-2 py-0.5 bg-green-900/30 text-green-400 rounded">
-                            已找到
+                            {t('settings.ide.found')}
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-zinc-400 truncate">
-                        {ide.path || `命令: ${ide.command}`}
+                        {ide.path || t('settings.ide.commandPrefix', { command: ide.command })}
                       </p>
                     </div>
 
@@ -450,7 +502,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       <button
                         onClick={() => handleDeleteIDE(ide.id)}
                         className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-900/30 text-zinc-400 hover:text-red-400 transition-colors"
-                        title="删除"
+                        title={t('common.delete')}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -470,7 +522,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
               >
                 <Plus size={16} />
-                添加快捷导航
+                {t('settings.quickNav.add')}
               </button>
             </div>
 
@@ -479,8 +531,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
               {quickNavItems.length === 0 ? (
                 <div className="text-center py-12 text-zinc-500">
                   <Globe size={48} className="mx-auto mb-4 opacity-50" />
-                  <p className="text-lg mb-2">暂无快捷导航</p>
-                  <p className="text-sm">点击"添加快捷导航"开始配置</p>
+                  <p className="text-lg mb-2">{t('settings.quickNav.emptyTitle')}</p>
+                  <p className="text-sm">{t('settings.quickNav.emptyDescription')}</p>
                 </div>
               ) : (
                 quickNavItems.map((item) => (
@@ -511,7 +563,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             ? 'bg-blue-900/30 text-blue-400'
                             : 'bg-yellow-900/30 text-yellow-400'
                         }`}>
-                          {item.type === 'url' ? '网址' : '文件夹'}
+                          {item.type === 'url' ? t('common.url') : t('common.folder')}
                         </span>
                       </div>
                       <p className="text-xs text-zinc-400 truncate" title={item.path}>
@@ -524,14 +576,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       <button
                         onClick={() => handleEditNavItem(item)}
                         className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
-                        title="编辑"
+                        title={t('common.edit')}
                       >
                         <Edit2 size={16} />
                       </button>
                       <button
                         onClick={() => handleDeleteNavItem(item.id)}
                         className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-900/30 text-zinc-400 hover:text-red-400 transition-colors"
-                        title="删除"
+                        title={t('common.delete')}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -548,8 +600,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
               {/* 启用开关 */}
               <div className="flex items-center justify-between p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
                 <div>
-                  <h3 className="text-sm font-semibold text-zinc-100 mb-1">启用 Claude StatusLine</h3>
-                  <p className="text-xs text-zinc-400">在 Claude Code CLI 中显示模型和上下文信息</p>
+                  <h3 className="text-sm font-semibold text-zinc-100 mb-1">{t('settings.statusLine.enableTitle')}</h3>
+                  <p className="text-xs text-zinc-400">{t('settings.statusLine.enableDescription')}</p>
                 </div>
                 <Switch.Root
                   checked={statusLineConfig.enabled}
@@ -565,7 +617,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                 <>
                   {/* 显示格式 */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-zinc-100">显示格式</h3>
+                    <h3 className="text-sm font-semibold text-zinc-100">{t('settings.statusLine.displayFormat')}</h3>
                     <div className="space-y-2">
                       <label className="flex items-center gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50 hover:border-zinc-600 cursor-pointer transition-colors">
                         <input
@@ -577,7 +629,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           className="w-4 h-4 text-blue-600"
                         />
                         <div className="flex-1">
-                          <div className="text-sm text-zinc-100 mb-1">完整版</div>
+                          <div className="text-sm text-zinc-100 mb-1">{t('settings.statusLine.full')}</div>
                           <div className="text-xs font-mono text-zinc-400 bg-zinc-900/50 px-2 py-1 rounded">
                             Model: Sonnet 4.6 | Context: 45% | Cost: $0.25
                           </div>
@@ -593,7 +645,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           className="w-4 h-4 text-blue-600"
                         />
                         <div className="flex-1">
-                          <div className="text-sm text-zinc-100 mb-1">简洁版</div>
+                          <div className="text-sm text-zinc-100 mb-1">{t('settings.statusLine.compact')}</div>
                           <div className="text-xs font-mono text-zinc-400 bg-zinc-900/50 px-2 py-1 rounded">
                             Sonnet 4.6 • 45% • $0.25
                           </div>
@@ -604,7 +656,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
                   {/* 显示内容 */}
                   <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-zinc-100">显示内容</h3>
+                    <h3 className="text-sm font-semibold text-zinc-100">{t('settings.statusLine.displayContent')}</h3>
                     <div className="space-y-2">
                       <label className="flex items-center gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
                         <input
@@ -614,8 +666,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           disabled
                         />
                         <div className="flex-1">
-                          <div className="text-sm text-zinc-100">模型名称</div>
-                          <div className="text-xs text-zinc-400">必选项</div>
+                          <div className="text-sm text-zinc-100">{t('settings.statusLine.modelName')}</div>
+                          <div className="text-xs text-zinc-400">{t('settings.statusLine.required')}</div>
                         </div>
                       </label>
                       <label className="flex items-center gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50 hover:border-zinc-600 cursor-pointer transition-colors">
@@ -626,8 +678,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           className="w-4 h-4 text-blue-600"
                         />
                         <div className="flex-1">
-                          <div className="text-sm text-zinc-100">上下文百分比</div>
-                          <div className="text-xs text-zinc-400">如 "Context: 45%"</div>
+                          <div className="text-sm text-zinc-100">{t('settings.statusLine.contextPercentage')}</div>
+                          <div className="text-xs text-zinc-400">{t('settings.statusLine.contextExample')}</div>
                         </div>
                       </label>
                       <label className="flex items-center gap-3 p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/50 hover:border-zinc-600 cursor-pointer transition-colors">
@@ -638,8 +690,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           className="w-4 h-4 text-blue-600"
                         />
                         <div className="flex-1">
-                          <div className="text-sm text-zinc-100">成本</div>
-                          <div className="text-xs text-zinc-400">如 "Cost: $0.25"</div>
+                          <div className="text-sm text-zinc-100">{t('settings.statusLine.cost')}</div>
+                          <div className="text-xs text-zinc-400">{t('settings.statusLine.costExample')}</div>
                         </div>
                       </label>
                     </div>
@@ -652,9 +704,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <Check size={14} className="text-white" />
                       </div>
                       <div className="flex-1">
-                        <div className="text-sm font-medium text-green-100 mb-1">配置已保存</div>
+                        <div className="text-sm font-medium text-green-100 mb-1">{t('settings.statusLine.savedTitle')}</div>
                         <div className="text-xs text-green-200/70">
-                          插件将在下次启动 Claude Code CLI 时生效
+                          {t('settings.statusLine.savedDescription')}
                         </div>
                       </div>
                     </div>
@@ -675,14 +727,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
               <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[60]" />
               <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] bg-zinc-800 rounded-xl shadow-2xl border border-zinc-700 z-[70] p-6">
                 <Dialog.Title className="text-lg font-semibold text-zinc-100 mb-4">
-                  {editingIDE?.id ? '编辑 IDE' : '添加自定义 IDE'}
+                  {editingIDE?.id ? t('settings.ideDialog.editTitle') : t('settings.ideDialog.addTitle')}
                 </Dialog.Title>
 
                 <div className="space-y-4">
                   {/* IDE 名称选择 */}
                   <div>
                     <label className="block text-sm font-medium text-zinc-300 mb-2">
-                      IDE 名称
+                      {t('settings.ideDialog.nameLabel')}
                     </label>
                     <Select.Root
                       value={editingIDE?.name || ''}
@@ -692,7 +744,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       }}
                     >
                       <Select.Trigger className="w-full flex items-center justify-between px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 hover:border-zinc-600 transition-colors">
-                        <Select.Value placeholder="选择 IDE" />
+                        <Select.Value placeholder={t('settings.ideDialog.namePlaceholder')} />
                         <Select.Icon>
                           <ChevronDown size={16} />
                         </Select.Icon>
@@ -721,13 +773,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                   {/* 命令 */}
                   <div>
                     <label className="block text-sm font-medium text-zinc-300 mb-2">
-                      命令
+                      {t('settings.ideDialog.commandLabel')}
                     </label>
                     <input
                       type="text"
                       value={editingIDE?.command || ''}
                       onChange={(e) => setEditingIDE(prev => prev ? { ...prev, command: e.target.value } : null)}
-                      placeholder="例如: code, idea, pycharm"
+                      placeholder={t('settings.ideDialog.commandPlaceholder')}
                       className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -735,13 +787,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                   {/* 路径 */}
                   <div>
                     <label className="block text-sm font-medium text-zinc-300 mb-2">
-                      可执行文件路径（可选）
+                      {t('settings.ideDialog.pathLabel')}
                     </label>
                     <input
                       type="text"
                       value={editingIDE?.path || ''}
                       onChange={(e) => setEditingIDE(prev => prev ? { ...prev, path: e.target.value } : null)}
-                      placeholder="留空则使用 PATH 中的命令"
+                      placeholder={t('settings.ideDialog.pathPlaceholder')}
                       className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none transition-colors"
                     />
                   </div>
@@ -752,14 +804,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     onClick={() => setShowAddDialog(false)}
                     className="px-4 py-2 text-zinc-400 hover:text-zinc-100 transition-colors"
                   >
-                    取消
+                    {t('common.cancel')}
                   </button>
                   <button
                     onClick={handleSaveIDE}
                     disabled={!editingIDE?.name || !editingIDE?.command}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors font-medium"
                   >
-                    保存
+                    {t('common.save')}
                   </button>
                 </div>
               </Dialog.Content>
@@ -772,35 +824,35 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
               <Dialog.Overlay className="fixed inset-0 bg-black/50 z-[60]" />
               <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] bg-zinc-800 rounded-xl shadow-2xl border border-zinc-700 z-[70] p-6">
                 <Dialog.Title className="text-lg font-semibold text-zinc-100 mb-4">
-                  {editingNavItem?.id && quickNavItems.find(i => i.id === editingNavItem.id) ? '编辑快捷导航' : '添加快捷导航'}
+                  {editingNavItem?.id && quickNavItems.find(i => i.id === editingNavItem.id) ? t('settings.quickNavDialog.editTitle') : t('settings.quickNavDialog.addTitle')}
                 </Dialog.Title>
 
                 <div className="space-y-4">
                   {/* 路径/URL */}
                   <div>
                     <label className="block text-sm font-medium text-zinc-300 mb-2">
-                      网址或文件夹路径
+                      {t('settings.quickNavDialog.pathLabel')}
                     </label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={editingNavItem?.path || ''}
                         onChange={(e) => handlePathChange(e.target.value)}
-                        placeholder="https://example.com 或 D:\Projects\MyApp"
+                        placeholder={t('settings.quickNavDialog.pathPlaceholder')}
                         className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none transition-colors"
                       />
                       <button
                         type="button"
                         onClick={handleBrowseFolder}
                         className="flex items-center justify-center w-10 h-10 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-400 hover:text-zinc-100 hover:border-blue-500 transition-colors"
-                        title="浏览文件夹"
+                        title={t('settings.quickNavDialog.browseFolder')}
                       >
                         <FolderOpen size={18} />
                       </button>
                     </div>
                     {editingNavItem?.path && (
                       <p className="mt-1 text-xs text-zinc-500">
-                        自动识别为: {editingNavItem.type === 'url' ? '网址' : '文件夹'}
+                        {t('settings.quickNavDialog.detectedAs', { type: editingNavItem.type === 'url' ? t('common.url') : t('common.folder') })}
                       </p>
                     )}
                   </div>
@@ -808,14 +860,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                   {/* 名称 */}
                   <div>
                     <label className="block text-sm font-medium text-zinc-300 mb-2">
-                      显示名称
+                      {t('settings.quickNavDialog.nameLabel')}
                     </label>
                     <div className="flex gap-2">
                       <input
                         type="text"
                         value={editingNavItem?.name || ''}
                         onChange={(e) => setEditingNavItem(prev => prev ? { ...prev, name: e.target.value } : null)}
-                        placeholder="例如: GitHub, 项目文件夹"
+                        placeholder={t('settings.quickNavDialog.namePlaceholder')}
                         className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-100 placeholder-zinc-500 focus:border-blue-500 focus:outline-none transition-colors"
                       />
                       {/* 占位元素，保持与上方输入框宽度一致 */}
@@ -829,14 +881,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     onClick={() => setShowNavDialog(false)}
                     className="px-4 py-2 text-zinc-400 hover:text-zinc-100 transition-colors"
                   >
-                    取消
+                    {t('common.cancel')}
                   </button>
                   <button
                     onClick={handleSaveNavItem}
                     disabled={!editingNavItem?.name || !editingNavItem?.path}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-lg transition-colors font-medium"
                   >
-                    保存
+                    {t('common.save')}
                   </button>
                 </div>
               </Dialog.Content>

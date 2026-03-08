@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useWindowStore } from '../stores/windowStore';
+import { useI18n } from '../i18n';
 
 export interface UseViewSwitcherReturn {
   currentView: 'unified' | 'terminal';
@@ -18,6 +19,7 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
   const [activeWindowId, setActiveWindowId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const setActiveWindow = useWindowStore((state) => state.setActiveWindow);
+  const { t } = useI18n();
 
   const switchToTerminalView = useCallback(async (windowId: string) => {
     try {
@@ -25,26 +27,26 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
       await window.electronAPI.switchToTerminalView(windowId);
       setActiveWindow(windowId);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '切换到终端视图失败';
+      const errorMessage = err instanceof Error ? err.message : t('viewSwitch.toTerminalFailed');
       setError(errorMessage);
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to switch to terminal view:', err);
       }
     }
-  }, [setActiveWindow]);
+  }, [setActiveWindow, t]);
 
   const switchToUnifiedView = useCallback(async () => {
     try {
       setError(null);
       await window.electronAPI.switchToUnifiedView();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : '切换到统一视图失败';
+      const errorMessage = err instanceof Error ? err.message : t('viewSwitch.toUnifiedFailed');
       setError(errorMessage);
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to switch to unified view:', err);
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const handler = (_event: unknown, payload: { view: 'unified' | 'terminal'; windowId?: string }) => {

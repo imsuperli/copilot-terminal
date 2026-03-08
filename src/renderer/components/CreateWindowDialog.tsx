@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { useWindowStore } from '../stores/windowStore'
+import { useI18n } from '../i18n'
 
 interface CreateWindowDialogProps {
   open: boolean
@@ -9,6 +10,7 @@ interface CreateWindowDialogProps {
 }
 
 export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogProps) {
+  const { t } = useI18n()
   const [name, setName] = useState('')
   const [workingDirectory, setWorkingDirectory] = useState('')
   const [command, setCommand] = useState('')
@@ -41,12 +43,12 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
       try {
         const response = await window.electronAPI.validatePath(workingDirectory)
         if (response && response.success) {
-          setPathError(response.data ? '' : '路径不存在')
+          setPathError(response.data ? '' : t('createWindow.errorPathNotFound'))
         } else {
-          setPathError('验证失败')
+          setPathError(t('createWindow.errorValidationFailed'))
         }
       } catch (error) {
-        setPathError('验证失败')
+        setPathError(t('createWindow.errorValidationFailed'))
       } finally {
         setIsValidating(false)
       }
@@ -89,11 +91,11 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
         onOpenChange(false)
         resetForm()
       } else {
-        throw new Error(response?.error || '创建窗口失败')
+        throw new Error(response?.error || t('createWindow.errorCreateFailed'))
       }
     } catch (error) {
       // 显示用户友好的错误信息
-      const errorMessage = (error as Error).message || '创建窗口失败，请重试'
+      const errorMessage = (error as Error).message || t('createWindow.errorCreateFailedRetry')
       setCreateError(errorMessage)
     } finally {
       setIsCreating(false)
@@ -118,7 +120,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
   }
 
   const windows = useWindowStore((state) => state.windows)
-  const placeholderName = `窗口 #${windows.length + 1}`
+  const placeholderName = t('createWindow.defaultName', { count: windows.length + 1 })
 
   return (
     <Dialog
@@ -127,14 +129,14 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
         onOpenChange(isOpen)
         if (!isOpen) resetForm()
       }}
-      title="新建窗口"
-      description="创建一个新的终端窗口"
+      title={t('createWindow.title')}
+      description={t('createWindow.description')}
     >
       <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} role="form">
         {/* 窗口名称 */}
         <div className="mb-4">
           <label htmlFor="window-name" className="block text-sm font-medium text-text-primary mb-2">
-            窗口名称（可选）
+            {t('createWindow.nameLabel')}
           </label>
           <input
             id="window-name"
@@ -149,7 +151,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
         {/* 工作目录 */}
         <div className="mb-4">
           <label htmlFor="working-directory" className="block text-sm font-medium text-text-primary mb-2">
-            工作目录 <span className="text-status-error">*</span>
+            {t('createWindow.workingDirectoryLabel')} <span className="text-status-error">*</span>
           </label>
           <div className="flex gap-2">
             <input
@@ -158,7 +160,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
               type="text"
               value={workingDirectory}
               onChange={(e) => setWorkingDirectory(e.target.value)}
-              placeholder="选择或输入工作目录路径"
+              placeholder={t('createWindow.workingDirectoryPlaceholder')}
               required
               aria-describedby={pathError ? 'path-error' : undefined}
               className={`flex-1 px-3 py-2 bg-bg-app border rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 ${
@@ -173,7 +175,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
               onClick={handleSelectDirectory}
               className="shrink-0"
             >
-              浏览
+              {t('common.browse')}
             </Button>
           </div>
           {/* 固定高度的提示区域，防止弹窗抖动 */}
@@ -184,7 +186,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
               </p>
             )}
             {!pathError && isValidating && (
-              <p className="text-sm text-text-secondary" aria-live="polite">验证中...</p>
+              <p className="text-sm text-text-secondary" aria-live="polite">{t('common.validating')}</p>
             )}
           </div>
         </div>
@@ -192,14 +194,14 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
         {/* Shell 程序 */}
         <div className="mb-6">
           <label htmlFor="command" className="block text-sm font-medium text-text-primary mb-2">
-            Shell 程序（可选）
+            {t('createWindow.shellLabel')}
           </label>
           <input
             id="command"
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
-            placeholder="默认使用系统 shell（pwsh/cmd/bash）"
+            placeholder={t('createWindow.shellPlaceholder')}
             className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
           />
         </div>
@@ -221,7 +223,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
               resetForm()
             }}
           >
-            取消
+            {t('common.cancel')}
           </Button>
           <Button
             type="submit"
@@ -229,7 +231,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
             disabled={!workingDirectory || !!pathError || isValidating || isCreating}
             aria-busy={isCreating}
           >
-            {isCreating ? '创建中...' : '创建'}
+            {isCreating ? t('common.creating') : t('common.create')}
           </Button>
         </div>
       </form>

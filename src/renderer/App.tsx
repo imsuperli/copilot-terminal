@@ -14,8 +14,9 @@ import { useWindowSwitcher } from './hooks/useWindowSwitcher';
 import { useWorkspaceRestore } from './hooks/useWorkspaceRestore';
 import { subscribeToPaneStatusChange, subscribeToWindowGitBranchChange } from './api/events';
 import { Window } from './types/window';
+import { I18nProvider } from './i18n';
 
-function App() {
+function AppContent() {
   const windows = useWindowStore((state) => state.windows);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
@@ -233,4 +234,10 @@ function App() {
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
+  );
+}

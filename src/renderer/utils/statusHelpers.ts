@@ -1,4 +1,5 @@
 import { WindowStatus } from '../types/window';
+import { TranslationKey } from '../i18n';
 
 /**
  * 状态色映射表（常量，避免重复创建）
@@ -27,13 +28,13 @@ const STATUS_TEXT_COLOR_MAP: Record<WindowStatus, string> = {
 /**
  * 状态标签映射表（常量，避免重复创建）
  */
-const STATUS_LABEL_MAP: Record<WindowStatus, string> = {
-  [WindowStatus.Running]: '运行中',
-  [WindowStatus.WaitingForInput]: '等待输入',
-  [WindowStatus.Completed]: '已完成',
-  [WindowStatus.Error]: '出错',
-  [WindowStatus.Restoring]: '恢复中',
-  [WindowStatus.Paused]: '已暂停'
+const STATUS_LABEL_KEY_MAP: Record<WindowStatus, TranslationKey> = {
+  [WindowStatus.Running]: 'status.running',
+  [WindowStatus.WaitingForInput]: 'status.waitingInput',
+  [WindowStatus.Completed]: 'status.completed',
+  [WindowStatus.Error]: 'status.error',
+  [WindowStatus.Restoring]: 'status.restoring',
+  [WindowStatus.Paused]: 'status.paused'
 };
 
 /**
@@ -46,12 +47,12 @@ export function getStatusColor(status: WindowStatus): string {
 }
 
 /**
- * 获取窗口状态对应的中文标签
+ * 获取窗口状态对应的翻译 key
  * @param status 窗口状态
- * @returns 中文状态标签
+ * @returns 状态翻译 key
  */
-export function getStatusLabel(status: WindowStatus): string {
-  return STATUS_LABEL_MAP[status];
+export function getStatusLabelKey(status: WindowStatus): TranslationKey {
+  return STATUS_LABEL_KEY_MAP[status];
 }
 
 /**

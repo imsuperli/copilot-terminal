@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
+﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Pause } from 'lucide-react';
@@ -12,6 +12,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
+import { useI18n } from '../i18n';
 
 export interface TerminalViewProps {
   window: Window;
@@ -21,8 +22,8 @@ export interface TerminalViewProps {
 }
 
 /**
- * TerminalView 组件
- * 支持多窗格拆分的终端视图
+ * TerminalView 缁勪欢
+ * 鏀寔澶氱獥鏍兼媶鍒嗙殑缁堢瑙嗗浘
  */
 export const TerminalView: React.FC<TerminalViewProps> = ({
   window: terminalWindow,
@@ -30,11 +31,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   onWindowSwitch,
   isActive,
 }) => {
+  const { t } = useI18n();
   const { enabledIDEs } = useIDESettings();
   const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
   const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
 
-  // 切换面板状态
+  // 鍒囨崲闈㈡澘鐘舵€?
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
 
   // Store
@@ -49,38 +51,38 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   } = useWindowStore();
   const activeWindows = getActiveWindows();
 
-  // 确保窗口激活时，激活第一个窗格
+  // 纭繚绐楀彛婵€娲绘椂锛屾縺娲荤涓€涓獥鏍?
   useEffect(() => {
     if (!isActive) return;
 
     const paneIds = panes.map(p => p.id);
 
-    // 如果没有激活的窗格，或激活的窗格不在当前窗格列表中，则激活第一个窗格
+    // 濡傛灉娌℃湁婵€娲荤殑绐楁牸锛屾垨婵€娲荤殑绐楁牸涓嶅湪褰撳墠绐楁牸鍒楄〃涓紝鍒欐縺娲荤涓€涓獥鏍?
     if (!terminalWindow.activePaneId || !paneIds.includes(terminalWindow.activePaneId)) {
       if (panes.length > 0) {
         setActivePane(terminalWindow.id, panes[0].id);
       }
     }
 
-    // 窗口激活时，启动 git 分支监听
+    // 绐楀彛婵€娲绘椂锛屽惎鍔?git 鍒嗘敮鐩戝惉
     const firstPane = panes[0];
     if (firstPane && firstPane.cwd && window.electronAPI?.startGitWatch) {
       window.electronAPI.startGitWatch(terminalWindow.id, firstPane.cwd).catch((error: any) => {
-        // 忽略错误
+        // 蹇界暐閿欒
       });
     }
 
-    // 窗口失活时，停止 git 分支监听
+    // 绐楀彛澶辨椿鏃讹紝鍋滄 git 鍒嗘敮鐩戝惉
     return () => {
       if (window.electronAPI?.stopGitWatch) {
         window.electronAPI.stopGitWatch(terminalWindow.id).catch((error: any) => {
-          // 忽略错误
+          // 蹇界暐閿欒
         });
       }
     };
   }, [isActive, terminalWindow.activePaneId, terminalWindow.id, panes, setActivePane]);
 
-  // 快捷键处理
+  // 蹇嵎閿鐞?
   useKeyboardShortcuts({
     onCtrlTab: () => {
       setQuickSwitcherOpen(true);
@@ -97,18 +99,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       }
     },
     onEscape: () => {
-      // 只有当面板打开时才处理 ESC 键
+      // 鍙湁褰撻潰鏉挎墦寮€鏃舵墠澶勭悊 ESC 閿?
       if (quickSwitcherOpen) {
         setQuickSwitcherOpen(false);
-        return true; // 表示已处理，阻止传播到终端
+        return true; // 琛ㄧず宸插鐞嗭紝闃绘浼犳挱鍒扮粓绔?
       }
-      // 没有面板打开时，返回 false，让 ESC 键传递到终端
+      // 娌℃湁闈㈡澘鎵撳紑鏃讹紝杩斿洖 false锛岃 ESC 閿紶閫掑埌缁堢
       return false;
     },
     enabled: isActive,
   });
 
-  // 处理窗格激活
+  // 澶勭悊绐楁牸婵€娲?
   const handlePaneActivate = useCallback(
     (paneId: string) => {
       setActivePane(terminalWindow.id, paneId);
@@ -116,10 +118,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [terminalWindow.id, setActivePane]
   );
 
-  // 处理窗格关闭
+  // 澶勭悊绐楁牸鍏抽棴
   const handlePaneClose = useCallback(
     (paneId: string) => {
-      // 如果只有一个窗格，不允许关闭
+      // 濡傛灉鍙湁涓€涓獥鏍硷紝涓嶅厑璁稿叧闂?
       if (panes.length <= 1) {
         return;
       }
@@ -128,29 +130,29 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [terminalWindow.id, panes.length, closePaneInWindow]
   );
 
-  // 处理拆分窗格
+  // 澶勭悊鎷嗗垎绐楁牸
   const handleSplitPane = useCallback(
     async (direction: 'horizontal' | 'vertical') => {
       const activePaneId = terminalWindow.activePaneId;
       if (!activePaneId) return;
 
-      // 获取当前激活窗格的信息
+      // 鑾峰彇褰撳墠婵€娲荤獥鏍肩殑淇℃伅
       const { getPaneById } = useWindowStore.getState();
       const activePane = getPaneById(terminalWindow.id, activePaneId);
       const currentCwd = activePane?.cwd || 'D:\\';
       const currentCommand = activePane?.command || 'pwsh.exe';
 
-      // 创建新窗格
+      // 鍒涘缓鏂扮獥鏍?
       const newPaneId = uuidv4();
       const newPane: Pane = {
         id: newPaneId,
-        cwd: currentCwd, // 使用当前窗格的工作目录
-        command: currentCommand, // 使用当前窗格的命令
+        cwd: currentCwd, // 浣跨敤褰撳墠绐楁牸鐨勫伐浣滅洰褰?
+        command: currentCommand, // 浣跨敤褰撳墠绐楁牸鐨勫懡浠?
         status: WindowStatus.Paused,
         pid: null,
       };
 
-      // 调用 IPC 创建新的 PTY 进程
+      // 璋冪敤 IPC 鍒涘缓鏂扮殑 PTY 杩涚▼
       try {
         if (window.electronAPI) {
           const response = await window.electronAPI.splitPane({
@@ -164,7 +166,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             newPane.pid = response.data.pid;
             newPane.status = WindowStatus.Running;
           } else {
-            throw new Error(response?.error || '拆分窗格失败');
+            throw new Error(response?.error || t('terminalView.splitFailed'));
           }
         }
       } catch (error) {
@@ -172,16 +174,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
 
-      // 更新布局
+      // 鏇存柊甯冨眬
       splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
     },
-    [terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow]
+    [t, terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow]
   );
 
-  // 处理打开文件夹
+  // 澶勭悊鎵撳紑鏂囦欢澶?
   const handleOpenFolder = useCallback(async () => {
     try {
-      // 获取第一个窗格的工作目录
+      // 鑾峰彇绗竴涓獥鏍肩殑宸ヤ綔鐩綍
       const firstPane = panes[0];
       if (firstPane && window.electronAPI) {
         await window.electronAPI.openFolder(firstPane.cwd);
@@ -191,7 +193,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [panes]);
 
-  // 处理在 IDE 中打开
+  // 澶勭悊鍦?IDE 涓墦寮€
   const handleOpenInIDE = useCallback(async (ide: string) => {
     try {
       const firstPane = panes[0];
@@ -206,13 +208,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [panes]);
 
-  // 处理暂停窗口
+  // 澶勭悊鏆傚仠绐楀彛
   const handlePauseWindow = useCallback(async () => {
     try {
-      // 关闭窗口（终止所有 PTY 进程）
+      // 鍏抽棴绐楀彛锛堢粓姝㈡墍鏈?PTY 杩涚▼锛?
       await window.electronAPI.closeWindow(terminalWindow.id);
 
-      // 立即更新所有窗格状态为 Paused
+      // 绔嬪嵆鏇存柊鎵€鏈夌獥鏍肩姸鎬佷负 Paused
       for (const pane of panes) {
         updatePane(terminalWindow.id, pane.id, {
           status: WindowStatus.Paused,
@@ -224,29 +226,29 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [terminalWindow.id, panes, updatePane]);
 
-  // 处理归档窗口
+  // 澶勭悊褰掓。绐楀彛
   const handleArchiveWindow = useCallback(async () => {
     try {
-      // 获取所有未归档的窗口
+      // 鑾峰彇鎵€鏈夋湭褰掓。鐨勭獥鍙?
       const { windows } = useWindowStore.getState();
       const activeWindows = windows.filter(w => !w.archived && w.id !== terminalWindow.id);
 
-      // 查找第一个等待输入的窗口
+      // 鏌ユ壘绗竴涓瓑寰呰緭鍏ョ殑绐楀彛
       let targetWindow = activeWindows.find(w => {
         const windowPanes = getAllPanes(w.layout);
         return windowPanes.some(pane => pane.status === WindowStatus.WaitingForInput);
       });
 
-      // 如果没有等待输入的窗口，找第一个活跃窗口
+      // 濡傛灉娌℃湁绛夊緟杈撳叆鐨勭獥鍙ｏ紝鎵剧涓€涓椿璺冪獥鍙?
       if (!targetWindow && activeWindows.length > 0) {
         targetWindow = activeWindows[0];
       }
 
-      // 如果找到了目标窗口，先切换过去
+      // 濡傛灉鎵惧埌浜嗙洰鏍囩獥鍙ｏ紝鍏堝垏鎹㈣繃鍘?
       if (targetWindow) {
         onWindowSwitch(targetWindow.id);
 
-        // 等待切换完成后再关闭和归档当前窗口
+        // 绛夊緟鍒囨崲瀹屾垚鍚庡啀鍏抽棴鍜屽綊妗ｅ綋鍓嶇獥鍙?
         setTimeout(async () => {
           try {
             await window.electronAPI.closeWindow(terminalWindow.id);
@@ -256,7 +258,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           }
         }, 100);
       } else {
-        // 没有其他窗口，关闭并归档后返回主界面
+        // 娌℃湁鍏朵粬绐楀彛锛屽叧闂苟褰掓。鍚庤繑鍥炰富鐣岄潰
         await window.electronAPI.closeWindow(terminalWindow.id);
         archiveWindow(terminalWindow.id);
         onReturn();
@@ -266,7 +268,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [terminalWindow.id, archiveWindow, onReturn, onWindowSwitch]);
 
-  // 处理快速切换
+  // 澶勭悊蹇€熷垏鎹?
   const handleQuickSwitcherSelect = useCallback(
     (windowId: string) => {
       setQuickSwitcherOpen(false);
@@ -277,18 +279,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   return (
     <div className="flex h-screen w-screen bg-zinc-900 overflow-hidden">
-      {/* 侧边栏 */}
+      {/* 渚ц竟鏍?*/}
       <Sidebar
         activeWindowId={terminalWindow.id}
         onWindowSelect={onWindowSwitch}
       />
 
-      {/* 主内容区 */}
+      {/* 涓诲唴瀹瑰尯 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 顶部工具栏 */}
+        {/* 椤堕儴宸ュ叿鏍?*/}
         <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {/* 返回按钮 */}
+            {/* 杩斿洖鎸夐挳 */}
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
@@ -304,13 +306,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
                     sideOffset={5}
                   >
-                    返回统一视图 (Esc)
+                    {t('terminalView.return')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
             </Tooltip.Provider>
 
-            {/* 窗口名称和 git 分支 */}
+            {/* 绐楀彛鍚嶇О鍜?git 鍒嗘敮 */}
             <div className="flex items-center gap-2">
               <span className="text-zinc-100 font-medium text-sm">{terminalWindow.name}</span>
               {terminalWindow.gitBranch && (
@@ -324,9 +326,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </div>
           </div>
 
-          {/* 右侧按钮组 */}
+          {/* 鍙充晶鎸夐挳缁?*/}
           <div className="flex items-center gap-2">
-            {/* 项目链接 */}
+            {/* 椤圭洰閾炬帴 */}
             {terminalWindow.projectConfig && terminalWindow.projectConfig.links.length > 0 && (
               <>
                 <ProjectLinks
@@ -334,12 +336,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   variant="toolbar"
                   maxDisplay={6}
                 />
-                {/* 分隔线 */}
+                {/* 鍒嗛殧绾?*/}
                 <div className="w-px h-4 bg-zinc-700" />
               </>
             )}
 
-            {/* 动态渲染启用的 IDE 图标 */}
+            {/* 鍔ㄦ€佹覆鏌撳惎鐢ㄧ殑 IDE 鍥炬爣 */}
             {enabledIDEs.map((ide) => (
               <Tooltip.Provider key={ide.id}>
                 <Tooltip.Root delayDuration={300}>
@@ -347,7 +349,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     <button
                       onClick={() => handleOpenInIDE(ide.id)}
                       className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                      title={`在 ${ide.name} 中打开`}
+                      title={t('common.openInIDE', { name: ide.name })}
                     >
                       <IDEIcon icon={ide.icon || ''} size={14} />
                     </button>
@@ -357,21 +359,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
                       sideOffset={5}
                     >
-                      在 {ide.name} 中打开
+                      {t('common.openInIDE', { name: ide.name })}
                     </Tooltip.Content>
                   </Tooltip.Portal>
                 </Tooltip.Root>
               </Tooltip.Provider>
             ))}
 
-            {/* 归档按钮 */}
+            {/* 褰掓。鎸夐挳 */}
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
                   <button
                     onClick={handleArchiveWindow}
                     className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                    title="归档窗口"
+                    title={t('terminalView.archive')}
                   >
                     <Archive size={14} />
                   </button>
@@ -381,20 +383,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
                     sideOffset={5}
                   >
-                    归档窗口
+                    {t('terminalView.archive')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
             </Tooltip.Provider>
 
-            {/* 打开文件夹按钮 */}
+            {/* 鎵撳紑鏂囦欢澶规寜閽?*/}
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
                   <button
                     onClick={handleOpenFolder}
                     className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                    title="打开文件夹"
+                    title={t('terminalView.openFolder')}
                   >
                     <Folder size={14} />
                   </button>
@@ -404,31 +406,31 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
                     sideOffset={5}
                   >
-                    打开文件夹
+                    {t('terminalView.openFolder')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
             </Tooltip.Provider>
 
-            {/* 左右拆分按钮 */}
+            {/* 宸﹀彸鎷嗗垎鎸夐挳 */}
             <button
               onClick={() => handleSplitPane('horizontal')}
               className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              title="左右拆分 (Ctrl+Shift+D)"
+              title={t('terminalView.splitHorizontal')}
             >
               <SplitSquareHorizontal size={14} />
             </button>
 
-            {/* 上下拆分按钮 */}
+            {/* 涓婁笅鎷嗗垎鎸夐挳 */}
             <button
               onClick={() => handleSplitPane('vertical')}
               className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              title="上下拆分 (Ctrl+Shift+E)"
+              title={t('terminalView.splitVertical')}
             >
               <SplitSquareVertical size={14} />
             </button>
 
-            {/* 暂停按钮 - 仅在运行或等待输入时显示 */}
+            {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
             {(aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
               <Tooltip.Provider>
                 <Tooltip.Root delayDuration={300}>
@@ -436,7 +438,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     <button
                       onClick={handlePauseWindow}
                       className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                      title="暂停窗口"
+                      title={t('terminalView.pause')}
                     >
                       <Pause size={14} />
                     </button>
@@ -446,7 +448,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
                       sideOffset={5}
                     >
-                      暂停窗口
+                      {t('terminalView.pause')}
                     </Tooltip.Content>
                   </Tooltip.Portal>
                 </Tooltip.Root>
@@ -455,7 +457,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           </div>
         </div>
 
-        {/* 终端布局区域 */}
+        {/* 缁堢甯冨眬鍖哄煙 */}
         <div className="flex-1 overflow-hidden">
           <SplitLayout
             windowId={terminalWindow.id}
@@ -468,7 +470,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         </div>
       </div>
 
-      {/* 快速切换面板 */}
+      {/* 蹇€熷垏鎹㈤潰鏉?*/}
       {quickSwitcherOpen && (
         <QuickSwitcher
           isOpen={quickSwitcherOpen}
@@ -483,3 +485,4 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 };
 
 TerminalView.displayName = 'TerminalView';
+

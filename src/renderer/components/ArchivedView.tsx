@@ -5,6 +5,7 @@ import { sortWindows } from '../utils/sortWindows';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { WindowCard } from './WindowCard';
 import { Window, WindowStatus } from '../types/window';
+import { useI18n } from '../i18n';
 
 interface ArchivedViewProps {
   onEnterTerminal?: (window: Window) => void;
@@ -16,6 +17,7 @@ interface ArchivedViewProps {
  * 显示所有已归档的窗口
  */
 export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, searchQuery = '' }) => {
+  const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const setActiveWindow = useWindowStore((state) => state.setActiveWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
@@ -154,8 +156,8 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
   if (archivedWindows.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <p className="text-lg text-[rgb(var(--muted-foreground))]">暂无归档终端</p>
+          <div className="text-center">
+          <p className="text-lg text-[rgb(var(--muted-foreground))]">{t('archived.emptyTitle')}</p>
         </div>
       </div>
     );
@@ -165,8 +167,8 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-lg text-[rgb(var(--muted-foreground))]">未找到匹配的窗口</p>
-          <p className="text-sm text-[rgb(var(--muted-foreground))] mt-2">尝试使用其他关键词搜索</p>
+          <p className="text-lg text-[rgb(var(--muted-foreground))]">{t('common.noMatchingWindows')}</p>
+          <p className="text-sm text-[rgb(var(--muted-foreground))] mt-2">{t('common.tryDifferentSearch')}</p>
         </div>
       </div>
     );

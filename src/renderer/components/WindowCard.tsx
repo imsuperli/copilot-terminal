@@ -1,15 +1,14 @@
 import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { formatDistanceToNow } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
 import { FolderOpen, Trash2, Play, Pause, Loader2, Archive, ArchiveRestore, ExternalLink } from 'lucide-react';
 import { Window, WindowStatus } from '../types/window';
-import { getStatusColor, getStatusLabel } from '../utils/statusHelpers';
+import { getStatusColor, getStatusLabelKey } from '../utils/statusHelpers';
 import { getAllPanes, getAggregatedStatus, getPaneCount } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
 import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
+import { formatRelativeTime, useI18n } from '../i18n';
 
 interface WindowCardProps {
   window: Window;
@@ -87,6 +86,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
   onOpenInIDE
 }) => {
   const { enabledIDEs } = useIDESettings();
+  const { language, t } = useI18n();
 
   // 获取窗口的聚合状态和窗格信息
   const aggregatedStatus = useMemo(() => getAggregatedStatus(window.layout), [window.layout]);
@@ -104,41 +104,37 @@ export const WindowCard = React.memo<WindowCardProps>(({
 
   // 缓存状态色和标签
   const statusColor = useMemo(() => getStatusColor(aggregatedStatus), [aggregatedStatus]);
-  const statusLabel = useMemo(() => getStatusLabel(aggregatedStatus), [aggregatedStatus]);
+  const statusLabel = useMemo(() => t(getStatusLabelKey(aggregatedStatus)), [aggregatedStatus, t]);
 
   // 缓存格式化的上次运行时间（移除"不到"、"大约"等字样）
   const formattedLastActiveTime = useMemo(() => {
     try {
-      const timeStr = formatDistanceToNow(new Date(window.lastActiveAt), {
-        addSuffix: true,
-        locale: zhCN
-      });
-      // 移除"不到"、"大约"等字样
-      return timeStr.replace(/不到|大约/g, '').trim();
+      return formatRelativeTime(window.lastActiveAt, language);
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to format time:', error, 'lastActiveAt:', window.lastActiveAt);
       }
-      return '未知';
+      return t('common.unknown');
     }
-  }, [window.lastActiveAt]);
+  }, [language, t, window.lastActiveAt]);
 
   // 缓存格式化的创建时间
   const formattedCreatedTime = useMemo(() => {
     try {
-      const timeStr = formatDistanceToNow(new Date(window.createdAt), {
-        addSuffix: true,
-        locale: zhCN
-      });
-      // 移除"不到"、"大约"等字样
-      return timeStr.replace(/不到|大约/g, '').trim();
+      return new Intl.DateTimeFormat(language, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date(window.createdAt));
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
         console.error('Failed to format created time:', error, 'createdAt:', window.createdAt);
       }
-      return '未知';
+      return t('common.unknown');
     }
-  }, [window.createdAt]);
+  }, [language, t, window.createdAt]);
 
   // 缓存截断后的路径
   const truncatedPath = useMemo(
@@ -148,8 +144,8 @@ export const WindowCard = React.memo<WindowCardProps>(({
 
   // 缓存 aria-label
   const ariaLabel = useMemo(
-    () => `${window.name}, 状态: ${statusLabel}, 工作目录: ${workingDirectory}, ${paneCount} 个窗格`,
-    [window.name, statusLabel, workingDirectory, paneCount]
+    () => t('windowCard.ariaLabel', { name: window.name, status: statusLabel, cwd: workingDirectory, count: paneCount }),
+    [paneCount, statusLabel, t, window.name, workingDirectory]
   );
 
   // 稳定的键盘事件处理
@@ -207,8 +203,8 @@ export const WindowCard = React.memo<WindowCardProps>(({
       {aggregatedStatus === WindowStatus.Restoring && (
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3 rounded-lg transition-opacity duration-200">
           <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
-          <div className="text-white text-sm font-medium">正在启动终端...</div>
-          <div className="text-zinc-400 text-xs">请稍候</div>
+          <div className="text-white text-sm font-medium">{t('windowCard.startingTerminal')}</div>
+          <div className="text-zinc-400 text-xs">{t('windowCard.pleaseWait')}</div>
         </div>
       )}
 
@@ -228,7 +224,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             </h3>
             {paneCount > 1 && (
               <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded flex-shrink-0">
-                {paneCount} 个窗格
+                {t('windowCard.panesCount', { count: paneCount })}
               </span>
             )}
           </div>
@@ -250,7 +246,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                       className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                       sideOffset={5}
                     >
-                      窗格 {index + 1}: {getStatusLabel(pane.status)}
+                      {t('windowCard.pane', { index: index + 1, status: t(getStatusLabelKey(pane.status)) })}
                     </Tooltip.Content>
                   </Tooltip.Portal>
                 </Tooltip.Root>
@@ -267,7 +263,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 data-testid="working-directory"
                 className="text-xs font-mono text-[rgb(var(--muted-foreground))] truncate pr-1 min-h-[1.25rem]"
               >
-                {truncatedPath || '(无工作目录)'}
+                {truncatedPath || `(${t('windowCard.noWorkingDirectory')})`}
               </p>
             </Tooltip.Trigger>
             <Tooltip.Portal>
@@ -275,7 +271,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-3 py-2 rounded-lg text-sm max-w-md break-all z-50 shadow-xl border border-[rgb(var(--border))]"
                 sideOffset={5}
               >
-                {workingDirectory || '(无工作目录)'}
+                {workingDirectory || `(${t('windowCard.noWorkingDirectory')})`}
               </Tooltip.Content>
             </Tooltip.Portal>
           </Tooltip.Root>
@@ -288,7 +284,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
         <div className="flex flex-col gap-1 flex-1">
           <div className="flex items-center justify-between">
             <span className="text-xs text-[rgb(var(--muted-foreground))]">
-              创建时间:
+              {t('windowCard.createdAt')}
             </span>
             <span className="text-xs text-[rgb(var(--muted-foreground))] flex-shrink-0">
               {formattedCreatedTime}
@@ -296,7 +292,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-[rgb(var(--muted-foreground))]">
-              上次运行:
+              {t('windowCard.lastRun')}
             </span>
             <span className="text-xs text-[rgb(var(--muted-foreground))] flex-shrink-0">
               {formattedLastActiveTime}
@@ -322,10 +318,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <button
                   onClick={(e) => handleButtonClick(e, () => onStart?.(window))}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap"
-                  aria-label="启动窗口"
+                  aria-label={t('windowCard.start')}
                 >
                   <Play size={14} />
-                  <span>启动</span>
+                  <span>{t('windowCard.start')}</span>
                 </button>
               </Tooltip.Trigger>
               <Tooltip.Portal>
@@ -333,7 +329,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                   sideOffset={5}
                 >
-                  启动窗口
+                  {t('windowCard.start')}
                 </Tooltip.Content>
               </Tooltip.Portal>
             </Tooltip.Root>
@@ -343,10 +339,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
           <button
             disabled
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--muted-foreground))] bg-[rgb(var(--card))] rounded cursor-not-allowed opacity-60 whitespace-nowrap"
-            aria-label="启动中"
+            aria-label={t('windowCard.starting')}
           >
             <Loader2 size={14} className="animate-spin" />
-            <span>启动中</span>
+            <span>{t('windowCard.starting')}</span>
           </button>
         )}
         {(aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
@@ -356,10 +352,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <button
                   onClick={(e) => handleButtonClick(e, () => onPause?.(window))}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] whitespace-nowrap"
-                  aria-label="暂停窗口"
+                  aria-label={t('windowCard.pause')}
                 >
                   <Pause size={14} />
-                  <span>暂停</span>
+                  <span>{t('windowCard.pause')}</span>
                 </button>
               </Tooltip.Trigger>
               <Tooltip.Portal>
@@ -367,7 +363,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                   sideOffset={5}
                 >
-                  暂停窗口
+                  {t('windowCard.pause')}
                 </Tooltip.Content>
               </Tooltip.Portal>
             </Tooltip.Root>
@@ -393,7 +389,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                     sideOffset={5}
                   >
-                    在 {ide.name} 中打开
+                    {t('common.openInIDE', { name: ide.name })}
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
@@ -406,7 +402,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <button
                   onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(workingDirectory))}
                   className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
-                  aria-label="打开文件夹"
+                  aria-label={t('common.openFolder')}
                 >
                   <FolderOpen size={16} />
                 </button>
@@ -416,7 +412,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                   sideOffset={5}
                 >
-                  打开文件夹
+                  {t('common.openFolder')}
                 </Tooltip.Content>
               </Tooltip.Portal>
             </Tooltip.Root>
@@ -429,7 +425,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <button
                     onClick={(e) => handleButtonClick(e, () => onArchive?.(window))}
                     className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
-                    aria-label="归档窗口"
+                    aria-label={t('terminalView.archive')}
                   >
                     <Archive size={16} />
                   </button>
@@ -439,7 +435,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                     sideOffset={5}
                   >
-                    归档
+                    {t('windowCard.archive')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
@@ -451,7 +447,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <button
                     onClick={(e) => handleButtonClick(e, () => onUnarchive?.(window))}
                     className="flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
-                    aria-label="取消归档"
+                    aria-label={t('windowCard.unarchive')}
                   >
                     <ArchiveRestore size={16} />
                   </button>
@@ -461,7 +457,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                     sideOffset={5}
                   >
-                    取消归档
+                    {t('windowCard.unarchive')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
@@ -474,7 +470,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <button
                   onClick={(e) => handleButtonClick(e, () => onDelete?.(window.id))}
                   className="flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
-                  aria-label="删除窗口"
+                  aria-label={t('common.deleteWindow')}
                 >
                   <Trash2 size={16} />
                 </button>
@@ -484,7 +480,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                   sideOffset={5}
                 >
-                  删除
+                  {t('common.delete')}
                 </Tooltip.Content>
               </Tooltip.Portal>
             </Tooltip.Root>

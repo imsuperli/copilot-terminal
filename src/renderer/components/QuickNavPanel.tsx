@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, ExternalLink, Folder, Globe } from 'lucide-react';
 import { QuickNavItem } from '../../shared/types/quick-nav';
+import { useI18n } from '../i18n';
 
 interface QuickNavPanelProps {
   open: boolean;
@@ -11,6 +12,7 @@ interface QuickNavPanelProps {
 export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) => {
   const [items, setItems] = useState<QuickNavItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const { t } = useI18n();
 
   // 加载快捷导航配置
   useEffect(() => {
@@ -60,7 +62,7 @@ export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) =
           {/* 标题栏 */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur">
             <Dialog.Title className="text-xl font-semibold text-zinc-100">
-              快捷导航
+              {t('quickNav.title')}
             </Dialog.Title>
             <Dialog.Close asChild>
               <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors">
@@ -73,13 +75,13 @@ export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) =
           <div className="flex-1 overflow-y-auto p-6">
             {loading ? (
               <div className="flex items-center justify-center py-12">
-                <div className="text-zinc-500">加载中...</div>
+                <div className="text-zinc-500">{t('common.loading')}</div>
               </div>
             ) : items.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
                 <Globe size={48} className="mb-4 opacity-50" />
-                <p className="text-lg mb-2">暂无快捷导航</p>
-                <p className="text-sm">在设置中添加常用的网址或文件夹</p>
+                <p className="text-lg mb-2">{t('quickNav.emptyTitle')}</p>
+                <p className="text-sm">{t('quickNav.emptyDescription')}</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">

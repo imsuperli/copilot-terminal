@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { X } from 'lucide-react';
 import { Pane, WindowStatus } from '../types/window';
 import { StatusDot } from './StatusDot';
+import { useI18n } from '../i18n';
 import '../styles/xterm.css';
 
 /**
@@ -71,6 +72,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   onActivate,
   onClose,
 }) => {
+  const { t } = useI18n();
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -531,7 +533,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       {/* 状态圆点 - 非悬停时显示 */}
       {!isHovered && (
         <div className="absolute top-1 right-1 z-10">
-          <StatusDot status={pane.status} size="sm" title="窗格状态" />
+          <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
         </div>
       )}
 
@@ -543,7 +545,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
             onClose();
           }}
           className="absolute top-1 right-1 z-20 w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
-          title="关闭窗格"
+          title={t('terminalPane.close')}
         >
           <X size={14} />
         </button>
