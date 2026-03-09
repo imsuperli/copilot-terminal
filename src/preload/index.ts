@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteWindow: (windowId: string) => ipcRenderer.invoke('delete-window', { windowId }),
   startWindow: (config: { windowId: string; paneId?: string; name: string; workingDirectory: string; command: string }) =>
     ipcRenderer.invoke('start-window', config),
+  checkPtyOutput: (windowId: string, paneId: string) => ipcRenderer.invoke('check-pty-output', { windowId, paneId }),
   startGitWatch: (windowId: string, cwd: string) => ipcRenderer.invoke('start-git-watch', { windowId, cwd }),
   stopGitWatch: (windowId: string) => ipcRenderer.invoke('stop-git-watch', { windowId }),
 

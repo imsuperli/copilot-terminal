@@ -32,7 +32,12 @@ export function registerStatusLineHandlers(ctx: HandlerContext) {
   ipcMain.handle('statusline-configure', async () => {
     try {
       // 获取插件路径
-      const appPath = (app as any).app.getAppPath();
+      // 生产环境中 getAppPath() 返回 app.asar 路径，
+      // 但经 asarUnpack 解包的文件实际在 app.asar.unpacked 目录下
+      let appPath = (app as any).app.getAppPath();
+      if (appPath.endsWith('app.asar')) {
+        appPath = appPath.slice(0, -8) + 'app.asar.unpacked';
+      }
       const pluginPath = path.join(appPath, 'dist', 'statusline', 'index.js');
 
       await claudeCodeConfig.configure(pluginPath);

@@ -60,15 +60,20 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    */
   async spawnTerminal(config: TerminalConfig): Promise<ProcessHandle> {
     const spawnStartAt = Date.now();
+    console.log(`[ProcessManager] Starting spawn for windowId=${config.windowId}, paneId=${config.paneId}`);
 
     // Validate working directory
+    const validateStartAt = Date.now();
     if (!existsSync(config.workingDirectory)) {
       throw new Error(`Working directory does not exist: ${config.workingDirectory}`);
     }
+    console.log(`[ProcessManager] Directory validation took ${Date.now() - validateStartAt}ms`);
 
     // Get default shell for platform
+    const shellStartAt = Date.now();
     const shell = this.getDefaultShell();
     const command = config.command || shell;
+    console.log(`[ProcessManager] Shell detection took ${Date.now() - shellStartAt}ms, shell=${shell}`);
 
     // 创建 PTY 进程（真实或 mock）
     let ptyProcess: any;
@@ -76,8 +81,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     if (pty) {
       // 使用真实的 node-pty
+      const ptyCreateStartAt = Date.now();
       ptyProcess = this.createRealPty(config);
       pid = ptyProcess.pid;
+      console.log(`[ProcessManager] PTY creation took ${Date.now() - ptyCreateStartAt}ms, pid=${pid}`);
     } else {
       // 使用 mock PTY
       pid = this.nextPid++;
@@ -349,6 +356,14 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         disposable.dispose();
       }
     };
+  }
+
+  /**
+   * 检查 PTY 输出缓冲区是否有数据（用于判断 PTY 是否已输出初始化信息）
+   */
+  hasPtyOutput(pid: number): boolean {
+    const buffer = this.ptyOutputBuffers.get(pid);
+    return buffer ? buffer.length > 0 : false;
   }
 
   /**
@@ -669,7 +684,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const command = config.command || shell;
 
     // 获取最新的系统环境变量（Windows 从注册表读取，macOS/Linux 使用 process.env）
+    const envStartAt = Date.now();
     const latestEnv = this.getSpawnEnvironment();
+    console.log(`[ProcessManager] Environment variable loading took ${Date.now() - envStartAt}ms`);
 
     // 清理环境变量，移除可能导致冲突的变量
     const cleanEnv = { ...latestEnv };
@@ -693,7 +710,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       ptySpawnOptions.useConptyDll = true;
     }
 
+    const ptySpawnStartAt = Date.now();
     const ptyProcess = pty.spawn(shell, [], ptySpawnOptions);
+    console.log(`[ProcessManager] pty.spawn() took ${Date.now() - ptySpawnStartAt}ms`);
 
     return ptyProcess;
   }

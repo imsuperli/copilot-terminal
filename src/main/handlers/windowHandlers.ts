@@ -215,6 +215,25 @@ export function registerWindowHandlers(ctx: HandlerContext) {
     }
   });
 
+  // 检查 PTY 是否有输出（用于判断 PTY 初始化是否完成）
+  ipcMain.handle('check-pty-output', async (_event, { windowId, paneId }: { windowId: string; paneId: string }) => {
+    try {
+      if (!processManager) {
+        return successResponse({ hasOutput: false });
+      }
+
+      const pid = processManager.getPidByPane(windowId, paneId);
+      if (!pid) {
+        return successResponse({ hasOutput: false });
+      }
+
+      const hasOutput = processManager.hasPtyOutput(pid);
+      return successResponse({ hasOutput });
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   // 关闭窗口（终止进程）
   ipcMain.handle('close-window', async (_event, { windowId }: { windowId: string }) => {
     try {

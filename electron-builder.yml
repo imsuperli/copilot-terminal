@@ -8,6 +8,8 @@ files:
   - resources/**/*
   - package.json
   - node_modules/**/*
+asarUnpack:
+  - dist/statusline/**/*
 npmRebuild: false
 buildDependenciesFromSource: false
 win:
