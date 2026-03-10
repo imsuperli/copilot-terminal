@@ -28,6 +28,20 @@ export interface ElectronAPI {
   // Status events
   onWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void
   offWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void
+  onPaneStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void
+  offPaneStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void
+  onWindowGitBranchChanged: (callback: (event: unknown, payload: unknown) => void) => void
+  offWindowGitBranchChanged: (callback: (event: unknown, payload: unknown) => void) => void
+
+  // tmux events
+  onTmuxPaneTitleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; title: string }) => void) => void
+  offTmuxPaneTitleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; title: string }) => void) => void
+  onTmuxPaneStyleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; metadata: unknown }) => void) => void
+  offTmuxPaneStyleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; metadata: unknown }) => void) => void
+  onTmuxWindowSynced: (callback: (event: unknown, payload: { window: TerminalWindow }) => void) => void
+  offTmuxWindowSynced: (callback: (event: unknown, payload: { window: TerminalWindow }) => void) => void
+  onTmuxWindowRemoved: (callback: (event: unknown, payload: { windowId: string }) => void) => void
+  offTmuxWindowRemoved: (callback: (event: unknown, payload: { windowId: string }) => void) => void
 
   // PTY I/O
   ptyWrite: (windowId: string, data: string) => Promise<void>

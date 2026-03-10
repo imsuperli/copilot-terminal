@@ -148,6 +148,7 @@ describe('tmux-shim', () => {
         AUSOME_TMUX_RPC: socketPath,
         AUSOME_TERMINAL_WINDOW_ID: 'win-test-123',
         AUSOME_TERMINAL_PANE_ID: 'pane-test-456',
+        TMUX_PANE: '%9',
       }
     );
 
@@ -159,7 +160,8 @@ describe('tmux-shim', () => {
       'split-window', '-h', '-P', '-F', '#{pane_id}',
     ]);
     expect(receivedRequest.request.windowId).toBe('win-test-123');
-    expect(receivedRequest.request.paneId).toBe('pane-test-456');
+    expect(receivedRequest.request.paneId).toBe('%9');
+    expect(receivedRequest.request.debugContext.paneId).toBe('pane-test-456');
 
     // Verify output
     expect(result.stdout).toBe('%1\n');
@@ -184,6 +186,7 @@ describe('tmux-shim', () => {
       AUSOME_TMUX_RPC: socketPath,
       AUSOME_TERMINAL_WINDOW_ID: 'win-1',
       AUSOME_TERMINAL_PANE_ID: 'pane-1',
+      TMUX_PANE: '%1',
     });
 
     expect(result.stderr).toContain('no server running');
@@ -204,6 +207,7 @@ describe('tmux-shim', () => {
       AUSOME_TMUX_RPC: socketPath,
       AUSOME_TERMINAL_WINDOW_ID: 'win-1',
       AUSOME_TERMINAL_PANE_ID: 'pane-1',
+      TMUX_PANE: '%1',
     });
 
     expect(result.stderr).toContain('unknown command: foobar');
@@ -219,6 +223,7 @@ describe('tmux-shim', () => {
       AUSOME_TMUX_RPC: socketPath,
       AUSOME_TERMINAL_WINDOW_ID: 'win-1',
       AUSOME_TERMINAL_PANE_ID: 'pane-1',
+      TMUX_PANE: '%1',
     });
 
     expect(result.stderr).toContain('cannot connect to RPC server');
@@ -243,6 +248,7 @@ describe('tmux-shim', () => {
       AUSOME_TMUX_RPC: socketPath,
       AUSOME_TERMINAL_WINDOW_ID: 'win-1',
       AUSOME_TERMINAL_PANE_ID: 'pane-1',
+      TMUX_PANE: '%1',
     });
 
     expect(receivedCwd).toBeTruthy();

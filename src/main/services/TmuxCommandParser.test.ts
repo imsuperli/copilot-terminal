@@ -103,6 +103,25 @@ describe('TmuxCommandParser', () => {
       expect(result.args).toEqual(['pane-border-style', 'fg=blue']);
     });
 
+    it('应该解析 new-window/new-session 的 -n windowName 选项', () => {
+      const result = TmuxCommandParser.parse([
+        'tmux',
+        'new-window',
+        '-t',
+        'swarm',
+        '-n',
+        'planner',
+        '-P',
+        '-F',
+        '#{pane_id}',
+      ]);
+
+      expect(result.command).toBe(TmuxCommand.NewWindow);
+      expect(result.options.target).toBe('swarm');
+      expect(result.options.windowName).toBe('planner');
+      expect(result.options.print).toBe(true);
+    });
+
     it('应该解析 display-message 命令', () => {
       const result = TmuxCommandParser.parse([
         'tmux',

@@ -19,6 +19,8 @@ import './api/ptyDataBus';
 
 function AppContent() {
   const windows = useWindowStore((state) => state.windows);
+  const syncWindow = useWindowStore((state) => state.syncWindow);
+  const removeWindow = useWindowStore((state) => state.removeWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
@@ -96,6 +98,64 @@ function AppContent() {
       unsubscribe();
     };
   }, [updateWindow]);
+
+  // 订阅 tmux pane 元数据变化事件
+  useEffect(() => {
+    if (
+      !window.electronAPI?.onTmuxPaneTitleChanged ||
+      !window.electronAPI?.onTmuxPaneStyleChanged ||
+      !window.electronAPI?.onTmuxWindowSynced ||
+      !window.electronAPI?.onTmuxWindowRemoved
+    ) {
+      return;
+    }
+
+    const handleTitleChanged = (_event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; title: string }) => {
+      updatePane(payload.windowId, payload.paneId, { title: payload.title });
+    };
+
+    const handleStyleChanged = (_event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; metadata: any }) => {
+      const updates: Partial<Window['layout']['pane']> = {};
+      if (payload.metadata.borderColor !== undefined) {
+        updates.borderColor = payload.metadata.borderColor;
+      }
+      if (payload.metadata.activeBorderColor !== undefined) {
+        updates.activeBorderColor = payload.metadata.activeBorderColor;
+      }
+      if (payload.metadata.agentName !== undefined) {
+        updates.agentName = payload.metadata.agentName;
+      }
+      if (payload.metadata.agentColor !== undefined) {
+        updates.agentColor = payload.metadata.agentColor;
+      }
+      if (payload.metadata.teamName !== undefined) {
+        updates.teamName = payload.metadata.teamName;
+      }
+      if (Object.keys(updates).length > 0) {
+        updatePane(payload.windowId, payload.paneId, updates);
+      }
+    };
+
+    const handleWindowSynced = (_event: unknown, payload: { window: Window }) => {
+      syncWindow(payload.window);
+    };
+
+    const handleWindowRemoved = (_event: unknown, payload: { windowId: string }) => {
+      removeWindow(payload.windowId);
+    };
+
+    window.electronAPI.onTmuxPaneTitleChanged(handleTitleChanged);
+    window.electronAPI.onTmuxPaneStyleChanged(handleStyleChanged);
+    window.electronAPI.onTmuxWindowSynced(handleWindowSynced);
+    window.electronAPI.onTmuxWindowRemoved(handleWindowRemoved);
+
+    return () => {
+      window.electronAPI?.offTmuxPaneTitleChanged?.(handleTitleChanged);
+      window.electronAPI?.offTmuxPaneStyleChanged?.(handleStyleChanged);
+      window.electronAPI?.offTmuxWindowSynced?.(handleWindowSynced);
+      window.electronAPI?.offTmuxWindowRemoved?.(handleWindowRemoved);
+    };
+  }, [removeWindow, syncWindow, updatePane]);
 
   // 订阅主进程推送的项目配置更新事件
   useEffect(() => {

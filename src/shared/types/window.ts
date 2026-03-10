@@ -32,6 +32,9 @@ export interface Pane {
   /** 边框颜色（通过 tmux select-pane -P 或 set-option 设置） */
   borderColor?: string;
 
+  /** 激活时的边框颜色（通过 tmux set-option pane-active-border-style 设置） */
+  activeBorderColor?: string;
+
   /** 团队名称（Claude Agent Teams） */
   teamName?: string;
 

@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ProcessManager } from '../ProcessManager';
 import { ProcessStatus } from '../../types/process';
+import { TmuxCompatService } from '../TmuxCompatService';
+import { WindowStatus } from '../../../shared/types/window';
 import { tmpdir } from 'os';
 
 describe('ProcessManager', () => {
@@ -193,6 +195,101 @@ describe('ProcessManager', () => {
       // Second process should still be alive
       const status2 = processManager.getProcessStatus(handle2.pid);
       expect(status2?.status).toBe(ProcessStatus.Alive);
+    });
+  });
+
+  describe('tmux compatibility', () => {
+    it('ensures tmux RPC server before spawning when tmux compat is enabled', async () => {
+      const tmuxCompatService = {
+        executeCommand: vi.fn(),
+        allocatePaneId: vi.fn().mockReturnValue('%1'),
+        resolvePaneId: vi.fn().mockReturnValue(null),
+        resolveWindowTarget: vi.fn().mockReturnValue(null),
+        registerPane: vi.fn(),
+        unregisterPane: vi.fn(),
+        getOrCreateSession: vi.fn(),
+        getTmuxPaneId: vi.fn().mockReturnValue(undefined),
+        ensureRpcServer: vi.fn().mockResolvedValue('\\\\.\\pipe\\ausome-tmux-win-rpc'),
+        getRpcSocketPath: vi.fn().mockReturnValue('\\\\.\\pipe\\ausome-tmux-win-rpc'),
+        destroy: vi.fn(),
+      } as any;
+
+      const tmuxEnabledProcessManager = new ProcessManager(
+        () => ({ tmux: { enabled: true, autoInjectPath: false } } as any),
+        tmuxCompatService,
+      );
+
+      const handle = await tmuxEnabledProcessManager.spawnTerminal({
+        workingDirectory: testWorkingDir,
+        windowId: 'win-rpc',
+        paneId: 'pane-rpc',
+      });
+
+      expect(tmuxCompatService.ensureRpcServer).toHaveBeenCalledOnce();
+      expect(tmuxCompatService.ensureRpcServer).toHaveBeenCalledWith('win-rpc');
+
+      await tmuxEnabledProcessManager.killProcess(handle.pid);
+    });
+
+    it('injects the same rpc path as TmuxCompatService exposes', () => {
+      const tmuxEnabledProcessManager = new ProcessManager(
+        () => ({ tmux: { enabled: true, autoInjectPath: false } } as any),
+      );
+
+      const store = {
+        windows: [
+          {
+            id: 'win-sync',
+            name: 'Sync Test',
+            layout: {
+              type: 'pane' as const,
+              id: 'pane-sync',
+              pane: {
+                id: 'pane-sync',
+                cwd: testWorkingDir,
+                command: 'pwsh.exe',
+                status: WindowStatus.WaitingForInput,
+                pid: 1001,
+              },
+            },
+            activePaneId: 'pane-sync',
+            createdAt: new Date().toISOString(),
+            lastActiveAt: new Date().toISOString(),
+          },
+        ],
+      };
+
+      const tmuxCompatService = new TmuxCompatService({
+        processManager: {
+          spawnTerminal: vi.fn().mockResolvedValue({ pid: 1001, pty: {} }),
+          killProcess: vi.fn().mockResolvedValue(undefined),
+          getProcessStatus: vi.fn().mockReturnValue(null),
+          listProcesses: vi.fn().mockReturnValue([]),
+          getPaneStatus: vi.fn().mockResolvedValue('waiting'),
+          subscribeStatusChange: vi.fn(),
+          destroy: vi.fn().mockResolvedValue(undefined),
+          getPidByPane: vi.fn().mockReturnValue(1001),
+          writeToPty: vi.fn(),
+        },
+        getWindowStore: () => store as any,
+        updateWindowStore: (updater) => updater(store as any),
+        debug: false,
+      });
+
+      tmuxEnabledProcessManager.setTmuxCompatService(tmuxCompatService);
+
+      const tmuxEnv = (tmuxEnabledProcessManager as any).buildTmuxEnvironment(
+        {
+          workingDirectory: testWorkingDir,
+          windowId: 'win-sync',
+          paneId: 'pane-sync',
+        },
+        { PATH: '', Path: '' },
+      );
+
+      expect(tmuxEnv.AUSOME_TMUX_RPC).toBe(tmuxCompatService.getRpcSocketPath('win-sync'));
+
+      tmuxCompatService.destroy();
     });
   });
 });

@@ -176,8 +176,13 @@ export class TmuxCommandParser {
         options.size = args[i + 1];
         i += 2;
       } else if (arg === '-P') {
-        options.print = true;
-        i++;
+        if (command === TmuxCommand.SelectPane && i + 1 < args.length && !args[i + 1].startsWith('-')) {
+          options.style = args[i + 1];
+          i += 2;
+        } else {
+          options.print = true;
+          i++;
+        }
       } else if (arg === '-F' && i + 1 < args.length) {
         options.format = args[i + 1];
         i += 2;
@@ -208,6 +213,9 @@ export class TmuxCommandParser {
         i += 2;
       } else if (arg === '-s' && i + 1 < args.length) {
         options.sessionName = args[i + 1];
+        i += 2;
+      } else if (arg === '-n' && i + 1 < args.length) {
+        options.windowName = args[i + 1];
         i += 2;
       } else if (arg === '-d') {
         options.detached = true;
@@ -249,9 +257,17 @@ export class TmuxCommandParser {
         arg === '-x' ||
         arg === '-y' ||
         arg === '-s' ||
+        arg === '-n' ||
         arg === '-c'
       ) {
         i += 2; // 选项 + 值
+      } else if (
+        arg === '-P' &&
+        command === TmuxCommand.SelectPane &&
+        i + 1 < args.length &&
+        !args[i + 1].startsWith('-')
+      ) {
+        i += 2;
       } else {
         i++; // 仅选项
       }
@@ -504,7 +520,7 @@ export class TmuxCommandParser {
     return {
       target: parsed.options.target as string | undefined,
       print: parsed.options.print as boolean | undefined,
-      format: parsed.options.format as string | undefined,
+      format: (parsed.options.format as string | undefined) || parsed.args[0],
     };
   }
 

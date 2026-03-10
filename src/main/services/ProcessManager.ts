@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { platform } from 'os';
+import { platform, tmpdir } from 'os';
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';
@@ -9,8 +9,9 @@ import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
 import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
+import { getTmuxShimDir } from '../utils/tmux-shim-path';
 
-// 尝试导入 node-pty，如果失败则使用 mock
+// 灏濊瘯瀵煎叆 node-pty锛屽鏋滃け璐ュ垯浣跨敤 mock
 let pty: any;
 try {
   pty = require('@homebridge/node-pty-prebuilt-multiarch');
@@ -23,19 +24,19 @@ try {
 }
 
 /**
- * ProcessManager - 终端进程管理服务
+ * ProcessManager - 缁堢杩涚▼绠＄悊鏈嶅姟
  * 
- * 负责创建、监控和终止终端进程
- * 使用 node-pty 进行跨平台 PTY 进程管理
+ * 璐熻矗鍒涘缓銆佺洃鎺у拰缁堟缁堢杩涚▼
+ * 浣跨敤 node-pty 杩涜璺ㄥ钩鍙?PTY 杩涚▼绠＄悊
  * 
- * NOTE: 当前实现使用 mock PTY，待 node-pty 编译环境就绪后替换为真实实现
+ * NOTE: 褰撳墠瀹炵幇浣跨敤 mock PTY锛屽緟 node-pty 缂栬瘧鐜灏辩华鍚庢浛鎹负鐪熷疄瀹炵幇
  */
 export class ProcessManager extends EventEmitter implements IProcessManager {
   private processes: Map<number, ProcessInfo>;
   private ptys: Map<number, any>;
   private ptyDisposables: Map<number, Array<{ dispose: () => void }>>;
-  private ptyOutputBuffers: Map<number, string[]>; // 缓存 PTY 初始输出
-  private paneIndex: Map<string, number>; // "windowId:paneId" → pid 索引，用于 O(1) 查找
+  private ptyOutputBuffers: Map<number, string[]>; // 缂撳瓨 PTY 鍒濆杈撳嚭
+  private paneIndex: Map<string, number>; // "windowId:paneId" 鈫?pid 绱㈠紩锛岀敤浜?O(1) 鏌ユ壘
   private nextPid: number;
   private statusDetector: IStatusDetector;
   private cachedDefaultShell: string | null;
@@ -63,7 +64,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 设置 TmuxCompatService（解决循环依赖：ProcessManager 和 TmuxCompatService 互相引用）
+   * 璁剧疆 TmuxCompatService锛堣В鍐冲惊鐜緷璧栵細ProcessManager 鍜?TmuxCompatService 浜掔浉寮曠敤锛?
    */
   setTmuxCompatService(service: ITmuxCompatService): void {
     this.tmuxCompatService = service;
@@ -139,18 +140,24 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const command = config.command || shell;
     console.log(`[ProcessManager] Shell detection took ${Date.now() - shellStartAt}ms, shell=${shell}`);
 
-    // 创建 PTY 进程（真实或 mock）
+    const tmuxRpcStartAt = Date.now();
+    await this.ensureTmuxRpcServer(config);
+    if (this.shouldEnableTmuxCompat()) {
+      console.log(`[ProcessManager] Tmux RPC ensure took ${Date.now() - tmuxRpcStartAt}ms`);
+    }
+
+    // 鍒涘缓 PTY 杩涚▼锛堢湡瀹炴垨 mock锛?
     let ptyProcess: any;
     let pid: number;
 
     if (pty) {
-      // 使用真实的 node-pty
+      // 浣跨敤鐪熷疄鐨?node-pty
       const ptyCreateStartAt = Date.now();
       ptyProcess = this.createRealPty(config);
       pid = ptyProcess.pid;
       console.log(`[ProcessManager] PTY creation took ${Date.now() - ptyCreateStartAt}ms, pid=${pid}`);
     } else {
-      // 使用 mock PTY
+      // 浣跨敤 mock PTY
       pid = this.nextPid++;
       ptyProcess = this.createMockPty(pid, config);
     }
@@ -167,22 +174,22 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.processes.set(pid, processInfo);
     this.ptys.set(pid, ptyProcess);
 
-    // 维护 paneIndex 索引，用于 O(1) 查找
+    // 缁存姢 paneIndex 绱㈠紩锛岀敤浜?O(1) 鏌ユ壘
     const paneKey = this.getPaneKey(config.windowId, config.paneId);
     this.paneIndex.set(paneKey, pid);
 
-    // 初始化输出缓冲区，用于缓存早期输出（避免竞态条件导致数据丢失）
+    // 鍒濆鍖栬緭鍑虹紦鍐插尯锛岀敤浜庣紦瀛樻棭鏈熻緭鍑猴紙閬垮厤绔炴€佹潯浠跺鑷存暟鎹涪澶憋級
     this.ptyOutputBuffers.set(pid, []);
 
     // Start tracking this PID before registering listeners (avoids race condition)
     this.statusDetector.trackPid(pid);
 
-    // 立即开始缓存 PTY 输出（在任何订阅之前）
+    // 绔嬪嵆寮€濮嬬紦瀛?PTY 杈撳嚭锛堝湪浠讳綍璁㈤槄涔嬪墠锛?
     const bufferDisposable = ptyProcess.onData((data: string) => {
       const buffer = this.ptyOutputBuffers.get(pid);
       if (buffer) {
         buffer.push(data);
-        // 限制缓冲区大小，避免内存泄漏（增加到 500 条消息，覆盖更多启动输出）
+        // 闄愬埗缂撳啿鍖哄ぇ灏忥紝閬垮厤鍐呭瓨娉勬紡锛堝鍔犲埌 500 鏉℃秷鎭紝瑕嗙洊鏇村鍚姩杈撳嚭锛?
         if (buffer.length > 500) {
           buffer.shift();
         }
@@ -192,7 +199,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     // Register PTY listeners for status detection and save disposables
     const disposables: Array<{ dispose: () => void }> = [];
 
-    // 保存缓冲区监听器
+    // 淇濆瓨缂撳啿鍖虹洃鍚櫒
     if (bufferDisposable && typeof bufferDisposable.dispose === 'function') {
       disposables.push(bufferDisposable);
     }
@@ -231,7 +238,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 终止指定进程
+   * 缁堟鎸囧畾杩涚▼
    */
   async killProcess(pid: number): Promise<void> {
     const processInfo = this.processes.get(pid);
@@ -243,46 +250,46 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       throw new Error(`Process already exited: ${pid}`);
     }
 
-    // 清理 PTY 事件监听器
+    // 娓呯悊 PTY 浜嬩欢鐩戝惉鍣?
     const disposables = this.ptyDisposables.get(pid);
     if (disposables) {
       disposables.forEach(d => {
         try {
           d.dispose();
         } catch (error) {
-          // 忽略清理错误
+          // 蹇界暐娓呯悊閿欒
         }
       });
       this.ptyDisposables.delete(pid);
     }
 
-    // 清理输出缓冲区
+    // 娓呯悊杈撳嚭缂撳啿鍖?
     this.ptyOutputBuffers.delete(pid);
 
-    // 清理 paneIndex 索引
+    // 娓呯悊 paneIndex 绱㈠紩
     const paneKey = this.getPaneKey(processInfo.windowId, processInfo.paneId);
     this.paneIndex.delete(paneKey);
 
-    // 实际终止 PTY 进程
+    // 瀹為檯缁堟 PTY 杩涚▼
     const ptyProcess = this.ptys.get(pid);
     if (ptyProcess && typeof ptyProcess.kill === 'function') {
       try {
         if (platform() === 'win32') {
-          // Windows: 使用 taskkill 强制终止进程树
+          // Windows: 浣跨敤 taskkill 寮哄埗缁堟杩涚▼鏍?
           this.killProcessTreeWindows(pid);
         } else {
-          // Unix: 使用 SIGTERM 信号温和地终止进程
+          // Unix: 浣跨敤 SIGTERM 淇″彿娓╁拰鍦扮粓姝㈣繘绋?
           ptyProcess.kill('SIGTERM');
         }
       } catch (error) {
-        // 忽略错误，因为进程可能已经退出
+        // 蹇界暐閿欒锛屽洜涓鸿繘绋嬪彲鑳藉凡缁忛€€鍑?
         if (process.env.NODE_ENV === 'development') {
           console.log(`PTY process ${pid} already exited or kill failed`);
         }
       }
     }
 
-    // 更新进程状态
+    // 鏇存柊杩涚▼鐘舵€?
     processInfo.status = ProcessStatus.Exited;
     processInfo.exitCode = 0;
 
@@ -298,27 +305,27 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       this.ptys.delete(pid);
       this.statusDetector.untrackPid(pid);
     }, 1000);
-    cleanupTimer.unref(); // 不阻止进程退出
+    cleanupTimer.unref(); // 涓嶉樆姝㈣繘绋嬮€€鍑?
   }
 
   /**
-   * 获取进程状态
+   * 鑾峰彇杩涚▼鐘舵€?
    */
   getProcessStatus(pid: number): ProcessInfo | null {
     return this.processes.get(pid) || null;
   }
 
   /**
-   * 列出所有进程
+   * 鍒楀嚭鎵€鏈夎繘绋?
    */
   listProcesses(): ProcessInfo[] {
     return Array.from(this.processes.values());
   }
 
   /**
-   * 通过 windowId 和 paneId 查找 PID（O(1) 查找）
+   * 閫氳繃 windowId 鍜?paneId 鏌ユ壘 PID锛圤(1) 鏌ユ壘锛?
    *
-   * @returns PID 或 null（如果未找到）
+   * @returns PID 鎴?null锛堝鏋滄湭鎵惧埌锛?
    */
   getPidByPane(windowId: string, paneId?: string): number | null {
     const paneKey = this.getPaneKey(windowId, paneId);
@@ -326,14 +333,14 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 生成 paneIndex 的 key
+   * 鐢熸垚 paneIndex 鐨?key
    */
   private getPaneKey(windowId: string | undefined, paneId: string | undefined): string {
     return `${windowId ?? ''}:${paneId ?? ''}`;
   }
 
   /**
-   * 获取窗格状态（通过 windowId 和 paneId）
+   * 鑾峰彇绐楁牸鐘舵€侊紙閫氳繃 windowId 鍜?paneId锛?
    */
   async getPaneStatus(windowId: string, paneId: string): Promise<WindowStatus> {
     const processInfo = Array.from(this.processes.values()).find(
@@ -346,21 +353,21 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 获取 StatusDetector 实例（供 StatusPoller 使用）
+   * 鑾峰彇 StatusDetector 瀹炰緥锛堜緵 StatusPoller 浣跨敤锛?
    */
   getStatusDetector(): IStatusDetector {
     return this.statusDetector;
   }
 
   /**
-   * 订阅状态变化事件，返回取消订阅函数
+   * 璁㈤槄鐘舵€佸彉鍖栦簨浠讹紝杩斿洖鍙栨秷璁㈤槄鍑芥暟
    */
   subscribeStatusChange(callback: (pid: number, status: WindowStatus) => void): () => void {
     return this.statusDetector.subscribeStatusChange(callback);
   }
 
   /**
-   * 向 PTY 写入数据（用户输入）
+   * 鍚?PTY 鍐欏叆鏁版嵁锛堢敤鎴疯緭鍏ワ級
    */
   writeToPty(pid: number, data: string): void {
     const pty = this.ptys.get(pid);
@@ -370,7 +377,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 调整 PTY 大小
+   * 璋冩暣 PTY 澶у皬
    */
   resizePty(pid: number, cols: number, rows: number): void {
     const pty = this.ptys.get(pid);
@@ -380,41 +387,41 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 订阅 PTY 数据输出，返回取消订阅函数
+   * 璁㈤槄 PTY 鏁版嵁杈撳嚭锛岃繑鍥炲彇娑堣闃呭嚱鏁?
    *
-   * 注意：首次订阅时会先发送缓存的初始输出，避免竞态条件导致数据丢失
+   * 娉ㄦ剰锛氶娆¤闃呮椂浼氬厛鍙戦€佺紦瀛樼殑鍒濆杈撳嚭锛岄伩鍏嶇珵鎬佹潯浠跺鑷存暟鎹涪澶?
    */
   subscribePtyData(pid: number, callback: (data: string) => void): () => void {
     const pty = this.ptys.get(pid);
     if (!pty) return () => {};
 
-    // 包装回调，添加错误处理，防止回调异常中断 PTY 数据流
+    // 鍖呰鍥炶皟锛屾坊鍔犻敊璇鐞嗭紝闃叉鍥炶皟寮傚父涓柇 PTY 鏁版嵁娴?
     const safeCallback = (data: string) => {
       try {
         callback(data);
       } catch (error) {
         console.error(`[ProcessManager] PTY data callback error for pid ${pid}:`, error);
-        // 不要让错误中断 PTY 数据流
+        // 涓嶈璁╅敊璇腑鏂?PTY 鏁版嵁娴?
       }
     };
 
-    // 先发送缓存的初始输出（如果有）
+    // 鍏堝彂閫佺紦瀛樼殑鍒濆杈撳嚭锛堝鏋滄湁锛?
     const buffer = this.ptyOutputBuffers.get(pid);
     if (buffer && buffer.length > 0) {
-      // 使用 setImmediate 异步发送，避免阻塞
+      // 浣跨敤 setImmediate 寮傛鍙戦€侊紝閬垮厤闃诲
       setImmediate(() => {
         for (const data of buffer) {
           safeCallback(data);
         }
       });
-      // 清空缓冲区，避免重复发送
+      // 娓呯┖缂撳啿鍖猴紝閬垮厤閲嶅鍙戦€?
       this.ptyOutputBuffers.delete(pid);
     }
 
-    // node-pty 的 onData 返回一个 disposable 对象
+    // node-pty 鐨?onData 杩斿洖涓€涓?disposable 瀵硅薄
     const disposable = pty.onData(safeCallback);
 
-    // 返回清理函数
+    // 杩斿洖娓呯悊鍑芥暟
     return () => {
       if (disposable && typeof disposable.dispose === 'function') {
         disposable.dispose();
@@ -423,7 +430,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 检查 PTY 输出缓冲区是否有数据（用于判断 PTY 是否已输出初始化信息）
+   * 妫€鏌?PTY 杈撳嚭缂撳啿鍖烘槸鍚︽湁鏁版嵁锛堢敤浜庡垽鏂?PTY 鏄惁宸茶緭鍑哄垵濮嬪寲淇℃伅锛?
    */
   hasPtyOutput(pid: number): boolean {
     const buffer = this.ptyOutputBuffers.get(pid);
@@ -431,39 +438,39 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 销毁 ProcessManager，释放资源
+   * 閿€姣?ProcessManager锛岄噴鏀捐祫婧?
    */
   async destroy(progressCallback?: (current: number, total: number) => void): Promise<void> {
     console.log('[ProcessManager] Starting destroy...');
 
-    // 先停止状态检测器，避免在清理过程中触发检测
+    // 鍏堝仠姝㈢姸鎬佹娴嬪櫒锛岄伩鍏嶅湪娓呯悊杩囩▼涓Е鍙戞娴?
     this.statusDetector.destroy();
 
-    // 清理所有 PTY 事件监听器
+    // 娓呯悊鎵€鏈?PTY 浜嬩欢鐩戝惉鍣?
     for (const [pid, disposables] of this.ptyDisposables.entries()) {
       disposables.forEach(d => {
         try {
           d.dispose();
         } catch (error) {
-          // 忽略清理错误
+          // 蹇界暐娓呯悊閿欒
         }
       });
     }
     this.ptyDisposables.clear();
 
-    // 收集所有 PTY 进程的 PID
+    // 鏀堕泦鎵€鏈?PTY 杩涚▼鐨?PID
     const pidsToKill: number[] = [];
 
-    // 第一步：尝试优雅终止（SIGTERM）
+    // 绗竴姝ワ細灏濊瘯浼橀泤缁堟锛圫IGTERM锛?
     for (const [pid, pty] of this.ptys.entries()) {
       pidsToKill.push(pid);
       if (pty && typeof pty.kill === 'function') {
         try {
-          // 先使用 SIGTERM 优雅终止
+          // 鍏堜娇鐢?SIGTERM 浼橀泤缁堟
           pty.kill('SIGTERM');
           console.log(`[ProcessManager] Sent SIGTERM to PTY process ${pid}`);
         } catch (error) {
-          // 忽略错误，因为进程可能已经退出
+          // 蹇界暐閿欒锛屽洜涓鸿繘绋嬪彲鑳藉凡缁忛€€鍑?
           if (process.env.NODE_ENV === 'development') {
             console.log(`[ProcessManager] PTY process ${pid} already exited or kill failed`);
           }
@@ -473,27 +480,27 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     const totalProcesses = pidsToKill.length;
 
-    // 等待 300ms 让进程有机会优雅退出
+    // 绛夊緟 300ms 璁╄繘绋嬫湁鏈轰細浼橀泤閫€鍑?
     if (pidsToKill.length > 0) {
       console.log('[ProcessManager] Waiting 300ms for graceful shutdown...');
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    // 第二步：强制终止所有进程及其子进程树
+    // 绗簩姝ワ細寮哄埗缁堟鎵€鏈夎繘绋嬪強鍏跺瓙杩涚▼鏍?
     if (pidsToKill.length > 0) {
       console.log('[ProcessManager] Force killing remaining processes and their children...');
 
       if (platform() === 'win32') {
-        // Windows: 使用 taskkill /T 一次性终止进程树，避免递归查询
-        // 这比逐个查询子进程快得多，且不会阻塞主线程太久
+        // Windows: 浣跨敤 taskkill /T 涓€娆℃€х粓姝㈣繘绋嬫爲锛岄伩鍏嶉€掑綊鏌ヨ
+        // 杩欐瘮閫愪釜鏌ヨ瀛愯繘绋嬪揩寰楀锛屼笖涓嶄細闃诲涓荤嚎绋嬪お涔?
         await this.killProcessTreesBatch(pidsToKill, progressCallback, totalProcesses);
       } else {
-        // Unix/macOS: 使用进程组终止子进程
+        // Unix/macOS: 浣跨敤杩涚▼缁勭粓姝㈠瓙杩涚▼
         await this.killProcessTreesUnix(pidsToKill, progressCallback, totalProcesses);
       }
     }
 
-    // 不等待进程退出，直接清理
+    // 涓嶇瓑寰呰繘绋嬮€€鍑猴紝鐩存帴娓呯悊
     this.processes.clear();
     this.ptys.clear();
     this.paneIndex.clear();
@@ -502,8 +509,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 批量终止进程树（Windows）
-   * 使用 taskkill /T 一次性终止进程树，避免递归查询子进程
+   * 鎵归噺缁堟杩涚▼鏍戯紙Windows锛?
+   * 浣跨敤 taskkill /T 涓€娆℃€х粓姝㈣繘绋嬫爲锛岄伩鍏嶉€掑綊鏌ヨ瀛愯繘绋?
    */
   private async killProcessTreesBatch(
     pids: number[],
@@ -513,26 +520,26 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const totalProcesses = total || pids.length;
     let processedCount = 0;
 
-    // 分批处理，每批最多 10 个进程，避免命令行过长
+    // 鍒嗘壒澶勭悊锛屾瘡鎵规渶澶?10 涓繘绋嬶紝閬垮厤鍛戒护琛岃繃闀?
     const batchSize = 10;
     for (let i = 0; i < pids.length; i += batchSize) {
       const batch = pids.slice(i, i + batchSize);
 
-      // 使用 Promise.all 并行终止多个进程树
+      // 浣跨敤 Promise.all 骞惰缁堟澶氫釜杩涚▼鏍?
       await Promise.all(
         batch.map(async (pid) => {
           try {
-            // 使用 taskkill /F /T 强制终止进程树
-            // /F: 强制终止
-            // /T: 终止进程及其所有子进程
+            // 浣跨敤 taskkill /F /T 寮哄埗缁堟杩涚▼鏍?
+            // /F: 寮哄埗缁堟
+            // /T: 缁堟杩涚▼鍙婂叾鎵€鏈夊瓙杩涚▼
             await new Promise<void>((resolve) => {
-              // 使用 setImmediate 将 execSync 放到下一个事件循环，避免阻塞 UI
+              // 浣跨敤 setImmediate 灏?execSync 鏀惧埌涓嬩竴涓簨浠跺惊鐜紝閬垮厤闃诲 UI
               setImmediate(() => {
                 try {
                   execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
                   console.log(`[ProcessManager] Killed process tree for PID ${pid}`);
                 } catch (error) {
-                  // 进程可能已经退出，忽略错误
+                  // 杩涚▼鍙兘宸茬粡閫€鍑猴紝蹇界暐閿欒
                   console.log(`[ProcessManager] Process ${pid} already exited`);
                 }
                 resolve();
@@ -544,13 +551,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         })
       );
 
-      // 更新进度（每批处理完后更新一次，减少 IPC 调用频率）
+      // 鏇存柊杩涘害锛堟瘡鎵瑰鐞嗗畬鍚庢洿鏂颁竴娆★紝鍑忓皯 IPC 璋冪敤棰戠巼锛?
       processedCount += batch.length;
       if (progressCallback) {
         progressCallback(Math.min(processedCount, totalProcesses), totalProcesses);
       }
 
-      // 每批之间短暂延迟，让 UI 有机会更新
+      // 姣忔壒涔嬮棿鐭殏寤惰繜锛岃 UI 鏈夋満浼氭洿鏂?
       if (i + batchSize < pids.length) {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
@@ -558,8 +565,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 批量终止进程树（Unix/macOS）
-   * 使用进程组 (PGID) 终止整个进程树
+   * 鎵归噺缁堟杩涚▼鏍戯紙Unix/macOS锛?
+   * 浣跨敤杩涚▼缁?(PGID) 缁堟鏁翠釜杩涚▼鏍?
    */
   private async killProcessTreesUnix(
     pids: number[],
@@ -569,25 +576,25 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const totalProcesses = total || pids.length;
     let processedCount = 0;
 
-    // 分批处理，每批最多 10 个进程
+    // 鍒嗘壒澶勭悊锛屾瘡鎵规渶澶?10 涓繘绋?
     const batchSize = 10;
     for (let i = 0; i < pids.length; i += batchSize) {
       const batch = pids.slice(i, i + batchSize);
 
-      // 使用 Promise.all 并行终止多个进程树
+      // 浣跨敤 Promise.all 骞惰缁堟澶氫釜杩涚▼鏍?
       await Promise.all(
         batch.map(async (pid) => {
           try {
             await new Promise<void>((resolve) => {
               setImmediate(() => {
                 try {
-                  // 方法1: 尝试终止进程组（负 PID 表示进程组）
-                  // 这会终止该进程及其所有子进程
+                  // 鏂规硶1: 灏濊瘯缁堟杩涚▼缁勶紙璐?PID 琛ㄧず杩涚▼缁勶級
+                  // 杩欎細缁堟璇ヨ繘绋嬪強鍏舵墍鏈夊瓙杩涚▼
                   try {
                     process.kill(-pid, 'SIGKILL');
                     console.log(`[ProcessManager] Killed process group -${pid}`);
                   } catch (pgidError) {
-                    // 如果进程组终止失败，尝试直接终止进程
+                    // 濡傛灉杩涚▼缁勭粓姝㈠け璐ワ紝灏濊瘯鐩存帴缁堟杩涚▼
                     try {
                       process.kill(pid, 'SIGKILL');
                       console.log(`[ProcessManager] Killed process ${pid}`);
@@ -596,13 +603,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
                     }
                   }
 
-                  // 方法2: 使用 pkill 终止子进程（备用方案）
-                  // pkill -P <pid> 会终止所有父进程为 <pid> 的子进程
+                  // 鏂规硶2: 浣跨敤 pkill 缁堟瀛愯繘绋嬶紙澶囩敤鏂规锛?
+                  // pkill -P <pid> 浼氱粓姝㈡墍鏈夌埗杩涚▼涓?<pid> 鐨勫瓙杩涚▼
                   try {
                     execSync(`pkill -9 -P ${pid}`, { stdio: 'ignore' });
                     console.log(`[ProcessManager] Killed children of process ${pid}`);
                   } catch (error) {
-                    // 忽略错误，可能没有子进程
+                    // 蹇界暐閿欒锛屽彲鑳芥病鏈夊瓙杩涚▼
                   }
                 } catch (error) {
                   console.log(`[ProcessManager] Failed to kill process ${pid}`);
@@ -616,13 +623,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         })
       );
 
-      // 更新进度（每批处理完后更新一次，减少 IPC 调用频率）
+      // 鏇存柊杩涘害锛堟瘡鎵瑰鐞嗗畬鍚庢洿鏂颁竴娆★紝鍑忓皯 IPC 璋冪敤棰戠巼锛?
       processedCount += batch.length;
       if (progressCallback) {
         progressCallback(Math.min(processedCount, totalProcesses), totalProcesses);
       }
 
-      // 每批之间短暂延迟，让 UI 有机会更新
+      // 姣忔壒涔嬮棿鐭殏寤惰繜锛岃 UI 鏈夋満浼氭洿鏂?
       if (i + batchSize < pids.length) {
         await new Promise(resolve => setTimeout(resolve, 50));
       }
@@ -630,21 +637,21 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * Windows: 强制终止进程树
+   * Windows: 寮哄埗缁堟杩涚▼鏍?
    */
   private killProcessTreeWindows(pid: number): void {
     try {
-      // 使用 taskkill /F /T 强制终止进程及其所有子进程
+      // 浣跨敤 taskkill /F /T 寮哄埗缁堟杩涚▼鍙婂叾鎵€鏈夊瓙杩涚▼
       execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' });
       console.log(`[ProcessManager] Killed process tree for PID ${pid}`);
     } catch (error) {
-      // 进程可能已经退出，忽略错误
+      // 杩涚▼鍙兘宸茬粡閫€鍑猴紝蹇界暐閿欒
       console.log(`[ProcessManager] Process ${pid} already exited or kill failed`);
     }
   }
 
   /**
-   * 获取平台默认 shell
+   * 鑾峰彇骞冲彴榛樿 shell
    */
   private getDefaultShell(): string {
     if (this.cachedDefaultShell) {
@@ -655,16 +662,16 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const currentPlatform = platform();
 
     if (currentPlatform === 'win32') {
-      // Windows: 使用 where 命令查找 pwsh.exe (PowerShell 7+)
+      // Windows: 浣跨敤 where 鍛戒护鏌ユ壘 pwsh.exe (PowerShell 7+)
       try {
         execSync('where pwsh.exe', { stdio: 'ignore' });
         shell = 'pwsh.exe';
       } catch {
-        // 回退到 cmd.exe，不使用旧版 powershell.exe
+        // 鍥為€€鍒?cmd.exe锛屼笉浣跨敤鏃х増 powershell.exe
         shell = 'cmd.exe';
       }
     } else if (currentPlatform === 'darwin') {
-      // macOS: 优先 zsh, 降级到 bash
+      // macOS: 浼樺厛 zsh, 闄嶇骇鍒?bash
       if (existsSync('/bin/zsh')) {
         shell = '/bin/zsh';
       } else {
@@ -680,8 +687,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 获取用于创建 PTY 的环境变量（带短期缓存）
-   * 说明：Windows 下读取注册表是同步命令，缓存可显著降低卡顿概率。
+   * 鑾峰彇鐢ㄤ簬鍒涘缓 PTY 鐨勭幆澧冨彉閲忥紙甯︾煭鏈熺紦瀛橈級
+   * 璇存槑锛歐indows 涓嬭鍙栨敞鍐岃〃鏄悓姝ュ懡浠わ紝缂撳瓨鍙樉钁楅檷浣庡崱椤挎鐜囥€?
    */
   private getSpawnEnvironment(): NodeJS.ProcessEnv {
     const now = Date.now();
@@ -698,10 +705,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 创建 Mock PTY 进程（仅在 node-pty 不可用时使用）
+   * 鍒涘缓 Mock PTY 杩涚▼锛堜粎鍦?node-pty 涓嶅彲鐢ㄦ椂浣跨敤锛?
    */
   private createMockPty(pid: number, config: TerminalConfig): any {
-    // Mock 实现
+    // Mock 瀹炵幇
     const dataCallbacks: Array<(data: string) => void> = [];
     const exitCallbacks: Array<(exitCode: number) => void> = [];
 
@@ -709,31 +716,31 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       pid,
       onData: (callback: (data: string) => void) => {
         dataCallbacks.push(callback);
-        // Mock: 模拟终端输出
+        // Mock: 妯℃嫙缁堢杈撳嚭
         setTimeout(() => {
           callback(`Mock terminal started in ${config.workingDirectory}\r\n`);
-          callback(`$ `); // 显示提示符
+          callback(`$ `); // 鏄剧ず鎻愮ず绗?
         }, 100);
       },
       onExit: (callback: (exitCode: number) => void) => {
         exitCallbacks.push(callback);
       },
       write: (data: string) => {
-        // Mock: 回显用户输入并模拟命令执行
+        // Mock: 鍥炴樉鐢ㄦ埛杈撳叆骞舵ā鎷熷懡浠ゆ墽琛?
         dataCallbacks.forEach(cb => {
-          cb(data); // 回显输入
+          cb(data); // 鍥炴樉杈撳叆
 
-          // 如果是回车，模拟命令执行
+          // 濡傛灉鏄洖杞︼紝妯℃嫙鍛戒护鎵ц
           if (data === '\r') {
-            cb('\r\n$ '); // 新行 + 提示符
+            cb('\r\n$ '); // 鏂拌 + 鎻愮ず绗?
           }
         });
       },
       resize: (cols: number, rows: number) => {
-        // Mock: 模拟调整终端大小（无需实际操作）
+        // Mock: 妯℃嫙璋冩暣缁堢澶у皬锛堟棤闇€瀹為檯鎿嶄綔锛?
       },
       kill: () => {
-        // Mock: 模拟终止进程
+        // Mock: 妯℃嫙缁堟杩涚▼
         exitCallbacks.forEach(cb => cb(0));
         this.killProcess(pid);
       },
@@ -741,33 +748,33 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 创建真实的 PTY 进程（使用 node-pty）
+   * 鍒涘缓鐪熷疄鐨?PTY 杩涚▼锛堜娇鐢?node-pty锛?
    */
   private createRealPty(config: TerminalConfig): any {
     const shell = this.getDefaultShell();
     const command = config.command || shell;
 
-    // 获取最新的系统环境变量（Windows 从注册表读取，macOS/Linux 使用 process.env）
+    // 鑾峰彇鏈€鏂扮殑绯荤粺鐜鍙橀噺锛圵indows 浠庢敞鍐岃〃璇诲彇锛宮acOS/Linux 浣跨敤 process.env锛?
     const envStartAt = Date.now();
     const latestEnv = this.getSpawnEnvironment();
     console.log(`[ProcessManager] Environment variable loading took ${Date.now() - envStartAt}ms`);
 
-    // 清理环境变量，移除可能导致冲突的变量
+    // 娓呯悊鐜鍙橀噺锛岀Щ闄ゅ彲鑳藉鑷村啿绐佺殑鍙橀噺
     const cleanEnv = { ...latestEnv };
-    delete cleanEnv.CLAUDECODE; // 移除 Claude Code 环境变量，避免嵌套会话检测
-    delete cleanEnv.VSCODE_INJECTION; // 移除 VS Code 注入变量
+    delete cleanEnv.CLAUDECODE; // 绉婚櫎 Claude Code 鐜鍙橀噺锛岄伩鍏嶅祵濂椾細璇濇娴?
+    delete cleanEnv.VSCODE_INJECTION; // 绉婚櫎 VS Code 娉ㄥ叆鍙橀噺
 
-    // 注入窗口 ID 环境变量（供 statusLine 插件使用）
+    // 娉ㄥ叆绐楀彛 ID 鐜鍙橀噺锛堜緵 statusLine 鎻掍欢浣跨敤锛?
     cleanEnv.AUSOME_TERMINAL_WINDOW_ID = config.windowId;
 
-    // 合并用户提供的环境变量（如果有）
+    // 鍚堝苟鐢ㄦ埛鎻愪緵鐨勭幆澧冨彉閲忥紙濡傛灉鏈夛級
     if (config.env) {
       Object.assign(cleanEnv, config.env);
     }
 
-    // 注入 tmux 兼容环境变量（如果启用）
+    // 娉ㄥ叆 tmux 鍏煎鐜鍙橀噺锛堝鏋滃惎鐢級
     if (this.shouldEnableTmuxCompat()) {
-      const tmuxEnv = this.buildTmuxEnvironment(config);
+      const tmuxEnv = this.buildTmuxEnvironment(config, cleanEnv);
       Object.assign(cleanEnv, tmuxEnv);
 
       if (process.env.AUSOME_TMUX_DEBUG === '1') {
@@ -781,7 +788,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       }
     }
 
-    // 创建真实的 PTY 进程
+    // 鍒涘缓鐪熷疄鐨?PTY 杩涚▼
     const ptySpawnOptions: Record<string, unknown> = {
       name: 'xterm-256color',
       cols: 80,
@@ -823,17 +830,36 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 检查是否启用 tmux 兼容模式
+   * 妫€鏌ユ槸鍚﹀惎鐢?tmux 鍏煎妯″紡
    */
+  private async ensureTmuxRpcServer(config: TerminalConfig): Promise<void> {
+    if (!this.shouldEnableTmuxCompat()) {
+      return;
+    }
+
+    if (!this.tmuxCompatService) {
+      console.warn('[ProcessManager] Tmux compat enabled but service is unavailable, skipping RPC server ensure');
+      return;
+    }
+
+    if (!config.windowId) {
+      console.warn('[ProcessManager] Tmux compat enabled but windowId is missing, skipping RPC server ensure');
+      return;
+    }
+
+    const socketPath = await this.tmuxCompatService.ensureRpcServer(config.windowId);
+    console.log(`[ProcessManager] Ensured tmux RPC server for windowId=${config.windowId} at ${socketPath}`);
+  }
+
   private shouldEnableTmuxCompat(): boolean {
     const settings = this.getSettings?.();
     return settings?.tmux?.enabled ?? false;
   }
 
   /**
-   * 构建 tmux 环境变量
+   * 鏋勫缓 tmux 鐜鍙橀噺
    */
-  private buildTmuxEnvironment(config: TerminalConfig): Partial<NodeJS.ProcessEnv> {
+  private buildTmuxEnvironment(config: TerminalConfig, baseEnv: NodeJS.ProcessEnv): Partial<NodeJS.ProcessEnv> {
     if (!this.tmuxCompatService) {
       console.warn('[ProcessManager] TmuxCompatService not available, skipping tmux environment injection');
       return {};
@@ -844,31 +870,32 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       return {};
     }
 
-    // 分配 tmux pane ID
-    const tmuxPaneId = this.tmuxCompatService.allocatePaneId();
+    const existingTmuxPaneId = this.tmuxCompatService.getTmuxPaneId(config.windowId, config.paneId);
+    const tmuxPaneId = existingTmuxPaneId ?? this.tmuxCompatService.allocatePaneId();
 
-    // 注册 pane 映射
-    this.tmuxCompatService.registerPane(tmuxPaneId, config.windowId, config.paneId);
+    if (!existingTmuxPaneId) {
+      this.tmuxCompatService.registerPane(tmuxPaneId, config.windowId, config.paneId);
+    }
 
-    // 获取 RPC socket 路径
     const rpcSocketPath = this.getRpcSocketPath(config.windowId);
 
-    // 构建 TMUX 环境变量
     const tmuxSocketPath = platform() === 'win32'
       ? `\\\\.\\pipe\\ausome-tmux-default`
       : `/tmp/tmux-${process.getuid?.() ?? 1000}/default`;
 
     const tmuxValue = `${tmuxSocketPath},${process.pid},0`;
 
-    // 构建 PATH（将 fake tmux 目录添加到前面）
     const settings = this.getSettings?.();
     const autoInjectPath = settings?.tmux?.autoInjectPath ?? true;
 
-    let newPath = process.env.PATH || '';
+    const currentPath = baseEnv.Path || baseEnv.PATH || process.env.Path || process.env.PATH || '';
+    let newPath = currentPath;
     if (autoInjectPath) {
       const fakeTmuxDir = this.getFakeTmuxDir();
-      newPath = `${fakeTmuxDir}${path.delimiter}${process.env.PATH}`;
+      newPath = `${fakeTmuxDir}${path.delimiter}${currentPath}`;
     }
+
+    const tmuxLogFile = path.join(tmpdir(), 'copilot-terminal-tmux-debug.log');
 
     return {
       TMUX: tmuxValue,
@@ -876,38 +903,49 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       AUSOME_TERMINAL_WINDOW_ID: config.windowId,
       AUSOME_TERMINAL_PANE_ID: config.paneId,
       AUSOME_TMUX_RPC: rpcSocketPath,
+      AUSOME_TMUX_LOG_FILE: tmuxLogFile,
+      ...(baseEnv.AUSOME_TMUX_DEBUG === '1' ? { AUSOME_TMUX_DEBUG: '1' } : {}),
       PATH: newPath,
+      Path: newPath,
     };
   }
-
-  /**
-   * 获取 fake tmux 目录
-   */
   private getFakeTmuxDir(): string {
-    // 开发环境
-    if (process.env.NODE_ENV === 'development') {
-      return path.join(__dirname, '../../resources/bin');
-    }
-
-    // 生产环境
     try {
-      const { app } = require('electron');
-      return path.join(app.getAppPath(), 'resources', 'bin');
+      return getTmuxShimDir();
     } catch (error) {
-      console.error('[ProcessManager] Failed to get app path:', error);
-      // 回退到相对路径
-      return path.join(__dirname, '../../resources/bin');
+      console.error('[ProcessManager] Failed to resolve tmux shim dir:', error);
+      return path.join(process.cwd(), 'resources', 'bin');
     }
   }
-
-  /**
-   * 获取 RPC socket 路径
-   */
   private getRpcSocketPath(windowId: string): string {
+    if (this.tmuxCompatService) {
+      return this.tmuxCompatService.getRpcSocketPath(windowId);
+    }
+
     if (platform() === 'win32') {
       return `\\\\.\\pipe\\ausome-tmux-${windowId}`;
     } else {
       return `/tmp/ausome-tmux-${windowId}.sock`;
+    }
+  }
+
+  rebindPaneProcess(oldWindowId: string, paneId: string, newWindowId: string, newPaneId: string = paneId): void {
+    const oldKey = this.getPaneKey(oldWindowId, paneId);
+    const pid = this.paneIndex.get(oldKey);
+    if (!pid) {
+      return;
+    }
+
+    const newKey = this.getPaneKey(newWindowId, newPaneId);
+    if (oldKey !== newKey) {
+      this.paneIndex.delete(oldKey);
+      this.paneIndex.set(newKey, pid);
+    }
+
+    const processInfo = this.processes.get(pid);
+    if (processInfo) {
+      processInfo.windowId = newWindowId;
+      processInfo.paneId = newPaneId;
     }
   }
 }

@@ -196,11 +196,47 @@ app.whenReady().then(async () => {
         updater(currentWorkspace);
       }
     },
+    onPaneProcessStarted: ({ windowId, paneId, pid }) => {
+      statusPoller?.addPane(windowId, paneId, pid);
+    },
+    onPaneProcessStopped: ({ paneId }) => {
+      statusPoller?.removePane(paneId);
+    },
+    onPaneData: ({ windowId, paneId, data }) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('pty-data', { windowId, paneId, data });
+      }
+    },
     debug: process.env.AUSOME_TMUX_DEBUG === '1',
   });
 
   // 将 tmuxCompatService 注入 ProcessManager（解决循环依赖）
   processManager.setTmuxCompatService(tmuxCompatService);
+
+  // 监听 TmuxCompatService 事件并转发到渲染进程
+  tmuxCompatService.on('pane-title-changed', (data: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('tmux:pane-title-changed', data);
+    }
+  });
+
+  tmuxCompatService.on('pane-style-changed', (data: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('tmux:pane-style-changed', data);
+    }
+  });
+
+  tmuxCompatService.on('window-synced', (data: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('tmux:window-synced', data);
+    }
+  });
+
+  tmuxCompatService.on('window-removed', (data: any) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('tmux:window-removed', data);
+    }
+  });
 
   // 初始化 PtySubscriptionManager
   ptySubscriptionManager = new PtySubscriptionManager();
@@ -322,4 +358,3 @@ app.on('window-all-closed', () => {
     }
   }
 });
-

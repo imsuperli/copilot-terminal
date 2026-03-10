@@ -62,6 +62,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
   offWindowGitBranchChanged: (callback: (event: unknown, payload: unknown) => void) =>
     ipcRenderer.removeListener('window-git-branch-changed', callback),
 
+  // Tmux pane metadata events
+  onTmuxPaneTitleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; title: string }) => void) => {
+    ipcRenderer.on('tmux:pane-title-changed', callback);
+  },
+  offTmuxPaneTitleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; title: string }) => void) => {
+    ipcRenderer.removeListener('tmux:pane-title-changed', callback);
+  },
+  onTmuxPaneStyleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; metadata: unknown }) => void) => {
+    ipcRenderer.on('tmux:pane-style-changed', callback);
+  },
+  offTmuxPaneStyleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; metadata: unknown }) => void) => {
+    ipcRenderer.removeListener('tmux:pane-style-changed', callback);
+  },
+  onTmuxWindowSynced: (callback: (event: unknown, payload: { window: unknown }) => void) => {
+    ipcRenderer.on('tmux:window-synced', callback);
+  },
+  offTmuxWindowSynced: (callback: (event: unknown, payload: { window: unknown }) => void) => {
+    ipcRenderer.removeListener('tmux:window-synced', callback);
+  },
+  onTmuxWindowRemoved: (callback: (event: unknown, payload: { windowId: string }) => void) => {
+    ipcRenderer.on('tmux:window-removed', callback);
+  },
+  offTmuxWindowRemoved: (callback: (event: unknown, payload: { windowId: string }) => void) => {
+    ipcRenderer.removeListener('tmux:window-removed', callback);
+  },
+
   // Project config updates
   onProjectConfigUpdated: (callback: (event: unknown, payload: { windowId: string; projectConfig: unknown }) => void) => {
     ipcRenderer.on('project-config-updated', callback);

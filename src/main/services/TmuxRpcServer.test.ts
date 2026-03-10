@@ -64,6 +64,8 @@ function createMockService(overrides?: Partial<ITmuxCompatService>): ITmuxCompat
       windows: [],
       createdAt: Date.now(),
     }),
+    ensureRpcServer: vi.fn().mockResolvedValue('/tmp/mock-rpc.sock'),
+    getRpcSocketPath: vi.fn().mockReturnValue('/tmp/mock-rpc.sock'),
     destroy: vi.fn(),
     ...overrides,
   };

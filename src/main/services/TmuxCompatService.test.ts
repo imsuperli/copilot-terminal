@@ -400,6 +400,35 @@ describe('TmuxCompatService', () => {
     });
   });
 
+  describe('Windows teammate launch translation', () => {
+    it('PowerShell launcher should invoke node for js entrypoints', () => {
+      const { service } = createService();
+
+      const command = (service as any).buildPowerShellLauncher(
+        'D:\\tmp',
+        [['CLAUDECODE', '1']],
+        'D:\\ProgramData\\nodejs\\node_global\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+        ['--agent-id', 'senior-architect'],
+      );
+
+      expect(command).toContain("& 'node' 'D:\\ProgramData\\nodejs\\node_global\\node_modules\\@anthropic-ai\\claude-code\\cli.js' '--agent-id' 'senior-architect'");
+      expect(command).not.toContain("& 'D:\\ProgramData\\nodejs\\node_global\\node_modules\\@anthropic-ai\\claude-code\\cli.js'");
+    });
+
+    it('cmd launcher should invoke node for js entrypoints', () => {
+      const { service } = createService();
+
+      const command = (service as any).buildCmdLauncher(
+        'D:\\tmp',
+        [['CLAUDECODE', '1']],
+        'D:\\ProgramData\\nodejs\\node_global\\node_modules\\@anthropic-ai\\claude-code\\cli.js',
+        ['--agent-id', 'startup-cto'],
+      );
+
+      expect(command).toContain('node D:\\ProgramData\\nodejs\\node_global\\node_modules\\@anthropic-ai\\claude-code\\cli.js --agent-id startup-cto');
+    });
+  });
+
   describe('destroy', () => {
     it('应清理所有状态', () => {
       const { service } = createService();

@@ -43,6 +43,7 @@ interface WindowStore {
 
   // Actions
   addWindow: (window: Window) => void;
+  syncWindow: (window: Window) => void;
   removeWindow: (id: string) => void;
   updateWindow: (id: string, updates: Partial<Window>) => void;
   /**
@@ -101,6 +102,24 @@ export const useWindowStore = create<WindowStore>()(
         state.mruList = [window.id, ...state.mruList.filter(id => id !== window.id)];
       });
       // 触发自动保存，传递最新的窗口列表
+      const windows = get().windows;
+      triggerAutoSave(windows);
+    },
+
+    // 同步 window（存在则替换，不存在则新增）
+    syncWindow: (window) => {
+      set((state) => {
+        const index = state.windows.findIndex((item) => item.id === window.id);
+        if (index >= 0) {
+          state.windows[index] = window;
+        } else {
+          state.windows.push(window);
+        }
+
+        if (!state.mruList.includes(window.id)) {
+          state.mruList = [window.id, ...state.mruList];
+        }
+      });
       const windows = get().windows;
       triggerAutoSave(windows);
     },

@@ -31,6 +31,34 @@ function getStatusBorderColor(status: WindowStatus): string {
 }
 
 /**
+ * 将 hex 颜色转换为 Tailwind 边框类（如果是自定义颜色则返回 inline style）
+ */
+function getCustomBorderStyle(color?: string): { className?: string; style?: React.CSSProperties } {
+  if (!color) {
+    return {};
+  }
+
+  // 如果是 hex 颜色，使用 inline style
+  if (color.startsWith('#')) {
+    return {
+      style: { borderTopColor: color }
+    };
+  }
+
+  return {};
+}
+
+function getActivePaneStyle(color?: string): React.CSSProperties | undefined {
+  if (!color || !color.startsWith('#')) {
+    return undefined;
+  }
+
+  return {
+    boxShadow: `0 0 0 1px ${color}`,
+  };
+}
+
+/**
  * 根据窗格状态获取选中时的边框颜色
  */
 function getStatusRingColor(status: WindowStatus): string {
@@ -86,8 +114,16 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const lastCtrlEnterTimeRef = useRef(0); // 记录上次 Ctrl+Enter 的时间戳
   const lastStatusRef = useRef<WindowStatus>(pane.status); // 跟踪上一次的状态
   const [isHovered, setIsHovered] = useState(false);
-  const borderColor = getStatusBorderColor(pane.status);
+
+  // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
+  const customBorderStyle = getCustomBorderStyle(pane.borderColor);
+  const activePaneStyle = isActive ? getActivePaneStyle(pane.activeBorderColor) : undefined;
+  const defaultBorderColor = getStatusBorderColor(pane.status);
+  const borderColorClass = customBorderStyle.style ? 'border-t-2' : `border-t-2 ${defaultBorderColor}`;
   const ringColor = getStatusRingColor(pane.status);
+
+  // 是否显示 pane header（当有 title 或 agentName 时显示）
+  const showPaneHeader = !!(pane.title || pane.agentName);
 
   // 写入系统剪贴板（优先走 Electron IPC，失败时回退到浏览器 API）
   const writeClipboardText = useCallback(async (text: string) => {
@@ -501,15 +537,40 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   return (
     <div
-      className={`relative flex flex-col h-full bg-[#0f0f0f] ${
+      className={`relative flex flex-col h-full bg-[#0f0f0f] ${borderColorClass} ${
         isActive ? `ring-1 ${ringColor}` : ''
       }`}
+      style={{
+        ...customBorderStyle.style,
+        ...activePaneStyle,
+      }}
       onClick={handleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 状态圆点 - 非悬停时显示 */}
-      {!isHovered && (
+      {/* Pane Header - 显示 tmux 元数据（title, agentName） */}
+      {showPaneHeader && (
+        <div className="flex items-center justify-between px-2 py-1 bg-zinc-900/50 border-b border-zinc-800">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Agent 颜色指示器 */}
+            {pane.agentColor && (
+              <div
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ backgroundColor: pane.agentColor }}
+              />
+            )}
+            {/* Pane 标题或 Agent 名称 */}
+            <span className="text-xs text-zinc-400 truncate font-mono">
+              {pane.title || pane.agentName}
+            </span>
+          </div>
+          {/* 状态指示器 */}
+          <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
+        </div>
+      )}
+
+      {/* 状态圆点 - 非悬停时显示（仅在没有 header 时显示） */}
+      {!showPaneHeader && !isHovered && (
         <div className="absolute top-1 right-1 z-10">
           <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
         </div>
@@ -522,7 +583,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
             e.stopPropagation();
             onClose();
           }}
-          className="absolute top-1 right-1 z-20 w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+          className={`absolute ${showPaneHeader ? 'top-8' : 'top-1'} right-1 z-20 w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg`}
           title={t('terminalPane.close')}
         >
           <X size={14} />
