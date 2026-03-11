@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 // 暴露受控的 IPC API 到渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
+  platform: process.platform,
   ping: () => ipcRenderer.invoke('ping'),
 
   // Terminal management

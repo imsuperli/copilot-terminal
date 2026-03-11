@@ -525,7 +525,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       language: this.resolveLanguage(settings?.language),
       ides: settings?.ides ?? defaults.ides,
       terminal: {
-        useBundledConptyDll: settings?.terminal?.useBundledConptyDll ?? defaults.terminal?.useBundledConptyDll ?? false,
+        useBundledConptyDll: settings?.terminal?.useBundledConptyDll ?? defaults.terminal?.useBundledConptyDll ?? true,
       },
     };
   }
@@ -539,7 +539,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       language: this.resolveLanguage(),
       ides: scanInstalledIDEs(),
       terminal: {
-        useBundledConptyDll: false,
+        useBundledConptyDll: true,
       },
     };
   }

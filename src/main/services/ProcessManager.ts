@@ -14,10 +14,10 @@ import { getTmuxShimDir } from '../utils/tmux-shim-path';
 // 灏濊瘯瀵煎叆 node-pty锛屽鏋滃け璐ュ垯浣跨敤 mock
 let pty: any;
 try {
-  pty = require('@homebridge/node-pty-prebuilt-multiarch');
+  pty = require('node-pty');
 } catch {
   try {
-    pty = require('node-pty');
+    pty = require('@homebridge/node-pty-prebuilt-multiarch');
   } catch {
     pty = null;
   }
@@ -798,17 +798,21 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     };
 
     if (platform() === 'win32') {
+      const conptyCheckStart = Date.now();
       const useBundledConptyDll = this.shouldUseBundledConptyDll();
+      console.log(`[ProcessManager] ⏱️ ConPTY DLL check took ${Date.now() - conptyCheckStart}ms`);
       ptySpawnOptions.useConpty = true;
       if (useBundledConptyDll) {
         ptySpawnOptions.useConptyDll = true;
       }
-      console.log(`[ProcessManager] useConptyDll=${useBundledConptyDll}`);
+      console.log(`[ProcessManager] 🔧 useConptyDll=${useBundledConptyDll}`);
     }
 
     const ptySpawnStartAt = Date.now();
+    console.log(`[ProcessManager] 🚀 Calling pty.spawn()...`);
     const ptyProcess = pty.spawn(shell, [], ptySpawnOptions);
-    console.log(`[ProcessManager] pty.spawn() took ${Date.now() - ptySpawnStartAt}ms`);
+    const ptySpawnDuration = Date.now() - ptySpawnStartAt;
+    console.log(`[ProcessManager] ⏱️ pty.spawn() took ${ptySpawnDuration}ms`);
 
     return ptyProcess;
   }
@@ -826,7 +830,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       return false;
     }
 
-    return this.getSettings?.()?.terminal?.useBundledConptyDll ?? false;
+    return this.getSettings?.()?.terminal?.useBundledConptyDll ?? true;
   }
 
   /**

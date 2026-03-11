@@ -2,6 +2,7 @@ import { TerminalWindow } from './types/window'
 import { Workspace } from '../main/types/workspace'
 
 export interface ElectronAPI {
+  platform: 'win32' | 'darwin' | 'linux'
   ping: () => Promise<string>
 
   // Terminal management

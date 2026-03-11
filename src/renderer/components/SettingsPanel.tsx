@@ -26,6 +26,7 @@ interface SettingsPanelProps {
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) => {
   const { language, setLanguage, t } = useI18n();
+  const isWindows = window.electronAPI.platform === 'win32';
   const [ides, setIDEs] = useState<IDEConfig[]>([]);
   const [supportedIDENames, setSupportedIDENames] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
@@ -47,7 +48,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     showCost: true,
   });
   const [terminalSettings, setTerminalSettings] = useState({
-    useBundledConptyDll: false,
+    useBundledConptyDll: true,
   });
 
   // tmux 兼容模式配置状态
@@ -85,7 +86,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
         if (response.data.terminal) {
           setTerminalSettings({
-            useBundledConptyDll: response.data.terminal.useBundledConptyDll ?? false,
+            useBundledConptyDll: response.data.terminal.useBundledConptyDll ?? true,
           });
         }
 
@@ -486,21 +487,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       </Select.Root>
                     </div>
 
-                    <div className="p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <h3 className="text-sm font-semibold text-zinc-100 mb-1">{t('settings.general.bundledConptyTitle')}</h3>
-                          <p className="text-xs text-zinc-400">{t('settings.general.bundledConptyDescription')}</p>
+                    {isWindows && (
+                      <div className="p-4 bg-zinc-800/50 rounded-lg border border-zinc-700/50">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <h3 className="text-sm font-semibold text-zinc-100 mb-1">{t('settings.general.bundledConptyTitle')}</h3>
+                            <p className="text-xs text-zinc-400">{t('settings.general.bundledConptyDescription')}</p>
+                          </div>
+                          <Switch.Root
+                            checked={terminalSettings.useBundledConptyDll}
+                            onCheckedChange={(checked) => handleTerminalSettingsChange({ useBundledConptyDll: checked })}
+                            className="w-11 h-6 bg-zinc-700 rounded-full relative data-[state=checked]:bg-blue-600 transition-colors flex-shrink-0"
+                          >
+                            <Switch.Thumb className="block w-5 h-5 bg-white rounded-full transition-transform translate-x-0.5 data-[state=checked]:translate-x-[22px]" />
+                          </Switch.Root>
                         </div>
-                        <Switch.Root
-                          checked={terminalSettings.useBundledConptyDll}
-                          onCheckedChange={(checked) => handleTerminalSettingsChange({ useBundledConptyDll: checked })}
-                          className="w-11 h-6 bg-zinc-700 rounded-full relative data-[state=checked]:bg-blue-600 transition-colors flex-shrink-0"
-                        >
-                          <Switch.Thumb className="block w-5 h-5 bg-white rounded-full transition-transform translate-x-0.5 data-[state=checked]:translate-x-[22px]" />
-                        </Switch.Root>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </Tabs.Content>
 

@@ -11,6 +11,7 @@ global.ResizeObserver = class ResizeObserver {
 // Mock window.electronAPI for all renderer tests
 Object.defineProperty(window, 'electronAPI', {
   value: {
+    platform: 'win32',
     ping: vi.fn().mockResolvedValue('pong'),
     createWindow: vi.fn().mockResolvedValue({}),
     killTerminal: vi.fn().mockResolvedValue(undefined),
