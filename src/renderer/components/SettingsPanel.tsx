@@ -21,7 +21,7 @@ interface IDEConfig {
 
 interface ShellProgramOption {
   command: string;
-  label: string;
+  path: string;
   isDefault: boolean;
 }
 
@@ -471,20 +471,29 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     },
   ];
   const recommendedShell = availableShells.find((shell) => shell.isDefault);
+  const autoShellTarget = recommendedShell?.path ?? '';
   const detectedShellOptions = availableShells.slice();
-  const currentShellValue = terminalSettings.defaultShellProgram;
-  const currentShellExistsInDetectedList = detectedShellOptions.some((shell) => shell.command === currentShellValue);
-  const selectedShellOptions = currentShellValue && !currentShellExistsInDetectedList
+  const currentShellValue = terminalSettings.defaultShellProgram.trim();
+  const matchedShell = detectedShellOptions.find((shell) => (
+    shell.path === currentShellValue || shell.command === currentShellValue
+  ));
+  const selectedShellOptions = currentShellValue && !matchedShell
     ? [
         {
           command: currentShellValue,
-          label: currentShellValue,
+          path: currentShellValue,
           isDefault: false,
         },
         ...detectedShellOptions,
       ]
     : detectedShellOptions;
-  const selectedShellValue = currentShellValue || AUTO_SHELL_OPTION_VALUE;
+  const filteredShellOptions = autoShellTarget
+    ? selectedShellOptions.filter((shell) => shell.path !== autoShellTarget)
+    : selectedShellOptions;
+  const effectiveSelectedShell = matchedShell?.path ?? currentShellValue;
+  const selectedShellValue = !effectiveSelectedShell || effectiveSelectedShell === autoShellTarget
+    ? AUTO_SHELL_OPTION_VALUE
+    : effectiveSelectedShell;
 
   return (
     <Dialog.Root open={open} onOpenChange={handleSettingsOpenChange}>
@@ -618,24 +627,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   <Select.Viewport className="p-1">
                                     <Select.Item value={AUTO_SHELL_OPTION_VALUE} className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
                                       <Select.ItemText>
-                                        {t('settings.general.defaultShellAutoOption', {
-                                          shell: recommendedShell?.label ?? t('settings.general.defaultShellAutoFallback'),
-                                        })}
+                                        {autoShellTarget
+                                          ? t('settings.general.defaultShellAutoOption', { shell: autoShellTarget })
+                                          : t('settings.general.defaultShellAutoFallback')}
                                       </Select.ItemText>
                                       <Select.ItemIndicator>
                                         <Check size={14} />
                                       </Select.ItemIndicator>
                                     </Select.Item>
-                                    {selectedShellOptions.map((shell) => (
+                                    {filteredShellOptions.map((shell) => (
                                       <Select.Item
-                                        key={shell.command}
-                                        value={shell.command}
+                                        key={shell.path}
+                                        value={shell.path}
                                         className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
                                       >
                                         <Select.ItemText>
-                                          {shell.isDefault
-                                            ? t('settings.general.defaultShellDetectedOption', { shell: shell.label })
-                                            : shell.label}
+                                          {shell.path}
                                         </Select.ItemText>
                                         <Select.ItemIndicator>
                                           <Check size={14} />

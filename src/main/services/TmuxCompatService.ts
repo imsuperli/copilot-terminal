@@ -1978,9 +1978,24 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       return node.id === targetPaneId ? null : node;
     }
 
-    const newChildren = node.children
-      .map(child => this.removePaneFromLayout(child, targetPaneId))
-      .filter((child): child is LayoutNode => child !== null);
+    let hasChanges = false;
+    const newChildren: LayoutNode[] = [];
+    const remainingSizes: number[] = [];
+
+    node.children.forEach((child, index) => {
+      const nextChild = this.removePaneFromLayout(child, targetPaneId);
+      if (nextChild !== child) {
+        hasChanges = true;
+      }
+      if (nextChild !== null) {
+        newChildren.push(nextChild);
+        remainingSizes.push(node.sizes[index] ?? 0);
+      }
+    });
+
+    if (!hasChanges) {
+      return node;
+    }
 
     if (newChildren.length === 0) {
       return null;
@@ -1994,13 +2009,29 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
     // 闂傚倸鍊搁崐鐑芥倿閿曚降浜归柛鎰典簽閻捇鏌ｉ姀銏╃劸闁藉啰鍠庨埞鎴︽偐閹绘帩浠炬繝娈垮灠閵堟悂寮婚妸銉㈡婵☆垯璀︽导鈧梻?sizes
 
-    const newSizes = Array(newChildren.length).fill(1 / newChildren.length);
+    const sizesChanged = newChildren.length !== node.children.length;
+    const newSizes = sizesChanged
+      ? this.normalizeSplitSizes(remainingSizes)
+      : node.sizes;
 
     return {
       ...node,
       children: newChildren,
       sizes: newSizes,
     };
+  }
+
+  private normalizeSplitSizes(sizes: number[]): number[] {
+    const normalizedSizes = sizes.map(size =>
+      Number.isFinite(size) && size > 0 ? size : 0
+    );
+    const total = normalizedSizes.reduce((sum, size) => sum + size, 0);
+
+    if (total <= 0) {
+      return sizes.map(() => 1 / sizes.length);
+    }
+
+    return normalizedSizes.map(size => size / total);
   }
 
   /**

@@ -282,6 +282,83 @@ describe('TmuxCompatService', () => {
       // 验证 pane 已从映射中移除
       expect(service.resolvePaneId(newPaneId)).toBeNull();
     });
+
+    it('关闭嵌套 pane 时应保留根布局比例', async () => {
+      const { service, store } = createService();
+      const teammatePane = (id: string): Pane => ({
+        id,
+        cwd: '/home/user/project',
+        command: 'pwsh.exe',
+        status: WindowStatus.WaitingForInput,
+        pid: 1000,
+      });
+
+      store.getState().windows[0].layout = {
+        type: 'split',
+        direction: 'horizontal',
+        sizes: [0.3, 0.7],
+        children: [
+          {
+            type: 'pane',
+            id: 'pane-1',
+            pane: teammatePane('pane-1'),
+          },
+          {
+            type: 'split',
+            direction: 'vertical',
+            sizes: [0.2, 0.3, 0.5],
+            children: [
+              {
+                type: 'pane',
+                id: 'pane-2',
+                pane: teammatePane('pane-2'),
+              },
+              {
+                type: 'pane',
+                id: 'pane-3',
+                pane: teammatePane('pane-3'),
+              },
+              {
+                type: 'pane',
+                id: 'pane-4',
+                pane: teammatePane('pane-4'),
+              },
+            ],
+          },
+        ],
+      };
+
+      service.registerPane('%2', 'win-1', 'pane-2');
+      service.registerPane('%3', 'win-1', 'pane-3');
+      service.registerPane('%4', 'win-1', 'pane-4');
+
+      const response = await service.executeCommand({
+        argv: ['kill-pane', '-t', '%3'],
+      });
+
+      expect(response.exitCode).toBe(0);
+
+      const window = store.getState().windows[0];
+      expect(window.layout.type).toBe('split');
+      if (window.layout.type !== 'split') {
+        throw new Error('expected split layout');
+      }
+
+      expect(window.layout.sizes[0]).toBeCloseTo(0.3);
+      expect(window.layout.sizes[1]).toBeCloseTo(0.7);
+
+      const rightSide = window.layout.children[1];
+      expect(rightSide.type).toBe('split');
+      if (rightSide.type !== 'split') {
+        throw new Error('expected nested split');
+      }
+
+      expect(rightSide.sizes[0]).toBeCloseTo(0.2 / 0.7);
+      expect(rightSide.sizes[1]).toBeCloseTo(0.5 / 0.7);
+      expect(rightSide.children).toHaveLength(2);
+      expect(rightSide.children[0]).toMatchObject({ type: 'pane', id: 'pane-2' });
+      expect(rightSide.children[1]).toMatchObject({ type: 'pane', id: 'pane-4' });
+    });
   });
 
   describe('select-pane', () => {

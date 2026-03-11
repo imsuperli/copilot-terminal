@@ -68,9 +68,9 @@ Object.defineProperty(window, 'electronAPI', {
     getSettings: vi.fn().mockResolvedValue({ success: true, data: { language: 'zh-CN', ides: [], quickNav: { items: [] }, terminal: { useBundledConptyDll: false, defaultShellProgram: '' } } }),
     updateSettings: vi.fn().mockResolvedValue({ success: true, data: {} }),
     getAvailableShells: vi.fn().mockResolvedValue({ success: true, data: [
-      { command: 'pwsh.exe', label: 'PowerShell 7 (pwsh.exe)', isDefault: true },
-      { command: 'powershell.exe', label: 'Windows PowerShell 5.1 (powershell.exe)', isDefault: false },
-      { command: 'cmd.exe', label: 'Command Prompt (cmd.exe)', isDefault: false },
+      { command: 'pwsh.exe', path: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', isDefault: true },
+      { command: 'powershell.exe', path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', isDefault: false },
+      { command: 'cmd.exe', path: 'C:\\Windows\\System32\\cmd.exe', isDefault: false },
     ] }),
     getSupportedIDENames: vi.fn().mockResolvedValue({ success: true, data: [] }),
     scanIDEs: vi.fn().mockResolvedValue({ success: true, data: [] }),

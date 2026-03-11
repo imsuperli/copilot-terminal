@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
+import * as Select from '@radix-ui/react-select'
+import { Check, ChevronDown } from 'lucide-react'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { useWindowStore } from '../stores/windowStore'
@@ -9,12 +11,21 @@ interface CreateWindowDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
+interface ShellProgramOption {
+  command: string
+  path: string
+  isDefault: boolean
+}
+
+const AUTO_SHELL_OPTION_VALUE = '__auto__'
+
 export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogProps) {
   const { t } = useI18n()
   const [name, setName] = useState('')
   const [workingDirectory, setWorkingDirectory] = useState('')
   const [command, setCommand] = useState('')
   const [globalDefaultShell, setGlobalDefaultShell] = useState('')
+  const [availableShells, setAvailableShells] = useState<ShellProgramOption[]>([])
   const [pathError, setPathError] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -35,25 +46,35 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
   useEffect(() => {
     if (!open) {
       setGlobalDefaultShell('')
+      setAvailableShells([])
       return
     }
 
     let disposed = false
 
-    const loadGlobalDefaultShell = async () => {
+    const loadShellSettings = async () => {
       try {
-        const response = await window.electronAPI.getSettings()
-        if (response?.success && response.data && !disposed) {
-          setGlobalDefaultShell(response.data.terminal?.defaultShellProgram ?? '')
+        const [settingsResponse, shellsResponse] = await Promise.all([
+          window.electronAPI.getSettings(),
+          window.electronAPI.getAvailableShells(),
+        ])
+
+        if (settingsResponse?.success && settingsResponse.data && !disposed) {
+          setGlobalDefaultShell(settingsResponse.data.terminal?.defaultShellProgram ?? '')
+        }
+
+        if (shellsResponse?.success && shellsResponse.data && !disposed) {
+          setAvailableShells(shellsResponse.data)
         }
       } catch (error) {
         if (!disposed) {
           setGlobalDefaultShell('')
+          setAvailableShells([])
         }
       }
     }
 
-    void loadGlobalDefaultShell()
+    void loadShellSettings()
 
     return () => {
       disposed = true
@@ -150,9 +171,39 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
 
   const windows = useWindowStore((state) => state.windows)
   const placeholderName = t('createWindow.defaultName', { count: windows.length + 1 })
-  const shellPlaceholder = globalDefaultShell
-    ? t('createWindow.shellPlaceholderWithGlobal', { shell: globalDefaultShell })
-    : t('createWindow.shellPlaceholder')
+  const recommendedShell = availableShells.find((shell) => shell.isDefault)
+  const autoShellTarget = globalDefaultShell || recommendedShell?.path || ''
+  const matchedShell = availableShells.find((shell) => (
+    shell.path === command || shell.command === command
+  ))
+  const selectedShellOptions = command && !matchedShell
+    ? [
+        {
+          command,
+          path: command,
+          isDefault: false,
+        },
+        ...availableShells,
+      ]
+    : availableShells
+  const filteredShellOptions = autoShellTarget
+    ? selectedShellOptions.filter((shell) => shell.path !== autoShellTarget)
+    : selectedShellOptions
+  const effectiveSelectedShell = matchedShell?.path ?? command
+  const selectedShellValue = !effectiveSelectedShell || effectiveSelectedShell === autoShellTarget
+    ? AUTO_SHELL_OPTION_VALUE
+    : effectiveSelectedShell
+
+  const handleSelectCustomShell = async () => {
+    try {
+      const response = await window.electronAPI.selectExecutableFile()
+      if (response?.success && response.data) {
+        setCommand(response.data)
+      }
+    } catch (error) {
+      console.error('Failed to select custom shell:', error)
+    }
+  }
 
   return (
     <Dialog
@@ -228,14 +279,67 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
           <label htmlFor="command" className="block text-sm font-medium text-text-primary mb-2">
             {t('createWindow.shellLabel')}
           </label>
-          <input
-            id="command"
-            type="text"
-            value={command}
-            onChange={(e) => setCommand(e.target.value)}
-            placeholder={shellPlaceholder}
-            className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-          />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Select.Root
+                value={selectedShellValue}
+                onValueChange={(value) => setCommand(value === AUTO_SHELL_OPTION_VALUE ? '' : value)}
+              >
+                <Select.Trigger
+                  id="command"
+                  className="flex w-full items-center justify-between rounded border border-border-subtle bg-bg-app px-3 py-2 text-left text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
+                >
+                  <Select.Value placeholder={t('createWindow.shellPlaceholder')} />
+                  <Select.Icon>
+                    <ChevronDown size={16} className="text-text-secondary" />
+                  </Select.Icon>
+                </Select.Trigger>
+
+                <Select.Portal>
+                  <Select.Content
+                    position="popper"
+                    side="bottom"
+                    align="start"
+                    sideOffset={6}
+                    className="z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded border border-border-subtle bg-bg-card shadow-2xl"
+                  >
+                    <Select.Viewport className="p-1">
+                      <Select.Item value={AUTO_SHELL_OPTION_VALUE} className="flex cursor-pointer items-center justify-between rounded px-3 py-2 text-text-primary outline-none transition-colors hover:bg-bg-hover">
+                        <Select.ItemText>
+                          {autoShellTarget
+                            ? t('createWindow.shellAutoOption', { shell: autoShellTarget })
+                            : t('createWindow.shellAutoFallback')}
+                        </Select.ItemText>
+                        <Select.ItemIndicator>
+                          <Check size={14} />
+                        </Select.ItemIndicator>
+                      </Select.Item>
+                      {filteredShellOptions.map((shell) => (
+                        <Select.Item
+                          key={shell.path}
+                          value={shell.path}
+                          className="flex cursor-pointer items-center justify-between rounded px-3 py-2 text-text-primary outline-none transition-colors hover:bg-bg-hover"
+                        >
+                          <Select.ItemText>{shell.path}</Select.ItemText>
+                          <Select.ItemIndicator>
+                            <Check size={14} />
+                          </Select.ItemIndicator>
+                        </Select.Item>
+                      ))}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleSelectCustomShell}
+              className="shrink-0"
+            >
+              {t('settings.general.defaultShellCustomButton')}
+            </Button>
+          </div>
         </div>
 
         {/* 创建错误提示 */}

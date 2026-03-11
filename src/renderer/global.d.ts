@@ -44,7 +44,7 @@ export interface ElectronAPI {
   // Settings
   getSettings: () => Promise<IpcResponse<Workspace['settings']>>
   updateSettings: (settings: unknown) => Promise<IpcResponse<Workspace['settings']>>
-  getAvailableShells: () => Promise<IpcResponse<Array<{ command: string; label: string; isDefault: boolean }>>>
+  getAvailableShells: () => Promise<IpcResponse<Array<{ command: string; path: string; isDefault: boolean }>>>
 
   // Status events
   onWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void

@@ -178,10 +178,25 @@ export function closePane(
     return layout.id === paneId ? null : layout;
   }
 
-  // SplitNode: 递归处理子节点
-  const newChildren = layout.children
-    .map(child => closePane(child, paneId))
-    .filter((child): child is LayoutNode => child !== null);
+  let hasChanges = false;
+  const newChildren: LayoutNode[] = [];
+  const remainingSizes: number[] = [];
+
+  // SplitNode: 递归处理子节点，仅在当前层子节点数量变化时重算 sizes
+  layout.children.forEach((child, index) => {
+    const nextChild = closePane(child, paneId);
+    if (nextChild !== child) {
+      hasChanges = true;
+    }
+    if (nextChild !== null) {
+      newChildren.push(nextChild);
+      remainingSizes.push(layout.sizes[index] ?? 0);
+    }
+  });
+
+  if (!hasChanges) {
+    return layout;
+  }
 
   // 如果只剩一个子节点，提升它（消除不必要的拆分层级）
   if (newChildren.length === 1) {
@@ -193,15 +208,29 @@ export function closePane(
     return null;
   }
 
-  // 重新计算大小比例
-  const totalSize = newChildren.length;
-  const newSizes = newChildren.map(() => 1 / totalSize);
+  const sizesChanged = newChildren.length !== layout.children.length;
+  const newSizes = sizesChanged
+    ? normalizeSizes(remainingSizes)
+    : layout.sizes;
 
   return {
     ...layout,
     children: newChildren,
     sizes: newSizes,
   };
+}
+
+function normalizeSizes(sizes: number[]): number[] {
+  const normalizedSizes = sizes.map(size =>
+    Number.isFinite(size) && size > 0 ? size : 0
+  );
+  const total = normalizedSizes.reduce((sum, size) => sum + size, 0);
+
+  if (total <= 0) {
+    return sizes.map(() => 1 / sizes.length);
+  }
+
+  return normalizedSizes.map(size => size / total);
 }
 
 /**

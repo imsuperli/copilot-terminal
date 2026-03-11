@@ -6,30 +6,29 @@ let cachedDefaultShell: string | null = null;
 
 interface ShellCandidate {
   command: string;
-  label: string;
 }
 
 export interface AvailableShellProgram {
   command: string;
-  label: string;
+  path: string;
   isDefault: boolean;
 }
 
 const WINDOWS_SHELL_CANDIDATES: ShellCandidate[] = [
-  { command: 'pwsh.exe', label: 'PowerShell 7 (pwsh.exe)' },
-  { command: 'powershell.exe', label: 'Windows PowerShell 5.1 (powershell.exe)' },
-  { command: 'cmd.exe', label: 'Command Prompt (cmd.exe)' },
+  { command: 'pwsh.exe' },
+  { command: 'powershell.exe' },
+  { command: 'cmd.exe' },
 ];
 
 const MACOS_SHELL_CANDIDATES: ShellCandidate[] = [
-  { command: '/bin/zsh', label: 'zsh (/bin/zsh)' },
-  { command: '/bin/bash', label: 'bash (/bin/bash)' },
+  { command: '/bin/zsh' },
+  { command: '/bin/bash' },
 ];
 
 const LINUX_SHELL_CANDIDATES: ShellCandidate[] = [
-  { command: '/bin/bash', label: 'bash (/bin/bash)' },
-  { command: '/usr/bin/zsh', label: 'zsh (/usr/bin/zsh)' },
-  { command: '/bin/sh', label: 'sh (/bin/sh)' },
+  { command: '/bin/bash' },
+  { command: '/usr/bin/zsh' },
+  { command: '/bin/sh' },
 ];
 
 export function normalizeShellProgram(shellProgram?: string | null): string | undefined {
@@ -50,24 +49,35 @@ function getShellCandidates(): ShellCandidate[] {
 }
 
 function commandExists(command: string): boolean {
+  return resolveShellPath(command) !== null;
+}
+
+function resolveShellPath(command: string): string | null {
   const normalized = normalizeShellProgram(command);
   if (!normalized) {
-    return false;
+    return null;
   }
 
   if (normalized.includes('\\') || normalized.includes('/')) {
-    return existsSync(normalized);
+    return existsSync(normalized) ? normalized : null;
   }
 
   try {
     if (process.platform === 'win32') {
-      execSync(`where ${normalized}`, { stdio: 'ignore' });
-    } else {
-      execSync(`command -v ${normalized}`, { stdio: 'ignore' });
+      const output = execSync(`where ${normalized}`, { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' });
+      const resolved = output
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean);
+
+      return resolved ?? null;
     }
-    return true;
+
+    const output = execSync(`command -v ${normalized}`, { stdio: ['ignore', 'pipe', 'ignore'], encoding: 'utf8' });
+    const resolved = output.trim();
+    return resolved || null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -99,12 +109,19 @@ export function scanAvailableShellPrograms(): AvailableShellProgram[] {
   const defaultShell = getDefaultShell();
 
   return getShellCandidates()
-    .filter((candidate) => commandExists(candidate.command))
-    .map((candidate) => ({
-      command: candidate.command,
-      label: candidate.label,
-      isDefault: candidate.command === defaultShell,
-    }));
+    .map((candidate) => {
+      const path = resolveShellPath(candidate.command);
+      if (!path) {
+        return null;
+      }
+
+      return {
+        command: candidate.command,
+        path,
+        isDefault: candidate.command === defaultShell,
+      };
+    })
+    .filter((candidate): candidate is AvailableShellProgram => candidate !== null);
 }
 
 export function resolveShellProgram(options: {

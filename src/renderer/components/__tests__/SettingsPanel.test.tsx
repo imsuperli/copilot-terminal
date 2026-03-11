@@ -30,9 +30,9 @@ describe('SettingsPanel', () => {
     vi.mocked(window.electronAPI.getAvailableShells).mockResolvedValueOnce({
       success: true,
       data: [
-        { command: 'pwsh.exe', label: 'PowerShell 7 (pwsh.exe)', isDefault: true },
-        { command: 'powershell.exe', label: 'Windows PowerShell 5.1 (powershell.exe)', isDefault: false },
-        { command: 'cmd.exe', label: 'Command Prompt (cmd.exe)', isDefault: false },
+        { command: 'pwsh.exe', path: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', isDefault: true },
+        { command: 'powershell.exe', path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', isDefault: false },
+        { command: 'cmd.exe', path: 'C:\\Windows\\System32\\cmd.exe', isDefault: false },
       ],
     });
     vi.mocked(window.electronAPI.selectExecutableFile).mockResolvedValueOnce({
@@ -46,15 +46,16 @@ describe('SettingsPanel', () => {
       </I18nProvider>,
     );
 
-    expect(await screen.findByText('PowerShell 7 (pwsh.exe)（当前内置默认）')).toBeInTheDocument();
+    expect(await screen.findByText('(默认)C:\\Program Files\\PowerShell\\7\\pwsh.exe')).toBeInTheDocument();
 
     await user.click(screen.getByRole('combobox', { name: '全局默认 Shell 程序' }));
-    await user.click(await screen.findByText('Windows PowerShell 5.1 (powershell.exe)'));
+    expect(screen.queryByText('C:\\Program Files\\PowerShell\\7\\pwsh.exe')).not.toBeInTheDocument();
+    await user.click(await screen.findByText('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'));
 
     expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
       terminal: {
         useBundledConptyDll: false,
-        defaultShellProgram: 'powershell.exe',
+        defaultShellProgram: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
       },
     });
 
