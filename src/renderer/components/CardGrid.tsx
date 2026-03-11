@@ -6,8 +6,11 @@ import { sortWindows } from '../utils/sortWindows';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { WindowCard } from './WindowCard';
 import { NewWindowCard } from './NewWindowCard';
+import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
+import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
 import { Window, WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
+import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 
 interface CardGridProps {
   onEnterTerminal?: (window: Window) => void;
@@ -22,10 +25,10 @@ interface CardGridProps {
 export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWindow, searchQuery = '' }) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
-  const setActiveWindow = useWindowStore((state) => state.setActiveWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
   const archiveWindow = useWindowStore((state) => state.archiveWindow);
+  const { runWithWindowDirectory, dialogState } = useWindowDirectoryGuard();
 
   // 只显示未归档的窗口
   const activeWindows = useMemo(() => windows.filter(w => !w.archived), [windows]);
@@ -54,13 +57,14 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWi
 
   const handleCardClick = useCallback(
     async (win: Window) => {
-      // 直接调用 onEnterTerminal，让上层处理启动逻辑
-      onEnterTerminal?.(win);
+      await runWithWindowDirectory(win, async (targetWindow) => {
+        onEnterTerminal?.(targetWindow);
+      });
     },
-    [onEnterTerminal]
+    [onEnterTerminal, runWithWindowDirectory]
   );
 
-  const handleStartWindow = useCallback(async (win: Window) => {
+  const startWindow = useCallback(async (win: Window) => {
     try {
       // 获取所有窗格
       const panes = getAllPanes(win.layout);
@@ -105,6 +109,10 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWi
     }
   }, [updatePane]);
 
+  const handleStartWindow = useCallback(async (win: Window) => {
+    await runWithWindowDirectory(win, startWindow);
+  }, [runWithWindowDirectory, startWindow]);
+
   const handlePauseWindow = useCallback(async (win: Window) => {
     try {
       // 关闭窗口（终止所有 PTY 进程）
@@ -134,14 +142,6 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWi
     }
   }, [archiveWindow]);
 
-  const handleCloseWindow = useCallback(async (windowId: string) => {
-    try {
-      await window.electronAPI.closeWindow(windowId);
-    } catch (error) {
-      console.error('Failed to close window:', error);
-    }
-  }, []);
-
   const handleDeleteWindow = useCallback(async (windowId: string) => {
     try {
       await window.electronAPI.deleteWindow(windowId);
@@ -151,7 +151,8 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWi
     }
   }, [removeWindow]);
 
-  const handleOpenFolder = useCallback(async (workingDirectory: string) => {
+  const openFolder = useCallback(async (win: Window) => {
+    const workingDirectory = getCurrentWindowWorkingDirectory(win);
     try {
       await window.electronAPI.openFolder(workingDirectory);
     } catch (error) {
@@ -159,7 +160,12 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWi
     }
   }, []);
 
-  const handleOpenInIDE = useCallback(async (ide: string, workingDirectory: string) => {
+  const handleOpenFolder = useCallback(async (win: Window) => {
+    await runWithWindowDirectory(win, openFolder);
+  }, [openFolder, runWithWindowDirectory]);
+
+  const openInIDE = useCallback(async (ide: string, win: Window) => {
+    const workingDirectory = getCurrentWindowWorkingDirectory(win);
     try {
       console.log(`Opening ${ide} with path: ${workingDirectory}`);
       const response = await window.electronAPI.openInIDE(ide, workingDirectory);
@@ -173,50 +179,60 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onCreateWi
     }
   }, []);
 
+  const handleOpenInIDE = useCallback(async (ide: string, win: Window) => {
+    await runWithWindowDirectory(win, async (targetWindow) => {
+      await openInIDE(ide, targetWindow);
+    });
+  }, [openInIDE, runWithWindowDirectory]);
+
   if (activeWindows.length === 0) {
     return null;
   }
 
   return (
-    <ScrollArea.Root className="h-full" data-testid="card-grid-scroll-root">
-      <ScrollArea.Viewport className="h-full w-full">
-        <div
-          data-testid="card-grid"
-          className="grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4 p-8"
-        >
-          {filteredWindows.map((win) => {
-            return (
-              <WindowCard
-                key={win.id}
-                window={win}
-                onClick={handleCardClick}
-                onOpenFolder={handleOpenFolder}
-                onDelete={handleDeleteWindow}
-                onStart={handleStartWindow}
-                onPause={handlePauseWindow}
-                onArchive={handleArchiveWindow}
-                onOpenInIDE={handleOpenInIDE}
-              />
-            );
-          })}
-          {!searchQuery && <NewWindowCard onClick={onCreateWindow || (() => {})} />}
-        </div>
-        {/* 无搜索结果提示 */}
-        {searchQuery && filteredWindows.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
-            <Search size={48} className="mb-4 opacity-50" />
-            <p className="text-lg">{t('common.noMatchingWindows')}</p>
-            <p className="text-sm mt-2">{t('common.tryDifferentSearch')}</p>
+    <>
+      <ScrollArea.Root className="h-full" data-testid="card-grid-scroll-root">
+        <ScrollArea.Viewport className="h-full w-full">
+          <div
+            data-testid="card-grid"
+            className="grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4 p-8"
+          >
+            {filteredWindows.map((win) => {
+              return (
+                <WindowCard
+                  key={win.id}
+                  window={win}
+                  onClick={handleCardClick}
+                  onOpenFolder={handleOpenFolder}
+                  onDelete={handleDeleteWindow}
+                  onStart={handleStartWindow}
+                  onPause={handlePauseWindow}
+                  onArchive={handleArchiveWindow}
+                  onOpenInIDE={handleOpenInIDE}
+                />
+              );
+            })}
+            {!searchQuery && <NewWindowCard onClick={onCreateWindow || (() => {})} />}
           </div>
-        )}
-      </ScrollArea.Viewport>
-      <ScrollArea.Scrollbar
-        orientation="vertical"
-        className="flex w-2.5 touch-none select-none bg-transparent p-0.5 transition-colors hover:bg-zinc-800/50"
-      >
-        <ScrollArea.Thumb className="relative flex-1 rounded-full bg-zinc-700 hover:bg-zinc-600 transition-colors" />
-      </ScrollArea.Scrollbar>
-    </ScrollArea.Root>
+          {/* 无搜索结果提示 */}
+          {searchQuery && filteredWindows.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
+              <Search size={48} className="mb-4 opacity-50" />
+              <p className="text-lg">{t('common.noMatchingWindows')}</p>
+              <p className="text-sm mt-2">{t('common.tryDifferentSearch')}</p>
+            </div>
+          )}
+        </ScrollArea.Viewport>
+        <ScrollArea.Scrollbar
+          orientation="vertical"
+          className="flex w-2.5 touch-none select-none bg-transparent p-0.5 transition-colors hover:bg-zinc-800/50"
+        >
+          <ScrollArea.Thumb className="relative flex-1 rounded-full bg-zinc-700 hover:bg-zinc-600 transition-colors" />
+        </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
+
+      <MissingWorkingDirectoryDialog {...dialogState} />
+    </>
   );
 });
 

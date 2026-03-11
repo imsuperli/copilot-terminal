@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Window management
   closeWindow: (windowId: string) => ipcRenderer.invoke('close-window', { windowId }),
   deleteWindow: (windowId: string) => ipcRenderer.invoke('delete-window', { windowId }),
-  startWindow: (config: { windowId: string; paneId?: string; name: string; workingDirectory: string; command: string }) =>
+  startWindow: (config: { windowId: string; paneId?: string; name: string; workingDirectory: string; command?: string }) =>
     ipcRenderer.invoke('start-window', config),
   checkPtyOutput: (windowId: string, paneId: string) => ipcRenderer.invoke('check-pty-output', { windowId, paneId }),
   startGitWatch: (windowId: string, cwd: string) => ipcRenderer.invoke('start-git-watch', { windowId, cwd }),
@@ -23,7 +23,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // File system
   validatePath: (path: string) => ipcRenderer.invoke('validate-path', path),
+  createDirectory: (path: string) => ipcRenderer.invoke('create-directory', path),
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
+  selectExecutableFile: () => ipcRenderer.invoke('select-executable-file'),
   selectAndScanFolder: () => ipcRenderer.invoke('select-and-scan-folder'),
   openFolder: (path: string) => ipcRenderer.invoke('open-folder', { path }),
   openInIDE: (ide: string, path: string) => ipcRenderer.invoke('open-in-ide', { ide, path }),
@@ -32,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings: unknown) => ipcRenderer.invoke('update-settings', settings),
+  getAvailableShells: () => ipcRenderer.invoke('get-available-shells'),
   scanIDEs: () => ipcRenderer.invoke('scan-ides'),
   scanSpecificIDE: (ideName: string) => ipcRenderer.invoke('scan-specific-ide', ideName),
   getSupportedIDENames: () => ipcRenderer.invoke('get-supported-ide-names'),

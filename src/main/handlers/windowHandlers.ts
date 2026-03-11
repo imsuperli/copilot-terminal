@@ -2,7 +2,7 @@ import { ipcMain, dialog } from 'electron';
 import { randomUUID } from 'crypto';
 import { HandlerContext } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
-import { getDefaultShell } from '../utils/shell';
+import { resolveShellProgram } from '../utils/shell';
 import { scanSubfolders } from '../utils/folderScanner';
 import { readProjectConfig } from '../utils/project-config';
 import { projectConfigWatcher } from '../services/ProjectConfigWatcher';
@@ -19,6 +19,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
     statusPoller,
     ptySubscriptionManager,
     gitBranchWatcher,
+    getCurrentWorkspace,
   } = ctx;
 
   // 创建窗口
@@ -44,9 +45,10 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       const windowId = randomUUID();
       const paneId = randomUUID();
 
-      // 获取默认 shell
-      const defaultShell = getDefaultShell();
-      const command = config.command || defaultShell;
+      const command = resolveShellProgram({
+        preferredShellProgram: config.command,
+        settings: getCurrentWorkspace()?.settings,
+      });
 
       // 创建终端进程（使用安全路径）
       const handle = await processManager.spawnTerminal({
@@ -137,7 +139,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
   });
 
   // 启动暂停的窗口（恢复 PTY 进程）
-  ipcMain.handle('start-window', async (_event, { windowId, paneId, name, workingDirectory, command }: { windowId: string; paneId?: string; name: string; workingDirectory: string; command: string }) => {
+  ipcMain.handle('start-window', async (_event, { windowId, paneId, name, workingDirectory, command }: { windowId: string; paneId?: string; name: string; workingDirectory: string; command?: string }) => {
     try {
       if (!processManager) {
         throw new Error('进程管理器未初始化，请重启应用');
@@ -155,9 +157,10 @@ export function registerWindowHandlers(ctx: HandlerContext) {
         throw new Error('无法解析工作目录路径');
       }
 
-      // 获取默认 shell
-      const defaultShell = getDefaultShell();
-      const shellCommand = command || defaultShell;
+      const shellCommand = resolveShellProgram({
+        preferredShellProgram: command,
+        settings: getCurrentWorkspace()?.settings,
+      });
 
       // 创建终端进程（使用安全路径）
       const handle = await processManager.spawnTerminal({

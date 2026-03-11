@@ -20,7 +20,7 @@ export interface IPty {
 // 终端配置
 export interface TerminalConfig {
   workingDirectory: string;
-  command?: string;  // 可选,默认打开 shell
+  command?: string;  // 可选，指定要启动的 shell 程序
   env?: Record<string, string>;
   name?: string;  // 窗口名称
   windowId?: string;  // 关联的窗口 ID

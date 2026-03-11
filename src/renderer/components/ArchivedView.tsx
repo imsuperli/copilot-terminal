@@ -4,8 +4,11 @@ import { useWindowStore } from '../stores/windowStore';
 import { sortWindows } from '../utils/sortWindows';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { WindowCard } from './WindowCard';
+import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
+import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
 import { Window, WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
+import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 
 interface ArchivedViewProps {
   onEnterTerminal?: (window: Window) => void;
@@ -19,11 +22,10 @@ interface ArchivedViewProps {
 export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, searchQuery = '' }) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
-  const setActiveWindow = useWindowStore((state) => state.setActiveWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
-  const updateWindow = useWindowStore((state) => state.updateWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
   const unarchiveWindow = useWindowStore((state) => state.unarchiveWindow);
+  const { runWithWindowDirectory, dialogState } = useWindowDirectoryGuard();
 
   // 只显示已归档的窗口
   const archivedWindows = useMemo(() => windows.filter(w => w.archived), [windows]);
@@ -52,13 +54,14 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
 
   const handleCardClick = useCallback(
     async (win: Window) => {
-      // 直接调用 onEnterTerminal，让上层处理启动逻辑
-      onEnterTerminal?.(win);
+      await runWithWindowDirectory(win, async (targetWindow) => {
+        onEnterTerminal?.(targetWindow);
+      });
     },
-    [onEnterTerminal]
+    [onEnterTerminal, runWithWindowDirectory]
   );
 
-  const handleStartWindow = useCallback(async (win: Window) => {
+  const startWindow = useCallback(async (win: Window) => {
     try {
       // 获取所有窗格
       const panes = getAllPanes(win.layout);
@@ -103,6 +106,10 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
     }
   }, [updatePane]);
 
+  const handleStartWindow = useCallback(async (win: Window) => {
+    await runWithWindowDirectory(win, startWindow);
+  }, [runWithWindowDirectory, startWindow]);
+
   const handlePauseWindow = useCallback(async (win: Window) => {
     try {
       // 关闭窗口（终止所有 PTY 进程）
@@ -134,7 +141,8 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
     }
   }, [removeWindow]);
 
-  const handleOpenFolder = useCallback(async (workingDirectory: string) => {
+  const openFolder = useCallback(async (win: Window) => {
+    const workingDirectory = getCurrentWindowWorkingDirectory(win);
     try {
       await window.electronAPI.openFolder(workingDirectory);
     } catch (error) {
@@ -142,7 +150,12 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
     }
   }, []);
 
-  const handleOpenInIDE = useCallback(async (ide: string, workingDirectory: string) => {
+  const handleOpenFolder = useCallback(async (win: Window) => {
+    await runWithWindowDirectory(win, openFolder);
+  }, [openFolder, runWithWindowDirectory]);
+
+  const openInIDE = useCallback(async (ide: string, win: Window) => {
+    const workingDirectory = getCurrentWindowWorkingDirectory(win);
     try {
       const response = await window.electronAPI.openInIDE(ide, workingDirectory);
       if (!response.success) {
@@ -152,6 +165,12 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
       console.error(`Failed to open in ${ide}:`, error);
     }
   }, []);
+
+  const handleOpenInIDE = useCallback(async (ide: string, win: Window) => {
+    await runWithWindowDirectory(win, async (targetWindow) => {
+      await openInIDE(ide, targetWindow);
+    });
+  }, [openInIDE, runWithWindowDirectory]);
 
   if (archivedWindows.length === 0) {
     return (
@@ -175,36 +194,40 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
   }
 
   return (
-    <ScrollArea.Root className="h-full" data-testid="archived-view-scroll-root">
-      <ScrollArea.Viewport className="h-full w-full">
-        <div
-          data-testid="archived-view"
-          className="grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4 p-8"
+    <>
+      <ScrollArea.Root className="h-full" data-testid="archived-view-scroll-root">
+        <ScrollArea.Viewport className="h-full w-full">
+          <div
+            data-testid="archived-view"
+            className="grid grid-cols-[repeat(auto-fill,minmax(350px,1fr))] gap-4 p-8"
+          >
+            {filteredWindows.map((win) => {
+              return (
+                <WindowCard
+                  key={win.id}
+                  window={win}
+                  onClick={handleCardClick}
+                  onOpenFolder={handleOpenFolder}
+                  onDelete={handleDeleteWindow}
+                  onStart={handleStartWindow}
+                  onPause={handlePauseWindow}
+                  onUnarchive={handleUnarchiveWindow}
+                  onOpenInIDE={handleOpenInIDE}
+                />
+              );
+            })}
+          </div>
+        </ScrollArea.Viewport>
+        <ScrollArea.Scrollbar
+          orientation="vertical"
+          className="flex w-2.5 touch-none select-none bg-transparent p-0.5 transition-colors hover:bg-zinc-800/50"
         >
-          {filteredWindows.map((win) => {
-            return (
-              <WindowCard
-                key={win.id}
-                window={win}
-                onClick={handleCardClick}
-                onOpenFolder={handleOpenFolder}
-                onDelete={handleDeleteWindow}
-                onStart={handleStartWindow}
-                onPause={handlePauseWindow}
-                onUnarchive={handleUnarchiveWindow}
-                onOpenInIDE={handleOpenInIDE}
-              />
-            );
-          })}
-        </div>
-      </ScrollArea.Viewport>
-      <ScrollArea.Scrollbar
-        orientation="vertical"
-        className="flex w-2.5 touch-none select-none bg-transparent p-0.5 transition-colors hover:bg-zinc-800/50"
-      >
-        <ScrollArea.Thumb className="relative flex-1 rounded-full bg-zinc-700 hover:bg-zinc-600 transition-colors" />
-      </ScrollArea.Scrollbar>
-    </ScrollArea.Root>
+          <ScrollArea.Thumb className="relative flex-1 rounded-full bg-zinc-700 hover:bg-zinc-600 transition-colors" />
+        </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
+
+      <MissingWorkingDirectoryDialog {...dialogState} />
+    </>
   );
 });
 

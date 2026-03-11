@@ -33,6 +33,7 @@ export interface StatusLineConfig {
  */
 export interface TerminalSettings {
   useBundledConptyDll: boolean;
+  defaultShellProgram: string;
 }
 
 /**

@@ -1,6 +1,12 @@
 import { TerminalWindow } from './types/window'
 import { Workspace } from '../main/types/workspace'
 
+interface IpcResponse<T> {
+  success: boolean
+  data?: T
+  error?: string
+}
+
 export interface ElectronAPI {
   platform: 'win32' | 'darwin' | 'linux'
   ping: () => Promise<string>
@@ -18,13 +24,27 @@ export interface ElectronAPI {
   // Window management
   closeWindow: (windowId: string) => Promise<void>
   deleteWindow: (windowId: string) => Promise<void>
+  startWindow: (config: {
+    windowId: string
+    paneId?: string
+    name: string
+    workingDirectory: string
+    command?: string
+  }) => Promise<{ success: boolean; data?: { pid: number; status: string }; error?: string }>
 
   // File system
-  validatePath: (path: string) => Promise<boolean>
-  selectDirectory: () => Promise<string | null>
-  selectAndScanFolder: () => Promise<{ success: boolean; data?: { folders: Array<{ name: string; path: string }>; parentPath: string | null }; error?: string }>
+  validatePath: (path: string) => Promise<IpcResponse<boolean>>
+  createDirectory: (path: string) => Promise<IpcResponse<string>>
+  selectDirectory: () => Promise<IpcResponse<string | null>>
+  selectExecutableFile: () => Promise<IpcResponse<string | null>>
+  selectAndScanFolder: () => Promise<IpcResponse<{ folders: Array<{ name: string; path: string }>; parentPath: string | null }>>
   openFolder: (path: string) => Promise<void>
   openExternalUrl: (url: string) => Promise<void>
+
+  // Settings
+  getSettings: () => Promise<IpcResponse<Workspace['settings']>>
+  updateSettings: (settings: unknown) => Promise<IpcResponse<Workspace['settings']>>
+  getAvailableShells: () => Promise<IpcResponse<Array<{ command: string; label: string; isDefault: boolean }>>>
 
   // Status events
   onWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => void

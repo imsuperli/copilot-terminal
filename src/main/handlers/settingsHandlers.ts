@@ -4,6 +4,7 @@ import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { scanInstalledIDEs, scanSpecificIDE, getSupportedIDENames } from '../utils/ideScanner';
 import { IDEConfig } from '../types/workspace';
+import { scanAvailableShellPrograms } from '../utils/shell';
 
 export function registerSettingsHandlers(ctx: HandlerContext) {
   const { workspaceManager, getCurrentWorkspace, setCurrentWorkspace } = ctx;
@@ -29,11 +30,27 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
         throw new Error('Workspace not loaded');
       }
 
+      const terminalSettings = settings?.terminal
+        ? {
+            ...workspace.settings.terminal,
+            ...settings.terminal,
+          }
+        : workspace.settings.terminal;
+
+      const tmuxSettings = settings?.tmux
+        ? {
+            ...workspace.settings.tmux,
+            ...settings.tmux,
+          }
+        : workspace.settings.tmux;
+
       const updatedWorkspace = {
         ...workspace,
         settings: {
           ...workspace.settings,
           ...settings,
+          terminal: terminalSettings,
+          tmux: tmuxSettings,
         },
       };
 
@@ -71,6 +88,14 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
     try {
       const names = getSupportedIDENames();
       return successResponse(names);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('get-available-shells', async () => {
+    try {
+      return successResponse(scanAvailableShellPrograms());
     } catch (error) {
       return errorResponse(error);
     }

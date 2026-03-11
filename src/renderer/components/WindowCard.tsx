@@ -9,17 +9,18 @@ import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
 import { formatRelativeTime, useI18n } from '../i18n';
+import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 
 interface WindowCardProps {
   window: Window;
   onClick?: (window: Window) => void;
-  onOpenFolder?: (workingDirectory: string) => void;
+  onOpenFolder?: (window: Window) => void;
   onDelete?: (windowId: string) => void;
   onStart?: (window: Window) => void;
   onPause?: (window: Window) => void;
   onArchive?: (window: Window) => void;
   onUnarchive?: (window: Window) => void;
-  onOpenInIDE?: (ide: string, workingDirectory: string) => void;
+  onOpenInIDE?: (ide: string, window: Window) => void;
 }
 
 /**
@@ -95,12 +96,12 @@ export const WindowCard = React.memo<WindowCardProps>(({
 
   // 获取第一个窗格的工作目录作为显示
   const workingDirectory = useMemo(() => {
-    const cwd = panes[0]?.cwd || '';
+    const cwd = getCurrentWindowWorkingDirectory(window);
     if (process.env.NODE_ENV === 'development' && !cwd) {
       console.warn(`[WindowCard] Window "${window.name}" (${window.id}) has no cwd. Panes:`, panes);
     }
     return cwd;
-  }, [panes, window.name, window.id]);
+  }, [panes, window]);
 
   // 缓存状态色和标签
   const statusColor = useMemo(() => getStatusColor(aggregatedStatus), [aggregatedStatus]);
@@ -378,8 +379,9 @@ export const WindowCard = React.memo<WindowCardProps>(({
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id, workingDirectory))}
+                    onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id, window))}
                     className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-0 border-0"
+                    aria-label={t('common.openInIDE', { name: ide.name })}
                   >
                     <IDEIcon icon={ide.icon || ''} size={16} />
                   </button>
@@ -400,7 +402,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
                 <button
-                  onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(workingDirectory))}
+                  onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(window))}
                   className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
                   aria-label={t('common.openFolder')}
                 >

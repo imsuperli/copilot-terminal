@@ -1,6 +1,6 @@
 import { ipcMain, dialog, shell } from 'electron';
 import { spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { HandlerContext } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
 import { successResponse, errorResponse } from './HandlerResponse';
@@ -20,6 +20,28 @@ export function registerFileHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('create-directory', async (_event, pathToCreate: string) => {
+    try {
+      const result = PathValidator.validateCreatable(pathToCreate);
+      if (!result.valid) {
+        throw new Error(`工作目录无法创建: ${result.reason}`);
+      }
+
+      const safePath = PathValidator.getCreatablePath(pathToCreate);
+      if (!safePath) {
+        throw new Error('无法解析工作目录路径');
+      }
+
+      if (!existsSync(safePath)) {
+        mkdirSync(safePath, { recursive: true });
+      }
+
+      return successResponse(safePath);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('select-directory', async () => {
     try {
       if (!mainWindow) throw new Error('Main window not available');
@@ -27,6 +49,34 @@ export function registerFileHandlers(ctx: HandlerContext) {
       if (result.canceled || result.filePaths.length === 0) {
         return successResponse(null);
       }
+      return successResponse(result.filePaths[0]);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('select-executable-file', async () => {
+    try {
+      if (!mainWindow) throw new Error('Main window not available');
+
+      const dialogOptions: Electron.OpenDialogOptions = {
+        properties: ['openFile'],
+        title: '选择 Shell 程序',
+      };
+
+      if (process.platform === 'win32') {
+        dialogOptions.filters = [
+          { name: 'Executable Files', extensions: ['exe', 'cmd', 'bat', 'com'] },
+          { name: 'All Files', extensions: ['*'] },
+        ];
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, dialogOptions);
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return successResponse(null);
+      }
+
       return successResponse(result.filePaths[0]);
     } catch (error) {
       return errorResponse(error);

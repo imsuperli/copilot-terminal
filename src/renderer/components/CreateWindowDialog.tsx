@@ -14,6 +14,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
   const [name, setName] = useState('')
   const [workingDirectory, setWorkingDirectory] = useState('')
   const [command, setCommand] = useState('')
+  const [globalDefaultShell, setGlobalDefaultShell] = useState('')
   const [pathError, setPathError] = useState('')
   const [isValidating, setIsValidating] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -28,6 +29,34 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
       setTimeout(() => {
         workingDirInputRef.current?.focus()
       }, 0)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      setGlobalDefaultShell('')
+      return
+    }
+
+    let disposed = false
+
+    const loadGlobalDefaultShell = async () => {
+      try {
+        const response = await window.electronAPI.getSettings()
+        if (response?.success && response.data && !disposed) {
+          setGlobalDefaultShell(response.data.terminal?.defaultShellProgram ?? '')
+        }
+      } catch (error) {
+        if (!disposed) {
+          setGlobalDefaultShell('')
+        }
+      }
+    }
+
+    void loadGlobalDefaultShell()
+
+    return () => {
+      disposed = true
     }
   }, [open])
 
@@ -121,6 +150,9 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
 
   const windows = useWindowStore((state) => state.windows)
   const placeholderName = t('createWindow.defaultName', { count: windows.length + 1 })
+  const shellPlaceholder = globalDefaultShell
+    ? t('createWindow.shellPlaceholderWithGlobal', { shell: globalDefaultShell })
+    : t('createWindow.shellPlaceholder')
 
   return (
     <Dialog
@@ -201,7 +233,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
-            placeholder={t('createWindow.shellPlaceholder')}
+            placeholder={shellPlaceholder}
             className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
           />
         </div>

@@ -20,7 +20,7 @@ export enum WindowStatus {
 export interface Pane {
   id: string;                    // UUID
   cwd: string;                   // 工作目录路径
-  command: string;               // 启动命令（如 "pwsh.exe"）
+  command: string;               // 启动的 shell 程序（如 "pwsh.exe"）
   status: WindowStatus;          // 当前状态
   pid: number | null;            // 进程 PID
   lastOutput?: string;           // 最新输出摘要（前 100 字符）

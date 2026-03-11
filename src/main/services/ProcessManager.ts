@@ -10,6 +10,7 @@ import { WindowStatus } from '../../shared/types/window';
 import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
+import { resolveShellProgram } from '../utils/shell';
 
 // 灏濊瘯瀵煎叆 node-pty锛屽鏋滃け璐ュ垯浣跨敤 mock
 let pty: any;
@@ -39,7 +40,6 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private paneIndex: Map<string, number>; // "windowId:paneId" 鈫?pid 绱㈠紩锛岀敤浜?O(1) 鏌ユ壘
   private nextPid: number;
   private statusDetector: IStatusDetector;
-  private cachedDefaultShell: string | null;
   private cachedSpawnEnv: NodeJS.ProcessEnv | null;
   private cachedSpawnEnvAt: number;
   private readonly SPAWN_ENV_CACHE_TTL_MS = 30000;
@@ -55,7 +55,6 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.paneIndex = new Map();
     this.nextPid = 1000;  // Start from 1000 for mock PIDs
     this.statusDetector = new StatusDetectorImpl();
-    this.cachedDefaultShell = null;
     this.cachedSpawnEnv = null;
     this.cachedSpawnEnvAt = 0;
     this.getSettings = getSettings ?? null;
@@ -136,8 +135,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // Get default shell for platform
     const shellStartAt = Date.now();
-    const shell = this.getDefaultShell();
-    const command = config.command || shell;
+    const shell = resolveShellProgram({
+      preferredShellProgram: config.command,
+      settings: this.getSettings?.() ?? null,
+    });
     console.log(`[ProcessManager] Shell detection took ${Date.now() - shellStartAt}ms, shell=${shell}`);
 
     const tmuxRpcStartAt = Date.now();
@@ -153,7 +154,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     if (pty) {
       // 浣跨敤鐪熷疄鐨?node-pty
       const ptyCreateStartAt = Date.now();
-      ptyProcess = this.createRealPty(config);
+      ptyProcess = this.createRealPty(config, shell);
       pid = ptyProcess.pid;
       console.log(`[ProcessManager] PTY creation took ${Date.now() - ptyCreateStartAt}ms, pid=${pid}`);
     } else {
@@ -167,7 +168,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       pid,
       status: ProcessStatus.Alive,
       workingDirectory: config.workingDirectory,
-      command,
+      command: shell,
       windowId: config.windowId,
       paneId: config.paneId,
     };
@@ -651,42 +652,6 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   /**
-   * 鑾峰彇骞冲彴榛樿 shell
-   */
-  private getDefaultShell(): string {
-    if (this.cachedDefaultShell) {
-      return this.cachedDefaultShell;
-    }
-
-    let shell: string;
-    const currentPlatform = platform();
-
-    if (currentPlatform === 'win32') {
-      // Windows: 浣跨敤 where 鍛戒护鏌ユ壘 pwsh.exe (PowerShell 7+)
-      try {
-        execSync('where pwsh.exe', { stdio: 'ignore' });
-        shell = 'pwsh.exe';
-      } catch {
-        // 鍥為€€鍒?cmd.exe锛屼笉浣跨敤鏃х増 powershell.exe
-        shell = 'cmd.exe';
-      }
-    } else if (currentPlatform === 'darwin') {
-      // macOS: 浼樺厛 zsh, 闄嶇骇鍒?bash
-      if (existsSync('/bin/zsh')) {
-        shell = '/bin/zsh';
-      } else {
-        shell = '/bin/bash';
-      }
-    } else {
-      // Linux: bash
-      shell = '/bin/bash';
-    }
-
-    this.cachedDefaultShell = shell;
-    return shell;
-  }
-
-  /**
    * 鑾峰彇鐢ㄤ簬鍒涘缓 PTY 鐨勭幆澧冨彉閲忥紙甯︾煭鏈熺紦瀛橈級
    * 璇存槑锛歐indows 涓嬭鍙栨敞鍐岃〃鏄悓姝ュ懡浠わ紝缂撳瓨鍙樉钁楅檷浣庡崱椤挎鐜囥€?
    */
@@ -750,10 +715,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   /**
    * 鍒涘缓鐪熷疄鐨?PTY 杩涚▼锛堜娇鐢?node-pty锛?
    */
-  private createRealPty(config: TerminalConfig): any {
-    const shell = this.getDefaultShell();
-    const command = config.command || shell;
-
+  private createRealPty(config: TerminalConfig, shell: string): any {
     // 鑾峰彇鏈€鏂扮殑绯荤粺鐜鍙橀噺锛圵indows 浠庢敞鍐岃〃璇诲彇锛宮acOS/Linux 浣跨敤 process.env锛?
     const envStartAt = Date.now();
     const latestEnv = this.getSpawnEnvironment();

@@ -19,6 +19,12 @@ interface IDEConfig {
   icon?: string;
 }
 
+interface ShellProgramOption {
+  command: string;
+  label: string;
+  isDefault: boolean;
+}
+
 interface SettingsPanelProps {
   open: boolean;
   onClose: () => void;
@@ -26,6 +32,7 @@ interface SettingsPanelProps {
 
 type SettingsTab = 'general' | 'quicknav' | 'statusline' | 'advanced';
 type QuickNavSubTab = 'ide' | 'custom';
+const AUTO_SHELL_OPTION_VALUE = '__auto__';
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) => {
   const { language, setLanguage, t } = useI18n();
@@ -35,6 +42,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const [scanning, setScanning] = useState(false);
   const [editingIDE, setEditingIDE] = useState<IDEConfig | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [availableShells, setAvailableShells] = useState<ShellProgramOption[]>([]);
 
   // 快捷导航状态
   const [quickNavItems, setQuickNavItems] = useState<QuickNavItem[]>([]);
@@ -74,6 +82,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     }
 
     loadSettings();
+    loadAvailableShells();
     loadSupportedIDENames();
   }, [open]);
 
@@ -115,6 +124,17 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       }
     } catch (error) {
       console.error('Failed to load supported IDE names:', error);
+    }
+  };
+
+  const loadAvailableShells = async () => {
+    try {
+      const response = await window.electronAPI.getAvailableShells();
+      if (response.success && response.data) {
+        setAvailableShells(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to load available shells:', error);
     }
   };
 
@@ -352,6 +372,17 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     }
   };
 
+  const handleSelectCustomShell = async () => {
+    try {
+      const response = await window.electronAPI.selectExecutableFile();
+      if (response?.success && response.data) {
+        await handleTerminalSettingsChange({ defaultShellProgram: response.data });
+      }
+    } catch (error) {
+      console.error('Failed to select custom shell:', error);
+    }
+  };
+
   const handleTmuxSettingsChange = async (updates: Partial<typeof tmuxSettings>) => {
     const newConfig = { ...tmuxSettings, ...updates };
     setTmuxSettings(newConfig);
@@ -439,6 +470,21 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       icon: Wrench,
     },
   ];
+  const recommendedShell = availableShells.find((shell) => shell.isDefault);
+  const detectedShellOptions = availableShells.slice();
+  const currentShellValue = terminalSettings.defaultShellProgram;
+  const currentShellExistsInDetectedList = detectedShellOptions.some((shell) => shell.command === currentShellValue);
+  const selectedShellOptions = currentShellValue && !currentShellExistsInDetectedList
+    ? [
+        {
+          command: currentShellValue,
+          label: currentShellValue,
+          isDefault: false,
+        },
+        ...detectedShellOptions,
+      ]
+    : detectedShellOptions;
+  const selectedShellValue = currentShellValue || AUTO_SHELL_OPTION_VALUE;
 
   return (
     <Dialog.Root open={open} onOpenChange={handleSettingsOpenChange}>
@@ -543,20 +589,73 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <label htmlFor="default-shell-program" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
                           {t('settings.general.defaultShellLabel')}
                         </label>
-                        <input
-                          id="default-shell-program"
-                          type="text"
-                          value={terminalSettings.defaultShellProgram}
-                          onChange={(event) => setTerminalSettings((prev) => ({ ...prev, defaultShellProgram: event.target.value }))}
-                          onBlur={(event) => handleTerminalSettingsChange({ defaultShellProgram: event.target.value })}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.currentTarget.blur()
-                            }
-                          }}
-                          placeholder={t('settings.general.defaultShellPlaceholder')}
-                          className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:outline-none"
-                        />
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start">
+                          <div className="flex-1">
+                            <Select.Root
+                              value={selectedShellValue}
+                              onValueChange={(value) => handleTerminalSettingsChange({
+                                defaultShellProgram: value === AUTO_SHELL_OPTION_VALUE ? '' : value,
+                              })}
+                            >
+                              <Select.Trigger
+                                id="default-shell-program"
+                                className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                              >
+                                <Select.Value placeholder={t('settings.general.defaultShellPlaceholder')} />
+                                <Select.Icon>
+                                  <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                                </Select.Icon>
+                              </Select.Trigger>
+
+                              <Select.Portal>
+                                <Select.Content
+                                  position="popper"
+                                  side="bottom"
+                                  align="start"
+                                  sideOffset={6}
+                                  className="z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                                >
+                                  <Select.Viewport className="p-1">
+                                    <Select.Item value={AUTO_SHELL_OPTION_VALUE} className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                      <Select.ItemText>
+                                        {t('settings.general.defaultShellAutoOption', {
+                                          shell: recommendedShell?.label ?? t('settings.general.defaultShellAutoFallback'),
+                                        })}
+                                      </Select.ItemText>
+                                      <Select.ItemIndicator>
+                                        <Check size={14} />
+                                      </Select.ItemIndicator>
+                                    </Select.Item>
+                                    {selectedShellOptions.map((shell) => (
+                                      <Select.Item
+                                        key={shell.command}
+                                        value={shell.command}
+                                        className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                      >
+                                        <Select.ItemText>
+                                          {shell.isDefault
+                                            ? t('settings.general.defaultShellDetectedOption', { shell: shell.label })
+                                            : shell.label}
+                                        </Select.ItemText>
+                                        <Select.ItemIndicator>
+                                          <Check size={14} />
+                                        </Select.ItemIndicator>
+                                      </Select.Item>
+                                    ))}
+                                  </Select.Viewport>
+                                </Select.Content>
+                              </Select.Portal>
+                            </Select.Root>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleSelectCustomShell}
+                            className="inline-flex h-[50px] items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] md:mt-[30px]"
+                          >
+                            {t('settings.general.defaultShellCustomButton')}
+                          </button>
+                        </div>
                         <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.general.defaultShellHint')}</p>
                       </div>
                     </div>

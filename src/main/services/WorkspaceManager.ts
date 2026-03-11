@@ -7,6 +7,7 @@ import { LayoutNode, PaneNode, SplitNode, WindowStatus } from '../../shared/type
 import { AppLanguage, DEFAULT_LANGUAGE, normalizeLanguage } from '../../shared/i18n';
 import { scanInstalledIDEs } from '../utils/ideScanner';
 import { readProjectConfig } from '../utils/project-config';
+import { normalizeShellProgram } from '../utils/shell';
 
 /**
  * WorkspaceManager 接口
@@ -526,6 +527,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       ides: settings?.ides ?? defaults.ides,
       terminal: {
         useBundledConptyDll: settings?.terminal?.useBundledConptyDll ?? defaults.terminal?.useBundledConptyDll ?? true,
+        defaultShellProgram: normalizeShellProgram(settings?.terminal?.defaultShellProgram) ?? defaults.terminal?.defaultShellProgram ?? '',
       },
     };
   }
@@ -540,6 +542,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       ides: scanInstalledIDEs(),
       terminal: {
         useBundledConptyDll: true,
+        defaultShellProgram: '',
       },
     };
   }

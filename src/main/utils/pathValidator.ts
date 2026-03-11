@@ -99,6 +99,67 @@ export class PathValidator {
   }
 
   /**
+   * 验证路径是否可安全创建。
+   * 允许目标目录当前不存在，但要求其最近的已存在父目录可访问且可写。
+   */
+  static validateCreatable(pathToValidate: string): { valid: boolean; reason?: string } {
+    try {
+      if (!pathToValidate || pathToValidate.trim() === '') {
+        return { valid: false, reason: 'Empty path' };
+      }
+
+      const normalizedPath = path.normalize(pathToValidate);
+      const resolvedPath = path.resolve(normalizedPath);
+
+      if (!this.isValidPathFormat(resolvedPath)) {
+        return { valid: false, reason: 'Invalid path format' };
+      }
+
+      if (this.isSensitivePath(resolvedPath)) {
+        return { valid: false, reason: 'Sensitive system path' };
+      }
+
+      if (existsSync(resolvedPath)) {
+        const stats = statSync(resolvedPath);
+        if (!stats.isDirectory()) {
+          return { valid: false, reason: 'Path is not a directory' };
+        }
+
+        const realPath = realpathSync(resolvedPath);
+        if (this.isSensitivePath(realPath)) {
+          return { valid: false, reason: 'Symlink points to sensitive path' };
+        }
+
+        accessSync(realPath, constants.R_OK | constants.W_OK | constants.X_OK);
+        return { valid: true };
+      }
+
+      const existingParent = this.findNearestExistingParent(resolvedPath);
+      if (!existingParent) {
+        return { valid: false, reason: 'Parent path does not exist' };
+      }
+
+      const realParentPath = realpathSync(existingParent);
+      if (this.isSensitivePath(realParentPath)) {
+        return { valid: false, reason: 'Parent path is sensitive' };
+      }
+
+      const parentStats = statSync(realParentPath);
+      if (!parentStats.isDirectory()) {
+        return { valid: false, reason: 'Parent path is not a directory' };
+      }
+
+      accessSync(realParentPath, constants.R_OK | constants.W_OK | constants.X_OK);
+      return { valid: true };
+    } catch (error) {
+      return {
+        valid: false,
+        reason: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
    * 检查路径格式是否合法
    */
   private static isValidPathFormat(pathStr: string): boolean {
@@ -167,5 +228,36 @@ export class PathValidator {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * 获取可安全创建的绝对路径。
+   */
+  static getCreatablePath(pathToNormalize: string): string | null {
+    const result = this.validateCreatable(pathToNormalize);
+    if (!result.valid) {
+      return null;
+    }
+
+    try {
+      const normalizedPath = path.normalize(pathToNormalize);
+      return path.resolve(normalizedPath);
+    } catch {
+      return null;
+    }
+  }
+
+  private static findNearestExistingParent(pathStr: string): string | null {
+    let currentPath = pathStr;
+
+    while (!existsSync(currentPath)) {
+      const parentPath = path.dirname(currentPath);
+      if (parentPath === currentPath) {
+        return null;
+      }
+      currentPath = parentPath;
+    }
+
+    return currentPath;
   }
 }

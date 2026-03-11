@@ -8,6 +8,22 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+}
+
+if (!Element.prototype.setPointerCapture) {
+  Element.prototype.setPointerCapture = () => {};
+}
+
+if (!Element.prototype.releasePointerCapture) {
+  Element.prototype.releasePointerCapture = () => {};
+}
+
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 // Mock window.electronAPI for all renderer tests
 Object.defineProperty(window, 'electronAPI', {
   value: {
@@ -20,8 +36,10 @@ Object.defineProperty(window, 'electronAPI', {
     closeWindow: vi.fn().mockResolvedValue(undefined),
     deleteWindow: vi.fn().mockResolvedValue(undefined),
     startWindow: vi.fn().mockResolvedValue({ success: true }),
-    validatePath: vi.fn().mockResolvedValue(true),
-    selectDirectory: vi.fn().mockResolvedValue(null),
+    validatePath: vi.fn().mockResolvedValue({ success: true, data: true }),
+    createDirectory: vi.fn().mockResolvedValue({ success: true }),
+    selectDirectory: vi.fn().mockResolvedValue({ success: true, data: null }),
+    selectExecutableFile: vi.fn().mockResolvedValue({ success: true, data: null }),
     openFolder: vi.fn().mockResolvedValue(undefined),
     onWindowStatusChanged: vi.fn(),
     offWindowStatusChanged: vi.fn(),
@@ -47,8 +65,13 @@ Object.defineProperty(window, 'electronAPI', {
     switchToUnifiedView: vi.fn().mockResolvedValue(undefined),
     onViewChanged: vi.fn(),
     offViewChanged: vi.fn(),
-    getSettings: vi.fn().mockResolvedValue({ success: true, data: { language: 'zh-CN', ides: [], quickNav: { items: [] }, terminal: { useBundledConptyDll: false } } }),
+    getSettings: vi.fn().mockResolvedValue({ success: true, data: { language: 'zh-CN', ides: [], quickNav: { items: [] }, terminal: { useBundledConptyDll: false, defaultShellProgram: '' } } }),
     updateSettings: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    getAvailableShells: vi.fn().mockResolvedValue({ success: true, data: [
+      { command: 'pwsh.exe', label: 'PowerShell 7 (pwsh.exe)', isDefault: true },
+      { command: 'powershell.exe', label: 'Windows PowerShell 5.1 (powershell.exe)', isDefault: false },
+      { command: 'cmd.exe', label: 'Command Prompt (cmd.exe)', isDefault: false },
+    ] }),
     getSupportedIDENames: vi.fn().mockResolvedValue({ success: true, data: [] }),
     scanIDEs: vi.fn().mockResolvedValue({ success: true, data: [] }),
     deleteIDEConfig: vi.fn().mockResolvedValue({ success: true, data: [] }),

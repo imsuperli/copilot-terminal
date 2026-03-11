@@ -17,7 +17,7 @@ describe('ProcessManager', () => {
     it('creates a new terminal process with valid config', async () => {
       const config = {
         workingDirectory: testWorkingDir,
-        command: 'echo test',
+        command: 'pwsh.exe',
       };
 
       const handle = await processManager.spawnTerminal(config);
@@ -49,6 +49,43 @@ describe('ProcessManager', () => {
       expect(status?.command).toBeDefined();
       // Should use platform default shell
       expect(status?.command).toMatch(/(pwsh|cmd|zsh|bash)/);
+    });
+
+    it('uses the global default shell when the window does not override it', async () => {
+      const processManagerWithGlobalShell = new ProcessManager(
+        () => ({
+          terminal: {
+            useBundledConptyDll: true,
+            defaultShellProgram: 'powershell.exe',
+          },
+        } as any),
+      );
+
+      const handle = await processManagerWithGlobalShell.spawnTerminal({
+        workingDirectory: testWorkingDir,
+      });
+      const status = processManagerWithGlobalShell.getProcessStatus(handle.pid);
+
+      expect(status?.command).toBe('powershell.exe');
+    });
+
+    it('prefers the window shell over the global default shell', async () => {
+      const processManagerWithGlobalShell = new ProcessManager(
+        () => ({
+          terminal: {
+            useBundledConptyDll: true,
+            defaultShellProgram: 'powershell.exe',
+          },
+        } as any),
+      );
+
+      const handle = await processManagerWithGlobalShell.spawnTerminal({
+        workingDirectory: testWorkingDir,
+        command: 'cmd.exe',
+      });
+      const status = processManagerWithGlobalShell.getProcessStatus(handle.pid);
+
+      expect(status?.command).toBe('cmd.exe');
     });
 
     it('emits process-created event', async () => {
