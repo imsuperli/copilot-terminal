@@ -14,6 +14,18 @@ const STATUS_COLOR_MAP: Record<WindowStatus, string> = {
 };
 
 /**
+ * 状态实际颜色值映射表（用于内联样式）
+ */
+const STATUS_COLOR_VALUE_MAP: Record<WindowStatus, string> = {
+  [WindowStatus.Running]: '#3b82f6', // blue-500
+  [WindowStatus.WaitingForInput]: '#f59e0b', // amber-500
+  [WindowStatus.Completed]: '#22c55e', // green-500
+  [WindowStatus.Error]: '#ef4444', // red-500
+  [WindowStatus.Restoring]: '#6b7280', // gray-500
+  [WindowStatus.Paused]: '#9ca3af' // gray-400
+};
+
+/**
  * 状态文字色映射表（text-* 变体，用于文字和图标着色）
  */
 const STATUS_TEXT_COLOR_MAP: Record<WindowStatus, string> = {
@@ -62,4 +74,13 @@ export function getStatusLabelKey(status: WindowStatus): TranslationKey {
  */
 export function getStatusTextColor(status: WindowStatus): string {
   return STATUS_TEXT_COLOR_MAP[status];
+}
+
+/**
+ * 获取窗口状态对应的实际颜色值（用于内联样式）
+ * @param status 窗口状态
+ * @returns 十六进制颜色值
+ */
+export function getStatusColorValue(status: WindowStatus): string {
+  return STATUS_COLOR_VALUE_MAP[status];
 }

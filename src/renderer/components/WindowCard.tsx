@@ -2,7 +2,7 @@ import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { FolderOpen, Trash2, Play, Pause, Loader2, Archive, ArchiveRestore, ExternalLink } from 'lucide-react';
 import { Window, WindowStatus } from '../types/window';
-import { getStatusColor, getStatusLabelKey } from '../utils/statusHelpers';
+import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils/statusHelpers';
 import { getAllPanes, getAggregatedStatus, getPaneCount } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
 import { IDEIcon } from './icons/IDEIcons';
@@ -198,7 +198,8 @@ export const WindowCard = React.memo<WindowCardProps>(({
       onClick={() => onClick?.(window)}
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
-      className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border border-[rgb(var(--border))] relative"
+      className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border-l border-r border-b border-[rgb(var(--border))] relative"
+      style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus)}` }}
     >
       {/* 启动中加载遮罩 */}
       {aggregatedStatus === WindowStatus.Restoring && (
@@ -208,12 +209,6 @@ export const WindowCard = React.memo<WindowCardProps>(({
           <div className="text-zinc-400 text-xs">{t('windowCard.pleaseWait')}</div>
         </div>
       )}
-
-      {/* 圆弧形彩色顶部线条 (3px 高度，更大的圆角) */}
-      <div
-        data-testid="status-bar"
-        className={`h-[3px] rounded-t-xl ${statusColor}`}
-      />
 
       {/* 卡片内容 - 占据剩余空间 */}
       <div className="flex-1 p-4 space-y-2 flex flex-col min-h-0">
