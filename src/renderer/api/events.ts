@@ -1,23 +1,9 @@
 import { WindowStatus } from '../types/window';
-
-export interface WindowStatusChangedPayload {
-  windowId: string;
-  status: WindowStatus;
-  timestamp: string;
-}
-
-export interface PaneStatusChangedPayload {
-  windowId: string;
-  paneId: string;
-  status: WindowStatus;
-  timestamp: string;
-}
-
-export interface WindowGitBranchChangedPayload {
-  windowId: string;
-  gitBranch: string | undefined;
-  timestamp: string;
-}
+import type {
+  PaneStatusChangedPayload,
+  WindowGitBranchChangedPayload,
+  WindowStatusChangedPayload,
+} from '../../shared/types/electron-api';
 
 /**
  * 订阅窗口状态变化事件

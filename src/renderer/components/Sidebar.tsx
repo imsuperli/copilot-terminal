@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onWindowContextMenu?.(windowId, e);
   };
 
-  const handleOpenInIDE = useCallback(async (ide: 'vscode' | 'idea', path: string) => {
+  const handleOpenInIDE = useCallback(async (ide: string, path: string) => {
     try {
       const response = await window.electronAPI.openInIDE(ide, path);
       if (!response.success) {

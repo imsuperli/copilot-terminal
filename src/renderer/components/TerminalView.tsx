@@ -150,11 +150,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         id: newPaneId,
         cwd: currentCwd, // 浣跨敤褰撳墠绐楁牸鐨勫伐浣滅洰褰?
         command: currentCommand, // 浣跨敤褰撳墠绐楁牸鐨勫懡浠?
-        status: WindowStatus.Paused,
+        status: WindowStatus.Restoring,
         pid: null,
       };
 
-      // 璋冪敤 IPC 鍒涘缓鏂扮殑 PTY 杩涚▼
+      // 先把新 pane 插入布局，避免把 PTY 启动耗时直接表现成“拆分很慢”
+      splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+
+      // 异步创建 PTY 进程，完成后再补齐 pid/状态
       try {
         if (window.electronAPI) {
           const response = await window.electronAPI.splitPane({
@@ -165,21 +168,27 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           });
 
           if (response && response.success && response.data) {
-            newPane.pid = response.data.pid;
-            newPane.status = WindowStatus.Running;
+            const paneStillExists = useWindowStore.getState().getPaneById(terminalWindow.id, newPaneId);
+            if (!paneStillExists) {
+              await window.electronAPI.closePane(terminalWindow.id, newPaneId);
+              return;
+            }
+
+            updatePane(terminalWindow.id, newPaneId, {
+              pid: response.data.pid,
+              status: WindowStatus.Running,
+            });
           } else {
             throw new Error(response?.error || t('terminalView.splitFailed'));
           }
         }
       } catch (error) {
         console.error('Failed to split pane:', error);
+        closePaneInWindow(terminalWindow.id, newPaneId, { syncProcess: false });
         return;
       }
-
-      // 鏇存柊甯冨眬
-      splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
     },
-    [t, terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow]
+    [t, terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow, updatePane, closePaneInWindow]
   );
 
   // 澶勭悊鎵撳紑鏂囦欢澶?
@@ -285,10 +294,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       <Sidebar
         activeWindowId={terminalWindow.id}
         onWindowSelect={onWindowSwitch}
-        onSettingsClick={() => {
-          console.log('[TerminalView] Settings clicked, setting state to true');
-          setIsSettingsPanelOpen(true);
-        }}
+        onSettingsClick={() => setIsSettingsPanelOpen(true)}
       />
 
       {/* 涓诲唴瀹瑰尯 */}
@@ -487,13 +493,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       )}
 
       {/* 设置面板 */}
-      {console.log('[TerminalView] Rendering SettingsPanel, open:', isSettingsPanelOpen)}
       <SettingsPanel
         open={isSettingsPanelOpen}
-        onClose={() => {
-          console.log('[TerminalView] SettingsPanel onClose called');
-          setIsSettingsPanelOpen(false);
-        }}
+        onClose={() => setIsSettingsPanelOpen(false)}
       />
 
     </div>

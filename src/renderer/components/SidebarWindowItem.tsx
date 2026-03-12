@@ -114,7 +114,7 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
   }, [terminalWindow.layout]);
 
   // 处理 IDE 按钮点击
-  const handleIDEClick = useCallback((e: React.MouseEvent, ide: 'vscode' | 'idea') => {
+  const handleIDEClick = useCallback((e: React.MouseEvent, ide: string) => {
     e.stopPropagation();
     onOpenInIDE?.(ide, workingDirectory);
   }, [onOpenInIDE, workingDirectory]);

@@ -77,7 +77,7 @@ interface WindowStore {
   // Pane 相关
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
   splitPaneInWindow: (windowId: string, targetPaneId: string, direction: 'horizontal' | 'vertical', newPane: Pane) => void;
-  closePaneInWindow: (windowId: string, paneId: string) => void;
+  closePaneInWindow: (windowId: string, paneId: string, options?: { syncProcess?: boolean }) => void;
   updateSplitSizes: (windowId: string, splitPath: number[], sizes: number[]) => void;
   setActivePane: (windowId: string, paneId: string) => void;
 
@@ -249,9 +249,9 @@ export const useWindowStore = create<WindowStore>()(
     },
 
     // 关闭窗格
-    closePaneInWindow: (windowId, paneId) => {
+    closePaneInWindow: (windowId, paneId, options) => {
       // 先调用 IPC 关闭 PTY 进程
-      if (window.electronAPI) {
+      if (options?.syncProcess !== false && window.electronAPI) {
         window.electronAPI.closePane(windowId, paneId).catch((error) => {
           console.error('Failed to close pane:', error);
         });

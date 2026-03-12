@@ -3,11 +3,26 @@ import path from 'path';
 import { app } from 'electron';
 import { randomUUID } from 'crypto';
 import { Workspace, Settings } from '../types/workspace';
-import { LayoutNode, PaneNode, SplitNode, WindowStatus } from '../../shared/types/window';
+import { LayoutNode, PaneNode, SplitNode, Window, WindowStatus } from '../../shared/types/window';
 import { AppLanguage, DEFAULT_LANGUAGE, normalizeLanguage } from '../../shared/i18n';
 import { scanInstalledIDEs } from '../utils/ideScanner';
 import { readProjectConfig } from '../utils/project-config';
 import { normalizeShellProgram } from '../utils/shell';
+
+type PersistedPane = Omit<PaneNode['pane'], 'status' | 'pid'> & {
+  status?: PaneNode['pane']['status'];
+  pid?: PaneNode['pane']['pid'];
+};
+
+type PersistedLayoutNode =
+  | (Omit<PaneNode, 'pane'> & { pane: PersistedPane })
+  | (Omit<SplitNode, 'children'> & { children: PersistedLayoutNode[] });
+
+type PersistedWindow =
+  & Omit<Window, 'layout' | 'claudeModel' | 'claudeModelId' | 'claudeContextPercentage' | 'claudeCost'>
+  & { layout: PersistedLayoutNode };
+
+type PersistedWorkspace = Omit<Workspace, 'windows'> & { windows: PersistedWindow[] };
 
 /**
  * WorkspaceManager 接口
@@ -185,34 +200,29 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     };
   }
 
-  private sanitizeWorkspaceForPersistence(workspace: Workspace): Record<string, unknown> {
+  private sanitizeWorkspaceForPersistence(workspace: Workspace): PersistedWorkspace {
     return {
       ...workspace,
-      windows: workspace.windows.map((window) => this.sanitizeWindowForPersistence(window as Record<string, unknown>)),
+      windows: workspace.windows.map((window) => this.sanitizeWindowForPersistence(window)),
     };
   }
 
-  private sanitizeWindowForPersistence(window: Record<string, unknown>): Record<string, unknown> {
+  private sanitizeWindowForPersistence(window: Window): PersistedWindow {
     const {
       claudeModel,
       claudeModelId,
       claudeContextPercentage,
       claudeCost,
-      layout,
       ...persistedWindow
     } = window;
 
-    if (!layout) {
-      return persistedWindow;
-    }
-
     return {
       ...persistedWindow,
-      layout: this.sanitizeLayoutForPersistence(layout as LayoutNode),
+      layout: this.sanitizeLayoutForPersistence(window.layout),
     };
   }
 
-  private sanitizeLayoutForPersistence(layout: LayoutNode): Record<string, unknown> {
+  private sanitizeLayoutForPersistence(layout: LayoutNode): PersistedLayoutNode {
     if (layout.type === 'pane') {
       const { status, pid, ...pane } = layout.pane;
       return {

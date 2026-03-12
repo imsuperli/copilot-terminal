@@ -11,8 +11,16 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "node"]
   },
-  "include": ["src/renderer/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/renderer/**/*", "src/shared/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/renderer/**/__tests__/**",
+    "src/renderer/**/*.test.ts",
+    "src/renderer/**/*.test.tsx",
+    "src/renderer/**/*.old.tsx",
+    "src/renderer/test-setup.ts"
+  ]
 }

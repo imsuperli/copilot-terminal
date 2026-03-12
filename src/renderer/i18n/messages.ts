@@ -377,7 +377,6 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'settings.title': 'Settings',
   'settings.panelDescription': 'Reorganize quick access and terminal capability settings in one place.',
   'settings.tab.general': 'General',
-  'settings.tab.ide': 'IDE Settings',
   'settings.tab.quickNav': 'Quick Navigation',
   'settings.tab.advanced': 'Advanced',
   'settings.tab.statusLine': 'Plugins',

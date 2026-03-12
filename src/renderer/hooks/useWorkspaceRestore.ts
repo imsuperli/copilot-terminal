@@ -1,6 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { useWindowStore, setAutoSaveEnabled } from '../stores/windowStore';
-import { Workspace } from '../../main/types/workspace';
+import { Workspace } from '../../shared/types/workspace';
 
 /**
  * 工作区恢复 Hook

@@ -1,7 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { ElectronAPI } from '../shared/types/electron-api';
 
 // 暴露受控的 IPC API 到渲染进程
-contextBridge.exposeInMainWorld('electronAPI', {
+const electronAPI: ElectronAPI = {
   platform: process.platform,
   ping: () => ipcRenderer.invoke('ping'),
 
@@ -50,61 +51,61 @@ contextBridge.exposeInMainWorld('electronAPI', {
   statusLineRestore: () => ipcRenderer.invoke('statusline-restore'),
 
   // Status events
-  onWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) => {
+  onWindowStatusChanged: (callback) => {
     ipcRenderer.on('window-status-changed', callback);
   },
-  offWindowStatusChanged: (callback: (event: unknown, payload: unknown) => void) =>
+  offWindowStatusChanged: (callback) =>
     ipcRenderer.removeListener('window-status-changed', callback),
-  onPaneStatusChanged: (callback: (event: unknown, payload: unknown) => void) => {
+  onPaneStatusChanged: (callback) => {
     ipcRenderer.on('pane-status-changed', callback);
   },
-  offPaneStatusChanged: (callback: (event: unknown, payload: unknown) => void) =>
+  offPaneStatusChanged: (callback) =>
     ipcRenderer.removeListener('pane-status-changed', callback),
-  onWindowGitBranchChanged: (callback: (event: unknown, payload: unknown) => void) => {
+  onWindowGitBranchChanged: (callback) => {
     ipcRenderer.on('window-git-branch-changed', callback);
   },
-  offWindowGitBranchChanged: (callback: (event: unknown, payload: unknown) => void) =>
+  offWindowGitBranchChanged: (callback) =>
     ipcRenderer.removeListener('window-git-branch-changed', callback),
 
   // Tmux pane metadata events
-  onTmuxPaneTitleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; title: string }) => void) => {
+  onTmuxPaneTitleChanged: (callback) => {
     ipcRenderer.on('tmux:pane-title-changed', callback);
   },
-  offTmuxPaneTitleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; title: string }) => void) => {
+  offTmuxPaneTitleChanged: (callback) => {
     ipcRenderer.removeListener('tmux:pane-title-changed', callback);
   },
-  onTmuxPaneStyleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; metadata: unknown }) => void) => {
+  onTmuxPaneStyleChanged: (callback) => {
     ipcRenderer.on('tmux:pane-style-changed', callback);
   },
-  offTmuxPaneStyleChanged: (callback: (event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; metadata: unknown }) => void) => {
+  offTmuxPaneStyleChanged: (callback) => {
     ipcRenderer.removeListener('tmux:pane-style-changed', callback);
   },
-  onTmuxWindowSynced: (callback: (event: unknown, payload: { window: unknown }) => void) => {
+  onTmuxWindowSynced: (callback) => {
     ipcRenderer.on('tmux:window-synced', callback);
   },
-  offTmuxWindowSynced: (callback: (event: unknown, payload: { window: unknown }) => void) => {
+  offTmuxWindowSynced: (callback) => {
     ipcRenderer.removeListener('tmux:window-synced', callback);
   },
-  onTmuxWindowRemoved: (callback: (event: unknown, payload: { windowId: string }) => void) => {
+  onTmuxWindowRemoved: (callback) => {
     ipcRenderer.on('tmux:window-removed', callback);
   },
-  offTmuxWindowRemoved: (callback: (event: unknown, payload: { windowId: string }) => void) => {
+  offTmuxWindowRemoved: (callback) => {
     ipcRenderer.removeListener('tmux:window-removed', callback);
   },
 
   // Project config updates
-  onProjectConfigUpdated: (callback: (event: unknown, payload: { windowId: string; projectConfig: unknown }) => void) => {
+  onProjectConfigUpdated: (callback) => {
     ipcRenderer.on('project-config-updated', callback);
   },
-  offProjectConfigUpdated: (callback: (event: unknown, payload: { windowId: string; projectConfig: unknown }) => void) => {
+  offProjectConfigUpdated: (callback) => {
     ipcRenderer.removeListener('project-config-updated', callback);
   },
 
   // Claude model updates
-  onClaudeModelUpdated: (callback: (event: unknown, payload: { windowId: string; model?: string; modelId?: string; contextPercentage?: number; cost?: number }) => void) => {
+  onClaudeModelUpdated: (callback) => {
     ipcRenderer.on('claude-model-updated', callback);
   },
-  offClaudeModelUpdated: (callback: (event: unknown, payload: { windowId: string; model?: string; modelId?: string; contextPercentage?: number; cost?: number }) => void) => {
+  offClaudeModelUpdated: (callback) => {
     ipcRenderer.removeListener('claude-model-updated', callback);
   },
 
@@ -115,10 +116,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('pty-resize', { windowId, paneId, cols, rows }),
   getPtyHistory: (paneId: string) =>
     ipcRenderer.invoke('get-pty-history', { paneId }),
-  onPtyData: (callback: (event: unknown, payload: { windowId: string; paneId?: string; data: string }) => void) => {
+  onPtyData: (callback) => {
     ipcRenderer.on('pty-data', callback);
   },
-  offPtyData: (callback: (event: unknown, payload: { windowId: string; paneId?: string; data: string }) => void) => {
+  offPtyData: (callback) => {
     ipcRenderer.removeListener('pty-data', callback);
   },
 
@@ -135,10 +136,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('switch-to-unified-view'),
   setActivePane: (windowId: string, paneId: string | null) =>
     ipcRenderer.invoke('set-active-pane', { windowId, paneId }),
-  onViewChanged: (callback: (event: unknown, payload: { view: 'unified' | 'terminal'; windowId?: string }) => void) => {
+  onViewChanged: (callback) => {
     ipcRenderer.on('view-changed', callback);
   },
-  offViewChanged: (callback: (event: unknown, payload: { view: 'unified' | 'terminal'; windowId?: string }) => void) => {
+  offViewChanged: (callback) => {
     ipcRenderer.removeListener('view-changed', callback);
   },
 
@@ -147,10 +148,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-workspace', windows),
   loadWorkspace: () =>
     ipcRenderer.invoke('load-workspace'),
-  onWorkspaceLoaded: (callback: (event: unknown, workspace: unknown) => void) => {
+  onWorkspaceLoaded: (callback) => {
     ipcRenderer.on('workspace-loaded', callback);
   },
-  offWorkspaceLoaded: (callback: (event: unknown, workspace: unknown) => void) => {
+  offWorkspaceLoaded: (callback) => {
     ipcRenderer.removeListener('workspace-loaded', callback);
   },
 
@@ -168,32 +169,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
   notifyRendererReady: () => ipcRenderer.send('renderer-ready'),
 
   // Workspace restore
-  onWindowRestored: (callback: (event: unknown, result: unknown) => void) => {
+  onWindowRestored: (callback) => {
     ipcRenderer.on('window-restored', callback);
   },
-  offWindowRestored: (callback: (event: unknown, result: unknown) => void) => {
+  offWindowRestored: (callback) => {
     ipcRenderer.removeListener('window-restored', callback);
   },
-  onWorkspaceRestoreError: (callback: (event: unknown, error: unknown) => void) => {
+  onWorkspaceRestoreError: (callback) => {
     ipcRenderer.on('workspace-restore-error', callback);
   },
-  offWorkspaceRestoreError: (callback: (event: unknown, error: unknown) => void) => {
+  offWorkspaceRestoreError: (callback) => {
     ipcRenderer.removeListener('workspace-restore-error', callback);
   },
   recoverFromBackup: () =>
     ipcRenderer.invoke('recover-from-backup'),
 
   // Cleanup progress
-  onCleanupStarted: (callback: () => void) => {
+  onCleanupStarted: (callback) => {
     ipcRenderer.on('cleanup-started', callback);
   },
-  offCleanupStarted: (callback: () => void) => {
+  offCleanupStarted: (callback) => {
     ipcRenderer.removeListener('cleanup-started', callback);
   },
-  onCleanupProgress: (callback: (event: unknown, payload: { current: number; total: number }) => void) => {
+  onCleanupProgress: (callback) => {
     ipcRenderer.on('cleanup-progress', callback);
   },
-  offCleanupProgress: (callback: (event: unknown, payload: { current: number; total: number }) => void) => {
+  offCleanupProgress: (callback) => {
     ipcRenderer.removeListener('cleanup-progress', callback);
   },
-});
+};
+
+contextBridge.exposeInMainWorld('electronAPI', electronAPI);

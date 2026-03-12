@@ -13,8 +13,16 @@ import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
 import { useWorkspaceRestore } from './hooks/useWorkspaceRestore';
 import { subscribeToPaneStatusChange, subscribeToWindowGitBranchChange } from './api/events';
-import { Window } from './types/window';
+import { Pane, Window } from './types/window';
 import { I18nProvider } from './i18n';
+import type {
+  ClaudeModelUpdatedPayload,
+  ProjectConfigUpdatedPayload,
+  TmuxPaneStyleChangedPayload,
+  TmuxPaneTitleChangedPayload,
+  TmuxWindowRemovedPayload,
+  TmuxWindowSyncedPayload,
+} from '../shared/types/electron-api';
 import './api/ptyDataBus';
 
 function AppContent() {
@@ -110,12 +118,12 @@ function AppContent() {
       return;
     }
 
-    const handleTitleChanged = (_event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; title: string }) => {
+    const handleTitleChanged = (_event: unknown, payload: TmuxPaneTitleChangedPayload) => {
       updatePane(payload.windowId, payload.paneId, { title: payload.title });
     };
 
-    const handleStyleChanged = (_event: unknown, payload: { tmuxPaneId: string; windowId: string; paneId: string; metadata: any }) => {
-      const updates: Partial<Window['layout']['pane']> = {};
+    const handleStyleChanged = (_event: unknown, payload: TmuxPaneStyleChangedPayload) => {
+      const updates: Partial<Pane> = {};
       if (payload.metadata.borderColor !== undefined) {
         updates.borderColor = payload.metadata.borderColor;
       }
@@ -136,11 +144,11 @@ function AppContent() {
       }
     };
 
-    const handleWindowSynced = (_event: unknown, payload: { window: Window }) => {
+    const handleWindowSynced = (_event: unknown, payload: TmuxWindowSyncedPayload) => {
       syncWindow(payload.window);
     };
 
-    const handleWindowRemoved = (_event: unknown, payload: { windowId: string }) => {
+    const handleWindowRemoved = (_event: unknown, payload: TmuxWindowRemovedPayload) => {
       removeWindow(payload.windowId);
     };
 
@@ -161,9 +169,8 @@ function AppContent() {
   useEffect(() => {
     if (!window.electronAPI?.onProjectConfigUpdated) return;
 
-    const handleProjectConfigUpdate = (_event: unknown, payload: { windowId: string; projectConfig: unknown }) => {
-      console.log('[App] Project config updated for window:', payload.windowId);
-      updateWindow(payload.windowId, { projectConfig: payload.projectConfig });
+    const handleProjectConfigUpdate = (_event: unknown, payload: ProjectConfigUpdatedPayload) => {
+      updateWindow(payload.windowId, { projectConfig: payload.projectConfig ?? undefined });
     };
 
     window.electronAPI.onProjectConfigUpdated(handleProjectConfigUpdate);
@@ -177,8 +184,7 @@ function AppContent() {
   useEffect(() => {
     if (!window.electronAPI?.onClaudeModelUpdated) return;
 
-    const handleClaudeModelUpdate = (_event: unknown, payload: { windowId: string; model?: string; modelId?: string; contextPercentage?: number; cost?: number }) => {
-      console.log('[App] Claude model updated for window:', payload.windowId, payload);
+    const handleClaudeModelUpdate = (_event: unknown, payload: ClaudeModelUpdatedPayload) => {
       updateClaudeModel(payload.windowId, payload.model, payload.modelId, payload.contextPercentage, payload.cost);
     };
 
@@ -187,7 +193,7 @@ function AppContent() {
     return () => {
       window.electronAPI?.offClaudeModelUpdated?.(handleClaudeModelUpdate);
     };
-  }, []);
+  }, [updateClaudeModel]);
 
   const handleCreateWindow = useCallback(() => {
     setIsDialogOpen(true);

@@ -73,35 +73,26 @@ export const StatusDot: React.FC<StatusDotProps> = ({
   const dotColor = getStatusDotColor(status);
   const animationClass = getStatusAnimation(status);
 
-  // 使用图标的状态
-  if (status === WindowStatus.Running) {
-    return (
-      <Activity
+  const renderIcon = (Icon: typeof Activity) => (
+    <span title={title} className="inline-flex items-center justify-center">
+      <Icon
         size={iconSize}
         className={`${iconColor} ${animationClass} ${className}`}
-        title={title}
       />
-    );
+    </span>
+  );
+
+  // 使用图标的状态
+  if (status === WindowStatus.Running) {
+    return renderIcon(Activity);
   }
 
   if (status === WindowStatus.WaitingForInput) {
-    return (
-      <Keyboard
-        size={iconSize}
-        className={`${iconColor} ${animationClass} ${className}`}
-        title={title}
-      />
-    );
+    return renderIcon(Keyboard);
   }
 
   if (status === WindowStatus.Paused) {
-    return (
-      <Pause
-        size={iconSize}
-        className={`${iconColor} ${animationClass} ${className}`}
-        title={title}
-      />
-    );
+    return renderIcon(Pause);
   }
 
   // 其他状态继续使用圆点

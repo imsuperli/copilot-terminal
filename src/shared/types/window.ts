@@ -89,6 +89,10 @@ export interface Window {
   archived?: boolean;            // 是否已归档
   projectConfig?: ProjectConfig; // 项目配置（从 copilot.json 读取）
   gitBranch?: string;            // Git 分支名称（如果是 git 仓库）
+  claudeModel?: string;          // Claude 模型名称（运行态）
+  claudeModelId?: string;        // Claude 模型 ID（运行态）
+  claudeContextPercentage?: number; // Claude 上下文占比（运行态）
+  claudeCost?: number;           // Claude 成本统计（运行态）
 }
 
 /**

@@ -7,6 +7,7 @@ import { X, Plus, Trash2, Search, Check, ChevronDown, Globe, Folder, Edit2, Fold
 import { IDEIcon } from './icons/IDEIcons';
 import { notifyIDESettingsUpdated } from '../hooks/useIDESettings';
 import { QuickNavItem } from '../../shared/types/quick-nav';
+import { StatusLineConfig } from '../../shared/types/workspace';
 import { useI18n } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
 
@@ -32,7 +33,19 @@ interface SettingsPanelProps {
 
 type SettingsTab = 'general' | 'quicknav' | 'statusline' | 'advanced';
 type QuickNavSubTab = 'ide' | 'custom';
+type StatusLineDisplayFormat = 'full' | 'compact';
 const AUTO_SHELL_OPTION_VALUE = '__auto__';
+const DEFAULT_STATUSLINE_CONFIG: StatusLineConfig = {
+  enabled: false,
+  displayLocation: 'both',
+  cliFormat: 'full',
+  cardFormat: 'compact',
+  showModel: true,
+  showContext: true,
+  showCost: true,
+  showTime: false,
+  showTokens: false,
+};
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) => {
   const { language, setLanguage, t } = useI18n();
@@ -52,13 +65,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const [quickNavTab, setQuickNavTab] = useState<QuickNavSubTab>('ide');
 
   // StatusLine 配置状态
-  const [statusLineConfig, setStatusLineConfig] = useState({
-    enabled: false,
-    format: 'full' as 'full' | 'compact',
-    showModel: true,
-    showContext: true,
-    showCost: true,
-  });
+  const [statusLineConfig, setStatusLineConfig] = useState<StatusLineConfig>(DEFAULT_STATUSLINE_CONFIG);
   const [terminalSettings, setTerminalSettings] = useState({
     useBundledConptyDll: true,
     defaultShellProgram: '',
@@ -95,11 +102,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         setIDEs(settings.ides || []);
         setQuickNavItems([...(settings.quickNav?.items || [])].sort((a: QuickNavItem, b: QuickNavItem) => a.order - b.order));
         setStatusLineConfig({
-          enabled: settings.statusLine?.enabled ?? false,
-          format: settings.statusLine?.format ?? 'full',
-          showModel: settings.statusLine?.showModel ?? true,
-          showContext: settings.statusLine?.showContext ?? true,
-          showCost: settings.statusLine?.showCost ?? true,
+          ...DEFAULT_STATUSLINE_CONFIG,
+          ...settings.statusLine,
         });
         setTerminalSettings({
           useBundledConptyDll: settings.terminal?.useBundledConptyDll ?? true,
@@ -232,7 +236,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     try {
       const response = await window.electronAPI.scanSpecificIDE(ideName);
       if (response.success && response.data) {
-        setEditingIDE(prev => prev ? { ...prev, path: response.data } : null);
+        setEditingIDE(prev => prev ? { ...prev, path: response.data ?? undefined } : null);
       }
     } catch (error) {
       console.error('Failed to scan specific IDE:', error);
@@ -350,7 +354,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   };
 
   // StatusLine 配置处理
-  const handleStatusLineConfigChange = async (updates: Partial<typeof statusLineConfig>) => {
+  const handleStatusLineConfigChange = async (updates: Partial<StatusLineConfig>) => {
     const newConfig = { ...statusLineConfig, ...updates };
     setStatusLineConfig(newConfig);
 
@@ -494,6 +498,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const selectedShellValue = !effectiveSelectedShell || effectiveSelectedShell === autoShellTarget
     ? AUTO_SHELL_OPTION_VALUE
     : effectiveSelectedShell;
+  const statusLineDisplayFormat: StatusLineDisplayFormat = (
+    statusLineConfig.cliFormat === 'compact' && statusLineConfig.cardFormat === 'compact'
+  ) ? 'compact' : 'full';
+  const handleStatusLineFormatChange = (format: StatusLineDisplayFormat) => {
+    void handleStatusLineConfigChange({
+      cliFormat: format,
+      cardFormat: format,
+    });
+  };
 
   return (
     <Dialog.Root open={open} onOpenChange={handleSettingsOpenChange}>
@@ -909,8 +922,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               type="radio"
                               name="format"
                               value="full"
-                              checked={statusLineConfig.format === 'full'}
-                              onChange={() => handleStatusLineConfigChange({ format: 'full' })}
+                              checked={statusLineDisplayFormat === 'full'}
+                              onChange={() => handleStatusLineFormatChange('full')}
                               className="mt-1 h-4 w-4 text-[rgb(var(--primary))]"
                             />
                             <div className="flex-1">
@@ -926,8 +939,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               type="radio"
                               name="format"
                               value="compact"
-                              checked={statusLineConfig.format === 'compact'}
-                              onChange={() => handleStatusLineConfigChange({ format: 'compact' })}
+                              checked={statusLineDisplayFormat === 'compact'}
+                              onChange={() => handleStatusLineFormatChange('compact')}
                               className="mt-1 h-4 w-4 text-[rgb(var(--primary))]"
                             />
                             <div className="flex-1">
