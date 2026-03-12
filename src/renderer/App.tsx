@@ -214,6 +214,10 @@ function AppContent() {
     () => windows.find((w) => w.id === activeWindowId),
     [windows, activeWindowId]
   );
+  const activeTerminalWindow = useMemo(
+    () => (currentView === 'terminal' ? activeWindow ?? null : null),
+    [currentView, activeWindow]
+  );
   const hasActiveWindows = useMemo(
     () => windows.some(w => !w.archived),
     [windows]
@@ -256,14 +260,14 @@ function AppContent() {
         </MainLayout>
       </div>
 
-      {/* 终端视图：为每个窗口保持一个 TerminalView 实例 - 淡入淡出 */}
-      {windows.map((win) => (
+      {/* 终端视图：仅挂载当前活跃窗口，避免后台窗口常驻终端实例 */}
+      {activeTerminalWindow && (
         <div
-          key={win.id}
+          key={activeTerminalWindow.id}
           className="transition-opacity duration-300"
           style={{
-            display: currentView === 'terminal' && activeWindowId === win.id ? 'block' : 'none',
-            opacity: currentView === 'terminal' && activeWindowId === win.id ? 1 : 0,
+            display: 'block',
+            opacity: 1,
             position: 'fixed',
             top: 0,
             left: 0,
@@ -273,13 +277,14 @@ function AppContent() {
           }}
         >
           <TerminalView
-            window={win}
+            key={activeTerminalWindow.id}
+            window={activeTerminalWindow}
             onReturn={switchToUnifiedView}
             onWindowSwitch={handleWindowSwitch}
-            isActive={currentView === 'terminal' && activeWindowId === win.id}
+            isActive
           />
         </div>
-      ))}
+      )}
 
       {error && <ViewSwitchError message={error} />}
 
