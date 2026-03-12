@@ -198,11 +198,6 @@ export function closePane(
     return layout;
   }
 
-  // 如果只剩一个子节点，提升它（消除不必要的拆分层级）
-  if (newChildren.length === 1) {
-    return newChildren[0];
-  }
-
   // 如果没有子节点了，返回 null
   if (newChildren.length === 0) {
     return null;

@@ -2003,10 +2003,6 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
     // 濠电姷鏁告慨鐑姐€傛禒瀣劦妞ゆ巻鍋撻柛鐔锋健閸┾偓妞ゆ巻鍋撶紓宥咃躬楠炲啫螣鐠囪尙绐為梺褰掑亰閸撴盯鎮￠幋婵愭富闁靛牆鎳愮粻浼存倵濮樼厧澧撮柛鈺傜洴瀵€燁槷婵℃彃鐗撻弻鐔虹磼閵忕姷浠╂繛瀛樼矌閸嬫挾鎹㈠☉銏犵闁绘劕鐡ㄩ崕搴㈢箾鐎涙鐭嬬紒顔芥崌楠炲啴宕崟銊︾€婚梺鍦亾濞兼瑥鈻撻悢鍏尖拺缂佸瀵у﹢鎵磼椤斿吋婀扮紒鍌涘浮椤㈡盯鎮欑€电寮虫繝鐢靛仦閸ㄦ儼鎽┑鐘亾闁规鍠楅崰鎰涙０浣藉厡缂佹劖姊婚埀顒冾潐濞测晝鎹㈠┑鍡欐殾闁诡垶鍋婂Σ楣冩⒑?
 
-    if (newChildren.length === 1) {
-      return newChildren[0];
-    }
-
     // 闂傚倸鍊搁崐鐑芥倿閿曚降浜归柛鎰典簽閻捇鏌ｉ姀銏╃劸闁藉啰鍠庨埞鎴︽偐閹绘帩浠炬繝娈垮灠閵堟悂寮婚妸銉㈡婵☆垯璀︽导鈧梻?sizes
 
     const sizesChanged = newChildren.length !== node.children.length;

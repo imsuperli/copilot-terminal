@@ -359,6 +359,72 @@ describe('TmuxCompatService', () => {
       expect(rightSide.children[0]).toMatchObject({ type: 'pane', id: 'pane-2' });
       expect(rightSide.children[1]).toMatchObject({ type: 'pane', id: 'pane-4' });
     });
+
+    it('关闭兄弟 pane 后应保留单子节点 split，避免幸存 pane 重挂载', async () => {
+      const { service, store } = createService();
+      const teammatePane = (id: string): Pane => ({
+        id,
+        cwd: '/home/user/project',
+        command: 'pwsh.exe',
+        status: WindowStatus.WaitingForInput,
+        pid: 1000,
+      });
+
+      store.getState().windows[0].layout = {
+        type: 'split',
+        direction: 'horizontal',
+        sizes: [0.3, 0.7],
+        children: [
+          {
+            type: 'pane',
+            id: 'pane-1',
+            pane: teammatePane('pane-1'),
+          },
+          {
+            type: 'split',
+            direction: 'vertical',
+            sizes: [0.5, 0.5],
+            children: [
+              {
+                type: 'pane',
+                id: 'pane-2',
+                pane: teammatePane('pane-2'),
+              },
+              {
+                type: 'pane',
+                id: 'pane-3',
+                pane: teammatePane('pane-3'),
+              },
+            ],
+          },
+        ],
+      };
+
+      service.registerPane('%2', 'win-1', 'pane-2');
+      service.registerPane('%3', 'win-1', 'pane-3');
+
+      const response = await service.executeCommand({
+        argv: ['kill-pane', '-t', '%2'],
+      });
+
+      expect(response.exitCode).toBe(0);
+
+      const window = store.getState().windows[0];
+      expect(window.layout.type).toBe('split');
+      if (window.layout.type !== 'split') {
+        throw new Error('expected split layout');
+      }
+
+      const rightSide = window.layout.children[1];
+      expect(rightSide.type).toBe('split');
+      if (rightSide.type !== 'split') {
+        throw new Error('expected nested split');
+      }
+
+      expect(rightSide.children).toHaveLength(1);
+      expect(rightSide.sizes).toEqual([1]);
+      expect(rightSide.children[0]).toMatchObject({ type: 'pane', id: 'pane-3' });
+    });
   });
 
   describe('select-pane', () => {

@@ -178,6 +178,35 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     isActiveRef.current = isActive;
   }, [isActive]);
 
+  const forceResizeToContainer = useCallback(() => {
+    lastContainerSizeRef.current = { width: 0, height: 0 };
+
+    if (!terminalRef.current || !fitAddonRef.current || !terminalContainerRef.current) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      const container = terminalContainerRef.current;
+      const terminal = terminalRef.current;
+      const fitAddon = fitAddonRef.current;
+
+      if (!container || !terminal || !fitAddon) return;
+
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      if (width > 0 && height > 0) {
+        lastContainerSizeRef.current = { width, height };
+        fitAddon.fit();
+
+        if (window.electronAPI) {
+          const { cols, rows } = terminal;
+          window.electronAPI.ptyResize(windowId, pane.id, cols, rows);
+        }
+      }
+    });
+  }, [windowId, pane.id]);
+
   // 监听窗格状态变化：从 Paused 恢复时重置尺寸缓存，强制下次 resize
   useEffect(() => {
     const prevStatus = lastStatusRef.current;
@@ -188,36 +217,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       prevStatus === WindowStatus.Paused &&
       (currentStatus === WindowStatus.Running || currentStatus === WindowStatus.WaitingForInput || currentStatus === WindowStatus.Restoring)
     ) {
-      // 重置尺寸缓存，强制下次 resize 执行
-      lastContainerSizeRef.current = { width: 0, height: 0 };
-
-      // 立即触发 resize
-      if (terminalRef.current && fitAddonRef.current && terminalContainerRef.current) {
-        requestAnimationFrame(() => {
-          const container = terminalContainerRef.current;
-          const terminal = terminalRef.current;
-          const fitAddon = fitAddonRef.current;
-
-          if (!container || !terminal || !fitAddon) return;
-
-          const width = container.clientWidth;
-          const height = container.clientHeight;
-
-          if (width > 0 && height > 0) {
-            lastContainerSizeRef.current = { width, height };
-            fitAddon.fit();
-
-            if (window.electronAPI) {
-              const { cols, rows } = terminal;
-              window.electronAPI.ptyResize(windowId, pane.id, cols, rows);
-            }
-          }
-        });
-      }
+      forceResizeToContainer();
     }
 
     lastStatusRef.current = currentStatus;
-  }, [pane.status, windowId, pane.id]);
+  }, [pane.status, forceResizeToContainer]);
 
   // 当窗格激活且窗口激活时，自动聚焦到终端
   useEffect(() => {

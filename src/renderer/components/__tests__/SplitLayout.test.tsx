@@ -119,6 +119,63 @@ describe('SplitLayout', () => {
     expect(mountCounts['pane-b']).toBe(1);
   });
 
+  it('keeps surviving pane mounted when a nested split collapses to one child', () => {
+    const initialLayout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.3, 0.7],
+      children: [
+        createPaneNode('pane-left'),
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [createPaneNode('pane-top'), createPaneNode('pane-bottom')],
+        },
+      ],
+    };
+
+    const { rerender } = render(
+      <SplitLayout
+        windowId="win-1"
+        layout={initialLayout}
+        activePaneId="pane-bottom"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const nextLayout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.3, 0.7],
+      children: [
+        createPaneNode('pane-left'),
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [1],
+          children: [createPaneNode('pane-bottom')],
+        },
+      ],
+    };
+
+    rerender(
+      <SplitLayout
+        windowId="win-1"
+        layout={nextLayout}
+        activePaneId="pane-bottom"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    expect(mountCounts['pane-bottom']).toBe(1);
+    expect(unmountCounts['pane-bottom'] ?? 0).toBe(0);
+  });
+
   it('persists resized split sizes back to the store on drag end', () => {
     const layout: LayoutNode = {
       type: 'split',

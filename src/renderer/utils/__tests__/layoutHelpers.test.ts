@@ -77,6 +77,43 @@ describe('layoutHelpers.closePane', () => {
 
     expect(closePane(layout, 'missing-pane')).toBe(layout);
   });
+
+  it('keeps a single-child split node after closing a sibling pane', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.3, 0.7],
+      children: [
+        createPaneNode('leader'),
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [
+            createPaneNode('teammate-a'),
+            createPaneNode('teammate-b'),
+          ],
+        },
+      ],
+    };
+
+    const nextLayout = closePane(layout, 'teammate-a');
+    expect(nextLayout).not.toBeNull();
+
+    if (!nextLayout || nextLayout.type !== 'split') {
+      throw new Error('expected split layout');
+    }
+
+    const rightSide = nextLayout.children[1];
+    expect(rightSide.type).toBe('split');
+    if (rightSide.type !== 'split') {
+      throw new Error('expected nested split');
+    }
+
+    expect(rightSide.children).toHaveLength(1);
+    expect(rightSide.sizes).toEqual([1]);
+    expect(rightSide.children[0]).toMatchObject({ type: 'pane', id: 'teammate-b' });
+  });
 });
 
 describe('layoutHelpers.updateSplitSizes', () => {
