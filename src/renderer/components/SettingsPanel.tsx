@@ -498,8 +498,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   return (
     <Dialog.Root open={open} onOpenChange={handleSettingsOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm animate-fade-in" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex h-[72vh] w-[94vw] max-h-[720px] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] shadow-2xl animate-scale-in">
+        <Dialog.Overlay className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm animate-fade-in" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[9999] flex h-[72vh] w-[94vw] max-h-[720px] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] shadow-2xl animate-scale-in">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(168,170,88,0.16),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(84,72,31,0.18),_transparent_32%)]" />
 
           <div className="relative flex items-center justify-between border-b border-[rgb(var(--border))] px-8 py-4">
@@ -567,7 +567,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
                             >
                               <Select.Viewport className="p-1">
                                 <Select.Item value="zh-CN" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
@@ -622,7 +622,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   side="bottom"
                                   align="start"
                                   sideOffset={6}
-                                  className="z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                                  className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
                                 >
                                   <Select.Viewport className="p-1">
                                     <Select.Item value={AUTO_SHELL_OPTION_VALUE} className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
@@ -1079,6 +1079,21 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         </div>
                       </div>
 
+                      <div className={`rounded-[24px] border border-[rgba(168,170,88,0.24)] bg-[rgba(168,170,88,0.10)] p-5 ${!tmuxSettings.enabled ? 'opacity-50' : ''}`}>
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
+                            <Check size={14} />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-[rgb(var(--primary))]">{t('settings.tmux.agentTeamsEnvTitle')}</div>
+                            <div className="mt-1 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.agentTeamsEnvDescription')}</div>
+                            <code className="mt-3 inline-flex rounded-xl border border-[rgba(168,170,88,0.24)] bg-[rgba(12,12,10,0.45)] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
+                              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+                            </code>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className={`grid gap-4 lg:grid-cols-2 ${!tmuxSettings.enabled ? 'opacity-50' : ''}`}>
                         <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
                           <div className="flex items-center justify-between gap-4">
@@ -1148,7 +1163,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </Select.Icon>
                   </Select.Trigger>
                   <Select.Portal>
-                    <Select.Content className="z-[80] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl">
+                    <Select.Content className="z-[10000] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl">
                       <Select.Viewport className="p-1">
                         {supportedIDENames.map((name) => (
                           <Select.Item

@@ -3,6 +3,7 @@ import { LayoutNode, SplitNode } from '../types/window';
 import { TerminalPane } from './TerminalPane';
 import { getPaneCount } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
+import { useWindowStore } from '../stores/windowStore';
 
 export interface SplitLayoutProps {
   windowId: string;
@@ -26,6 +27,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   onPaneClose,
 }) => {
   const { t } = useI18n();
+  const updateSplitSizes = useWindowStore((state) => state.updateSplitSizes);
 
   // 防御性检查：如果 layout 为 undefined 或 null，返回空
   if (!layout) {
@@ -49,11 +51,13 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
     <SplitContainer
       windowId={windowId}
       splitNode={rootSplitNode}
+      splitPath={[]}
       activePaneId={activePaneId}
       isWindowActive={isWindowActive}
       totalPaneCount={totalPaneCount}
       onPaneActivate={onPaneActivate}
       onPaneClose={onPaneClose}
+      onSplitResize={updateSplitSizes}
     />
   );
 };
@@ -67,21 +71,25 @@ SplitLayout.displayName = 'SplitLayout';
 interface SplitContainerProps {
   windowId: string;
   splitNode: SplitNode;
+  splitPath: number[];
   activePaneId: string;
   isWindowActive: boolean;
   totalPaneCount: number;
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
+  onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
 
 const SplitContainer: React.FC<SplitContainerProps> = ({
   windowId,
   splitNode,
+  splitPath,
   activePaneId,
   isWindowActive,
   totalPaneCount,
   onPaneActivate,
   onPaneClose,
+  onSplitResize,
 }) => {
   const [sizes, setSizes] = useState<number[]>(splitNode.sizes);
   const [isResizing, setIsResizing] = useState(false);
@@ -128,10 +136,12 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
       newSizes[resizingIndex] = leftSize;
       newSizes[resizingIndex + 1] = rightSize;
 
+      sizesRef.current = newSizes;
       setSizes(newSizes);
     };
 
     const handleMouseUp = () => {
+      onSplitResize(windowId, splitPath, sizesRef.current);
       setIsResizing(false);
       setResizingIndex(-1);
     };
@@ -143,7 +153,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, resizingIndex, splitNode.direction]);
+  }, [isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
 
@@ -164,11 +174,13 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
             <LayoutNodeRenderer
               windowId={windowId}
               layout={child}
+              splitPath={[...splitPath, index]}
               activePaneId={activePaneId}
               isWindowActive={isWindowActive}
               totalPaneCount={totalPaneCount}
               onPaneActivate={onPaneActivate}
               onPaneClose={onPaneClose}
+              onSplitResize={onSplitResize}
             />
           </div>
 
@@ -192,21 +204,25 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
 interface LayoutNodeRendererProps {
   windowId: string;
   layout: LayoutNode;
+  splitPath: number[];
   activePaneId: string;
   isWindowActive: boolean;
   totalPaneCount: number;
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
+  onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
 
 const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
   windowId,
   layout,
+  splitPath,
   activePaneId,
   isWindowActive,
   totalPaneCount,
   onPaneActivate,
   onPaneClose,
+  onSplitResize,
 }) => {
   if (layout.type === 'pane') {
     const isActive = layout.id === activePaneId;
@@ -227,11 +243,13 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
     <SplitContainer
       windowId={windowId}
       splitNode={layout}
+      splitPath={splitPath}
       activePaneId={activePaneId}
       isWindowActive={isWindowActive}
       totalPaneCount={totalPaneCount}
       onPaneActivate={onPaneActivate}
       onPaneClose={onPaneClose}
+      onSplitResize={onSplitResize}
     />
   );
 };

@@ -193,6 +193,9 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
   const selectedShellValue = !effectiveSelectedShell || effectiveSelectedShell === autoShellTarget
     ? AUTO_SHELL_OPTION_VALUE
     : effectiveSelectedShell
+  const autoShellLabel = autoShellTarget
+    ? t('createWindow.shellAutoOption', { shell: autoShellTarget })
+    : t('createWindow.shellAutoFallback')
 
   const handleSelectCustomShell = async () => {
     try {
@@ -214,6 +217,7 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
       }}
       title={t('createWindow.title')}
       description={t('createWindow.description')}
+      contentClassName="max-w-[640px]"
     >
       <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} role="form">
         {/* 窗口名称 */}
@@ -280,17 +284,19 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
             {t('createWindow.shellLabel')}
           </label>
           <div className="flex gap-2">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <Select.Root
                 value={selectedShellValue}
                 onValueChange={(value) => setCommand(value === AUTO_SHELL_OPTION_VALUE ? '' : value)}
               >
                 <Select.Trigger
                   id="command"
-                  className="flex w-full items-center justify-between rounded border border-border-subtle bg-bg-app px-3 py-2 text-left text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
+                  className="flex w-full items-center justify-between gap-2 rounded border border-border-subtle bg-bg-app px-3 py-2 text-sm text-left text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running min-w-0"
                 >
-                  <Select.Value placeholder={t('createWindow.shellPlaceholder')} />
-                  <Select.Icon>
+                  <span className="truncate flex-1 min-w-0">
+                    <Select.Value placeholder={t('createWindow.shellPlaceholder')} />
+                  </span>
+                  <Select.Icon className="shrink-0">
                     <ChevronDown size={16} className="text-text-secondary" />
                   </Select.Icon>
                 </Select.Trigger>
@@ -304,13 +310,11 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
                     className="z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded border border-border-subtle bg-bg-card shadow-2xl"
                   >
                     <Select.Viewport className="p-1">
-                      <Select.Item value={AUTO_SHELL_OPTION_VALUE} className="flex cursor-pointer items-center justify-between rounded px-3 py-2 text-text-primary outline-none transition-colors hover:bg-bg-hover">
-                        <Select.ItemText>
-                          {autoShellTarget
-                            ? t('createWindow.shellAutoOption', { shell: autoShellTarget })
-                            : t('createWindow.shellAutoFallback')}
+                      <Select.Item value={AUTO_SHELL_OPTION_VALUE} className="flex cursor-pointer items-center justify-between gap-2 rounded px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:bg-bg-hover">
+                        <Select.ItemText className="truncate">
+                          {autoShellLabel}
                         </Select.ItemText>
-                        <Select.ItemIndicator>
+                        <Select.ItemIndicator className="shrink-0">
                           <Check size={14} />
                         </Select.ItemIndicator>
                       </Select.Item>
@@ -318,10 +322,12 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
                         <Select.Item
                           key={shell.path}
                           value={shell.path}
-                          className="flex cursor-pointer items-center justify-between rounded px-3 py-2 text-text-primary outline-none transition-colors hover:bg-bg-hover"
+                          className="flex cursor-pointer items-center justify-between gap-2 rounded px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:bg-bg-hover"
                         >
-                          <Select.ItemText>{shell.path}</Select.ItemText>
-                          <Select.ItemIndicator>
+                          <Select.ItemText className="truncate">
+                            {shell.path}
+                          </Select.ItemText>
+                          <Select.ItemIndicator className="shrink-0">
                             <Check size={14} />
                           </Select.ItemIndicator>
                         </Select.Item>

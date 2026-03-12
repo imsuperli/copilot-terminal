@@ -5,6 +5,7 @@ import {
   splitPane as splitPaneInLayout,
   closePane as closePaneInLayout,
   updatePaneInLayout,
+  updateSplitSizes as updateSplitSizesInLayout,
   getAllPanes,
   findPaneNode,
 } from '../utils/layoutHelpers';
@@ -61,6 +62,7 @@ interface WindowStore {
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
   splitPaneInWindow: (windowId: string, targetPaneId: string, direction: 'horizontal' | 'vertical', newPane: Pane) => void;
   closePaneInWindow: (windowId: string, paneId: string) => void;
+  updateSplitSizes: (windowId: string, splitPath: number[], sizes: number[]) => void;
   setActivePane: (windowId: string, paneId: string) => void;
 
   // MRU 相关
@@ -259,6 +261,30 @@ export const useWindowStore = create<WindowStore>()(
       // 触发自动保存
       const windows = get().windows;
       triggerAutoSave(windows);
+    },
+
+    updateSplitSizes: (windowId, splitPath, sizes) => {
+      let didChange = false;
+
+      set((state) => {
+        const window = state.windows.find(w => w.id === windowId);
+        if (!window) {
+          return;
+        }
+
+        const nextLayout = updateSplitSizesInLayout(window.layout, splitPath, sizes);
+        if (nextLayout === window.layout) {
+          return;
+        }
+
+        didChange = true;
+        window.layout = nextLayout;
+        window.lastActiveAt = new Date().toISOString();
+      });
+
+      if (didChange) {
+        triggerAutoSave(get().windows);
+      }
     },
 
     // 设置激活的窗格

@@ -525,11 +525,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   return (
     <div
-      className={`relative flex flex-col h-full bg-[#0f0f0f] ${borderColorClass} ${
+      className={`relative flex flex-col h-full bg-[#0f0f0f] ${
         isActive ? `ring-1 ${ringColor}` : ''
       }`}
       style={{
-        ...customBorderStyle.style,
         ...activePaneStyle,
       }}
       onClick={handleClick}

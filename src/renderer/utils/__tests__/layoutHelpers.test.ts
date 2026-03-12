@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closePane } from '../layoutHelpers';
+import { closePane, updateSplitSizes } from '../layoutHelpers';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 
 function createPane(id: string): Pane {
@@ -76,5 +76,59 @@ describe('layoutHelpers.closePane', () => {
     };
 
     expect(closePane(layout, 'missing-pane')).toBe(layout);
+  });
+});
+
+describe('layoutHelpers.updateSplitSizes', () => {
+  it('updates nested split sizes without changing ancestor sizes', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.3, 0.7],
+      children: [
+        createPaneNode('leader'),
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.2, 0.3, 0.5],
+          children: [
+            createPaneNode('teammate-a'),
+            createPaneNode('teammate-b'),
+            createPaneNode('teammate-c'),
+          ],
+        },
+      ],
+    };
+
+    const nextLayout = updateSplitSizes(layout, [1], [0.1, 0.2, 0.7]);
+
+    expect(nextLayout).toMatchObject({
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.3, 0.7],
+    });
+
+    if (nextLayout.type !== 'split') {
+      throw new Error('expected root split');
+    }
+
+    const nestedSplit = nextLayout.children[1];
+    expect(nestedSplit.type).toBe('split');
+    if (nestedSplit.type !== 'split') {
+      throw new Error('expected nested split');
+    }
+
+    expect(nestedSplit.sizes).toEqual([0.1, 0.2, 0.7]);
+  });
+
+  it('returns the original layout when the split path is invalid', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('left'), createPaneNode('right')],
+    };
+
+    expect(updateSplitSizes(layout, [1], [0.4, 0.6])).toBe(layout);
   });
 });

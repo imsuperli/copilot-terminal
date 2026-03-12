@@ -25,6 +25,12 @@
 
 ## 修复进展
 
+- 2026-03-12：已修复问题 5“拖拽调整窗格大小只存在于组件局部状态，不能持久化，也无法回写布局树”。
+- 修复内容：新增 `src/renderer/utils/layoutHelpers.ts` 的 `updateSplitSizes(...)` 和 `src/renderer/stores/windowStore.ts` 的 `updateSplitSizes(...)` action；`src/renderer/components/SplitLayout.tsx` 在拖拽过程中仍使用局部 state 预览，但会在 `mouseup` 时把最终 `sizes` 写回 store 和布局树，并触发 autosave。
+- 回归测试：补充 `src/renderer/utils/__tests__/layoutHelpers.test.ts` 与 `src/renderer/components/__tests__/SplitLayout.test.tsx`，覆盖嵌套 split 的尺寸更新和拖拽结束后写回 store 的路径。
+- 2026-03-12：已修复问题 4“所有 `TerminalView` / `TerminalPane` 都常驻挂载，窗口数增长时会线性放大内存和监听器成本”。
+- 修复内容：`src/renderer/App.tsx` 从“为所有窗口都挂载一个 `TerminalView` 再用 CSS 隐藏”改为“只挂载当前活跃窗口的一个 `TerminalView`，并在切窗时通过 `key` 强制释放旧实例”。这会直接卸载后台窗口里的 xterm 实例、`ResizeObserver`、`window.resize` 监听和 PTY 数据订阅。
+- 回归测试：新增 `src/renderer/__tests__/App.terminalMounting.test.tsx`，覆盖“多窗口存在时只挂载当前活跃 `TerminalView`”。
 - 2026-03-12：已修复问题 1“`ProcessManager` 在真实 PTY 路径里忽略了用户传入的 `command`”。
 - 修复内容：`src/main/services/ProcessManager.ts` 现在会把 `command` 解析为实际传给 `node-pty` 的 `file + args`，再调用 `pty.spawn(file, args, options)`，不再把参数在真实 PTY 路径里丢掉；同时保留“显式 shell 路径带空格但没有参数”的兼容解析。
 - 回归测试：补充 `src/main/services/__tests__/ProcessManager.test.ts`，覆盖“显式 shell 路径 + 参数”与“显式 shell 路径带空格但无参数”两种真实 PTY 启动场景。
@@ -34,7 +40,7 @@
 - 2026-03-12：已修复问题 3“`StatusPoller` 的活跃窗格优化没有接入运行时，导致可见 pane 也按 5 秒轮询”。
 - 修复内容：新增 `set-active-pane` IPC，把 renderer 当前活动 pane 同步回 main；窗口切换时由 `useViewSwitcher` 发送当前 `activePaneId`，pane 切换时由 `windowStore.setActivePane(...)` 发送更新，切回 unified view 时由主进程调用 `StatusPoller.clearActivePane()` 降回非活跃轮询。
 - 回归测试：新增 `src/main/handlers/__tests__/viewHandlers.test.ts` 与 `src/renderer/stores/__tests__/windowStore.activePaneSync.test.ts`，并补充 `src/renderer/hooks/__tests__/useViewSwitcher.test.ts`、`src/main/services/__tests__/StatusPoller.test.ts`，覆盖 active pane 同步与清空后的轮询节奏。
-- 下一条建议继续修复：问题 4“所有 `TerminalView` / `TerminalPane` 都常驻挂载，窗口数增长时会线性放大内存和监听器成本”。在剩余问题里，这一项是最直接的性能上限瓶颈。
+- 下一条建议继续修复：问题 6“工作区持久化混入大量运行态字段，且几乎所有 UI 操作都会触发保存”。在当前剩余问题里，这是最直接的 IO 写放大来源。
 
 ## 主要问题
 
@@ -227,6 +233,8 @@
 - `npm test -- --run src/main/services/__tests__/StatusPoller.test.ts` 通过。
 - `npm test -- --run src/main/handlers/__tests__/paneHandlers.test.ts src/main/services/__tests__/StatusPoller.test.ts` 通过。
 - `npm test -- --run src/main/handlers/__tests__/viewHandlers.test.ts src/main/services/__tests__/StatusPoller.test.ts src/renderer/hooks/__tests__/useViewSwitcher.test.ts src/renderer/stores/__tests__/windowStore.activePaneSync.test.ts` 通过。
+- `npm test -- --run src/renderer/__tests__/App.terminalMounting.test.tsx` 通过。
+- `npm test -- --run src/renderer/utils/__tests__/layoutHelpers.test.ts src/renderer/components/__tests__/SplitLayout.test.tsx` 通过。
 
 ## 补充说明
 

@@ -96,4 +96,18 @@ describe('SettingsPanel', () => {
     await user.click(screen.getByRole('tab', { name: /高级设置/ }));
     expect(screen.queryByText('使用随应用附带的 ConPTY 组件')).not.toBeInTheDocument();
   });
+
+  it('shows the Claude Agent Teams environment requirement in tmux settings', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /高级设置/ }));
+    expect(screen.getByText('Claude Agent Teams 环境变量')).toBeInTheDocument();
+    expect(screen.getByText('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1')).toBeInTheDocument();
+  });
 });

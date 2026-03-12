@@ -7,6 +7,7 @@ import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
 import { QuickSwitcher } from './QuickSwitcher';
 import { SplitLayout } from './SplitLayout';
+import { SettingsPanel } from './SettingsPanel';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { IDEIcon } from './icons/IDEIcons';
@@ -38,6 +39,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // 鍒囨崲闈㈡澘鐘舵€?
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
+  const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
 
   // Store
   const {
@@ -283,6 +285,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       <Sidebar
         activeWindowId={terminalWindow.id}
         onWindowSelect={onWindowSwitch}
+        onSettingsClick={() => {
+          console.log('[TerminalView] Settings clicked, setting state to true');
+          setIsSettingsPanelOpen(true);
+        }}
       />
 
       {/* 涓诲唴瀹瑰尯 */}
@@ -479,6 +485,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           onClose={() => setQuickSwitcherOpen(false)}
         />
       )}
+
+      {/* 设置面板 */}
+      {console.log('[TerminalView] Rendering SettingsPanel, open:', isSettingsPanelOpen)}
+      <SettingsPanel
+        open={isSettingsPanelOpen}
+        onClose={() => {
+          console.log('[TerminalView] SettingsPanel onClose called');
+          setIsSettingsPanelOpen(false);
+        }}
+      />
 
     </div>
   );

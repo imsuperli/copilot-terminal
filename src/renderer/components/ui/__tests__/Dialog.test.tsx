@@ -56,4 +56,14 @@ describe('Dialog Component', () => {
     const title = screen.getByText('Test');
     expect(title.className).toContain('text-text-primary');
   });
+
+  it('supports custom content width classes', () => {
+    render(
+      <Dialog open={true} onOpenChange={() => {}} title="Test" contentClassName="max-w-[640px]">
+        <div>Content</div>
+      </Dialog>
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('max-w-[640px]');
+  });
 });

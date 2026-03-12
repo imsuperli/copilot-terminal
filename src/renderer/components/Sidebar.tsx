@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Menu, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { Menu, Archive, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
 import { getAllPanes } from '../utils/layoutHelpers';
+import { useI18n } from '../i18n';
 
 interface SidebarProps {
   activeWindowId: string | null;
   onWindowSelect: (windowId: string) => void;
   onWindowContextMenu?: (windowId: string, e: React.MouseEvent) => void;
+  onSettingsClick?: () => void;
 }
 
 /**
@@ -18,7 +20,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeWindowId,
   onWindowSelect,
   onWindowContextMenu,
+  onSettingsClick,
 }) => {
+  const { t } = useI18n();
   const {
     sidebarExpanded,
     sidebarWidth,
@@ -181,6 +185,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ))}
             </div>
           )}
+        </div>
+
+        {/* 底部设置按钮 */}
+        <div className="border-t border-zinc-800 flex-shrink-0">
+          <button
+            onClick={() => {
+              console.log('[Sidebar] Settings button clicked');
+              onSettingsClick?.();
+            }}
+            className={`
+              w-full h-10 flex items-center gap-2
+              text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700
+              transition-all duration-200
+              ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
+            `}
+            title={sidebarExpanded ? undefined : t('settings.title')}
+            aria-label={t('settings.title')}
+          >
+            <Settings size={16} />
+            {sidebarExpanded && (
+              <span className="text-sm transition-opacity duration-200">
+                {t('settings.title')}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 

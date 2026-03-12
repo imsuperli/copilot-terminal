@@ -264,6 +264,55 @@ export function updatePaneInLayout(
 }
 
 /**
+ * 更新布局树中某个 split 节点的 sizes
+ * splitPath 使用子节点索引描述从根 split 到目标 split 的路径；根 split 为 []
+ */
+export function updateSplitSizes(
+  layout: LayoutNode,
+  splitPath: number[],
+  sizes: number[]
+): LayoutNode {
+  if (layout.type !== 'split') {
+    return layout;
+  }
+
+  if (splitPath.length === 0) {
+    if (sizes.length !== layout.children.length) {
+      return layout;
+    }
+
+    const nextSizes = normalizeSizes(sizes);
+    const didChange = nextSizes.some((size, index) => size !== layout.sizes[index]);
+    if (!didChange) {
+      return layout;
+    }
+
+    return {
+      ...layout,
+      sizes: nextSizes,
+    };
+  }
+
+  const [childIndex, ...restPath] = splitPath;
+  const targetChild = layout.children[childIndex];
+  if (!targetChild || targetChild.type !== 'split') {
+    return layout;
+  }
+
+  const nextChild = updateSplitSizes(targetChild, restPath, sizes);
+  if (nextChild === targetChild) {
+    return layout;
+  }
+
+  return {
+    ...layout,
+    children: layout.children.map((child, index) => (
+      index === childIndex ? nextChild : child
+    )),
+  };
+}
+
+/**
  * 获取窗口的聚合状态（基于所有窗格的状态）
  */
 export function getAggregatedStatus(layout: LayoutNode): WindowStatus {

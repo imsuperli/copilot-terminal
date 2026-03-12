@@ -1,8 +1,9 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { SplitLayout } from '../SplitLayout';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
+import { useWindowStore } from '../../stores/windowStore';
 
 const mountCounts: Record<string, number> = {};
 const unmountCounts: Record<string, number> = {};
@@ -116,5 +117,74 @@ describe('SplitLayout', () => {
     expect(mountCounts['pane-a']).toBe(1);
     expect(unmountCounts['pane-a'] ?? 0).toBe(0);
     expect(mountCounts['pane-b']).toBe(1);
+  });
+
+  it('persists resized split sizes back to the store on drag end', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('pane-a'), createPaneNode('pane-b')],
+    };
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Split Window',
+          layout,
+          activePaneId: 'pane-a',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    const { container } = render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const splitContainer = container.querySelector('.flex-row.w-full.h-full') as HTMLDivElement | null;
+    if (!splitContainer) {
+      throw new Error('expected split container');
+    }
+
+    vi.spyOn(splitContainer, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 400,
+      right: 1000,
+      width: 1000,
+      height: 400,
+      toJSON: () => ({}),
+    });
+
+    const divider = container.querySelector('.cursor-col-resize');
+    if (!divider) {
+      throw new Error('expected split divider');
+    }
+
+    fireEvent.mouseDown(divider, { clientX: 500, clientY: 0 });
+    fireEvent.mouseMove(document, { clientX: 300, clientY: 0 });
+    fireEvent.mouseUp(document);
+
+    const storedLayout = useWindowStore.getState().windows[0]?.layout;
+    expect(storedLayout).toMatchObject({
+      type: 'split',
+      sizes: [0.3, 0.7],
+    });
   });
 });

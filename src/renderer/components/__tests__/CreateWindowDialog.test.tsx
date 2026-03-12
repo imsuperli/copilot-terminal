@@ -83,6 +83,9 @@ describe('CreateWindowDialog', () => {
       expect(screen.getByText('(默认)C:\\Program Files\\PowerShell\\7\\pwsh.exe')).toBeInTheDocument()
     })
 
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.className).toContain('max-w-[640px]')
+
     const user = userEvent.setup()
     await user.click(screen.getByRole('combobox', { name: /Shell 程序/ }))
     expect(screen.queryByText('C:\\Program Files\\PowerShell\\7\\pwsh.exe')).not.toBeInTheDocument()
@@ -123,7 +126,7 @@ describe('CreateWindowDialog', () => {
     })
 
     await user.click(screen.getByRole('combobox', { name: /Shell 程序/ }))
-    await user.click(await screen.findByText('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'))
+    await user.click(await screen.findByRole('option', { name: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe' }))
 
     await waitFor(() => {
       expect(mockElectronAPI.validatePath).toHaveBeenCalledWith('/test/path')

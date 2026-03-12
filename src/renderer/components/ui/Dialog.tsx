@@ -7,14 +7,22 @@ interface DialogProps {
   title: string;
   description?: string;
   children: React.ReactNode;
+  contentClassName?: string;
 }
 
-export function Dialog({ open, onOpenChange, title, description, children }: DialogProps) {
+export function Dialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  children,
+  contentClassName = '',
+}: DialogProps) {
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="fixed inset-0 bg-black/50" />
-        <RadixDialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-bg-card rounded-card p-card-padding max-w-md w-full">
+        <RadixDialog.Content className={`fixed top-1/2 left-1/2 w-[92vw] max-w-xl -translate-x-1/2 -translate-y-1/2 bg-bg-card rounded-card p-card-padding ${contentClassName}`}>
           <RadixDialog.Title className="text-xl font-semibold text-text-primary mb-2">
             {title}
           </RadixDialog.Title>
