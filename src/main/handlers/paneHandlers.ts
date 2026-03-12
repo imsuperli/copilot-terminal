@@ -10,6 +10,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
   const {
     mainWindow,
     processManager,
+    statusPoller,
     ptySubscriptionManager,
   } = ctx;
 
@@ -20,6 +21,10 @@ export function registerPaneHandlers(ctx: HandlerContext) {
         throw new Error('ProcessManager not initialized');
       }
       const handle = await processManager.spawnTerminal(config);
+
+      if (statusPoller && config.windowId && config.paneId) {
+        statusPoller.addPane(config.windowId, config.paneId, handle.pid);
+      }
 
       // 订阅 PTY 数据
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
@@ -59,6 +64,8 @@ export function registerPaneHandlers(ctx: HandlerContext) {
       if (ptySubscriptionManager) {
         ptySubscriptionManager.remove(paneId);
       }
+
+      statusPoller?.removePane(paneId);
 
       const processes = processManager.listProcesses();
       const found = processes.find(p => p.windowId === windowId && p.paneId === paneId);
