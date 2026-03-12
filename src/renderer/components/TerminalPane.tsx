@@ -124,6 +124,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   // 是否显示 pane header（当有 title 或 agentName 时显示）
   const showPaneHeader = !!(pane.title || pane.agentName);
+  const showCloseButton = Boolean(onClose && isHovered);
 
   // 写入系统剪贴板（优先走 Electron IPC，失败时回退到浏览器 API）
   const writeClipboardText = useCallback(async (text: string) => {
@@ -557,30 +558,45 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
               {pane.title || pane.agentName}
             </span>
           </div>
-          {/* 状态指示器 */}
-          <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
+          <div className="flex items-center justify-center w-6 h-6 flex-shrink-0">
+            {showCloseButton ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose?.();
+                }}
+                className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+                title={t('terminalPane.close')}
+                aria-label={t('terminalPane.close')}
+              >
+                <X size={14} />
+              </button>
+            ) : (
+              <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
+            )}
+          </div>
         </div>
       )}
 
-      {/* 状态圆点 - 非悬停时显示（仅在没有 header 时显示） */}
-      {!showPaneHeader && !isHovered && (
-        <div className="absolute top-1 right-1 z-10">
-          <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
+      {/* 无 header 时，右上角在状态图标与关闭按钮之间切换 */}
+      {!showPaneHeader && (
+        <div className="absolute top-1 right-1 z-20">
+          {showCloseButton ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose?.();
+              }}
+              className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+              title={t('terminalPane.close')}
+              aria-label={t('terminalPane.close')}
+            >
+              <X size={14} />
+            </button>
+          ) : (
+            <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
+          )}
         </div>
-      )}
-
-      {/* 悬浮时显示的关闭按钮 */}
-      {onClose && isHovered && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          className={`absolute ${showPaneHeader ? 'top-8' : 'top-1'} right-1 z-20 w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg`}
-          title={t('terminalPane.close')}
-        >
-          <X size={14} />
-        </button>
       )}
 
       {/* 终端容器 */}

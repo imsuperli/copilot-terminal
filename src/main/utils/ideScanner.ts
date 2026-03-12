@@ -177,11 +177,11 @@ function scanIconPath(installPath: string, config: IDEScanConfig): string | null
     const fullIconPath = join(installDir, iconPath);
 
     if (existsSync(fullIconPath)) {
-      console.log(`Found icon for ${config.name}: ${fullIconPath}`);
       return fullIconPath;
     }
   }
 
+  console.warn(`Icon not found for ${config.name} under ${installDir}`);
   return null;
 }
 

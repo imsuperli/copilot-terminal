@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalPane } from '../TerminalPane';
 import { WindowStatus } from '../../types/window';
@@ -129,5 +129,40 @@ describe('TerminalPane resize on resume', () => {
       expect(fitAddonInstances[0]?.fit).toHaveBeenCalledTimes(1);
       expect(window.electronAPI.ptyResize).toHaveBeenCalledWith('win-1', 'pane-1', 120, 40);
     });
+  });
+
+  it('swaps the tmux header status icon with the close button on hover', () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+          title: 'agent-1',
+          agentName: 'agent-1',
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+        onClose={onClose}
+      />
+    );
+
+    expect(screen.getByTitle('窗格状态')).toBeInTheDocument();
+    expect(screen.queryByTitle('关闭窗格')).not.toBeInTheDocument();
+
+    fireEvent.mouseEnter(container.firstElementChild as HTMLElement);
+
+    expect(screen.queryByTitle('窗格状态')).not.toBeInTheDocument();
+    const closeButton = screen.getByTitle('关闭窗格');
+    expect(closeButton).toBeInTheDocument();
+    expect(closeButton).not.toHaveClass('absolute');
+
+    fireEvent.click(closeButton);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
