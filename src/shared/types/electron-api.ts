@@ -154,6 +154,11 @@ export interface CleanupProgressPayload {
   total: number;
 }
 
+export interface AppVersionInfo {
+  version: string;
+  name: string;
+}
+
 export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
@@ -170,6 +175,7 @@ export type SettingsPatch =
 export interface ElectronAPI {
   platform: string;
   ping: () => Promise<IpcResponse<string>>;
+  getAppVersion: () => Promise<IpcResponse<AppVersionInfo>>;
 
   createWindow: (config: CreateWindowConfig) => Promise<IpcResponse<Window>>;
   killTerminal: (pid: number) => Promise<IpcResponse<void>>;

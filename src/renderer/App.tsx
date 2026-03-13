@@ -37,6 +37,25 @@ function AppContent() {
   const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
+  const [appVersion, setAppVersion] = useState<{ name: string; version: string }>({
+    name: 'Copilot-Terminal',
+    version: '1.0.0',
+  });
+
+  // 获取应用版本信息
+  useEffect(() => {
+    const fetchVersion = async () => {
+      try {
+        const result = await window.electronAPI.getAppVersion();
+        if (result.success && result.data) {
+          setAppVersion(result.data);
+        }
+      } catch (error) {
+        console.error('Failed to get app version:', error);
+      }
+    };
+    fetchVersion();
+  }, []);
 
   // 工作区恢复
   useWorkspaceRestore();
@@ -262,8 +281,8 @@ function AppContent() {
         <MainLayout
           sidebar={
             <Sidebar
-              appName="Copilot-Terminal"
-              version="0.1.0"
+              appName={appVersion.name}
+              version={appVersion.version}
               onCreateWindow={handleCreateWindow}
               isDialogOpen={isDialogOpen}
               onDialogChange={handleDialogChange}

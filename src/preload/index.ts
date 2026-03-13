@@ -5,6 +5,7 @@ import type { ElectronAPI, PtyWriteMetadata } from '../shared/types/electron-api
 const electronAPI: ElectronAPI = {
   platform: process.platform,
   ping: () => ipcRenderer.invoke('ping'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // Terminal management
   createWindow: (config: { name?: string; workingDirectory: string; command?: string }) =>

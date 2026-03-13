@@ -218,7 +218,7 @@ export const zhCNMessages = {
 
   'terminalView.return': '返回统一视图 (Esc)',
   'terminalView.archive': '归档窗口',
-  'terminalView.pause': '暂停窗口',
+  'terminalView.stop': '停止窗口',
   'terminalView.openFolder': '打开文件夹',
   'terminalView.splitHorizontal': '左右拆分 (Ctrl+Shift+D)',
   'terminalView.splitVertical': '上下拆分 (Ctrl+Shift+E)',
@@ -364,7 +364,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'windowCard.starting': 'Starting',
   'windowCard.startingTerminal': 'Starting terminal...',
   'windowCard.pleaseWait': 'Please wait',
-  'windowCard.pause': 'Pause',
+  'windowCard.stop': 'Stop',
   'windowCard.archive': 'Archive',
   'windowCard.unarchive': 'Unarchive',
   'windowDirectory.missingTitle': 'Working directory missing',
