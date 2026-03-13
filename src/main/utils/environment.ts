@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { platform } from 'os';
 
 /**
@@ -35,13 +35,13 @@ function getWindowsEnvironmentVariables(): NodeJS.ProcessEnv {
     // 1. 从 process.env 开始（确保所有关键系统变量都存在）
     const env: NodeJS.ProcessEnv = { ...process.env };
 
-    // 2. 读取注册表中的系统环境变量
-    const systemEnv = readRegistryEnvironment(
-      'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment'
-    );
-
-    // 3. 读取注册表中的用户环境变量
-    const userEnv = readRegistryEnvironment('HKCU\\Environment');
+    // 2. 使用 PowerShell/.NET 读取注册表，避免 reg query 在非 UTF-8 代码页下产生 mojibake
+    const registryEnv = readWindowsRegistryEnvironment();
+    const systemEnv = materializeRegistryEnvironment(registryEnv.system ?? {}, env);
+    const userEnv = materializeRegistryEnvironment(registryEnv.user ?? {}, {
+      ...env,
+      ...systemEnv,
+    });
 
     // 4. 用注册表中的值覆盖 process.env（获取最新值）
     // 但排除 PATH，因为 PATH 需要特殊处理
@@ -79,46 +79,74 @@ function getWindowsEnvironmentVariables(): NodeJS.ProcessEnv {
   }
 }
 
+interface RegistryValueRecord {
+  type?: string;
+  value?: string;
+}
+
+interface RegistryEnvironmentPayload {
+  system?: Record<string, RegistryValueRecord>;
+  user?: Record<string, RegistryValueRecord>;
+}
+
 /**
  * 从 Windows 注册表读取环境变量
  *
- * @param registryPath 注册表路径
- * @returns 环境变量键值对
+ * 通过 powershell.exe + .NET Registry API 读取，避免 reg.exe 输出依赖当前代码页。
  */
-function readRegistryEnvironment(registryPath: string): Record<string, string> {
+function readWindowsRegistryEnvironment(): RegistryEnvironmentPayload {
+  const command = [
+    '$utf8NoBom = New-Object System.Text.UTF8Encoding($false)',
+    '$OutputEncoding = [Console]::OutputEncoding = $utf8NoBom',
+    'function Get-RegistryEnv([Microsoft.Win32.RegistryHive]$Hive, [string]$SubKey) {',
+    '  $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($Hive, [Microsoft.Win32.RegistryView]::Default)',
+    '  $key = $base.OpenSubKey($SubKey)',
+    '  $result = @{}',
+    '  if ($null -eq $key) {',
+    '    $base.Close()',
+    '    return $result',
+    '  }',
+    '  foreach ($name in $key.GetValueNames()) {',
+    '    $value = $key.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)',
+    '    if ($null -eq $value) { continue }',
+    '    $result[$name] = @{ type = $key.GetValueKind($name).ToString(); value = [string]$value }',
+    '  }',
+    '  $key.Close()',
+    '  $base.Close()',
+    '  return $result',
+    '}',
+    "$payload = @{ system = Get-RegistryEnv ([Microsoft.Win32.RegistryHive]::LocalMachine) 'SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment'; user = Get-RegistryEnv ([Microsoft.Win32.RegistryHive]::CurrentUser) 'Environment' }",
+    '$payload | ConvertTo-Json -Compress -Depth 4',
+  ].join('; ');
+
+  const output = execFileSync(
+    'powershell.exe',
+    ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command],
+    {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    },
+  );
+
+  return JSON.parse(output) as RegistryEnvironmentPayload;
+}
+
+function materializeRegistryEnvironment(
+  registryEnv: Record<string, RegistryValueRecord>,
+  baseEnv: NodeJS.ProcessEnv,
+): Record<string, string> {
   const env: Record<string, string> = {};
 
-  try {
-    // 使用 reg query 命令读取注册表
-    const output = execSync(`reg query "${registryPath}"`, {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'ignore'], // 忽略 stderr
-    });
-
-    // 解析输出
-    // 格式：变量名    REG_SZ/REG_EXPAND_SZ    值
-    const lines = output.split('\n');
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith(registryPath)) continue;
-
-      // 匹配格式：变量名    类型    值
-      const match = trimmed.match(/^(\S+)\s+(REG_\w+)\s+(.*)$/);
-      if (match) {
-        const [, name, type, value] = match;
-
-        // 处理 REG_EXPAND_SZ 类型（包含 %变量% 引用）
-        if (type === 'REG_EXPAND_SZ') {
-          env[name] = expandEnvironmentVariables(value, env);
-        } else {
-          env[name] = value;
-        }
-      }
+  for (const [name, record] of Object.entries(registryEnv)) {
+    if (!record || typeof record.value !== 'string') {
+      continue;
     }
-  } catch (error) {
-    // 读取失败（可能是权限问题或注册表路径不存在），返回空对象
-    console.warn(`[Environment] Failed to read registry: ${registryPath}`);
+
+    if (record.type === 'ExpandString') {
+      env[name] = expandEnvironmentVariables(record.value, { ...baseEnv, ...env });
+    } else {
+      env[name] = record.value;
+    }
   }
 
   return env;
@@ -131,7 +159,7 @@ function readRegistryEnvironment(registryPath: string): Record<string, string> {
  * @param env 当前环境变量上下文
  * @returns 展开后的字符串
  */
-function expandEnvironmentVariables(value: string, env: Record<string, string>): string {
+function expandEnvironmentVariables(value: string, env: Record<string, string | undefined>): string {
   return value.replace(/%([^%]+)%/g, (match, varName) => {
     // 优先使用当前上下文中的变量
     if (env[varName]) {
