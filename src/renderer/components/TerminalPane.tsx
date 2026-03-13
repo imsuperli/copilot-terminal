@@ -163,6 +163,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const historyReplayTokenRef = useRef(0);
   const lastAppliedSeqRef = useRef(0);
   const suppressPtyWriteRef = useRef(false);
+  // 区分“当前会话首次回放”和“同一会话后的补回放”：
+  // 首次回放可能包含 PowerShell 启动阶段仍在等待响应的 ESC[c，
+  // 这时必须允许 xterm 生成的 DA 响应回写到 PTY。
+  const hasCompletedReplayForCurrentSessionRef = useRef(false);
   const replayHistoryRef = useRef<((options?: { resetTerminal?: boolean }) => Promise<void>) | null>(null);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -440,6 +444,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       isHistoryLoadedRef.current = false;
       bufferedLiveDataRef.current = [];
       lastAppliedSeqRef.current = 0;
+      // 只有同一会话的后续补回放才屏蔽协议响应，避免把旧历史里的 CSI 查询
+      // 再次变成 synthetic reply 注入 live PTY。
+      const shouldSuppressReplayProtocolReplies = hasCompletedReplayForCurrentSessionRef.current && !resetTerminal;
       let shouldResumePtyWrites = false;
 
       if (resetTerminal && terminalRef.current) {
@@ -457,8 +464,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         lastAppliedSeqRef.current = historySnapshot.lastSeq;
         const replayData = historySnapshot.chunks.join('');
         if (replayData) {
-          suppressPtyWriteRef.current = true;
-          shouldResumePtyWrites = true;
+          if (shouldSuppressReplayProtocolReplies) {
+            suppressPtyWriteRef.current = true;
+            shouldResumePtyWrites = true;
+          }
           await writeReplayOutput(replayData);
         }
       } catch {
@@ -473,6 +482,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         }
 
         isHistoryLoadedRef.current = true;
+        hasCompletedReplayForCurrentSessionRef.current = true;
         const bufferedChunks = bufferedLiveDataRef.current;
         bufferedLiveDataRef.current = [];
         for (const payload of bufferedChunks) {
@@ -592,8 +602,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     // 监听用户输入
     const disposable = terminal.onData((data) => {
-      // History replay may contain CSI queries like ESC[c. Replaying them into xterm
-      // can generate synthetic protocol replies; those must not be injected into the live PTY.
+      // 新会话的首次回放里，xterm 生成的协议响应仍然要回给 PTY；
+      // 只有同一会话后续的补回放才需要屏蔽 synthetic reply。
       if (window.electronAPI && !suppressPtyWriteRef.current) {
         window.electronAPI.ptyWrite(windowId, pane.id, data);
       }
@@ -636,6 +646,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       bufferedLiveDataRef.current = [];
       lastAppliedSeqRef.current = 0;
       suppressPtyWriteRef.current = false;
+      hasCompletedReplayForCurrentSessionRef.current = false;
       disposable.dispose();
       selectionDisposable.dispose();
       unsubscribePtyData();
@@ -675,6 +686,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     );
 
     if (shouldReplayFreshSession) {
+      // pid 变化代表启动了新会话，下一次 history replay 可能正好覆盖 shell
+      // 启动握手阶段，不能沿用上一会话的 suppress 状态。
+      hasCompletedReplayForCurrentSessionRef.current = false;
       void replayHistoryRef.current?.({ resetTerminal: true });
     }
 

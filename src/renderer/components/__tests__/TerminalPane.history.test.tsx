@@ -174,7 +174,7 @@ describe('TerminalPane history replay', () => {
     expect(terminalInstances[0]?.write).toHaveBeenCalledTimes(1);
   });
 
-  it('does not write synthetic protocol replies from replayed history back into the live PTY', async () => {
+  it('writes startup protocol replies from the initial history replay back into the live PTY', async () => {
     vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
       success: true,
       data: { chunks: ['\u001b[c'], lastSeq: 1 },
@@ -200,6 +200,6 @@ describe('TerminalPane history replay', () => {
       expect(terminalInstances[0]?.write).toHaveBeenCalled();
     });
 
-    expect(window.electronAPI.ptyWrite).not.toHaveBeenCalledWith('win-1', 'pane-1', '\u001b[?1;2c');
+    expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith('win-1', 'pane-1', '\u001b[?1;2c');
   });
 });
