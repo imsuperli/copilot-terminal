@@ -138,6 +138,14 @@ function extractPtyHistorySnapshot(response: unknown): PtyHistorySnapshot {
   };
 }
 
+function stripReplayDeviceAttributeQueries(data: string): string {
+  if (!data) {
+    return data;
+  }
+
+  return data.replace(/\x1b\[(?:[>=])?c/g, '');
+}
+
 export interface TerminalPaneProps {
   windowId: string;
   pane: Pane;
@@ -510,7 +518,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
         const historySnapshot = extractPtyHistorySnapshot(response);
         lastAppliedSeqRef.current = historySnapshot.lastSeq;
-        const replayData = historySnapshot.chunks.join('');
+        // 历史回放只用于恢复屏幕内容，不应重新触发终端握手查询。
+        const replayData = stripReplayDeviceAttributeQueries(historySnapshot.chunks.join(''));
         if (replayData) {
           if (shouldSuppressReplayProtocolReplies) {
             suppressPtyWriteRef.current = true;
