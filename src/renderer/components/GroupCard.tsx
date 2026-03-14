@@ -140,7 +140,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
       onKeyDown={handleKeyDown}
       aria-label={`组: ${group.name}, ${windowCount} 个窗口`}
       className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border-l border-r border-b border-[rgb(var(--border))] relative"
-      style={{ borderTop: '2px solid rgb(var(--primary))' }}
+      style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus)}` }}
     >
       {/* 卡片内容 */}
       <div className="flex-1 p-4 space-y-2 flex flex-col min-h-0">
