@@ -165,7 +165,7 @@ export function Sidebar({
     }
   };
 
-  const handleClearAllWindows = async () => {
+  const handleClearActiveWindows = async () => {
     try {
       for (const win of activeWindows) {
         await window.electronAPI.closeWindow(win.id);
@@ -173,7 +173,7 @@ export function Sidebar({
         removeWindow(win.id);
       }
     } catch (error) {
-      console.error('Failed to clear all windows:', error);
+      console.error('Failed to clear active windows:', error);
     }
   };
 
@@ -189,6 +189,30 @@ export function Sidebar({
     }
   };
 
+  const handleClearAllWindows = async () => {
+    try {
+      for (const win of windows) {
+        await window.electronAPI.closeWindow(win.id);
+        await window.electronAPI.deleteWindow(win.id);
+        removeWindow(win.id);
+      }
+    } catch (error) {
+      console.error('Failed to clear all windows:', error);
+    }
+  };
+
+  // 根据当前标签获取清空函数和窗口数量
+  const getClearHandler = () => {
+    if (currentTab === 'active') {
+      return { handler: handleClearActiveWindows, count: activeWindows.length };
+    } else if (currentTab === 'archived') {
+      return { handler: handleClearArchivedWindows, count: archivedWindows.length };
+    } else if (currentTab === 'all') {
+      return { handler: handleClearAllWindows, count: windows.length };
+    }
+    return { handler: null, count: 0 };
+  };
+
   /** 计算分类中的有效项目数 */
   const getCategoryCount = (category: CustomCategory) => {
     const wCount = category.windowIds.filter(id => windows.some(w => w.id === id)).length;
@@ -202,8 +226,8 @@ export function Sidebar({
         {/* 顶部间距，与右侧卡片对齐 */}
         <div className="h-4" />
 
-        {/* 搜索框 */}
-        {((currentTab === 'all' && allCount > 0) || (currentTab === 'active' && activeCount > 0) || (currentTab === 'archived' && archivedCount > 0) || (currentTab !== 'all' && currentTab !== 'active' && currentTab !== 'archived')) && (
+        {/* 搜索框 - 全局搜索，始终显示 */}
+        {(allCount > 0) && (
           <div className="px-4 pb-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
@@ -243,20 +267,6 @@ export function Sidebar({
           {/* Tab buttons */}
           <div className="flex flex-col gap-2">
             <button
-              onClick={() => onTabChange?.('all')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
-                currentTab === 'all'
-                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
-                  : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
-              }`}
-            >
-              <Grid className="h-4 w-4" />
-              <span>{t('sidebar.tab.all')}</span>
-              {allCount > 0 && (
-                <span className="ml-auto text-xs">{allCount}</span>
-              )}
-            </button>
-            <button
               onClick={() => onTabChange?.('active')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
                 currentTab === 'active'
@@ -282,6 +292,20 @@ export function Sidebar({
               <span>{t('sidebar.tab.archived')}</span>
               {archivedCount > 0 && (
                 <span className="ml-auto text-xs">{archivedCount}</span>
+              )}
+            </button>
+            <button
+              onClick={() => onTabChange?.('all')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                currentTab === 'all'
+                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
+                  : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
+              }`}
+            >
+              <Grid className="h-4 w-4" />
+              <span>{t('sidebar.tab.all')}</span>
+              {allCount > 0 && (
+                <span className="ml-auto text-xs">{allCount}</span>
               )}
             </button>
           </div>
@@ -473,18 +497,6 @@ export function Sidebar({
             <span>{t('common.newTerminal')}</span>
           </button>
 
-          {/* Create Group button */}
-          {activeWindows.length >= 2 && (
-            <button
-              onClick={onCreateGroup}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 font-medium hover:bg-zinc-600 transition-colors"
-              title="创建窗口组"
-            >
-              <Folder className="h-4 w-4" />
-              <span>创建组</span>
-            </button>
-          )}
-
           {/* Batch button - always show */}
           <button
             onClick={() => setIsBatchDialogOpen(true)}
@@ -494,27 +506,47 @@ export function Sidebar({
             <span>{t('sidebar.batchAdd')}</span>
           </button>
 
-          {/* Clear button - show for both active and archived tabs */}
-          {currentTab === 'active' && activeWindows.length > 0 && (
+          {/* Create Group button */}
+          {activeWindows.length >= 2 && (
             <button
-              onClick={() => setIsConfirmDialogOpen(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
-              title={t('sidebar.confirmClearActiveTitle')}
+              onClick={onCreateGroup}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 font-medium hover:bg-zinc-600 transition-colors"
+              title="创建窗口组"
             >
-              <Trash2 className="h-4 w-4" />
-              <span>{t('sidebar.clearActive')}</span>
+              <Folder className="h-4 w-4" />
+              <span>创建窗口组</span>
             </button>
           )}
-          {currentTab === 'archived' && archivedWindows.length > 0 && (
-            <button
-              onClick={() => setIsConfirmDialogOpen(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
-              title={t('sidebar.confirmClearArchivedTitle')}
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>{t('sidebar.clearArchived')}</span>
-            </button>
-          )}
+
+          {/* Clear button - show for all tabs when there are windows */}
+          {(() => {
+            const { handler, count } = getClearHandler();
+            if (!handler || count === 0) return null;
+
+            let buttonText = '';
+            let titleText = '';
+            if (currentTab === 'active') {
+              buttonText = '清空活跃终端';
+              titleText = '确认清空活跃终端';
+            } else if (currentTab === 'archived') {
+              buttonText = '清空已归档终端';
+              titleText = '确认清空已归档终端';
+            } else if (currentTab === 'all') {
+              buttonText = '清空全部终端';
+              titleText = '确认清空全部终端';
+            }
+
+            return (
+              <button
+                onClick={() => setIsConfirmDialogOpen(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
+                title={titleText}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>{buttonText}</span>
+              </button>
+            );
+          })()}
         </div>
       </aside>
 
@@ -532,15 +564,23 @@ export function Sidebar({
       <ConfirmDialog
         open={isConfirmDialogOpen}
         onOpenChange={setIsConfirmDialogOpen}
-        title={currentTab === 'active' ? t('sidebar.confirmClearActiveTitle') : t('sidebar.confirmClearArchivedTitle')}
+        title={
+          currentTab === 'active'
+            ? '确认清空活跃终端'
+            : currentTab === 'archived'
+            ? '确认清空已归档终端'
+            : '确认清空全部终端'
+        }
         description={
           currentTab === 'active'
-            ? t('sidebar.confirmClearActiveDescription', { count: activeWindows.length })
-            : t('sidebar.confirmClearArchivedDescription', { count: archivedWindows.length })
+            ? `确定要删除全部 ${activeWindows.length} 个活跃终端吗？此操作不可撤销。`
+            : currentTab === 'archived'
+            ? `确定要删除全部 ${archivedWindows.length} 个已归档终端吗？此操作不可撤销。`
+            : `确定要删除全部 ${windows.length} 个终端吗？此操作不可撤销。`
         }
         confirmText={t('common.delete')}
         cancelText={t('common.cancel')}
-        onConfirm={currentTab === 'active' ? handleClearAllWindows : handleClearArchivedWindows}
+        onConfirm={getClearHandler().handler || (() => {})}
         variant="danger"
       />
 

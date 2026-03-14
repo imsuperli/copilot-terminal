@@ -123,6 +123,25 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
     ];
   }, [currentTab, windows, groups, customCategories]);
 
+  // 全局搜索：始终搜索所有终端和组，不受 currentTab 限制
+  const allCardItems = useMemo<CardItem[]>(() => {
+    const sortGroupsByCreatedAt = (gs: WindowGroup[]) =>
+      [...gs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // 全部终端：活跃组 → 活跃窗口 → 归档组 → 归档窗口
+    const activeGroups = groups.filter(g => !g.archived);
+    const archivedGroups = groups.filter(g => g.archived);
+    const activeWindows = windows.filter(w => !w.archived);
+    const archivedWindows = windows.filter(w => w.archived);
+
+    return [
+      ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
+      ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
+      ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
+      ...sortWindows(archivedWindows, 'lastActiveAt').map(w => ({ type: 'window' as const, data: w })),
+    ];
+  }, [windows, groups]);
+
   // 根据搜索关键词过滤卡片项（窗口和组）
   const filteredCardItems = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -130,7 +149,8 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
     }
 
     const query = searchQuery.toLowerCase().trim();
-    return cardItems.filter((item) => {
+    // 使用全局卡片列表进行搜索，而不是当前标签的卡片列表
+    return allCardItems.filter((item) => {
       if (item.type === 'window') {
         const win = item.data;
         // 搜索窗口名称
@@ -157,7 +177,7 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
         });
       }
     });
-  }, [cardItems, searchQuery, windows]);
+  }, [cardItems, allCardItems, searchQuery, windows]);
 
   const handleCardClick = useCallback(
     async (win: Window) => {
