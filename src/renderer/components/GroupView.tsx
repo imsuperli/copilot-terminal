@@ -330,11 +330,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
           }
         }}
         onGroupSelect={(groupId) => {
-          if (groupId === group.id) {
-            // 点击当前组，不做任何操作
-            return;
-          }
-          // 切换到其他组
+          // 切换到其他组（包括当前组，用于刷新）
           onGroupSwitch?.(groupId);
         }}
         onSettingsClick={() => setIsSettingsPanelOpen(true)}
