@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { FolderOpen, Trash2, Play, Square, Archive, ArchiveRestore, Edit2, Folder } from 'lucide-react';
+import { GroupStatusIcons } from './GroupStatusIcons';
 import { WindowGroup } from '../../shared/types/window-group';
 import { getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { useWindowStore } from '../stores/windowStore';
@@ -143,7 +144,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
     >
       {/* 卡片内容 */}
       <div className="flex-1 p-4 space-y-2 flex flex-col min-h-0">
-        {/* 第一行：组名称 + 窗口数量徽章 */}
+        {/* 第一行：组名称 + 窗口数量徽章 + 状态图标（靠右） */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {/* 文件夹图标 + 数字徽章 */}
@@ -157,13 +158,9 @@ export const GroupCard = React.memo<GroupCardProps>(({
               {group.name}
             </h3>
           </div>
+          {/* 组内窗口状态图标（靠右，与 WindowCard 一致） */}
+          <GroupStatusIcons group={group} windows={windows} />
         </div>
-
-        {/* 第二行：组描述 */}
-        <p className="text-xs text-[rgb(var(--muted-foreground))] truncate">
-          {/* TODO: 显示组内窗口列表或其他描述信息 */}
-          {windowCount} 个窗口
-        </p>
 
         {/* 分割线 */}
         <div className="border-t border-[rgb(var(--border))]" />

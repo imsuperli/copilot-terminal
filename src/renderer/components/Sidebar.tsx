@@ -1,9 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Menu, Archive, ChevronDown, ChevronRight, Settings, FolderOpen } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Menu, Archive, ChevronDown, Settings } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
-import { getAllPanes } from '../utils/layoutHelpers';
+import { GroupStatusIcon } from './GroupStatusIcon';
+import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { getWindowCount, getAllWindowIds } from '../utils/groupLayoutHelpers';
+import { WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 
 interface SidebarProps {
@@ -37,11 +39,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     getArchivedWindows,
     getActiveGroups,
     getArchivedGroups,
+    windows,
   } = useWindowStore();
 
   const [isResizing, setIsResizing] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const [showGroups, setShowGroups] = useState(true);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   const activeWindows = getActiveWindows();
@@ -53,6 +55,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const groupedWindowIds = new Set(
     activeGroups.flatMap(g => getAllWindowIds(g.layout))
   );
+
+  // 状态排序优先级：WaitingForInput > Running > 其他
+  const getStatusSortPriority = (status: WindowStatus): number => {
+    switch (status) {
+      case WindowStatus.WaitingForInput: return 3;
+      case WindowStatus.Running: return 2;
+      case WindowStatus.Paused: return 1;
+      default: return 0;
+    }
+  };
+
+  // 将组和独立窗口统一排序
+  type SidebarItem =
+    | { kind: 'group'; id: string; status: WindowStatus; group: typeof activeGroups[0] }
+    | { kind: 'window'; id: string; status: WindowStatus; window: typeof activeWindows[0] };
+
+  const sortedItems = useMemo<SidebarItem[]>(() => {
+    const items: SidebarItem[] = [];
+
+    // 添加组
+    for (const group of activeGroups) {
+      const windowIds = getAllWindowIds(group.layout);
+      const groupWindows = windows.filter(w => windowIds.includes(w.id));
+      const statuses = groupWindows.map(w => getAggregatedStatus(w.layout));
+      let groupStatus = WindowStatus.Paused;
+      if (statuses.some(s => s === WindowStatus.WaitingForInput)) groupStatus = WindowStatus.WaitingForInput;
+      else if (statuses.some(s => s === WindowStatus.Running)) groupStatus = WindowStatus.Running;
+      else if (statuses.some(s => s === WindowStatus.Restoring)) groupStatus = WindowStatus.Restoring;
+      items.push({ kind: 'group', id: group.id, status: groupStatus, group });
+    }
+
+    // 添加独立窗口（不属于任何组）
+    for (const w of activeWindows) {
+      if (groupedWindowIds.has(w.id)) continue;
+      items.push({ kind: 'window', id: w.id, status: getAggregatedStatus(w.layout), window: w });
+    }
+
+    // 排序：第一优先级状态，第二优先级组>窗口
+    items.sort((a, b) => {
+      const statusDiff = getStatusSortPriority(b.status) - getStatusSortPriority(a.status);
+      if (statusDiff !== 0) return statusDiff;
+      const kindDiff = (b.kind === 'group' ? 1 : 0) - (a.kind === 'group' ? 1 : 0);
+      return kindDiff;
+    });
+
+    return items;
+  }, [activeGroups, activeWindows, groupedWindowIds, windows]);
 
   // 处理宽度调整
   useEffect(() => {
@@ -131,49 +180,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* 活跃窗口列表 */}
+        {/* 活跃窗口和组列表（统一排序） */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          {/* 组列表 */}
-          {activeGroups.length > 0 && (
-            <div>
-              {sidebarExpanded && (
-                <button
-                  onClick={() => setShowGroups(!showGroups)}
-                  className="w-full px-3 py-1.5 flex items-center gap-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider hover:bg-zinc-700 transition-all duration-200"
-                >
-                  <ChevronDown
-                    size={12}
-                    className={`transition-transform duration-200 ${showGroups ? 'rotate-0' : '-rotate-90'}`}
-                  />
-                  <span>组</span>
-                  <span className="ml-auto text-zinc-500">({activeGroups.length})</span>
-                </button>
-              )}
-              {(showGroups || !sidebarExpanded) && activeGroups.map((group) => (
+          {sortedItems.map((item) => {
+            if (item.kind === 'group') {
+              return (
                 <SidebarGroupItem
-                  key={group.id}
-                  group={group}
-                  isActive={group.id === activeGroupId}
+                  key={item.id}
+                  group={item.group}
+                  isActive={item.id === activeGroupId}
                   isExpanded={sidebarExpanded}
-                  onClick={() => onGroupSelect?.(group.id)}
+                  onClick={() => onGroupSelect?.(item.id)}
                 />
-              ))}
-            </div>
-          )}
-
-          {/* 独立窗口（不属于任何组的窗口） */}
-          {activeWindows.filter(w => !groupedWindowIds.has(w.id)).map((window) => (
-            <SidebarWindowItem
-              key={window.id}
-              window={window}
-              isActive={window.id === activeWindowId}
-              isExpanded={sidebarExpanded}
-              onClick={() => onWindowSelect(window.id)}
-              onContextMenu={(e) => handleWindowContextMenu(window.id, e)}
-              onOpenInIDE={handleOpenInIDE}
-              onOpenFolder={handleOpenFolder}
-            />
-          ))}
+              );
+            } else {
+              return (
+                <SidebarWindowItem
+                  key={item.id}
+                  window={item.window}
+                  isActive={item.id === activeWindowId}
+                  isExpanded={sidebarExpanded}
+                  onClick={() => onWindowSelect(item.id)}
+                  onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
+                  onOpenInIDE={handleOpenInIDE}
+                  onOpenFolder={handleOpenFolder}
+                />
+              );
+            }
+          })}
 
           {/* 归档区域 */}
           {archivedWindows.length > 0 && (
@@ -284,6 +318,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   isExpanded,
   onClick,
 }) => {
+  const { windows } = useWindowStore();
   const windowCount = getWindowCount(group.layout);
   const bgColor = isActive ? 'bg-blue-600/50' : 'bg-zinc-800 hover:bg-zinc-700';
 
@@ -295,12 +330,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
         title={`${group.name}\n(${windowCount} 个窗口)`}
         aria-label={group.name}
       >
-        <div className="relative">
-          <FolderOpen size={14} className="text-zinc-400" />
-          <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-600 text-[8px] text-white rounded-full flex items-center justify-center">
-            {windowCount}
-          </span>
-        </div>
+        <GroupStatusIcon group={group} windows={windows} />
       </button>
     );
   }
@@ -311,11 +341,8 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
       className={`w-full px-3 py-2 flex items-start gap-2 transition-colors text-left rounded ${bgColor}`}
       aria-label={group.name}
     >
-      <div className="relative mt-0.5">
-        <FolderOpen size={14} className="text-zinc-400" />
-        <span className="absolute -top-1 -right-1 w-3 h-3 bg-blue-600 text-[8px] text-white rounded-full flex items-center justify-center">
-          {windowCount}
-        </span>
+      <div className="mt-0.5">
+        <GroupStatusIcon group={group} windows={windows} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-zinc-100 truncate">{group.name}</div>
