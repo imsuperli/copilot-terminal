@@ -48,17 +48,19 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
     };
 
   return (
-    <SplitContainer
-      windowId={windowId}
-      splitNode={rootSplitNode}
-      splitPath={[]}
-      activePaneId={activePaneId}
-      isWindowActive={isWindowActive}
-      totalPaneCount={totalPaneCount}
-      onPaneActivate={onPaneActivate}
-      onPaneClose={onPaneClose}
-      onSplitResize={updateSplitSizes}
-    />
+    <div className="h-full w-full">
+      <SplitContainer
+        windowId={windowId}
+        splitNode={rootSplitNode}
+        splitPath={[]}
+        activePaneId={activePaneId}
+        isWindowActive={isWindowActive}
+        totalPaneCount={totalPaneCount}
+        onPaneActivate={onPaneActivate}
+        onPaneClose={onPaneClose}
+        onSplitResize={updateSplitSizes}
+      />
+    </div>
   );
 };
 
@@ -169,7 +171,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
             style={{
               [isHorizontal ? 'width' : 'height']: `${(sizes[index] ?? (1 / splitNode.children.length)) * 100}%`,
             }}
-            className="relative"
+            className="relative h-full"
           >
             <LayoutNodeRenderer
               windowId={windowId}

@@ -1,6 +1,7 @@
 import { AppLanguage } from '../i18n';
 import { QuickNavConfig } from './quick-nav';
 import { Window } from './window';
+import { WindowGroup } from './window-group';
 
 export interface IDEConfig {
   id: string;
@@ -50,6 +51,7 @@ export interface Settings {
 export interface Workspace {
   version: string;
   windows: Window[];
+  groups: WindowGroup[];
   settings: Settings;
   lastSavedAt: string;
 }

@@ -9,6 +9,7 @@ import { registerProcessHandlers } from './processHandlers';
 import { registerMiscHandlers } from './miscHandlers';
 import { registerSettingsHandlers } from './settingsHandlers';
 import { registerStatusLineHandlers } from './statusLineHandlers';
+import { registerGroupHandlers } from './groupHandlers';
 
 /**
  * 注册所有 IPC handlers
@@ -42,6 +43,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // StatusLine 管理 (statusline-configure, statusline-remove, etc.)
   registerStatusLineHandlers(ctx);
+
+  // 窗口组管理 (create-group, delete-group, archive-group, etc.)
+  registerGroupHandlers(ctx);
 
   // 其他 (ping)
   registerMiscHandlers(ctx);

@@ -157,8 +157,8 @@ const electronAPI: ElectronAPI = {
   },
 
   // Auto-save
-  triggerAutoSave: (windows?: unknown[]) =>
-    ipcRenderer.send('trigger-auto-save', windows),
+  triggerAutoSave: (windows?: unknown[], groups?: unknown[]) =>
+    ipcRenderer.send('trigger-auto-save', windows, groups),
 
   // Clipboard
   writeClipboardText: (text: string) =>
@@ -198,6 +198,24 @@ const electronAPI: ElectronAPI = {
   offCleanupProgress: (callback) => {
     ipcRenderer.removeListener('cleanup-progress', callback);
   },
+
+  // Group management
+  createGroup: (name: string, windowIds: string[]) =>
+    ipcRenderer.invoke('create-group', name, windowIds),
+  deleteGroup: (groupId: string) =>
+    ipcRenderer.invoke('delete-group', groupId),
+  archiveGroup: (groupId: string) =>
+    ipcRenderer.invoke('archive-group', groupId),
+  unarchiveGroup: (groupId: string) =>
+    ipcRenderer.invoke('unarchive-group', groupId),
+  renameGroup: (groupId: string, name: string) =>
+    ipcRenderer.invoke('rename-group', groupId, name),
+  addWindowToGroup: (groupId: string, windowId: string, direction: 'horizontal' | 'vertical', targetWindowId: string | null) =>
+    ipcRenderer.invoke('add-window-to-group', groupId, windowId, direction, targetWindowId),
+  removeWindowFromGroup: (groupId: string, windowId: string) =>
+    ipcRenderer.invoke('remove-window-from-group', groupId, windowId),
+  updateGroupSplitSizes: (groupId: string, splitPath: number[], sizes: number[]) =>
+    ipcRenderer.invoke('update-group-split-sizes', groupId, splitPath, sizes),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

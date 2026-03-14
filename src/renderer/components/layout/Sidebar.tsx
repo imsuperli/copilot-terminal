@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass } from 'lucide-react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder } from 'lucide-react';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
@@ -14,6 +14,7 @@ interface SidebarProps {
   appName?: string;
   version?: string;
   onCreateWindow?: () => void;
+  onCreateGroup?: () => void;
   isDialogOpen?: boolean;
   onDialogChange?: (open: boolean) => void;
   currentTab?: 'active' | 'archived';
@@ -26,6 +27,7 @@ export function Sidebar({
   appName = 'Copilot-Terminal',
   version = '0.1.0',
   onCreateWindow,
+  onCreateGroup,
   isDialogOpen = false,
   onDialogChange,
   currentTab = 'active',
@@ -200,6 +202,18 @@ export function Sidebar({
             <Plus className="h-4 w-4" />
             <span>{t('common.newTerminal')}</span>
           </button>
+
+          {/* Create Group button */}
+          {activeWindows.length >= 2 && (
+            <button
+              onClick={onCreateGroup}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 font-medium hover:bg-zinc-600 transition-colors"
+              title="创建窗口组"
+            >
+              <Folder className="h-4 w-4" />
+              <span>创建组</span>
+            </button>
+          )}
 
           {/* Batch button - always show */}
           <button

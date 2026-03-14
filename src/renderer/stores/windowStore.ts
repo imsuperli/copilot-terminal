@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { Window, WindowStatus, Pane, LayoutNode } from '../types/window';
+import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import {
   splitPane as splitPaneInLayout,
   closePane as closePaneInLayout,
@@ -10,6 +11,13 @@ import {
   findPaneNode,
   collapseTmuxAgentPanesForPause,
 } from '../utils/layoutHelpers';
+import {
+  getAllWindowIds,
+  removeWindowFromGroup as removeWindowFromGroupLayout,
+  updateGroupSplitSizes as updateGroupSplitSizesInLayout,
+  addWindowToGroup as addWindowToGroupInLayout,
+  getWindowCount,
+} from '../utils/groupLayoutHelpers';
 
 // 全局标志：是否启用自动保存
 let autoSaveEnabled = true;
@@ -31,10 +39,11 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
  * 触发自动保存
  * 通过 IPC 事件通知主进程触发保存
  * @param windows 当前窗口列表
+ * @param groups 当前窗口组列表
  */
-function triggerAutoSave(windows: Window[]): void {
+function triggerAutoSave(windows: Window[], groups?: WindowGroup[]): void {
   if (autoSaveEnabled && window.electronAPI) {
-    window.electronAPI.triggerAutoSave(windows);
+    window.electronAPI.triggerAutoSave(windows, groups);
   }
 }
 
@@ -59,6 +68,11 @@ interface WindowStore {
   mruList: string[]; // 最近使用列表（窗口 ID）
   sidebarExpanded: boolean; // 侧边栏是否展开
   sidebarWidth: number; // 侧边栏宽度
+
+  // 组相关状态
+  groups: WindowGroup[]; // 窗口组列表
+  activeGroupId: string | null; // 当前激活的窗口组 ID
+  groupMruList: string[]; // 组的 MRU 列表
 
   // Actions
   addWindow: (window: Window) => void;
@@ -100,6 +114,32 @@ interface WindowStore {
 
   // Claude 模型相关
   updateClaudeModel: (windowId: string, model?: string, modelId?: string, contextPercentage?: number, cost?: number) => void;
+
+  // 组相关 Actions
+  addGroup: (group: WindowGroup) => void;
+  removeGroup: (id: string) => void;
+  updateGroup: (id: string, updates: Partial<WindowGroup>) => void;
+  archiveGroup: (id: string) => void;
+  unarchiveGroup: (id: string) => void;
+  setActiveGroup: (id: string | null) => void;
+  clearGroups: () => void; // 清空所有组（用于工作区恢复）
+
+  // 组布局操作
+  addWindowToGroupLayout: (groupId: string, targetWindowId: string, newWindowId: string, direction: 'horizontal' | 'vertical') => void;
+  removeWindowFromGroupLayout: (groupId: string, windowId: string) => void;
+  updateGroupSplitSizes: (groupId: string, splitPath: number[], sizes: number[]) => void;
+  setActiveWindowInGroup: (groupId: string, windowId: string) => void;
+
+  // 组 MRU 相关
+  updateGroupMRU: (groupId: string) => void;
+  getMRUGroups: () => WindowGroup[];
+
+  // 组辅助方法
+  getGroupById: (id: string) => WindowGroup | undefined;
+  getWindowsInGroup: (groupId: string) => Window[];
+  getActiveGroups: () => WindowGroup[]; // 获取未归档的组
+  getArchivedGroups: () => WindowGroup[]; // 获取已归档的组
+  findGroupByWindowId: (windowId: string) => WindowGroup | undefined; // 查找包含指定窗口的组
 }
 
 /**
@@ -115,6 +155,11 @@ export const useWindowStore = create<WindowStore>()(
     sidebarExpanded: false, // 默认折叠
     sidebarWidth: 200, // 默认宽度
 
+    // 组相关初始状态
+    groups: [],
+    activeGroupId: null,
+    groupMruList: [],
+
     // 添加窗口
     addWindow: (window) => {
       set((state) => {
@@ -122,9 +167,9 @@ export const useWindowStore = create<WindowStore>()(
         // 添加到 MRU 列表首位
         state.mruList = [window.id, ...state.mruList.filter(id => id !== window.id)];
       });
-      // 触发自动保存，传递最新的窗口列表
-      const windows = get().windows;
-      triggerAutoSave(windows);
+      // 触发自动保存，传递最新的窗口列表和组列表
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
     },
 
     // 同步 window（存在则替换，不存在则新增）
@@ -141,8 +186,8 @@ export const useWindowStore = create<WindowStore>()(
           state.mruList = [window.id, ...state.mruList];
         }
       });
-      const windows = get().windows;
-      triggerAutoSave(windows);
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
     },
 
     // 删除窗口
@@ -154,10 +199,32 @@ export const useWindowStore = create<WindowStore>()(
         }
         // 从 MRU 列表移除
         state.mruList = state.mruList.filter(wid => wid !== id);
+
+        // 从所属组中移除窗口
+        const groupIndex = state.groups.findIndex(g =>
+          getAllWindowIds(g.layout).includes(id)
+        );
+        if (groupIndex >= 0) {
+          const group = state.groups[groupIndex];
+          const newLayout = removeWindowFromGroupLayout(group.layout, id);
+          if (!newLayout || getWindowCount(newLayout) < 2) {
+            // 组内不足 2 个窗口，解散组
+            state.groups.splice(groupIndex, 1);
+            if (state.activeGroupId === group.id) {
+              state.activeGroupId = null;
+            }
+            state.groupMruList = state.groupMruList.filter(gid => gid !== group.id);
+          } else {
+            group.layout = newLayout;
+            if (group.activeWindowId === id) {
+              group.activeWindowId = getAllWindowIds(newLayout)[0];
+            }
+          }
+        }
       });
-      // 触发自动保存，传递最新的窗口列表
-      const windows = get().windows;
-      triggerAutoSave(windows);
+      // 触发自动保存，传递最新的窗口列表和组列表
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
     },
 
     // 更新窗口（支持更新多个属性）
@@ -169,9 +236,9 @@ export const useWindowStore = create<WindowStore>()(
           window.lastActiveAt = new Date().toISOString();
         }
       });
-      // 触发自动保存，传递最新的窗口列表
-      const windows = get().windows;
-      triggerAutoSave(windows);
+      // 触发自动保存，传递最新的窗口列表和组列表
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
     },
 
     /**
@@ -192,8 +259,8 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       // 触发自动保存
-      const windows = get().windows;
-      triggerAutoSave(windows);
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
     },
 
     // 更新窗格
@@ -228,8 +295,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange && !isRuntimeOnlyUpdate) {
-        const windows = get().windows;
-        triggerAutoSave(windows);
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
       }
     },
 
@@ -272,7 +339,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange && shouldAutoSave) {
-        triggerAutoSave(get().windows);
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
       }
     },
 
@@ -290,8 +358,8 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       // 触发自动保存
-      const windows = get().windows;
-      triggerAutoSave(windows);
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
     },
 
     // 关闭窗格
@@ -319,8 +387,8 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       // 触发自动保存
-      const windows = get().windows;
-      triggerAutoSave(windows);
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
     },
 
     updateSplitSizes: (windowId, splitPath, sizes) => {
@@ -343,7 +411,8 @@ export const useWindowStore = create<WindowStore>()(
       });
 
       if (didChange) {
-        triggerAutoSave(get().windows);
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
       }
     },
 
@@ -381,12 +450,34 @@ export const useWindowStore = create<WindowStore>()(
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
         }
+
+        // 从所属组中移除窗口
+        const groupIndex = state.groups.findIndex(g =>
+          getAllWindowIds(g.layout).includes(id)
+        );
+        if (groupIndex >= 0) {
+          const group = state.groups[groupIndex];
+          const newLayout = removeWindowFromGroupLayout(group.layout, id);
+          if (!newLayout || getWindowCount(newLayout) < 2) {
+            // 组内不足 2 个窗口，解散组
+            state.groups.splice(groupIndex, 1);
+            if (state.activeGroupId === group.id) {
+              state.activeGroupId = null;
+            }
+            state.groupMruList = state.groupMruList.filter(gid => gid !== group.id);
+          } else {
+            group.layout = newLayout;
+            if (group.activeWindowId === id) {
+              group.activeWindowId = getAllWindowIds(newLayout)[0];
+            }
+          }
+        }
       });
       // 触发自动保存
-      const windows = get().windows;
+      const { windows, groups } = get();
       const archivedCount = windows.filter(w => w.archived).length;
       console.log(`[WindowStore] Triggering auto-save with ${windows.length} windows (${archivedCount} archived)`);
-      triggerAutoSave(windows);
+      triggerAutoSave(windows, groups);
     },
 
     // 取消归档窗口
@@ -399,15 +490,17 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       // 触发自动保存
-      const windows = get().windows;
-      triggerAutoSave(windows);
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
     },
 
-    // 设置活跃窗口
+    // 设置活跃窗口（与 activeGroupId 互斥）
     setActiveWindow: (id) => {
       set((state) => {
         state.activeWindowId = id;
+        // 激活单窗口时清空 activeGroupId
         if (id) {
+          state.activeGroupId = null;
           const window = state.windows.find(w => w.id === id);
           if (window) {
             window.lastActiveAt = new Date().toISOString();
@@ -424,6 +517,9 @@ export const useWindowStore = create<WindowStore>()(
         state.windows = [];
         state.activeWindowId = null;
         state.mruList = [];
+        state.groups = [];
+        state.activeGroupId = null;
+        state.groupMruList = [];
       });
       // 不触发自动保存，因为这是恢复过程的一部分
     },
@@ -493,9 +589,265 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
     },
+
+    // ==================== 组相关 Actions ====================
+
+    // 添加组
+    addGroup: (group) => {
+      set((state) => {
+        state.groups.push(group);
+        state.groupMruList = [group.id, ...state.groupMruList.filter(id => id !== group.id)];
+      });
+      triggerAutoSave(get().windows, get().groups);
+    },
+
+    // 删除组（不删除组内窗口）
+    removeGroup: (id) => {
+      set((state) => {
+        state.groups = state.groups.filter(g => g.id !== id);
+        if (state.activeGroupId === id) {
+          state.activeGroupId = null;
+        }
+        state.groupMruList = state.groupMruList.filter(gid => gid !== id);
+      });
+      triggerAutoSave(get().windows, get().groups);
+    },
+
+    // 更新组
+    updateGroup: (id, updates) => {
+      set((state) => {
+        const group = state.groups.find(g => g.id === id);
+        if (group) {
+          Object.assign(group, updates);
+          group.lastActiveAt = new Date().toISOString();
+        }
+      });
+      triggerAutoSave(get().windows, get().groups);
+    },
+
+    // 归档组
+    archiveGroup: (id) => {
+      set((state) => {
+        const group = state.groups.find(g => g.id === id);
+        if (group) {
+          group.archived = true;
+          group.lastActiveAt = new Date().toISOString();
+
+          // 归档组内所有窗口
+          const windowIds = getAllWindowIds(group.layout);
+          windowIds.forEach(windowId => {
+            const window = state.windows.find(w => w.id === windowId);
+            if (window && !window.archived) {
+              window.archived = true;
+              window.lastActiveAt = new Date().toISOString();
+            }
+          });
+        }
+        if (state.activeGroupId === id) {
+          state.activeGroupId = null;
+        }
+      });
+      triggerAutoSave(get().windows, get().groups);
+    },
+
+    // 取消归档组
+    unarchiveGroup: (id) => {
+      set((state) => {
+        const group = state.groups.find(g => g.id === id);
+        if (group) {
+          group.archived = false;
+          group.lastActiveAt = new Date().toISOString();
+
+          // 取消归档组内所有窗口
+          const windowIds = getAllWindowIds(group.layout);
+          windowIds.forEach(windowId => {
+            const window = state.windows.find(w => w.id === windowId);
+            if (window && window.archived) {
+              window.archived = false;
+              window.lastActiveAt = new Date().toISOString();
+            }
+          });
+        }
+      });
+      triggerAutoSave(get().windows, get().groups);
+    },
+
+    // 设置活跃组（与 activeWindowId 互斥）
+    setActiveGroup: (id) => {
+      set((state) => {
+        state.activeGroupId = id;
+        // 激活组时清空 activeWindowId
+        if (id) {
+          state.activeWindowId = null;
+          const group = state.groups.find(g => g.id === id);
+          if (group) {
+            group.lastActiveAt = new Date().toISOString();
+          }
+          state.groupMruList = [id, ...state.groupMruList.filter(gid => gid !== id)];
+        }
+      });
+    },
+
+    // 清空所有组
+    clearGroups: () => {
+      set((state) => {
+        state.groups = [];
+        state.activeGroupId = null;
+        state.groupMruList = [];
+      });
+    },
+
+    // ==================== 组布局操作 ====================
+
+    // 添加窗口到组布局
+    addWindowToGroupLayout: (groupId, targetWindowId, newWindowId, direction) => {
+      set((state) => {
+        const group = state.groups.find(g => g.id === groupId);
+        if (!group) return;
+
+        // 如果布局是单个窗口节点，创建拆分
+        if (group.layout.type === 'window') {
+          if (group.layout.id === targetWindowId) {
+            group.layout = {
+              type: 'split',
+              direction,
+              sizes: [0.5, 0.5],
+              children: [
+                group.layout,
+                { type: 'window', id: newWindowId },
+              ],
+            };
+          }
+        } else {
+          // 使用工具函数在布局树中添加
+          const newLayout = addWindowToGroupInLayout(group.layout, targetWindowId, newWindowId, direction);
+          if (newLayout) {
+            group.layout = newLayout;
+          }
+        }
+        group.lastActiveAt = new Date().toISOString();
+      });
+      triggerAutoSave(get().windows, get().groups);
+    },
+
+    // 从组中移除窗口
+    removeWindowFromGroupLayout: (groupId, windowId) => {
+      set((state) => {
+        const groupIndex = state.groups.findIndex(g => g.id === groupId);
+        if (groupIndex < 0) return;
+
+        const group = state.groups[groupIndex];
+        const newLayout = removeWindowFromGroupLayout(group.layout, windowId);
+
+        if (!newLayout || getWindowCount(newLayout) < 2) {
+          // 组内不足 2 个窗口，解散组
+          state.groups.splice(groupIndex, 1);
+          if (state.activeGroupId === groupId) {
+            state.activeGroupId = null;
+          }
+          state.groupMruList = state.groupMruList.filter(gid => gid !== groupId);
+        } else {
+          group.layout = newLayout;
+          if (group.activeWindowId === windowId) {
+            group.activeWindowId = getAllWindowIds(newLayout)[0];
+          }
+          group.lastActiveAt = new Date().toISOString();
+        }
+      });
+      triggerAutoSave(get().windows, get().groups);
+    },
+
+    // 更新组布局的 split sizes
+    updateGroupSplitSizes: (groupId, splitPath, sizes) => {
+      let didChange = false;
+
+      set((state) => {
+        const group = state.groups.find(g => g.id === groupId);
+        if (!group) return;
+
+        const nextLayout = updateGroupSplitSizesInLayout(group.layout, splitPath, sizes);
+        if (nextLayout === group.layout) return;
+
+        didChange = true;
+        group.layout = nextLayout;
+        group.lastActiveAt = new Date().toISOString();
+      });
+
+      if (didChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
+    },
+
+    // 设置组内激活的窗口
+    setActiveWindowInGroup: (groupId, windowId) => {
+      set((state) => {
+        const group = state.groups.find(g => g.id === groupId);
+        if (group) {
+          group.activeWindowId = windowId;
+          group.lastActiveAt = new Date().toISOString();
+        }
+      });
+    },
+
+    // ==================== 组 MRU 相关 ====================
+
+    // 更新组 MRU 列表
+    updateGroupMRU: (groupId) => {
+      set((state) => {
+        state.groupMruList = [groupId, ...state.groupMruList.filter(id => id !== groupId)];
+      });
+    },
+
+    // 获取按 MRU 排序的组列表
+    getMRUGroups: () => {
+      const { groups, groupMruList } = get();
+      const groupMap = new Map(groups.map(g => [g.id, g]));
+      return groupMruList
+        .map(id => groupMap.get(id))
+        .filter((g): g is WindowGroup => g !== undefined && !g.archived);
+    },
+
+    // ==================== 组辅助方法 ====================
+
+    // 根据 ID 查找组
+    getGroupById: (id) => {
+      return get().groups.find(g => g.id === id);
+    },
+
+    // 获取组内的所有窗口
+    getWindowsInGroup: (groupId) => {
+      const { groups, windows } = get();
+      const group = groups.find(g => g.id === groupId);
+      if (!group) return [];
+
+      const windowIds = getAllWindowIds(group.layout);
+      const windowMap = new Map(windows.map(w => [w.id, w]));
+      return windowIds
+        .map(id => windowMap.get(id))
+        .filter((w): w is Window => w !== undefined);
+    },
+
+    // 获取未归档的组
+    getActiveGroups: () => {
+      return get().groups.filter(g => !g.archived);
+    },
+
+    // 获取已归档的组
+    getArchivedGroups: () => {
+      return get().groups.filter(g => g.archived);
+    },
+
+    // 查找包含指定窗口的组
+    findGroupByWindowId: (windowId) => {
+      return get().groups.find(g =>
+        getAllWindowIds(g.layout).includes(windowId)
+      );
+    },
   }))
 );
 
 // Re-export types for convenience
 export type { Window };
+export type { WindowGroup } from '../../shared/types/window-group';
 export { WindowStatus } from '../types/window';

@@ -14,12 +14,17 @@ import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
 import { useI18n } from '../i18n';
+import { DropZone } from './dnd';
+import type { WindowCardDragItem, DropResult } from './dnd';
+import { createGroup } from '../utils/groupLayoutHelpers';
 
 export interface TerminalViewProps {
   window: Window;
   onReturn: () => void;
   onWindowSwitch: (windowId: string) => void;
   isActive: boolean;
+  /** 嵌入模式：在 GroupView 中使用时隐藏侧边栏和返回按钮，但保留顶部工具栏 */
+  embedded?: boolean;
 }
 
 /**
@@ -31,6 +36,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   onReturn,
   onWindowSwitch,
   isActive,
+  embedded = false,
 }) => {
   const { t } = useI18n();
   const { enabledIDEs } = useIDESettings();
@@ -51,8 +57,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     archiveWindow,
     updatePane,
     pauseWindowState,
+    addGroup,
+    setActiveGroup,
+    findGroupByWindowId,
+    addWindowToGroupLayout,
+    removeWindowFromGroupLayout,
   } = useWindowStore();
   const activeWindows = getActiveWindows();
+  const windows = useWindowStore((state) => state.windows);
 
   // 纭繚绐楀彛婵€娲绘椂锛屾縺娲荤涓€涓獥鏍?
   useEffect(() => {
@@ -283,21 +295,91 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [onWindowSwitch]
   );
 
-  return (
-    <div className="flex h-screen w-screen bg-zinc-900 overflow-hidden">
-      {/* 渚ц竟鏍?*/}
-      <Sidebar
-        activeWindowId={terminalWindow.id}
-        onWindowSelect={onWindowSwitch}
-        onSettingsClick={() => setIsSettingsPanelOpen(true)}
-      />
+  // 处理拖拽窗口到终端区域创建或调整分组
+  const handleWindowDrop = useCallback(
+    async (dragItem: WindowCardDragItem, dropResult: DropResult) => {
+      const dragWindowId = dragItem.windowId;
+      const targetWindowId = terminalWindow.id;
 
-      {/* 涓诲唴瀹瑰尯 */}
+      if (dragWindowId === targetWindowId) return;
+
+      const dragGroup = findGroupByWindowId(dragWindowId);
+      const targetGroup = findGroupByWindowId(targetWindowId);
+
+      // 已在同一个组中，忽略
+      if (dragGroup && targetGroup && dragGroup.id === targetGroup.id) return;
+
+      const direction = (dropResult.position === 'left' || dropResult.position === 'right')
+        ? 'horizontal'
+        : 'vertical';
+
+      // 如果拖拽的窗口在另一个组中，先从原组移除
+      if (dragGroup) {
+        removeWindowFromGroupLayout(dragGroup.id, dragWindowId);
+      }
+
+      if (targetGroup) {
+        // 目标窗口已在组中 → 添加拖拽窗口到该组
+        addWindowToGroupLayout(targetGroup.id, targetWindowId, dragWindowId, direction);
+      } else {
+        // 两个独立窗口 → 创建新组
+        const dragWin = windows.find(w => w.id === dragWindowId);
+        if (!dragWin) return;
+
+        const isReversed = dropResult.position === 'left' || dropResult.position === 'top';
+        const firstId = isReversed ? dragWindowId : targetWindowId;
+        const secondId = isReversed ? targetWindowId : dragWindowId;
+
+        const groupName = `${terminalWindow.name} + ${dragWin.name}`;
+        const newGroup = createGroup(groupName, firstId, secondId, direction);
+        addGroup(newGroup);
+        setActiveGroup(newGroup.id);
+        // 新组创建后 GroupView 的 auto-start useEffect 会自动启动窗口
+        return;
+      }
+
+      // 自动启动拖入窗口的所有暂停窗格
+      const dragWin = useWindowStore.getState().getWindowById(dragWindowId);
+      if (dragWin) {
+        const panes = getAllPanes(dragWin.layout);
+        for (const pane of panes) {
+          if (pane.status === WindowStatus.Paused) {
+            try {
+              await window.electronAPI.startWindow({
+                windowId: dragWin.id,
+                paneId: pane.id,
+                name: dragWin.name,
+                workingDirectory: pane.cwd,
+                command: pane.command,
+              });
+            } catch (error) {
+              console.error(`Failed to auto-start pane ${pane.id}:`, error);
+            }
+          }
+        }
+      }
+    },
+    [terminalWindow.id, terminalWindow.name, windows, findGroupByWindowId, addGroup, setActiveGroup, addWindowToGroupLayout, removeWindowFromGroupLayout]
+  );
+
+  return (
+    <div className={`flex ${embedded ? 'h-full w-full' : 'h-screen w-screen'} bg-zinc-900 overflow-hidden`}>
+      {/* 渚ц竟鏍?*/}
+      {!embedded && (
+        <Sidebar
+          activeWindowId={terminalWindow.id}
+          onWindowSelect={onWindowSwitch}
+          onSettingsClick={() => setIsSettingsPanelOpen(true)}
+        />
+      )}
+
+      {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 椤堕儴宸ュ叿鏍?*/}
+        {/* 顶部工具栏 - 在嵌入模式下也显示 */}
         <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {/* 杩斿洖鎸夐挳 */}
+            {/* 返回按钮 - 仅在非嵌入模式显示 */}
+            {!embedded && (
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
@@ -318,6 +400,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 </Tooltip.Portal>
               </Tooltip.Root>
             </Tooltip.Provider>
+            )}
 
             {/* 绐楀彛鍚嶇О鍜?git 鍒嗘敮 */}
             <div className="flex items-center gap-2">
@@ -463,20 +546,26 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             )}
           </div>
         </div>
-
         {/* 缁堢甯冨眬鍖哄煙 */}
         <div className="flex-1 overflow-hidden">
-          <SplitLayout
-            windowId={terminalWindow.id}
-            layout={terminalWindow.layout}
-            activePaneId={terminalWindow.activePaneId}
-            isWindowActive={isActive}
-            onPaneActivate={handlePaneActivate}
-            onPaneClose={handlePaneClose}
-          />
+          <DropZone
+            targetWindowId={terminalWindow.id}
+            onDrop={handleWindowDrop}
+            className="h-full w-full"
+          >
+            <SplitLayout
+              windowId={terminalWindow.id}
+              layout={terminalWindow.layout}
+              activePaneId={terminalWindow.activePaneId}
+              isWindowActive={isActive}
+              onPaneActivate={handlePaneActivate}
+              onPaneClose={handlePaneClose}
+            />
+          </DropZone>
         </div>
       </div>
 
+      {!embedded && (<>
       {/* 蹇€熷垏鎹㈤潰鏉?*/}
       {quickSwitcherOpen && (
         <QuickSwitcher
@@ -493,6 +582,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         onClose={() => setIsSettingsPanelOpen(false)}
       />
 
+      </>)}
     </div>
   );
 };

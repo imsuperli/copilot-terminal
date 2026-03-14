@@ -1,10 +1,14 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { MainLayout } from './components/layout/MainLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { EmptyState } from './components/EmptyState';
 import { CardGrid } from './components/CardGrid';
+import { CreateGroupDialog } from './components/CreateGroupDialog';
 import { ArchivedView } from './components/ArchivedView';
 import { TerminalView } from './components/TerminalView';
+import { GroupView } from './components/GroupView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
 import { QuickNavPanel } from './components/QuickNavPanel';
@@ -14,6 +18,7 @@ import { useWindowSwitcher } from './hooks/useWindowSwitcher';
 import { useWorkspaceRestore } from './hooks/useWorkspaceRestore';
 import { subscribeToPaneStatusChange, subscribeToWindowGitBranchChange } from './api/events';
 import { Pane, Window } from './types/window';
+import { WindowGroup } from '../shared/types/window-group';
 import { I18nProvider } from './i18n';
 import type {
   ClaudeModelUpdatedPayload,
@@ -33,7 +38,11 @@ function AppContent() {
   const updateWindow = useWindowStore((state) => state.updateWindow);
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
+  const activeGroupId = useWindowStore((state) => state.activeGroupId);
+  const groups = useWindowStore((state) => state.groups);
+  const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
   const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
@@ -251,6 +260,10 @@ function AppContent() {
     setIsDialogOpen(true);
   }, []);
 
+  const handleCreateGroup = useCallback(() => {
+    setShowCreateGroupDialog(true);
+  }, []);
+
   const handleDialogChange = useCallback((open: boolean) => {
     setIsDialogOpen(open);
   }, []);
@@ -266,6 +279,23 @@ function AppContent() {
   const handleTabChange = useCallback((tab: 'active' | 'archived') => {
     setCurrentTab(tab);
   }, []);
+
+  // 进入组视图
+  const handleEnterGroup = useCallback((group: WindowGroup) => {
+    setActiveGroup(group.id);
+  }, [setActiveGroup]);
+
+  // 从组视图返回
+  const handleReturnFromGroup = useCallback(() => {
+    setActiveGroup(null);
+    switchToUnifiedView();
+  }, [setActiveGroup, switchToUnifiedView]);
+
+  // 计算当前激活的组
+  const activeGroup = useMemo(
+    () => groups.find(g => g.id === activeGroupId),
+    [groups, activeGroupId]
+  );
 
   const mountedTerminalWindowIdSet = useMemo(
     () => new Set(mountedTerminalWindowIds),
@@ -296,6 +326,7 @@ function AppContent() {
               appName={appVersion.name}
               version={appVersion.version}
               onCreateWindow={handleCreateWindow}
+              onCreateGroup={handleCreateGroup}
               isDialogOpen={isDialogOpen}
               onDialogChange={handleDialogChange}
               currentTab={currentTab}
@@ -309,7 +340,7 @@ function AppContent() {
             !hasActiveWindows ? (
               <EmptyState onCreateWindow={handleCreateWindow} />
             ) : (
-              <CardGrid onEnterTerminal={handleEnterTerminal} onCreateWindow={handleCreateWindow} searchQuery={searchQuery} />
+              <CardGrid onEnterTerminal={handleEnterTerminal} onEnterGroup={handleEnterGroup} onCreateWindow={handleCreateWindow} searchQuery={searchQuery} />
             )
           ) : (
             <ArchivedView onEnterTerminal={handleEnterTerminal} searchQuery={searchQuery} />
@@ -349,6 +380,27 @@ function AppContent() {
 
       {error && <ViewSwitchError message={error} />}
 
+      {/* 组视图：当 activeGroupId 有效时显示 */}
+      {activeGroup && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1001,
+          }}
+        >
+          <GroupView
+            group={activeGroup}
+            onReturn={handleReturnFromGroup}
+            onWindowSwitch={handleWindowSwitch}
+            isActive={true}
+          />
+        </div>
+      )}
+
       {/* 清理进度覆盖层 */}
       <CleanupOverlay />
 
@@ -357,6 +409,14 @@ function AppContent() {
         open={isQuickNavOpen}
         onClose={() => setIsQuickNavOpen(false)}
       />
+
+      {/* 创建组对话框 */}
+      {showCreateGroupDialog && (
+        <CreateGroupDialog
+          open={showCreateGroupDialog}
+          onOpenChange={setShowCreateGroupDialog}
+        />
+      )}
     </>
   );
 }
@@ -364,7 +424,9 @@ function AppContent() {
 export default function App() {
   return (
     <I18nProvider>
-      <AppContent />
+      <DndProvider backend={HTML5Backend}>
+        <AppContent />
+      </DndProvider>
     </I18nProvider>
   );
 }

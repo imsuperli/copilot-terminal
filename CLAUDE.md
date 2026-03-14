@@ -27,9 +27,10 @@ npm test
 1. **Main Process** (`src/main/index.ts`): Electron main process, manages native resources
    - `ProcessManager`: Spawns and manages node-pty terminal processes
    - `StatusPoller`: Polls terminal status every 500ms, broadcasts to renderer
-   - `WorkspaceManager`: Persists/restores workspace state to JSON file
+   - `WorkspaceManager`: Persists/restores workspace state to JSON file (includes groups)
    - `AutoSaveManager`: Auto-saves workspace every 5 seconds
    - `ViewSwitcher`: Handles unified view ↔ terminal view transitions
+   - `GroupManager`: Manages window groups (create/update/delete/archive)
    - `TmuxCompatService`: Handles fake tmux commands for Claude Code Agent Teams
    - `TmuxRpcServer`: Named Pipe/Unix Socket RPC server for tmux shim communication
 
@@ -38,9 +39,11 @@ npm test
    - All main ↔ renderer communication goes through this layer
 
 3. **Renderer Process** (`src/renderer/`): React application
-   - `windowStore` (Zustand): Single source of truth for window state, includes MRU list and sidebar state
+   - `windowStore` (Zustand): Single source of truth for window state, includes MRU list, sidebar state, and window groups
    - `TerminalView`: xterm.js integration, handles PTY I/O, includes sidebar and quick switcher
+   - `GroupView`: Group terminal view, displays multiple windows in split layout
    - `WindowCard`: Displays window status, controls (start/pause/archive/delete)
+   - `GroupCard`: Displays group status, controls (start all/pause all/archive/delete)
    - `Sidebar`: Collapsible window list in terminal view
    - `QuickSwitcher`: Ctrl+Tab search panel for quick window switching
    - `QuickNavPanel`: Ctrl+K quick navigation panel for URLs and folders
@@ -115,7 +118,159 @@ Terminal view includes multiple ways to switch between windows:
 
 **MRU List**: Maintained in `windowStore.mruList`, updated on every window switch. Persisted to workspace.json.
 
-### Project Configuration (copilot.json)
+### Window Groups
+
+Window groups allow organizing multiple terminal windows into a single logical unit with split-pane layout. Groups are displayed in the unified view as GroupCard components and can be opened in a dedicated GroupView.
+
+#### Data Structure
+
+**WindowGroup** (`src/shared/types/window-group.ts`):
+```typescript
+interface WindowGroup {
+  id: string;
+  name: string;
+  layout: GroupLayoutNode;  // Recursive tree structure
+  activeWindowId: string;   // Currently active window in group
+  createdAt: string;
+  lastActiveAt: string;
+  archived: boolean;
+}
+```
+
+**GroupLayoutNode** - Recursive tree structure (similar to Window's pane layout):
+- `WindowNode`: Leaf node containing a window ID
+- `GroupSplitNode`: Branch node with direction (horizontal/vertical), sizes, and children
+
+Example layout:
+```typescript
+{
+  type: 'split',
+  direction: 'horizontal',
+  sizes: [0.5, 0.5],
+  children: [
+    { type: 'window', id: 'window-1' },
+    { type: 'window', id: 'window-2' }
+  ]
+}
+```
+
+#### State Management
+
+**windowStore** (`src/renderer/stores/windowStore.ts`) manages group state:
+- `groups: WindowGroup[]` - All window groups
+- `activeGroupId: string | null` - Currently active group (mutually exclusive with activeWindowId)
+- `groupMruList: string[]` - Group MRU list for quick switching
+
+**State Mutual Exclusion**:
+- `setActiveWindow(id)` - Activates single window, clears `activeGroupId`
+- `setActiveGroup(id)` - Activates group, clears `activeWindowId`
+- Only one can be active at a time (single window OR group view)
+
+**Group Operations**:
+- `createGroup(name, windowIds)` - Creates new group from selected windows
+- `removeGroup(id)` - Deletes group (windows remain)
+- `archiveGroup(id)` - Archives group and all windows inside
+- `unarchiveGroup(id)` - Unarchives group and all windows inside
+- `addWindowToGroupLayout(groupId, targetWindowId, newWindowId, direction)` - Adds window to group layout
+- `removeWindowFromGroupLayout(groupId, windowId)` - Removes window from group (auto-dissolves if < 2 windows remain)
+- `setActiveWindowInGroup(groupId, windowId)` - Sets active window within group
+- `updateGroupSplitSizes(groupId, splitPath, sizes)` - Updates split pane sizes after user resize
+
+**Boundary Cases**:
+- When a window is archived/deleted, it's automatically removed from its group
+- If a group has < 2 windows after removal, the group is automatically dissolved
+- Archived groups are shown in separate section in unified view
+
+#### IPC Communication
+
+**GroupManager** (`src/main/services/GroupManager.ts`) provides 8 IPC handlers:
+1. `group:create` - Create new group
+2. `group:update` - Update group properties
+3. `group:delete` - Delete group
+4. `group:archive` - Archive group
+5. `group:unarchive` - Unarchive group
+6. `group:add-window` - Add window to group layout
+7. `group:remove-window` - Remove window from group layout
+8. `group:set-active-window` - Set active window in group
+
+All operations trigger auto-save via WorkspaceManager.
+
+#### UI Components
+
+**GroupCard** (`src/renderer/components/GroupCard.tsx`):
+- Displays group name, window count, aggregated status
+- Shows creation time and last active time
+- Batch operations: Start All, Pause All, Archive, Delete
+- Click to open GroupView
+
+**GroupView** (`src/renderer/components/GroupView.tsx`):
+- Full-screen group terminal view
+- Top toolbar: Back button, group name, status indicator, batch operations
+- Main area: GroupSplitLayout with resizable split panes
+- Sidebar and QuickSwitcher for navigation
+- Keyboard shortcuts: Ctrl+B (toggle sidebar), Ctrl+Tab (quick switcher)
+
+**GroupSplitLayout** (`src/renderer/components/GroupSplitLayout.tsx`):
+- Recursively renders GroupLayoutNode tree
+- Each WindowNode renders an embedded TerminalView
+- Resizable split panes with drag handles
+- Supports nested splits (horizontal and vertical)
+
+#### View Switching Logic
+
+**App.tsx** routing:
+- `currentView === 'unified'` - Shows CardGrid with WindowCard and GroupCard
+- `currentView === 'terminal' && activeWindowId` - Shows single TerminalView
+- `currentView === 'terminal' && activeGroupId` - Shows GroupView (TODO: not yet implemented)
+
+**Current Limitation**:
+- App.tsx does not yet render GroupView when `activeGroupId` is set
+- Users can create and manage groups in unified view, but cannot enter group terminal view
+- This will be implemented in a future iteration
+
+#### Drag-and-Drop (Planned Feature)
+
+**Status**: UI components implemented, business logic pending
+
+**Implemented**:
+- `DraggableWindowCard` - Makes WindowCard draggable
+- `DropZone` - Detects drop position (left/right/top/bottom/center)
+- Visual feedback during drag (opacity, drop zone highlight)
+
+**Pending**:
+- GroupView `onWindowDrop` handler - Process drop events
+- Business logic to add/remove windows from groups via drag
+- Conflict handling between drag and split pane resize
+
+**Note**: Drag-and-drop functionality is currently disabled. The UI components are in place but not connected to business logic. This feature will be implemented in a future iteration.
+
+#### Persistence
+
+Groups are persisted to `%APPDATA%/copilot-terminal/workspace.json`:
+```json
+{
+  "windows": [...],
+  "groups": [
+    {
+      "id": "group-1",
+      "name": "Backend Services",
+      "layout": { ... },
+      "activeWindowId": "window-1",
+      "createdAt": "2026-03-14T10:00:00.000Z",
+      "lastActiveAt": "2026-03-14T12:30:00.000Z",
+      "archived": false
+    }
+  ],
+  "activeWindowId": null,
+  "activeGroupId": "group-1",
+  "mruList": [...],
+  "groupMruList": ["group-1", "group-2"]
+}
+```
+
+**Auto-save**: Triggered on every group operation (create/update/delete/archive).
+
+
 
 Projects can include a `copilot.json` file in their root directory to define quick links to related resources:
 
