@@ -127,9 +127,9 @@ export const zhCNMessages = {
   'about.close': '关闭',
   'about.logoAlt': '{appName} Logo',
 
-  'quickSwitcher.searchPlaceholder': '搜索窗口（名称、路径）...',
+  'quickSwitcher.searchPlaceholder': '搜索窗口或窗口组（名称、路径）...',
   'quickSwitcher.resultsCount': '{count} 个结果',
-  'quickSwitcher.noResults': '没有找到匹配的窗口',
+  'quickSwitcher.noResults': '没有找到匹配的窗口或窗口组',
   'quickSwitcher.noResultsHint': '尝试使用不同的关键词搜索',
   'quickSwitcher.emptyHint': '创建一个新窗口开始使用',
   'quickSwitcher.select': '选择',
@@ -141,6 +141,9 @@ export const zhCNMessages = {
   'quickSwitcher.paneStatus': '窗格状态：',
   'quickSwitcher.pane': '窗格 {index}: {status}',
   'quickSwitcher.openFolderTitle': '打开文件夹: {path}',
+  'quickSwitcher.windowCount': '{count} 个窗口',
+  'quickSwitcher.windowStatus': '窗口状态：',
+  'quickSwitcher.window': '窗口 {index}',
 
   'windowCard.createdAt': '创建时间:',
   'windowCard.lastActive': '{time}',
@@ -412,9 +415,9 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'about.close': 'Close',
   'about.logoAlt': '{appName} logo',
 
-  'quickSwitcher.searchPlaceholder': 'Search windows (name, path)...',
+  'quickSwitcher.searchPlaceholder': 'Search windows and groups (name, path)...',
   'quickSwitcher.resultsCount': '{count} results',
-  'quickSwitcher.noResults': 'No matching windows found',
+  'quickSwitcher.noResults': 'No matching windows or groups found',
   'quickSwitcher.noResultsHint': 'Try a different keyword',
   'quickSwitcher.emptyHint': 'Create a new window to get started',
   'quickSwitcher.select': 'Select',
@@ -426,6 +429,9 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'quickSwitcher.paneStatus': 'Pane status:',
   'quickSwitcher.pane': 'Pane {index}: {status}',
   'quickSwitcher.openFolderTitle': 'Open folder: {path}',
+  'quickSwitcher.windowCount': '{count} windows',
+  'quickSwitcher.windowStatus': 'Window status:',
+  'quickSwitcher.window': 'Window {index}',
 
   'windowCard.createdAt': 'Created:',
   'windowCard.lastActive': '{time}',

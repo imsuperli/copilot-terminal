@@ -142,6 +142,17 @@ export const GroupView: React.FC<GroupViewProps> = ({
     [group.id, group.layout, setActiveWindowInGroup, onWindowSwitch]
   );
 
+  // 处理快速切换器选择窗口组
+  const handleQuickSwitcherSelectGroup = useCallback(
+    (groupId: string) => {
+      setQuickSwitcherOpen(false);
+      if (groupId !== group.id) {
+        onGroupSwitch(groupId);
+      }
+    },
+    [group.id, onGroupSwitch]
+  );
+
   // 处理归档组
   const handleArchiveGroup = useCallback(() => {
     archiveGroup(group.id);
@@ -478,7 +489,9 @@ export const GroupView: React.FC<GroupViewProps> = ({
         <QuickSwitcher
           isOpen={quickSwitcherOpen}
           currentWindowId={group.activeWindowId}
+          currentGroupId={group.id}
           onSelect={handleQuickSwitcherSelect}
+          onSelectGroup={handleQuickSwitcherSelectGroup}
           onClose={() => setQuickSwitcherOpen(false)}
         />
       )}

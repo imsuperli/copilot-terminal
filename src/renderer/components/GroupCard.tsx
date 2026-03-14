@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { FolderOpen, Trash2, Play, Square, Archive, ArchiveRestore, Edit2, Folder } from 'lucide-react';
+import { FolderOpen, Trash2, Play, Square, Archive, ArchiveRestore, Edit2, Layers } from 'lucide-react';
 import { GroupStatusIcons } from './GroupStatusIcons';
 import { WindowGroup } from '../../shared/types/window-group';
 import { getAllWindowIds } from '../utils/groupLayoutHelpers';
@@ -147,9 +147,9 @@ export const GroupCard = React.memo<GroupCardProps>(({
         {/* 第一行：组名称 + 窗口数量徽章 + 状态图标（靠右） */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* 文件夹图标 + 数字徽章 */}
+            {/* 组图标 + 数字徽章 */}
             <div className="relative flex-shrink-0">
-              <Folder size={20} className="text-[rgb(var(--primary))]" />
+              <Layers size={20} className="text-purple-400" />
               <span className="absolute -top-1 -right-1 bg-[rgb(var(--primary))] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-semibold">
                 {windowCount}
               </span>

@@ -308,6 +308,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [onWindowSwitch]
   );
 
+  // 处理快速切换到窗口组
+  const handleQuickSwitcherSelectGroup = useCallback(
+    (groupId: string) => {
+      setQuickSwitcherOpen(false);
+      if (onGroupSwitch) {
+        onGroupSwitch(groupId);
+      }
+    },
+    [onGroupSwitch]
+  );
+
   // 处理拖拽窗口到终端区域创建或调整分组
   const handleWindowDrop = useCallback(
     async (dragItem: WindowCardDragItem, dropResult: DropResult) => {
@@ -656,6 +667,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           isOpen={quickSwitcherOpen}
           currentWindowId={terminalWindow.id}
           onSelect={handleQuickSwitcherSelect}
+          onSelectGroup={handleQuickSwitcherSelectGroup}
           onClose={() => setQuickSwitcherOpen(false)}
         />
       )}
