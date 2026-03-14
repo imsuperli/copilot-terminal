@@ -759,6 +759,8 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         useBundledConptyDll: settings?.terminal?.useBundledConptyDll ?? defaults.terminal?.useBundledConptyDll ?? true,
         defaultShellProgram: normalizeShellProgram(settings?.terminal?.defaultShellProgram) ?? defaults.terminal?.defaultShellProgram ?? '',
       },
+      customCategories: settings?.customCategories ?? defaults.customCategories,
+      defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
     };
   }
 
@@ -774,6 +776,8 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         useBundledConptyDll: true,
         defaultShellProgram: '',
       },
+      customCategories: [],
+      defaultSidebarTab: 'active',
     };
   }
 

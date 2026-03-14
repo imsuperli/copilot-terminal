@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { Window, WindowStatus, Pane, LayoutNode } from '../types/window';
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
+import { CustomCategory } from '../../shared/types/custom-category';
 import {
   splitPane as splitPaneInLayout,
   closePane as closePaneInLayout,
@@ -18,6 +19,7 @@ import {
   addWindowToGroup as addWindowToGroupInLayout,
   getWindowCount,
 } from '../utils/groupLayoutHelpers';
+import { updateSettingsCategories } from './categoryHelpers';
 
 // 全局标志：是否启用自动保存
 let autoSaveEnabled = true;
@@ -73,6 +75,9 @@ interface WindowStore {
   groups: WindowGroup[]; // 窗口组列表
   activeGroupId: string | null; // 当前激活的窗口组 ID
   groupMruList: string[]; // 组的 MRU 列表
+
+  // 自定义分类相关状态（本地缓存,从 settings 同步）
+  customCategories: CustomCategory[];
 
   // Actions
   addWindow: (window: Window) => void;
@@ -140,6 +145,22 @@ interface WindowStore {
   getActiveGroups: () => WindowGroup[]; // 获取未归档的组
   getArchivedGroups: () => WindowGroup[]; // 获取已归档的组
   findGroupByWindowId: (windowId: string) => WindowGroup | undefined; // 查找包含指定窗口的组
+
+  // 自定义分类相关 Actions
+  syncCustomCategories: (categories: CustomCategory[]) => void; // 从 settings 同步分类数据
+  addCustomCategory: (category: Omit<CustomCategory, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
+  updateCustomCategory: (id: string, updates: Partial<Omit<CustomCategory, 'id' | 'createdAt'>>) => Promise<void>;
+  removeCustomCategory: (id: string) => Promise<void>;
+  addWindowToCategory: (categoryId: string, windowId: string) => Promise<void>;
+  removeWindowFromCategory: (categoryId: string, windowId: string) => Promise<void>;
+  addGroupToCategory: (categoryId: string, groupId: string) => Promise<void>;
+  removeGroupFromCategory: (categoryId: string, groupId: string) => Promise<void>;
+
+  // 自定义分类辅助方法
+  getCustomCategories: () => CustomCategory[];
+  getCategoryById: (id: string) => CustomCategory | undefined;
+  getWindowCategories: (windowId: string) => CustomCategory[];
+  getGroupCategories: (groupId: string) => CustomCategory[];
 }
 
 /**
@@ -159,6 +180,9 @@ export const useWindowStore = create<WindowStore>()(
     groups: [],
     activeGroupId: null,
     groupMruList: [],
+
+    // 自定义分类相关初始状态（从 settings 加载）
+    customCategories: [],
 
     // 添加窗口
     addWindow: (window) => {
@@ -200,6 +224,14 @@ export const useWindowStore = create<WindowStore>()(
         // 从 MRU 列表移除
         state.mruList = state.mruList.filter(wid => wid !== id);
 
+        // 从所有分类中移除该窗口
+        state.customCategories.forEach(category => {
+          if (category.windowIds.includes(id)) {
+            category.windowIds = category.windowIds.filter(wid => wid !== id);
+            category.updatedAt = new Date().toISOString();
+          }
+        });
+
         // 从所属组中移除窗口
         const groupIndex = state.groups.findIndex(g =>
           getAllWindowIds(g.layout).includes(id)
@@ -223,8 +255,12 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       // 触发自动保存，传递最新的窗口列表和组列表
-      const { windows, groups } = get();
+      const { windows, groups, customCategories } = get();
       triggerAutoSave(windows, groups);
+      // 异步保存分类更新
+      updateSettingsCategories(customCategories).catch(error => {
+        console.error('[WindowStore] Failed to save categories after window removal:', error);
+      });
     },
 
     // 更新窗口（支持更新多个属性）
@@ -609,8 +645,21 @@ export const useWindowStore = create<WindowStore>()(
           state.activeGroupId = null;
         }
         state.groupMruList = state.groupMruList.filter(gid => gid !== id);
+
+        // 从所有分类中移除该组
+        state.customCategories.forEach(category => {
+          if (category.groupIds.includes(id)) {
+            category.groupIds = category.groupIds.filter(gid => gid !== id);
+            category.updatedAt = new Date().toISOString();
+          }
+        });
       });
-      triggerAutoSave(get().windows, get().groups);
+      const { windows, groups, customCategories } = get();
+      triggerAutoSave(windows, groups);
+      // 异步保存分类更新
+      updateSettingsCategories(customCategories).catch(error => {
+        console.error('[WindowStore] Failed to save categories after group removal:', error);
+      });
     },
 
     // 更新组
@@ -843,6 +892,234 @@ export const useWindowStore = create<WindowStore>()(
       return get().groups.find(g =>
         getAllWindowIds(g.layout).includes(windowId)
       );
+    },
+
+    // ==================== 自定义分类相关 Actions ====================
+
+    /**
+     * 从 settings 同步分类数据
+     * 在应用启动或 settings 更新时调用
+     */
+    syncCustomCategories: (categories) => {
+      set((state) => {
+        state.customCategories = categories;
+      });
+    },
+
+    /**
+     * 添加自定义分类
+     * @param category 分类信息（不包含 id、createdAt、updatedAt）
+     * @returns 新创建的分类 ID
+     */
+    addCustomCategory: async (category) => {
+      const now = new Date().toISOString();
+      const newCategory: CustomCategory = {
+        ...category,
+        id: crypto.randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      // 更新本地状态
+      set((state) => {
+        state.customCategories.push(newCategory);
+      });
+
+      // 保存到 settings
+      await updateSettingsCategories(get().customCategories);
+
+      return newCategory.id;
+    },
+
+    /**
+     * 更新自定义分类
+     * @param id 分类 ID
+     * @param updates 要更新的字段
+     */
+    updateCustomCategory: async (id, updates) => {
+      const category = get().customCategories.find(c => c.id === id);
+      if (!category) {
+        console.warn(`[WindowStore] Category not found: ${id}`);
+        return;
+      }
+
+      set((state) => {
+        const index = state.customCategories.findIndex(c => c.id === id);
+        if (index >= 0) {
+          state.customCategories[index] = {
+            ...state.customCategories[index],
+            ...updates,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      });
+
+      // 保存到 settings
+      await updateSettingsCategories(get().customCategories);
+    },
+
+    /**
+     * 删除自定义分类
+     * @param id 分类 ID
+     */
+    removeCustomCategory: async (id) => {
+      set((state) => {
+        state.customCategories = state.customCategories.filter(c => c.id !== id);
+        // 同时删除所有子分类
+        state.customCategories = state.customCategories.filter(c => c.parentId !== id);
+      });
+
+      // 保存到 settings
+      await updateSettingsCategories(get().customCategories);
+    },
+
+    /**
+     * 添加窗口到分类
+     * @param categoryId 分类 ID
+     * @param windowId 窗口 ID
+     */
+    addWindowToCategory: async (categoryId, windowId) => {
+      const category = get().customCategories.find(c => c.id === categoryId);
+      if (!category) {
+        console.warn(`[WindowStore] Category not found: ${categoryId}`);
+        return;
+      }
+
+      // 检查窗口是否存在
+      const window = get().windows.find(w => w.id === windowId);
+      if (!window) {
+        console.warn(`[WindowStore] Window not found: ${windowId}`);
+        return;
+      }
+
+      // 检查是否已存在
+      if (category.windowIds.includes(windowId)) {
+        return;
+      }
+
+      set((state) => {
+        const index = state.customCategories.findIndex(c => c.id === categoryId);
+        if (index >= 0) {
+          state.customCategories[index].windowIds.push(windowId);
+          state.customCategories[index].updatedAt = new Date().toISOString();
+        }
+      });
+
+      // 保存到 settings
+      await updateSettingsCategories(get().customCategories);
+    },
+
+    /**
+     * 从分类中移除窗口
+     * @param categoryId 分类 ID
+     * @param windowId 窗口 ID
+     */
+    removeWindowFromCategory: async (categoryId, windowId) => {
+      set((state) => {
+        const index = state.customCategories.findIndex(c => c.id === categoryId);
+        if (index >= 0) {
+          state.customCategories[index].windowIds = state.customCategories[index].windowIds.filter(
+            id => id !== windowId
+          );
+          state.customCategories[index].updatedAt = new Date().toISOString();
+        }
+      });
+
+      // 保存到 settings
+      await updateSettingsCategories(get().customCategories);
+    },
+
+    /**
+     * 添加组到分类
+     * @param categoryId 分类 ID
+     * @param groupId 组 ID
+     */
+    addGroupToCategory: async (categoryId, groupId) => {
+      const category = get().customCategories.find(c => c.id === categoryId);
+      if (!category) {
+        console.warn(`[WindowStore] Category not found: ${categoryId}`);
+        return;
+      }
+
+      // 检查组是否存在
+      const group = get().groups.find(g => g.id === groupId);
+      if (!group) {
+        console.warn(`[WindowStore] Group not found: ${groupId}`);
+        return;
+      }
+
+      // 检查是否已存在
+      if (category.groupIds.includes(groupId)) {
+        return;
+      }
+
+      set((state) => {
+        const index = state.customCategories.findIndex(c => c.id === categoryId);
+        if (index >= 0) {
+          state.customCategories[index].groupIds.push(groupId);
+          state.customCategories[index].updatedAt = new Date().toISOString();
+        }
+      });
+
+      // 保存到 settings
+      await updateSettingsCategories(get().customCategories);
+    },
+
+    /**
+     * 从分类中移除组
+     * @param categoryId 分类 ID
+     * @param groupId 组 ID
+     */
+    removeGroupFromCategory: async (categoryId, groupId) => {
+      set((state) => {
+        const index = state.customCategories.findIndex(c => c.id === categoryId);
+        if (index >= 0) {
+          state.customCategories[index].groupIds = state.customCategories[index].groupIds.filter(
+            id => id !== groupId
+          );
+          state.customCategories[index].updatedAt = new Date().toISOString();
+        }
+      });
+
+      // 保存到 settings
+      await updateSettingsCategories(get().customCategories);
+    },
+
+    // ==================== 自定义分类辅助方法 ====================
+
+    /**
+     * 获取所有自定义分类
+     * @returns 分类列表（按 order 排序）
+     */
+    getCustomCategories: () => {
+      return [...get().customCategories].sort((a, b) => a.order - b.order);
+    },
+
+    /**
+     * 根据 ID 获取分类
+     * @param id 分类 ID
+     * @returns 分类对象，如果不存在则返回 undefined
+     */
+    getCategoryById: (id) => {
+      return get().customCategories.find(c => c.id === id);
+    },
+
+    /**
+     * 获取窗口所属的所有分类
+     * @param windowId 窗口 ID
+     * @returns 包含该窗口的所有分类
+     */
+    getWindowCategories: (windowId) => {
+      return get().customCategories.filter(c => c.windowIds.includes(windowId));
+    },
+
+    /**
+     * 获取组所属的所有分类
+     * @param groupId 组 ID
+     * @returns 包含该组的所有分类
+     */
+    getGroupCategories: (groupId) => {
+      return get().customCategories.filter(c => c.groupIds.includes(groupId));
     },
   }))
 );

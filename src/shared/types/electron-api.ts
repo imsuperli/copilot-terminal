@@ -3,6 +3,7 @@ import { ProjectConfig } from './project-config';
 import { QuickNavConfig } from './quick-nav';
 import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
+import { CustomCategory } from './custom-category';
 import {
   IDEConfig,
   Settings,
@@ -164,13 +165,14 @@ export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
 export type SettingsPatch =
-  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux'>>
+  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'customCategories'>>
   & {
     ides?: IDEConfig[];
     quickNav?: QuickNavConfig;
     statusLine?: Partial<StatusLineConfig>;
     terminal?: Partial<TerminalSettings>;
     tmux?: Partial<TmuxSettings>;
+    customCategories?: CustomCategory[];
   };
 
 export interface ElectronAPI {
