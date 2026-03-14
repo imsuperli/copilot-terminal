@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
@@ -7,9 +7,7 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { SettingsPanel } from '../SettingsPanel';
 import { QuickNavPanel } from '../QuickNavPanel';
 import { AboutPanel } from '../AboutPanel';
-import { CreateCategoryDialog } from '../CreateCategoryDialog';
-import { EditCategoryDialog } from '../EditCategoryDialog';
-import { CategoryItem } from '../CategoryItem';
+import { CategoryDropZone } from '../dnd/CategoryDropZone';
 import { CustomCategory } from '../../../shared/types/custom-category';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
@@ -46,6 +44,8 @@ export function Sidebar({
   const removeWindow = useWindowStore((state) => state.removeWindow);
   const customCategories = useWindowStore((state) => state.customCategories);
   const syncCustomCategories = useWindowStore((state) => state.syncCustomCategories);
+  const addCustomCategory = useWindowStore((state) => state.addCustomCategory);
+  const updateCustomCategory = useWindowStore((state) => state.updateCustomCategory);
   const removeCustomCategory = useWindowStore((state) => state.removeCustomCategory);
 
   const activeWindows = windows.filter(w => !w.archived);
@@ -62,11 +62,18 @@ export function Sidebar({
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [isQuickNavPanelOpen, setIsQuickNavPanelOpen] = useState(false);
   const [isAboutPanelOpen, setIsAboutPanelOpen] = useState(false);
-  const [isCreateCategoryDialogOpen, setIsCreateCategoryDialogOpen] = useState(false);
-  const [isEditCategoryDialogOpen, setIsEditCategoryDialogOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<CustomCategory | null>(null);
   const [categoryToDelete, setCategoryToDelete] = useState<CustomCategory | null>(null);
-  const [parentIdForNewCategory, setParentIdForNewCategory] = useState<string>('');
+
+  // 自定义分类折叠/展开
+  const [customExpanded, setCustomExpanded] = useState(true);
+  // 内联创建分类
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const createInputRef = useRef<HTMLInputElement>(null);
+  // 内联编辑分类
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   // 从 settings 同步分类数据
   useEffect(() => {
@@ -87,6 +94,58 @@ export function Sidebar({
   const topLevelCategories = customCategories
     .filter(c => !c.parentId)
     .sort((a, b) => a.order - b.order);
+
+  // 创建分类时自动聚焦
+  useEffect(() => {
+    if (isCreatingCategory && createInputRef.current) {
+      createInputRef.current.focus();
+    }
+  }, [isCreatingCategory]);
+
+  // 编辑分类时自动聚焦
+  useEffect(() => {
+    if (editingCategoryId && editInputRef.current) {
+      editInputRef.current.focus();
+    }
+  }, [editingCategoryId]);
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    try {
+      await addCustomCategory({
+        name,
+        icon: '📌',
+        windowIds: [],
+        groupIds: [],
+        order: topLevelCategories.length,
+      });
+      setNewCategoryName('');
+      setIsCreatingCategory(false);
+    } catch (error) {
+      console.error('Failed to create category:', error);
+    }
+  };
+
+  const handleStartEdit = (category: CustomCategory) => {
+    setEditingCategoryId(category.id);
+    setEditName(category.name);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingCategoryId) return;
+    const name = editName.trim();
+    if (!name) {
+      setEditingCategoryId(null);
+      return;
+    }
+    try {
+      await updateCustomCategory(editingCategoryId, { name });
+      setEditingCategoryId(null);
+    } catch (error) {
+      console.error('Failed to update category:', error);
+    }
+  };
 
   const handleBatchCreate = async (selectedPaths: string[]) => {
     for (const path of selectedPaths) {
@@ -128,6 +187,13 @@ export function Sidebar({
     } catch (error) {
       console.error('Failed to clear archived windows:', error);
     }
+  };
+
+  /** 计算分类中的有效项目数 */
+  const getCategoryCount = (category: CustomCategory) => {
+    const wCount = category.windowIds.filter(id => windows.some(w => w.id === id)).length;
+    const gCount = category.groupIds.filter(id => groups.some(g => g.id === id)).length;
+    return wCount + gCount;
   };
 
   return (
@@ -221,44 +287,153 @@ export function Sidebar({
           </div>
 
           {/* 分隔线 */}
-          {topLevelCategories.length > 0 && (
-            <div className="my-3 border-t border-[rgb(var(--border))]" />
-          )}
+          <div className="my-3 border-t border-[rgb(var(--border))]" />
 
-          {/* 自定义分类列表 */}
-          <div className="flex flex-col gap-1">
-            {topLevelCategories.map((category) => (
-              <CategoryItem
-                key={category.id}
-                category={category}
-                isActive={currentTab === category.id}
-                onClick={() => onTabChange?.(category.id)}
-                onEdit={(cat) => {
-                  setEditingCategory(cat);
-                  setIsEditCategoryDialogOpen(true);
-                }}
-                onDelete={(cat) => {
-                  setCategoryToDelete(cat);
-                }}
-                onCreateSubcategory={(parentId) => {
-                  setParentIdForNewCategory(parentId);
-                  setIsCreateCategoryDialogOpen(true);
-                }}
-              />
-            ))}
+          {/* 可折叠的自定义分类区域 */}
+          <div className="flex flex-col">
+            {/* 自定义主菜单按钮 */}
+            <button
+              onClick={() => setCustomExpanded(!customExpanded)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
+            >
+              {customExpanded ? (
+                <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <ChevronRight className="h-4 w-4 flex-shrink-0" />
+              )}
+              <Tag className="h-4 w-4 flex-shrink-0" />
+              <span className="font-medium">{t('sidebar.customCategories')}</span>
+              {topLevelCategories.length > 0 && (
+                <span className="ml-auto text-xs text-[rgb(var(--muted-foreground))]">{topLevelCategories.length}</span>
+              )}
+            </button>
+
+            {/* 展开后的子分类列表 */}
+            {customExpanded && (
+              <div className="flex flex-col gap-0.5 mt-1">
+                {topLevelCategories.map((category) => (
+                  <CategoryDropZone
+                    key={category.id}
+                    categoryId={category.id}
+                    windowIds={category.windowIds}
+                    groupIds={category.groupIds}
+                  >
+                    <div
+                      className={`flex items-center gap-2 pl-8 pr-2 py-1.5 rounded-lg text-sm transition-colors cursor-pointer group ${
+                        currentTab === category.id
+                          ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
+                          : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
+                      }`}
+                      onClick={() => onTabChange?.(category.id)}
+                    >
+                      {/* 图标和名称（或编辑输入框） */}
+                      {editingCategoryId === category.id ? (
+                        <>
+                          <span className="flex-shrink-0 text-sm">{category.icon || '📌'}</span>
+                          <input
+                            ref={editInputRef}
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit();
+                              if (e.key === 'Escape') setEditingCategoryId(null);
+                            }}
+                            onBlur={handleSaveEdit}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 focus:outline-none focus:border-blue-500"
+                          />
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}
+                            className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-green-400 hover:text-green-300 rounded transition-colors"
+                            title={t('common.save')}
+                          >
+                            <Check className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditingCategoryId(null); }}
+                            className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded transition-colors"
+                            title={t('common.cancel')}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-shrink-0 text-sm">{category.icon || '📌'}</span>
+                          <span className="flex-1 truncate">{category.name}</span>
+                          {getCategoryCount(category) > 0 && (
+                            <span className="flex-shrink-0 text-xs text-[rgb(var(--muted-foreground))]">
+                              {getCategoryCount(category)}
+                            </span>
+                          )}
+                          {/* 悬停时显示编辑和删除按钮 */}
+                          <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleStartEdit(category); }}
+                              className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-700 transition-colors"
+                              title={t('category.rename')}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setCategoryToDelete(category); }}
+                              className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-red-400 rounded hover:bg-zinc-700 transition-colors"
+                              title={t('category.delete')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </CategoryDropZone>
+                ))}
+
+                {/* 内联创建分类 */}
+                {isCreatingCategory ? (
+                  <div className="flex items-center gap-1.5 pl-8 pr-2 py-1.5">
+                    <span className="flex-shrink-0 text-sm">📁</span>
+                    <input
+                      ref={createInputRef}
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateCategory();
+                        if (e.key === 'Escape') {
+                          setIsCreatingCategory(false);
+                          setNewCategoryName('');
+                        }
+                      }}
+                      placeholder={t('category.namePlaceholder')}
+                      className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+                    />
+                    <button
+                      onClick={handleCreateCategory}
+                      className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-green-400 hover:text-green-300 rounded transition-colors"
+                      title={t('common.save')}
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+                    <button
+                      onClick={() => { setIsCreatingCategory(false); setNewCategoryName(''); }}
+                      className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded transition-colors"
+                      title={t('common.cancel')}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsCreatingCategory(true)}
+                    className="flex items-center gap-2 pl-8 pr-2 py-1.5 rounded-lg text-sm text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>{t('sidebar.newCategory')}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* 新建分类按钮 */}
-          <button
-            onClick={() => {
-              setParentIdForNewCategory('');
-              setIsCreateCategoryDialogOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 mt-2 rounded-lg text-sm text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            <span>{t('sidebar.newCategory')}</span>
-          </button>
         </div>
 
         {/* Bottom section */}
@@ -314,7 +489,6 @@ export function Sidebar({
           <button
             onClick={() => setIsBatchDialogOpen(true)}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
-            title={t('sidebar.batchAdd')}
           >
             <FolderPlus className="h-4 w-4" />
             <span>{t('sidebar.batchAdd')}</span>
@@ -387,18 +561,6 @@ export function Sidebar({
         version={version}
       />
 
-      <CreateCategoryDialog
-        open={isCreateCategoryDialogOpen}
-        onOpenChange={setIsCreateCategoryDialogOpen}
-        defaultParentId={parentIdForNewCategory}
-      />
-
-      <EditCategoryDialog
-        open={isEditCategoryDialogOpen}
-        onOpenChange={setIsEditCategoryDialogOpen}
-        category={editingCategory}
-      />
-
       <ConfirmDialog
         open={!!categoryToDelete}
         onOpenChange={(open) => { if (!open) setCategoryToDelete(null); }}
@@ -425,5 +587,3 @@ export function Sidebar({
     </>
   );
 }
-
-
