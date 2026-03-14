@@ -79,7 +79,8 @@ export function addWindowToGroup(
   layout: GroupLayoutNode,
   targetWindowId: string,
   newWindowId: string,
-  direction: 'horizontal' | 'vertical'
+  direction: 'horizontal' | 'vertical',
+  insertBefore: boolean = false
 ): GroupLayoutNode | null {
   if (layout.type === 'window') {
     if (layout.id === targetWindowId) {
@@ -92,7 +93,7 @@ export function addWindowToGroup(
         type: 'split',
         direction,
         sizes: [0.5, 0.5],
-        children: [layout, newWindowNode],
+        children: insertBefore ? [newWindowNode, layout] : [layout, newWindowNode],
       };
 
       return splitNode;
@@ -101,7 +102,7 @@ export function addWindowToGroup(
   }
 
   const newChildren = layout.children.map(child =>
-    addWindowToGroup(child, targetWindowId, newWindowId, direction)
+    addWindowToGroup(child, targetWindowId, newWindowId, direction, insertBefore)
   );
 
   const hasChanges = newChildren.some((child, i) => child !== layout.children[i]);

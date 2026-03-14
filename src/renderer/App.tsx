@@ -299,8 +299,19 @@ function AppContent() {
   }, []);
 
   // 进入组视图
-  const handleEnterGroup = useCallback((group: WindowGroup) => {
+  const handleEnterGroup = useCallback(async (group: WindowGroup) => {
+    // 先设置 activeGroup，这会清除 activeWindowId
     setActiveGroup(group.id);
+
+    // 然后通知主进程切换到终端视图（使用组的活跃窗口 ID）
+    // 这样点击关闭按钮时会返回主界面而不是退出软件
+    // 注意：switchToTerminalView 会设置 activeWindowId，但由于我们已经设置了 activeGroupId，
+    // 渲染时 GroupView 会优先显示（zIndex 更高）
+    try {
+      await window.electronAPI.switchToTerminalView(group.activeWindowId);
+    } catch (error) {
+      console.error('Failed to notify main process of view change:', error);
+    }
   }, [setActiveGroup]);
 
   // 从组视图返回

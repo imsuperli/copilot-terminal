@@ -46,17 +46,10 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
     }
   }, [open]);
 
-  // 获取所有未归档且不在任何组中的窗口
+  // 获取所有未归档的窗口（允许窗口同时属于多个组）
   const availableWindows = useMemo(() => {
-    return windows.filter(w => {
-      // 过滤掉已归档的窗口
-      if (w.archived) return false;
-
-      // 过滤掉已经在组中的窗口
-      const group = findGroupByWindowId(w.id);
-      return !group;
-    });
-  }, [windows, findGroupByWindowId]);
+    return windows.filter(w => !w.archived);
+  }, [windows]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

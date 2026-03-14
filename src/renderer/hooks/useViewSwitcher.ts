@@ -77,9 +77,17 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
       setCurrentView(payload.view);
       setActiveWindowId(payload.windowId || null);
 
-      // 更新 store 中的 activeWindowId
+      // 更新 store 中的 activeWindowId 和 activeGroupId
       if (payload.view === 'terminal' && payload.windowId) {
-        setActiveWindow(payload.windowId);
+        const { activeGroupId } = useWindowStore.getState();
+        if (!activeGroupId) {
+          setActiveWindow(payload.windowId);
+        }
+      } else if (payload.view === 'unified') {
+        // 切换到统一视图时，清除 activeWindowId 和 activeGroupId
+        const { setActiveGroup } = useWindowStore.getState();
+        setActiveWindow(null);
+        setActiveGroup(null);
       }
     };
 

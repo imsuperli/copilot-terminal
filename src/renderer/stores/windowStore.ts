@@ -132,6 +132,7 @@ interface WindowStore {
   // 组布局操作
   addWindowToGroupLayout: (groupId: string, targetWindowId: string, newWindowId: string, direction: 'horizontal' | 'vertical') => void;
   removeWindowFromGroupLayout: (groupId: string, windowId: string) => void;
+  rearrangeWindowInGroupLayout: (groupId: string, dragWindowId: string, targetWindowId: string, direction: 'horizontal' | 'vertical', insertBefore: boolean) => void;
   updateGroupSplitSizes: (groupId: string, splitPath: number[], sizes: number[]) => void;
   setActiveWindowInGroup: (groupId: string, windowId: string) => void;
 
@@ -480,7 +481,6 @@ export const useWindowStore = create<WindowStore>()(
         if (window) {
           window.archived = true;
           window.lastActiveAt = new Date().toISOString();
-          console.log(`[WindowStore] Archived window: ${window.name} (id: ${id})`);
         }
         // 如果归档的是当前活跃窗口，清除活跃状态
         if (state.activeWindowId === id) {
@@ -511,8 +511,6 @@ export const useWindowStore = create<WindowStore>()(
       });
       // 触发自动保存
       const { windows, groups } = get();
-      const archivedCount = windows.filter(w => w.archived).length;
-      console.log(`[WindowStore] Triggering auto-save with ${windows.length} windows (${archivedCount} archived)`);
       triggerAutoSave(windows, groups);
     },
 
@@ -752,7 +750,9 @@ export const useWindowStore = create<WindowStore>()(
     addWindowToGroupLayout: (groupId, targetWindowId, newWindowId, direction) => {
       set((state) => {
         const group = state.groups.find(g => g.id === groupId);
-        if (!group) return;
+        if (!group) {
+          return;
+        }
 
         // 如果布局是单个窗口节点，创建拆分
         if (group.layout.type === 'window') {
@@ -783,7 +783,9 @@ export const useWindowStore = create<WindowStore>()(
     removeWindowFromGroupLayout: (groupId, windowId) => {
       set((state) => {
         const groupIndex = state.groups.findIndex(g => g.id === groupId);
-        if (groupIndex < 0) return;
+        if (groupIndex < 0) {
+          return;
+        }
 
         const group = state.groups[groupIndex];
         const newLayout = removeWindowFromGroupLayout(group.layout, windowId);
@@ -802,6 +804,26 @@ export const useWindowStore = create<WindowStore>()(
           }
           group.lastActiveAt = new Date().toISOString();
         }
+      });
+      triggerAutoSave(get().windows, get().groups);
+    },
+
+    // 组内窗口重新排列（原子操作，避免中间状态触发解散）
+    rearrangeWindowInGroupLayout: (groupId, dragWindowId, targetWindowId, direction, insertBefore) => {
+      set((state) => {
+        const group = state.groups.find(g => g.id === groupId);
+        if (!group) return;
+
+        // 先移除拖拽的窗口
+        const layoutAfterRemove = removeWindowFromGroupLayout(group.layout, dragWindowId);
+        if (!layoutAfterRemove) return;
+
+        // 再添加到目标位置
+        const finalLayout = addWindowToGroupInLayout(layoutAfterRemove, targetWindowId, dragWindowId, direction, insertBefore);
+        if (!finalLayout) return;
+
+        group.layout = finalLayout;
+        group.lastActiveAt = new Date().toISOString();
       });
       triggerAutoSave(get().windows, get().groups);
     },

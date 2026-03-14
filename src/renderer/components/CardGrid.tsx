@@ -68,16 +68,6 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
   const [editingGroup, setEditingGroup] = useState<WindowGroup | null>(null);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
 
-  // 收集所有属于某个组的窗口 ID（用于在"全部"和"活跃"标签中排除组内窗口避免重复）
-  const windowIdsInGroups = useMemo(() => {
-    const ids = new Set<string>();
-    for (const group of groups) {
-      for (const wid of getAllWindowIds(group.layout)) {
-        ids.add(wid);
-      }
-    }
-    return ids;
-  }, [groups]);
 
   // 根据 currentTab 过滤和排序卡片项
   const cardItems = useMemo<CardItem[]>(() => {
@@ -98,11 +88,11 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
     }
 
     if (currentTab === 'all') {
-      // 全部终端：活跃组 → 活跃独立窗口 → 归档组 → 归档窗口
+      // 全部终端：活跃组 → 活跃窗口 → 归档组 → 归档窗口
       const activeGroups = groups.filter(g => !g.archived);
       const archivedGroups = groups.filter(g => g.archived);
-      const activeWindows = windows.filter(w => !w.archived && !windowIdsInGroups.has(w.id));
-      const archivedWindows = windows.filter(w => w.archived && !windowIdsInGroups.has(w.id));
+      const activeWindows = windows.filter(w => !w.archived);
+      const archivedWindows = windows.filter(w => w.archived);
 
       return [
         ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -115,7 +105,7 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
     if (currentTab === 'archived') {
       // 归档终端：归档组 → 归档窗口
       const archivedGroups = groups.filter(g => g.archived);
-      const archivedWindows = windows.filter(w => w.archived && !windowIdsInGroups.has(w.id));
+      const archivedWindows = windows.filter(w => w.archived);
 
       return [
         ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -123,15 +113,15 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
       ];
     }
 
-    // 活跃终端（默认）：活跃组 → 活跃独立窗口
+    // 活跃终端（默认）：活跃组 → 活跃窗口
     const activeGroups = groups.filter(g => !g.archived);
-    const activeWindows = windows.filter(w => !w.archived && !windowIdsInGroups.has(w.id));
+    const activeWindows = windows.filter(w => !w.archived);
 
     return [
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
     ];
-  }, [currentTab, windows, groups, windowIdsInGroups, customCategories]);
+  }, [currentTab, windows, groups, customCategories]);
 
   // 根据搜索关键词过滤卡片项（窗口和组）
   const filteredCardItems = useMemo(() => {

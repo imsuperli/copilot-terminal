@@ -617,11 +617,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         </div>
         {/* 缁堢甯冨眬鍖哄煙 */}
         <div className="flex-1 overflow-hidden">
-          <DropZone
-            targetWindowId={terminalWindow.id}
-            onDrop={handleWindowDrop}
-            className="h-full w-full"
-          >
+          {embedded ? (
             <SplitLayout
               windowId={terminalWindow.id}
               layout={terminalWindow.layout}
@@ -630,7 +626,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               onPaneActivate={handlePaneActivate}
               onPaneClose={handlePaneClose}
             />
-          </DropZone>
+          ) : (
+            <DropZone
+              targetWindowId={terminalWindow.id}
+              onDrop={handleWindowDrop}
+              className="h-full w-full"
+            >
+              <SplitLayout
+                windowId={terminalWindow.id}
+                layout={terminalWindow.layout}
+                activePaneId={terminalWindow.activePaneId}
+                isWindowActive={isActive}
+                onPaneActivate={handlePaneActivate}
+                onPaneClose={handlePaneClose}
+              />
+            </DropZone>
+          )}
         </div>
       </div>
 

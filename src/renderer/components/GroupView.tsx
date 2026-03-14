@@ -38,6 +38,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
 
   const {
+    windows,
     toggleSidebar,
     getActiveWindows,
     setActiveWindowInGroup,
@@ -45,11 +46,12 @@ export const GroupView: React.FC<GroupViewProps> = ({
     getWindowsInGroup,
     addWindowToGroupLayout,
     removeWindowFromGroupLayout,
+    rearrangeWindowInGroupLayout,
     findGroupByWindowId,
   } = useWindowStore();
 
   const activeWindows = getActiveWindows();
-  const groupWindows = useMemo(() => getWindowsInGroup(group.id), [group.id, getWindowsInGroup]);
+  const groupWindows = useMemo(() => getWindowsInGroup(group.id), [group.id, windows]);
   const windowCount = getWindowCount(group.layout);
 
   // 自动启动组内所有暂停的窗口
@@ -76,19 +78,20 @@ export const GroupView: React.FC<GroupViewProps> = ({
     };
 
     // 只在组视图激活时自动启动
-    if (isActive) {
+    if (isActive && groupWindows.length > 0) {
       autoStartWindows();
     }
-  }, [group.id, isActive]); // 只在组 ID 或激活状态变化时触发
+  }, [group.id, isActive]); // 保持原来的依赖项，避免无限循环
 
   // 计算组的聚合状态
   const groupAggregatedStatus = useMemo(() => {
     const statuses = groupWindows.map(w => getAggregatedStatus(w.layout));
+
     if (statuses.includes(WindowStatus.Running)) return WindowStatus.Running;
     if (statuses.includes(WindowStatus.WaitingForInput)) return WindowStatus.WaitingForInput;
     if (statuses.includes(WindowStatus.Paused)) return WindowStatus.Paused;
     return WindowStatus.Paused;
-  }, [groupWindows]);
+  }, [groupWindows, group.id]);
 
   // 快捷键
   useKeyboardShortcuts({
@@ -155,53 +158,88 @@ export const GroupView: React.FC<GroupViewProps> = ({
 
       // 检查拖拽的窗口是否已经在当前组中
       const windowIdsInGroup = getAllWindowIds(group.layout);
-      if (windowIdsInGroup.includes(dragWindowId)) return;
+      const isInternalDrag = windowIdsInGroup.includes(dragWindowId);
 
-      // 如果拖拽的窗口在另一个组中，先从原组移除
-      const sourceGroup = findGroupByWindowId(dragWindowId);
-      if (sourceGroup) {
-        removeWindowFromGroupLayout(sourceGroup.id, dragWindowId);
-      }
+      if (isInternalDrag) {
+        // 组内拖拽：使用原子操作重新排列窗口（避免中间状态触发解散）
+        const direction = (dropResult.position === 'left' || dropResult.position === 'right')
+          ? 'horizontal'
+          : 'vertical';
+        const insertBefore = dropResult.position === 'left' || dropResult.position === 'top';
 
-      // 确定分割方向
-      const direction = (dropResult.position === 'left' || dropResult.position === 'right')
-        ? 'horizontal'
-        : 'vertical';
+        rearrangeWindowInGroupLayout(group.id, dragWindowId, targetWindowId, direction, insertBefore);
+      } else {
+        // 跨组或从主界面拖入：添加新窗口到组
+        // 如果拖拽的窗口在另一个组中，先从原组移除
+        const sourceGroup = findGroupByWindowId(dragWindowId);
+        if (sourceGroup) {
+          removeWindowFromGroupLayout(sourceGroup.id, dragWindowId);
+        }
 
-      // 添加窗口到当前组
-      addWindowToGroupLayout(group.id, targetWindowId, dragWindowId, direction);
+        // 确定分割方向
+        const direction = (dropResult.position === 'left' || dropResult.position === 'right')
+          ? 'horizontal'
+          : 'vertical';
 
-      // 自动启动拖入窗口的所有暂停窗格
-      const dragWin = useWindowStore.getState().getWindowById(dragWindowId);
-      if (dragWin) {
-        const panes = getAllPanes(dragWin.layout);
-        for (const pane of panes) {
-          if (pane.status === WindowStatus.Paused) {
-            try {
-              await window.electronAPI.startWindow({
-                windowId: dragWin.id,
-                paneId: pane.id,
-                name: dragWin.name,
-                workingDirectory: pane.cwd,
-                command: pane.command,
-              });
-            } catch (error) {
-              console.error(`Failed to auto-start pane ${pane.id}:`, error);
+        // 添加窗口到当前组
+        addWindowToGroupLayout(group.id, targetWindowId, dragWindowId, direction);
+
+        // 自动启动拖入窗口的所有暂停窗格
+        const dragWin = useWindowStore.getState().getWindowById(dragWindowId);
+        if (dragWin) {
+          const panes = getAllPanes(dragWin.layout);
+          for (const pane of panes) {
+            if (pane.status === WindowStatus.Paused) {
+              try {
+                await window.electronAPI.startWindow({
+                  windowId: dragWin.id,
+                  paneId: pane.id,
+                  name: dragWin.name,
+                  workingDirectory: pane.cwd,
+                  command: pane.command,
+                });
+              } catch (error) {
+                console.error(`Failed to auto-start pane ${pane.id}:`, error);
+              }
             }
           }
         }
       }
     },
-    [group.id, group.layout, findGroupByWindowId, addWindowToGroupLayout, removeWindowFromGroupLayout]
+    [group.id, group.layout, findGroupByWindowId, addWindowToGroupLayout, removeWindowFromGroupLayout, rearrangeWindowInGroupLayout]
   );
 
   // 从组中移除窗口（保持运行）
   const handleRemoveFromGroup = useCallback(async (windowId: string) => {
+    // 获取移除前的窗口列表
+    const windowIdsBeforeRemove = getAllWindowIds(group.layout);
+
+    // 移除窗口
     removeWindowFromGroupLayout(group.id, windowId);
-  }, [group.id, removeWindowFromGroupLayout]);
+
+    // 检查分组是否被解散（窗口数 < 2）
+    setTimeout(() => {
+      const { getGroupById } = useWindowStore.getState();
+      const currentGroup = getGroupById(group.id);
+
+      if (!currentGroup) {
+        // 分组已被解散，跳转到剩余的窗口
+        const remainingWindowId = windowIdsBeforeRemove.find(id => id !== windowId);
+        if (remainingWindowId) {
+          onWindowSwitch(remainingWindowId);
+        } else {
+          // 没有剩余窗口，返回主界面
+          onReturn();
+        }
+      }
+    }, 0);
+  }, [group.id, group.layout, removeWindowFromGroupLayout, onWindowSwitch, onReturn]);
 
   // 停止窗口并从组中移除
   const handleStopAndRemoveFromGroup = useCallback(async (windowId: string) => {
+    // 获取移除前的窗口列表
+    const windowIdsBeforeRemove = getAllWindowIds(group.layout);
+
     try {
       await window.electronAPI.closeWindow(windowId);
       const { pauseWindowState } = useWindowStore.getState();
@@ -209,8 +247,27 @@ export const GroupView: React.FC<GroupViewProps> = ({
     } catch (error) {
       console.error('Failed to stop window:', error);
     }
+
+    // 移除窗口
     removeWindowFromGroupLayout(group.id, windowId);
-  }, [group.id, removeWindowFromGroupLayout]);
+
+    // 检查分组是否被解散（窗口数 < 2）
+    setTimeout(() => {
+      const { getGroupById } = useWindowStore.getState();
+      const currentGroup = getGroupById(group.id);
+
+      if (!currentGroup) {
+        // 分组已被解散，跳转到剩余的窗口
+        const remainingWindowId = windowIdsBeforeRemove.find(id => id !== windowId);
+        if (remainingWindowId) {
+          onWindowSwitch(remainingWindowId);
+        } else {
+          // 没有剩余窗口，返回主界面
+          onReturn();
+        }
+      }
+    }, 0);
+  }, [group.id, group.layout, removeWindowFromGroupLayout, onWindowSwitch, onReturn]);
 
   // 批量启动组内所有窗口
   const handleStartAll = useCallback(async () => {
@@ -340,29 +397,35 @@ export const GroupView: React.FC<GroupViewProps> = ({
               </Tooltip.Root>
             </Tooltip.Provider>
 
-            {/* 暂停全部 */}
-            {(groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput) && (
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={handlePauseAll}
-                      className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
-                    >
-                      <Square size={14} fill="currentColor" />
-                    </button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                      sideOffset={5}
-                    >
-                      暂停全部
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-            )}
+            {/* 暂停全部 - 始终显示，根据状态改变颜色和禁用状态 */}
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={200}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={handlePauseAll}
+                    disabled={groupAggregatedStatus !== WindowStatus.Running && groupAggregatedStatus !== WindowStatus.WaitingForInput}
+                    className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
+                      groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
+                        ? 'text-red-500 cursor-pointer'
+                        : 'text-zinc-600 cursor-not-allowed opacity-50'
+                    }`}
+                    title={groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput ? '暂停全部' : '窗口未运行'}
+                  >
+                    <Square size={14} fill="currentColor" />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                    sideOffset={5}
+                  >
+                    {groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
+                      ? '暂停全部'
+                      : '窗口未运行'}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
 
             {/* 归档组 */}
             <Tooltip.Provider>
