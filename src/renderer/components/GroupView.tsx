@@ -320,6 +320,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
       {/* 侧边栏 */}
       <Sidebar
         activeWindowId={group.activeWindowId}
+        activeGroupId={group.id}
         onWindowSelect={(windowId) => {
           const windowIds = getAllWindowIds(group.layout);
           if (windowIds.includes(windowId)) {
@@ -327,6 +328,14 @@ export const GroupView: React.FC<GroupViewProps> = ({
           } else {
             onWindowSwitch(windowId);
           }
+        }}
+        onGroupSelect={(groupId) => {
+          if (groupId === group.id) {
+            // 点击当前组，不做任何操作
+            return;
+          }
+          // 切换到其他组
+          onGroupSwitch?.(groupId);
         }}
         onSettingsClick={() => setIsSettingsPanelOpen(true)}
       />

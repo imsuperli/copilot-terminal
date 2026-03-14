@@ -320,6 +320,26 @@ function AppContent() {
     switchToUnifiedView();
   }, [setActiveGroup, switchToUnifiedView]);
 
+  // 切换到其他组
+  const handleGroupSwitch = useCallback(async (groupId: string) => {
+    // 先设置 activeGroup
+    setActiveGroup(groupId);
+
+    // 获取目标组
+    const targetGroup = groups.find(g => g.id === groupId);
+    if (!targetGroup) {
+      console.error('Target group not found:', groupId);
+      return;
+    }
+
+    // 通知主进程切换到终端视图（使用组的活跃窗口 ID）
+    try {
+      await window.electronAPI.switchToTerminalView(targetGroup.activeWindowId);
+    } catch (error) {
+      console.error('Failed to notify main process of view change:', error);
+    }
+  }, [setActiveGroup, groups]);
+
   // 计算当前激活的组
   const activeGroup = useMemo(
     () => groups.find(g => g.id === activeGroupId),
@@ -427,6 +447,7 @@ function AppContent() {
             group={activeGroup}
             onReturn={handleReturnFromGroup}
             onWindowSwitch={handleWindowSwitch}
+            onGroupSwitch={handleGroupSwitch}
             isActive={true}
           />
         </div>
