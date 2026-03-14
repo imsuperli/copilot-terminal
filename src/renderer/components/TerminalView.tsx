@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square } from 'lucide-react';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -25,6 +25,12 @@ export interface TerminalViewProps {
   isActive: boolean;
   /** 嵌入模式：在 GroupView 中使用时隐藏侧边栏和返回按钮，但保留顶部工具栏 */
   embedded?: boolean;
+  /** 所属组 ID（嵌入模式下传入） */
+  groupId?: string;
+  /** 从组中移除窗口的回调 */
+  onRemoveFromGroup?: (windowId: string) => void;
+  /** 停止并从组中移除窗口的回调 */
+  onStopAndRemoveFromGroup?: (windowId: string) => void;
 }
 
 /**
@@ -37,6 +43,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   onWindowSwitch,
   isActive,
   embedded = false,
+  groupId,
+  onRemoveFromGroup,
+  onStopAndRemoveFromGroup,
 }) => {
   const { t } = useI18n();
   const { enabledIDEs } = useIDESettings();
@@ -521,7 +530,57 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </button>
 
             {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
-            {(aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
+            {/* 嵌入模式（组内）：移除和停止并移除按钮 */}
+            {embedded && groupId && (
+              <>
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <button
+                        onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
+                        className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
+                      >
+                        <LogOut size={14} />
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                        sideOffset={5}
+                      >
+                        {t('terminalView.removeFromGroup')}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+
+                {(aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
+                  <Tooltip.Provider>
+                    <Tooltip.Root delayDuration={300}>
+                      <Tooltip.Trigger asChild>
+                        <button
+                          onClick={() => onStopAndRemoveFromGroup?.(terminalWindow.id)}
+                          className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
+                        >
+                          <SquareX size={14} />
+                        </button>
+                      </Tooltip.Trigger>
+                      <Tooltip.Portal>
+                        <Tooltip.Content
+                          className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                          sideOffset={5}
+                        >
+                          {t('terminalView.stopAndRemoveFromGroup')}
+                        </Tooltip.Content>
+                      </Tooltip.Portal>
+                    </Tooltip.Root>
+                  </Tooltip.Provider>
+                )}
+              </>
+            )}
+
+            {/* 停止按钮 - 仅在非嵌入模式下显示 */}
+            {!embedded && (aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
               <Tooltip.Provider>
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>

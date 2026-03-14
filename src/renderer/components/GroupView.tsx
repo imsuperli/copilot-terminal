@@ -195,6 +195,23 @@ export const GroupView: React.FC<GroupViewProps> = ({
     [group.id, group.layout, findGroupByWindowId, addWindowToGroupLayout, removeWindowFromGroupLayout]
   );
 
+  // 从组中移除窗口（保持运行）
+  const handleRemoveFromGroup = useCallback(async (windowId: string) => {
+    removeWindowFromGroupLayout(group.id, windowId);
+  }, [group.id, removeWindowFromGroupLayout]);
+
+  // 停止窗口并从组中移除
+  const handleStopAndRemoveFromGroup = useCallback(async (windowId: string) => {
+    try {
+      await window.electronAPI.closeWindow(windowId);
+      const { pauseWindowState } = useWindowStore.getState();
+      pauseWindowState(windowId);
+    } catch (error) {
+      console.error('Failed to stop window:', error);
+    }
+    removeWindowFromGroupLayout(group.id, windowId);
+  }, [group.id, removeWindowFromGroupLayout]);
+
   // 批量启动组内所有窗口
   const handleStartAll = useCallback(async () => {
     for (const win of groupWindows) {
@@ -382,6 +399,8 @@ export const GroupView: React.FC<GroupViewProps> = ({
             onWindowSwitch={onWindowSwitch}
             onReturn={onReturn}
             onWindowDrop={handleWindowDrop}
+            onRemoveFromGroup={handleRemoveFromGroup}
+            onStopAndRemoveFromGroup={handleStopAndRemoveFromGroup}
           />
         </div>
       </div>

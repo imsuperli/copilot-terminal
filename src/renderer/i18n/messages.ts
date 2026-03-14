@@ -265,6 +265,8 @@ export const zhCNMessages = {
   'terminalView.splitHorizontal': '左右拆分 (Ctrl+Shift+D)',
   'terminalView.splitVertical': '上下拆分 (Ctrl+Shift+E)',
   'terminalView.splitFailed': '拆分窗格失败',
+  'terminalView.removeFromGroup': '从组中移除',
+  'terminalView.stopAndRemoveFromGroup': '停止并移除',
 
   'terminalPane.status': '窗格状态',
   'terminalPane.close': '关闭窗格',
@@ -548,6 +550,8 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'terminalView.splitHorizontal': 'Split left/right (Ctrl+Shift+D)',
   'terminalView.splitVertical': 'Split up/down (Ctrl+Shift+E)',
   'terminalView.splitFailed': 'Failed to split pane',
+  'terminalView.removeFromGroup': 'Remove from group',
+  'terminalView.stopAndRemoveFromGroup': 'Stop and remove',
 
   'terminalPane.status': 'Pane status',
   'terminalPane.close': 'Close pane',

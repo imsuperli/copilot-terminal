@@ -18,6 +18,10 @@ export interface GroupSplitLayoutProps {
   onReturn: () => void;
   /** 拖拽窗口到组内某个窗口旁边时的回调 */
   onWindowDrop?: (dragItem: WindowCardDragItem, dropResult: DropResult) => void;
+  /** 从组中移除窗口 */
+  onRemoveFromGroup?: (windowId: string) => void;
+  /** 停止并从组中移除窗口 */
+  onStopAndRemoveFromGroup?: (windowId: string) => void;
 }
 
 /**
@@ -33,6 +37,8 @@ export const GroupSplitLayout: React.FC<GroupSplitLayoutProps> = ({
   onWindowSwitch,
   onReturn,
   onWindowDrop,
+  onRemoveFromGroup,
+  onStopAndRemoveFromGroup,
 }) => {
   const { t } = useI18n();
   const updateGroupSplitSizes = useWindowStore((state) => state.updateGroupSplitSizes);
@@ -66,6 +72,8 @@ export const GroupSplitLayout: React.FC<GroupSplitLayoutProps> = ({
         onReturn={onReturn}
         onSplitResize={updateGroupSplitSizes}
         onWindowDrop={onWindowDrop}
+        onRemoveFromGroup={onRemoveFromGroup}
+        onStopAndRemoveFromGroup={onStopAndRemoveFromGroup}
       />
     </div>
   );
@@ -85,6 +93,8 @@ interface GroupSplitContainerProps {
   onReturn: () => void;
   onSplitResize: (groupId: string, splitPath: number[], sizes: number[]) => void;
   onWindowDrop?: (dragItem: WindowCardDragItem, dropResult: DropResult) => void;
+  onRemoveFromGroup?: (windowId: string) => void;
+  onStopAndRemoveFromGroup?: (windowId: string) => void;
 }
 
 const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
@@ -99,6 +109,8 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
   onReturn,
   onSplitResize,
   onWindowDrop,
+  onRemoveFromGroup,
+  onStopAndRemoveFromGroup,
 }) => {
   const [sizes, setSizes] = useState<number[]>(splitNode.sizes);
   const [isResizing, setIsResizing] = useState(false);
@@ -186,6 +198,8 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
               onReturn={onReturn}
               onSplitResize={onSplitResize}
               onWindowDrop={onWindowDrop}
+              onRemoveFromGroup={onRemoveFromGroup}
+              onStopAndRemoveFromGroup={onStopAndRemoveFromGroup}
             />
           </div>
 
@@ -217,6 +231,8 @@ interface GroupLayoutNodeRendererProps {
   onReturn: () => void;
   onSplitResize: (groupId: string, splitPath: number[], sizes: number[]) => void;
   onWindowDrop?: (dragItem: WindowCardDragItem, dropResult: DropResult) => void;
+  onRemoveFromGroup?: (windowId: string) => void;
+  onStopAndRemoveFromGroup?: (windowId: string) => void;
 }
 
 const GroupLayoutNodeRenderer: React.FC<GroupLayoutNodeRendererProps> = ({
@@ -231,6 +247,8 @@ const GroupLayoutNodeRenderer: React.FC<GroupLayoutNodeRendererProps> = ({
   onReturn,
   onSplitResize,
   onWindowDrop,
+  onRemoveFromGroup,
+  onStopAndRemoveFromGroup,
 }) => {
   if (layout.type === 'window') {
     return (
@@ -242,6 +260,8 @@ const GroupLayoutNodeRenderer: React.FC<GroupLayoutNodeRendererProps> = ({
         onWindowSwitch={onWindowSwitch}
         onReturn={onReturn}
         onWindowDrop={onWindowDrop}
+        onRemoveFromGroup={onRemoveFromGroup}
+        onStopAndRemoveFromGroup={onStopAndRemoveFromGroup}
       />
     );
   }
@@ -259,6 +279,8 @@ const GroupLayoutNodeRenderer: React.FC<GroupLayoutNodeRendererProps> = ({
       onReturn={onReturn}
       onSplitResize={onSplitResize}
       onWindowDrop={onWindowDrop}
+      onRemoveFromGroup={onRemoveFromGroup}
+      onStopAndRemoveFromGroup={onStopAndRemoveFromGroup}
     />
   );
 };
@@ -276,6 +298,8 @@ interface GroupWindowPaneProps {
   onWindowSwitch: (windowId: string) => void;
   onReturn: () => void;
   onWindowDrop?: (dragItem: WindowCardDragItem, dropResult: DropResult) => void;
+  onRemoveFromGroup?: (windowId: string) => void;
+  onStopAndRemoveFromGroup?: (windowId: string) => void;
 }
 
 const GroupWindowPane: React.FC<GroupWindowPaneProps> = ({
@@ -286,6 +310,8 @@ const GroupWindowPane: React.FC<GroupWindowPaneProps> = ({
   onWindowSwitch,
   onReturn,
   onWindowDrop,
+  onRemoveFromGroup,
+  onStopAndRemoveFromGroup,
 }) => {
   const terminalWindow = useWindowStore((state) => state.getWindowById(windowId));
 
@@ -333,6 +359,9 @@ const GroupWindowPane: React.FC<GroupWindowPaneProps> = ({
             onWindowSwitch={onWindowSwitch}
             isActive={isActive}
             embedded={true}
+            groupId={groupId}
+            onRemoveFromGroup={onRemoveFromGroup}
+            onStopAndRemoveFromGroup={onStopAndRemoveFromGroup}
           />
         </div>
       </DropZone>
