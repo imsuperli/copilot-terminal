@@ -11,7 +11,7 @@ import { EditGroupPanel } from './EditGroupPanel';
 import { CreateGroupDialog } from './CreateGroupDialog';
 import { NewWindowCard } from './NewWindowCard';
 import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
-import { DraggableWindowCard, DropZone } from './dnd';
+import { DraggableWindowCard, DraggableGroupCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
 import { Window, WindowStatus } from '../types/window';
@@ -479,17 +479,22 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
               } else {
                 const group = item.data;
                 return (
-                  <GroupCard
+                  <DraggableGroupCard
                     key={`group-${group.id}`}
-                    group={group}
-                    onClick={handleGroupClick}
-                    onDelete={handleDeleteGroup}
-                    onStartAll={handleStartAllWindows}
-                    onPauseAll={handlePauseAllWindows}
-                    onArchive={handleArchiveGroup}
-                    onUnarchive={handleUnarchiveGroup}
-                    onEdit={handleEditGroup}
-                  />
+                    groupId={group.id}
+                    groupName={group.name}
+                  >
+                    <GroupCard
+                      group={group}
+                      onClick={handleGroupClick}
+                      onDelete={handleDeleteGroup}
+                      onStartAll={handleStartAllWindows}
+                      onPauseAll={handlePauseAllWindows}
+                      onArchive={handleArchiveGroup}
+                      onUnarchive={handleUnarchiveGroup}
+                      onEdit={handleEditGroup}
+                    />
+                  </DraggableGroupCard>
                 );
               }
             })}

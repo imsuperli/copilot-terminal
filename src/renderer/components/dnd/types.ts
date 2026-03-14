@@ -8,6 +8,8 @@ export const DragItemTypes = {
   WINDOW_CARD: 'WINDOW_CARD',
   /** 组卡片（主界面 CardGrid 中的 GroupCard） */
   GROUP_CARD: 'GROUP_CARD',
+  /** 分类项（侧边栏中的 CategoryItem，用于分类排序） */
+  CATEGORY_ITEM: 'CATEGORY_ITEM',
 } as const;
 
 /** WindowCard 拖拽数据 */
@@ -19,6 +21,14 @@ export interface WindowCardDragItem {
   source: 'cardGrid' | 'sidebar' | 'groupLayout';
   /** 如果窗口属于某个组，记录组 ID */
   sourceGroupId?: string;
+}
+
+/** GroupCard 拖拽数据 */
+export interface GroupCardDragItem {
+  type: typeof DragItemTypes.GROUP_CARD;
+  groupId: string;
+  groupName: string;
+  source: 'cardGrid';
 }
 
 /** DropZone 放置位置（用于确定分割方向） */
