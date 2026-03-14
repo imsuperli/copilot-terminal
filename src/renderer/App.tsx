@@ -43,7 +43,7 @@ function AppContent() {
   const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
-  const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active');
+  const [currentTab, setCurrentTab] = useState<'all' | 'active' | 'archived' | string>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
   const [appVersion, setAppVersion] = useState<{ name: string; version: string }>({
@@ -276,7 +276,7 @@ function AppContent() {
     switchToWindow(windowId);
   }, [switchToWindow]);
 
-  const handleTabChange = useCallback((tab: 'active' | 'archived') => {
+  const handleTabChange = useCallback((tab: 'all' | 'active' | 'archived' | string) => {
     setCurrentTab(tab);
   }, []);
 
@@ -336,14 +336,14 @@ function AppContent() {
             />
           }
         >
-          {currentTab === 'active' ? (
+          {currentTab === 'archived' ? (
+            <ArchivedView onEnterTerminal={handleEnterTerminal} searchQuery={searchQuery} />
+          ) : (
             !hasActiveWindows ? (
               <EmptyState onCreateWindow={handleCreateWindow} />
             ) : (
               <CardGrid onEnterTerminal={handleEnterTerminal} onEnterGroup={handleEnterGroup} onCreateWindow={handleCreateWindow} searchQuery={searchQuery} />
             )
-          ) : (
-            <ArchivedView onEnterTerminal={handleEnterTerminal} searchQuery={searchQuery} />
           )}
         </MainLayout>
       </div>
