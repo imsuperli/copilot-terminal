@@ -70,23 +70,20 @@
 - 可以从窗口卡片或终端视图中直接“在 IDE 中打开项目”
 - 当前代码中内置了 VS Code、IntelliJ IDEA、PyCharm、WebStorm、Android Studio、Sublime Text 等常见 IDE 的扫描配置
 
-### 8. 工作区保存与恢复
+### 8. tmux 协议兼容（Claude Code Agent Teams）
+
+- 内置 fake tmux 兼容层，无需安装真实 tmux
+- 支持 Claude Code Agent Teams 多 Agent 分屏工作流
+- 拦截 `tmux` 命令并通过 Named Pipe / Unix Socket RPC 转发至主进程处理
+- 支持 `split-window`、`send-keys`、`select-pane`、`list-panes` 等核心子命令
+- 每个窗格自动注入 `TMUX`、`TMUX_PANE` 等环境变量，保持与真实 tmux 的兼容性
+
+### 9. 工作区保存与恢复
 
 - 自动保存窗口与布局状态
 - 启动时恢复历史工作区
 - 包含崩溃恢复与备份策略
 - 恢复后的窗格默认以暂停状态加载，避免启动应用时自动拉起全部终端进程
-
-## 技术栈
-
-- Electron
-- React 18
-- TypeScript
-- Vite
-- xterm.js
-- Zustand
-- Tailwind CSS
-- Radix UI
 
 ## 安装
 
@@ -129,7 +126,7 @@
 
 ```text
 pc_program/
-├─ ausome-terminal/
+├─ copilot-terminal/
 └─ xterm.js-master/
    ├─ xterm-xterm-6.0.0-custom.tgz
    └─ addons/

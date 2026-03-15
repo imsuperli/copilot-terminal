@@ -70,23 +70,20 @@ Typical targets include:
 - Open a project directly from a window card or terminal view
 - The current codebase includes scanning presets for VS Code, IntelliJ IDEA, PyCharm, WebStorm, Android Studio, and Sublime Text
 
-### 8. Workspace Save and Restore
+### 8. tmux Compatibility (Claude Code Agent Teams)
+
+- Built-in fake tmux layer — no real tmux installation required
+- Supports Claude Code Agent Teams multi-agent split-pane workflow
+- Intercepts `tmux` commands and forwards them to the main process via Named Pipe / Unix Socket RPC
+- Handles core subcommands: `split-window`, `send-keys`, `select-pane`, `list-panes`, and more
+- Automatically injects `TMUX`, `TMUX_PANE`, and related environment variables into each pane for compatibility
+
+### 9. Workspace Save and Restore
 
 - Automatically save window state and layout state
 - Restore the previous workspace on startup
 - Includes backup and crash-recovery logic
 - Restored panes are loaded in a paused state so the app does not automatically start every terminal process on launch
-
-## Tech Stack
-
-- Electron
-- React 18
-- TypeScript
-- Vite
-- xterm.js
-- Zustand
-- Tailwind CSS
-- Radix UI
 
 ## Installation
 
@@ -131,7 +128,7 @@ A recommended directory layout looks like this:
 
 ```text
 pc_program/
-├─ ausome-terminal/
+├─ copilot-terminal/
 └─ xterm.js-master/
    ├─ xterm-xterm-6.0.0-custom.tgz
    └─ addons/
