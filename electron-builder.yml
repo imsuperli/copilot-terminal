@@ -1,5 +1,6 @@
 appId: com.copilot.terminal
 productName: Copilot-Terminal
+publish: null
 directories:
   output: release
   buildResources: resources
