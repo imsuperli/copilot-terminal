@@ -30,6 +30,8 @@ If you often work across multiple repositories, multiple AI coding sessions, or 
 - Use a shared layout model for both single-pane and multi-pane states
 - Close individual panes and let the layout rebalance automatically
 
+![Group Split View](assets/group-split-view.png)
+
 ### 3. Fast Switching and Keyboard-Driven Workflow
 
 - `Ctrl+Tab` opens a quick switcher with fuzzy search by window name or path
@@ -77,6 +79,8 @@ Typical targets include:
 - Intercepts `tmux` commands and forwards them to the main process via Named Pipe / Unix Socket RPC
 - Handles core subcommands: `split-window`, `send-keys`, `select-pane`, `list-panes`, and more
 - Automatically injects `TMUX`, `TMUX_PANE`, and related environment variables into each pane for compatibility
+
+![tmux Agent Teams Interface](assets/tmux-agent-teams.png)
 
 ### 9. Workspace Save and Restore
 

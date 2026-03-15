@@ -30,6 +30,8 @@
 - 单窗格和多窗格使用统一布局结构，行为更一致
 - 支持关闭单个窗格，并自动整理布局
 
+![窗口组分屏界面](assets/group-split-view.png)
+
 ### 3. 快速切换与键盘操作
 
 - `Ctrl+Tab` 打开快速切换面板，支持模糊搜索窗口名称或路径
@@ -77,6 +79,8 @@
 - 拦截 `tmux` 命令并通过 Named Pipe / Unix Socket RPC 转发至主进程处理
 - 支持 `split-window`、`send-keys`、`select-pane`、`list-panes` 等核心子命令
 - 每个窗格自动注入 `TMUX`、`TMUX_PANE` 等环境变量，保持与真实 tmux 的兼容性
+
+![tmux Agent Teams 界面](assets/tmux-agent-teams.png)
 
 ### 9. 工作区保存与恢复
 
