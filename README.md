@@ -29,11 +29,28 @@ It provides a unified card view to manage multiple project terminals and an imme
   - Visual status indicators: Each window shows its status with icon badges
   - Status aggregation: Group cards display all window statuses at a glance
   - Dedicated GroupView: Full-screen split-pane view for working with multiple windows
+
+![Group Split View](docs/assets/group-split-view.png)
+
+- **tmux compatibility layer**: Built-in fake tmux for Claude Code Agent Teams
+  - No real tmux installation required
+  - Intercepts `tmux` commands via Named Pipe / Unix Socket RPC
+  - Supports core subcommands: `split-window`, `send-keys`, `select-pane`, `list-panes`
+  - Auto-injects `TMUX`, `TMUX_PANE` environment variables for compatibility
+
+![tmux Agent Teams Interface](docs/assets/tmux-agent-teams.png)
+
+- **Claude StatusLine integration**: Real-time display of AI coding context
+  - Shows current model (Opus/Sonnet/Haiku) and version
+  - Displays context usage (tokens used / total capacity)
+  - Tracks estimated cost per session
+  - Updates automatically via Named Pipe communication
+  - Helps manage context limits during long coding sessions
 - `Ctrl+Tab` quick window switching, `Ctrl+1~9` numbered navigation
 - Project link configuration: Place `copilot.json` in project root to display quick access buttons
 - Quick navigation panel: Supports URLs and local folders, activated by double-tapping `Shift`
 - Workspace auto-save, crash recovery, window state restoration
-- Git branch, window status, Claude StatusLine information display
+- Git branch and window status display
 - Open project directories directly in common IDEs from the app
 
 ## Quick Start
