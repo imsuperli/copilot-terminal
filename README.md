@@ -1,88 +1,96 @@
 ﻿# Copilot-Terminal
 
-[简体中文](docs/README.zh-CN.md) | [English](docs/README.en.md)
+[English](docs/README.en.md) | [简体中文](docs/README.zh-CN.md)
 
-一个基于 Electron、React、TypeScript 和 xterm.js 构建的现代终端窗口管理工具，面向“多项目、多终端、多上下文”的日常开发场景。
+A modern terminal window manager built with Electron, React, TypeScript, and xterm.js, designed for “multi-project, multi-terminal, multi-context” daily development scenarios.
 
-它提供统一卡片视图来管理多个项目终端，也提供沉浸式终端视图用于专注操作，适合同时维护多个代码仓库、多个 AI 编码会话、多个本地开发环境的场景。
+It provides a unified card view to manage multiple project terminals and an immersive terminal view for focused operations, perfect for maintaining multiple code repositories, AI coding sessions, and local development environments simultaneously.
 
-## 主页预览
+## Homepage Preview
 
-![Copilot-Terminal 主页预览](docs/assets/homepage-preview.svg)
+![Copilot-Terminal Homepage Preview](docs/assets/homepage-preview.png)
 
-> 当前仓库暂无现成的真实界面截图，以上先使用主页预览图展示整体布局。后续如果补充真实截图，可以直接替换这里的图片资源。
+> The repository currently lacks real interface screenshots. The above preview image shows the overall layout. Real screenshots can be added later by replacing this image resource.
 
-## 为什么使用它
+## Why Use It
 
-- **统一管理多个项目终端**：不再在系统终端和多个标签页之间来回切换
-- **终端与项目上下文绑定**：窗口卡片可直接展示工作目录、Git 分支、项目链接和状态信息
-- **适合 AI 辅助开发**：支持 Claude StatusLine 信息展示，便于跟踪模型和上下文使用情况
-- **更适合长期开发会话**：支持工作区自动保存、崩溃恢复和历史状态恢复
-- **减少跳转成本**：支持项目链接、快捷导航和 IDE 打开项目
+- **Unified management of multiple project terminals**: No more switching between system terminals and multiple tabs
+- **Terminal bound to project context**: Window cards directly display working directory, Git branch, project links, and status information
+- **Perfect for AI-assisted development**: Supports Claude StatusLine information display for tracking model and context usage
+- **Better for long-term development sessions**: Supports workspace auto-save, crash recovery, and history state restoration
+- **Reduced context switching cost**: Supports project links, quick navigation, and IDE project opening
 
-## 核心特性
+## Core Features
 
-- 多终端窗口管理，支持统一总览与沉浸式终端视图切换
-- 横向 / 纵向拆分窗格，统一的递归布局模型
-- `Ctrl+Tab` 快速切换窗口，`Ctrl+1~9` 编号跳转
-- 项目链接配置：在项目根目录放置 `copilot.json` 即可显示快捷入口
-- 快捷导航面板：支持 URL 和本地文件夹，双击 `Shift` 唤出
-- 工作区自动保存、崩溃恢复、窗口状态恢复
-- Git 分支、窗口状态、Claude StatusLine 信息展示
-- 支持从应用中直接用常见 IDE 打开项目目录
+- Multiple terminal window management with unified overview and immersive terminal view switching
+- Horizontal/vertical pane splitting with unified recursive layout model
+- **Window groups**: Organize multiple windows into logical groups with split-pane layout
+  - Batch operations: Start All, Pause All, Archive, Delete
+  - Visual status indicators: Each window shows its status with icon badges
+  - Status aggregation: Group cards display all window statuses at a glance
+  - Dedicated GroupView: Full-screen split-pane view for working with multiple windows
+- `Ctrl+Tab` quick window switching, `Ctrl+1~9` numbered navigation
+- Project link configuration: Place `copilot.json` in project root to display quick access buttons
+- Quick navigation panel: Supports URLs and local folders, activated by double-tapping `Shift`
+- Workspace auto-save, crash recovery, window state restoration
+- Git branch, window status, Claude StatusLine information display
+- Open project directories directly in common IDEs from the app
 
-## 快速开始
+## Quick Start
 
-### 方式一：下载安装包（推荐普通用户）
+### Option 1: Download Installer (Recommended for Users)
 
-1. 打开 [Releases 页面](../../releases)
-2. 下载适合你系统的安装包或压缩包
-3. 安装并启动应用
+1. Open the [Releases page](../../releases)
+2. Download the installer or archive for your system
+3. Install and launch the app
 
-### 方式二：从源码运行（推荐开发者）
+### Option 2: Run from Source (Recommended for Developers)
 
-1. 先阅读 [xterm.js 自定义依赖约束](docs/xterm-custom-package-constraint.md)
-2. 按约定准备好本地 `xterm.js` 自定义 tgz 包
-3. 安装依赖
+1. First read [xterm.js Custom Package Constraint](docs/xterm-custom-package-constraint.md)
+2. Prepare the local `xterm.js` custom tgz package as specified
+3. Install dependencies
 
    ```bash
    npm install
    ```
 
-4. 启动开发环境
+4. Start development environment
 
    ```bash
    npm run dev
    ```
 
-5. 如果需要打包安装包，可执行
+5. To build installer packages, run
 
    ```bash
    npm run dist
    ```
 
-## 文档导航
+## Documentation
 
-- [中文完整文档](docs/README.zh-CN.md)
-- [English documentation](docs/README.en.md)
-- [项目链接配置（copilot.json）](docs/project-config.md)
-- [快捷键说明](docs/keyboard-shortcuts.md)
-- [快捷导航功能说明](docs/quick-nav-feature.md)
-- [多窗格架构说明](docs/pane-architecture.md)
-- [xterm.js 自定义依赖约束](docs/xterm-custom-package-constraint.md)
+- [Complete Chinese Documentation](docs/README.zh-CN.md)
+- [Complete English Documentation](docs/README.en.md)
+- [User Manual (Chinese)](docs/user-manual-zh.md)
+- [User Manual (English)](docs/user-manual-en.md)
+- [Project Link Configuration (copilot.json)](docs/project-config.md)
+- [Keyboard Shortcuts](docs/keyboard-shortcuts.md)
+- [Quick Navigation Feature](docs/quick-nav-feature.md)
+- [Multi-Pane Architecture](docs/pane-architecture.md)
+- [Window Group Status Icons Design](docs/窗口组状态图标设计展示方案.md)
+- [xterm.js Custom Package Constraint](docs/xterm-custom-package-constraint.md)
 
-## 典型使用场景
+## Typical Use Cases
 
-- **多仓库并行开发**：一个窗口对应一个项目，主页统一总览
-- **微服务开发**：批量创建多个服务窗口，快速切换不同目录
-- **AI 辅助编码**：结合 Claude Code 工作流，集中管理多个会话
-- **项目运维排查**：把仓库、文档、监控、日志等入口挂到项目卡片上
+- **Multi-repository parallel development**: One window per project, unified overview on homepage
+- **Microservices development**: Batch create multiple service windows, quickly switch between directories
+- **AI-assisted coding**: Integrate with Claude Code workflow, centrally manage multiple sessions
+- **Project operations troubleshooting**: Attach repository, documentation, monitoring, and log links to project cards
 
-## 重要说明
+## Important Notes
 
-源码安装前，请务必先阅读 [xterm.js 自定义依赖约束](docs/xterm-custom-package-constraint.md)。
+Before installing from source, please read [xterm.js Custom Package Constraint](docs/xterm-custom-package-constraint.md).
 
-当前项目依赖自定义打包的 `xterm.js` 产物，**不能直接把 `package.json` 中的本地依赖改成官方 npm 版本或其他路径**。如果要让其他开发者顺利安装源码，这一点需要在开源仓库中明确保留。
+This project depends on a custom-built `xterm.js` package. **Do not change the local dependency in `package.json` to the official npm version or other paths**. This constraint must be clearly documented in the open-source repository for other developers to install from source successfully.
 
 ## License
 
