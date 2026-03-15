@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { QuickSwitcherItem } from './QuickSwitcherItem';
+import { QuickSwitcherGroupItem } from './QuickSwitcherGroupItem';
 import { fuzzyMatch } from '../utils/fuzzySearch';
 import { Window, WindowStatus } from '../types/window';
+import { WindowGroup } from '../../shared/types/window-group';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
 
@@ -11,21 +13,31 @@ interface QuickSwitcherProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (windowId: string) => void;
+  onSelectGroup?: (groupId: string) => void;
   currentWindowId: string | null;
+  currentGroupId?: string | null;
 }
+
+// 统一的列表项类型
+type SwitcherItem =
+  | { type: 'window'; data: Window }
+  | { type: 'group'; data: WindowGroup };
 
 /**
  * 快速切换面板组件（Ctrl+Tab）
- * 支持搜索和键盘导航
+ * 支持搜索和键盘导航，同时显示窗口和窗口组
  */
 export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
   isOpen,
   onClose,
   onSelect,
+  onSelectGroup,
   currentWindowId,
+  currentGroupId,
 }) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
+  const groups = useWindowStore((state) => state.groups);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,9 +66,18 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
     }
   };
 
-  // 过滤窗口并排序
-  const filteredWindows = useMemo(() =>
-    windows
+  // 获取窗口组的排序优先级
+  const getGroupPriority = (group: WindowGroup): number => {
+    // 归档组优先级最低
+    if (group.archived) return 4;
+    // 活跃组优先级较高
+    return 0;
+  };
+
+  // 过滤并合并窗口和窗口组
+  const filteredItems = useMemo(() => {
+    // 过滤窗口
+    const filteredWindows: SwitcherItem[] = windows
       .filter((window) => {
         const matchName = fuzzyMatch(query, window.name);
         // 获取第一个窗格的工作目录进行匹配
@@ -65,24 +86,55 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
         const matchCwd = fuzzyMatch(query, cwd);
         return matchName || matchCwd;
       })
-      .sort((a, b) => {
-        // 当前窗口排在最前面
-        if (a.id === currentWindowId) return -1;
-        if (b.id === currentWindowId) return 1;
+      .map((window) => ({ type: 'window' as const, data: window }));
 
-        // 按优先级排序
-        const priorityA = getWindowPriority(a);
-        const priorityB = getWindowPriority(b);
+    // 过滤窗口组
+    const filteredGroups: SwitcherItem[] = groups
+      .filter((group) => {
+        return fuzzyMatch(query, group.name);
+      })
+      .map((group) => ({ type: 'group' as const, data: group }));
+
+    // 合并并排序
+    return [...filteredGroups, ...filteredWindows].sort((a, b) => {
+      // 当前激活的项排在最前面
+      if (a.type === 'window' && a.data.id === currentWindowId) return -1;
+      if (b.type === 'window' && b.data.id === currentWindowId) return 1;
+      if (a.type === 'group' && a.data.id === currentGroupId) return -1;
+      if (b.type === 'group' && b.data.id === currentGroupId) return 1;
+
+      // 窗口组优先于窗口
+      if (a.type === 'group' && b.type === 'window') return -1;
+      if (a.type === 'window' && b.type === 'group') return 1;
+
+      // 同类型按优先级排序
+      if (a.type === 'window' && b.type === 'window') {
+        const priorityA = getWindowPriority(a.data);
+        const priorityB = getWindowPriority(b.data);
 
         if (priorityA !== priorityB) {
           return priorityA - priorityB;
         }
 
         // 优先级相同时，按最后活跃时间排序（最近的在前）
-        return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime();
-      }),
-    [windows, query, currentWindowId]
-  );
+        return new Date(b.data.lastActiveAt).getTime() - new Date(a.data.lastActiveAt).getTime();
+      }
+
+      if (a.type === 'group' && b.type === 'group') {
+        const priorityA = getGroupPriority(a.data);
+        const priorityB = getGroupPriority(b.data);
+
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+
+        // 优先级相同时，按最后活跃时间排序（最近的在前）
+        return new Date(b.data.lastActiveAt).getTime() - new Date(a.data.lastActiveAt).getTime();
+      }
+
+      return 0;
+    });
+  }, [windows, groups, query, currentWindowId, currentGroupId]);
 
   // 重置状态和处理动画
   useEffect(() => {
@@ -118,27 +170,32 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
         case 'ArrowDown':
           e.preventDefault();
           e.stopPropagation();
-          setSelectedIndex((prev) => (prev + 1) % filteredWindows.length);
+          setSelectedIndex((prev) => (prev + 1) % filteredItems.length);
           break;
         case 'ArrowUp':
           e.preventDefault();
           e.stopPropagation();
-          setSelectedIndex((prev) => (prev - 1 + filteredWindows.length) % filteredWindows.length);
+          setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % filteredItems.length);
           break;
         case 'Tab':
           e.preventDefault();
           e.stopPropagation();
           if (e.shiftKey) {
-            setSelectedIndex((prev) => (prev - 1 + filteredWindows.length) % filteredWindows.length);
+            setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % filteredItems.length);
           } else {
-            setSelectedIndex((prev) => (prev + 1) % filteredWindows.length);
+            setSelectedIndex((prev) => (prev + 1) % filteredItems.length);
           }
           break;
         case 'Enter':
           e.preventDefault();
           e.stopPropagation();
-          if (filteredWindows[selectedIndex]) {
-            onSelect(filteredWindows[selectedIndex].id);
+          if (filteredItems[selectedIndex]) {
+            const item = filteredItems[selectedIndex];
+            if (item.type === 'window') {
+              onSelect(item.data.id);
+            } else if (item.type === 'group' && onSelectGroup) {
+              onSelectGroup(item.data.id);
+            }
             onClose();
           }
           break;
@@ -153,13 +210,13 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
       if (e.ctrlKey && e.key === 'n') {
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => (prev + 1) % filteredWindows.length);
+        setSelectedIndex((prev) => (prev + 1) % filteredItems.length);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown); // 使用冒泡阶段
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, filteredWindows, selectedIndex, onSelect, onClose]);
+  }, [isOpen, filteredItems, selectedIndex, onSelect, onSelectGroup, onClose]);
 
   // 自动滚动到选中项
   useEffect(() => {
@@ -207,13 +264,13 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
               />
               {query && (
                 <span className="text-xs text-zinc-500">
-                  {t('quickSwitcher.resultsCount', { count: filteredWindows.length })}
+                  {t('quickSwitcher.resultsCount', { count: filteredItems.length })}
                 </span>
               )}
             </div>
           </div>
 
-          {/* 窗口列表 */}
+          {/* 列表 */}
           <div
             ref={listRef}
             className="max-h-[500px] overflow-y-auto py-2"
@@ -222,7 +279,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
               scrollbarColor: '#52525b #27272a'
             }}
           >
-            {filteredWindows.length === 0 ? (
+            {filteredItems.length === 0 ? (
               <div className="px-6 py-12 text-center">
                 <div className="text-zinc-400 text-sm mb-2">{t('quickSwitcher.noResults')}</div>
                 <div className="text-zinc-600 text-xs">
@@ -230,19 +287,31 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
                 </div>
               </div>
             ) : (
-              filteredWindows.map((window, index) => (
+              filteredItems.map((item, index) => (
                 <div
-                  key={window.id}
+                  key={item.type === 'window' ? `window-${item.data.id}` : `group-${item.data.id}`}
                   onClick={() => {
-                    onSelect(window.id);
+                    if (item.type === 'window') {
+                      onSelect(item.data.id);
+                    } else if (onSelectGroup) {
+                      onSelectGroup(item.data.id);
+                    }
                     onClose();
                   }}
                 >
-                  <QuickSwitcherItem
-                    window={window}
-                    isSelected={index === selectedIndex}
-                    query={query}
-                  />
+                  {item.type === 'window' ? (
+                    <QuickSwitcherItem
+                      window={item.data}
+                      isSelected={index === selectedIndex}
+                      query={query}
+                    />
+                  ) : (
+                    <QuickSwitcherGroupItem
+                      group={item.data}
+                      isSelected={index === selectedIndex}
+                      query={query}
+                    />
+                  )}
                 </div>
               ))
             )}

@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square } from 'lucide-react';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -14,12 +14,25 @@ import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
 import { useI18n } from '../i18n';
+import { DropZone } from './dnd';
+import type { WindowCardDragItem, DropResult } from './dnd';
+import { createGroup } from '../utils/groupLayoutHelpers';
 
 export interface TerminalViewProps {
   window: Window;
   onReturn: () => void;
   onWindowSwitch: (windowId: string) => void;
   isActive: boolean;
+  /** 嵌入模式：在 GroupView 中使用时隐藏侧边栏和返回按钮，但保留顶部工具栏 */
+  embedded?: boolean;
+  /** 所属组 ID（嵌入模式下传入） */
+  groupId?: string;
+  /** 从组中移除窗口的回调 */
+  onRemoveFromGroup?: (windowId: string) => void;
+  /** 停止并从组中移除窗口的回调 */
+  onStopAndRemoveFromGroup?: (windowId: string) => void;
+  /** 切换到指定组的回调 */
+  onGroupSwitch?: (groupId: string) => void;
 }
 
 /**
@@ -31,11 +44,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   onReturn,
   onWindowSwitch,
   isActive,
+  embedded = false,
+  groupId,
+  onRemoveFromGroup,
+  onStopAndRemoveFromGroup,
+  onGroupSwitch,
 }) => {
   const { t } = useI18n();
   const { enabledIDEs } = useIDESettings();
   const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
   const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
+  const isWindowRunning = aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput;
 
   // 鍒囨崲闈㈡澘鐘舵€?
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
@@ -51,8 +70,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     archiveWindow,
     updatePane,
     pauseWindowState,
+    addGroup,
+    setActiveGroup,
+    findGroupByWindowId,
+    addWindowToGroupLayout,
+    removeWindowFromGroupLayout,
   } = useWindowStore();
   const activeWindows = getActiveWindows();
+  const windows = useWindowStore((state) => state.windows);
 
   // 纭繚绐楀彛婵€娲绘椂锛屾縺娲荤涓€涓獥鏍?
   useEffect(() => {
@@ -283,21 +308,103 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [onWindowSwitch]
   );
 
-  return (
-    <div className="flex h-screen w-screen bg-zinc-900 overflow-hidden">
-      {/* 渚ц竟鏍?*/}
-      <Sidebar
-        activeWindowId={terminalWindow.id}
-        onWindowSelect={onWindowSwitch}
-        onSettingsClick={() => setIsSettingsPanelOpen(true)}
-      />
+  // 处理快速切换到窗口组
+  const handleQuickSwitcherSelectGroup = useCallback(
+    (groupId: string) => {
+      setQuickSwitcherOpen(false);
+      if (onGroupSwitch) {
+        onGroupSwitch(groupId);
+      }
+    },
+    [onGroupSwitch]
+  );
 
-      {/* 涓诲唴瀹瑰尯 */}
+  // 处理拖拽窗口到终端区域创建或调整分组
+  const handleWindowDrop = useCallback(
+    async (dragItem: WindowCardDragItem, dropResult: DropResult) => {
+      const dragWindowId = dragItem.windowId;
+      const targetWindowId = terminalWindow.id;
+
+      if (dragWindowId === targetWindowId) return;
+
+      const dragGroup = findGroupByWindowId(dragWindowId);
+      const targetGroup = findGroupByWindowId(targetWindowId);
+
+      // 已在同一个组中，忽略
+      if (dragGroup && targetGroup && dragGroup.id === targetGroup.id) return;
+
+      const direction = (dropResult.position === 'left' || dropResult.position === 'right')
+        ? 'horizontal'
+        : 'vertical';
+
+      // 如果拖拽的窗口在另一个组中，先从原组移除
+      if (dragGroup) {
+        removeWindowFromGroupLayout(dragGroup.id, dragWindowId);
+      }
+
+      if (targetGroup) {
+        // 目标窗口已在组中 → 添加拖拽窗口到该组
+        addWindowToGroupLayout(targetGroup.id, targetWindowId, dragWindowId, direction);
+      } else {
+        // 两个独立窗口 → 创建新组
+        const dragWin = windows.find(w => w.id === dragWindowId);
+        if (!dragWin) return;
+
+        const isReversed = dropResult.position === 'left' || dropResult.position === 'top';
+        const firstId = isReversed ? dragWindowId : targetWindowId;
+        const secondId = isReversed ? targetWindowId : dragWindowId;
+
+        const groupName = `${terminalWindow.name} + ${dragWin.name}`;
+        const newGroup = createGroup(groupName, firstId, secondId, direction);
+        addGroup(newGroup);
+        setActiveGroup(newGroup.id);
+        // 新组创建后 GroupView 的 auto-start useEffect 会自动启动窗口
+        return;
+      }
+
+      // 自动启动拖入窗口的所有暂停窗格
+      const dragWin = useWindowStore.getState().getWindowById(dragWindowId);
+      if (dragWin) {
+        const panes = getAllPanes(dragWin.layout);
+        for (const pane of panes) {
+          if (pane.status === WindowStatus.Paused) {
+            try {
+              await window.electronAPI.startWindow({
+                windowId: dragWin.id,
+                paneId: pane.id,
+                name: dragWin.name,
+                workingDirectory: pane.cwd,
+                command: pane.command,
+              });
+            } catch (error) {
+              console.error(`Failed to auto-start pane ${pane.id}:`, error);
+            }
+          }
+        }
+      }
+    },
+    [terminalWindow.id, terminalWindow.name, windows, findGroupByWindowId, addGroup, setActiveGroup, addWindowToGroupLayout, removeWindowFromGroupLayout]
+  );
+
+  return (
+    <div className={`flex ${embedded ? 'h-full w-full' : 'h-screen w-screen'} bg-zinc-900 overflow-hidden`}>
+      {/* 渚ц竟鏍?*/}
+      {!embedded && (
+        <Sidebar
+          activeWindowId={terminalWindow.id}
+          onWindowSelect={onWindowSwitch}
+          onGroupSelect={onGroupSwitch}
+          onSettingsClick={() => setIsSettingsPanelOpen(true)}
+        />
+      )}
+
+      {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 椤堕儴宸ュ叿鏍?*/}
+        {/* 顶部工具栏 - 在嵌入模式下也显示 */}
         <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {/* 杩斿洖鎸夐挳 */}
+            {/* 返回按钮 - 仅在非嵌入模式显示 */}
+            {!embedded && (
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
@@ -318,6 +425,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 </Tooltip.Portal>
               </Tooltip.Root>
             </Tooltip.Provider>
+            )}
 
             {/* 绐楀彛鍚嶇О鍜?git 鍒嗘敮 */}
             <div className="flex items-center gap-2">
@@ -438,7 +546,66 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </button>
 
             {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
-            {(aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
+            {/* 嵌入模式（组内）：移除和停止并移除按钮 */}
+            {embedded && groupId && (
+              <>
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={200}>
+                    <Tooltip.Trigger asChild>
+                      <button
+                        onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
+                        className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
+                        title={t('terminalView.removeFromGroup')}
+                      >
+                        <LogOut size={14} />
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                        sideOffset={5}
+                      >
+                        {t('terminalView.removeFromGroup')}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={200}>
+                    <Tooltip.Trigger asChild>
+                      <button
+                        onClick={() => {
+                          if (isWindowRunning) {
+                            onStopAndRemoveFromGroup?.(terminalWindow.id);
+                          }
+                        }}
+                        disabled={!isWindowRunning}
+                        className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 transition-colors ${
+                          isWindowRunning
+                            ? 'hover:bg-zinc-700 text-red-500 cursor-pointer'
+                            : 'text-zinc-600 cursor-not-allowed'
+                        }`}
+                        title={t('terminalView.stopAndRemoveFromGroup')}
+                      >
+                        <SquareX size={14} />
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                        sideOffset={5}
+                      >
+                        {t('terminalView.stopAndRemoveFromGroup')}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+              </>
+            )}
+
+            {/* 停止按钮 - 仅在非嵌入模式下显示 */}
+            {!embedded && (aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
               <Tooltip.Provider>
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>
@@ -463,26 +630,44 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             )}
           </div>
         </div>
-
         {/* 缁堢甯冨眬鍖哄煙 */}
         <div className="flex-1 overflow-hidden">
-          <SplitLayout
-            windowId={terminalWindow.id}
-            layout={terminalWindow.layout}
-            activePaneId={terminalWindow.activePaneId}
-            isWindowActive={isActive}
-            onPaneActivate={handlePaneActivate}
-            onPaneClose={handlePaneClose}
-          />
+          {embedded ? (
+            <SplitLayout
+              windowId={terminalWindow.id}
+              layout={terminalWindow.layout}
+              activePaneId={terminalWindow.activePaneId}
+              isWindowActive={isActive}
+              onPaneActivate={handlePaneActivate}
+              onPaneClose={handlePaneClose}
+            />
+          ) : (
+            <DropZone
+              targetWindowId={terminalWindow.id}
+              onDrop={handleWindowDrop}
+              className="h-full w-full"
+            >
+              <SplitLayout
+                windowId={terminalWindow.id}
+                layout={terminalWindow.layout}
+                activePaneId={terminalWindow.activePaneId}
+                isWindowActive={isActive}
+                onPaneActivate={handlePaneActivate}
+                onPaneClose={handlePaneClose}
+              />
+            </DropZone>
+          )}
         </div>
       </div>
 
+      {!embedded && (<>
       {/* 蹇€熷垏鎹㈤潰鏉?*/}
       {quickSwitcherOpen && (
         <QuickSwitcher
           isOpen={quickSwitcherOpen}
           currentWindowId={terminalWindow.id}
           onSelect={handleQuickSwitcherSelect}
+          onSelectGroup={handleQuickSwitcherSelectGroup}
           onClose={() => setQuickSwitcherOpen(false)}
         />
       )}
@@ -493,6 +678,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         onClose={() => setIsSettingsPanelOpen(false)}
       />
 
+      </>)}
     </div>
   );
 };

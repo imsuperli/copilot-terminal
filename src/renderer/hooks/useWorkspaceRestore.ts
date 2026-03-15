@@ -12,6 +12,7 @@ import { Workspace } from '../../shared/types/workspace';
  */
 export const useWorkspaceRestore = () => {
   const addWindow = useWindowStore((state) => state.addWindow);
+  const addGroup = useWindowStore((state) => state.addGroup);
   const clearWindows = useWindowStore((state) => state.clearWindows);
 
   /**
@@ -19,17 +20,25 @@ export const useWorkspaceRestore = () => {
    * 立即渲染所有窗口为暂停状态（不启动 PTY 进程）
    */
   const handleWorkspaceLoaded = useCallback((event: unknown, workspace: Workspace) => {
-    console.log(`[useWorkspaceRestore] Workspace loaded with ${workspace.windows.length} windows`);
+    console.log(`[useWorkspaceRestore] Workspace loaded with ${workspace.windows.length} windows, ${workspace.groups?.length || 0} groups`);
 
     // 禁用自动保存，避免恢复过程中的临时状态被保存
     setAutoSaveEnabled(false);
 
-    // 先清空现有窗口，避免重复
+    // 先清空现有窗口和组，避免重复
     clearWindows();
 
     // 将所有窗口添加到 store（窗口已经包含正确的 layout 结构）
     for (const window of workspace.windows) {
       addWindow(window);
+    }
+
+    // 恢复窗口组
+    if (workspace.groups && workspace.groups.length > 0) {
+      for (const group of workspace.groups) {
+        addGroup(group);
+      }
+      console.log(`[useWorkspaceRestore] Restored ${workspace.groups.length} groups`);
     }
 
     console.log(`[useWorkspaceRestore] Restored ${workspace.windows.length} windows`);
@@ -40,7 +49,7 @@ export const useWorkspaceRestore = () => {
       setAutoSaveEnabled(true);
       console.log('[useWorkspaceRestore] Auto-save enabled, windows in paused state');
     }, 2000);
-  }, [addWindow, clearWindows]);
+  }, [addWindow, addGroup, clearWindows]);
 
   /**
    * 订阅 IPC 事件

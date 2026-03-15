@@ -1,10 +1,13 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { MainLayout } from './components/layout/MainLayout';
 import { Sidebar } from './components/layout/Sidebar';
 import { EmptyState } from './components/EmptyState';
 import { CardGrid } from './components/CardGrid';
-import { ArchivedView } from './components/ArchivedView';
+import { CreateGroupDialog } from './components/CreateGroupDialog';
 import { TerminalView } from './components/TerminalView';
+import { GroupView } from './components/GroupView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
 import { QuickNavPanel } from './components/QuickNavPanel';
@@ -14,6 +17,7 @@ import { useWindowSwitcher } from './hooks/useWindowSwitcher';
 import { useWorkspaceRestore } from './hooks/useWorkspaceRestore';
 import { subscribeToPaneStatusChange, subscribeToWindowGitBranchChange } from './api/events';
 import { Pane, Window } from './types/window';
+import { WindowGroup } from '../shared/types/window-group';
 import { I18nProvider } from './i18n';
 import type {
   ClaudeModelUpdatedPayload,
@@ -33,8 +37,12 @@ function AppContent() {
   const updateWindow = useWindowStore((state) => state.updateWindow);
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
+  const activeGroupId = useWindowStore((state) => state.activeGroupId);
+  const groups = useWindowStore((state) => state.groups);
+  const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [currentTab, setCurrentTab] = useState<'active' | 'archived'>('active');
+  const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [currentTab, setCurrentTab] = useState<'all' | 'active' | 'archived' | string>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
   const [appVersion, setAppVersion] = useState<{ name: string; version: string }>({
@@ -55,6 +63,21 @@ function AppContent() {
       }
     };
     fetchVersion();
+  }, []);
+
+  // 从 settings 恢复上次选择的侧边栏标签
+  useEffect(() => {
+    const loadDefaultTab = async () => {
+      try {
+        const response = await window.electronAPI.getSettings();
+        if (response.success && response.data?.defaultSidebarTab) {
+          setCurrentTab(response.data.defaultSidebarTab);
+        }
+      } catch (error) {
+        console.error('Failed to load default sidebar tab:', error);
+      }
+    };
+    loadDefaultTab();
   }, []);
 
   // 工作区恢复
@@ -251,6 +274,10 @@ function AppContent() {
     setIsDialogOpen(true);
   }, []);
 
+  const handleCreateGroup = useCallback(() => {
+    setShowCreateGroupDialog(true);
+  }, []);
+
   const handleDialogChange = useCallback((open: boolean) => {
     setIsDialogOpen(open);
   }, []);
@@ -263,9 +290,61 @@ function AppContent() {
     switchToWindow(windowId);
   }, [switchToWindow]);
 
-  const handleTabChange = useCallback((tab: 'active' | 'archived') => {
+  const handleTabChange = useCallback((tab: 'all' | 'active' | 'archived' | string) => {
     setCurrentTab(tab);
+    // 持久化到 settings
+    window.electronAPI?.updateSettings({ defaultSidebarTab: tab }).catch((error) => {
+      console.error('Failed to save default sidebar tab:', error);
+    });
   }, []);
+
+  // 进入组视图
+  const handleEnterGroup = useCallback(async (group: WindowGroup) => {
+    // 先设置 activeGroup，这会清除 activeWindowId
+    setActiveGroup(group.id);
+
+    // 然后通知主进程切换到终端视图（使用组的活跃窗口 ID）
+    // 这样点击关闭按钮时会返回主界面而不是退出软件
+    // 注意：switchToTerminalView 会设置 activeWindowId，但由于我们已经设置了 activeGroupId，
+    // 渲染时 GroupView 会优先显示（zIndex 更高）
+    try {
+      await window.electronAPI.switchToTerminalView(group.activeWindowId);
+    } catch (error) {
+      console.error('Failed to notify main process of view change:', error);
+    }
+  }, [setActiveGroup]);
+
+  // 从组视图返回
+  const handleReturnFromGroup = useCallback(() => {
+    setActiveGroup(null);
+    switchToUnifiedView();
+  }, [setActiveGroup, switchToUnifiedView]);
+
+  // 切换到其他组
+  const handleGroupSwitch = useCallback(async (groupId: string) => {
+    // 先设置 activeGroup
+    setActiveGroup(groupId);
+
+    // 获取目标组
+    const targetGroup = groups.find(g => g.id === groupId);
+    if (!targetGroup) {
+      console.error('Target group not found:', groupId);
+      return;
+    }
+
+    // 通知主进程切换到终端视图（使用组的活跃窗口 ID）
+    try {
+      await window.electronAPI.switchToTerminalView(targetGroup.activeWindowId);
+    } catch (error) {
+      console.error('Failed to notify main process of view change:', error);
+    }
+  }, [setActiveGroup, groups]);
+
+  // 计算当前激活的组
+  const activeGroup = useMemo(
+    () => groups.find(g => g.id === activeGroupId),
+    [groups, activeGroupId]
+  );
 
   const mountedTerminalWindowIdSet = useMemo(
     () => new Set(mountedTerminalWindowIds),
@@ -276,8 +355,8 @@ function AppContent() {
     [windows, mountedTerminalWindowIdSet]
   );
   const hasActiveWindows = useMemo(
-    () => windows.some(w => !w.archived),
-    [windows]
+    () => windows.some(w => !w.archived) || groups.some(g => !g.archived),
+    [windows, groups]
   );
 
   return (
@@ -296,6 +375,7 @@ function AppContent() {
               appName={appVersion.name}
               version={appVersion.version}
               onCreateWindow={handleCreateWindow}
+              onCreateGroup={handleCreateGroup}
               isDialogOpen={isDialogOpen}
               onDialogChange={handleDialogChange}
               currentTab={currentTab}
@@ -305,14 +385,16 @@ function AppContent() {
             />
           }
         >
-          {currentTab === 'active' ? (
-            !hasActiveWindows ? (
-              <EmptyState onCreateWindow={handleCreateWindow} />
-            ) : (
-              <CardGrid onEnterTerminal={handleEnterTerminal} onCreateWindow={handleCreateWindow} searchQuery={searchQuery} />
-            )
+          {currentTab === 'active' && !hasActiveWindows ? (
+            <EmptyState onCreateWindow={handleCreateWindow} />
           ) : (
-            <ArchivedView onEnterTerminal={handleEnterTerminal} searchQuery={searchQuery} />
+            <CardGrid
+              onEnterTerminal={handleEnterTerminal}
+              onEnterGroup={handleEnterGroup}
+              onCreateWindow={handleCreateWindow}
+              searchQuery={searchQuery}
+              currentTab={currentTab}
+            />
           )}
         </MainLayout>
       </div>
@@ -341,6 +423,7 @@ function AppContent() {
               window={terminalWindow}
               onReturn={switchToUnifiedView}
               onWindowSwitch={handleWindowSwitch}
+              onGroupSwitch={handleGroupSwitch}
               isActive={isVisible}
             />
           </div>
@@ -348,6 +431,28 @@ function AppContent() {
       })}
 
       {error && <ViewSwitchError message={error} />}
+
+      {/* 组视图：当 activeGroupId 有效时显示 */}
+      {activeGroup && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1001,
+          }}
+        >
+          <GroupView
+            group={activeGroup}
+            onReturn={handleReturnFromGroup}
+            onWindowSwitch={handleWindowSwitch}
+            onGroupSwitch={handleGroupSwitch}
+            isActive={true}
+          />
+        </div>
+      )}
 
       {/* 清理进度覆盖层 */}
       <CleanupOverlay />
@@ -357,6 +462,14 @@ function AppContent() {
         open={isQuickNavOpen}
         onClose={() => setIsQuickNavOpen(false)}
       />
+
+      {/* 创建组对话框 */}
+      {showCreateGroupDialog && (
+        <CreateGroupDialog
+          open={showCreateGroupDialog}
+          onOpenChange={setShowCreateGroupDialog}
+        />
+      )}
     </>
   );
 }
@@ -364,7 +477,9 @@ function AppContent() {
 export default function App() {
   return (
     <I18nProvider>
-      <AppContent />
+      <DndProvider backend={HTML5Backend}>
+        <AppContent />
+      </DndProvider>
     </I18nProvider>
   );
 }

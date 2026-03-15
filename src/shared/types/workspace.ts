@@ -1,6 +1,8 @@
 import { AppLanguage } from '../i18n';
 import { QuickNavConfig } from './quick-nav';
 import { Window } from './window';
+import { WindowGroup } from './window-group';
+import { CustomCategory } from './custom-category';
 
 export interface IDEConfig {
   id: string;
@@ -45,11 +47,14 @@ export interface Settings {
   statusLine?: StatusLineConfig;
   terminal?: TerminalSettings;
   tmux?: TmuxSettings;
+  customCategories?: CustomCategory[];
+  defaultSidebarTab?: 'all' | 'active' | 'archived' | string; // string 为自定义分类 ID
 }
 
 export interface Workspace {
   version: string;
   windows: Window[];
+  groups: WindowGroup[];
   settings: Settings;
   lastSavedAt: string;
 }

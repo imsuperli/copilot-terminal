@@ -1,13 +1,14 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
 import { Window } from '../../shared/types/window';
+import { WindowGroup } from '../../shared/types/window-group';
 import { successResponse, errorResponse } from './HandlerResponse';
 
 export function registerWorkspaceHandlers(ctx: HandlerContext) {
   const { workspaceManager, autoSaveManager, getCurrentWorkspace, setCurrentWorkspace } = ctx;
 
   // 监听自动保存触发事件
-  ipcMain.on('trigger-auto-save', async (_event, windows: Window[]) => {
+  ipcMain.on('trigger-auto-save', async (_event, windows: Window[], groups?: WindowGroup[]) => {
     try {
       if (!autoSaveManager) {
         console.warn('[WorkspaceHandlers] AutoSaveManager not initialized');
@@ -34,8 +35,9 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
         return;
       }
 
-      // 更新窗口列表
+      // 更新窗口列表和组列表
       currentWorkspace.windows = windows;
+      currentWorkspace.groups = groups || [];
 
       // 更新全局 currentWorkspace
       setCurrentWorkspace(currentWorkspace);

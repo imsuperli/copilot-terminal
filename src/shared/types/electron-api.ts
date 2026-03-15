@@ -2,6 +2,8 @@ import { ViewChangedPayload } from './ipc';
 import { ProjectConfig } from './project-config';
 import { QuickNavConfig } from './quick-nav';
 import { Window, WindowStatus } from './window';
+import { WindowGroup } from './window-group';
+import { CustomCategory } from './custom-category';
 import {
   IDEConfig,
   Settings,
@@ -163,13 +165,14 @@ export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
 export type SettingsPatch =
-  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux'>>
+  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'customCategories'>>
   & {
     ides?: IDEConfig[];
     quickNav?: QuickNavConfig;
     statusLine?: Partial<StatusLineConfig>;
     terminal?: Partial<TerminalSettings>;
     tmux?: Partial<TmuxSettings>;
+    customCategories?: CustomCategory[];
   };
 
 export interface ElectronAPI {
@@ -257,7 +260,7 @@ export interface ElectronAPI {
   loadWorkspace: () => Promise<IpcResponse<Workspace>>;
   onWorkspaceLoaded: (callback: ElectronEventHandler<Workspace>) => void;
   offWorkspaceLoaded: (callback: ElectronEventHandler<Workspace>) => void;
-  triggerAutoSave: (windows?: Window[]) => void;
+  triggerAutoSave: (windows?: Window[], groups?: WindowGroup[]) => void;
 
   writeClipboardText: (text: string) => Promise<IpcResponse<void>>;
   readClipboardText: () => Promise<IpcResponse<string>>;
@@ -274,4 +277,14 @@ export interface ElectronAPI {
   offCleanupStarted: (callback: ElectronSignalHandler) => void;
   onCleanupProgress: (callback: ElectronEventHandler<CleanupProgressPayload>) => void;
   offCleanupProgress: (callback: ElectronEventHandler<CleanupProgressPayload>) => void;
+
+  // Group management
+  createGroup: (name: string, windowIds: string[]) => Promise<IpcResponse<WindowGroup>>;
+  deleteGroup: (groupId: string) => Promise<IpcResponse<void>>;
+  archiveGroup: (groupId: string) => Promise<IpcResponse<void>>;
+  unarchiveGroup: (groupId: string) => Promise<IpcResponse<void>>;
+  renameGroup: (groupId: string, name: string) => Promise<IpcResponse<void>>;
+  addWindowToGroup: (groupId: string, windowId: string, direction: 'horizontal' | 'vertical', targetWindowId: string | null) => Promise<IpcResponse<void>>;
+  removeWindowFromGroup: (groupId: string, windowId: string) => Promise<IpcResponse<{ dissolved: boolean }>>;
+  updateGroupSplitSizes: (groupId: string, splitPath: number[], sizes: number[]) => Promise<IpcResponse<void>>;
 }

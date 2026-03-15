@@ -131,9 +131,10 @@ function createWindow() {
     // 检查当前视图状态（从 ViewSwitcher 获取）
     const currentViewState = viewSwitcher?.getCurrentView() || 'unified';
 
-    // 如果在终端视图，返回统一视图而不是关闭窗口
+    // 如果在终端视图（包括单窗口和组视图），返回统一视图而不是关闭窗口
     if (currentViewState === 'terminal' && !isQuitting) {
       event.preventDefault();
+      // 通知渲染进程返回统一视图（会同时清除 activeWindowId 和 activeGroupId）
       viewSwitcher?.switchToUnifiedView();
       return;
     }

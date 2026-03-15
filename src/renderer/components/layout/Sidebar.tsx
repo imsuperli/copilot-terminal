@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
@@ -7,6 +7,8 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { SettingsPanel } from '../SettingsPanel';
 import { QuickNavPanel } from '../QuickNavPanel';
 import { AboutPanel } from '../AboutPanel';
+import { CategoryDropZone } from '../dnd/CategoryDropZone';
+import { CustomCategory } from '../../../shared/types/custom-category';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
 
@@ -14,10 +16,11 @@ interface SidebarProps {
   appName?: string;
   version?: string;
   onCreateWindow?: () => void;
+  onCreateGroup?: () => void;
   isDialogOpen?: boolean;
   onDialogChange?: (open: boolean) => void;
-  currentTab?: 'active' | 'archived';
-  onTabChange?: (tab: 'active' | 'archived') => void;
+  currentTab?: 'all' | 'active' | 'archived' | string;
+  onTabChange?: (tab: 'all' | 'active' | 'archived' | string) => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
 }
@@ -26,6 +29,7 @@ export function Sidebar({
   appName = 'Copilot-Terminal',
   version = '0.1.0',
   onCreateWindow,
+  onCreateGroup,
   isDialogOpen = false,
   onDialogChange,
   currentTab = 'active',
@@ -35,15 +39,115 @@ export function Sidebar({
 }: SidebarProps) {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
+  const groups = useWindowStore((state) => state.groups);
   const addWindow = useWindowStore((state) => state.addWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
+  const customCategories = useWindowStore((state) => state.customCategories);
+  const syncCustomCategories = useWindowStore((state) => state.syncCustomCategories);
+  const addCustomCategory = useWindowStore((state) => state.addCustomCategory);
+  const updateCustomCategory = useWindowStore((state) => state.updateCustomCategory);
+  const removeCustomCategory = useWindowStore((state) => state.removeCustomCategory);
+  const hideGroupedWindows = useWindowStore((state) => state.hideGroupedWindows);
+  const setHideGroupedWindows = useWindowStore((state) => state.setHideGroupedWindows);
+
   const activeWindows = windows.filter(w => !w.archived);
   const archivedWindows = windows.filter(w => w.archived);
+  const activeGroups = groups.filter(g => !g.archived);
+  const archivedGroups = groups.filter(g => g.archived);
+
+  // 各标签的计数
+  const allCount = windows.length + groups.length;
+  const activeCount = activeWindows.length + activeGroups.length;
+  const archivedCount = archivedWindows.length + archivedGroups.length;
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [isQuickNavPanelOpen, setIsQuickNavPanelOpen] = useState(false);
   const [isAboutPanelOpen, setIsAboutPanelOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<CustomCategory | null>(null);
+
+  // 自定义分类折叠/展开
+  const [customExpanded, setCustomExpanded] = useState(true);
+  // 内联创建分类
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const createInputRef = useRef<HTMLInputElement>(null);
+  // 内联编辑分类
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // 从 settings 同步分类数据
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const response = await window.electronAPI.getSettings();
+        if (response.success && response.data?.customCategories) {
+          syncCustomCategories(response.data.customCategories);
+        }
+      } catch (error) {
+        console.error('Failed to load custom categories:', error);
+      }
+    };
+    loadCategories();
+  }, [syncCustomCategories]);
+
+  // 获取顶级分类（没有父分类的）
+  const topLevelCategories = customCategories
+    .filter(c => !c.parentId)
+    .sort((a, b) => a.order - b.order);
+
+  // 创建分类时自动聚焦
+  useEffect(() => {
+    if (isCreatingCategory && createInputRef.current) {
+      createInputRef.current.focus();
+    }
+  }, [isCreatingCategory]);
+
+  // 编辑分类时自动聚焦
+  useEffect(() => {
+    if (editingCategoryId && editInputRef.current) {
+      editInputRef.current.focus();
+    }
+  }, [editingCategoryId]);
+
+  const handleCreateCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    try {
+      await addCustomCategory({
+        name,
+        icon: '📌',
+        windowIds: [],
+        groupIds: [],
+        order: topLevelCategories.length,
+      });
+      setNewCategoryName('');
+      setIsCreatingCategory(false);
+    } catch (error) {
+      console.error('Failed to create category:', error);
+    }
+  };
+
+  const handleStartEdit = (category: CustomCategory) => {
+    setEditingCategoryId(category.id);
+    setEditName(category.name);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingCategoryId) return;
+    const name = editName.trim();
+    if (!name) {
+      setEditingCategoryId(null);
+      return;
+    }
+    try {
+      await updateCustomCategory(editingCategoryId, { name });
+      setEditingCategoryId(null);
+    } catch (error) {
+      console.error('Failed to update category:', error);
+    }
+  };
 
   const handleBatchCreate = async (selectedPaths: string[]) => {
     for (const path of selectedPaths) {
@@ -63,7 +167,7 @@ export function Sidebar({
     }
   };
 
-  const handleClearAllWindows = async () => {
+  const handleClearActiveWindows = async () => {
     try {
       for (const win of activeWindows) {
         await window.electronAPI.closeWindow(win.id);
@@ -71,7 +175,7 @@ export function Sidebar({
         removeWindow(win.id);
       }
     } catch (error) {
-      console.error('Failed to clear all windows:', error);
+      console.error('Failed to clear active windows:', error);
     }
   };
 
@@ -87,14 +191,45 @@ export function Sidebar({
     }
   };
 
+  const handleClearAllWindows = async () => {
+    try {
+      for (const win of windows) {
+        await window.electronAPI.closeWindow(win.id);
+        await window.electronAPI.deleteWindow(win.id);
+        removeWindow(win.id);
+      }
+    } catch (error) {
+      console.error('Failed to clear all windows:', error);
+    }
+  };
+
+  // 根据当前标签获取清空函数和窗口数量
+  const getClearHandler = () => {
+    if (currentTab === 'active') {
+      return { handler: handleClearActiveWindows, count: activeWindows.length };
+    } else if (currentTab === 'archived') {
+      return { handler: handleClearArchivedWindows, count: archivedWindows.length };
+    } else if (currentTab === 'all') {
+      return { handler: handleClearAllWindows, count: windows.length };
+    }
+    return { handler: null, count: 0 };
+  };
+
+  /** 计算分类中的有效项目数 */
+  const getCategoryCount = (category: CustomCategory) => {
+    const wCount = category.windowIds.filter(id => windows.some(w => w.id === id)).length;
+    const gCount = category.groupIds.filter(id => groups.some(g => g.id === id)).length;
+    return wCount + gCount;
+  };
+
   return (
     <>
       <aside className="w-64 h-screen bg-[rgb(var(--sidebar))] border-r border-[rgb(var(--border))] flex flex-col">
         {/* 顶部间距，与右侧卡片对齐 */}
         <div className="h-4" />
 
-        {/* 搜索框 */}
-        {((currentTab === 'active' && activeWindows.length > 0) || (currentTab === 'archived' && archivedWindows.length > 0)) && (
+        {/* 搜索框 - 全局搜索，始终显示 */}
+        {(allCount > 0) && (
           <div className="px-4 pb-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
@@ -118,18 +253,40 @@ export function Sidebar({
           </div>
         )}
 
-        {/* 状态统计 */}
+        {/* 状态分类 */}
         <div className="px-4 py-4 border-b border-[rgb(var(--border))]">
           <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider mb-3">
             {t('sidebar.section.statusSummary')}
           </h3>
-          <StatusBar />
+          <StatusBar currentTab={currentTab} onTabChange={onTabChange} />
         </div>
 
         {/* 窗格管理 */}
         <div className="flex-1 px-4 py-4 overflow-y-auto border-b border-[rgb(var(--border))]">
-          <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider mb-3">
-            {t('sidebar.section.windowManagement')}
+          <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider mb-3 flex items-center justify-between">
+            <span>{t('sidebar.section.windowManagement')}</span>
+            <div
+              className="flex items-center gap-1 cursor-pointer normal-case tracking-normal font-normal"
+              title="勾选后隐藏已加入窗口组的窗口"
+              onClick={() => setHideGroupedWindows(!hideGroupedWindows)}
+            >
+              <span className="text-[10px] text-[rgb(var(--muted-foreground))]">隐藏已分组</span>
+              <span
+                role="checkbox"
+                aria-checked={hideGroupedWindows}
+                className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
+                  hideGroupedWindows
+                    ? 'bg-blue-500 border-blue-500'
+                    : 'border-zinc-500 bg-transparent hover:border-zinc-400'
+                }`}
+              >
+                {hideGroupedWindows && (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+            </div>
           </h3>
           {/* Tab buttons */}
           <div className="flex flex-col gap-2">
@@ -143,8 +300,8 @@ export function Sidebar({
             >
               <Terminal className="h-4 w-4" />
               <span>{t('sidebar.tab.active')}</span>
-              {activeWindows.length > 0 && (
-                <span className="ml-auto text-xs">{activeWindows.length}</span>
+              {activeCount > 0 && (
+                <span className="ml-auto text-xs">{activeCount}</span>
               )}
             </button>
             <button
@@ -157,10 +314,168 @@ export function Sidebar({
             >
               <Archive className="h-4 w-4" />
               <span>{t('sidebar.tab.archived')}</span>
-              {archivedWindows.length > 0 && (
-                <span className="ml-auto text-xs">{archivedWindows.length}</span>
+              {archivedCount > 0 && (
+                <span className="ml-auto text-xs">{archivedCount}</span>
               )}
             </button>
+            <button
+              onClick={() => onTabChange?.('all')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                currentTab === 'all'
+                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
+                  : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
+              }`}
+            >
+              <Grid className="h-4 w-4" />
+              <span>{t('sidebar.tab.all')}</span>
+              {allCount > 0 && (
+                <span className="ml-auto text-xs">{allCount}</span>
+              )}
+            </button>
+          </div>
+
+          {/* 分隔线 */}
+          <div className="my-3 border-t border-[rgb(var(--border))]" />
+
+          {/* 可折叠的自定义分类区域 */}
+          <div className="flex flex-col">
+            {/* 自定义主菜单按钮 */}
+            <button
+              onClick={() => setCustomExpanded(!customExpanded)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
+            >
+              {customExpanded ? (
+                <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <ChevronRight className="h-4 w-4 flex-shrink-0" />
+              )}
+              <Tag className="h-4 w-4 flex-shrink-0" />
+              <span className="font-medium">{t('sidebar.customCategories')}</span>
+              {topLevelCategories.length > 0 && (
+                <span className="ml-auto text-xs text-[rgb(var(--muted-foreground))]">{topLevelCategories.length}</span>
+              )}
+            </button>
+
+            {/* 展开后的子分类列表 */}
+            {customExpanded && (
+              <div className="flex flex-col gap-0.5 mt-1">
+                {topLevelCategories.map((category) => (
+                  <CategoryDropZone
+                    key={category.id}
+                    categoryId={category.id}
+                    windowIds={category.windowIds}
+                    groupIds={category.groupIds}
+                  >
+                    <div
+                      className={`flex items-center gap-2 pl-8 pr-2 py-1.5 rounded-lg text-sm transition-colors cursor-pointer group ${
+                        currentTab === category.id
+                          ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
+                          : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
+                      }`}
+                      onClick={() => onTabChange?.(category.id)}
+                    >
+                      {/* 图标和名称（或编辑输入框） */}
+                      {editingCategoryId === category.id ? (
+                        <>
+                          <span className="flex-shrink-0 text-sm">{category.icon || '📌'}</span>
+                          <input
+                            ref={editInputRef}
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit();
+                              if (e.key === 'Escape') setEditingCategoryId(null);
+                            }}
+                            onBlur={handleSaveEdit}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 focus:outline-none focus:border-blue-500"
+                          />
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}
+                            className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-green-400 hover:text-green-300 rounded transition-colors"
+                            title={t('common.save')}
+                          >
+                            <Check className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setEditingCategoryId(null); }}
+                            className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded transition-colors"
+                            title={t('common.cancel')}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex-shrink-0 text-sm">{category.icon || '📌'}</span>
+                          <span className="flex-1 truncate">{category.name}</span>
+                          {getCategoryCount(category) > 0 && (
+                            <span className="flex-shrink-0 text-xs text-[rgb(var(--muted-foreground))]">
+                              {getCategoryCount(category)}
+                            </span>
+                          )}
+                          {/* 悬停时显示编辑和删除按钮 */}
+                          <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleStartEdit(category); }}
+                              className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-700 transition-colors"
+                              title={t('category.rename')}
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setCategoryToDelete(category); }}
+                              className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-red-400 rounded hover:bg-zinc-700 transition-colors"
+                              title={t('category.delete')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </CategoryDropZone>
+                ))}
+
+                {/* 内联创建分类 */}
+                {isCreatingCategory ? (
+                  <div className="flex items-center gap-1.5 pl-8 pr-2 py-1.5">
+                    <span className="flex-shrink-0 text-sm">📁</span>
+                    <input
+                      ref={createInputRef}
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateCategory();
+                        if (e.key === 'Escape') {
+                          setIsCreatingCategory(false);
+                          setNewCategoryName('');
+                        }
+                      }}
+                      onBlur={() => {
+                        // 如果有内容，自动保存；如果没有内容，自动取消
+                        if (newCategoryName.trim()) {
+                          handleCreateCategory();
+                        } else {
+                          setIsCreatingCategory(false);
+                          setNewCategoryName('');
+                        }
+                      }}
+                      placeholder={t('category.namePlaceholder')}
+                      className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsCreatingCategory(true)}
+                    className="flex items-center gap-2 pl-8 pr-2 py-1.5 rounded-lg text-sm text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>{t('sidebar.newCategory')}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -205,33 +520,52 @@ export function Sidebar({
           <button
             onClick={() => setIsBatchDialogOpen(true)}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
-            title={t('sidebar.batchAdd')}
           >
             <FolderPlus className="h-4 w-4" />
             <span>{t('sidebar.batchAdd')}</span>
           </button>
 
-          {/* Clear button - show for both active and archived tabs */}
-          {currentTab === 'active' && activeWindows.length > 0 && (
+          {/* Create Group button */}
+          {activeWindows.length >= 2 && (
             <button
-              onClick={() => setIsConfirmDialogOpen(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
-              title={t('sidebar.confirmClearActiveTitle')}
+              onClick={onCreateGroup}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 font-medium hover:bg-zinc-600 transition-colors"
+              title="创建窗口组"
             >
-              <Trash2 className="h-4 w-4" />
-              <span>{t('sidebar.clearActive')}</span>
+              <Folder className="h-4 w-4" />
+              <span>创建窗口组</span>
             </button>
           )}
-          {currentTab === 'archived' && archivedWindows.length > 0 && (
-            <button
-              onClick={() => setIsConfirmDialogOpen(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
-              title={t('sidebar.confirmClearArchivedTitle')}
-            >
-              <Trash2 className="h-4 w-4" />
-              <span>{t('sidebar.clearArchived')}</span>
-            </button>
-          )}
+
+          {/* Clear button - show for all tabs when there are windows */}
+          {(() => {
+            const { handler, count } = getClearHandler();
+            if (!handler || count === 0) return null;
+
+            let buttonText = '';
+            let titleText = '';
+            if (currentTab === 'active') {
+              buttonText = '清空活跃终端';
+              titleText = '确认清空活跃终端';
+            } else if (currentTab === 'archived') {
+              buttonText = '清空已归档终端';
+              titleText = '确认清空已归档终端';
+            } else if (currentTab === 'all') {
+              buttonText = '清空全部终端';
+              titleText = '确认清空全部终端';
+            }
+
+            return (
+              <button
+                onClick={() => setIsConfirmDialogOpen(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
+                title={titleText}
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>{buttonText}</span>
+              </button>
+            );
+          })()}
         </div>
       </aside>
 
@@ -249,15 +583,23 @@ export function Sidebar({
       <ConfirmDialog
         open={isConfirmDialogOpen}
         onOpenChange={setIsConfirmDialogOpen}
-        title={currentTab === 'active' ? t('sidebar.confirmClearActiveTitle') : t('sidebar.confirmClearArchivedTitle')}
+        title={
+          currentTab === 'active'
+            ? '确认清空活跃终端'
+            : currentTab === 'archived'
+            ? '确认清空已归档终端'
+            : '确认清空全部终端'
+        }
         description={
           currentTab === 'active'
-            ? t('sidebar.confirmClearActiveDescription', { count: activeWindows.length })
-            : t('sidebar.confirmClearArchivedDescription', { count: archivedWindows.length })
+            ? `确定要删除全部 ${activeWindows.length} 个活跃终端吗？此操作不可撤销。`
+            : currentTab === 'archived'
+            ? `确定要删除全部 ${archivedWindows.length} 个已归档终端吗？此操作不可撤销。`
+            : `确定要删除全部 ${windows.length} 个终端吗？此操作不可撤销。`
         }
         confirmText={t('common.delete')}
         cancelText={t('common.cancel')}
-        onConfirm={currentTab === 'active' ? handleClearAllWindows : handleClearArchivedWindows}
+        onConfirm={getClearHandler().handler || (() => {})}
         variant="danger"
       />
 
@@ -277,8 +619,30 @@ export function Sidebar({
         appName={appName}
         version={version}
       />
+
+      <ConfirmDialog
+        open={!!categoryToDelete}
+        onOpenChange={(open) => { if (!open) setCategoryToDelete(null); }}
+        title={t('category.delete')}
+        description={
+          categoryToDelete
+            ? t('category.deleteConfirm', { name: categoryToDelete.name })
+            : ''
+        }
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={async () => {
+          if (categoryToDelete) {
+            await removeCustomCategory(categoryToDelete.id);
+            // 如果当前选中的是被删除的分类，切换到活跃终端
+            if (currentTab === categoryToDelete.id) {
+              onTabChange?.('active');
+            }
+            setCategoryToDelete(null);
+          }
+        }}
+        variant="danger"
+      />
     </>
   );
 }
-
-

@@ -1,9 +1,11 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { Activity, Keyboard, Pause, XCircle, Folder } from 'lucide-react';
+import { useDrag } from 'react-dnd';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
+import { DragItemTypes, WindowCardDragItem } from './dnd/types';
 
 interface SidebarWindowItemProps {
   window: Window;
@@ -13,6 +15,8 @@ interface SidebarWindowItemProps {
   onContextMenu: (e: React.MouseEvent) => void;
   onOpenInIDE?: (ide: string, path: string) => void;
   onOpenFolder?: (path: string) => void;
+  /** 如果窗口属于某个组，传入组 ID 以支持拖拽移出组 */
+  groupId?: string;
 }
 
 /**
@@ -93,9 +97,27 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
   onContextMenu,
   onOpenInIDE,
   onOpenFolder,
+  groupId,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const { enabledIDEs } = useIDESettings();
+  const dragRef = useRef<HTMLDivElement>(null);
+
+  const [{ isDragging }, drag] = useDrag<WindowCardDragItem, unknown, { isDragging: boolean }>({
+    type: DragItemTypes.WINDOW_CARD,
+    item: {
+      type: DragItemTypes.WINDOW_CARD,
+      windowId: terminalWindow.id,
+      windowName: terminalWindow.name,
+      source: 'sidebar',
+      sourceGroupId: groupId,
+    },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
+  drag(dragRef);
 
   // 获取窗口的聚合状态
   const aggregatedStatus = useMemo(
@@ -128,26 +150,30 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
   // 折叠状态：只显示图标
   if (!isExpanded) {
     return (
-      <button
-        onClick={onClick}
-        onContextMenu={onContextMenu}
-        className={`
-          w-full h-10 flex items-center justify-center
-          transition-colors
-          ${bgColor}
-        `}
-        title={`${terminalWindow.name}\n${workingDirectory}`}
-        aria-label={terminalWindow.name}
-      >
-        <StatusIcon className={`h-4 w-4 ${iconColor} ${statusAnimation}`} />
-      </button>
+      <div ref={dragRef} style={{ opacity: isDragging ? 0.4 : 1 }}>
+        <button
+          onClick={onClick}
+          onContextMenu={onContextMenu}
+          className={`
+            w-full h-10 flex items-center justify-center
+            transition-colors
+            ${bgColor}
+          `}
+          title={`${terminalWindow.name}\n${workingDirectory}`}
+          aria-label={terminalWindow.name}
+        >
+          <StatusIcon className={`h-4 w-4 ${iconColor} ${statusAnimation}`} />
+        </button>
+      </div>
     );
   }
 
   // 展开状态：显示完整信息
   return (
     <div
+      ref={dragRef}
       className="relative group"
+      style={{ opacity: isDragging ? 0.4 : 1 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
