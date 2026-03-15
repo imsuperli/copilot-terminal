@@ -255,7 +255,7 @@ export function Sidebar({
 
         {/* 状态分类 */}
         <div className="px-4 py-4 border-b border-[rgb(var(--border))]">
-          <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider mb-3">
+          <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] tracking-wide mb-3" style={{ letterSpacing: '0.05em' }}>
             {t('sidebar.section.statusSummary')}
           </h3>
           <StatusBar currentTab={currentTab} onTabChange={onTabChange} />
@@ -263,11 +263,11 @@ export function Sidebar({
 
         {/* 窗格管理 */}
         <div className="flex-1 px-4 py-4 overflow-y-auto border-b border-[rgb(var(--border))]">
-          <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] uppercase tracking-wider mb-3 flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] tracking-wide mb-3 flex items-center justify-between" style={{ letterSpacing: '0.05em' }}>
             <span>{t('sidebar.section.windowManagement')}</span>
             <div
               className="flex items-center gap-1 cursor-pointer normal-case tracking-normal font-normal"
-              title="勾选后隐藏已加入窗口组的窗口"
+              title={t('sidebar.hideGroupedWindowsTooltip')}
               onClick={() => setHideGroupedWindows(!hideGroupedWindows)}
             >
               <span className="text-[10px] text-[rgb(var(--muted-foreground))]">{t('sidebar.hideGroupedWindows')}</span>
@@ -530,10 +530,10 @@ export function Sidebar({
             <button
               onClick={onCreateGroup}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 font-medium hover:bg-zinc-600 transition-colors"
-              title="创建窗口组"
+              title={t('sidebar.createGroup')}
             >
               <Folder className="h-4 w-4" />
-              <span>创建窗口组</span>
+              <span>{t('sidebar.createGroup')}</span>
             </button>
           )}
 
@@ -545,14 +545,14 @@ export function Sidebar({
             let buttonText = '';
             let titleText = '';
             if (currentTab === 'active') {
-              buttonText = '清空活跃终端';
-              titleText = '确认清空活跃终端';
+              buttonText = t('sidebar.clearActiveWindows');
+              titleText = t('sidebar.confirmClearActiveTitle');
             } else if (currentTab === 'archived') {
-              buttonText = '清空已归档终端';
-              titleText = '确认清空已归档终端';
+              buttonText = t('sidebar.clearArchivedWindows');
+              titleText = t('sidebar.confirmClearArchivedTitle');
             } else if (currentTab === 'all') {
-              buttonText = '清空全部终端';
-              titleText = '确认清空全部终端';
+              buttonText = t('sidebar.clearAllWindows');
+              titleText = t('sidebar.confirmClearActiveTitle');
             }
 
             return (

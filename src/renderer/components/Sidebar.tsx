@@ -174,11 +174,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* 标题（仅展开时显示） - 淡入淡出 */}
         {sidebarExpanded && (
           <div
-            className={`px-3 py-2 text-xs font-semibold text-zinc-400 uppercase tracking-wider border-b border-zinc-800 flex-shrink-0 transition-opacity duration-200 flex items-center justify-between ${
+            className={`px-3 py-2 text-xs font-semibold text-zinc-400 tracking-wide border-b border-zinc-800 flex-shrink-0 transition-opacity duration-200 flex items-center justify-between ${
               sidebarExpanded ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <span>窗口</span>
+            <span>Windows</span>
             <button
               type="button"
               role="checkbox"
@@ -242,11 +242,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => setShowArchived(!showArchived)}
                 className={`
                   w-full px-3 py-2 flex items-center gap-2
-                  text-xs font-semibold text-zinc-400 uppercase tracking-wider
+                  text-xs font-semibold text-zinc-400 tracking-wide
                   hover:bg-zinc-700 transition-all duration-200
                   ${!sidebarExpanded ? 'justify-center' : ''}
                 `}
-                title={sidebarExpanded ? undefined : `归档 (${archivedWindows.length})`}
+                title={sidebarExpanded ? undefined : `Archived (${archivedWindows.length})`}
               >
                 {sidebarExpanded ? (
                   <>
@@ -256,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         showArchived ? 'rotate-0' : '-rotate-90'
                       }`}
                     />
-                    <span className="transition-opacity duration-200">归档</span>
+                    <span className="transition-opacity duration-200">Archived</span>
                     <span className="ml-auto text-zinc-500 transition-opacity duration-200">
                       ({archivedWindows.length})
                     </span>
