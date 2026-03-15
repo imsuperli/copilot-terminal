@@ -41,15 +41,15 @@ export const zhCNMessages = {
 
   'statusBar.ariaLabel': '窗格状态统计：运行中 {running} 个，等待输入 {waiting} 个，暂停 {paused} 个',
 
-  'sidebar.section.statusSummary': 'Status Summary',
-  'sidebar.section.windowManagement': 'Terminal Management',
+  'sidebar.section.statusSummary': '状态统计',
+  'sidebar.section.windowManagement': '终端管理',
   'sidebar.tab.all': '全部终端',
   'sidebar.tab.active': '活动终端',
   'sidebar.tab.archived': '归档终端',
   'sidebar.hideGroupedWindows': '隐藏已分组',
   'sidebar.hideGroupedWindowsTooltip': '勾选后隐藏已加入窗口组的窗口',
   'sidebar.newCategory': '新建分类',
-  'sidebar.customCategories': 'Custom',
+  'sidebar.customCategories': '自定义分类',
   'sidebar.batchAdd': '批量添加',
   'sidebar.createGroup': '创建窗口组',
   'sidebar.clearActive': '清空终端',
