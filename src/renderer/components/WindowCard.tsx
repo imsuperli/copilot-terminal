@@ -252,13 +252,16 @@ export const WindowCard = React.memo<WindowCardProps>(({
           </div>
         </div>
 
+        {/* 标题分割线 */}
+        <div className="border-t border-[rgb(var(--border))]" />
+
         {/* 第二行：工作目录路径（小字体，单行显示） */}
         <Tooltip.Provider>
           <Tooltip.Root delayDuration={500}>
             <Tooltip.Trigger asChild>
               <p
                 data-testid="working-directory"
-                className="text-xs font-mono text-[rgb(var(--muted-foreground))] truncate pr-1 min-h-[1.25rem]"
+                className="text-xs text-[rgb(var(--muted-foreground))] truncate pr-1 min-h-[1.25rem] opacity-80"
               >
                 {truncatedPath || `(${t('windowCard.noWorkingDirectory')})`}
               </p>
@@ -273,9 +276,6 @@ export const WindowCard = React.memo<WindowCardProps>(({
             </Tooltip.Portal>
           </Tooltip.Root>
         </Tooltip.Provider>
-
-        {/* 分割线 */}
-        <div className="border-t border-[rgb(var(--border))]" />
 
         {/* 第三行：时间信息 */}
         <div className="flex flex-col gap-1 flex-1">

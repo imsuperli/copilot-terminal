@@ -9,6 +9,7 @@ import { useWindowStore } from '../stores/windowStore';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils/statusHelpers';
 import { formatRelativeTime, useI18n } from '../i18n';
+import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 
 interface GroupCardProps {
   group: WindowGroup;
@@ -81,6 +82,11 @@ export const GroupCard = React.memo<GroupCardProps>(({
 
     // 否则为暂停状态
     return 'paused';
+  }, [windowsInGroup]);
+
+  // 获取所有窗口的路径
+  const windowPaths = useMemo(() => {
+    return windowsInGroup.map(w => getCurrentWindowWorkingDirectory(w));
   }, [windowsInGroup]);
 
   // 格式化最后活跃时间
@@ -166,8 +172,30 @@ export const GroupCard = React.memo<GroupCardProps>(({
         {/* 分割线 */}
         <div className="border-t border-[rgb(var(--border))]" />
 
-        {/* 第三行：时间信息 */}
-        <div className="flex flex-col gap-1 flex-1">
+        {/* 窗口路径列表（默认显示3行，可滚动） */}
+        <div
+          className="flex flex-col gap-0.5 flex-1 min-h-0 overflow-y-auto"
+          style={{ maxHeight: '3.75rem' }}
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {windowPaths.map((path, index) => (
+            <div key={index} className="flex items-center gap-1.5 min-w-0 group/path">
+              <button
+                onClick={(e) => handleButtonClick(e, () => window.electronAPI?.openFolder(path))}
+                className="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity focus:outline-none"
+                title={`在资源管理器中打开: ${path}`}
+              >
+                <FolderOpen size={11} className="text-[rgb(var(--muted-foreground))] group-hover/path:text-[rgb(var(--primary))]" />
+              </button>
+              <span className="text-xs text-[rgb(var(--muted-foreground))] truncate opacity-80" title={path}>
+                {path}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* 时间信息 */}
+        <div className="flex flex-col gap-1 flex-shrink-0">
           <div className="flex items-center justify-between">
             <span className="text-xs text-[rgb(var(--muted-foreground))]">
               创建时间
