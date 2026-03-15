@@ -2,7 +2,7 @@
 
 [English](docs/README.en.md) | [简体中文](docs/README.zh-CN.md)
 
-A modern terminal window manager built with Electron, React, TypeScript, and xterm.js, designed for “multi-project, multi-terminal, multi-context” daily development scenarios.
+A modern terminal window manager designed for “multi-project, multi-terminal, multi-context” daily development scenarios.
 
 It provides a unified card view to manage multiple project terminals and an immersive terminal view for focused operations, perfect for maintaining multiple code repositories, AI coding sessions, and local development environments simultaneously.
 
