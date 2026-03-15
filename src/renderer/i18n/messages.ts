@@ -375,6 +375,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'category.emptyTitle': 'No terminals in this category',
   'category.emptyHint': 'Drag windows or groups here to add them',
   'createWindow.title': 'New window',
+  'createWindow.defaultName': 'Window #{count}',
   'createWindow.description': 'Create a new terminal window',
   'createWindow.nameLabel': 'Window name (optional)',
   'createWindow.workingDirectoryLabel': 'Working directory',

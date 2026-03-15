@@ -147,7 +147,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
     (groupId: string) => {
       setQuickSwitcherOpen(false);
       if (groupId !== group.id) {
-        onGroupSwitch(groupId);
+        onGroupSwitch?.(groupId);
       }
     },
     [group.id, onGroupSwitch]
