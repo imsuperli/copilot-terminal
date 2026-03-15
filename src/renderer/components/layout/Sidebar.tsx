@@ -529,7 +529,7 @@ export function Sidebar({
           {activeWindows.length >= 2 && (
             <button
               onClick={onCreateGroup}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-700 text-zinc-100 font-medium hover:bg-zinc-600 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
               title={t('sidebar.createGroup')}
             >
               <Folder className="h-4 w-4" />
