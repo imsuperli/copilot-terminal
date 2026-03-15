@@ -1149,8 +1149,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
       <Dialog.Root open={showAddDialog} onOpenChange={handleAddDialogChange}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[70] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-2xl">
+          <Dialog.Overlay className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[10001] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-2xl">
             <Dialog.Title className="text-xl font-semibold text-white">
               {editingIDE?.id ? t('settings.ideDialog.editTitle') : t('settings.ideDialog.addTitle')}
             </Dialog.Title>
@@ -1236,8 +1236,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
       <Dialog.Root open={showNavDialog} onOpenChange={handleNavDialogChange}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[70] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-2xl">
+          <Dialog.Overlay className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[10001] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-2xl">
             <Dialog.Title className="text-xl font-semibold text-white">
               {editingNavItem?.id && quickNavItems.find((item) => item.id === editingNavItem.id)
                 ? t('settings.quickNavDialog.editTitle')

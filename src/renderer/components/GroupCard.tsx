@@ -187,30 +187,32 @@ export const GroupCard = React.memo<GroupCardProps>(({
         </div>
       </div>
 
-      {/* 底部按钮栏 */}
-      <div className="flex items-center gap-1.5 px-4 py-3 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
-        {/* 根据聚合状态显示启动/暂停按钮 */}
-        {aggregatedStatus === 'paused' && (
-          <button
-            onClick={(e) => handleButtonClick(e, () => onStartAll?.(group))}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap"
-          >
-            <Play size={14} />
-            <span>全部启动</span>
-          </button>
-        )}
-        {(aggregatedStatus === 'running' || aggregatedStatus === 'waiting') && (
-          <button
-            onClick={(e) => handleButtonClick(e, () => onPauseAll?.(group))}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap"
-          >
-            <Square size={14} fill="currentColor" />
-            <span>全部暂停</span>
-          </button>
-        )}
+      {/* 底部按钮栏 - 单行布局 */}
+      <div className="flex items-center justify-between gap-1.5 px-4 py-2 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
+        {/* 左侧：启动/暂停按钮 */}
+        <div>
+          {aggregatedStatus === 'paused' && (
+            <button
+              onClick={(e) => handleButtonClick(e, () => onStartAll?.(group))}
+              className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap"
+            >
+              <Play size={14} />
+              <span>全部启动</span>
+            </button>
+          )}
+          {(aggregatedStatus === 'running' || aggregatedStatus === 'waiting') && (
+            <button
+              onClick={(e) => handleButtonClick(e, () => onPauseAll?.(group))}
+              className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap"
+            >
+              <Square size={14} fill="currentColor" />
+              <span>全部暂停</span>
+            </button>
+          )}
+        </div>
 
-        {/* 图标按钮组 */}
-        <div className="flex items-center gap-1.5 ml-auto">
+        {/* 右侧：操作按钮组（归档 + 编辑 + 删除） */}
+        <div className="flex items-center gap-1.5">
           {!group.archived ? (
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>

@@ -270,7 +270,7 @@ export function Sidebar({
               title="勾选后隐藏已加入窗口组的窗口"
               onClick={() => setHideGroupedWindows(!hideGroupedWindows)}
             >
-              <span className="text-[10px] text-[rgb(var(--muted-foreground))]">隐藏已分组</span>
+              <span className="text-[10px] text-[rgb(var(--muted-foreground))]">{t('sidebar.hideGroupedWindows')}</span>
               <span
                 role="checkbox"
                 aria-checked={hideGroupedWindows}

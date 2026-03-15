@@ -298,134 +298,129 @@ export const WindowCard = React.memo<WindowCardProps>(({
         </div>
       </div>
 
-      {/* 项目链接（如果存在） - 移到底部 */}
-      {window.projectConfig && window.projectConfig.links.length > 0 && (
-        <div className="px-4 py-2 bg-[rgb(var(--card))] border-t border-[rgb(var(--border))] flex-shrink-0">
-          <ProjectLinks links={window.projectConfig.links} variant="card" maxDisplay={6} />
-        </div>
-      )}
+      {/* 底部按钮栏 - 两行布局 */}
+      <div className="flex flex-col gap-1.5 px-4 py-2 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
+        {/* 第一行：启动/暂停按钮（左侧） + 操作按钮（右侧） */}
+        <div className="flex items-center justify-between">
+          {/* 左侧：启动/暂停按钮 */}
+          <div>
+            {aggregatedStatus === WindowStatus.Paused && (
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={(e) => handleButtonClick(e, () => onStart?.(window))}
+                      className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap"
+                      aria-label={t('windowCard.start')}
+                    >
+                      <Play size={14} />
+                      <span>{t('windowCard.start')}</span>
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      sideOffset={5}
+                    >
+                      {t('windowCard.start')}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            )}
+            {aggregatedStatus === WindowStatus.Restoring && (
+              <button
+                disabled
+                className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--muted-foreground))] bg-[rgb(var(--card))] rounded cursor-not-allowed opacity-60 whitespace-nowrap"
+                aria-label={t('windowCard.starting')}
+              >
+                <Loader2 size={14} className="animate-spin" />
+                <span>{t('windowCard.starting')}</span>
+              </button>
+            )}
+            {(aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={(e) => handleButtonClick(e, () => onPause?.(window))}
+                      className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap"
+                      aria-label={t('windowCard.stop')}
+                    >
+                      <Square size={14} fill="currentColor" />
+                      <span>{t('windowCard.stop')}</span>
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      sideOffset={5}
+                    >
+                      {t('windowCard.stop')}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            )}
+          </div>
 
-      {/* 底部按钮栏 */}
-      <div className="flex items-center gap-1.5 px-4 py-3 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
-        {/* 启动/暂停按钮 */}
-        {aggregatedStatus === WindowStatus.Paused && (
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(e) => handleButtonClick(e, () => onStart?.(window))}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap"
-                  aria-label={t('windowCard.start')}
-                >
-                  <Play size={14} />
-                  <span>{t('windowCard.start')}</span>
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
-                  sideOffset={5}
-                >
-                  {t('windowCard.start')}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        )}
-        {aggregatedStatus === WindowStatus.Restoring && (
-          <button
-            disabled
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--muted-foreground))] bg-[rgb(var(--card))] rounded cursor-not-allowed opacity-60 whitespace-nowrap"
-            aria-label={t('windowCard.starting')}
-          >
-            <Loader2 size={14} className="animate-spin" />
-            <span>{t('windowCard.starting')}</span>
-          </button>
-        )}
-        {(aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(e) => handleButtonClick(e, () => onPause?.(window))}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap"
-                  aria-label={t('windowCard.stop')}
-                >
-                  <Square size={14} fill="currentColor" />
-                  <span>{t('windowCard.stop')}</span>
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
-                  sideOffset={5}
-                >
-                  {t('windowCard.stop')}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        )}
+          {/* 右侧：操作按钮组（归档 + 编辑 + 删除） */}
+          <div className="flex items-center gap-1.5">
+            {!window.archived ? (
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={(e) => handleButtonClick(e, () => onArchive?.(window))}
+                      className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                      aria-label={t('terminalView.archive')}
+                    >
+                      <Archive size={16} />
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      sideOffset={5}
+                    >
+                      {t('windowCard.archive')}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            ) : (
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={(e) => handleButtonClick(e, () => onUnarchive?.(window))}
+                      className="flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                      aria-label={t('windowCard.unarchive')}
+                    >
+                      <ArchiveRestore size={16} />
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      sideOffset={5}
+                    >
+                      {t('windowCard.unarchive')}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            )}
 
-        {/* 图标按钮组 */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          {/* 动态渲染启用的 IDE 图标 */}
-          {enabledIDEs.map((ide) => (
-            <Tooltip.Provider key={ide.id}>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id, window))}
-                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-0 border-0"
-                    aria-label={t('common.openInIDE', { name: ide.name })}
-                  >
-                    <IDEIcon icon={ide.icon || ''} size={16} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
-                    sideOffset={5}
-                  >
-                    {t('common.openInIDE', { name: ide.name })}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
-          ))}
-
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(window))}
-                  className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
-                  aria-label={t('common.openFolder')}
-                >
-                  <FolderOpen size={16} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
-                  sideOffset={5}
-                >
-                  {t('common.openFolder')}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-
-          {!window.archived ? (
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={(e) => handleButtonClick(e, () => onArchive?.(window))}
+                    onClick={(e) => handleButtonClick(e, () => onEdit?.(window))}
                     className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
-                    aria-label={t('terminalView.archive')}
+                    aria-label={t('windowCard.edit')}
                   >
-                    <Archive size={16} />
+                    <Edit2 size={16} />
                   </button>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
@@ -433,21 +428,21 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                     sideOffset={5}
                   >
-                    {t('windowCard.archive')}
+                    {t('windowCard.edit')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
             </Tooltip.Provider>
-          ) : (
+
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={(e) => handleButtonClick(e, () => onUnarchive?.(window))}
-                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
-                    aria-label={t('windowCard.unarchive')}
+                    onClick={(e) => handleButtonClick(e, () => onDelete?.(window.id))}
+                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
+                    aria-label={t('common.deleteWindow')}
                   >
-                    <ArchiveRestore size={16} />
+                    <Trash2 size={16} />
                   </button>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
@@ -455,56 +450,72 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
                     sideOffset={5}
                   >
-                    {t('windowCard.unarchive')}
+                    {t('common.delete')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
             </Tooltip.Provider>
+          </div>
+        </div>
+
+        {/* 第二行：快捷导航区域 - 左右分栏 7:3 */}
+        <div className="flex items-center gap-2">
+          {/* 左侧（70%）：快捷打开方式（IDE + 文件夹） */}
+          <div className="flex items-center gap-1.5 flex-[7]">
+            {/* 动态渲染启用的 IDE 图标 */}
+            {enabledIDEs.map((ide) => (
+              <Tooltip.Provider key={ide.id}>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id, window))}
+                      className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-0 border-0"
+                      aria-label={t('common.openInIDE', { name: ide.name })}
+                    >
+                      <IDEIcon icon={ide.icon || ''} size={16} />
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      sideOffset={5}
+                    >
+                      {t('common.openInIDE', { name: ide.name })}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            ))}
+
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(window))}
+                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                    aria-label={t('common.openFolder')}
+                  >
+                    <FolderOpen size={16} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                    sideOffset={5}
+                  >
+                    {t('common.openFolder')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
+          </div>
+
+          {/* 右侧（30%）：项目链接（如果存在） */}
+          {window.projectConfig && window.projectConfig.links.length > 0 && (
+            <div className="flex-[3] min-w-0 flex justify-end">
+              <ProjectLinks links={window.projectConfig.links} variant="card" maxDisplay={6} />
+            </div>
           )}
-
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(e) => handleButtonClick(e, () => onEdit?.(window))}
-                  className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
-                  aria-label={t('windowCard.edit')}
-                >
-                  <Edit2 size={16} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
-                  sideOffset={5}
-                >
-                  {t('windowCard.edit')}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(e) => handleButtonClick(e, () => onDelete?.(window.id))}
-                  className="flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
-                  aria-label={t('common.deleteWindow')}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
-                  sideOffset={5}
-                >
-                  {t('common.delete')}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
         </div>
       </div>
     </div>

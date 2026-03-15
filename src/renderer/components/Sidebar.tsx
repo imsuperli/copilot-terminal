@@ -187,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="flex items-center gap-1.5 cursor-pointer normal-case tracking-normal font-normal"
               title="勾选后隐藏已加入窗口组的窗口"
             >
-              <span className="text-[10px] text-zinc-500">隐藏已分组</span>
+              <span className="text-[10px] text-zinc-500">{t('sidebar.hideGroupedWindows')}</span>
               <span
                 className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border transition-colors ${
                   hideGroupedWindows
