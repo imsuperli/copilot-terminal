@@ -26,21 +26,21 @@
 
 本项目当前在 `package.json` 中固定引用了以下两个本地包：
 
-- `@xterm/xterm` → `file:../xterm.js-master/xterm-xterm-6.0.0-custom.tgz`
-- `@xterm/addon-fit` → `file:../xterm.js-master/addons/addon-fit/xterm-addon-fit-0.11.0-custom.tgz`
+- `@xterm/xterm` → `file:vendor/xterm/xterm-xterm-6.0.0-custom.tgz`
+- `@xterm/addon-fit` → `file:vendor/xterm/xterm-addon-fit-0.11.0-custom.tgz`
 
-这意味着，其他开发者要想在不改 `package.json` 的前提下正常安装和打包项目，就必须保证本地目录结构满足这个约定。
+这些包文件已经提交到项目仓库的 `vendor/xterm/` 目录中，确保 CI/CD 环境和所有开发者都能正常构建。
 
-建议保持如下目录结构：
+项目目录结构：
 
 ```text
-pc_program/
-├─ ausome-terminal/
-└─ xterm.js-master/
-   ├─ xterm-xterm-6.0.0-custom.tgz
-   └─ addons/
-      └─ addon-fit/
-         └─ xterm-addon-fit-0.11.0-custom.tgz
+copilot-terminal/
+├─ vendor/
+│  └─ xterm/
+│     ├─ xterm-xterm-6.0.0-custom.tgz
+│     └─ xterm-addon-fit-0.11.0-custom.tgz
+├─ package.json
+└─ ...
 ```
 
 ## 正确操作方式
@@ -49,9 +49,9 @@ pc_program/
 
 1. 从包含目标修复的上游 `xterm.js master` 源码进行构建和打包。
 2. 产出 `@xterm/xterm` 与 `@xterm/addon-fit` 对应的 tgz 包。
-3. 将打包结果复制、移动或覆盖到 `package.json` 已经约定的固定路径。
-4. 回到本项目后再执行正常的依赖安装、构建和打包流程。
-5. 提交代码前确认 `package.json` 没有因为本次操作发生任何改动。
+3. 将打包结果复制、移动或覆盖到项目的 `vendor/xterm/` 目录。
+4. 提交更新后的 tgz 包文件到代码仓库。
+5. 确认 `package.json` 没有因为本次操作发生任何改动。
 
 一句话原则：**改包文件，不改依赖声明。**
 
