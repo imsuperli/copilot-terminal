@@ -759,6 +759,11 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         useBundledConptyDll: settings?.terminal?.useBundledConptyDll ?? defaults.terminal?.useBundledConptyDll ?? true,
         defaultShellProgram: normalizeShellProgram(settings?.terminal?.defaultShellProgram) ?? defaults.terminal?.defaultShellProgram ?? '',
       },
+      tmux: {
+        enabled: settings?.tmux?.enabled ?? defaults.tmux?.enabled ?? true,
+        autoInjectPath: settings?.tmux?.autoInjectPath ?? defaults.tmux?.autoInjectPath ?? true,
+        enableForAllPanes: settings?.tmux?.enableForAllPanes ?? defaults.tmux?.enableForAllPanes ?? true,
+      },
       customCategories: settings?.customCategories ?? defaults.customCategories,
       defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
     };
@@ -775,6 +780,11 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       terminal: {
         useBundledConptyDll: true,
         defaultShellProgram: '',
+      },
+      tmux: {
+        enabled: true,
+        autoInjectPath: true,
+        enableForAllPanes: true,
       },
       customCategories: [],
       defaultSidebarTab: 'active',
