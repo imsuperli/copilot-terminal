@@ -95,10 +95,11 @@ Typical targets include:
 If this repository provides packaged builds, the easiest way to get started is from the release page:
 
 - Windows: installer or portable build
-- macOS: packaged app build
-- Linux: package or archive depending on the published release
+- macOS: `.dmg` installer
 
 This is the recommended path for regular users because it avoids the local build chain and custom `xterm.js` dependency setup.
+
+> **macOS users**: If you see "cannot verify the developer" when opening the app, right-click the installer, select "Open", then confirm in the dialog.
 
 ### Option 2: Run from Source
 
