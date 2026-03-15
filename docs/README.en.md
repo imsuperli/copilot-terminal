@@ -91,6 +91,10 @@ Typical targets include:
 
 ## Installation
 
+> **Windows Users**: For the best terminal experience, we strongly recommend using **PowerShell 7** (pwsh) as your default shell. It offers better Unicode support, performance, and cross-platform compatibility compared to PowerShell 5.1 or cmd.exe.
+>
+> Download: [PowerShell/PowerShell](https://github.com/PowerShell/PowerShell) (GitHub Releases)
+
 ### Option 1: Install from GitHub Releases (Recommended)
 
 If this repository provides packaged builds, the easiest way to get started is from the release page:

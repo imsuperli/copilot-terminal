@@ -91,6 +91,10 @@
 
 ## 安装
 
+> **Windows 用户建议**：为获得最佳终端体验，强烈推荐使用 **PowerShell 7**（pwsh）作为默认 Shell。相比 PowerShell 5.1 或 cmd.exe，它提供了更好的 Unicode 支持、性能表现和跨平台兼容性。
+>
+> 下载地址：[PowerShell/PowerShell](https://github.com/PowerShell/PowerShell)（GitHub Releases）
+
 ### 方式一：通过 GitHub Releases 安装（推荐）
 
 如果仓库已经发布了安装包，优先使用 Release 页面中的构建产物：

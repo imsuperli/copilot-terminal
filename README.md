@@ -55,6 +55,10 @@ It provides a unified card view to manage multiple project terminals and an imme
 
 ## Quick Start
 
+> **Windows Users**: For the best terminal experience, we strongly recommend using **PowerShell 7** (pwsh) as your default shell. It offers better Unicode support, performance, and cross-platform compatibility compared to PowerShell 5.1 or cmd.exe.
+>
+> Download: [PowerShell/PowerShell](https://github.com/PowerShell/PowerShell) (GitHub Releases)
+
 ### Option 1: Download Installer (Recommended for Users)
 
 1. Open the [Releases page](../../releases)
