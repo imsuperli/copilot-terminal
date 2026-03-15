@@ -1,6 +1,16 @@
 import { existsSync, readdirSync } from 'fs';
 import { join, dirname, basename } from 'path';
+import { platform } from 'os';
 import { IDEConfig } from '../types/workspace';
+
+/**
+ * 平台特定的 IDE 配置
+ */
+interface PlatformIDEConfig {
+  searchPaths: string[];
+  executableName: string;
+  iconPaths?: string[];
+}
 
 /**
  * IDE 扫描配置
@@ -9,9 +19,30 @@ interface IDEScanConfig {
   name: string;
   command: string;
   icon: string;
-  searchPaths: string[];  // 可能的安装路径模式
-  executableName: string; // 可执行文件名
-  iconPaths?: string[];   // 可能的图标文件路径(相对于安装目录)
+  win32?: PlatformIDEConfig;
+  darwin?: PlatformIDEConfig;
+  linux?: PlatformIDEConfig;
+}
+
+/**
+ * 获取当前平台的配置
+ */
+function getPlatformConfig(config: IDEScanConfig): PlatformIDEConfig | null {
+  const currentPlatform = platform();
+
+  if (currentPlatform === 'win32' && config.win32) {
+    return config.win32;
+  }
+
+  if (currentPlatform === 'darwin' && config.darwin) {
+    return config.darwin;
+  }
+
+  if (currentPlatform === 'linux' && config.linux) {
+    return config.linux;
+  }
+
+  return null;
 }
 
 /**
@@ -22,114 +53,175 @@ const IDE_SCAN_CONFIGS: IDEScanConfig[] = [
     name: 'VS Code',
     command: 'code',
     icon: 'vscode',
-    searchPaths: [
-      'C:\\Program Files\\Microsoft VS Code',
-      'D:\\Program Files\\Microsoft VS Code',
-      'E:\\Program Files\\Microsoft VS Code',
-      'C:\\Program Files (x86)\\Microsoft VS Code',
-      'D:\\Program Files (x86)\\Microsoft VS Code',
-      'E:\\Program Files (x86)\\Microsoft VS Code',
-      'C:\\ProgramData\\Microsoft VS Code',
-      'D:\\ProgramData\\Microsoft VS Code',
-      'E:\\ProgramData\\Microsoft VS Code',
-    ],
-    executableName: 'Code.exe',
-    iconPaths: ['resources/app/resources/win32/code_70x70.png'],
+    win32: {
+      searchPaths: [
+        'C:\Program Files\Microsoft VS Code',
+        'D:\Program Files\Microsoft VS Code',
+        'E:\Program Files\Microsoft VS Code',
+        'C:\Program Files (x86)\Microsoft VS Code',
+        'D:\Program Files (x86)\Microsoft VS Code',
+        'E:\Program Files (x86)\Microsoft VS Code',
+      ],
+      executableName: 'Code.exe',
+      iconPaths: ['resources/app/resources/win32/code_70x70.png'],
+    },
+    darwin: {
+      searchPaths: [
+        '/Applications/Visual Studio Code.app',
+      ],
+      executableName: 'Contents/MacOS/Electron',
+      iconPaths: ['Contents/Resources/Code.icns'],
+    },
+    linux: {
+      searchPaths: [
+        '/usr/share/code',
+        '/opt/visual-studio-code',
+      ],
+      executableName: 'code',
+    },
   },
   {
     name: 'IntelliJ IDEA',
     command: 'idea',
     icon: 'idea',
-    searchPaths: [
-      'C:\\Program Files\\JetBrains',
-      'D:\\Program Files\\JetBrains',
-      'E:\\Program Files\\JetBrains',
-      'C:\\Program Files (x86)\\JetBrains',
-      'D:\\Program Files (x86)\\JetBrains',
-      'E:\\Program Files (x86)\\JetBrains',
-      'C:\\ProgramData\\JetBrains',
-      'D:\\ProgramData\\JetBrains',
-      'E:\\ProgramData\\JetBrains',
-    ],
-    executableName: 'idea64.exe',
-    iconPaths: ['bin/idea.ico'],
+    win32: {
+      searchPaths: [
+        'C:\Program Files\JetBrains',
+        'D:\Program Files\JetBrains',
+        'E:\Program Files\JetBrains',
+      ],
+      executableName: 'idea64.exe',
+      iconPaths: ['bin/idea.ico'],
+    },
+    darwin: {
+      searchPaths: [
+        '/Applications/IntelliJ IDEA.app',
+        '/Applications/IntelliJ IDEA CE.app',
+      ],
+      executableName: 'Contents/MacOS/idea',
+      iconPaths: ['Contents/Resources/idea.icns'],
+    },
+    linux: {
+      searchPaths: [
+        '/opt/idea',
+      ],
+      executableName: 'bin/idea.sh',
+    },
   },
   {
     name: 'PyCharm',
     command: 'pycharm',
     icon: 'pycharm',
-    searchPaths: [
-      'C:\\Program Files\\JetBrains',
-      'D:\\Program Files\\JetBrains',
-      'E:\\Program Files\\JetBrains',
-      'C:\\Program Files (x86)\\JetBrains',
-      'D:\\Program Files (x86)\\JetBrains',
-      'E:\\Program Files (x86)\\JetBrains',
-      'C:\\ProgramData\\JetBrains',
-      'D:\\ProgramData\\JetBrains',
-      'E:\\ProgramData\\JetBrains',
-    ],
-    executableName: 'pycharm64.exe',
-    iconPaths: ['bin/pycharm.ico'],
+    win32: {
+      searchPaths: [
+        'C:\Program Files\JetBrains',
+        'D:\Program Files\JetBrains',
+        'E:\Program Files\JetBrains',
+      ],
+      executableName: 'pycharm64.exe',
+      iconPaths: ['bin/pycharm.ico'],
+    },
+    darwin: {
+      searchPaths: [
+        '/Applications/PyCharm.app',
+        '/Applications/PyCharm CE.app',
+      ],
+      executableName: 'Contents/MacOS/pycharm',
+      iconPaths: ['Contents/Resources/pycharm.icns'],
+    },
+    linux: {
+      searchPaths: [
+        '/opt/pycharm',
+      ],
+      executableName: 'bin/pycharm.sh',
+    },
   },
   {
     name: 'WebStorm',
     command: 'webstorm',
     icon: 'webstorm',
-    searchPaths: [
-      'C:\\Program Files\\JetBrains',
-      'D:\\Program Files\\JetBrains',
-      'E:\\Program Files\\JetBrains',
-      'C:\\Program Files (x86)\\JetBrains',
-      'D:\\Program Files (x86)\\JetBrains',
-      'E:\\Program Files (x86)\\JetBrains',
-      'C:\\ProgramData\\JetBrains',
-      'D:\\ProgramData\\JetBrains',
-      'E:\\ProgramData\\JetBrains',
-    ],
-    executableName: 'webstorm64.exe',
-    iconPaths: ['bin/webstorm.ico'],
+    win32: {
+      searchPaths: [
+        'C:\Program Files\JetBrains',
+        'D:\Program Files\JetBrains',
+        'E:\Program Files\JetBrains',
+      ],
+      executableName: 'webstorm64.exe',
+      iconPaths: ['bin/webstorm.ico'],
+    },
+    darwin: {
+      searchPaths: [
+        '/Applications/WebStorm.app',
+      ],
+      executableName: 'Contents/MacOS/webstorm',
+      iconPaths: ['Contents/Resources/webstorm.icns'],
+    },
+    linux: {
+      searchPaths: [
+        '/opt/webstorm',
+      ],
+      executableName: 'bin/webstorm.sh',
+    },
   },
   {
     name: 'Android Studio',
     command: 'studio',
     icon: 'androidstudio',
-    searchPaths: [
-      'C:\\Program Files\\Android\\Android Studio',
-      'D:\\Program Files\\Android\\Android Studio',
-      'E:\\Program Files\\Android\\Android Studio',
-      'C:\\Program Files (x86)\\Android\\Android Studio',
-      'D:\\Program Files (x86)\\Android\\Android Studio',
-      'E:\\Program Files (x86)\\Android\\Android Studio',
-      'C:\\ProgramData\\Android\\Android Studio',
-      'D:\\ProgramData\\Android\\Android Studio',
-      'E:\\ProgramData\\Android\\Android Studio',
-    ],
-    executableName: 'studio64.exe',
-    iconPaths: ['bin/studio.ico'],
+    win32: {
+      searchPaths: [
+        'C:\Program Files\Android\Android Studio',
+        'D:\Program Files\Android\Android Studio',
+        'E:\Program Files\Android\Android Studio',
+      ],
+      executableName: 'studio64.exe',
+      iconPaths: ['bin/studio.ico'],
+    },
+    darwin: {
+      searchPaths: [
+        '/Applications/Android Studio.app',
+      ],
+      executableName: 'Contents/MacOS/studio',
+      iconPaths: ['Contents/Resources/studio.icns'],
+    },
+    linux: {
+      searchPaths: [
+        '/opt/android-studio',
+      ],
+      executableName: 'bin/studio.sh',
+    },
   },
   {
     name: 'Sublime Text',
     command: 'subl',
     icon: 'sublime',
-    searchPaths: [
-      'C:\\Program Files\\Sublime Text',
-      'D:\\Program Files\\Sublime Text',
-      'E:\\Program Files\\Sublime Text',
-      'C:\\Program Files (x86)\\Sublime Text',
-      'D:\\Program Files (x86)\\Sublime Text',
-      'E:\\Program Files (x86)\\Sublime Text',
-      'C:\\ProgramData\\Sublime Text',
-      'D:\\ProgramData\\Sublime Text',
-      'E:\\ProgramData\\Sublime Text',
-    ],
-    executableName: 'sublime_text.exe',
-    iconPaths: ['sublime_text.exe'],
+    win32: {
+      searchPaths: [
+        'C:\Program Files\Sublime Text',
+        'D:\Program Files\Sublime Text',
+        'E:\Program Files\Sublime Text',
+      ],
+      executableName: 'sublime_text.exe',
+      iconPaths: ['sublime_text.exe'],
+    },
+    darwin: {
+      searchPaths: [
+        '/Applications/Sublime Text.app',
+      ],
+      executableName: 'Contents/MacOS/sublime_text',
+      iconPaths: ['Contents/Resources/Sublime Text.icns'],
+    },
+    linux: {
+      searchPaths: [
+        '/opt/sublime_text',
+      ],
+      executableName: 'sublime_text',
+    },
   },
 ];
 
+
 /**
- * 扫描 JetBrains 产品目录
+ * 扫描 JetBrains 产品目录 (Windows)
  */
 function scanJetBrainsDirectory(basePath: string, productName: string, executableName: string): string | null {
   if (!existsSync(basePath)) {
@@ -139,7 +231,6 @@ function scanJetBrainsDirectory(basePath: string, productName: string, executabl
   try {
     const dirs = readdirSync(basePath, { withFileTypes: true });
 
-    // 查找匹配的产品目录（如 "IntelliJ IDEA 2024.3"）
     for (const dir of dirs) {
       if (dir.isDirectory() && dir.name.includes(productName)) {
         const binPath = join(basePath, dir.name, 'bin', executableName);
@@ -156,32 +247,51 @@ function scanJetBrainsDirectory(basePath: string, productName: string, executabl
 }
 
 /**
- * 扫描IDE图标文件
- * @param installPath IDE安装路径(可执行文件路径)
- * @param config IDE配置
- * @returns 图标文件的完整路径,如果未找到则返回null
+ * 扫描 macOS .app 包
  */
-function scanIconPath(installPath: string, config: IDEScanConfig): string | null {
-  if (!config.iconPaths || config.iconPaths.length === 0) {
+function scanMacOSApp(appPath: string, executableRelativePath: string): string | null {
+  if (!existsSync(appPath)) {
     return null;
   }
 
-  // 获取IDE安装目录(去掉可执行文件名和bin目录)
+  const executablePath = join(appPath, executableRelativePath);
+  if (existsSync(executablePath)) {
+    return executablePath;
+  }
+
+  return null;
+}
+
+/**
+ * 扫描IDE图标文件
+ */
+function scanIconPath(installPath: string, platformConfig: PlatformIDEConfig): string | null {
+  if (!platformConfig.iconPaths || platformConfig.iconPaths.length === 0) {
+    return null;
+  }
+
   let installDir = dirname(installPath);
-  if (basename(installDir) === 'bin') {
+  
+  // macOS: 如果路径在 .app/Contents/MacOS 下，回退到 .app 根目录
+  if (platform() === 'darwin' && installPath.includes('.app/Contents/MacOS')) {
+    const appMatch = installPath.match(/^(.+\.app)\//);
+    if (appMatch) {
+      installDir = appMatch[1];
+    }
+  }
+  
+  // Windows: 如果在 bin 目录下，回退到上级目录
+  if (platform() === 'win32' && basename(installDir) === 'bin') {
     installDir = dirname(installDir);
   }
 
-  // 尝试查找图标文件
-  for (const iconPath of config.iconPaths) {
+  for (const iconPath of platformConfig.iconPaths) {
     const fullIconPath = join(installDir, iconPath);
-
     if (existsSync(fullIconPath)) {
       return fullIconPath;
     }
   }
 
-  console.warn(`Icon not found for ${config.name} under ${installDir}`);
   return null;
 }
 
@@ -189,33 +299,35 @@ function scanIconPath(installPath: string, config: IDEScanConfig): string | null
  * 扫描单个 IDE
  */
 function scanIDE(config: IDEScanConfig): { path: string | null; iconPath: string | null } {
-  // 对于 JetBrains 产品，需要扫描子目录
-  const isJetBrains = config.searchPaths.some(p => p.includes('JetBrains'));
+  const platformConfig = getPlatformConfig(config);
+  
+  if (!platformConfig) {
+    return { path: null, iconPath: null };
+  }
 
-  for (const searchPath of config.searchPaths) {
+  const currentPlatform = platform();
+  const isJetBrains = platformConfig.searchPaths.some(p => p.includes('JetBrains'));
+
+  for (const searchPath of platformConfig.searchPaths) {
     let foundPath: string | null = null;
 
-    if (isJetBrains) {
-      // JetBrains 产品需要扫描版本目录
-      const productName = config.name.split(' ')[0]; // 提取产品名称（如 "IntelliJ"）
-      foundPath = scanJetBrainsDirectory(searchPath, productName, config.executableName);
+    if (currentPlatform === 'win32' && isJetBrains) {
+      // Windows JetBrains 产品需要扫描版本目录
+      const productName = config.name.split(' ')[0];
+      foundPath = scanJetBrainsDirectory(searchPath, productName, platformConfig.executableName);
+    } else if (currentPlatform === 'darwin' && searchPath.endsWith('.app')) {
+      // macOS .app 包
+      foundPath = scanMacOSApp(searchPath, platformConfig.executableName);
     } else {
-      // 其他 IDE 直接检查路径
-      const fullPath = join(searchPath, config.executableName);
+      // 其他情况：直接检查路径
+      const fullPath = join(searchPath, platformConfig.executableName);
       if (existsSync(fullPath)) {
         foundPath = fullPath;
-      } else {
-        // 也检查 bin 子目录
-        const binPath = join(searchPath, 'bin', config.executableName);
-        if (existsSync(binPath)) {
-          foundPath = binPath;
-        }
       }
     }
 
     if (foundPath) {
-      // 找到IDE后,扫描图标路径
-      const iconPath = scanIconPath(foundPath, config);
+      const iconPath = scanIconPath(foundPath, platformConfig);
       return { path: foundPath, iconPath };
     }
   }
@@ -225,7 +337,6 @@ function scanIDE(config: IDEScanConfig): { path: string | null; iconPath: string
 
 /**
  * 扫描所有已安装的 IDE
- * 只返回成功找到的IDE
  */
 export function scanInstalledIDEs(): IDEConfig[] {
   const installedIDEs: IDEConfig[] = [];
@@ -233,15 +344,14 @@ export function scanInstalledIDEs(): IDEConfig[] {
   for (const config of IDE_SCAN_CONFIGS) {
     const { path: foundPath, iconPath } = scanIDE(config);
 
-    // 只添加找到的IDE
     if (foundPath) {
       installedIDEs.push({
         id: config.command,
         name: config.name,
         command: config.command,
         path: foundPath,
-        enabled: true, // 找到的IDE默认启用
-        icon: iconPath || config.icon, // 优先使用扫描到的图标路径,否则使用默认标识符
+        enabled: true,
+        icon: iconPath || config.icon,
       });
     }
   }
@@ -250,7 +360,7 @@ export function scanInstalledIDEs(): IDEConfig[] {
 }
 
 /**
- * 获取默认 IDE 配置（如果没有扫描到任何 IDE）
+ * 获取默认 IDE 配置
  */
 export function getDefaultIDEConfigs(): IDEConfig[] {
   return IDE_SCAN_CONFIGS.map(config => ({
