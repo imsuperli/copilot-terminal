@@ -3,6 +3,16 @@ Always reply in chinese.
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Commit Rules
+
+**CRITICAL**: NEVER include `Co-Authored-By` tags with Claude model information in commit messages. This includes:
+- `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
+- `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+- `Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>`
+- Any other Claude model variants
+
+A git commit-msg hook is installed at `.git/hooks/commit-msg` to enforce this rule. All commits containing Claude Co-Authored-By tags will be rejected.
+
 ## Project Overview
 
 A modern terminal window manager built with Electron, React, and TypeScript. Manages multiple terminal sessions with workspace persistence, window archiving, and real-time status monitoring.
