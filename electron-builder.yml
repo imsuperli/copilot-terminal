@@ -29,6 +29,10 @@ nsis:
 mac:
   icon: resources/icon.png
   category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - universal
 linux:
   icon: resources/icon.png
   category: Development
