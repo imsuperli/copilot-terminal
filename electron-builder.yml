@@ -26,6 +26,8 @@ nsis:
   allowElevation: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+dmg:
+  format: UDZO
 mac:
   icon: resources/icon.png
   category: public.app-category.developer-tools
