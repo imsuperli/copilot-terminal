@@ -51,6 +51,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native modules
+        run: npm rebuild node-pty --update-binary
+
       - name: Build & Package
         run: npm run dist
 

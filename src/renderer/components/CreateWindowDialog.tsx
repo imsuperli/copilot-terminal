@@ -145,7 +145,15 @@ export function CreateWindowDialog({ open, onOpenChange }: CreateWindowDialogPro
       }
     } catch (error) {
       // 显示用户友好的错误信息
-      const errorMessage = (error as Error).message || t('createWindow.errorCreateFailedRetry')
+      let errorMessage = (error as Error).message || t('createWindow.errorCreateFailedRetry')
+
+      // 针对常见错误提供更友好的提示
+      if (errorMessage.includes('posix_spawnp failed')) {
+        errorMessage = t('createWindow.errorSpawnFailed')
+      } else if (errorMessage.includes('Working directory does not exist')) {
+        errorMessage = t('createWindow.errorPathNotFound')
+      }
+
       setCreateError(errorMessage)
     } finally {
       setIsCreating(false)

@@ -800,9 +800,27 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       }
     }
 
-    const ptyProcess = pty.spawn(executable, args, ptySpawnOptions);
+    try {
+      console.log('[ProcessManager] Spawning PTY:', {
+        executable,
+        args,
+        cwd: config.workingDirectory,
+        platform: platform(),
+      });
 
-    return ptyProcess;
+      const ptyProcess = pty.spawn(executable, args, ptySpawnOptions);
+      return ptyProcess;
+    } catch (error) {
+      console.error('[ProcessManager] Failed to spawn PTY:', {
+        error,
+        executable,
+        args,
+        cwd: config.workingDirectory,
+        cwdExists: existsSync(config.workingDirectory),
+        executableExists: existsSync(executable),
+      });
+      throw error;
+    }
   }
 
   private resolveLaunchCommand(config: TerminalConfig): { command: string; file: string; args: string[] } {

@@ -105,6 +105,7 @@ export const zhCNMessages = {
   'createWindow.errorValidationFailed': '验证失败',
   'createWindow.errorCreateFailed': '创建窗口失败',
   'createWindow.errorCreateFailedRetry': '创建窗口失败，请重试',
+  'createWindow.errorSpawnFailed': '无法启动终端进程。请检查：1) 工作目录是否存在 2) Shell 程序是否正确安装 3) 应用是否有必要的系统权限',
 
   'batchCreate.noSubfoldersFound': '未找到子文件夹',
   'batchCreate.scanFailed': '扫描文件夹失败',
@@ -400,6 +401,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'createWindow.errorValidationFailed': 'Validation failed',
   'createWindow.errorCreateFailed': 'Failed to create window',
   'createWindow.errorCreateFailedRetry': 'Failed to create window. Please try again.',
+  'createWindow.errorSpawnFailed': 'Failed to start terminal process. Please check: 1) Working directory exists 2) Shell program is installed 3) App has necessary system permissions',
 
   'batchCreate.noSubfoldersFound': 'No subfolders found',
   'batchCreate.scanFailed': 'Failed to scan folders',
