@@ -34,7 +34,7 @@ mac:
   target:
     - target: dmg
       arch:
-        - universal
+        - arm64
 linux:
   icon: resources/icon.png
   category: Development

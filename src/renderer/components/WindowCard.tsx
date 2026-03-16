@@ -1,5 +1,6 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import * as Popover from '@radix-ui/react-popover';
 import { FolderOpen, Trash2, Play, Square, Loader2, Archive, ArchiveRestore, ExternalLink, Edit2 } from 'lucide-react';
 import { Window, WindowStatus } from '../types/window';
 import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils/statusHelpers';
@@ -91,6 +92,9 @@ export const WindowCard = React.memo<WindowCardProps>(({
   const { enabledIDEs } = useIDESettings();
   const { language, t } = useI18n();
 
+  // 控制左侧更多菜单的显示
+  const [showLeftMore, setShowLeftMore] = useState(false);
+
   // 获取窗口的聚合状态和窗格信息
   const aggregatedStatus = useMemo(() => getAggregatedStatus(window.layout), [window.layout]);
   const paneCount = useMemo(() => getPaneCount(window.layout), [window.layout]);
@@ -104,6 +108,23 @@ export const WindowCard = React.memo<WindowCardProps>(({
     }
     return cwd;
   }, [panes, window]);
+
+  // 检查是否有项目链接
+  const hasProjectLinks = useMemo(
+    () => Boolean(window.projectConfig?.links && window.projectConfig.links.length > 0),
+    [window.projectConfig]
+  );
+
+  // 检查是否有左侧快捷方式
+  const hasLeftShortcuts = useMemo(
+    () => enabledIDEs.length > 0 || Boolean(workingDirectory),
+    [enabledIDEs.length, workingDirectory]
+  );
+
+  // 调试输出
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[WindowCard ${window.name}] hasProjectLinks:`, hasProjectLinks, 'hasLeftShortcuts:', hasLeftShortcuts);
+  }
 
   // 缓存状态色和标签
   const statusColor = useMemo(() => getStatusColor(aggregatedStatus), [aggregatedStatus]);
@@ -458,62 +479,107 @@ export const WindowCard = React.memo<WindowCardProps>(({
           </div>
         </div>
 
-        {/* 第二行：快捷导航区域 - 左右分栏 7:3 */}
-        <div className="flex items-center gap-2">
-          {/* 左侧（70%）：快捷打开方式（IDE + 文件夹） */}
-          <div className="flex items-center gap-1.5 flex-[7]">
-            {/* 动态渲染启用的 IDE 图标 */}
-            {enabledIDEs.map((ide) => (
-              <Tooltip.Provider key={ide.id}>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id, window))}
-                      className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-0 border-0"
-                      aria-label={t('common.openInIDE', { name: ide.name })}
-                    >
-                      <IDEIcon icon={ide.icon || ''} size={16} />
-                    </button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
-                      sideOffset={5}
-                    >
-                      {t('common.openInIDE', { name: ide.name })}
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
-            ))}
+        {/* 第二行：快捷导航区域 - 固定 6:4 比例 */}
+        <div className="flex items-center gap-1.5">
+          {/* 左侧（60%）：快捷打开方式（IDE + 文件夹） */}
+          {hasLeftShortcuts && (
+            <Popover.Root open={showLeftMore && enabledIDEs.length > 3} onOpenChange={setShowLeftMore}>
+              <Popover.Trigger asChild>
+                <div
+                  className="flex items-center gap-1 flex-[6]"
+                  onMouseEnter={() => enabledIDEs.length > 3 && setShowLeftMore(true)}
+                  onMouseLeave={() => setShowLeftMore(false)}
+                >
+                  {/* 显示前 3 个 IDE 图标 */}
+                  {enabledIDEs.slice(0, 3).map((ide) => (
+                    <Tooltip.Provider key={ide.id}>
+                      <Tooltip.Root delayDuration={300}>
+                        <Tooltip.Trigger asChild>
+                          <button
+                            onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id, window))}
+                            className="flex items-center justify-center w-7 h-7 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-0 border-0 flex-shrink-0"
+                            aria-label={t('common.openInIDE', { name: ide.name })}
+                          >
+                            <IDEIcon icon={ide.icon || ''} size={16} />
+                          </button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                          <Tooltip.Content
+                            className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                            sideOffset={5}
+                          >
+                            {t('common.openInIDE', { name: ide.name })}
+                          </Tooltip.Content>
+                        </Tooltip.Portal>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
+                  ))}
 
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(window))}
-                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
-                    aria-label={t('common.openFolder')}
-                  >
-                    <FolderOpen size={16} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                  {/* 文件夹图标 */}
+                  {workingDirectory && (
+                    <Tooltip.Provider>
+                      <Tooltip.Root delayDuration={300}>
+                        <Tooltip.Trigger asChild>
+                          <button
+                            onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(window))}
+                            className="flex items-center justify-center w-7 h-7 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] flex-shrink-0"
+                            aria-label={t('common.openFolder')}
+                          >
+                            <FolderOpen size={16} />
+                          </button>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                          <Tooltip.Content
+                            className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                            sideOffset={5}
+                          >
+                            {t('common.openFolder')}
+                          </Tooltip.Content>
+                        </Tooltip.Portal>
+                      </Tooltip.Root>
+                    </Tooltip.Provider>
+                  )}
+                </div>
+              </Popover.Trigger>
+
+              {/* Popover 内容：显示隐藏的 IDE */}
+              {enabledIDEs.length > 3 && (
+                <Popover.Portal>
+                  <Popover.Content
+                    className="bg-[rgb(var(--card))] rounded-lg shadow-xl border border-[rgb(var(--border))] p-1 z-50 min-w-[120px]"
                     sideOffset={5}
+                    onMouseEnter={() => setShowLeftMore(true)}
+                    onMouseLeave={() => setShowLeftMore(false)}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    {t('common.openFolder')}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
-          </div>
+                    {enabledIDEs.slice(3).map((ide) => (
+                      <button
+                        key={ide.id}
+                        className="flex items-center gap-2 px-3 py-2 text-sm text-[rgb(var(--foreground))] rounded hover:bg-[rgb(var(--accent))] cursor-pointer outline-none w-full"
+                        onClick={(e) => {
+                          handleButtonClick(e, () => onOpenInIDE?.(ide.id, window));
+                          setShowLeftMore(false);
+                        }}
+                      >
+                        <IDEIcon icon={ide.icon || ''} size={16} />
+                        <span>{ide.name}</span>
+                      </button>
+                    ))}
+                  </Popover.Content>
+                </Popover.Portal>
+              )}
+            </Popover.Root>
+          )}
 
-          {/* 右侧（30%）：项目链接（如果存在） */}
-          {window.projectConfig && window.projectConfig.links.length > 0 && (
-            <div className="flex-[3] min-w-0 flex justify-end">
-              <ProjectLinks links={window.projectConfig.links} variant="card" maxDisplay={6} />
+          {/* 右侧（40%）：项目链接（如果存在） */}
+          {hasProjectLinks && (
+            <div className="flex items-center gap-1 justify-end flex-[4]">
+              <ProjectLinks
+                links={window.projectConfig.links}
+                variant="card"
+                maxDisplay={2}
+                onOpenLink={handleOpenLink}
+              />
             </div>
           )}
         </div>

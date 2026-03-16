@@ -22,7 +22,7 @@ permissions:
 jobs:
   build-mac:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'mac' }}
-    runs-on: macos-13
+    runs-on: macos-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
@@ -37,10 +37,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Rebuild native modules for universal
-        run: |
-          npm rebuild node-pty --arch=x64 --update-binary
-          npm rebuild node-pty --arch=arm64 --update-binary
+      - name: Rebuild native modules
+        run: npm rebuild node-pty --update-binary
 
       - name: Build & Package
         run: npm run dist

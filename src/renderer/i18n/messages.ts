@@ -25,6 +25,7 @@ export const zhCNMessages = {
   'common.folder': '文件夹',
   'common.unknown': '未知',
   'common.close': '关闭',
+  'common.more': '更多',
 
   'status.running': '运行中',
   'status.waitingInput': '等待输入',
