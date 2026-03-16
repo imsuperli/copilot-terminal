@@ -22,7 +22,7 @@ permissions:
 jobs:
   build-mac:
     if: ${{ github.event.inputs.platform == 'all' || github.event.inputs.platform == 'mac' }}
-    runs-on: macos-latest
+    runs-on: macos-13
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
