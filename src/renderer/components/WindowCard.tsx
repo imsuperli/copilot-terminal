@@ -565,7 +565,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
           {hasProjectLinks && (
             <div className="flex items-center gap-1 justify-end flex-[4]">
               <ProjectLinks
-                links={window.projectConfig.links}
+                links={window.projectConfig!.links}
                 variant="card"
                 maxDisplay={2}
                 onOpenLink={handleOpenLink}
