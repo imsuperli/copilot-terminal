@@ -673,7 +673,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     const selectionDisposable = terminal.onSelectionChange(() => {
       const selection = terminal.getSelection();
       if (!selection) return;
-      void writeClipboardText(selection);
+      // 去掉每行尾部空格填充（xterm.js 复制时会包含终端宽度的空格）
+      const trimmed = selection.split('\n').map(line => line.trimEnd()).join('\n');
+      void writeClipboardText(trimmed);
     });
 
     const unsubscribePtyData = subscribeToPanePtyData(windowId, pane.id, queueLiveOutput, {
