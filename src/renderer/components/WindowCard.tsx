@@ -562,10 +562,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
           )}
 
           {/* 右侧（40%）：项目链接（如果存在） */}
-          {hasProjectLinks && (
+          {hasProjectLinks && window.projectConfig?.links && (
             <div className="flex items-center gap-1 justify-end flex-[4]">
               <ProjectLinks
-                links={window.projectConfig!.links}
+                links={window.projectConfig.links}
                 variant="card"
                 maxDisplay={2}
                 onOpenLink={handleOpenLink}
