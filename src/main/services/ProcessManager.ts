@@ -365,7 +365,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     const pty = this.ptys.get(pid);
     if (pty) {
-      pty.write(data);
+      // Windows 剪贴板换行符为 \r\n，直接写入 PTY 会导致双重换行，统一转为 \r
+      pty.write(data.replace(/\r\n/g, '\r'));
     }
   }
 
