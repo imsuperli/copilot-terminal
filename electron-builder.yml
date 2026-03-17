@@ -13,7 +13,7 @@ asarUnpack:
   - dist/statusline/**/*
   - resources/bin/**/*
 npmRebuild: true
-buildDependenciesFromSource: true
+buildDependenciesFromSource: false
 win:
   icon: resources/icon.png
   target:
