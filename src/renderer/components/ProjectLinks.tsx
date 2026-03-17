@@ -128,7 +128,7 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
   if (variant === 'toolbar') {
     return (
       <>
-        {displayLinks.map((link, index) => (
+        {visibleLinks.map((link, index) => (
           <React.Fragment key={link.name}>
             {index > 0 && (
               <div className="w-px h-4 bg-zinc-700" />

@@ -118,11 +118,6 @@ export const WindowCard = React.memo<WindowCardProps>(({
     [enabledIDEs.length, workingDirectory]
   );
 
-  // 调试输出
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[WindowCard ${window.name}] hasProjectLinks:`, hasProjectLinks, 'hasLeftShortcuts:', hasLeftShortcuts);
-  }
-
   // 缓存状态色和标签
   const statusColor = useMemo(() => getStatusColor(aggregatedStatus), [aggregatedStatus]);
   const statusLabel = useMemo(() => t(getStatusLabelKey(aggregatedStatus)), [aggregatedStatus, t]);
