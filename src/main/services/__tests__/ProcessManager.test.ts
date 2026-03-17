@@ -8,11 +8,7 @@ import { tmpdir } from 'os';
 import * as path from 'path';
 
 function getPtyModule() {
-  try {
-    return require('node-pty');
-  } catch {
-    return require('@homebridge/node-pty-prebuilt-multiarch');
-  }
+  return require('node-pty');
 }
 
 function makeMockPtyProcess(pid = 4321) {
@@ -41,11 +37,7 @@ describe('ProcessManager', () => {
       }
 
       const ptyModule = (() => {
-        try {
-          return require('node-pty');
-        } catch {
-          return require('@homebridge/node-pty-prebuilt-multiarch');
-        }
+        return require('node-pty');
       })();
 
       const spawnSpy = vi.spyOn(ptyModule, 'spawn');

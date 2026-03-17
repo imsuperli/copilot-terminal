@@ -29,11 +29,7 @@ let pty: any;
 try {
   pty = require('node-pty');
 } catch {
-  try {
-    pty = require('@homebridge/node-pty-prebuilt-multiarch');
-  } catch {
-    pty = null;
-  }
+  pty = null;
 }
 
 /**
