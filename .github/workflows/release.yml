@@ -25,6 +25,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Rebuild native modules
+        run: npm rebuild node-pty --update-binary
+
       - name: Build & Package
         run: npm run dist
 
