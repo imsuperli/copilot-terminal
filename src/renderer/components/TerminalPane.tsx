@@ -621,7 +621,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         if (isActiveRef.current && window.electronAPI) {
           void readClipboardText().then((text) => {
             if (text && window.electronAPI && isActiveRef.current) {
-              window.electronAPI.ptyWrite(windowId, pane.id, text, { source: 'clipboard-shortcut' });
+              // 如果终端开启了 bracketed paste mode，用转义序列包裹粘贴内容
+              const wrapped = terminal.modes.bracketedPasteMode
+                ? `\x1b[200~${text}\x1b[201~`
+                : text;
+              window.electronAPI.ptyWrite(windowId, pane.id, wrapped, { source: 'clipboard-shortcut' });
             }
           });
         }
@@ -787,7 +791,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     void (async () => {
       const text = await readClipboardText();
       if (!text || !window.electronAPI) return;
-      window.electronAPI.ptyWrite(windowId, pane.id, text, { source: 'context-menu-paste' });
+      // 如果终端开启了 bracketed paste mode，用转义序列包裹粘贴内容
+      const terminal = terminalRef.current;
+      const wrapped = terminal?.modes.bracketedPasteMode
+        ? `\x1b[200~${text}\x1b[201~`
+        : text;
+      window.electronAPI.ptyWrite(windowId, pane.id, wrapped, { source: 'context-menu-paste' });
     })();
   }, [isActive, onActivate, readClipboardText, windowId, pane.id]);
 
