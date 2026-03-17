@@ -323,6 +323,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'common.folder': 'Folder',
   'common.unknown': 'Unknown',
   'common.close': 'Close',
+  'common.more': 'More',
 
   'status.running': 'Running',
   'status.waitingInput': 'Waiting',
