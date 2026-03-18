@@ -1,5 +1,8 @@
 import { ipcMain } from 'electron';
 import { readFileSync, existsSync } from 'fs';
+import { execSync } from 'child_process';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { scanInstalledIDEs, scanSpecificIDE, getSupportedIDENames } from '../utils/ideScanner';
@@ -172,11 +175,23 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
         throw new Error(`Icon file not found: ${iconPath}`);
       }
 
-      const iconData = readFileSync(iconPath);
-      const base64Data = iconData.toString('base64');
       const ext = iconPath.split('.').pop()?.toLowerCase();
 
-      // 根据文件扩展名确定MIME类型
+      // macOS .icns 格式：用 sips 转换为 PNG
+      if (ext === 'icns') {
+        const hash = iconPath.replace(/[^a-zA-Z0-9]/g, '_');
+        const pngPath = join(tmpdir(), `ide-icon-${hash}.png`);
+        if (!existsSync(pngPath)) {
+          execSync(`sips -s format png "${iconPath}" --out "${pngPath}" --resampleWidth 256`, { stdio: 'ignore' });
+        }
+        const pngData = readFileSync(pngPath);
+        const base64Data = pngData.toString('base64');
+        return successResponse(`data:image/png;base64,${base64Data}`);
+      }
+
+      const iconData = readFileSync(iconPath);
+      const base64Data = iconData.toString('base64');
+
       let mimeType = 'image/png';
       if (ext === 'ico') {
         mimeType = 'image/x-icon';
