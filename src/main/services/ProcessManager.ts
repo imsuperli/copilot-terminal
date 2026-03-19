@@ -780,6 +780,11 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       }
     }
 
+    // macOS: 确保 LANG 设置为 UTF-8，避免从 Finder 启动时中文乱码
+    if (platform() === 'darwin' && !cleanEnv.LANG) {
+      cleanEnv.LANG = 'en_US.UTF-8';
+    }
+
     // 鍒涘缓鐪熷疄鐨?PTY 杩涚▼
     const ptySpawnOptions: Record<string, unknown> = {
       name: 'xterm-256color',

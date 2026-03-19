@@ -65,6 +65,14 @@ It provides a unified card view to manage multiple project terminals and an imme
 2. Download the installer or archive for your system
 3. Install and launch the app
 
+> **macOS Users**: Since the app is not signed with an Apple Developer certificate, macOS Gatekeeper may block it with a "damaged" or "can't be opened" warning. Run the following command to fix it:
+>
+> ```bash
+> xattr -cr /Applications/Copilot-Terminal.app
+> ```
+>
+> Then open the app again. This only needs to be done once after installation.
+
 ### Option 2: Run from Source (Recommended for Developers)
 
 1. First read [xterm.js Custom Package Constraint](docs/xterm-custom-package-constraint.md)

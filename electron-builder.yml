@@ -13,7 +13,6 @@ asarUnpack:
   - dist/statusline/**/*
   - resources/bin/**/*
 npmRebuild: true
-buildDependenciesFromSource: true
 win:
   icon: resources/icon.png
   target:
@@ -28,13 +27,19 @@ nsis:
   createStartMenuShortcut: true
 dmg:
   format: UDZO
+  sign: false
 mac:
   icon: resources/icon.png
   category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.inherit.plist
   target:
     - target: dmg
       arch:
         - arm64
+        - x64
 linux:
   icon: resources/icon.png
   category: Development
