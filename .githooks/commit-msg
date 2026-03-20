@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# commit-msg hook: 禁止提交信息中包含 AI 工具的署名信息
+# 此 hook 通过 .githooks 目录跟踪，npm install 时自动生效
+#
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# 定义禁止出现的关键词（不区分大小写）
+BLOCKED_PATTERNS="Co-Authored-By|co-authored-by|Claude|GPT|OpenAI|Anthropic|Copilot|ChatGPT|Gemini"
+
+if echo "$COMMIT_MSG" | grep -iEq "$BLOCKED_PATTERNS"; then
+  echo ""
+  echo "============================================"
+  echo "  提交被拒绝 / Commit Rejected"
+  echo "============================================"
+  echo ""
+  echo "  提交信息中包含被禁止的关键词："
+  echo "  Commit message contains blocked keywords:"
+  echo ""
+  echo "  禁止列表: Co-Authored-By, Claude, GPT,"
+  echo "  OpenAI, Anthropic, Copilot, ChatGPT, Gemini"
+  echo ""
+  echo "  请移除相关内容后重新提交。"
+  echo "  Please remove them and try again."
+  echo ""
+  echo "============================================"
+  exit 1
+fi
+
+exit 0

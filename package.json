@@ -14,7 +14,8 @@
     "build:statusline": "tsc -p src/statusline/tsconfig.json",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "test": "vitest"
+    "test": "vitest",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "keywords": [
     "electron",
