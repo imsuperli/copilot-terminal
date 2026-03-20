@@ -9,6 +9,7 @@ files:
   - resources/**/*
   - package.json
   - node_modules/**/*
+afterPack: ./scripts/after-pack.js
 asarUnpack:
   - dist/statusline/**/*
   - resources/bin/**/*
