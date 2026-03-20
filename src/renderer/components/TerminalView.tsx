@@ -257,18 +257,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [terminalWindow.id, pauseWindowState]);
 
-  // 处理启动/重启窗口
+  // 处理启动窗口
   const handleStartWindow = useCallback(async () => {
     try {
       const panes = getAllPanes(terminalWindow.layout);
 
-      // 如果窗口正在运行，先停止
-      if (isWindowRunning) {
-        await window.electronAPI.closeWindow(terminalWindow.id);
-        pauseWindowState(terminalWindow.id);
-      }
-
-      // 启动所有窗格
       for (const pane of panes) {
         updatePane(terminalWindow.id, pane.id, { status: WindowStatus.Restoring });
       }
@@ -299,9 +292,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         })
       );
     } catch (error) {
-      console.error('Failed to start/restart window:', error);
+      console.error('Failed to start window:', error);
     }
-  }, [terminalWindow.id, terminalWindow.name, terminalWindow.layout, isWindowRunning, pauseWindowState, updatePane]);
+  }, [terminalWindow.id, terminalWindow.name, terminalWindow.layout, updatePane]);
+
+  // 处理重启窗口：先停止，再启动
+  const handleRestartWindow = useCallback(async () => {
+    await handlePauseWindow();
+    await handleStartWindow();
+  }, [handlePauseWindow, handleStartWindow]);
 
   // 澶勭悊褰掓。绐楀彛
   const handleArchiveWindow = useCallback(async () => {
@@ -681,7 +680,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>
                     <button
-                      onClick={handleStartWindow}
+                      onClick={isWindowRunning ? handleRestartWindow : handleStartWindow}
                       className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
                         isWindowRunning ? 'text-yellow-500' : 'text-green-500'
                       }`}
