@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX } from 'lucide-react';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -256,6 +256,52 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       console.error('Failed to pause window:', error);
     }
   }, [terminalWindow.id, pauseWindowState]);
+
+  // 处理启动/重启窗口
+  const handleStartWindow = useCallback(async () => {
+    try {
+      const panes = getAllPanes(terminalWindow.layout);
+
+      // 如果窗口正在运行，先停止
+      if (isWindowRunning) {
+        await window.electronAPI.closeWindow(terminalWindow.id);
+        pauseWindowState(terminalWindow.id);
+      }
+
+      // 启动所有窗格
+      for (const pane of panes) {
+        updatePane(terminalWindow.id, pane.id, { status: WindowStatus.Restoring });
+      }
+
+      await Promise.all(
+        panes.map(async (pane) => {
+          try {
+            const response = await window.electronAPI.startWindow({
+              windowId: terminalWindow.id,
+              paneId: pane.id,
+              name: terminalWindow.name,
+              workingDirectory: pane.cwd,
+              command: pane.command,
+            });
+
+            if (response && response.success && response.data) {
+              updatePane(terminalWindow.id, pane.id, {
+                pid: response.data.pid,
+                status: response.data.status,
+              });
+            } else {
+              throw new Error(response?.error || '启动窗格失败');
+            }
+          } catch (paneError) {
+            console.error(`Failed to start pane ${pane.id}:`, paneError);
+            updatePane(terminalWindow.id, pane.id, { status: WindowStatus.Paused });
+          }
+        })
+      );
+    } catch (error) {
+      console.error('Failed to start/restart window:', error);
+    }
+  }, [terminalWindow.id, terminalWindow.name, terminalWindow.layout, isWindowRunning, pauseWindowState, updatePane]);
 
   // 澶勭悊褰掓。绐楀彛
   const handleArchiveWindow = useCallback(async () => {
@@ -604,8 +650,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </>
             )}
 
-            {/* 停止按钮 - 仅在非嵌入模式下显示 */}
-            {!embedded && (aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
+            {/* 停止按钮 - 仅在非嵌入模式且运行中时显示 */}
+            {!embedded && isWindowRunning && (
               <Tooltip.Provider>
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>
@@ -623,6 +669,33 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       sideOffset={5}
                     >
                       {t('terminalView.stop')}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+            )}
+
+            {/* 重启/启动按钮 - 非嵌入模式下始终显示 */}
+            {!embedded && (
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={handleStartWindow}
+                      className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
+                        isWindowRunning ? 'text-yellow-500' : 'text-green-500'
+                      }`}
+                      title={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
+                    >
+                      {isWindowRunning ? <RotateCw size={14} /> : <Play size={14} fill="currentColor" />}
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                      sideOffset={5}
+                    >
+                      {isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
                     </Tooltip.Content>
                   </Tooltip.Portal>
                 </Tooltip.Root>
