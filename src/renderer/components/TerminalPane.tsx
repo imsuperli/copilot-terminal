@@ -8,6 +8,7 @@ import { useI18n } from '../i18n';
 import { subscribeToPanePtyData } from '../api/ptyDataBus';
 import { useWindowStore } from '../stores/windowStore';
 import type { PtyDataPayload, PtyHistorySnapshot } from '../../shared/types/electron-api';
+import { getPaneCount } from '../utils/layoutHelpers';
 import '../styles/xterm.css';
 
 const completedReplaySessions = new Set<string>();
@@ -192,7 +193,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const hasCompletedReplayForCurrentSessionRef = useRef(false);
   const replaySessionKeyRef = useRef<string | null>(getReplaySessionKey(windowId, pane.id, pane.pid));
   const replayHistoryRef = useRef<((options?: { resetTerminal?: boolean }) => Promise<void>) | null>(null);
-  const exitRestartDisposableRef = useRef<{ dispose: () => void } | null>(null); // 退出后按键重启的一次性监听器
   const [isHovered, setIsHovered] = useState(false);
 
   // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
@@ -333,71 +333,35 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     lastStatusRef.current = currentStatus;
   }, [pane.status, forceResizeToContainer]);
 
-  // 进程退出后：显示提示信息并监听按键重启
+  // 进程退出后自动处理：单窗格返回主界面，多窗格关闭当前窗格
   useEffect(() => {
     const isExited = pane.status === WindowStatus.Completed || pane.status === WindowStatus.Error;
+    if (!isExited) return;
 
-    if (!isExited) {
-      // 状态不是退出状态，清理之前的监听器
-      if (exitRestartDisposableRef.current) {
-        exitRestartDisposableRef.current.dispose();
-        exitRestartDisposableRef.current = null;
+    const store = useWindowStore.getState();
+    const win = store.windows.find(w => w.id === windowId);
+    if (!win) return;
+
+    const paneCount = getPaneCount(win.layout);
+
+    if (paneCount <= 1) {
+      // 单窗格：销毁进程 → 窗口 Paused → 返回主界面
+      if (window.electronAPI) {
+        window.electronAPI.closePane(windowId, pane.id).catch(err => {
+          console.error('[TerminalPane] Failed to close pane:', err);
+        });
       }
-      return;
+      store.pauseWindowState(windowId);
+      if (window.electronAPI) {
+        window.electronAPI.switchToUnifiedView().catch(err => {
+          console.error('[TerminalPane] Failed to switch to unified view:', err);
+        });
+      }
+    } else {
+      // 多窗格：关闭当前窗格（closePaneInWindow 处理 PTY 清理 + 布局更新）
+      store.closePaneInWindow(windowId, pane.id);
     }
-
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-
-    // 写入灰色提示信息
-    terminal.write('\r\n\x1b[90m[进程已退出] 按任意键重启终端\x1b[0m');
-
-    // 注册一次性按键监听器，按任意键触发重启
-    const disposable = terminal.onData(() => {
-      // 立刻清理，确保只触发一次
-      disposable.dispose();
-      exitRestartDisposableRef.current = null;
-
-      // 通过 store 获取当前窗口信息
-      const { windows, updatePane } = useWindowStore.getState();
-      const win = windows.find(w => w.id === windowId);
-      if (!win || !window.electronAPI) return;
-
-      // 标记为恢复中
-      updatePane(windowId, pane.id, { status: WindowStatus.Restoring });
-
-      // 调用 startWindow 重新创建 PTY 进程
-      void window.electronAPI.startWindow({
-        windowId,
-        paneId: pane.id,
-        name: win.name,
-        workingDirectory: pane.cwd,
-        command: pane.command,
-      }).then((response) => {
-        if (response && response.success && response.data) {
-          updatePane(windowId, pane.id, {
-            pid: response.data.pid,
-            status: response.data.status,
-          });
-        } else {
-          console.error(`[TerminalPane] Failed to restart pane ${pane.id}:`, response?.error);
-          updatePane(windowId, pane.id, { status: WindowStatus.Error });
-        }
-      }).catch((error) => {
-        console.error(`[TerminalPane] Error restarting pane ${pane.id}:`, error);
-        updatePane(windowId, pane.id, { status: WindowStatus.Error });
-      });
-    });
-
-    exitRestartDisposableRef.current = disposable;
-
-    return () => {
-      if (exitRestartDisposableRef.current) {
-        exitRestartDisposableRef.current.dispose();
-        exitRestartDisposableRef.current = null;
-      }
-    };
-  }, [pane.status, windowId, pane.id, pane.cwd, pane.command]);
+  }, [pane.status, windowId, pane.id]);
 
   // 当窗格激活且窗口激活时，自动聚焦到终端
   useEffect(() => {
@@ -783,11 +747,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       lastAppliedSeqRef.current = 0;
       suppressPtyWriteRef.current = false;
       hasCompletedReplayForCurrentSessionRef.current = false;
-      // 清理退出重启监听器
-      if (exitRestartDisposableRef.current) {
-        exitRestartDisposableRef.current.dispose();
-        exitRestartDisposableRef.current = null;
-      }
       disposable.dispose();
       selectionDisposable.dispose();
       unsubscribePtyData();

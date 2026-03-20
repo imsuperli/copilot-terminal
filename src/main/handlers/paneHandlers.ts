@@ -66,7 +66,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
 
       const processes = processManager.listProcesses();
       const found = processes.find(p => p.windowId === windowId && p.paneId === paneId);
-      if (found) {
+      if (found && found.status !== 'exited') {
         await processManager.killProcess(found.pid);
       }
 
