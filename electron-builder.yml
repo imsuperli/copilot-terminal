@@ -26,6 +26,7 @@ nsis:
   allowElevation: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+afterPack: scripts/afterPack.js
 dmg:
   format: UDZO
   sign: false
