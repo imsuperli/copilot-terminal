@@ -987,6 +987,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     return {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
       TMUX: tmuxValue,
+      AUSOME_TMUX_EXPECTED_TMUX: tmuxValue,
       TMUX_PANE: tmuxPaneId,
       AUSOME_TERMINAL_WINDOW_ID: config.windowId,
       AUSOME_TERMINAL_PANE_ID: config.paneId,

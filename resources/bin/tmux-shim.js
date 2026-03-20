@@ -22,6 +22,7 @@
 const net = require('net');
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
 
 const DEBUG = process.env.AUSOME_TMUX_DEBUG === '1';
 const LOG_FILE = process.env.AUSOME_TMUX_LOG_FILE;
@@ -60,17 +61,84 @@ if (argv.length === 1 && argv[0] === '-V') {
   process.exit(0);
 }
 
+// --- Passthrough support ---
+
+const RPC_COMMANDS = new Set([
+  'display-message', 'list-panes', 'split-window', 'send-keys',
+  'select-layout', 'select-pane', 'resize-pane', 'kill-pane', 'set-option',
+]);
+
+function getSubcommand(args) {
+  for (const arg of args) {
+    if (!arg.startsWith('-')) return arg;
+  }
+  return null;
+}
+
+function findRealTmux() {
+  const shimDir = __dirname;
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const pathDirs = (process.env.PATH || '').split(sep);
+  for (const dir of pathDirs) {
+    if (path.resolve(dir) === path.resolve(shimDir)) continue;
+    const candidate = path.join(dir, 'tmux');
+    try { fs.accessSync(candidate, fs.constants.X_OK); return candidate; } catch {}
+  }
+  return null;
+}
+
+function execRealTmux(args) {
+  const realTmux = findRealTmux();
+  if (!realTmux) {
+    process.stderr.write('tmux: command not found\n');
+    process.exit(127);
+  }
+  const { execFileSync } = require('child_process');
+  const env = { ...process.env };
+  // 如果 TMUX 等于假值，清除它；如果已被真实 tmux 覆盖，保留
+  if (env.TMUX && env.AUSOME_TMUX_EXPECTED_TMUX && env.TMUX === env.AUSOME_TMUX_EXPECTED_TMUX) {
+    delete env.TMUX;
+    delete env.TMUX_PANE;
+  }
+  delete env.AUSOME_TMUX_RPC;
+  delete env.AUSOME_TMUX_EXPECTED_TMUX;
+  delete env.AUSOME_TERMINAL_WINDOW_ID;
+  delete env.AUSOME_TERMINAL_PANE_ID;
+  delete env.AUSOME_TMUX_LOG_FILE;
+  delete env.AUSOME_TMUX_DEBUG;
+  try {
+    execFileSync(realTmux, args, { env, stdio: 'inherit' });
+    process.exit(0);
+  } catch (e) {
+    process.exit(e.status || 1);
+  }
+}
+
+// Passthrough 判断
+const rpcPathEnv = process.env.AUSOME_TMUX_RPC;
+const expectedTmux = process.env.AUSOME_TMUX_EXPECTED_TMUX;
+const currentTmux = process.env.TMUX;
+const subcommand = getSubcommand(argv);
+
+const shouldPassthrough =
+  !rpcPathEnv ||                                                          // 无 RPC 路径
+  (expectedTmux && currentTmux && expectedTmux !== currentTmux) ||        // 处于真实 tmux 内
+  (!subcommand) ||                                                        // 无子命令（如 tmux 无参数启动）
+  (subcommand && !RPC_COMMANDS.has(subcommand));                          // 非 P0 命令
+
+if (shouldPassthrough) {
+  debug('passthrough to real tmux', { rpcPathEnv, expectedTmux, currentTmux, subcommand });
+  execRealTmux(process.argv.slice(2));
+}
+
+// --- End passthrough support ---
+
 const rpcPath = process.env.AUSOME_TMUX_RPC;
 const windowId = process.env.AUSOME_TERMINAL_WINDOW_ID;
 const workspacePaneId = process.env.AUSOME_TERMINAL_PANE_ID;
 const tmuxPaneId = process.env.TMUX_PANE;
 const tmuxValue = process.env.TMUX;
 const logFile = process.env.AUSOME_TMUX_LOG_FILE;
-
-if (!rpcPath) {
-  process.stderr.write('tmux-shim: AUSOME_TMUX_RPC not set\n');
-  process.exit(1);
-}
 
 debug('startup', {
   rpcPath,
