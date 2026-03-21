@@ -30,6 +30,15 @@ export const IDEIcon: React.FC<{ icon: string; size?: number; className?: string
 
   useEffect(() => {
     const loadIcon = async () => {
+      setLoading(true);
+      setIconSrc('');
+
+      if (icon.startsWith('data:')) {
+        setIconSrc(icon);
+        setLoading(false);
+        return;
+      }
+
       // 如果icon是文件路径(包含路径分隔符或扩展名)
       if (icon && (icon.includes('\\') || icon.includes('/') || icon.includes('.'))) {
         try {
@@ -93,4 +102,3 @@ export const IDEIcon: React.FC<{ icon: string; size?: number; className?: string
     />
   );
 };
-

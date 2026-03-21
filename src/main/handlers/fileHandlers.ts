@@ -4,6 +4,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { HandlerContext } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
 import { successResponse, errorResponse } from './HandlerResponse';
+import { getOpenInIDEArgs } from '../utils/ideScanner';
 
 export function registerFileHandlers(ctx: HandlerContext) {
   const { mainWindow, getCurrentWorkspace } = ctx;
@@ -115,10 +116,10 @@ export function registerFileHandlers(ctx: HandlerContext) {
       // 如果配置了路径，使用路径；否则使用命令
       if (ideConfig.path && existsSync(ideConfig.path)) {
         command = ideConfig.path;
-        args = [path];
+        args = getOpenInIDEArgs(ideConfig, path);
       } else {
         command = ideConfig.command;
-        args = [path];
+        args = getOpenInIDEArgs(ideConfig, path);
       }
 
       console.log(`Opening ${ideConfig.name} with command: ${command} ${args.join(' ')}`);

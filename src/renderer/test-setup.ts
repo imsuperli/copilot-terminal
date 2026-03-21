@@ -76,6 +76,7 @@ Object.defineProperty(window, 'electronAPI', {
     ] }),
     getSupportedIDENames: vi.fn().mockResolvedValue({ success: true, data: [] }),
     scanIDEs: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    getIDEIcon: vi.fn().mockResolvedValue({ success: true, data: '' }),
     deleteIDEConfig: vi.fn().mockResolvedValue({ success: true, data: [] }),
     updateIDEConfig: vi.fn().mockResolvedValue({ success: true, data: [] }),
     scanSpecificIDE: vi.fn().mockResolvedValue({ success: true, data: '' }),

@@ -11,6 +11,12 @@ export interface IDEConfig {
   path?: string;
   enabled: boolean;
   icon?: string;
+  installPath?: string;
+  detected?: boolean;
+  source?: string;
+  version?: string;
+  catalogId?: string;
+  isCustom?: boolean;
 }
 
 export interface StatusLineConfig {

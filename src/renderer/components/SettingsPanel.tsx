@@ -7,18 +7,9 @@ import { X, Plus, Trash2, Search, Check, ChevronDown, Globe, Folder, Edit2, Fold
 import { IDEIcon } from './icons/IDEIcons';
 import { notifyIDESettingsUpdated } from '../hooks/useIDESettings';
 import { QuickNavItem } from '../../shared/types/quick-nav';
-import { StatusLineConfig } from '../../shared/types/workspace';
+import { IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
 import { useI18n } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
-
-interface IDEConfig {
-  id: string;
-  name: string;
-  command: string;
-  path?: string;
-  enabled: boolean;
-  icon?: string;
-}
 
 interface ShellProgramOption {
   command: string;
@@ -147,18 +138,33 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     try {
       const response = await window.electronAPI.scanIDEs();
       if (response.success && response.data) {
-        // 合并扫描结果和现有配置
         const scannedIDEs = response.data as IDEConfig[];
-        const mergedIDEs = scannedIDEs.map(scanned => {
-          const existing = ides.find(ide => ide.id === scanned.id);
-          return existing ? { ...scanned, enabled: existing.enabled } : scanned;
+        const existingById = new Map(ides.map(ide => [ide.id, ide]));
+        const mergedDetected = scannedIDEs.map(scanned => {
+          const existing = existingById.get(scanned.id);
+          if (!existing) {
+            return scanned;
+          }
+
+          return {
+            ...scanned,
+            enabled: existing.enabled,
+            isCustom: existing.isCustom ?? false,
+          };
         });
+
+        const customEntries = ides.filter(ide => ide.isCustom || !ide.detected);
+        const mergedIDEs = [...mergedDetected];
+
+        for (const customEntry of customEntries) {
+          if (!mergedIDEs.some(ide => ide.id === customEntry.id)) {
+            mergedIDEs.push(customEntry);
+          }
+        }
+
         setIDEs(mergedIDEs);
 
-        // 保存到设置
         await window.electronAPI.updateSettings({ ides: mergedIDEs });
-
-        // 通知其他组件刷新
         notifyIDESettingsUpdated();
       }
     } catch (error) {
@@ -204,6 +210,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       path: '',
       enabled: true,
       icon: '',
+      isCustom: true,
+      detected: false,
     });
     setShowAddDialog(true);
   };
@@ -217,6 +225,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       const ideToSave = {
         ...editingIDE,
         id: editingIDE.id || editingIDE.command.toLowerCase().replace(/\s+/g, '-'),
+        isCustom: editingIDE.isCustom ?? true,
+        detected: editingIDE.detected ?? false,
       };
 
       const response = await window.electronAPI.updateIDEConfig(ideToSave);
@@ -745,16 +755,26 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
                                       <h3 className="text-base font-semibold text-white">{ide.name}</h3>
-                                      {ide.path && (
+                                      {ide.detected && ide.path && (
                                         <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
                                           {t('settings.ide.found')}
                                         </span>
                                       )}
+                                      {ide.source && (
+                                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                          {t('settings.ide.source', { source: ide.source })}
+                                        </span>
+                                      )}
+                                      {ide.version && (
+                                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                          {t('settings.ide.version', { version: ide.version })}
+                                        </span>
+                                      )}
                                     </div>
                                     <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.ide.commandPrefix', { command: ide.command })}</p>
-                                    {ide.path && (
-                                      <p className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]" title={ide.path}>
-                                        {ide.path}
+                                    {(ide.installPath || ide.path) && (
+                                      <p className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]" title={ide.installPath || ide.path}>
+                                        {ide.installPath || ide.path}
                                       </p>
                                     )}
                                   </div>

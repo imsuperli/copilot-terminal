@@ -1,13 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-
-export interface IDEConfig {
-  id: string;
-  name: string;
-  command: string;
-  path?: string;
-  enabled: boolean;
-  icon?: string;
-}
+import type { IDEConfig } from '../../shared/types/workspace';
 
 // 创建自定义事件用于通知IDE设置更新
 const IDE_SETTINGS_UPDATED_EVENT = 'ide-settings-updated';
