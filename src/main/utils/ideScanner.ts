@@ -1142,6 +1142,10 @@ export function getSupportedIDENames(): string[] {
   return IDE_CATALOG.map(entry => entry.name);
 }
 
+export function getSupportedIDEIds(): Set<string> {
+  return new Set(IDE_CATALOG.map(entry => entry.id));
+}
+
 export function getOpenInIDEArgs(ide: Pick<IDEConfig, 'catalogId' | 'id'>, targetPath: string): string[] {
   const catalogId = ide.catalogId || ide.id;
   const resolver = (catalogId && LAUNCH_ARGS_BY_ID[catalogId]) || DEFAULT_LAUNCH_ARGS;

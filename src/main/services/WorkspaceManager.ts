@@ -8,6 +8,7 @@ import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { AppLanguage, DEFAULT_LANGUAGE, normalizeLanguage } from '../../shared/i18n';
 import { readProjectConfig } from '../utils/project-config';
 import { normalizeShellProgram } from '../utils/shell';
+import { getSupportedIDEIds } from '../utils/ideScanner';
 
 type PersistedPane = Omit<PaneNode['pane'], 'status' | 'pid'> & {
   status?: PaneNode['pane']['status'];
@@ -753,7 +754,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       ...defaults,
       ...settings,
       language: this.resolveLanguage(settings?.language),
-      ides: settings?.ides ?? defaults.ides,
+      ides: this.filterDeprecatedIDEs(settings?.ides ?? defaults.ides),
       terminal: {
         useBundledConptyDll: settings?.terminal?.useBundledConptyDll ?? defaults.terminal?.useBundledConptyDll ?? true,
         defaultShellProgram: normalizeShellProgram(settings?.terminal?.defaultShellProgram) ?? defaults.terminal?.defaultShellProgram ?? '',
@@ -766,6 +767,11 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       customCategories: settings?.customCategories ?? defaults.customCategories,
       defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
     };
+  }
+
+  private filterDeprecatedIDEs(ides: Settings['ides']): Settings['ides'] {
+    const supportedIds = getSupportedIDEIds();
+    return ides.filter(ide => ide.isCustom || supportedIds.has(ide.catalogId || ide.id));
   }
 
   private getDefaultSettings(): Settings {
