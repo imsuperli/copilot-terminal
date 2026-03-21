@@ -135,8 +135,6 @@ function createWindow() {
       mainWindow.setOpacity(1);
       mainWindow.maximize();
       mainWindow.show();
-      // 打开开发者工具以便调试
-      mainWindow.webContents.openDevTools();
     }
   }, 5000);
 

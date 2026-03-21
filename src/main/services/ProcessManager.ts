@@ -114,7 +114,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       return;
     }
 
-    const WARMUP_TIMEOUT_MS = 3000;
+    const WARMUP_TIMEOUT_MS = 10000;
     const warmupStartAt = Date.now();
     console.log('[ProcessManager] Starting ConPTY DLL warmup...');
 
