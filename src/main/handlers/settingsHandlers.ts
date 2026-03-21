@@ -1,5 +1,5 @@
 import { app, ipcMain } from 'electron';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { scanInstalledIDEs, scanSpecificIDE, getSupportedIDENames, isImageFile } from '../utils/ideScanner';
@@ -182,6 +182,13 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
 
       if (!existsSync(iconPath)) {
         throw new Error(`Icon file not found: ${iconPath}`);
+      }
+
+      const iconStat = statSync(iconPath);
+      const isMacAppBundle = process.platform === 'darwin' && iconStat.isDirectory() && iconPath.endsWith('.app');
+
+      if (iconStat.isDirectory() && !isMacAppBundle) {
+        throw new Error(`Refusing to resolve IDE icon from directory path: ${iconPath}`);
       }
 
       if (isImageFile(iconPath)) {

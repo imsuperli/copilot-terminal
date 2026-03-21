@@ -543,13 +543,21 @@ function pushCandidate(
     return;
   }
 
+  const resolvedBinaryPath = resolve(pathToBinary);
+  const resolvedInstallPath = installPath ? resolve(installPath) : undefined;
+  const resolvedIconPath = iconSource
+    ? resolve(iconSource)
+    : CURRENT_PLATFORM === 'darwin' && resolvedInstallPath?.endsWith('.app')
+      ? resolvedInstallPath
+      : resolvedBinaryPath;
+
   results.push({
     catalogId: entry.id,
     name: entry.name,
     command: entry.command,
-    path: resolve(pathToBinary),
-    installPath: installPath ? resolve(installPath) : undefined,
-    icon: iconSource ? resolve(iconSource) : installPath ? resolve(installPath) : resolve(pathToBinary),
+    path: resolvedBinaryPath,
+    installPath: resolvedInstallPath,
+    icon: resolvedIconPath,
     source,
     confidence,
     version: version || parseVersionFromPath(pathToBinary),

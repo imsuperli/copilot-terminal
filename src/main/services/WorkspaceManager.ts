@@ -6,7 +6,6 @@ import { Workspace, Settings } from '../types/workspace';
 import { LayoutNode, PaneNode, SplitNode, Window, WindowStatus } from '../../shared/types/window';
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { AppLanguage, DEFAULT_LANGUAGE, normalizeLanguage } from '../../shared/i18n';
-import { scanInstalledIDEs } from '../utils/ideScanner';
 import { readProjectConfig } from '../utils/project-config';
 import { normalizeShellProgram } from '../utils/shell';
 
@@ -776,7 +775,10 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       autoSave: true,
       autoSaveInterval: 5,
       language: this.resolveLanguage(),
-      ides: scanInstalledIDEs(),
+      // Do not auto-scan IDEs during app startup.
+      // Windows shortcut resolution can be relatively expensive and should
+      // only run from the explicit settings action.
+      ides: [],
       terminal: {
         useBundledConptyDll: true,
         defaultShellProgram: '',
