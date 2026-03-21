@@ -36,13 +36,23 @@ npm test
 
 1. **Main Process** (`src/main/index.ts`): Electron main process, manages native resources
    - `ProcessManager`: Spawns and manages node-pty terminal processes
-   - `StatusPoller`: Polls terminal status every 500ms, broadcasts to renderer
+   - `StatusPoller`: Polls terminal status (active panes every 1s, inactive every 5s), broadcasts to renderer
    - `WorkspaceManager`: Persists/restores workspace state to JSON file (includes groups)
    - `AutoSaveManager`: Auto-saves workspace every 5 seconds
    - `ViewSwitcher`: Handles unified view ↔ terminal view transitions
    - `GroupManager`: Manages window groups (create/update/delete/archive)
    - `TmuxCompatService`: Handles fake tmux commands for Claude Code Agent Teams
    - `TmuxRpcServer`: Named Pipe/Unix Socket RPC server for tmux shim communication
+
+   Additional services (not listed above but present in `src/main/services/`):
+   - `FileWatcherService`: Watches for file changes
+   - `GitBranchWatcher`: Monitors git branch changes
+   - `OrphanProcessCleaner`: Cleans up orphan processes
+   - `ProjectConfigWatcher`: Watches for copilot.json changes
+   - `PtySubscriptionManager`: Manages PTY data subscriptions
+   - `ShutdownManager`: Handles graceful shutdown
+   - `WorkspaceRestorer`: Restores workspace state on startup
+   - `TmuxCommandParser`: Parses tmux command argv
 
 2. **Preload** (`src/preload/index.ts`): Security bridge using `contextBridge`
    - Exposes controlled IPC API as `window.electronAPI`
@@ -56,7 +66,11 @@ npm test
    - `GroupCard`: Displays group status, controls (start all/pause all/archive/delete)
    - `Sidebar`: Collapsible window list in terminal view
    - `QuickSwitcher`: Ctrl+Tab search panel for quick window switching
-   - `QuickNavPanel`: Ctrl+K quick navigation panel for URLs and folders
+   - `QuickNavPanel`: Double-tap Shift quick navigation panel for URLs and folders
+
+4. **Statusline** (`src/statusline/`): Standalone CLI module for Claude Code status line rendering
+   - Reads Claude Code JSON status from stdin, renders formatted output to stdout
+   - Built separately via `build:statusline` script
 
 ### Key Data Flow
 
@@ -102,9 +116,10 @@ Rationale: PowerShell 7+ has better Unicode support and performance. If not avai
 ### Status Detection
 
 Uses **PTY output analysis** instead of `pidusage` to detect window status:
-- `WaitingForInput`: No output for 500ms
-- `Running`: Recent output detected
-- `Exited`: PTY process terminated
+- `WaitingForInput`: No output for 2000ms (2 seconds)
+- `Running`: Recent output within 2s
+- `Completed`: PTY process exited with code 0
+- `Error`: PTY process exited with non-zero code or crashed
 
 This avoids memory leaks from pidusage's native bindings. See `src/main/services/StatusDetector.ts`.
 
@@ -116,7 +131,7 @@ Electron windows show white flash on startup despite `backgroundColor` setting. 
 3. Set window opacity to 0, then show and maximize
 4. Fade in over 160ms using opacity animation
 
-This ensures React components are fully rendered before window becomes visible. See `src/main/index.ts` lines 79-105 and memory file `docs/electron-window-flash-fix.md`.
+This ensures React components are fully rendered before window becomes visible. See `src/main/index.ts`.
 
 ### Window Switching System
 
@@ -208,15 +223,15 @@ Example layout:
 
 #### IPC Communication
 
-**GroupManager** (`src/main/services/GroupManager.ts`) provides 8 IPC handlers:
-1. `group:create` - Create new group
-2. `group:update` - Update group properties
-3. `group:delete` - Delete group
-4. `group:archive` - Archive group
-5. `group:unarchive` - Unarchive group
-6. `group:add-window` - Add window to group layout
-7. `group:remove-window` - Remove window from group layout
-8. `group:set-active-window` - Set active window in group
+Group IPC handlers are registered in `src/main/handlers/groupHandlers.ts`:
+1. `create-group` - Create new group
+2. `delete-group` - Delete group
+3. `archive-group` - Archive group
+4. `unarchive-group` - Unarchive group
+5. `rename-group` - Rename group
+6. `add-window-to-group` - Add window to group layout
+7. `remove-window-from-group` - Remove window from group layout
+8. `update-group-split-sizes` - Update split pane sizes
 
 All operations trigger auto-save via WorkspaceManager.
 
@@ -246,12 +261,7 @@ All operations trigger auto-save via WorkspaceManager.
 **App.tsx** routing:
 - `currentView === 'unified'` - Shows CardGrid with WindowCard and GroupCard
 - `currentView === 'terminal' && activeWindowId` - Shows single TerminalView
-- `currentView === 'terminal' && activeGroupId` - Shows GroupView (TODO: not yet implemented)
-
-**Current Limitation**:
-- App.tsx does not yet render GroupView when `activeGroupId` is set
-- Users can create and manage groups in unified view, but cannot enter group terminal view
-- This will be implemented in a future iteration
+- `activeGroupId` is set - Shows GroupView (rendered as overlay with zIndex 1001)
 
 #### Drag-and-Drop (Planned Feature)
 
@@ -371,6 +381,8 @@ Provides fake tmux environment so Claude Code can use its Agent Teams multi-pane
 
 **Supported P0 commands**: `-V`, `display-message`, `list-panes`, `split-window`, `send-keys`, `select-layout`, `select-pane`, `resize-pane`, `kill-pane`, `set-option`.
 
+**Additional supported commands**: `has-session`, `new-session`, `list-windows`, `new-window`, `break-pane`, `join-pane`, `kill-session`, `switch-client`, `attach-session`.
+
 **Passthrough logic** (`tmux-shim.js`): Non-P0 commands, bare `tmux` (no args), and commands inside real tmux sessions are automatically forwarded to the real tmux binary. Detection uses `AUSOME_TMUX_EXPECTED_TMUX` to distinguish fake vs real tmux environments. Passthrough uses `spawn` with signal forwarding (SIGINT/SIGTSTP/etc.) for correct terminal behavior.
 
 **Socket health check**: `TmuxCompatService.ensureRpcServer()` checks if the Unix socket file still exists before reusing a server. If the file was cleaned up (e.g., macOS `/tmp` cleanup), the server is automatically rebuilt. Windows Named Pipes are not affected.
@@ -379,13 +391,13 @@ Provides fake tmux environment so Claude Code can use its Agent Teams multi-pane
 
 **Debug**: Set `AUSOME_TMUX_DEBUG=1` in pane for shim-side logging. Set `debug: true` in TmuxCompatServiceConfig for main-process logging.
 
-See `docs/tmux-user-guide.md`, `docs/tmux-developer-guide.md`, `docs/tmux-compat-architecture.md` for full documentation.
+See `docs/claude-code-tmux-compatibility.md`, `docs/claude-code-agent-teams-tmux-dev-guide.md` for full documentation.
 
 ## Important File Paths
 
 - Workspace persistence: `%APPDATA%/copilot-terminal/workspace.json`
 - Auto-save interval: 5 seconds (configurable in `AutoSaveManager`)
-- Status polling interval: 500ms (configurable in `StatusPoller`)
+- Status polling interval: 1s active / 5s inactive (configurable in `StatusPoller`)
 
 ## Testing Notes
 
