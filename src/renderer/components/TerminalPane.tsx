@@ -6,9 +6,7 @@ import { Pane, WindowStatus } from '../types/window';
 import { StatusDot } from './StatusDot';
 import { useI18n } from '../i18n';
 import { subscribeToPanePtyData } from '../api/ptyDataBus';
-import { useWindowStore } from '../stores/windowStore';
 import type { PtyDataPayload, PtyHistorySnapshot } from '../../shared/types/electron-api';
-import { getPaneCount } from '../utils/layoutHelpers';
 import '../styles/xterm.css';
 
 const completedReplaySessions = new Set<string>();
@@ -155,6 +153,7 @@ export interface TerminalPaneProps {
   isWindowActive: boolean; // 窗口是否是当前激活的窗口
   onActivate: () => void; // 点击激活
   onClose?: () => void; // 关闭窗格（可选，最后一个窗格不显示关闭按钮）
+  onProcessExit?: () => void; // 进程退出回调（委托父组件处理）
 }
 
 /**
@@ -168,6 +167,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   isWindowActive,
   onActivate,
   onClose,
+  onProcessExit,
 }) => {
   const { t } = useI18n();
   const terminalContainerRef = useRef<HTMLDivElement>(null);
@@ -333,35 +333,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     lastStatusRef.current = currentStatus;
   }, [pane.status, forceResizeToContainer]);
 
-  // 进程退出后自动处理：单窗格返回主界面，多窗格关闭当前窗格
+  // 进程退出后通知父组件处理
   useEffect(() => {
     const isExited = pane.status === WindowStatus.Completed || pane.status === WindowStatus.Error;
     if (!isExited) return;
-
-    const store = useWindowStore.getState();
-    const win = store.windows.find(w => w.id === windowId);
-    if (!win) return;
-
-    const paneCount = getPaneCount(win.layout);
-
-    if (paneCount <= 1) {
-      // 单窗格：销毁进程 → 窗口 Paused → 返回主界面
-      if (window.electronAPI) {
-        window.electronAPI.closePane(windowId, pane.id).catch(err => {
-          console.error('[TerminalPane] Failed to close pane:', err);
-        });
-      }
-      store.pauseWindowState(windowId);
-      if (window.electronAPI) {
-        window.electronAPI.switchToUnifiedView().catch(err => {
-          console.error('[TerminalPane] Failed to switch to unified view:', err);
-        });
-      }
-    } else {
-      // 多窗格：关闭当前窗格（closePaneInWindow 处理 PTY 清理 + 布局更新）
-      store.closePaneInWindow(windowId, pane.id);
-    }
-  }, [pane.status, windowId, pane.id]);
+    onProcessExit?.();
+  }, [pane.status, onProcessExit]);
 
   // 当窗格激活且窗口激活时，自动聚焦到终端
   useEffect(() => {

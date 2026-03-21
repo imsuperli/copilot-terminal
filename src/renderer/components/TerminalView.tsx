@@ -158,6 +158,35 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [terminalWindow.id, panes.length, closePaneInWindow]
   );
 
+  // 处理窗格进程退出
+  const handlePaneExit = useCallback(
+    (paneId: string) => {
+      if (!terminalWindow) return;
+      const currentPanes = getAllPanes(terminalWindow.layout);
+
+      if (currentPanes.length <= 1) {
+        // 单窗格窗口退出
+        if (embedded && onStopAndRemoveFromGroup) {
+          // 窗口组内：复用"停止并移除"逻辑
+          onStopAndRemoveFromGroup(terminalWindow.id);
+        } else {
+          // 单窗口：停止进程 + 暂停窗口 + 返回主界面
+          if (window.electronAPI) {
+            window.electronAPI.closeWindow(terminalWindow.id).catch(console.error);
+          }
+          pauseWindowState(terminalWindow.id);
+          if (window.electronAPI) {
+            window.electronAPI.switchToUnifiedView().catch(console.error);
+          }
+        }
+      } else {
+        // 多窗格：复用关闭窗格逻辑
+        closePaneInWindow(terminalWindow.id, paneId);
+      }
+    },
+    [terminalWindow, embedded, onStopAndRemoveFromGroup, pauseWindowState, closePaneInWindow]
+  );
+
   // 澶勭悊鎷嗗垎绐楁牸
   const handleSplitPane = useCallback(
     async (direction: 'horizontal' | 'vertical') => {
@@ -712,6 +741,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               isWindowActive={isActive}
               onPaneActivate={handlePaneActivate}
               onPaneClose={handlePaneClose}
+              onPaneExit={handlePaneExit}
             />
           ) : (
             <DropZone
@@ -726,6 +756,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 isWindowActive={isActive}
                 onPaneActivate={handlePaneActivate}
                 onPaneClose={handlePaneClose}
+                onPaneExit={handlePaneExit}
               />
             </DropZone>
           )}

@@ -12,6 +12,7 @@ export interface SplitLayoutProps {
   isWindowActive: boolean;
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
+  onPaneExit?: (paneId: string) => void;
 }
 
 /**
@@ -25,6 +26,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   isWindowActive,
   onPaneActivate,
   onPaneClose,
+  onPaneExit,
 }) => {
   const { t } = useI18n();
   const updateSplitSizes = useWindowStore((state) => state.updateSplitSizes);
@@ -58,6 +60,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
         totalPaneCount={totalPaneCount}
         onPaneActivate={onPaneActivate}
         onPaneClose={onPaneClose}
+        onPaneExit={onPaneExit}
         onSplitResize={updateSplitSizes}
       />
     </div>
@@ -79,6 +82,7 @@ interface SplitContainerProps {
   totalPaneCount: number;
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
+  onPaneExit?: (paneId: string) => void;
   onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
 
@@ -91,6 +95,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   totalPaneCount,
   onPaneActivate,
   onPaneClose,
+  onPaneExit,
   onSplitResize,
 }) => {
   const [sizes, setSizes] = useState<number[]>(splitNode.sizes);
@@ -182,6 +187,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
               totalPaneCount={totalPaneCount}
               onPaneActivate={onPaneActivate}
               onPaneClose={onPaneClose}
+              onPaneExit={onPaneExit}
               onSplitResize={onSplitResize}
             />
           </div>
@@ -212,6 +218,7 @@ interface LayoutNodeRendererProps {
   totalPaneCount: number;
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
+  onPaneExit?: (paneId: string) => void;
   onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
 
@@ -224,6 +231,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
   totalPaneCount,
   onPaneActivate,
   onPaneClose,
+  onPaneExit,
   onSplitResize,
 }) => {
   if (layout.type === 'pane') {
@@ -236,6 +244,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
         isWindowActive={isWindowActive}
         onActivate={() => onPaneActivate(layout.id)}
         onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
+        onProcessExit={onPaneExit ? () => onPaneExit(layout.id) : undefined}
       />
     );
   }
@@ -250,6 +259,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
       totalPaneCount={totalPaneCount}
       onPaneActivate={onPaneActivate}
       onPaneClose={onPaneClose}
+      onPaneExit={onPaneExit}
       onSplitResize={onSplitResize}
     />
   );
