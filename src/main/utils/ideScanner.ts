@@ -1003,10 +1003,8 @@ function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
     }
   }
 
-  // 移除了 filesystem deep search (66) 和 PATH lookup via where.exe (58)
-  // 这两个最慢且收益最低
-
-  return [];
+  // 5. PATH lookup via where.exe (confidence: 58) — 兜底，仅在前面全部未命中时执行
+  return scanPathLookup(entry);
 }
 
 function scanMacApplications(entry: IDECatalogEntry): DetectedIDECandidate[] {
