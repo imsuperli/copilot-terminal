@@ -114,11 +114,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       return;
     }
 
+    const WARMUP_TIMEOUT_MS = 3000;
     const warmupStartAt = Date.now();
     console.log('[ProcessManager] Starting ConPTY DLL warmup...');
 
+    let dummyPty: any = null;
     try {
-      const dummyPty = pty.spawn('cmd.exe', ['/c', 'exit'], {
+      dummyPty = pty.spawn('cmd.exe', ['/c', 'exit'], {
         name: 'xterm-256color',
         cols: 80,
         rows: 30,
@@ -128,28 +130,39 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         useConptyDll: true,
       });
 
+      let resolved = false;
       await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          try {
-            dummyPty.kill();
-          } catch {}
-          resolve();
-        }, 1000);
+        const done = () => {
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+        };
 
-        const disposable = dummyPty.onExit?.(() => {
+        const timeout = setTimeout(() => {
+          console.warn(`[ProcessManager] ConPTY DLL warmup timed out after ${WARMUP_TIMEOUT_MS}ms, force killing`);
+          try { dummyPty.kill(); } catch {}
+          // Force destroy the PTY handle to prevent it from hanging
+          try { (dummyPty as any).destroy?.(); } catch {}
+          done();
+        }, WARMUP_TIMEOUT_MS);
+
+        dummyPty.onExit?.(() => {
           clearTimeout(timeout);
-          resolve();
+          done();
         });
 
-        if (!disposable) {
-          clearTimeout(timeout);
-          setTimeout(resolve, 100);
-        }
+        dummyPty.onData?.(() => {
+          // Ignore data, just need to listen so the PTY doesn't block
+        });
       });
 
       console.log(`[ProcessManager] ConPTY DLL warmup completed in ${Date.now() - warmupStartAt}ms`);
     } catch (error) {
       console.error('[ProcessManager] ConPTY DLL warmup failed:', error);
+      // Ensure cleanup on error
+      try { dummyPty?.kill(); } catch {}
+      try { (dummyPty as any)?.destroy?.(); } catch {}
     }
   }
 
