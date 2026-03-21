@@ -528,7 +528,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     <button
                       onClick={() => handleOpenInIDE(ide.id)}
                       className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                      title={t('common.openInIDE', { name: ide.name })}
                     >
                       <IDEIcon icon={ide.icon || ''} size={14} />
                     </button>
@@ -553,7 +552,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <button
                     onClick={handleArchiveWindow}
                     className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                    title={t('terminalView.archive')}
                   >
                     <Archive size={14} />
                   </button>
@@ -577,7 +575,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <button
                     onClick={handleOpenFolder}
                     className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                    title={t('terminalView.openFolder')}
                   >
                     <Folder size={14} />
                   </button>
@@ -595,22 +592,50 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </Tooltip.Provider>
 
             {/* 宸﹀彸鎷嗗垎鎸夐挳 */}
-            <button
-              onClick={() => handleSplitPane('horizontal')}
-              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              title={t('terminalView.splitHorizontal')}
-            >
-              <SplitSquareHorizontal size={14} />
-            </button>
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={() => handleSplitPane('horizontal')}
+                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  >
+                    <SplitSquareHorizontal size={14} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                    side="top"
+                    sideOffset={5}
+                  >
+                    {t('terminalView.splitHorizontal')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
 
             {/* 涓婁笅鎷嗗垎鎸夐挳 */}
-            <button
-              onClick={() => handleSplitPane('vertical')}
-              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              title={t('terminalView.splitVertical')}
-            >
-              <SplitSquareVertical size={14} />
-            </button>
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={() => handleSplitPane('vertical')}
+                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  >
+                    <SplitSquareVertical size={14} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                    side="top"
+                    sideOffset={5}
+                  >
+                    {t('terminalView.splitVertical')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
 
             {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
             {/* 嵌入模式（组内）：移除和停止并移除按钮 */}
@@ -622,7 +647,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       <button
                         onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
                         className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
-                        title={t('terminalView.removeFromGroup')}
                       >
                         <LogOut size={14} />
                       </button>
@@ -654,7 +678,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                             ? 'hover:bg-zinc-700 text-red-500 cursor-pointer'
                             : 'text-zinc-600 cursor-not-allowed'
                         }`}
-                        title={t('terminalView.stopAndRemoveFromGroup')}
                       >
                         <SquareX size={14} />
                       </button>
@@ -681,7 +704,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     <button
                       onClick={handlePauseWindow}
                       className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
-                      title={t('terminalView.stop')}
                     >
                       <Square size={14} fill="currentColor" />
                     </button>
@@ -709,7 +731,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
                         isWindowRunning ? 'text-yellow-500' : 'text-green-500'
                       }`}
-                      title={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
                     >
                       {isWindowRunning ? <RotateCw size={14} /> : <Play size={14} fill="currentColor" />}
                     </button>

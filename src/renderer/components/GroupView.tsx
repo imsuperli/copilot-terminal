@@ -416,7 +416,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
                         ? 'text-red-500 cursor-pointer'
                         : 'text-zinc-600 cursor-not-allowed opacity-50'
                     }`}
-                    title={groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput ? '暂停全部' : '窗口未运行'}
                   >
                     <Square size={14} fill="currentColor" />
                   </button>

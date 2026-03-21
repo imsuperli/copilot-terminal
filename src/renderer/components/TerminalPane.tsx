@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { X } from 'lucide-react';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { Pane, WindowStatus } from '../types/window';
 import { StatusDot } from './StatusDot';
 import { useI18n } from '../i18n';
@@ -844,17 +845,31 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           </div>
           <div className="flex items-center justify-center w-6 h-6 flex-shrink-0">
             {showCloseButton ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose?.();
-                }}
-                className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
-                title={t('terminalPane.close')}
-                aria-label={t('terminalPane.close')}
-              >
-                <X size={14} />
-              </button>
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClose?.();
+                      }}
+                      className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+                      aria-label={t('terminalPane.close')}
+                    >
+                      <X size={14} />
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                      side="top"
+                      sideOffset={5}
+                    >
+                      {t('terminalPane.close')}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
             ) : (
               <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
             )}
@@ -866,17 +881,31 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       {!showPaneHeader && (
         <div className="absolute top-1 right-1 z-20">
           {showCloseButton ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose?.();
-              }}
-              className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
-              title={t('terminalPane.close')}
-              aria-label={t('terminalPane.close')}
-            >
-              <X size={14} />
-            </button>
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClose?.();
+                    }}
+                    className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+                    aria-label={t('terminalPane.close')}
+                  >
+                    <X size={14} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                    side="top"
+                    sideOffset={5}
+                  >
+                    {t('terminalPane.close')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
           ) : (
             <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
           )}
