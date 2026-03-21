@@ -544,24 +544,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </AppTooltip>
 
             {/* 宸﹀彸鎷嗗垎鎸夐挳 */}
-            <AppTooltip content={t('terminalView.splitHorizontal')} placement="toolbar-trailing">
-              <button
-                onClick={() => handleSplitPane('horizontal')}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              >
-                <SplitSquareHorizontal size={14} />
-              </button>
-            </AppTooltip>
+            <button
+              aria-label={t('terminalView.splitHorizontal')}
+              onClick={() => handleSplitPane('horizontal')}
+              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+            >
+              <SplitSquareHorizontal size={14} />
+            </button>
 
             {/* 涓婁笅鎷嗗垎鎸夐挳 */}
-            <AppTooltip content={t('terminalView.splitVertical')} placement="toolbar-trailing">
-              <button
-                onClick={() => handleSplitPane('vertical')}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              >
-                <SplitSquareVertical size={14} />
-              </button>
-            </AppTooltip>
+            <button
+              aria-label={t('terminalView.splitVertical')}
+              onClick={() => handleSplitPane('vertical')}
+              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+            >
+              <SplitSquareVertical size={14} />
+            </button>
 
             {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
             {/* 嵌入模式（组内）：移除和停止并移除按钮 */}
