@@ -482,7 +482,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                     side="top" avoidCollisions={false}
-                    sideOffset={5}
+                    sideOffset={14}
                   >
                     {t('terminalView.return')}
                   </Tooltip.Content>
@@ -536,7 +536,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     <Tooltip.Content
                       className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                       side="top" avoidCollisions={false}
-                      sideOffset={5}
+                      sideOffset={14}
                     >
                       {t('common.openInIDE', { name: ide.name })}
                     </Tooltip.Content>
@@ -560,7 +560,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                     side="top" avoidCollisions={false}
-                    sideOffset={5}
+                    sideOffset={14}
                   >
                     {t('terminalView.archive')}
                   </Tooltip.Content>
@@ -583,7 +583,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                     side="top" avoidCollisions={false}
-                    sideOffset={5}
+                    sideOffset={14}
                   >
                     {t('terminalView.openFolder')}
                   </Tooltip.Content>
@@ -606,7 +606,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                     side="top" avoidCollisions={false}
-                    sideOffset={5}
+                    sideOffset={14}
                   >
                     {t('terminalView.splitHorizontal')}
                   </Tooltip.Content>
@@ -629,7 +629,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                     side="top" avoidCollisions={false}
-                    sideOffset={5}
+                    sideOffset={14}
                   >
                     {t('terminalView.splitVertical')}
                   </Tooltip.Content>
@@ -655,7 +655,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       <Tooltip.Content
                         className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                         side="top" avoidCollisions={false}
-                        sideOffset={5}
+                        sideOffset={14}
                       >
                         {t('terminalView.removeFromGroup')}
                       </Tooltip.Content>
@@ -686,7 +686,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       <Tooltip.Content
                         className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                         side="top" avoidCollisions={false}
-                        sideOffset={5}
+                        sideOffset={14}
                       >
                         {t('terminalView.stopAndRemoveFromGroup')}
                       </Tooltip.Content>
@@ -712,7 +712,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     <Tooltip.Content
                       className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                       side="top" avoidCollisions={false}
-                      sideOffset={5}
+                      sideOffset={14}
                     >
                       {t('terminalView.stop')}
                     </Tooltip.Content>
@@ -739,7 +739,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     <Tooltip.Content
                       className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                       side="top" avoidCollisions={false}
-                      sideOffset={5}
+                      sideOffset={14}
                     >
                       {isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
                     </Tooltip.Content>

@@ -863,7 +863,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                     <Tooltip.Content
                       className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                       side="top" avoidCollisions={false}
-                      sideOffset={5}
+                      sideOffset={14}
                     >
                       {t('terminalPane.close')}
                     </Tooltip.Content>
@@ -899,7 +899,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                     side="top" avoidCollisions={false}
-                    sideOffset={5}
+                    sideOffset={14}
                   >
                     {t('terminalPane.close')}
                   </Tooltip.Content>
