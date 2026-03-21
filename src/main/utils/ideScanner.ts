@@ -401,6 +401,27 @@ function cleanWindowsRegistryPath(raw: string | undefined): string | null {
   return pathExists(cleaned) ? resolve(cleaned) : null;
 }
 
+function isWindowsExecutablePath(pathToCheck: string | undefined | null): pathToCheck is string {
+  if (!pathToCheck || !pathExists(pathToCheck) || isDirectory(pathToCheck)) {
+    return false;
+  }
+
+  const extension = extname(pathToCheck).toLowerCase();
+  return ['.exe', '.cmd', '.bat', '.com'].includes(extension);
+}
+
+function resolveWindowsInstallRoot(displayIcon: string | null, installLocation: string | undefined): string | undefined {
+  if (installLocation && pathExists(installLocation)) {
+    return resolve(installLocation);
+  }
+
+  if (displayIcon && isDirectory(displayIcon)) {
+    return resolve(displayIcon);
+  }
+
+  return undefined;
+}
+
 function extractRegistryValue(rawLine: string | undefined): string | undefined {
   if (!rawLine) {
     return undefined;
@@ -946,12 +967,14 @@ function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
         continue;
       }
 
-      const displayIcon = cleanWindowsRegistryPath(uninstallEntry.displayIcon);
-      const installLocation = uninstallEntry.installLocation && pathExists(uninstallEntry.installLocation)
-        ? resolve(uninstallEntry.installLocation)
+      const registryDisplayIcon = cleanWindowsRegistryPath(uninstallEntry.displayIcon);
+      const displayIcon = isWindowsExecutablePath(registryDisplayIcon) || isImageFile(registryDisplayIcon || '')
+        ? registryDisplayIcon
         : undefined;
+      const resolvedIconSource = displayIcon || undefined;
+      const installLocation = resolveWindowsInstallRoot(registryDisplayIcon, uninstallEntry.installLocation);
 
-      if (displayIcon) {
+      if (isWindowsExecutablePath(displayIcon)) {
         pushCandidate(
           results,
           entry,
@@ -960,7 +983,7 @@ function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
           88,
           installLocation || dirname(displayIcon),
           uninstallEntry.displayVersion,
-          uninstallEntry.displayIcon ? cleanWindowsRegistryPath(uninstallEntry.displayIcon) || undefined : undefined,
+          resolvedIconSource,
         );
         continue;
       }
@@ -969,7 +992,17 @@ function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
         for (const executableName of executableNames) {
           const installMatch = findExecutableNearRoot(installLocation, [executableName], entry.aliases)[0];
           if (installMatch) {
-            pushCandidate(results, entry, installMatch, 'registry:uninstall', 84, installLocation, uninstallEntry.displayVersion);
+            pushCandidate(
+              results,
+              entry,
+              installMatch,
+              'registry:uninstall',
+              84,
+              installLocation,
+              uninstallEntry.displayVersion,
+              resolvedIconSource,
+            );
+            break;
           }
         }
       }
@@ -1003,8 +1036,8 @@ function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
     }
   }
 
-  // 5. PATH lookup via where.exe (confidence: 58) — 兜底，仅在前面全部未命中时执行
-  return scanPathLookup(entry);
+  // 5. PATH lookup 被移除，保持扫描快速且避免在设置面板中阻塞过久
+  return [];
 }
 
 function scanMacApplications(entry: IDECatalogEntry): DetectedIDECandidate[] {
