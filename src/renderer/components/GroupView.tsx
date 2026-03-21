@@ -354,7 +354,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
               <Tooltip.Portal>
                 <Tooltip.Content
                   className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                  side="top"
+                  side="top" avoidCollisions={false}
                   sideOffset={5}
                 >
                   返回
@@ -395,7 +395,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
                 <Tooltip.Portal>
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                    side="top"
+                    side="top" avoidCollisions={false}
                     sideOffset={5}
                   >
                     启动全部
@@ -423,7 +423,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
                 <Tooltip.Portal>
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                    side="top"
+                    side="top" avoidCollisions={false}
                     sideOffset={5}
                   >
                     {groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
@@ -448,7 +448,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
                 <Tooltip.Portal>
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                    side="top"
+                    side="top" avoidCollisions={false}
                     sideOffset={5}
                   >
                     归档组
