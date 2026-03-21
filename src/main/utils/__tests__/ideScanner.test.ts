@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('electron', () => ({
+  shell: {
+    readShortcutLink: vi.fn(() => ({ target: '', icon: '' })),
+  },
+}));
 import {
   getDefaultIDEConfigs,
   getOpenInIDEArgs,

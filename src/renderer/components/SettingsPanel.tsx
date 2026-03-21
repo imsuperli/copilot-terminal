@@ -44,6 +44,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const [ides, setIDEs] = useState<IDEConfig[]>([]);
   const [supportedIDENames, setSupportedIDENames] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string>('');
   const [editingIDE, setEditingIDE] = useState<IDEConfig | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [availableShells, setAvailableShells] = useState<ShellProgramOption[]>([]);
@@ -135,6 +136,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
   const handleScanAll = async () => {
     setScanning(true);
+    setScanMessage('');
     try {
       const response = await window.electronAPI.scanIDEs();
       if (response.success && response.data) {
@@ -163,12 +165,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         }
 
         setIDEs(mergedIDEs);
+        setScanMessage(
+          scannedIDEs.length > 0
+            ? t('settings.ide.scanResultFound', { count: scannedIDEs.length })
+            : t('settings.ide.scanResultEmpty')
+        );
 
         await window.electronAPI.updateSettings({ ides: mergedIDEs });
         notifyIDESettingsUpdated();
+      } else {
+        setScanMessage(response.error || t('settings.ide.scanResultEmpty'));
       }
     } catch (error) {
       console.error('Failed to scan IDEs:', error);
+      setScanMessage(error instanceof Error ? error.message : t('settings.ide.scanResultError'));
     } finally {
       setScanning(false);
     }
@@ -712,6 +722,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <p className="max-w-2xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.quickNav.ideDescription')}</p>
+                            {scanMessage && (
+                              <p className="mt-3 text-sm text-[rgb(var(--muted-foreground))]">{scanMessage}</p>
+                            )}
                           </div>
 
                           <div className="flex flex-wrap gap-3">

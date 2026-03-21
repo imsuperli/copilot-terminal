@@ -67,8 +67,16 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
   ipcMain.handle('scan-ides', async () => {
     try {
       const installedIDEs = scanInstalledIDEs();
+      console.log('[IDE_SCAN] Found IDEs:', installedIDEs.map(ide => ({
+        id: ide.id,
+        name: ide.name,
+        path: ide.path,
+        source: ide.source,
+        version: ide.version,
+      })));
       return successResponse(installedIDEs);
     } catch (error) {
+      console.error('[IDE_SCAN] Failed to scan IDEs:', error);
       return errorResponse(error);
     }
   });

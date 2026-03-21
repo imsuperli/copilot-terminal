@@ -2,6 +2,7 @@ import { existsSync, readdirSync, statSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { homedir, platform } from 'os';
 import { basename, dirname, extname, join, resolve } from 'path';
+import { shell as electronShell } from 'electron';
 import { IDEConfig } from '../types/workspace';
 
 type SupportedPlatform = 'win32' | 'darwin' | 'linux';
@@ -581,6 +582,14 @@ function listDirectory(pathToList: string): string[] {
   }
 }
 
+function listDirectoryEntries(pathToList: string): string[] {
+  try {
+    return readdirSync(pathToList, { withFileTypes: true }).map(entry => join(pathToList, entry.name));
+  } catch {
+    return [];
+  }
+}
+
 function findMacAppExecutable(appPath: string, entry: IDECatalogEntry): string | null {
   const macOSDir = join(appPath, 'Contents', 'MacOS');
   if (!pathExists(macOSDir)) {
@@ -725,39 +734,97 @@ function getWindowsShortcutEntries(): WindowsShortcutEntry[] {
     return windowsShortcutCache;
   }
 
-  const script = [
-    '$paths = @(',
-    '  "$env:ProgramData\\Microsoft\\Windows\\Start Menu\\Programs",',
-    '  "$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs"',
-    ')',
-    '$shell = New-Object -ComObject WScript.Shell',
-    'Get-ChildItem -Path $paths -Filter *.lnk -Recurse -ErrorAction SilentlyContinue | ForEach-Object {',
-    '  try {',
-    '    $shortcut = $shell.CreateShortcut($_.FullName)',
-    '    if ($shortcut.TargetPath) {',
-    '      "$($_.BaseName)`t$($shortcut.TargetPath)`t$($shortcut.IconLocation)"',
-    '    }',
-    '  } catch {}',
-    '}',
-  ].join(' ');
+  const roots = uniqueStrings([
+    process.env.ProgramData ? join(process.env.ProgramData, 'Microsoft', 'Windows', 'Start Menu', 'Programs') : undefined,
+    process.env.APPDATA ? join(process.env.APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs') : undefined,
+    process.env.USERPROFILE ? join(process.env.USERPROFILE, 'Desktop') : undefined,
+    process.env.PUBLIC ? join(process.env.PUBLIC, 'Desktop') : undefined,
+  ]);
 
-  const output = safeSpawn('powershell.exe', ['-NoProfile', '-Command', script]);
-  const entries = (output || '')
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map(line => {
-      const [name, targetPath, iconLocation] = line.split('\t');
-      return {
-        name,
-        targetPath,
-        iconLocation,
-      };
+  const shortcutPaths: string[] = [];
+  const queue = [...roots];
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || visited.has(current) || !pathExists(current)) {
+      continue;
+    }
+    visited.add(current);
+
+    for (const entryPath of listDirectoryEntries(current)) {
+      if (isDirectory(entryPath)) {
+        queue.push(entryPath);
+        continue;
+      }
+
+      if (entryPath.toLowerCase().endsWith('.lnk')) {
+        shortcutPaths.push(entryPath);
+      }
+    }
+  }
+
+  const entries = shortcutPaths
+    .map((shortcutPath): WindowsShortcutEntry | null => {
+      try {
+        const shortcut = electronShell.readShortcutLink(shortcutPath);
+        if (!shortcut.target || !pathExists(shortcut.target)) {
+          return null;
+        }
+
+        return {
+          name: basename(shortcutPath, '.lnk'),
+          targetPath: shortcut.target,
+          iconLocation: shortcut.icon,
+        };
+      } catch {
+        return null;
+      }
     })
-    .filter(entry => pathExists(entry.targetPath));
+    .filter((entry): entry is WindowsShortcutEntry => entry !== null);
 
   windowsShortcutCache = entries;
   return entries;
+}
+
+function getWindowsDirectCandidates(entry: IDECatalogEntry): string[] {
+  const roots = uniqueStrings([
+    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Programs') : undefined,
+    process.env.LocalAppData ? join(process.env.LocalAppData, 'Programs') : undefined,
+    process.env.ProgramFiles,
+    process.env['ProgramFiles(x86)'],
+    process.env.ProgramW6432,
+  ]);
+
+  const candidates: string[] = [];
+  const executableNames = entry.executableNames.win32 || [];
+
+  for (const root of roots) {
+    for (const hint of entry.windowsPathHints || []) {
+      for (const executableName of executableNames) {
+        candidates.push(join(root, hint, executableName));
+        candidates.push(join(root, hint, 'bin', executableName));
+      }
+    }
+  }
+
+  if (entry.id === 'cursor' && process.env.LOCALAPPDATA) {
+    candidates.push(join(process.env.LOCALAPPDATA, 'Programs', 'Cursor', 'Cursor.exe'));
+  }
+
+  if (entry.id === 'vscode' && process.env.LOCALAPPDATA) {
+    candidates.push(join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code', 'Code.exe'));
+  }
+
+  if (entry.id === 'vscode-insiders' && process.env.LOCALAPPDATA) {
+    candidates.push(join(process.env.LOCALAPPDATA, 'Programs', 'Microsoft VS Code Insiders', 'Code - Insiders.exe'));
+  }
+
+  if (entry.id === 'vscodium' && process.env.LOCALAPPDATA) {
+    candidates.push(join(process.env.LOCALAPPDATA, 'Programs', 'VSCodium', 'VSCodium.exe'));
+  }
+
+  return uniqueStrings(candidates).filter(pathExists);
 }
 
 function findExecutableNearRoot(rootPath: string, executableNames: string[], keywords: string[]): string[] {
@@ -842,6 +909,10 @@ function getWindowsSearchRoots(entry: IDECatalogEntry): string[] {
 function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
   const results: DetectedIDECandidate[] = [];
   const executableNames = entry.executableNames.win32 || [];
+
+  for (const directCandidate of getWindowsDirectCandidates(entry)) {
+    pushCandidate(results, entry, directCandidate, 'filesystem:direct', 94, dirname(directCandidate));
+  }
 
   for (const executableName of executableNames) {
     for (const appPath of queryWindowsAppPaths(executableName)) {
