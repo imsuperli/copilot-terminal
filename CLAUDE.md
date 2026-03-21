@@ -83,6 +83,22 @@ Windows restored from workspace start in **paused state** (status: `Paused`, no 
 
 Rationale: PowerShell 7+ has better Unicode support and performance. If not available, use PowerShell 5.1 which is pre-installed on most Windows systems. See `getDefaultShell()` in `src/main/utils/shell.ts`.
 
+### macOS / Linux Platform Adaptations
+
+**Keyboard shortcuts**: macOS uses `⌘` (metaKey) instead of `Ctrl` for app-level shortcuts. Platform detection via `window.electronAPI.platform === 'darwin'`. Ctrl+B and Ctrl+1-9 were intentionally removed to avoid conflicts with vim (page up) and tmux (default prefix). See `TerminalPane.tsx` `attachCustomKeyEventHandler`.
+
+**Paste**: macOS uses `⌘V`, Windows/Linux uses `Ctrl+V`. On macOS, `Ctrl+V` passes through to the terminal (vim literal insert).
+
+**App menu**: macOS gets a standard menu bar (App/Edit/Window) to restore `⌘Q`/`⌘H`/`⌘M`. Windows/Linux: `Menu.setApplicationMenu(null)`. See `src/main/index.ts`.
+
+**Window close**: macOS hides the window on close (standard macOS behavior), `⌘Q` triggers actual quit via `before-quit` event. Windows/Linux: close triggers shutdown. See `src/main/index.ts`.
+
+**Login shell**: Unix (macOS/Linux) shells are launched with `-l` flag to ensure `.zprofile`/`.zshrc` are loaded (critical for nvm/pyenv PATH). Windows is unaffected. See `ProcessManager.ensureLoginShell()`.
+
+**Font fallback**: `"SF Mono", "Menlo"` (macOS system fonts) are prepended to the font chain. Non-existent fonts are automatically skipped by CSS. See `TerminalPane.tsx`.
+
+**tmux shim node resolution**: `AUSOME_NODE_PATH` is injected by ProcessManager, pointing to a known node binary. The Unix shim (`resources/bin/tmux`) uses it as fallback when `node` is not on PATH (common when launching from Finder/GNOME). See `resources/bin/tmux`.
+
 ### Status Detection
 
 Uses **PTY output analysis** instead of `pidusage` to detect window status:
@@ -121,10 +137,9 @@ Terminal view includes multiple ways to switch between windows:
    - Displays project links and IDE icons for each window
 
 3. **Keyboard Shortcuts**:
-   - `Ctrl+B`: Toggle sidebar expand/collapse
-   - `Ctrl+1~9`: Switch to Nth window in sidebar
    - `Ctrl+Tab`: Open quick switcher
-   - `Ctrl+Enter` / `Shift+Enter`: Insert newline in terminal (for apps like Claude Code)
+   - `Ctrl+Enter` / `⌘+Enter` (macOS): Insert newline in terminal (for apps like Claude Code)
+   - Sidebar toggle: click the sidebar button (no keyboard shortcut, to avoid conflicts with vim/tmux)
 
 **MRU List**: Maintained in `windowStore.mruList`, updated on every window switch. Persisted to workspace.json.
 
@@ -218,7 +233,7 @@ All operations trigger auto-save via WorkspaceManager.
 - Top toolbar: Back button, group name, status indicator, batch operations
 - Main area: GroupSplitLayout with resizable split panes
 - Sidebar and QuickSwitcher for navigation
-- Keyboard shortcuts: Ctrl+B (toggle sidebar), Ctrl+Tab (quick switcher)
+- Keyboard shortcuts: Ctrl+Tab (quick switcher)
 
 **GroupSplitLayout** (`src/renderer/components/GroupSplitLayout.tsx`):
 - Recursively renders GroupLayoutNode tree
@@ -352,9 +367,13 @@ Provides fake tmux environment so Claude Code can use its Agent Teams multi-pane
 
 **Key types**: `src/shared/types/tmux.ts` — `TmuxCommand` enum, `ParsedTmuxCommand`, `ITmuxCompatService`, `TmuxPaneMetadata`, etc.
 
-**Environment variables injected per pane**: `TMUX`, `TMUX_PANE`, `AUSOME_TMUX_RPC`, `AUSOME_TERMINAL_WINDOW_ID`, `AUSOME_TERMINAL_PANE_ID`. PATH is prepended with shim directory.
+**Environment variables injected per pane**: `TMUX`, `TMUX_PANE`, `AUSOME_TMUX_RPC`, `AUSOME_TERMINAL_WINDOW_ID`, `AUSOME_TERMINAL_PANE_ID`, `AUSOME_TMUX_EXPECTED_TMUX`, `AUSOME_NODE_PATH`. PATH is prepended with shim directory.
 
 **Supported P0 commands**: `-V`, `display-message`, `list-panes`, `split-window`, `send-keys`, `select-layout`, `select-pane`, `resize-pane`, `kill-pane`, `set-option`.
+
+**Passthrough logic** (`tmux-shim.js`): Non-P0 commands, bare `tmux` (no args), and commands inside real tmux sessions are automatically forwarded to the real tmux binary. Detection uses `AUSOME_TMUX_EXPECTED_TMUX` to distinguish fake vs real tmux environments. Passthrough uses `spawn` with signal forwarding (SIGINT/SIGTSTP/etc.) for correct terminal behavior.
+
+**Socket health check**: `TmuxCompatService.ensureRpcServer()` checks if the Unix socket file still exists before reusing a server. If the file was cleaned up (e.g., macOS `/tmp` cleanup), the server is automatically rebuilt. Windows Named Pipes are not affected.
 
 **Pane UI enhancements** (`src/renderer/components/TerminalPane.tsx`): Displays agent title (via `select-pane -T`), status-colored top border, custom border color (via `set-option pane-border-style`).
 
@@ -380,7 +399,10 @@ See `docs/tmux-user-guide.md`, `docs/tmux-developer-guide.md`, `docs/tmux-compat
 2. **Don't** unmount `TerminalView` components - use CSS display control instead
 3. **Don't** use `pidusage` for process monitoring - use PTY output detection
 4. **Don't** auto-start PTY processes on workspace restore - let user start manually
-5. **Don't** use `before-quit` event for cleanup - use `window.on('close')` instead (Windows compatibility)
+5. **Don't** use `before-quit` event for cleanup on Windows - use `window.on('close')` instead. macOS uses `before-quit` only to set `isQuitting` flag
 6. **Don't** implement full tmux protocol - only support the command subset Claude Code actually uses (see P0 list in tmux section)
 7. **Don't** forget to call `registerPane()` after creating a new pane via tmux split-window - the pane ID mapping is required for subsequent commands
 8. **Don't** use real tmux on Windows - the fake shim is the only supported path
+9. **Don't** intercept `Ctrl+B` or `Ctrl+1-9` in keyboard handlers - these conflict with vim (page up) and tmux (default prefix)
+10. **Don't** use `execFileSync` for passthrough to real tmux - use `spawn` with signal forwarding for correct Ctrl+Z/Ctrl+C behavior
+11. **Don't** assume Unix socket files persist forever - check existence before reusing RPC servers (macOS `/tmp` cleanup)
