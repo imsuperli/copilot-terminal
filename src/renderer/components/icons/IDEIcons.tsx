@@ -9,9 +9,7 @@ interface IconProps {
  * 动态IDE图标组件
  * 从IDE安装目录加载实际图标
  *
- * 图标缩放策略：
- * - VSCode 图标通常有较多透明边距，需要放大显示
- * - 其他 IDE 图标相对饱满，使用标准尺寸
+ * 所有图标统一使用固定尺寸容器约束，确保显示大小一致。
  */
 export const IDEIcon: React.FC<{ icon: string; size?: number; className?: string }> = ({
   icon,
@@ -20,13 +18,6 @@ export const IDEIcon: React.FC<{ icon: string; size?: number; className?: string
 }) => {
   const [iconSrc, setIconSrc] = useState<string>('');
   const [loading, setLoading] = useState(true);
-
-  // 判断是否是 VSCode 图标（通过路径特征）
-  const isVSCodeIcon = icon.toLowerCase().includes('code') || icon.toLowerCase().includes('vscode');
-
-  // VSCode 图标需要额外放大 1.5 倍来补偿透明边距
-  const scaleFactor = isVSCodeIcon ? 1.5 : 1.0;
-  const displaySize = Math.round(size * scaleFactor);
 
   useEffect(() => {
     const loadIcon = async () => {
@@ -57,7 +48,6 @@ export const IDEIcon: React.FC<{ icon: string; size?: number; className?: string
   }, [icon]);
 
   if (loading) {
-    // 加载中显示占位符
     return (
       <div
         className={`bg-zinc-700 rounded animate-pulse ${className}`}
@@ -67,7 +57,6 @@ export const IDEIcon: React.FC<{ icon: string; size?: number; className?: string
   }
 
   if (!iconSrc) {
-    // 无图标时显示默认图标
     return (
       <svg
         width={size}
@@ -87,18 +76,27 @@ export const IDEIcon: React.FC<{ icon: string; size?: number; className?: string
   }
 
   return (
-    <img
-      src={iconSrc}
-      alt="IDE Icon"
-      width={displaySize}
-      height={displaySize}
+    <div
       className={className}
       style={{
-        objectFit: 'contain',
-        // 使用负 margin 让放大的图标居中显示，不超出容器
-        marginLeft: isVSCodeIcon ? `-${Math.round((displaySize - size) / 2)}px` : '0',
-        marginTop: isVSCodeIcon ? `-${Math.round((displaySize - size) / 2)}px` : '0',
+        width: size,
+        height: size,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        flexShrink: 0,
       }}
-    />
+    >
+      <img
+        src={iconSrc}
+        alt="IDE Icon"
+        style={{
+          maxWidth: '100%',
+          maxHeight: '100%',
+          objectFit: 'contain',
+        }}
+      />
+    </div>
   );
 };

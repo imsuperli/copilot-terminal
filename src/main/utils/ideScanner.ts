@@ -305,22 +305,6 @@ const IDE_CATALOG: IDECatalogEntry[] = [
     linuxPathHints: ['/opt/eclipse'],
   },
   {
-    id: 'sts',
-    name: 'Spring Tool Suite',
-    command: 'sts',
-    aliases: ['spring tool suite', 'sts'],
-    executableNames: {
-      win32: ['SpringToolSuite4.exe', 'STS.exe'],
-      darwin: ['SpringToolSuite4.app', 'STS.app'],
-      linux: ['SpringToolSuite4', 'sts'],
-    },
-    displayNamePatterns: ['spring tool suite', 'sts'],
-    appNamePatterns: ['SpringToolSuite4.app', 'STS.app'],
-    bundleIdentifiers: ['com.springsource.sts4'],
-    windowsPathHints: ['Spring Tool Suite', 'STS'],
-    linuxPathHints: ['/opt/sts'],
-  },
-  {
     id: 'sublime',
     name: 'Sublime Text',
     command: 'subl',
@@ -372,7 +356,6 @@ const LAUNCH_ARGS_BY_ID: Record<string, (targetPath: string) => string[]> = {
   dataspell: DEFAULT_LAUNCH_ARGS,
   androidstudio: DEFAULT_LAUNCH_ARGS,
   eclipse: DEFAULT_LAUNCH_ARGS,
-  sts: DEFAULT_LAUNCH_ARGS,
   sublime: DEFAULT_LAUNCH_ARGS,
   zed: DEFAULT_LAUNCH_ARGS,
 };
