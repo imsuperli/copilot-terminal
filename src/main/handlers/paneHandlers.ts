@@ -45,7 +45,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
       }
 
       // 注册到状态轮询，确保进程退出时能通知渲染进程
-      if (config.paneId) {
+      if (config.windowId && config.paneId) {
         statusPoller?.addPane(config.windowId, config.paneId, handle.pid);
       }
 
