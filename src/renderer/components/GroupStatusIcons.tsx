@@ -67,7 +67,7 @@ export const GroupStatusIcons: React.FC<GroupStatusIconsProps> = React.memo(({
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Content
-                className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
                 side="top"
                 sideOffset={5}
               >

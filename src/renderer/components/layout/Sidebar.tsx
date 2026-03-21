@@ -253,7 +253,7 @@ export function Sidebar({
                       </button>
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
-                      <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                      <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
                         {t('common.clearSearch')}
                       </Tooltip.Content>
                     </Tooltip.Portal>
@@ -302,7 +302,7 @@ export function Sidebar({
                   </div>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
                     {t('sidebar.hideGroupedWindowsTooltip')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
@@ -422,7 +422,7 @@ export function Sidebar({
                                 </button>
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
-                                <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
                                   {t('common.save')}
                                 </Tooltip.Content>
                               </Tooltip.Portal>
@@ -439,7 +439,7 @@ export function Sidebar({
                                 </button>
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
-                                <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
                                   {t('common.cancel')}
                                 </Tooltip.Content>
                               </Tooltip.Portal>
@@ -468,7 +468,7 @@ export function Sidebar({
                                   </button>
                                 </Tooltip.Trigger>
                                 <Tooltip.Portal>
-                                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
                                     {t('category.rename')}
                                   </Tooltip.Content>
                                 </Tooltip.Portal>
@@ -485,7 +485,7 @@ export function Sidebar({
                                   </button>
                                 </Tooltip.Trigger>
                                 <Tooltip.Portal>
-                                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
                                     {t('category.delete')}
                                   </Tooltip.Content>
                                 </Tooltip.Portal>
@@ -562,7 +562,7 @@ export function Sidebar({
                   </button>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
                     {t('quickNav.title')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
@@ -580,7 +580,7 @@ export function Sidebar({
                   </button>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
                     {t('about.title')}
                   </Tooltip.Content>
                 </Tooltip.Portal>

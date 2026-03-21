@@ -861,7 +861,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                       side="top"
                       sideOffset={5}
                     >
@@ -897,7 +897,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
                     side="top"
                     sideOffset={5}
                   >
