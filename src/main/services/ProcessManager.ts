@@ -142,8 +142,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         const timeout = setTimeout(() => {
           console.warn(`[ProcessManager] ConPTY DLL warmup timed out after ${WARMUP_TIMEOUT_MS}ms, force killing`);
           try { dummyPty.kill(); } catch {}
-          // Force destroy the PTY handle to prevent it from hanging
-          try { (dummyPty as any).destroy?.(); } catch {}
+          // Do NOT call destroy() here — kill() already triggers native cleanup.
+          // Calling both causes double-free heap corruption (0xC0000374).
           done();
         }, WARMUP_TIMEOUT_MS);
 
@@ -160,9 +160,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       console.log(`[ProcessManager] ConPTY DLL warmup completed in ${Date.now() - warmupStartAt}ms`);
     } catch (error) {
       console.error('[ProcessManager] ConPTY DLL warmup failed:', error);
-      // Ensure cleanup on error
       try { dummyPty?.kill(); } catch {}
-      try { (dummyPty as any)?.destroy?.(); } catch {}
     }
   }
 
