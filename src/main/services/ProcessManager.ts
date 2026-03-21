@@ -838,6 +838,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     const explicitExecutable = this.findExplicitExecutable(tokens);
     if (explicitExecutable) {
+      // macOS: 标准 shell 以 login shell 启动，确保环境变量完整继承
+      this.ensureLoginShell(explicitExecutable);
       return {
         command,
         file: explicitExecutable.file,
@@ -845,11 +847,30 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       };
     }
 
-    return {
+    const result = {
       command,
       file: tokens[0],
       args: tokens.slice(1),
     };
+    this.ensureLoginShell(result);
+    return result;
+  }
+
+  /**
+   * Unix (macOS/Linux): 为标准 shell 添加 -l (login) 参数
+   * 确保从桌面环境（Finder/GNOME/KDE）启动时 nvm/pyenv/rbenv 等工具的 PATH 可用
+   */
+  private ensureLoginShell(launch: { file: string; args: string[] }): void {
+    if (platform() === 'win32') return;
+
+    const shellName = path.basename(launch.file);
+    const isStandardShell = ['zsh', 'bash', 'sh', 'fish'].includes(shellName);
+    if (!isStandardShell) return;
+
+    // 如果已经有 -l 或 --login 参数，不重复添加
+    if (launch.args.some(a => a === '-l' || a === '--login')) return;
+
+    launch.args.unshift('-l');
   }
 
   private findExplicitExecutable(tokens: string[]): { file: string; args: string[] } | null {
@@ -984,6 +1005,18 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     const tmuxLogFile = path.join(tmpdir(), 'copilot-terminal-tmux-debug.log');
 
+    // 解析 node 可执行文件路径，供 tmux shim 使用
+    // 开发环境: process.execPath 就是 node
+    // 生产环境: 尝试从 PATH 中查找 node，fallback 到 process.execPath（Electron 自身也能运行 JS）
+    let nodePath = process.execPath;
+    try {
+      const cmd = platform() === 'win32' ? 'where node' : 'command -v node';
+      const resolved = execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      if (resolved) nodePath = resolved.split(/\r?\n/)[0];
+    } catch {
+      // 找不到 node，使用 process.execPath
+    }
+
     return {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
       TMUX: tmuxValue,
@@ -993,6 +1026,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       AUSOME_TERMINAL_PANE_ID: config.paneId,
       AUSOME_TMUX_RPC: rpcSocketPath,
       AUSOME_TMUX_LOG_FILE: tmuxLogFile,
+      AUSOME_NODE_PATH: nodePath,
       ...(baseEnv.AUSOME_TMUX_DEBUG === '1' ? { AUSOME_TMUX_DEBUG: '1' } : {}),
       PATH: newPath,
       Path: newPath,

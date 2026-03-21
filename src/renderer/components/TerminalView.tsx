@@ -115,17 +115,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     onCtrlTab: () => {
       setQuickSwitcherOpen(true);
     },
-    onCtrlB: () => {
-      toggleSidebar();
-    },
-    onCtrlNumber: (num) => {
-      if (num > 0 && num <= activeWindows.length) {
-        const targetWindow = activeWindows[num - 1];
-        if (targetWindow) {
-          onWindowSwitch(targetWindow.id);
-        }
-      }
-    },
     onEscape: () => {
       // 鍙湁褰撻潰鏉挎墦寮€鏃舵墠澶勭悊 ESC 閿?
       if (quickSwitcherOpen) {

@@ -840,6 +840,13 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
   async ensureRpcServer(windowId: string): Promise<string> {
     const socketPath = this.rpcServer.getSocketPath(windowId);
     if (this.rpcServer.hasServer(windowId)) {
+      // 健康检查：Unix socket 文件可能被系统清理（macOS /tmp 清理），需要重建
+      if (process.platform !== 'win32' && !fs.existsSync(socketPath)) {
+        this.appendTmuxDebugFile(undefined, 'Socket file missing, rebuilding RPC server', { windowId, socketPath });
+        const startedPath = await this.rpcServer.startServer(windowId);
+        this.appendTmuxDebugFile(undefined, 'RPC server rebuilt', { windowId, socketPath: startedPath });
+        return startedPath;
+      }
       this.appendTmuxDebugFile(undefined, 'RPC server already active', { windowId, socketPath });
       return socketPath;
     }

@@ -405,7 +405,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         brightCyan: '#56b6c2',
         brightWhite: '#ffffff',
       },
-      fontFamily: '"Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
+      fontFamily: '"SF Mono", "Menlo", "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
       fontSize: 15,
       lineHeight: 1.2,
       macOptionIsMeta: true,
@@ -623,9 +623,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     terminalContainer?.addEventListener('paste', suppressNativePaste as EventListener, true);
 
     // 告诉 xterm.js 忽略应用级快捷键
+    const isMac = window.electronAPI?.platform === 'darwin';
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      // Ctrl+V：粘贴剪贴板内容
-      if (e.type === 'keydown' && e.ctrlKey && e.key.toLowerCase() === 'v' && !e.shiftKey && !e.altKey && !e.metaKey) {
+      // 粘贴：macOS 用 ⌘V，Windows/Linux 用 Ctrl+V
+      const isPaste = e.type === 'keydown' && e.key.toLowerCase() === 'v' && !e.shiftKey && !e.altKey
+        && (isMac ? (e.metaKey && !e.ctrlKey) : (e.ctrlKey && !e.metaKey));
+      if (isPaste) {
         e.preventDefault(); // 阻止浏览器默认粘贴行为（否则会通过 xterm textarea 触发第二次粘贴）
         e.stopPropagation();
         suppressNativePasteUntilRef.current = Date.now() + pasteCaptureBlockMs;
@@ -640,11 +643,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
             }
           });
         }
-        return false; // 阻止 xterm.js 将 Ctrl+V 作为 ^V 发送给 PTY
+        return false; // 阻止 xterm.js 处理粘贴键
       }
 
-      // Ctrl+Enter：发送换行符到 PTY（用于多行输入）
-      if (e.ctrlKey && e.key === 'Enter' && !e.shiftKey) {
+      // Ctrl+Enter / ⌘+Enter：发送换行符到 PTY（用于多行输入）
+      const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+      if (isCtrlOrCmd && e.key === 'Enter' && !e.shiftKey) {
         // 忽略键盘重复触发
         if (e.repeat) {
           return false;
@@ -666,8 +670,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       if (e.ctrlKey) {
         // 应用级快捷键：不让 xterm 处理
-        if (e.key === 'Tab' || e.key === 'b' ||
-            (e.key >= '1' && e.key <= '9')) {
+        if (e.key === 'Tab') {
           return false; // xterm 不处理，让事件正常传播
         }
       }

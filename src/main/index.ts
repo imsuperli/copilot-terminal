@@ -52,8 +52,47 @@ function createWindow() {
     },
   });
 
-  // 移除菜单栏，但保留窗口控制按钮
-  Menu.setApplicationMenu(null);
+  // macOS: 创建标准菜单栏（恢复 ⌘Q/⌘H/⌘M 等系统快捷键）
+  // Windows/Linux: 移除菜单栏
+  if (process.platform === 'darwin') {
+    const template: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { role: 'selectAll' },
+        ],
+      },
+      {
+        label: 'Window',
+        submenu: [
+          { role: 'minimize' },
+          { role: 'zoom' },
+          { role: 'close' },
+        ],
+      },
+    ];
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  } else {
+    Menu.setApplicationMenu(null);
+  }
 
   // 🎯 等待渲染进程明确通知"我准备好了"
   // 使用淡入效果掩盖任何系统级的白色闪烁
@@ -128,7 +167,14 @@ function createWindow() {
 
   // 窗口关闭前处理
   mainWindow.on('close', async (event) => {
-    // 检查当前视图状态（从 ViewSwitcher 获取）
+    // macOS: 关闭窗口只隐藏，不退出（除非用户通过 ⌘Q 触发退出）
+    if (process.platform === 'darwin' && !isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+      return;
+    }
+
+    // Windows/Linux: 检查当前视图状态
     const currentViewState = viewSwitcher?.getCurrentView() || 'unified';
 
     // 如果在终端视图（包括单窗口和组视图），返回统一视图而不是关闭窗口
@@ -325,12 +371,19 @@ app.whenReady().then(async () => {
     }
   }
 
-  // macOS 特定: 点击 Dock 图标时重新创建窗口
+  // macOS 特定: 点击 Dock 图标时重新显示或创建窗口
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+    } else if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
+});
+
+// macOS: ⌘Q 触发 before-quit，标记退出状态以便 close 事件不再隐藏窗口
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 // 所有窗口关闭时退出应用 (macOS 除外)

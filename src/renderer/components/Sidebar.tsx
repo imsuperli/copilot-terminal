@@ -165,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={toggleSidebar}
             className="w-8 h-8 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-all duration-200"
             aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
-            title={sidebarExpanded ? '折叠侧边栏 (Ctrl+B)' : '展开侧边栏 (Ctrl+B)'}
+            title={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
           >
             <Menu size={16} className="transition-transform duration-200" />
           </button>

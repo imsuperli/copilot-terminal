@@ -98,17 +98,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
     onCtrlTab: () => {
       setQuickSwitcherOpen(true);
     },
-    onCtrlB: () => {
-      toggleSidebar();
-    },
-    onCtrlNumber: (num) => {
-      if (num > 0 && num <= activeWindows.length) {
-        const targetWindow = activeWindows[num - 1];
-        if (targetWindow) {
-          onWindowSwitch(targetWindow.id);
-        }
-      }
-    },
     onEscape: () => {
       if (quickSwitcherOpen) {
         setQuickSwitcherOpen(false);
