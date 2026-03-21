@@ -1,5 +1,4 @@
 import React, { useCallback, useState, useEffect, useMemo } from 'react';
-import * as Tooltip from '@radix-ui/react-tooltip';
 import { ArrowLeft, FolderOpen, Play, Square, Archive } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -11,8 +10,8 @@ import { WindowGroup } from '../../shared/types/window-group';
 import { WindowStatus } from '../types/window';
 import { getAllWindowIds, getWindowCount } from '../utils/groupLayoutHelpers';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
-import { useI18n } from '../i18n';
 import type { WindowCardDragItem, DropResult } from './dnd';
+import { AppTooltip } from './ui/AppTooltip';
 
 export interface GroupViewProps {
   group: WindowGroup;
@@ -33,7 +32,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
   onGroupSwitch,
   isActive,
 }) => {
-  const { t } = useI18n();
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
 
@@ -341,27 +339,14 @@ export const GroupView: React.FC<GroupViewProps> = ({
         {/* 顶部工具栏 */}
         <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-3 gap-2 flex-shrink-0">
           {/* 返回按钮 */}
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={onReturn}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
-                >
-                  <ArrowLeft size={14} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                  side="bottom"
-                  sideOffset={14}
-                >
-                  返回
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
+          <AppTooltip content="返回" placement="toolbar-leading">
+            <button
+              onClick={onReturn}
+              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
+            >
+              <ArrowLeft size={14} />
+            </button>
+          </AppTooltip>
 
           {/* 组状态指示器 */}
           <div className={`w-2 h-2 rounded-full ${statusColor}`} />
@@ -382,80 +367,45 @@ export const GroupView: React.FC<GroupViewProps> = ({
           {/* 批量操作按钮 */}
           <div className="flex items-center gap-1">
             {/* 启动全部 */}
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={handleStartAll}
-                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-green-500 transition-colors"
-                  >
-                    <Play size={14} fill="currentColor" />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                    side="bottom"
-                    sideOffset={14}
-                  >
-                    启动全部
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+            <AppTooltip content="启动全部" placement="toolbar-trailing">
+              <button
+                onClick={handleStartAll}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-green-500 transition-colors"
+              >
+                <Play size={14} fill="currentColor" />
+              </button>
+            </AppTooltip>
 
             {/* 暂停全部 - 始终显示，根据状态改变颜色和禁用状态 */}
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={200}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={handlePauseAll}
-                    disabled={groupAggregatedStatus !== WindowStatus.Running && groupAggregatedStatus !== WindowStatus.WaitingForInput}
-                    className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
-                      groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
-                        ? 'text-red-500 cursor-pointer'
-                        : 'text-zinc-600 cursor-not-allowed opacity-50'
-                    }`}
-                  >
-                    <Square size={14} fill="currentColor" />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                    side="bottom"
-                    sideOffset={14}
-                  >
-                    {groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
-                      ? '暂停全部'
-                      : '窗口未运行'}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+            <AppTooltip
+              content={groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
+                ? '暂停全部'
+                : '窗口未运行'}
+              delayDuration={200}
+              placement="toolbar-trailing"
+            >
+              <button
+                onClick={handlePauseAll}
+                disabled={groupAggregatedStatus !== WindowStatus.Running && groupAggregatedStatus !== WindowStatus.WaitingForInput}
+                className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
+                  groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
+                    ? 'text-red-500 cursor-pointer'
+                    : 'text-zinc-600 cursor-not-allowed opacity-50'
+                }`}
+              >
+                <Square size={14} fill="currentColor" />
+              </button>
+            </AppTooltip>
 
             {/* 归档组 */}
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={handleArchiveGroup}
-                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
-                  >
-                    <Archive size={14} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                    side="bottom"
-                    sideOffset={14}
-                  >
-                    归档组
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+            <AppTooltip content="归档组" placement="toolbar-trailing">
+              <button
+                onClick={handleArchiveGroup}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
+              >
+                <Archive size={14} />
+              </button>
+            </AppTooltip>
           </div>
         </div>
 
