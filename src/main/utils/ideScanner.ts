@@ -813,6 +813,41 @@ function getWindowsShortcutEntries(): WindowsShortcutEntry[] {
   return entries;
 }
 
+function resolveWindowsShortcutIcon(entry: IDECatalogEntry): string | undefined {
+  for (const shortcut of getWindowsShortcutEntries()) {
+    if (!matchesAnyPattern(shortcut.name, [...entry.displayNamePatterns, ...entry.aliases])) {
+      continue;
+    }
+
+    const resolvedIcon = cleanWindowsRegistryPath(shortcut.iconLocation);
+    if (resolvedIcon && (isImageFile(resolvedIcon) || isWindowsExecutablePath(resolvedIcon))) {
+      return resolvedIcon;
+    }
+
+    if (isWindowsExecutablePath(shortcut.targetPath)) {
+      return resolve(shortcut.targetPath);
+    }
+  }
+
+  return undefined;
+}
+
+function withWindowsShortcutIcon(entry: IDECatalogEntry, candidates: DetectedIDECandidate[]): DetectedIDECandidate[] {
+  if (candidates.length === 0) {
+    return candidates;
+  }
+
+  const shortcutIcon = resolveWindowsShortcutIcon(entry);
+  if (!shortcutIcon) {
+    return candidates;
+  }
+
+  return candidates.map(candidate => ({
+    ...candidate,
+    icon: shortcutIcon,
+  }));
+}
+
 function getWindowsDirectCandidates(entry: IDECatalogEntry): string[] {
   const roots = uniqueStrings([
     process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Programs') : undefined,
@@ -943,7 +978,7 @@ function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
       const results: DetectedIDECandidate[] = [];
       pushCandidate(results, entry, appPath, 'registry:app-paths', 96, dirname(appPath));
       if (results.length > 0) {
-        return results;
+        return withWindowsShortcutIcon(entry, results);
       }
     }
   }
@@ -955,7 +990,7 @@ function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
       pushCandidate(results, entry, directCandidate, 'filesystem:direct', 94, dirname(directCandidate));
     }
     if (results.length > 0) {
-      return results;
+      return withWindowsShortcutIcon(entry, results);
     }
   }
 
@@ -1008,7 +1043,7 @@ function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
       }
     }
     if (results.length > 0) {
-      return results;
+      return withWindowsShortcutIcon(entry, results);
     }
   }
 
