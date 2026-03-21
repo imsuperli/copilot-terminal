@@ -65,22 +65,6 @@ const IDE_CATALOG: IDECatalogEntry[] = [
     linuxPathHints: ['/usr/share/code', '/opt/visual-studio-code'],
   },
   {
-    id: 'vscode-insiders',
-    name: 'VS Code Insiders',
-    command: 'code-insiders',
-    aliases: ['vscode insiders', 'visual studio code insiders', 'code insiders'],
-    executableNames: {
-      win32: ['Code - Insiders.exe', 'code-insiders.cmd'],
-      darwin: ['Visual Studio Code - Insiders.app'],
-      linux: ['code-insiders'],
-    },
-    displayNamePatterns: ['visual studio code insiders', 'vs code insiders'],
-    appNamePatterns: ['Visual Studio Code - Insiders.app'],
-    bundleIdentifiers: ['com.microsoft.VSCodeInsiders'],
-    windowsPathHints: ['Microsoft VS Code Insiders', 'VS Code Insiders'],
-    linuxPathHints: ['/usr/share/code-insiders', '/opt/visual-studio-code-insiders'],
-  },
-  {
     id: 'cursor',
     name: 'Cursor',
     command: 'cursor',
@@ -95,22 +79,6 @@ const IDE_CATALOG: IDECatalogEntry[] = [
     bundleIdentifiers: ['com.todesktop.230313mzl4w4u92'],
     windowsPathHints: ['Cursor'],
     linuxPathHints: ['/opt/Cursor', '/usr/share/cursor'],
-  },
-  {
-    id: 'vscodium',
-    name: 'VSCodium',
-    command: 'codium',
-    aliases: ['vscodium', 'codium'],
-    executableNames: {
-      win32: ['VSCodium.exe', 'codium.cmd'],
-      darwin: ['VSCodium.app'],
-      linux: ['codium'],
-    },
-    displayNamePatterns: ['vscodium'],
-    appNamePatterns: ['VSCodium.app'],
-    bundleIdentifiers: ['com.vscodium'],
-    windowsPathHints: ['VSCodium'],
-    linuxPathHints: ['/usr/share/codium', '/opt/vscodium-bin'],
   },
   {
     id: 'idea',
@@ -357,9 +325,7 @@ const IDE_CATALOG: IDECatalogEntry[] = [
 const DEFAULT_LAUNCH_ARGS = (targetPath: string) => [targetPath];
 const LAUNCH_ARGS_BY_ID: Record<string, (targetPath: string) => string[]> = {
   vscode: DEFAULT_LAUNCH_ARGS,
-  'vscode-insiders': DEFAULT_LAUNCH_ARGS,
   cursor: DEFAULT_LAUNCH_ARGS,
-  vscodium: DEFAULT_LAUNCH_ARGS,
   idea: DEFAULT_LAUNCH_ARGS,
   pycharm: DEFAULT_LAUNCH_ARGS,
   webstorm: DEFAULT_LAUNCH_ARGS,

@@ -92,8 +92,10 @@ export const IDEIcon: React.FC<{ icon: string; size?: number; className?: string
         src={iconSrc}
         alt="IDE Icon"
         style={{
-          maxWidth: '100%',
-          maxHeight: '100%',
+          // 放大 130% 来补偿图标自带的透明边距，overflow:hidden 裁掉溢出部分
+          // 使所有图标的视觉内容区域在容器中大小一致
+          width: size * 1.3,
+          height: size * 1.3,
           objectFit: 'contain',
         }}
       />
