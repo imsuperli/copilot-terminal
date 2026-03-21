@@ -254,6 +254,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Portal>
                     <Tooltip.Content
                       className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      side="top"
                       sideOffset={5}
                     >
                       {t('windowCard.pane', { index: index + 1, status: t(getStatusLabelKey(pane.status)) })}
@@ -282,6 +283,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             <Tooltip.Portal>
               <Tooltip.Content
                 className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-3 py-2 rounded-lg text-sm max-w-md break-all z-50 shadow-xl border border-[rgb(var(--border))]"
+                side="top"
                 sideOffset={5}
               >
                 {workingDirectory || `(${t('windowCard.noWorkingDirectory')})`}
@@ -333,6 +335,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Portal>
                     <Tooltip.Content
                       className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      side="top"
                       sideOffset={5}
                     >
                       {t('windowCard.start')}
@@ -367,6 +370,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Portal>
                     <Tooltip.Content
                       className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      side="top"
                       sideOffset={5}
                     >
                       {t('windowCard.stop')}
@@ -394,6 +398,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Portal>
                     <Tooltip.Content
                       className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      side="top"
                       sideOffset={5}
                     >
                       {t('windowCard.archive')}
@@ -416,6 +421,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Portal>
                     <Tooltip.Content
                       className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                      side="top"
                       sideOffset={5}
                     >
                       {t('windowCard.unarchive')}
@@ -439,6 +445,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <Tooltip.Portal>
                   <Tooltip.Content
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                    side="top"
                     sideOffset={5}
                   >
                     {t('windowCard.edit')}
@@ -461,6 +468,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <Tooltip.Portal>
                   <Tooltip.Content
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                    side="top"
                     sideOffset={5}
                   >
                     {t('common.delete')}
@@ -492,6 +500,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     <Tooltip.Portal>
                       <Tooltip.Content
                         className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                        side="top"
                         sideOffset={5}
                       >
                         {t('common.openInIDE', { name: ide.name })}
@@ -517,6 +526,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     <Tooltip.Portal>
                       <Tooltip.Content
                         className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                        side="top"
                         sideOffset={5}
                       >
                         {t('common.openFolder')}
@@ -541,6 +551,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content
                       className="bg-[rgb(var(--card))] rounded-lg shadow-xl border border-[rgb(var(--border))] p-1 z-50 min-w-[120px]"
+                      side="top"
                       sideOffset={5}
                       onClick={(e) => e.stopPropagation()}
                     >

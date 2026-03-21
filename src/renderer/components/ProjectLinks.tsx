@@ -70,6 +70,7 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
               <Tooltip.Portal>
                 <Tooltip.Content
                   className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))] max-w-xs break-all"
+                  side="top"
                   sideOffset={5}
                 >
                   {link.name}
@@ -147,6 +148,7 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
                 <Tooltip.Portal>
                   <Tooltip.Content
                     className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
+                    side="top"
                     sideOffset={5}
                   >
                     {link.name}

@@ -256,6 +256,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
                 <Tooltip.Portal>
                   <Tooltip.Content
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                    side="top"
                     sideOffset={5}
                   >
                     归档组
@@ -278,6 +279,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
                 <Tooltip.Portal>
                   <Tooltip.Content
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                    side="top"
                     sideOffset={5}
                   >
                     取消归档
@@ -301,6 +303,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
               <Tooltip.Portal>
                 <Tooltip.Content
                   className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                  side="top"
                   sideOffset={5}
                 >
                   编辑组
@@ -323,6 +326,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
               <Tooltip.Portal>
                 <Tooltip.Content
                   className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                  side="top"
                   sideOffset={5}
                 >
                   删除组

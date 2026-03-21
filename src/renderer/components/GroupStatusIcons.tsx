@@ -68,6 +68,7 @@ export const GroupStatusIcons: React.FC<GroupStatusIconsProps> = React.memo(({
             <Tooltip.Portal>
               <Tooltip.Content
                 className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                side="top"
                 sideOffset={5}
               >
                 {item.name} - {t(getStatusLabelKey(item.status))}（{item.paneCount} 窗格）
