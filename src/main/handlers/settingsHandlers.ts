@@ -2,7 +2,7 @@ import { app, ipcMain } from 'electron';
 import { readFileSync, existsSync, statSync } from 'fs';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
-import { scanInstalledIDEs, scanSpecificIDE, getSupportedIDENames, isImageFile } from '../utils/ideScanner';
+import { scanInstalledIDEsAsync, scanSpecificIDE, getSupportedIDENames, isImageFile } from '../utils/ideScanner';
 import { IDEConfig } from '../types/workspace';
 import { scanAvailableShellPrograms } from '../utils/shell';
 
@@ -66,7 +66,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
   // 扫描已安装的 IDE
   ipcMain.handle('scan-ides', async () => {
     try {
-      const installedIDEs = scanInstalledIDEs();
+      const installedIDEs = await scanInstalledIDEsAsync();
       console.log('[IDE_SCAN] Found IDEs:', installedIDEs.map(ide => ({
         id: ide.id,
         name: ide.name,

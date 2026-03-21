@@ -379,6 +379,7 @@ const LAUNCH_ARGS_BY_ID: Record<string, (targetPath: string) => string[]> = {
 
 let windowsShortcutCache: WindowsShortcutEntry[] | null = null;
 let windowsUninstallCache: WindowsUninstallEntry[] | null = null;
+let windowsAppPathsCache: Map<string, string> | null = null;
 
 function normalizeText(value: string | undefined | null): string {
   return (value || '').trim().toLowerCase();
@@ -388,11 +389,12 @@ function uniqueStrings(values: Array<string | undefined | null>): string[] {
   return [...new Set(values.filter((value): value is string => Boolean(value && value.trim())).map(value => value.trim()))];
 }
 
-function safeSpawn(command: string, args: string[]): string | null {
+function safeSpawn(command: string, args: string[], timeout = 5000): string | null {
   try {
     const result = spawnSync(command, args, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      timeout,
     });
 
     if (result.error || result.status !== 0) {
@@ -652,28 +654,57 @@ function scanPathLookup(entry: IDECatalogEntry): DetectedIDECandidate[] {
   return results;
 }
 
-function queryWindowsAppPaths(executableName: string): string[] {
+function getAllWindowsAppPaths(): Map<string, string> {
+  if (windowsAppPathsCache) {
+    return windowsAppPathsCache;
+  }
+
   const hives = [
     'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths',
     'HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths',
     'HKLM\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths',
   ];
 
-  const matches: string[] = [];
+  const cache = new Map<string, string>();
 
   for (const hive of hives) {
-    const output = safeSpawn('reg', ['query', `${hive}\\${executableName}`, '/ve']);
+    const output = safeSpawn('reg', ['query', hive, '/s']);
     if (!output) {
       continue;
     }
 
-    const value = cleanWindowsRegistryPath(extractRegistryValue(output.split(/\r?\n/).find(line => line.includes('REG_'))));
-    if (value) {
-      matches.push(value);
+    const lines = output.split(/\r?\n/);
+    let currentKey: string | null = null;
+
+    for (const line of lines) {
+      if (line.startsWith('HKEY_')) {
+        const parts = line.split('\\');
+        currentKey = parts[parts.length - 1]?.toLowerCase() || null;
+        continue;
+      }
+
+      if (!currentKey) {
+        continue;
+      }
+
+      if (line.includes('(Default)') && line.includes('REG_')) {
+        const value = cleanWindowsRegistryPath(extractRegistryValue(line));
+        if (value && !cache.has(currentKey)) {
+          cache.set(currentKey, value);
+        }
+      }
     }
   }
 
-  return uniqueStrings(matches);
+  windowsAppPathsCache = cache;
+  return cache;
+}
+
+function queryWindowsAppPaths(executableName: string): string[] {
+  const cache = getAllWindowsAppPaths();
+  const key = executableName.toLowerCase();
+  const value = cache.get(key);
+  return value ? [value] : [];
 }
 
 function getWindowsUninstallEntries(): WindowsUninstallEntry[] {
@@ -915,78 +946,101 @@ function getWindowsSearchRoots(entry: IDECatalogEntry): string[] {
 }
 
 function scanWindowsCatalog(entry: IDECatalogEntry): DetectedIDECandidate[] {
-  const results: DetectedIDECandidate[] = [];
   const executableNames = entry.executableNames.win32 || [];
 
-  for (const directCandidate of getWindowsDirectCandidates(entry)) {
-    pushCandidate(results, entry, directCandidate, 'filesystem:direct', 94, dirname(directCandidate));
-  }
+  // 按置信度从高到低扫描，找到即返回（早退机制）
 
+  // 1. Registry App Paths (confidence: 96) — 最快最准，已批量缓存
   for (const executableName of executableNames) {
     for (const appPath of queryWindowsAppPaths(executableName)) {
+      const results: DetectedIDECandidate[] = [];
       pushCandidate(results, entry, appPath, 'registry:app-paths', 96, dirname(appPath));
-    }
-  }
-
-  for (const uninstallEntry of getWindowsUninstallEntries()) {
-    if (!matchesAnyPattern(uninstallEntry.displayName, entry.displayNamePatterns)) {
-      continue;
-    }
-
-    const displayIcon = cleanWindowsRegistryPath(uninstallEntry.displayIcon);
-    const installLocation = uninstallEntry.installLocation && pathExists(uninstallEntry.installLocation)
-      ? resolve(uninstallEntry.installLocation)
-      : undefined;
-
-    if (displayIcon) {
-      pushCandidate(
-        results,
-        entry,
-        displayIcon,
-        'registry:uninstall',
-        88,
-        installLocation || dirname(displayIcon),
-        uninstallEntry.displayVersion,
-        uninstallEntry.displayIcon ? cleanWindowsRegistryPath(uninstallEntry.displayIcon) || undefined : undefined,
-      );
-      continue;
-    }
-
-    if (installLocation) {
-      for (const executableName of executableNames) {
-        const installMatch = findExecutableNearRoot(installLocation, [executableName], entry.aliases)[0];
-        if (installMatch) {
-          pushCandidate(results, entry, installMatch, 'registry:uninstall', 84, installLocation, uninstallEntry.displayVersion);
-        }
+      if (results.length > 0) {
+        return results;
       }
     }
   }
 
-  for (const shortcut of getWindowsShortcutEntries()) {
-    if (!matchesAnyPattern(shortcut.name, [...entry.displayNamePatterns, ...entry.aliases])) {
-      continue;
+  // 2. Direct filesystem (confidence: 94) — 纯文件存在性检查
+  {
+    const results: DetectedIDECandidate[] = [];
+    for (const directCandidate of getWindowsDirectCandidates(entry)) {
+      pushCandidate(results, entry, directCandidate, 'filesystem:direct', 94, dirname(directCandidate));
     }
-
-    pushCandidate(
-      results,
-      entry,
-      shortcut.targetPath,
-      'start-menu',
-      76,
-      dirname(shortcut.targetPath),
-      parseVersionFromPath(shortcut.targetPath),
-      cleanWindowsRegistryPath(shortcut.iconLocation) || shortcut.targetPath,
-    );
-  }
-
-  for (const root of getWindowsSearchRoots(entry)) {
-    const matches = findExecutableNearRoot(root, executableNames, [...entry.aliases, ...entry.displayNamePatterns]);
-    for (const match of matches) {
-      pushCandidate(results, entry, match, 'filesystem', 66, dirname(dirname(match)));
+    if (results.length > 0) {
+      return results;
     }
   }
 
-  return [...results, ...scanPathLookup(entry)];
+  // 3. Registry Uninstall (confidence: 88/84) — 已缓存
+  {
+    const results: DetectedIDECandidate[] = [];
+    for (const uninstallEntry of getWindowsUninstallEntries()) {
+      if (!matchesAnyPattern(uninstallEntry.displayName, entry.displayNamePatterns)) {
+        continue;
+      }
+
+      const displayIcon = cleanWindowsRegistryPath(uninstallEntry.displayIcon);
+      const installLocation = uninstallEntry.installLocation && pathExists(uninstallEntry.installLocation)
+        ? resolve(uninstallEntry.installLocation)
+        : undefined;
+
+      if (displayIcon) {
+        pushCandidate(
+          results,
+          entry,
+          displayIcon,
+          'registry:uninstall',
+          88,
+          installLocation || dirname(displayIcon),
+          uninstallEntry.displayVersion,
+          uninstallEntry.displayIcon ? cleanWindowsRegistryPath(uninstallEntry.displayIcon) || undefined : undefined,
+        );
+        continue;
+      }
+
+      if (installLocation) {
+        for (const executableName of executableNames) {
+          const installMatch = findExecutableNearRoot(installLocation, [executableName], entry.aliases)[0];
+          if (installMatch) {
+            pushCandidate(results, entry, installMatch, 'registry:uninstall', 84, installLocation, uninstallEntry.displayVersion);
+          }
+        }
+      }
+    }
+    if (results.length > 0) {
+      return results;
+    }
+  }
+
+  // 4. Start Menu shortcuts (confidence: 76) — 已缓存
+  {
+    const results: DetectedIDECandidate[] = [];
+    for (const shortcut of getWindowsShortcutEntries()) {
+      if (!matchesAnyPattern(shortcut.name, [...entry.displayNamePatterns, ...entry.aliases])) {
+        continue;
+      }
+
+      pushCandidate(
+        results,
+        entry,
+        shortcut.targetPath,
+        'start-menu',
+        76,
+        dirname(shortcut.targetPath),
+        parseVersionFromPath(shortcut.targetPath),
+        cleanWindowsRegistryPath(shortcut.iconLocation) || shortcut.targetPath,
+      );
+    }
+    if (results.length > 0) {
+      return results;
+    }
+  }
+
+  // 移除了 filesystem deep search (66) 和 PATH lookup via where.exe (58)
+  // 这两个最慢且收益最低
+
+  return [];
 }
 
 function scanMacApplications(entry: IDECatalogEntry): DetectedIDECandidate[] {
@@ -1078,6 +1132,21 @@ export function scanInstalledIDEs(): IDEConfig[] {
       return candidate ? candidateToIDEConfig(entry, candidate) : null;
     })
     .filter((value): value is IDEConfig => value !== null);
+}
+
+export async function scanInstalledIDEsAsync(): Promise<IDEConfig[]> {
+  const results: IDEConfig[] = [];
+
+  for (const entry of IDE_CATALOG) {
+    const candidate = scanCatalog(entry);
+    if (candidate) {
+      results.push(candidateToIDEConfig(entry, candidate));
+    }
+    // 每扫描完一个 IDE 后让出事件循环，避免主进程卡死
+    await new Promise(resolve => setImmediate(resolve));
+  }
+
+  return results;
 }
 
 export function getDefaultIDEConfigs(): IDEConfig[] {
