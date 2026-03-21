@@ -114,7 +114,6 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       return;
     }
 
-    const WARMUP_TIMEOUT_MS = 10000;
     const warmupStartAt = Date.now();
     console.log('[ProcessManager] Starting ConPTY DLL warmup...');
 
@@ -130,26 +129,17 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         useConptyDll: true,
       });
 
-      let resolved = false;
+      // warmup 目的只是让 ConPTY DLL 加载到内存
+      // spawn 成功即表示 DLL 已加载，等待进程自然退出或短暂超时即可
       await new Promise<void>((resolve) => {
-        const done = () => {
-          if (!resolved) {
-            resolved = true;
-            resolve();
-          }
-        };
-
         const timeout = setTimeout(() => {
-          console.warn(`[ProcessManager] ConPTY DLL warmup timed out after ${WARMUP_TIMEOUT_MS}ms, force killing`);
           try { dummyPty.kill(); } catch {}
-          // Do NOT call destroy() here — kill() already triggers native cleanup.
-          // Calling both causes double-free heap corruption (0xC0000374).
-          done();
-        }, WARMUP_TIMEOUT_MS);
+          resolve();
+        }, 2000);
 
         dummyPty.onExit?.(() => {
           clearTimeout(timeout);
-          done();
+          resolve();
         });
 
         dummyPty.onData?.(() => {
