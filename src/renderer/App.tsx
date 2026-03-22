@@ -347,11 +347,6 @@ function AppContent() {
     setIsDialogOpen(true);
   }, []);
 
-  const handleCreateSSHProfile = useCallback(() => {
-    setEditingSSHProfile(null);
-    setIsSSHDialogOpen(true);
-  }, []);
-
   const handleEditSSHProfile = useCallback((profile: SSHProfile) => {
     setEditingSSHProfile(profile);
     setIsSSHDialogOpen(true);
@@ -560,9 +555,10 @@ function AppContent() {
               appName={appVersion.name}
               version={appVersion.version}
               onCreateWindow={handleCreateWindow}
-              onCreateSSHProfile={handleCreateSSHProfile}
               onImportSSHProfiles={handleImportSSHProfiles}
               sshEnabled={sshEnabled}
+              sshProfiles={sshProfiles}
+              onSSHProfileSaved={handleSSHProfileSaved}
               importingSSHProfiles={importingSSHProfiles}
               sshProfileCount={sshProfiles.length}
               onCreateGroup={handleCreateGroup}

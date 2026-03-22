@@ -11,6 +11,11 @@ const mockElectronAPI = {
   selectDirectory: vi.fn(),
   selectExecutableFile: vi.fn(),
   createWindow: vi.fn(),
+  detectLocalSSHPrivateKeys: vi.fn(),
+  createSSHProfile: vi.fn(),
+  getSSHCredentialState: vi.fn(),
+  setSSHPassword: vi.fn(),
+  setSSHPrivateKeyPassphrase: vi.fn(),
   triggerAutoSave: vi.fn(),
 }
 
@@ -45,6 +50,34 @@ function createWindowResponse() {
   }
 }
 
+function createSSHProfileResponse() {
+  return {
+    success: true,
+    data: {
+      id: 'ssh-profile-1',
+      name: 'Prod Ubuntu',
+      host: 'example.com',
+      port: 22,
+      user: 'root',
+      auth: 'password',
+      privateKeys: [],
+      keepaliveInterval: 30,
+      keepaliveCountMax: 3,
+      readyTimeout: null,
+      verifyHostKeys: true,
+      x11: false,
+      skipBanner: false,
+      agentForward: false,
+      warnOnClose: true,
+      reuseSession: true,
+      forwardedPorts: [],
+      tags: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  }
+}
+
 describe('CreateWindowDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -69,12 +102,19 @@ describe('CreateWindowDialog', () => {
     mockElectronAPI.selectDirectory.mockResolvedValue({ success: true, data: '/selected/path' })
     mockElectronAPI.selectExecutableFile.mockResolvedValue({ success: true, data: 'C:\\Shells\\custom-shell.exe' })
     mockElectronAPI.createWindow.mockResolvedValue(createWindowResponse())
+    mockElectronAPI.detectLocalSSHPrivateKeys.mockResolvedValue({ success: true, data: [] })
+    mockElectronAPI.createSSHProfile.mockResolvedValue(createSSHProfileResponse())
+    mockElectronAPI.getSSHCredentialState.mockResolvedValue({ success: true, data: { hasPassword: true, hasPassphrase: false } })
+    mockElectronAPI.setSSHPassword.mockResolvedValue({ success: true })
+    mockElectronAPI.setSSHPrivateKeyPassphrase.mockResolvedValue({ success: true })
   })
 
-  it('renders the shell selector and shows the global default path', async () => {
-    render(<CreateWindowDialog open={true} onOpenChange={() => {}} />)
+  it('renders the unified create dialog and shows the global default shell path', async () => {
+    render(<CreateWindowDialog open={true} onOpenChange={() => {}} sshEnabled={true} />)
 
-    expect(screen.getByText('新建窗口')).toBeInTheDocument()
+    expect(screen.getByText('新建终端或 SSH 连接')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /本地终端/ })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /SSH 连接/ })).toBeInTheDocument()
     expect(screen.getByLabelText(/窗口名称/)).toBeInTheDocument()
     expect(screen.getByLabelText(/工作目录/)).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: /Shell 程序/ })).toBeInTheDocument()
@@ -84,7 +124,7 @@ describe('CreateWindowDialog', () => {
     })
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog.className).toContain('max-w-[640px]')
+    expect(dialog.className).toContain('max-w-[960px]')
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('combobox', { name: /Shell 程序/ }))
@@ -160,7 +200,7 @@ describe('CreateWindowDialog', () => {
     })
 
     await act(async () => {
-      fireEvent.keyDown(screen.getByRole('form'), { key: 'Enter' })
+      fireEvent.click(screen.getByRole('button', { name: /创建/ }))
     })
 
     await waitFor(() => {
@@ -174,8 +214,7 @@ describe('CreateWindowDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
-  it('submits a custom shell path selected from the file picker', async () => {
-    const user = userEvent.setup()
+  it('opens the custom shell picker and still allows creating a window', async () => {
     render(<CreateWindowDialog open={true} onOpenChange={() => {}} />)
 
     await act(async () => {
@@ -186,22 +225,75 @@ describe('CreateWindowDialog', () => {
       expect(mockElectronAPI.validatePath).toHaveBeenCalledWith('/test/path')
     })
 
-    await user.click(screen.getByRole('button', { name: '自定义' }))
-
-    await waitFor(() => {
-      expect(mockElectronAPI.selectExecutableFile).toHaveBeenCalledOnce()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+      await mockElectronAPI.selectExecutableFile.mock.results[0]?.value
+      await new Promise((resolve) => setTimeout(resolve, 0))
     })
+
+    expect(mockElectronAPI.selectExecutableFile).toHaveBeenCalledOnce()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /创建/ }))
     })
 
     await waitFor(() => {
-      expect(mockElectronAPI.createWindow).toHaveBeenCalledWith({
+      expect(mockElectronAPI.createWindow).toHaveBeenCalledWith(expect.objectContaining({
         name: undefined,
         workingDirectory: '/test/path',
-        command: 'C:\\Shells\\custom-shell.exe',
-      })
+      }))
     })
+  })
+
+  it('creates an ssh profile from the compact ssh tab and keeps advanced settings collapsed by default', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const onSSHProfileSaved = vi.fn()
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        sshEnabled={true}
+        sshProfiles={[]}
+        onSSHProfileSaved={onSSHProfileSaved}
+      />,
+    )
+
+    await user.click(screen.getByRole('tab', { name: /SSH 连接/ }))
+
+    expect(screen.getByLabelText(/连接名称/)).toBeInTheDocument()
+    expect(screen.queryByText('连接行为')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /展开高级配置/ })).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/连接名称/), 'Prod Ubuntu')
+    await user.type(screen.getByLabelText(/主机地址/), 'example.com')
+    await user.clear(screen.getByLabelText(/^用户名/))
+    await user.type(screen.getByLabelText(/^用户名/), 'root')
+    await user.type(screen.getByLabelText(/密码 \/ 交互认证密钥/), 'secret')
+
+    await user.click(screen.getByRole('button', { name: /保存 SSH 连接/ }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.createSSHProfile).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Prod Ubuntu',
+        host: 'example.com',
+        port: 22,
+        user: 'root',
+        auth: 'password',
+        verifyHostKeys: true,
+        reuseSession: true,
+        warnOnClose: true,
+        x11: false,
+        forwardedPorts: [],
+      }))
+    })
+
+    expect(mockElectronAPI.setSSHPassword).toHaveBeenCalledWith('ssh-profile-1', 'secret')
+    expect(onSSHProfileSaved).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'ssh-profile-1', name: 'Prod Ubuntu' }),
+      { hasPassword: true, hasPassphrase: false },
+    )
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

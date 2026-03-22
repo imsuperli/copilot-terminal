@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2, Server, Download } from 'lucide-react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2, Download } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
@@ -10,6 +10,7 @@ import { QuickNavPanel } from '../QuickNavPanel';
 import { AboutPanel } from '../AboutPanel';
 import { CategoryDropZone } from '../dnd/CategoryDropZone';
 import { CustomCategory } from '../../../shared/types/custom-category';
+import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
 
@@ -17,13 +18,14 @@ interface SidebarProps {
   appName?: string;
   version?: string;
   onCreateWindow?: () => void;
-  onCreateSSHProfile?: () => void;
   onImportSSHProfiles?: () => void;
   onCreateGroup?: () => void;
   isDialogOpen?: boolean;
   onDialogChange?: (open: boolean) => void;
   sshEnabled?: boolean;
   sshProfileCount?: number;
+  sshProfiles?: SSHProfile[];
+  onSSHProfileSaved?: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
   currentTab?: 'all' | 'active' | 'archived' | string;
   onTabChange?: (tab: 'all' | 'active' | 'archived' | string) => void;
   searchQuery?: string;
@@ -35,13 +37,14 @@ export function Sidebar({
   appName = 'Copilot-Terminal',
   version = '0.1.0',
   onCreateWindow,
-  onCreateSSHProfile,
   onImportSSHProfiles,
   onCreateGroup,
   isDialogOpen = false,
   onDialogChange,
   sshEnabled = false,
   sshProfileCount = 0,
+  sshProfiles = [],
+  onSSHProfileSaved,
   currentTab = 'active',
   onTabChange,
   searchQuery = '',
@@ -608,24 +611,14 @@ export function Sidebar({
           </button>
 
           {sshEnabled && (
-            <>
-              <button
-                onClick={onCreateSSHProfile}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
-              >
-                <Server className="h-4 w-4" />
-                <span>{t('sidebar.newSSHProfile')}</span>
-              </button>
-
-              <button
-                onClick={onImportSSHProfiles}
-                disabled={importingSSHProfiles}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] font-medium hover:bg-[rgb(var(--accent))] transition-colors disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                <Download className="h-4 w-4" />
-                <span>{importingSSHProfiles ? t('sidebar.importSSHProfilesLoading') : t('sidebar.importSSHProfiles')}</span>
-              </button>
-            </>
+            <button
+              onClick={onImportSSHProfiles}
+              disabled={importingSSHProfiles}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] font-medium hover:bg-[rgb(var(--accent))] transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <Download className="h-4 w-4" />
+              <span>{importingSSHProfiles ? t('sidebar.importSSHProfilesLoading') : t('sidebar.importSSHProfiles')}</span>
+            </button>
           )}
 
           {/* Batch button - always show */}
@@ -684,6 +677,9 @@ export function Sidebar({
       <CreateWindowDialog
         open={isDialogOpen}
         onOpenChange={onDialogChange ?? (() => {})}
+        sshEnabled={sshEnabled}
+        sshProfiles={sshProfiles}
+        onSSHProfileSaved={onSSHProfileSaved}
       />
 
       <BatchCreateWindowDialog
