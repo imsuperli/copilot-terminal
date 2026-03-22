@@ -124,7 +124,7 @@ describe('CreateWindowDialog', () => {
     })
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog.className).toContain('max-w-[960px]')
+    expect(dialog.className).toContain('max-w-[1180px]')
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('combobox', { name: /Shell 程序/ }))
@@ -245,7 +245,7 @@ describe('CreateWindowDialog', () => {
     })
   })
 
-  it('creates an ssh profile from the compact ssh tab and keeps advanced settings collapsed by default', async () => {
+  it('creates an ssh profile from the grouped ssh tabs', async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()
     const onSSHProfileSaved = vi.fn()
@@ -263,13 +263,16 @@ describe('CreateWindowDialog', () => {
     await user.click(screen.getByRole('tab', { name: /SSH 连接/ }))
 
     expect(screen.getByLabelText(/连接名称/)).toBeInTheDocument()
-    expect(screen.queryByText('连接行为')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /展开高级配置/ })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '基础' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '认证' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '路由' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '会话' })).toBeInTheDocument()
 
     await user.type(screen.getByLabelText(/连接名称/), 'Prod Ubuntu')
     await user.type(screen.getByLabelText(/主机地址/), 'example.com')
     await user.clear(screen.getByLabelText(/^用户名/))
     await user.type(screen.getByLabelText(/^用户名/), 'root')
+    await user.click(screen.getByRole('tab', { name: '认证' }))
     await user.type(screen.getByLabelText(/密码 \/ 交互认证密钥/), 'secret')
 
     await user.click(screen.getByRole('button', { name: /保存 SSH 连接/ }))
@@ -295,5 +298,35 @@ describe('CreateWindowDialog', () => {
       { hasPassword: true, hasPassphrase: false },
     )
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('falls back to the host value when saving an ssh profile without a name', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={() => {}}
+        sshEnabled={true}
+        sshProfiles={[]}
+      />,
+    )
+
+    await user.click(screen.getByRole('tab', { name: /SSH 连接/ }))
+    await user.type(screen.getByLabelText(/主机地址/), 'prod.example.com')
+    await user.clear(screen.getByLabelText(/^用户名/))
+    await user.type(screen.getByLabelText(/^用户名/), 'root')
+    await user.click(screen.getByRole('tab', { name: '认证' }))
+    await user.type(screen.getByLabelText(/密码 \/ 交互认证密钥/), 'secret')
+
+    await user.click(screen.getByRole('button', { name: /保存 SSH 连接/ }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.createSSHProfile).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'prod.example.com',
+        host: 'prod.example.com',
+        user: 'root',
+      }))
+    })
   })
 })
