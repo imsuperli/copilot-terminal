@@ -57,6 +57,7 @@ const electronAPI: ElectronAPI = {
   deleteIDEConfig: (ideId: string) => ipcRenderer.invoke('delete-ide-config', ideId),
   getIDEIcon: (iconPath: string) => ipcRenderer.invoke('get-ide-icon', iconPath),
   listSSHProfiles: () => ipcRenderer.invoke('list-ssh-profiles'),
+  getSSHAlgorithmCatalog: () => ipcRenderer.invoke('get-ssh-algorithm-catalog'),
   getSSHProfile: (profileId: string) => ipcRenderer.invoke('get-ssh-profile', profileId),
   createSSHProfile: (config: unknown) => ipcRenderer.invoke('create-ssh-profile', config),
   updateSSHProfile: (profileId: string, patch: unknown) => ipcRenderer.invoke('update-ssh-profile', profileId, patch),

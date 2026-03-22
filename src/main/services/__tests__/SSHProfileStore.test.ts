@@ -52,6 +52,8 @@ describe('SSHProfileStore', () => {
     expect(profile.verifyHostKeys).toBe(true);
     expect(profile.warnOnClose).toBe(true);
     expect(profile.reuseSession).toBe(true);
+    expect(profile.algorithms?.kex.length).toBeGreaterThan(0);
+    expect(profile.algorithms?.hostKey.length).toBeGreaterThan(0);
     expect(profile.tags).toEqual(['prod', 'cn-shanghai']);
     expect(profile.notes).toBe('web server');
 
@@ -96,6 +98,13 @@ describe('SSHProfileStore', () => {
       notes: '  rotated keys  ',
       privateKeys: ['/keys/id_ed25519', '/keys/id_rsa'],
       proxyCommand: '  ssh -W %h:%p jump ',
+      algorithms: {
+        kex: ['diffie-hellman-group14-sha256'],
+        hostKey: ['ssh-ed25519'],
+        cipher: ['aes128-gcm@openssh.com'],
+        hmac: ['hmac-sha2-256'],
+        compression: ['none'],
+      },
     });
 
     expect(updated.createdAt).toBe('2026-03-22T10:00:00.000Z');
@@ -103,6 +112,13 @@ describe('SSHProfileStore', () => {
     expect(updated.privateKeys).toEqual(['/keys/id_ed25519', '/keys/id_rsa']);
     expect(updated.notes).toBe('rotated keys');
     expect(updated.proxyCommand).toBe('ssh -W %h:%p jump');
+    expect(updated.algorithms).toEqual({
+      kex: ['diffie-hellman-group14-sha256'],
+      hostKey: ['ssh-ed25519'],
+      cipher: ['aes128-gcm@openssh.com'],
+      hmac: ['hmac-sha2-256'],
+      compression: ['none'],
+    });
   });
 
   it('rejects invalid public key profiles without key paths', async () => {

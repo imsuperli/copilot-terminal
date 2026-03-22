@@ -83,6 +83,48 @@ describe('registerSSHProfileHandlers', () => {
     });
   });
 
+  it('exposes the SSH algorithm catalog for profile editing', async () => {
+    registerSSHProfileHandlers({
+      mainWindow: null,
+      processManager: null,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: null,
+      sshVaultService: null,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('get-ssh-algorithm-catalog');
+    const response = await handler({});
+
+    expect(response).toEqual({
+      success: true,
+      data: expect.objectContaining({
+        defaults: expect.objectContaining({
+          kex: expect.any(Array),
+          hostKey: expect.any(Array),
+          cipher: expect.any(Array),
+          hmac: expect.any(Array),
+          compression: expect.any(Array),
+        }),
+        supported: expect.objectContaining({
+          kex: expect.any(Array),
+          hostKey: expect.any(Array),
+          cipher: expect.any(Array),
+          hmac: expect.any(Array),
+          compression: expect.any(Array),
+        }),
+      }),
+    });
+  });
+
   it('removes vault secrets when deleting an SSH profile', async () => {
     const sshProfileStore = {
       list: vi.fn(),

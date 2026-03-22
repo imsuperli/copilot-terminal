@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
 import { errorResponse, successResponse } from './HandlerResponse';
 import { SSHImportResult, SSHProfile, SSHProfileInput, SSHProfilePatch } from '../../shared/types/ssh';
+import { getSSHAlgorithmCatalog } from '../services/ssh/SSHAlgorithmCatalog';
 import { OpenSSHProfileImporter } from '../services/ssh/OpenSSHProfileImporter';
 
 export function registerSSHProfileHandlers(ctx: HandlerContext) {
@@ -36,6 +37,14 @@ export function registerSSHProfileHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(profile);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('get-ssh-algorithm-catalog', async () => {
+    try {
+      return successResponse(getSSHAlgorithmCatalog());
     } catch (error) {
       return errorResponse(error);
     }
@@ -244,6 +253,11 @@ function mergeImportedProfile(
     ...(importedInput.httpProxyHost ? { httpProxyHost: importedInput.httpProxyHost } : {}),
     ...(importedInput.httpProxyPort !== undefined ? { httpProxyPort: importedInput.httpProxyPort } : {}),
     reuseSession: existingProfile?.reuseSession ?? importedInput.reuseSession,
+    ...(existingProfile?.algorithms
+      ? { algorithms: existingProfile.algorithms }
+      : importedInput.algorithms
+        ? { algorithms: importedInput.algorithms }
+        : {}),
     forwardedPorts: importedInput.forwardedPorts,
     ...(importedInput.remoteCommand ? { remoteCommand: importedInput.remoteCommand } : {}),
     ...(importedInput.defaultRemoteCwd ? { defaultRemoteCwd: importedInput.defaultRemoteCwd } : {}),

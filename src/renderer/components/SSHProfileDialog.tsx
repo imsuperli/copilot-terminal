@@ -3,6 +3,9 @@ import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { useI18n } from '../i18n';
 import {
+  SSHAlgorithmCatalog,
+  SSHAlgorithmPreferences,
+  SSHAlgorithmType,
   ForwardedPortConfig,
   SSHAuthType,
   SSHCredentialState,
@@ -46,6 +49,7 @@ interface SSHProfileFormState {
   socksProxyPort: string;
   httpProxyHost: string;
   httpProxyPort: string;
+  algorithms: SSHAlgorithmPreferences;
   forwardedPorts: ForwardedPortConfig[];
   tagsText: string;
   notes: string;
@@ -64,6 +68,22 @@ const DEFAULT_CREDENTIAL_STATE: SSHCredentialState = {
   hasPassword: false,
   hasPassphrase: false,
 };
+
+const SSH_ALGORITHM_GROUPS: Array<{
+  type: SSHAlgorithmType;
+  labelKey:
+    | 'sshProfileDialog.algorithms.kex'
+    | 'sshProfileDialog.algorithms.hostKey'
+    | 'sshProfileDialog.algorithms.cipher'
+    | 'sshProfileDialog.algorithms.hmac'
+    | 'sshProfileDialog.algorithms.compression';
+}> = [
+  { type: 'kex', labelKey: 'sshProfileDialog.algorithms.kex' },
+  { type: 'hostKey', labelKey: 'sshProfileDialog.algorithms.hostKey' },
+  { type: 'cipher', labelKey: 'sshProfileDialog.algorithms.cipher' },
+  { type: 'hmac', labelKey: 'sshProfileDialog.algorithms.hmac' },
+  { type: 'compression', labelKey: 'sshProfileDialog.algorithms.compression' },
+];
 
 function uniqueList(values: string[]): string[] {
   return Array.from(new Set(values));
@@ -90,6 +110,32 @@ function parseTagList(value: string): string[] {
 function trimOptional(value: string): string | undefined {
   const normalized = value.trim();
   return normalized || undefined;
+}
+
+function createEmptyAlgorithmPreferences(): SSHAlgorithmPreferences {
+  return {
+    kex: [],
+    hostKey: [],
+    cipher: [],
+    hmac: [],
+    compression: [],
+  };
+}
+
+function resolveAlgorithmPreferences(
+  value?: Partial<SSHAlgorithmPreferences> | null,
+  defaults?: SSHAlgorithmPreferences | null,
+): SSHAlgorithmPreferences {
+  const empty = createEmptyAlgorithmPreferences();
+  const fallback = defaults ?? empty;
+
+  return {
+    kex: Array.isArray(value?.kex) && value.kex.length > 0 ? [...value.kex] : [...fallback.kex],
+    hostKey: Array.isArray(value?.hostKey) && value.hostKey.length > 0 ? [...value.hostKey] : [...fallback.hostKey],
+    cipher: Array.isArray(value?.cipher) && value.cipher.length > 0 ? [...value.cipher] : [...fallback.cipher],
+    hmac: Array.isArray(value?.hmac) && value.hmac.length > 0 ? [...value.hmac] : [...fallback.hmac],
+    compression: Array.isArray(value?.compression) && value.compression.length > 0 ? [...value.compression] : [...fallback.compression],
+  };
 }
 
 function resolveRoutingMode(profile?: SSHProfile | null): SSHRoutingMode {
@@ -148,6 +194,7 @@ function createInitialForm(profile?: SSHProfile | null): SSHProfileFormState {
     socksProxyPort: profile?.socksProxyPort ? String(profile.socksProxyPort) : '1080',
     httpProxyHost: profile?.httpProxyHost ?? '',
     httpProxyPort: profile?.httpProxyPort ? String(profile.httpProxyPort) : '8080',
+    algorithms: resolveAlgorithmPreferences(profile?.algorithms),
     forwardedPorts: profile?.forwardedPorts ?? [],
     tagsText: profile?.tags.join(', ') ?? '',
     notes: profile?.notes ?? '',
@@ -178,6 +225,8 @@ export function SSHProfileDialog({
   const [detectKeysMessage, setDetectKeysMessage] = useState('');
   const [isDetectingKeys, setIsDetectingKeys] = useState(false);
   const [newForward, setNewForward] = useState<SSHPortForwardDraft>(() => createEmptyPortForwardDraft());
+  const [algorithmCatalog, setAlgorithmCatalog] = useState<SSHAlgorithmCatalog | null>(null);
+  const [algorithmCatalogError, setAlgorithmCatalogError] = useState('');
 
   const currentCredentialState = readCredentialState(credentialState);
   const currentPrivateKeys = useMemo(
@@ -202,11 +251,51 @@ export function SSHProfileDialog({
     setSaveError('');
     setDetectKeysMessage('');
     setNewForward(createEmptyPortForwardDraft());
+    setAlgorithmCatalogError('');
 
     setTimeout(() => {
       nameInputRef.current?.focus();
     }, 0);
   }, [open, profile]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let disposed = false;
+
+    const loadAlgorithmCatalog = async () => {
+      try {
+        const response = await window.electronAPI.getSSHAlgorithmCatalog();
+        if (!response.success || !response.data) {
+          throw new Error(response.error || t('sshProfileDialog.algorithmsLoadError'));
+        }
+
+        const catalog = response.data;
+
+        if (disposed) {
+          return;
+        }
+
+        setAlgorithmCatalog(catalog);
+        setForm((previous) => ({
+          ...previous,
+          algorithms: resolveAlgorithmPreferences(profile?.algorithms ?? previous.algorithms, catalog.defaults),
+        }));
+      } catch (error) {
+        if (!disposed) {
+          setAlgorithmCatalogError((error as Error).message || t('sshProfileDialog.algorithmsLoadError'));
+        }
+      }
+    };
+
+    void loadAlgorithmCatalog();
+
+    return () => {
+      disposed = true;
+    };
+  }, [open, profile?.algorithms, t]);
 
   useEffect(() => {
     setPassphrases((previous) => {
@@ -268,6 +357,26 @@ export function SSHProfileDialog({
 
   const handleRemovePortForward = (forwardId: string) => {
     setField('forwardedPorts', form.forwardedPorts.filter((item) => item.id !== forwardId));
+  };
+
+  const handleToggleAlgorithm = (type: SSHAlgorithmType, value: string, checked: boolean) => {
+    const currentValues = form.algorithms[type];
+    const nextValues = checked
+      ? [...currentValues, value]
+      : currentValues.filter((item) => item !== value);
+
+    setField('algorithms', {
+      ...form.algorithms,
+      [type]: uniqueList(nextValues),
+    });
+  };
+
+  const handleResetAlgorithms = () => {
+    if (!algorithmCatalog) {
+      return;
+    }
+
+    setField('algorithms', resolveAlgorithmPreferences(undefined, algorithmCatalog.defaults));
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -394,6 +503,7 @@ export function SSHProfileDialog({
       httpProxyHost,
       httpProxyPort: httpProxyHost ? httpProxyPort : undefined,
       reuseSession: form.reuseSession,
+      algorithms: form.algorithms,
       forwardedPorts: form.forwardedPorts,
       remoteCommand: trimOptional(form.remoteCommand),
       defaultRemoteCwd: trimOptional(form.defaultRemoteCwd),
@@ -1078,6 +1188,64 @@ export function SSHProfileDialog({
             />
             <span>{t('sshProfileDialog.skipBanner')}</span>
           </label>
+        </div>
+
+        <div className="space-y-4 rounded-lg border border-border-subtle px-4 py-4 bg-bg-elevated/40">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-semibold text-text-primary">
+                {t('sshProfileDialog.algorithmsTitle')}
+              </h3>
+              <p className="mt-1 text-xs text-text-secondary">
+                {t('sshProfileDialog.algorithmsDescription')}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleResetAlgorithms}
+              disabled={!algorithmCatalog}
+              className="text-xs text-status-running hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {t('sshProfileDialog.algorithmsReset')}
+            </button>
+          </div>
+
+          {!algorithmCatalog && !algorithmCatalogError && (
+            <div className="text-sm text-text-secondary">
+              {t('common.loading')}
+            </div>
+          )}
+
+          {algorithmCatalogError && (
+            <div className="rounded-lg border border-status-error/40 bg-status-error/10 px-3 py-2 text-sm text-status-error">
+              {algorithmCatalogError}
+            </div>
+          )}
+
+          {algorithmCatalog && (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {SSH_ALGORITHM_GROUPS.map((group) => (
+                <div key={group.type} className="rounded-lg border border-border-subtle bg-bg-app/60 px-3 py-3">
+                  <h4 className="text-sm font-medium text-text-primary">
+                    {t(group.labelKey)}
+                  </h4>
+                  <div className="mt-3 max-h-40 space-y-2 overflow-y-auto pr-1">
+                    {algorithmCatalog.supported[group.type].map((algorithm) => (
+                      <label key={algorithm} className="flex items-start gap-2 text-xs text-text-secondary">
+                        <input
+                          type="checkbox"
+                          checked={form.algorithms[group.type].includes(algorithm)}
+                          onChange={(event) => handleToggleAlgorithm(group.type, algorithm, event.target.checked)}
+                        />
+                        <span className="break-all">{algorithm}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

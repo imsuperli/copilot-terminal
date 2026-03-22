@@ -227,4 +227,77 @@ describe('SSHProfileDialog', () => {
       }));
     });
   });
+
+  it('saves custom SSH algorithm preferences', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSSHAlgorithmCatalog).mockResolvedValueOnce({
+      success: true,
+      data: {
+        defaults: {
+          kex: ['curve25519-sha256'],
+          hostKey: ['ssh-ed25519'],
+          cipher: ['aes128-gcm@openssh.com'],
+          hmac: ['hmac-sha2-256'],
+          compression: ['none'],
+        },
+        supported: {
+          kex: ['curve25519-sha256', 'diffie-hellman-group14-sha256'],
+          hostKey: ['ssh-ed25519', 'rsa-sha2-256'],
+          cipher: ['aes128-gcm@openssh.com', 'aes256-gcm@openssh.com'],
+          hmac: ['hmac-sha2-256', 'hmac-sha2-512'],
+          compression: ['none', 'zlib@openssh.com'],
+        },
+      },
+    });
+    vi.mocked(window.electronAPI.createSSHProfile).mockResolvedValueOnce({
+      success: true,
+      data: createSavedProfile({
+        algorithms: {
+          kex: ['diffie-hellman-group14-sha256'],
+          hostKey: ['ssh-ed25519'],
+          cipher: ['aes128-gcm@openssh.com'],
+          hmac: ['hmac-sha2-256'],
+          compression: ['none'],
+        },
+      }),
+    });
+    vi.mocked(window.electronAPI.getSSHCredentialState).mockResolvedValueOnce({
+      success: true,
+      data: {
+        hasPassword: true,
+        hasPassphrase: false,
+      },
+    });
+
+    render(
+      <SSHProfileDialog
+        open={true}
+        onOpenChange={() => undefined}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('连接名称'), 'Legacy SSH');
+    await user.type(screen.getByLabelText('主机地址'), '10.0.0.99');
+    await user.clear(screen.getByLabelText('用户名'));
+    await user.type(screen.getByLabelText('用户名'), 'legacy');
+    await user.type(screen.getByLabelText('密码 / 交互认证密钥'), 'super-secret');
+
+    await user.click(screen.getByLabelText('curve25519-sha256'));
+    await user.click(screen.getByLabelText('diffie-hellman-group14-sha256'));
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.createSSHProfile).toHaveBeenCalledWith(expect.objectContaining({
+        algorithms: expect.objectContaining({
+          kex: ['diffie-hellman-group14-sha256'],
+          hostKey: ['ssh-ed25519'],
+          cipher: ['aes128-gcm@openssh.com'],
+          hmac: ['hmac-sha2-256'],
+          compression: ['none'],
+        }),
+      }));
+    });
+  });
 });

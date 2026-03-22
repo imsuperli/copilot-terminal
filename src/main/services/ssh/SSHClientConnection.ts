@@ -13,6 +13,7 @@ import {
   createProxyCommandSocket,
   createSocksProxySocket,
 } from './SSHTransportSockets';
+import { resolveSSHAlgorithmPreferences } from './SSHAlgorithmCatalog';
 
 export interface SSHShellOpenOptions {
   cols: number;
@@ -295,6 +296,14 @@ export class SSHClientConnection implements ISSHConnection {
   }
 
   private async buildConnectConfig(knownHosts: KnownHostEntry[]): Promise<ConnectConfig> {
+    const algorithms = resolveSSHAlgorithmPreferences(this.ssh.algorithms);
+    const connectAlgorithms = {
+      kex: algorithms.kex,
+      serverHostKey: algorithms.hostKey,
+      cipher: algorithms.cipher,
+      hmac: algorithms.hmac,
+      compress: algorithms.compression,
+    } as NonNullable<ConnectConfig['algorithms']>;
     const connectConfig: ConnectConfig = {
       host: this.ssh.host,
       port: this.ssh.port,
@@ -304,6 +313,7 @@ export class SSHClientConnection implements ISSHConnection {
       readyTimeout: this.ssh.readyTimeout ?? undefined,
       agentForward: this.ssh.agentForward,
       tryKeyboard: this.ssh.authType === 'keyboardInteractive',
+      algorithms: connectAlgorithms,
       hostVerifier: (key: Buffer, callback?: (verified: boolean) => void) => {
         void this.verifyHostKey(key, knownHosts)
           .then((verified) => {

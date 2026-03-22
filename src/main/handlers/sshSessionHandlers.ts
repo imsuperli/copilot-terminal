@@ -313,6 +313,7 @@ async function buildSSHSessionConfig(
       ...(profile.httpProxyHost ? { httpProxyHost: profile.httpProxyHost } : {}),
       ...(profile.httpProxyPort !== undefined ? { httpProxyPort: profile.httpProxyPort } : {}),
       forwardedPorts: profile.forwardedPorts,
+      ...(profile.algorithms ? { algorithms: profile.algorithms } : {}),
       skipBanner: profile.skipBanner,
       ...(options.remoteCwd || profile.defaultRemoteCwd ? { remoteCwd: options.remoteCwd || profile.defaultRemoteCwd } : {}),
       ...(options.command || profile.remoteCommand ? { command: options.command || profile.remoteCommand } : {}),

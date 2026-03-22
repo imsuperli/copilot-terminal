@@ -4,6 +4,20 @@ export type SSHAuthType =
   | 'agent'
   | 'keyboardInteractive';
 
+export type SSHAlgorithmType =
+  | 'kex'
+  | 'hostKey'
+  | 'cipher'
+  | 'hmac'
+  | 'compression';
+
+export type SSHAlgorithmPreferences = Record<SSHAlgorithmType, string[]>;
+
+export interface SSHAlgorithmCatalog {
+  defaults: SSHAlgorithmPreferences;
+  supported: SSHAlgorithmPreferences;
+}
+
 export type SSHPortForwardType =
   | 'local'
   | 'remote'
@@ -58,6 +72,7 @@ export interface SSHProfile {
   httpProxyHost?: string;
   httpProxyPort?: number;
   reuseSession: boolean;
+  algorithms?: SSHAlgorithmPreferences;
   forwardedPorts: ForwardedPortConfig[];
   remoteCommand?: string;
   defaultRemoteCwd?: string;

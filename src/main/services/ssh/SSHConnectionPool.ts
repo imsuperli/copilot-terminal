@@ -184,6 +184,13 @@ export function buildSSHConnectionKey(config: SSHSessionConfig): string {
     socksProxyPort: config.socksProxyPort ?? null,
     httpProxyHost: config.httpProxyHost ?? null,
     httpProxyPort: config.httpProxyPort ?? null,
+    algorithms: config.algorithms ? {
+      kex: [...config.algorithms.kex],
+      hostKey: [...config.algorithms.hostKey],
+      cipher: [...config.algorithms.cipher],
+      hmac: [...config.algorithms.hmac],
+      compression: [...config.algorithms.compression],
+    } : null,
     forwardedPorts: config.forwardedPorts.map((forward) => ({
       id: forward.id,
       type: forward.type,

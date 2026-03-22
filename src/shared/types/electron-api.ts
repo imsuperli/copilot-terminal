@@ -5,6 +5,7 @@ import {
   ActiveSSHPortForward,
   ForwardedPortConfig,
   KnownHostEntry,
+  SSHAlgorithmCatalog,
   SSHCredentialState,
   SSHImportResult,
   SSHProfile,
@@ -272,6 +273,7 @@ export interface ElectronAPI {
   deleteIDEConfig: (ideId: string) => Promise<IpcResponse<IDEConfig[]>>;
   getIDEIcon: (iconPath: string) => Promise<IpcResponse<string>>;
   listSSHProfiles: () => Promise<IpcResponse<SSHProfile[]>>;
+  getSSHAlgorithmCatalog: () => Promise<IpcResponse<SSHAlgorithmCatalog>>;
   getSSHProfile: (profileId: string) => Promise<IpcResponse<SSHProfile>>;
   createSSHProfile: (config: SSHProfileInput) => Promise<IpcResponse<SSHProfile>>;
   updateSSHProfile: (profileId: string, patch: SSHProfilePatch) => Promise<IpcResponse<SSHProfile>>;

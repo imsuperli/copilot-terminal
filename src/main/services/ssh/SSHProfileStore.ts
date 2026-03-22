@@ -16,6 +16,7 @@ import {
   uniqueStrings,
   writeJsonFileAtomic,
 } from './storeUtils';
+import { resolveSSHAlgorithmPreferences } from './SSHAlgorithmCatalog';
 
 interface PersistedSSHProfilesFile {
   version: 1;
@@ -179,6 +180,7 @@ function normalizeProfile(input: Partial<SSHProfile> & Pick<SSHProfile, 'id' | '
   const httpProxyHost = normalizeOptionalString(input.httpProxyHost);
   const httpProxyPort = normalizeOptionalPort(input.httpProxyPort, 'SSH HTTP proxy port');
   const reuseSession = normalizeBoolean(input.reuseSession, true);
+  const algorithms = resolveSSHAlgorithmPreferences(input.algorithms);
   const forwardedPorts = normalizeForwardedPorts(input.forwardedPorts);
   const remoteCommand = normalizeOptionalString(input.remoteCommand);
   const defaultRemoteCwd = normalizeOptionalString(input.defaultRemoteCwd);
@@ -228,6 +230,7 @@ function normalizeProfile(input: Partial<SSHProfile> & Pick<SSHProfile, 'id' | '
     ...(httpProxyHost ? { httpProxyHost } : {}),
     ...(httpProxyPort !== undefined ? { httpProxyPort } : {}),
     reuseSession,
+    algorithms,
     forwardedPorts,
     ...(remoteCommand ? { remoteCommand } : {}),
     ...(defaultRemoteCwd ? { defaultRemoteCwd } : {}),

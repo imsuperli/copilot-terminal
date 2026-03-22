@@ -89,6 +89,25 @@ Object.defineProperty(window, 'electronAPI', {
     updateIDEConfig: vi.fn().mockResolvedValue({ success: true, data: [] }),
     scanSpecificIDE: vi.fn().mockResolvedValue({ success: true, data: '' }),
     listSSHProfiles: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    getSSHAlgorithmCatalog: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        defaults: {
+          kex: ['curve25519-sha256'],
+          hostKey: ['ssh-ed25519'],
+          cipher: ['aes128-gcm@openssh.com'],
+          hmac: ['hmac-sha2-256'],
+          compression: ['none'],
+        },
+        supported: {
+          kex: ['curve25519-sha256', 'diffie-hellman-group14-sha256'],
+          hostKey: ['ssh-ed25519', 'rsa-sha2-256'],
+          cipher: ['aes128-gcm@openssh.com', 'aes256-gcm@openssh.com'],
+          hmac: ['hmac-sha2-256', 'hmac-sha2-512'],
+          compression: ['none', 'zlib@openssh.com'],
+        },
+      },
+    }),
     getSSHProfile: vi.fn().mockResolvedValue({ success: false, error: 'not found' }),
     createSSHProfile: vi.fn().mockResolvedValue({ success: true, data: {} }),
     updateSSHProfile: vi.fn().mockResolvedValue({ success: true, data: {} }),

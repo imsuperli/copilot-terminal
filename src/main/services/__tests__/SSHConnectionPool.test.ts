@@ -90,9 +90,19 @@ describe('SSHConnectionPool', () => {
     const jumpKey = buildSSHConnectionKey(createSSHConfig({ jumpHostProfileId: 'jump-1' }));
     const proxyKey = buildSSHConnectionKey(createSSHConfig({ proxyCommand: 'nc %h %p' }));
     const relaxedVerifyKey = buildSSHConnectionKey(createSSHConfig({ verifyHostKeys: false }));
+    const algorithmKey = buildSSHConnectionKey(createSSHConfig({
+      algorithms: {
+        kex: ['diffie-hellman-group14-sha256'],
+        hostKey: ['ssh-ed25519'],
+        cipher: ['aes128-gcm@openssh.com'],
+        hmac: ['hmac-sha2-256'],
+        compression: ['none'],
+      },
+    }));
 
     expect(jumpKey).not.toBe(baseKey);
     expect(proxyKey).not.toBe(baseKey);
     expect(relaxedVerifyKey).not.toBe(baseKey);
+    expect(algorithmKey).not.toBe(baseKey);
   });
 });
