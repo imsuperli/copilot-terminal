@@ -28,6 +28,7 @@ describe('SSHConnectionPool', () => {
     const firstConnection = {
       connect,
       close,
+      openForwardOut: vi.fn(),
       isClosed: vi.fn().mockReturnValue(false),
     };
     const createConnection = vi.fn().mockReturnValue(firstConnection);
@@ -52,11 +53,13 @@ describe('SSHConnectionPool', () => {
       .mockReturnValueOnce({
         connect: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
+        openForwardOut: vi.fn(),
         isClosed: vi.fn().mockReturnValue(false),
       })
       .mockReturnValueOnce({
         connect: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
+        openForwardOut: vi.fn(),
         isClosed: vi.fn().mockReturnValue(false),
       });
     const pool = new SSHConnectionPool({ createConnection });

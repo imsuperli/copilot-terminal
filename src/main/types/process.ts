@@ -47,6 +47,7 @@ export interface SSHSessionConfig {
   verifyHostKeys: boolean;
   agentForward: boolean;
   reuseSession: boolean;
+  jumpHost?: SSHSessionConfig;
   jumpHostProfileId?: string;
   proxyCommand?: string;
   socksProxyHost?: string;

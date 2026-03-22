@@ -177,6 +177,74 @@ describe('registerSSHSessionHandlers', () => {
     });
   });
 
+  it('resolves jump host profiles into nested SSH session config', async () => {
+    const processManager = {
+      spawnTerminal: vi.fn().mockResolvedValue({ pid: 2204, sessionId: 'ssh-session-4' }),
+      subscribePtyData: vi.fn().mockReturnValue(vi.fn()),
+      getLatestPaneOutputSeq: vi.fn().mockReturnValue(0),
+    };
+    const sshProfileStore = {
+      get: vi.fn().mockImplementation(async (profileId: string) => {
+        if (profileId === 'jump-1') {
+          return {
+            ...createProfile(),
+            id: 'jump-1',
+            name: 'bastion',
+            host: '10.0.0.10',
+          };
+        }
+
+        return {
+          ...createProfile(),
+          jumpHostProfileId: 'jump-1',
+        };
+      }),
+    };
+    const sshVaultService = {
+      get: vi.fn().mockImplementation(async (profileId: string) => {
+        if (profileId === 'jump-1') {
+          return { profileId, password: 'jump-secret', updatedAt: '2026-03-22T10:00:00.000Z' };
+        }
+
+        return { profileId, password: 'target-secret', updatedAt: '2026-03-22T10:00:00.000Z' };
+      }),
+    };
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: { addPane: vi.fn() } as any,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: { add: vi.fn() } as any,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: sshVaultService as any,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('create-ssh-window');
+    await handler({}, {
+      profileId: 'profile-1',
+    });
+
+    expect(processManager.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      ssh: expect.objectContaining({
+        profileId: 'profile-1',
+        jumpHostProfileId: 'jump-1',
+        jumpHost: expect.objectContaining({
+          profileId: 'jump-1',
+          host: '10.0.0.10',
+          password: 'jump-secret',
+        }),
+      }),
+    }));
+  });
+
   it('clones SSH panes from the current workspace layout', async () => {
     const processManager = {
       spawnTerminal: vi.fn().mockResolvedValue({ pid: 2203, sessionId: 'ssh-session-3' }),

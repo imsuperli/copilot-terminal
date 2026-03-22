@@ -5,20 +5,30 @@ import type { KnownHostEntry } from '../../../shared/types/ssh';
 import type { SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
 import type { ISSHHostKeyPromptService } from './SSHHostKeyPromptService';
+import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
 
 export interface SSHShellOpenOptions {
   cols: number;
   rows: number;
 }
 
+export interface SSHForwardOutOptions {
+  targetHost: string;
+  targetPort: number;
+  sourceHost?: string;
+  sourcePort?: number;
+}
+
 export interface SSHClientConnectionDependencies {
   knownHostsStore?: ISSHKnownHostsStore | null;
   hostKeyPromptService?: ISSHHostKeyPromptService | null;
+  connectionPool?: ISSHConnectionPool | null;
 }
 
 export interface ISSHConnection {
   connect(serviceListener?: (data: string) => void): Promise<void>;
   openShell(options: SSHShellOpenOptions): Promise<ClientChannel>;
+  openForwardOut(options: SSHForwardOutOptions): Promise<ClientChannel>;
   close(): Promise<void>;
   isClosed(): boolean;
 }
@@ -27,9 +37,11 @@ export class SSHClientConnection implements ISSHConnection {
   private readonly ssh: SSHSessionConfig;
   private readonly knownHostsStore: ISSHKnownHostsStore | null;
   private readonly hostKeyPromptService: ISSHHostKeyPromptService | null;
+  private readonly connectionPool: ISSHConnectionPool | null;
   private readonly client: Client;
   private readonly connectListeners = new Set<(data: string) => void>();
   private connectPromise: Promise<void> | null;
+  private jumpHostLease: SSHConnectionPoolLease | null;
   private ready: boolean;
   private closed: boolean;
   private hostKeyVerificationError: Error | null;
@@ -38,8 +50,10 @@ export class SSHClientConnection implements ISSHConnection {
     this.ssh = ssh;
     this.knownHostsStore = dependencies.knownHostsStore ?? null;
     this.hostKeyPromptService = dependencies.hostKeyPromptService ?? null;
+    this.connectionPool = dependencies.connectionPool ?? null;
     this.client = new Client();
     this.connectPromise = null;
+    this.jumpHostLease = null;
     this.ready = false;
     this.closed = false;
     this.hostKeyVerificationError = null;
@@ -50,12 +64,12 @@ export class SSHClientConnection implements ISSHConnection {
       throw new Error(`SSH connection is already closed for ${this.ssh.user}@${this.ssh.host}`);
     }
 
-    if (serviceListener) {
-      this.connectListeners.add(serviceListener);
-    }
-
     if (this.ready) {
       return;
+    }
+
+    if (serviceListener) {
+      this.connectListeners.add(serviceListener);
     }
 
     if (this.connectPromise) {
@@ -88,25 +102,48 @@ export class SSHClientConnection implements ISSHConnection {
     });
   }
 
+  async openForwardOut(options: SSHForwardOutOptions): Promise<ClientChannel> {
+    await this.connect();
+
+    return new Promise<ClientChannel>((resolve, reject) => {
+      this.client.forwardOut(
+        options.sourceHost ?? '127.0.0.1',
+        options.sourcePort ?? 0,
+        options.targetHost,
+        options.targetPort,
+        (error, stream) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve(stream);
+        },
+      );
+    });
+  }
+
   async close(): Promise<void> {
-    if (this.closed) {
-      return;
-    }
+    const alreadyClosed = this.closed;
 
     this.closed = true;
     this.ready = false;
 
-    try {
-      this.client.end();
-    } catch {
-      // Ignore teardown races.
+    if (!alreadyClosed) {
+      try {
+        this.client.end();
+      } catch {
+        // Ignore teardown races.
+      }
+
+      try {
+        this.client.destroy();
+      } catch {
+        // Ignore teardown races.
+      }
     }
 
-    try {
-      this.client.destroy();
-    } catch {
-      // Ignore teardown races.
-    }
+    await this.releaseJumpHostLease();
   }
 
   isClosed(): boolean {
@@ -216,6 +253,11 @@ export class SSHClientConnection implements ISSHConnection {
       },
     };
 
+    const transportSocket = await this.buildTransportSocket();
+    if (transportSocket) {
+      connectConfig.sock = transportSocket;
+    }
+
     switch (this.ssh.authType) {
       case 'password':
         if (!this.ssh.password) {
@@ -250,6 +292,30 @@ export class SSHClientConnection implements ISSHConnection {
     }
 
     return connectConfig;
+  }
+
+  private async buildTransportSocket(): Promise<ClientChannel | undefined> {
+    if (!this.ssh.jumpHost) {
+      return undefined;
+    }
+
+    if (!this.connectionPool) {
+      throw new Error(`SSH jump host requires a connection pool for ${this.ssh.host}:${this.ssh.port}`);
+    }
+
+    this.jumpHostLease = await this.connectionPool.acquire(this.ssh.jumpHost, (data) => {
+      this.emitServiceData(data);
+    });
+
+    try {
+      return await this.jumpHostLease.connection.openForwardOut({
+        targetHost: this.ssh.host,
+        targetPort: this.ssh.port,
+      });
+    } catch (error) {
+      await this.releaseJumpHostLease();
+      throw error;
+    }
   }
 
   private async verifyHostKey(key: Buffer, knownHosts: KnownHostEntry[]): Promise<boolean> {
@@ -319,6 +385,16 @@ export class SSHClientConnection implements ISSHConnection {
     for (const listener of this.connectListeners) {
       listener(data);
     }
+  }
+
+  private async releaseJumpHostLease(): Promise<void> {
+    if (!this.jumpHostLease) {
+      return;
+    }
+
+    const lease = this.jumpHostLease;
+    this.jumpHostLease = null;
+    await lease.release();
   }
 }
 

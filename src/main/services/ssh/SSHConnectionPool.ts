@@ -108,6 +108,7 @@ export class SSHConnectionPool implements ISSHConnectionPool {
     return {
       knownHostsStore: this.knownHostsStore,
       hostKeyPromptService: this.hostKeyPromptService,
+      connectionPool: this,
     };
   }
 
@@ -158,6 +159,7 @@ export function buildSSHConnectionKey(config: SSHSessionConfig): string {
     verifyHostKeys: config.verifyHostKeys,
     agentForward: config.agentForward,
     jumpHostProfileId: config.jumpHostProfileId ?? null,
+    jumpHost: config.jumpHost ? buildSSHConnectionKey(config.jumpHost) : null,
     proxyCommand: config.proxyCommand ?? null,
     socksProxyHost: config.socksProxyHost ?? null,
     socksProxyPort: config.socksProxyPort ?? null,

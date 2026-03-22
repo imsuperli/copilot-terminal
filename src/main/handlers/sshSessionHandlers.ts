@@ -39,11 +39,14 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
         command: config.command,
       });
 
-      const handle = await processManager.spawnTerminal(buildSSHSpawnConfig(profile, vaultEntry, {
+      const handle = await processManager.spawnTerminal(await buildSSHSpawnConfig(profile, vaultEntry, {
         windowId,
         paneId,
         remoteCwd: pane.ssh?.remoteCwd,
         command: config.command,
+      }, {
+        sshProfileStore,
+        sshVaultService,
       }));
 
       const runningPane: Pane = {
@@ -92,11 +95,14 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
 
       const profile = await requireSSHProfile(sshProfileStore, config.profileId);
       const vaultEntry = await sshVaultService?.get(profile.id) ?? null;
-      const handle = await processManager.spawnTerminal(buildSSHSpawnConfig(profile, vaultEntry, {
+      const handle = await processManager.spawnTerminal(await buildSSHSpawnConfig(profile, vaultEntry, {
         windowId: config.windowId,
         paneId: config.paneId,
         remoteCwd: config.remoteCwd,
         command: config.command,
+      }, {
+        sshProfileStore,
+        sshVaultService,
       }));
 
       subscribePaneOutput({
@@ -137,11 +143,14 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
 
       const profile = await requireSSHProfile(sshProfileStore, sourcePane.ssh.profileId);
       const vaultEntry = await sshVaultService?.get(profile.id) ?? null;
-      const handle = await processManager.spawnTerminal(buildSSHSpawnConfig(profile, vaultEntry, {
+      const handle = await processManager.spawnTerminal(await buildSSHSpawnConfig(profile, vaultEntry, {
         windowId: config.targetWindowId,
         paneId: config.targetPaneId,
         remoteCwd: sourcePane.ssh.remoteCwd ?? sourcePane.cwd,
         command: sourcePane.command,
+      }, {
+        sshProfileStore,
+        sshVaultService,
       }));
 
       subscribePaneOutput({
@@ -176,7 +185,7 @@ async function requireSSHProfile(
   return profile;
 }
 
-function buildSSHSpawnConfig(
+async function buildSSHSpawnConfig(
   profile: SSHProfile,
   vaultEntry: SSHVaultEntry | null,
   options: {
@@ -185,11 +194,11 @@ function buildSSHSpawnConfig(
     remoteCwd?: string;
     command?: string;
   },
-): TerminalConfig {
-  if (profile.jumpHostProfileId) {
-    throw new Error('SSH jump host is not supported yet');
-  }
-
+  context: {
+    sshProfileStore: NonNullable<HandlerContext['sshProfileStore']>;
+    sshVaultService: HandlerContext['sshVaultService'];
+  },
+): Promise<TerminalConfig> {
   if (profile.proxyCommand || profile.socksProxyHost || profile.httpProxyHost) {
     throw new Error('SSH proxy configuration is not supported yet');
   }
@@ -200,7 +209,52 @@ function buildSSHSpawnConfig(
     command: options.command || profile.remoteCommand || 'shell',
     windowId: options.windowId,
     paneId: options.paneId,
-    ssh: {
+    ssh: await buildSSHSessionConfig(profile, vaultEntry, {
+      remoteCwd: options.remoteCwd,
+      command: options.command,
+    }, {
+      sshProfileStore: context.sshProfileStore,
+      sshVaultService: context.sshVaultService,
+      visitedProfileIds: new Set<string>(),
+    }),
+  };
+}
+
+async function buildSSHSessionConfig(
+  profile: SSHProfile,
+  vaultEntry: SSHVaultEntry | null,
+  options: {
+    remoteCwd?: string;
+    command?: string;
+  },
+  context: {
+    sshProfileStore: NonNullable<HandlerContext['sshProfileStore']>;
+    sshVaultService: HandlerContext['sshVaultService'];
+    visitedProfileIds: Set<string>;
+  },
+): Promise<SSHSessionConfig> {
+  const nextContext = context;
+
+  if (nextContext.visitedProfileIds.has(profile.id)) {
+    throw new Error(`SSH jump host chain contains a loop at profile ${profile.id}`);
+  }
+
+  nextContext.visitedProfileIds.add(profile.id);
+
+  try {
+    let jumpHost: SSHSessionConfig | undefined;
+
+    if (profile.jumpHostProfileId) {
+      if (!nextContext.sshProfileStore) {
+        throw new Error('SSH profile store is required to resolve jump host profiles');
+      }
+
+      const jumpProfile = await requireSSHProfile(nextContext.sshProfileStore, profile.jumpHostProfileId);
+      const jumpVaultEntry = await nextContext.sshVaultService?.get(jumpProfile.id) ?? null;
+      jumpHost = await buildSSHSessionConfig(jumpProfile, jumpVaultEntry, {}, nextContext);
+    }
+
+    return {
       profileId: profile.id,
       host: profile.host,
       port: profile.port,
@@ -215,6 +269,7 @@ function buildSSHSpawnConfig(
       verifyHostKeys: profile.verifyHostKeys,
       agentForward: profile.agentForward,
       reuseSession: profile.reuseSession,
+      ...(jumpHost ? { jumpHost } : {}),
       ...(profile.jumpHostProfileId ? { jumpHostProfileId: profile.jumpHostProfileId } : {}),
       ...(profile.proxyCommand ? { proxyCommand: profile.proxyCommand } : {}),
       ...(profile.socksProxyHost ? { socksProxyHost: profile.socksProxyHost } : {}),
@@ -222,10 +277,12 @@ function buildSSHSpawnConfig(
       ...(profile.httpProxyHost ? { httpProxyHost: profile.httpProxyHost } : {}),
       ...(profile.httpProxyPort !== undefined ? { httpProxyPort: profile.httpProxyPort } : {}),
       skipBanner: profile.skipBanner,
-      remoteCwd: options.remoteCwd || profile.defaultRemoteCwd,
-      command: options.command || profile.remoteCommand,
-    } satisfies SSHSessionConfig,
-  };
+      ...(options.remoteCwd || profile.defaultRemoteCwd ? { remoteCwd: options.remoteCwd || profile.defaultRemoteCwd } : {}),
+      ...(options.command || profile.remoteCommand ? { command: options.command || profile.remoteCommand } : {}),
+    };
+  } finally {
+    nextContext.visitedProfileIds.delete(profile.id);
+  }
 }
 
 function createSshPaneDraft(
