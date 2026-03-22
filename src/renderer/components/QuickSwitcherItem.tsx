@@ -7,6 +7,7 @@ import { StatusDot } from './StatusDot';
 import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { formatRelativeTime, useI18n, TranslationParams, TranslationKey } from '../i18n';
+import { canPaneOpenInIDE, canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities';
 
 interface QuickSwitcherItemProps {
   window: Window;
@@ -143,6 +144,10 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
   const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
   const paneCount = panes.length;
+  const activePane = useMemo(
+    () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
+    [panes, terminalWindow.activePaneId]
+  );
 
   // 获取第一个窗格的工作目录作为显示
   const workingDirectory = useMemo(() => panes[0]?.cwd || '', [panes]);
@@ -190,7 +195,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   // 打开文件夹
   const handleOpenFolder = (e: React.MouseEvent) => {
     e.stopPropagation(); // 阻止事件冒泡，避免触发窗口切换
-    if (workingDirectory && window.electronAPI?.openFolder) {
+    if (activePane && canPaneOpenLocalFolder(activePane) && workingDirectory && window.electronAPI?.openFolder) {
       window.electronAPI.openFolder(workingDirectory);
     }
   };
@@ -209,7 +214,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   // 在 IDE 中打开
   const handleOpenInIDE = (e: React.MouseEvent, ide: string) => {
     e.stopPropagation(); // 阻止事件冒泡，避免触发窗口切换
-    if (workingDirectory && window.electronAPI?.openInIDE) {
+    if (activePane && canPaneOpenInIDE(activePane) && workingDirectory && window.electronAPI?.openInIDE) {
       window.electronAPI.openInIDE(ide, workingDirectory)
         .then((response) => {
           if (!response.success) {
@@ -251,7 +256,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
               ))}
             </span>
             {/* 文件夹图标 */}
-            {workingDirectory && (
+            {workingDirectory && activePane && canPaneOpenLocalFolder(activePane) && (
               <button
                 onClick={handleOpenFolder}
                 className="flex-shrink-0 p-1 rounded hover:bg-zinc-600/50 transition-colors group"
@@ -328,7 +333,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
             )}
 
             {/* IDE 图标 */}
-            {enabledIDEs.length > 0 && (
+            {enabledIDEs.length > 0 && activePane && canPaneOpenInIDE(activePane) && (
               <div className="flex items-center gap-1">
                 {enabledIDEs.slice(0, 3).map((ide) => (
                   <button

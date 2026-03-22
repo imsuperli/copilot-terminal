@@ -249,9 +249,7 @@ export function isTmuxAgentPane(pane: Pane): boolean {
 
 function sanitizePaneForPause(pane: Pane): Pane {
   return {
-    id: pane.id,
-    cwd: pane.cwd,
-    command: pane.command,
+    ...pane,
     status: WindowStatus.Paused,
     pid: null,
   };

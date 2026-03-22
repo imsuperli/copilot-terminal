@@ -5,6 +5,7 @@ import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
 import {
+  FeatureSettings,
   IDEConfig,
   Settings,
   StatusLineConfig,
@@ -165,13 +166,14 @@ export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
 export type SettingsPatch =
-  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'customCategories'>>
+  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'features' | 'customCategories'>>
   & {
     ides?: IDEConfig[];
     quickNav?: QuickNavConfig;
     statusLine?: Partial<StatusLineConfig>;
     terminal?: Partial<TerminalSettings>;
     tmux?: Partial<TmuxSettings>;
+    features?: Partial<FeatureSettings>;
     customCategories?: CustomCategory[];
   };
 

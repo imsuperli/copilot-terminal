@@ -45,6 +45,10 @@ export interface TmuxSettings {
   enableForAllPanes: boolean;
 }
 
+export interface FeatureSettings {
+  sshEnabled: boolean;
+}
+
 export interface Settings {
   notificationsEnabled: boolean;
   theme: 'dark' | 'light';
@@ -56,6 +60,7 @@ export interface Settings {
   statusLine?: StatusLineConfig;
   terminal?: TerminalSettings;
   tmux?: TmuxSettings;
+  features?: FeatureSettings;
   customCategories?: CustomCategory[];
   defaultSidebarTab?: 'all' | 'active' | 'archived' | string; // string 为自定义分类 ID
 }

@@ -17,6 +17,12 @@ import { DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
+import {
+  canPaneOpenInIDE,
+  canPaneOpenLocalFolder,
+  canPaneWatchGitBranch,
+  getPaneCapabilities,
+} from '../../shared/utils/terminalCapabilities';
 
 export interface TerminalViewProps {
   window: Window;
@@ -54,6 +60,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const { enabledIDEs } = useIDESettings();
   const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
   const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
+  const activePane = useMemo(
+    () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
+    [panes, terminalWindow.activePaneId]
+  );
+  const activePaneCapabilities = useMemo(
+    () => activePane ? getPaneCapabilities(activePane) : null,
+    [activePane]
+  );
   const isWindowRunning = aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput;
 
   // 鍒囨崲闈㈡澘鐘舵€?
@@ -94,7 +108,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     // 绐楀彛婵€娲绘椂锛屽惎鍔?git 鍒嗘敮鐩戝惉
     const firstPane = panes[0];
-    if (firstPane && firstPane.cwd && window.electronAPI?.startGitWatch) {
+    if (firstPane && firstPane.cwd && canPaneWatchGitBranch(firstPane) && window.electronAPI?.startGitWatch) {
       window.electronAPI.startGitWatch(terminalWindow.id, firstPane.cwd).catch((error: any) => {
         // 蹇界暐閿欒
       });
@@ -240,7 +254,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     try {
       // 鑾峰彇绗竴涓獥鏍肩殑宸ヤ綔鐩綍
       const firstPane = panes[0];
-      if (firstPane && window.electronAPI) {
+      if (firstPane && canPaneOpenLocalFolder(firstPane) && window.electronAPI) {
         await window.electronAPI.openFolder(firstPane.cwd);
       }
     } catch (error) {
@@ -252,7 +266,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const handleOpenInIDE = useCallback(async (ide: string) => {
     try {
       const firstPane = panes[0];
-      if (firstPane && window.electronAPI) {
+      if (firstPane && canPaneOpenInIDE(firstPane) && window.electronAPI) {
         const response = await window.electronAPI.openInIDE(ide, firstPane.cwd);
         if (!response.success) {
           console.error(`Failed to open in ${ide}:`, response.error);
@@ -516,7 +530,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               >
                 <button
                   onClick={() => handleOpenInIDE(ide.id)}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  disabled={!activePaneCapabilities?.canOpenInIDE}
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <IDEIcon icon={ide.icon || ''} size={14} />
                 </button>
@@ -537,7 +552,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             <AppTooltip content={t('terminalView.openFolder')} placement="toolbar-trailing">
               <button
                 onClick={handleOpenFolder}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                disabled={!activePaneCapabilities?.canOpenLocalFolder}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Folder size={14} />
               </button>

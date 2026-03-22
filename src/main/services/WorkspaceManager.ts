@@ -764,6 +764,9 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         autoInjectPath: settings?.tmux?.autoInjectPath ?? defaults.tmux?.autoInjectPath ?? true,
         enableForAllPanes: settings?.tmux?.enableForAllPanes ?? defaults.tmux?.enableForAllPanes ?? true,
       },
+      features: {
+        sshEnabled: settings?.features?.sshEnabled ?? defaults.features?.sshEnabled ?? false,
+      },
       customCategories: settings?.customCategories ?? defaults.customCategories,
       defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
     };
@@ -793,6 +796,9 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         enabled: true,
         autoInjectPath: true,
         enableForAllPanes: true,
+      },
+      features: {
+        sshEnabled: false,
       },
       customCategories: [],
       defaultSidebarTab: 'active',

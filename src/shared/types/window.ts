@@ -1,4 +1,5 @@
 import { ProjectConfig } from './project-config';
+import type { SSHAuthType } from './ssh';
 
 /**
  * 窗口状态枚举
@@ -13,6 +14,32 @@ export enum WindowStatus {
   Paused = 'paused'              // 暂停（未启动）
 }
 
+export type PaneBackend = 'local' | 'ssh';
+
+export interface PaneCapabilities {
+  canOpenLocalFolder: boolean;
+  canOpenInIDE: boolean;
+  canWatchGitBranch: boolean;
+  canReconnect: boolean;
+  canOpenSFTP: boolean;
+  canManagePortForwards: boolean;
+  canCloneSession: boolean;
+}
+
+export interface SshPaneBinding {
+  profileId: string;
+  host: string;
+  port: number;
+  user: string;
+  authType: SSHAuthType;
+  remoteCwd?: string;
+  jumpHostProfileId?: string;
+  proxyCommand?: string;
+  reuseSession?: boolean;
+}
+
+export type WindowKind = 'local' | 'ssh' | 'mixed';
+
 /**
  * 窗格接口
  * 表示一个终端窗格的状态（拆分后的单个终端）
@@ -23,6 +50,10 @@ export interface Pane {
   command: string;               // 启动的 shell 程序（如 "pwsh.exe"）
   status: WindowStatus;          // 当前状态
   pid: number | null;            // 进程 PID
+  backend?: PaneBackend;         // 会话后端类型，缺失时视为 local
+  sessionId?: string;            // 统一会话标识，逐步替代仅依赖 pid 的索引
+  capabilities?: PaneCapabilities; // pane 能力描述，用于 UI/主进程按能力分流
+  ssh?: SshPaneBinding;          // SSH pane 绑定信息
   lastOutput?: string;           // 最新输出摘要（前 100 字符）
 
   // tmux 兼容层扩展字段（用于 Claude Code Agent Teams）
@@ -87,6 +118,9 @@ export interface Window {
   createdAt: string;             // 创建时间（ISO 8601）
   lastActiveAt: string;          // 最后活跃时间
   archived?: boolean;            // 是否已归档
+  kind?: WindowKind;             // 窗口类型，可由 pane backend 动态推导
+  tags?: string[];               // 资产标签
+  favorite?: boolean;            // 是否收藏
   projectConfig?: ProjectConfig; // 项目配置（从 copilot.json 读取）
   gitBranch?: string;            // Git 分支名称（如果是 git 仓库）
   claudeModel?: string;          // Claude 模型名称（运行态）

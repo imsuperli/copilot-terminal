@@ -19,6 +19,7 @@ import { WindowGroup } from '../../shared/types/window-group';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
+import { canPaneOpenInIDE, canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities';
 
 // 统一的卡片项类型
 type CardItem =
@@ -313,6 +314,12 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
   }, [removeWindow]);
 
   const openFolder = useCallback(async (win: Window) => {
+    const panes = getAllPanes(win.layout);
+    const activePane = panes.find((pane) => pane.id === win.activePaneId) ?? panes[0];
+    if (!activePane || !canPaneOpenLocalFolder(activePane)) {
+      return;
+    }
+
     const workingDirectory = getCurrentWindowWorkingDirectory(win);
     try {
       await window.electronAPI.openFolder(workingDirectory);
@@ -326,6 +333,12 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
   }, [openFolder, runWithWindowDirectory]);
 
   const openInIDE = useCallback(async (ide: string, win: Window) => {
+    const panes = getAllPanes(win.layout);
+    const activePane = panes.find((pane) => pane.id === win.activePaneId) ?? panes[0];
+    if (!activePane || !canPaneOpenInIDE(activePane)) {
+      return;
+    }
+
     const workingDirectory = getCurrentWindowWorkingDirectory(win);
     try {
       const response = await window.electronAPI.openInIDE(ide, workingDirectory);

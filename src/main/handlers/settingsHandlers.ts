@@ -44,6 +44,13 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           }
         : workspace.settings.tmux;
 
+      const featureSettings = settings?.features
+        ? {
+            ...workspace.settings.features,
+            ...settings.features,
+          }
+        : workspace.settings.features;
+
       const updatedWorkspace = {
         ...workspace,
         settings: {
@@ -51,6 +58,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           ...settings,
           terminal: terminalSettings,
           tmux: tmuxSettings,
+          features: featureSettings,
         },
       };
 
