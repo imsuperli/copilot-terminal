@@ -23,6 +23,16 @@ describe('ProjectConfigWatcher', () => {
     await watcher.startWatching('window-1', '/repo-a', onUpdate);
 
     expect(fileWatcher.watch).toHaveBeenCalledTimes(1);
+    expect(fileWatcher.watch).toHaveBeenCalledWith(
+      '/repo-a/copilot.json',
+      expect.any(Function),
+      expect.objectContaining({
+        debounce: 500,
+        ignoreInitial: true,
+        awaitWriteFinish: true,
+        stabilityThreshold: 200,
+      })
+    );
     expect(unwatch).not.toHaveBeenCalled();
     expect(watcher.getWatcherCount()).toBe(1);
   });

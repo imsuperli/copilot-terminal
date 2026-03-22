@@ -45,14 +45,12 @@ class ProjectConfigWatcher {
     const configPath = path.join(projectPath, 'copilot.json');
     console.log(`[ProjectConfigWatcher] Start watching ${configPath} for window ${windowId}`);
 
-    // 监听项目目录，兼容 copilot.json 后创建/原子替换等场景
+    // 监听精确的 copilot.json 文件路径。
+    // 即使文件初始不存在，chokidar 也能在后续创建时触发 add 事件，
+    // 这样可以避免递归监听整个项目目录带来的高 CPU 开销。
     const unwatch = await this.fileWatcher.watch(
-      projectPath,
-      async (event, changedPath) => {
-        if (path.basename(changedPath) !== 'copilot.json') {
-          return;
-        }
-
+      configPath,
+      async (event) => {
         if (event === 'change' || event === 'add') {
           try {
             console.log(`[ProjectConfigWatcher] Reloading config for window ${windowId}`);
