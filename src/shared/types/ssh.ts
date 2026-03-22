@@ -62,3 +62,21 @@ export interface SSHProfile {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface SSHProfileInput extends Omit<SSHProfile, 'id' | 'createdAt' | 'updatedAt'> {}
+
+export type SSHProfilePatch = Partial<SSHProfileInput>;
+
+export interface SSHCredentialState {
+  hasPassword: boolean;
+  hasPassphrase: boolean;
+}
+
+export type SSHVaultStorageMode = 'electron-safe-storage' | 'plain-text-fallback';
+
+export interface SSHVaultEntry {
+  profileId: string;
+  password?: string;
+  privateKeyPassphrases?: Record<string, string>;
+  updatedAt: string;
+}

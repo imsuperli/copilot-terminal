@@ -1,0 +1,160 @@
+import fs from 'fs-extra';
+import os from 'os';
+import path from 'path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { SSHProfileStore } from '../ssh/SSHProfileStore';
+
+describe('SSHProfileStore', () => {
+  let tempDir: string;
+  let filePath: string;
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'copilot-terminal-ssh-profiles-'));
+    filePath = path.join(tempDir, 'ssh-profiles.json');
+  });
+
+  afterEach(async () => {
+    await fs.remove(tempDir);
+  });
+
+  it('creates profiles with normalized defaults and persists them', async () => {
+    const store = new SSHProfileStore({
+      filePath,
+      now: () => '2026-03-22T10:00:00.000Z',
+    });
+
+    const profile = await store.create({
+      name: '  prod-web-01  ',
+      host: ' 10.0.0.21 ',
+      port: 22,
+      user: ' root ',
+      auth: 'password',
+      privateKeys: [],
+      keepaliveInterval: undefined as never,
+      keepaliveCountMax: undefined as never,
+      readyTimeout: null,
+      verifyHostKeys: undefined as never,
+      x11: undefined as never,
+      skipBanner: undefined as never,
+      agentForward: undefined as never,
+      warnOnClose: undefined as never,
+      reuseSession: undefined as never,
+      forwardedPorts: [],
+      tags: ['prod', 'prod', ' cn-shanghai '],
+      notes: '  web server  ',
+    });
+
+    expect(profile.name).toBe('prod-web-01');
+    expect(profile.host).toBe('10.0.0.21');
+    expect(profile.user).toBe('root');
+    expect(profile.keepaliveInterval).toBe(30);
+    expect(profile.keepaliveCountMax).toBe(3);
+    expect(profile.verifyHostKeys).toBe(true);
+    expect(profile.warnOnClose).toBe(true);
+    expect(profile.reuseSession).toBe(true);
+    expect(profile.tags).toEqual(['prod', 'cn-shanghai']);
+    expect(profile.notes).toBe('web server');
+
+    const persisted = await fs.readJson(filePath);
+    expect(persisted.version).toBe(1);
+    expect(persisted.profiles).toHaveLength(1);
+    expect(persisted.profiles[0].name).toBe('prod-web-01');
+  });
+
+  it('updates profiles without losing createdAt and normalizes optional fields', async () => {
+    const store = new SSHProfileStore({
+      filePath,
+      now: () => '2026-03-22T10:00:00.000Z',
+    });
+
+    const profile = await store.create({
+      name: 'prod-web-01',
+      host: '10.0.0.21',
+      port: 22,
+      user: 'root',
+      auth: 'publicKey',
+      privateKeys: ['/keys/id_ed25519'],
+      keepaliveInterval: 15,
+      keepaliveCountMax: 2,
+      readyTimeout: 10000,
+      verifyHostKeys: true,
+      x11: false,
+      skipBanner: false,
+      agentForward: false,
+      warnOnClose: true,
+      reuseSession: true,
+      forwardedPorts: [],
+      tags: [],
+    });
+
+    const updatedStore = new SSHProfileStore({
+      filePath,
+      now: () => '2026-03-22T11:00:00.000Z',
+    });
+
+    const updated = await updatedStore.update(profile.id, {
+      notes: '  rotated keys  ',
+      privateKeys: ['/keys/id_ed25519', '/keys/id_rsa'],
+      proxyCommand: '  ssh -W %h:%p jump ',
+    });
+
+    expect(updated.createdAt).toBe('2026-03-22T10:00:00.000Z');
+    expect(updated.updatedAt).toBe('2026-03-22T11:00:00.000Z');
+    expect(updated.privateKeys).toEqual(['/keys/id_ed25519', '/keys/id_rsa']);
+    expect(updated.notes).toBe('rotated keys');
+    expect(updated.proxyCommand).toBe('ssh -W %h:%p jump');
+  });
+
+  it('rejects invalid public key profiles without key paths', async () => {
+    const store = new SSHProfileStore({ filePath });
+
+    await expect(store.create({
+      name: 'prod-web-01',
+      host: '10.0.0.21',
+      port: 22,
+      user: 'root',
+      auth: 'publicKey',
+      privateKeys: [],
+      keepaliveInterval: 15,
+      keepaliveCountMax: 2,
+      readyTimeout: null,
+      verifyHostKeys: true,
+      x11: false,
+      skipBanner: false,
+      agentForward: false,
+      warnOnClose: true,
+      reuseSession: true,
+      forwardedPorts: [],
+      tags: [],
+    })).rejects.toThrow('requires at least one private key path');
+  });
+
+  it('removes persisted profiles', async () => {
+    const store = new SSHProfileStore({ filePath });
+    const profile = await store.create({
+      name: 'prod-web-01',
+      host: '10.0.0.21',
+      port: 22,
+      user: 'root',
+      auth: 'password',
+      privateKeys: [],
+      keepaliveInterval: 15,
+      keepaliveCountMax: 2,
+      readyTimeout: null,
+      verifyHostKeys: true,
+      x11: false,
+      skipBanner: false,
+      agentForward: false,
+      warnOnClose: true,
+      reuseSession: true,
+      forwardedPorts: [],
+      tags: [],
+    });
+
+    await store.remove(profile.id);
+
+    expect(await store.list()).toEqual([]);
+    const persisted = await fs.readJson(filePath);
+    expect(persisted.profiles).toEqual([]);
+  });
+});
