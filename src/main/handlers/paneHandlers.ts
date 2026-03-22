@@ -44,6 +44,11 @@ export function registerPaneHandlers(ctx: HandlerContext) {
         ptySubscriptionManager.add(config.paneId, unsubscribe);
       }
 
+      // 注册到状态轮询，确保进程退出时能通知渲染进程
+      if (config.windowId && config.paneId) {
+        statusPoller?.addPane(config.windowId, config.paneId, handle.pid);
+      }
+
       return successResponse({ pid: handle.pid });
     } catch (error) {
       return errorResponse(error);
@@ -66,7 +71,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
 
       const processes = processManager.listProcesses();
       const found = processes.find(p => p.windowId === windowId && p.paneId === paneId);
-      if (found) {
+      if (found && found.status !== 'exited') {
         await processManager.killProcess(found.pid);
       }
 

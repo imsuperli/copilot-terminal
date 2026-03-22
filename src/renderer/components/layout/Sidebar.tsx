@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
@@ -241,13 +242,23 @@ export function Sidebar({
                 className="w-full pl-8 pr-7 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
               />
               {searchQuery && (
-                <button
-                  onClick={() => onSearchChange?.('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
-                  title={t('common.clearSearch')}
-                >
-                  <X size={12} />
-                </button>
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <button
+                        onClick={() => onSearchChange?.('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        <X size={12} />
+                      </button>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                        {t('common.clearSearch')}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
               )}
             </div>
           </div>
@@ -265,11 +276,13 @@ export function Sidebar({
         <div className="flex-1 px-4 py-4 overflow-y-auto border-b border-[rgb(var(--border))]">
           <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] tracking-wide mb-3 flex items-center justify-between" style={{ letterSpacing: '0.05em' }}>
             <span>{t('sidebar.section.windowManagement')}</span>
-            <div
-              className="flex items-center gap-1 cursor-pointer normal-case tracking-normal font-normal"
-              title={t('sidebar.hideGroupedWindowsTooltip')}
-              onClick={() => setHideGroupedWindows(!hideGroupedWindows)}
-            >
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <div
+                    className="flex items-center gap-1 cursor-pointer normal-case tracking-normal font-normal"
+                    onClick={() => setHideGroupedWindows(!hideGroupedWindows)}
+                  >
               <span className="text-[10px] text-[rgb(var(--muted-foreground))]">{t('sidebar.hideGroupedWindows')}</span>
               <span
                 role="checkbox"
@@ -286,7 +299,15 @@ export function Sidebar({
                   </svg>
                 )}
               </span>
-            </div>
+                  </div>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                    {t('sidebar.hideGroupedWindowsTooltip')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
           </h3>
           {/* Tab buttons */}
           <div className="flex flex-col gap-2">
@@ -390,20 +411,40 @@ export function Sidebar({
                             onClick={(e) => e.stopPropagation()}
                             className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 focus:outline-none focus:border-blue-500"
                           />
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}
-                            className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-green-400 hover:text-green-300 rounded transition-colors"
-                            title={t('common.save')}
-                          >
-                            <Check className="h-3 w-3" />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setEditingCategoryId(null); }}
-                            className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded transition-colors"
-                            title={t('common.cancel')}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                          <Tooltip.Provider>
+                            <Tooltip.Root delayDuration={300}>
+                              <Tooltip.Trigger asChild>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }}
+                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-green-400 hover:text-green-300 rounded transition-colors"
+                                >
+                                  <Check className="h-3 w-3" />
+                                </button>
+                              </Tooltip.Trigger>
+                              <Tooltip.Portal>
+                                <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                  {t('common.save')}
+                                </Tooltip.Content>
+                              </Tooltip.Portal>
+                            </Tooltip.Root>
+                          </Tooltip.Provider>
+                          <Tooltip.Provider>
+                            <Tooltip.Root delayDuration={300}>
+                              <Tooltip.Trigger asChild>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setEditingCategoryId(null); }}
+                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded transition-colors"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Tooltip.Trigger>
+                              <Tooltip.Portal>
+                                <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                  {t('common.cancel')}
+                                </Tooltip.Content>
+                              </Tooltip.Portal>
+                            </Tooltip.Root>
+                          </Tooltip.Provider>
                         </>
                       ) : (
                         <>
@@ -416,20 +457,40 @@ export function Sidebar({
                           )}
                           {/* 悬停时显示编辑和删除按钮 */}
                           <div className="flex-shrink-0 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleStartEdit(category); }}
-                              className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-700 transition-colors"
-                              title={t('category.rename')}
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setCategoryToDelete(category); }}
-                              className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-red-400 rounded hover:bg-zinc-700 transition-colors"
-                              title={t('category.delete')}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
+                            <Tooltip.Provider>
+                              <Tooltip.Root delayDuration={300}>
+                                <Tooltip.Trigger asChild>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleStartEdit(category); }}
+                                    className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-700 transition-colors"
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </button>
+                                </Tooltip.Trigger>
+                                <Tooltip.Portal>
+                                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                    {t('category.rename')}
+                                  </Tooltip.Content>
+                                </Tooltip.Portal>
+                              </Tooltip.Root>
+                            </Tooltip.Provider>
+                            <Tooltip.Provider>
+                              <Tooltip.Root delayDuration={300}>
+                                <Tooltip.Trigger asChild>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setCategoryToDelete(category); }}
+                                    className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-red-400 rounded hover:bg-zinc-700 transition-colors"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </Tooltip.Trigger>
+                                <Tooltip.Portal>
+                                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                    {t('category.delete')}
+                                  </Tooltip.Content>
+                                </Tooltip.Portal>
+                              </Tooltip.Root>
+                            </Tooltip.Provider>
                           </div>
                         </>
                       )}
@@ -490,21 +551,41 @@ export function Sidebar({
               <Settings className="h-4 w-4" />
               <span>{t('settings.title')}</span>
             </button>
-            <button
-              className="flex items-center justify-center w-9 h-9 rounded-lg text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
-              onClick={() => setIsQuickNavPanelOpen(true)}
-              title={t('quickNav.title')}
-            >
-              <Compass className="h-4 w-4" />
-            </button>
-            <button
-              className="flex items-center justify-center w-9 h-9 rounded-lg text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
-              onClick={() => setIsAboutPanelOpen(true)}
-              title={t('about.title')}
-              aria-label={t('about.title')}
-            >
-              <HelpCircle className="h-4 w-4" />
-            </button>
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    className="flex items-center justify-center w-9 h-9 rounded-lg text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
+                    onClick={() => setIsQuickNavPanelOpen(true)}
+                  >
+                    <Compass className="h-4 w-4" />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                    {t('quickNav.title')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    className="flex items-center justify-center w-9 h-9 rounded-lg text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
+                    onClick={() => setIsAboutPanelOpen(true)}
+                    aria-label={t('about.title')}
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                    {t('about.title')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
           </div>
 
           {/* New Terminal button */}
@@ -530,7 +611,7 @@ export function Sidebar({
             <button
               onClick={onCreateGroup}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
-              title={t('sidebar.createGroup')}
+
             >
               <Folder className="h-4 w-4" />
               <span>{t('sidebar.createGroup')}</span>
@@ -559,7 +640,7 @@ export function Sidebar({
               <button
                 onClick={() => setIsConfirmDialogOpen(true)}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
-                title={titleText}
+
               >
                 <Trash2 className="h-4 w-4" />
                 <span>{buttonText}</span>

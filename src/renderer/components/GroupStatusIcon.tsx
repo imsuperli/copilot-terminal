@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { Window, WindowStatus } from '../types/window';
 import { getGroupStatus, getWindowStatus } from '../../shared/utils/status-utils';
@@ -66,13 +67,28 @@ export const GroupStatusIcon: React.FC<GroupStatusIconProps> = ({ group, windows
   }, [group, windows, t]);
 
   return (
-    <div title={tooltipText}>
-      <StatusIconWithBadge
-        status={status}
-        count={count}
-        size="small"
-      />
-    </div>
+    <Tooltip.Provider>
+      <Tooltip.Root delayDuration={300}>
+        <Tooltip.Trigger asChild>
+          <div>
+            <StatusIconWithBadge
+              status={status}
+              count={count}
+              size="small"
+            />
+          </div>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700 whitespace-pre-line"
+            side="right"
+            sideOffset={5}
+          >
+            {tooltipText}
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
   );
 };
 

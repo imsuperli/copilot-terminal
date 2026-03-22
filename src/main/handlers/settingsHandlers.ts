@@ -1,11 +1,8 @@
-import { ipcMain } from 'electron';
-import { readFileSync, existsSync } from 'fs';
-import { execSync } from 'child_process';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { app, ipcMain } from 'electron';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
-import { scanInstalledIDEs, scanSpecificIDE, getSupportedIDENames } from '../utils/ideScanner';
+import { scanInstalledIDEsAsync, scanSpecificIDE, getSupportedIDENames, isImageFile } from '../utils/ideScanner';
 import { IDEConfig } from '../types/workspace';
 import { scanAvailableShellPrograms } from '../utils/shell';
 
@@ -69,9 +66,17 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
   // 扫描已安装的 IDE
   ipcMain.handle('scan-ides', async () => {
     try {
-      const installedIDEs = scanInstalledIDEs();
+      const installedIDEs = await scanInstalledIDEsAsync();
+      console.log('[IDE_SCAN] Found IDEs:', installedIDEs.map(ide => ({
+        id: ide.id,
+        name: ide.name,
+        path: ide.path,
+        source: ide.source,
+        version: ide.version,
+      })));
       return successResponse(installedIDEs);
     } catch (error) {
+      console.error('[IDE_SCAN] Failed to scan IDEs:', error);
       return errorResponse(error);
     }
   });
@@ -171,35 +176,44 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
   // 获取IDE图标数据(base64)
   ipcMain.handle('get-ide-icon', async (_event, iconPath: string) => {
     try {
+      if (iconPath.startsWith('data:')) {
+        return successResponse(iconPath);
+      }
+
       if (!existsSync(iconPath)) {
         throw new Error(`Icon file not found: ${iconPath}`);
       }
 
-      const ext = iconPath.split('.').pop()?.toLowerCase();
+      const iconStat = statSync(iconPath);
+      const isMacAppBundle = process.platform === 'darwin' && iconStat.isDirectory() && iconPath.endsWith('.app');
 
-      // macOS .icns 格式：用 sips 转换为 PNG
-      if (ext === 'icns') {
-        const hash = iconPath.replace(/[^a-zA-Z0-9]/g, '_');
-        const pngPath = join(tmpdir(), `ide-icon-${hash}.png`);
-        if (!existsSync(pngPath)) {
-          execSync(`sips -s format png "${iconPath}" --out "${pngPath}" --resampleWidth 256`, { stdio: 'ignore' });
+      if (iconStat.isDirectory() && !isMacAppBundle) {
+        throw new Error(`Refusing to resolve IDE icon from directory path: ${iconPath}`);
+      }
+
+      if (isImageFile(iconPath)) {
+        const ext = iconPath.split('.').pop()?.toLowerCase();
+        const iconData = readFileSync(iconPath);
+        const base64Data = iconData.toString('base64');
+
+        let mimeType = 'image/png';
+        if (ext === 'ico') {
+          mimeType = 'image/x-icon';
+        } else if (ext === 'jpg' || ext === 'jpeg') {
+          mimeType = 'image/jpeg';
+        } else if (ext === 'svg') {
+          mimeType = 'image/svg+xml';
         }
-        const pngData = readFileSync(pngPath);
-        const base64Data = pngData.toString('base64');
-        return successResponse(`data:image/png;base64,${base64Data}`);
+
+        return successResponse(`data:${mimeType};base64,${base64Data}`);
       }
 
-      const iconData = readFileSync(iconPath);
-      const base64Data = iconData.toString('base64');
-
-      let mimeType = 'image/png';
-      if (ext === 'ico') {
-        mimeType = 'image/x-icon';
-      } else if (ext === 'jpg' || ext === 'jpeg') {
-        mimeType = 'image/jpeg';
+      const nativeIcon = await app.getFileIcon(iconPath, { size: 'large' });
+      if (!nativeIcon.isEmpty()) {
+        return successResponse(nativeIcon.toDataURL());
       }
 
-      return successResponse(`data:${mimeType};base64,${base64Data}`);
+      throw new Error(`Unable to resolve icon for path: ${iconPath}`);
     } catch (error) {
       return errorResponse(error);
     }

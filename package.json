@@ -1,6 +1,6 @@
 {
   "name": "copilot-terminal",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A modern terminal window manager built with Electron",
   "main": "dist/main/index.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "build:statusline": "tsc -p src/statusline/tsconfig.json",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "test": "vitest"
+    "test": "vitest",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "keywords": [
     "electron",
@@ -47,7 +48,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.0",
     "tsx": "^4.0.0",
-    "typescript": "^5.0.0",
+    "typescript": "^5.9.3",
     "vite": "^5.0.0",
     "vitest": "^1.0.0",
     "wait-on": "^8.0.5"

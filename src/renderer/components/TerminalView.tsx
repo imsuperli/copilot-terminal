@@ -1,7 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import * as Tooltip from '@radix-ui/react-tooltip';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX } from 'lucide-react';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -17,6 +16,7 @@ import { useI18n } from '../i18n';
 import { DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
+import { AppTooltip } from './ui/AppTooltip';
 
 export interface TerminalViewProps {
   window: Window;
@@ -115,17 +115,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     onCtrlTab: () => {
       setQuickSwitcherOpen(true);
     },
-    onCtrlB: () => {
-      toggleSidebar();
-    },
-    onCtrlNumber: (num) => {
-      if (num > 0 && num <= activeWindows.length) {
-        const targetWindow = activeWindows[num - 1];
-        if (targetWindow) {
-          onWindowSwitch(targetWindow.id);
-        }
-      }
-    },
     onEscape: () => {
       // 鍙湁褰撻潰鏉挎墦寮€鏃舵墠澶勭悊 ESC 閿?
       if (quickSwitcherOpen) {
@@ -156,6 +145,35 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       closePaneInWindow(terminalWindow.id, paneId);
     },
     [terminalWindow.id, panes.length, closePaneInWindow]
+  );
+
+  // 处理窗格进程退出
+  const handlePaneExit = useCallback(
+    (paneId: string) => {
+      if (!terminalWindow) return;
+      const currentPanes = getAllPanes(terminalWindow.layout);
+
+      if (currentPanes.length <= 1) {
+        // 单窗格窗口退出
+        if (embedded && onStopAndRemoveFromGroup) {
+          // 窗口组内：复用"停止并移除"逻辑
+          onStopAndRemoveFromGroup(terminalWindow.id);
+        } else {
+          // 单窗口：停止进程 + 暂停窗口 + 返回主界面
+          if (window.electronAPI) {
+            window.electronAPI.closeWindow(terminalWindow.id).catch(console.error);
+          }
+          pauseWindowState(terminalWindow.id);
+          if (window.electronAPI) {
+            window.electronAPI.switchToUnifiedView().catch(console.error);
+          }
+        }
+      } else {
+        // 多窗格：复用关闭窗格逻辑
+        closePaneInWindow(terminalWindow.id, paneId);
+      }
+    },
+    [terminalWindow, embedded, onStopAndRemoveFromGroup, pauseWindowState, closePaneInWindow]
   );
 
   // 澶勭悊鎷嗗垎绐楁牸
@@ -256,6 +274,51 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       console.error('Failed to pause window:', error);
     }
   }, [terminalWindow.id, pauseWindowState]);
+
+  // 处理启动窗口
+  const handleStartWindow = useCallback(async () => {
+    try {
+      const panes = getAllPanes(terminalWindow.layout);
+
+      for (const pane of panes) {
+        updatePane(terminalWindow.id, pane.id, { status: WindowStatus.Restoring });
+      }
+
+      await Promise.all(
+        panes.map(async (pane) => {
+          try {
+            const response = await window.electronAPI.startWindow({
+              windowId: terminalWindow.id,
+              paneId: pane.id,
+              name: terminalWindow.name,
+              workingDirectory: pane.cwd,
+              command: pane.command,
+            });
+
+            if (response && response.success && response.data) {
+              updatePane(terminalWindow.id, pane.id, {
+                pid: response.data.pid,
+                status: response.data.status,
+              });
+            } else {
+              throw new Error(response?.error || '启动窗格失败');
+            }
+          } catch (paneError) {
+            console.error(`Failed to start pane ${pane.id}:`, paneError);
+            updatePane(terminalWindow.id, pane.id, { status: WindowStatus.Paused });
+          }
+        })
+      );
+    } catch (error) {
+      console.error('Failed to start window:', error);
+    }
+  }, [terminalWindow.id, terminalWindow.name, terminalWindow.layout, updatePane]);
+
+  // 处理重启窗口：先停止，再启动
+  const handleRestartWindow = useCallback(async () => {
+    await handlePauseWindow();
+    await handleStartWindow();
+  }, [handlePauseWindow, handleStartWindow]);
 
   // 澶勭悊褰掓。绐楀彛
   const handleArchiveWindow = useCallback(async () => {
@@ -405,26 +468,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           <div className="flex items-center gap-2">
             {/* 返回按钮 - 仅在非嵌入模式显示 */}
             {!embedded && (
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={onReturn}
-                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                  >
-                    <ArrowLeft size={14} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                    sideOffset={5}
-                  >
-                    {t('terminalView.return')}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+            <AppTooltip content={t('terminalView.return')} placement="toolbar-leading">
+              <button
+                onClick={onReturn}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              >
+                <ArrowLeft size={14} />
+              </button>
+            </AppTooltip>
             )}
 
             {/* 绐楀彛鍚嶇О鍜?git 鍒嗘敮 */}
@@ -458,175 +509,130 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
             {/* 鍔ㄦ€佹覆鏌撳惎鐢ㄧ殑 IDE 鍥炬爣 */}
             {enabledIDEs.map((ide) => (
-              <Tooltip.Provider key={ide.id}>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={() => handleOpenInIDE(ide.id)}
-                      className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                      title={t('common.openInIDE', { name: ide.name })}
-                    >
-                      <IDEIcon icon={ide.icon || ''} size={14} />
-                    </button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                      sideOffset={5}
-                    >
-                      {t('common.openInIDE', { name: ide.name })}
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
+              <AppTooltip
+                key={ide.id}
+                content={t('common.openInIDE', { name: ide.name })}
+                placement="toolbar-trailing"
+              >
+                <button
+                  onClick={() => handleOpenInIDE(ide.id)}
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                >
+                  <IDEIcon icon={ide.icon || ''} size={14} />
+                </button>
+              </AppTooltip>
             ))}
 
             {/* 褰掓。鎸夐挳 */}
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={handleArchiveWindow}
-                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                    title={t('terminalView.archive')}
-                  >
-                    <Archive size={14} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                    sideOffset={5}
-                  >
-                    {t('terminalView.archive')}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+            <AppTooltip content={t('terminalView.archive')} placement="toolbar-trailing">
+              <button
+                onClick={handleArchiveWindow}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              >
+                <Archive size={14} />
+              </button>
+            </AppTooltip>
 
             {/* 鎵撳紑鏂囦欢澶规寜閽?*/}
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={handleOpenFolder}
-                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                    title={t('terminalView.openFolder')}
-                  >
-                    <Folder size={14} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                    sideOffset={5}
-                  >
-                    {t('terminalView.openFolder')}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+            <AppTooltip content={t('terminalView.openFolder')} placement="toolbar-trailing">
+              <button
+                onClick={handleOpenFolder}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              >
+                <Folder size={14} />
+              </button>
+            </AppTooltip>
 
             {/* 宸﹀彸鎷嗗垎鎸夐挳 */}
-            <button
-              onClick={() => handleSplitPane('horizontal')}
-              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              title={t('terminalView.splitHorizontal')}
-            >
-              <SplitSquareHorizontal size={14} />
-            </button>
+            <AppTooltip content={t('terminalView.splitHorizontal')} placement="toolbar-trailing">
+              <button
+                aria-label={t('terminalView.splitHorizontal')}
+                onClick={() => handleSplitPane('horizontal')}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              >
+                <SplitSquareHorizontal size={14} />
+              </button>
+            </AppTooltip>
 
             {/* 涓婁笅鎷嗗垎鎸夐挳 */}
-            <button
-              onClick={() => handleSplitPane('vertical')}
-              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              title={t('terminalView.splitVertical')}
-            >
-              <SplitSquareVertical size={14} />
-            </button>
+            <AppTooltip content={t('terminalView.splitVertical')} placement="toolbar-trailing">
+              <button
+                aria-label={t('terminalView.splitVertical')}
+                onClick={() => handleSplitPane('vertical')}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              >
+                <SplitSquareVertical size={14} />
+              </button>
+            </AppTooltip>
 
             {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
             {/* 嵌入模式（组内）：移除和停止并移除按钮 */}
             {embedded && groupId && (
               <>
-                <Tooltip.Provider>
-                  <Tooltip.Root delayDuration={200}>
-                    <Tooltip.Trigger asChild>
-                      <button
-                        onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
-                        className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
-                        title={t('terminalView.removeFromGroup')}
-                      >
-                        <LogOut size={14} />
-                      </button>
-                    </Tooltip.Trigger>
-                    <Tooltip.Portal>
-                      <Tooltip.Content
-                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                        sideOffset={5}
-                      >
-                        {t('terminalView.removeFromGroup')}
-                      </Tooltip.Content>
-                    </Tooltip.Portal>
-                  </Tooltip.Root>
-                </Tooltip.Provider>
+                <AppTooltip
+                  content={t('terminalView.removeFromGroup')}
+                  delayDuration={200}
+                  placement="toolbar-trailing"
+                >
+                  <button
+                    onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
+                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
+                  >
+                    <LogOut size={14} />
+                  </button>
+                </AppTooltip>
 
-                <Tooltip.Provider>
-                  <Tooltip.Root delayDuration={200}>
-                    <Tooltip.Trigger asChild>
-                      <button
-                        onClick={() => {
-                          if (isWindowRunning) {
-                            onStopAndRemoveFromGroup?.(terminalWindow.id);
-                          }
-                        }}
-                        disabled={!isWindowRunning}
-                        className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 transition-colors ${
-                          isWindowRunning
-                            ? 'hover:bg-zinc-700 text-red-500 cursor-pointer'
-                            : 'text-zinc-600 cursor-not-allowed'
-                        }`}
-                        title={t('terminalView.stopAndRemoveFromGroup')}
-                      >
-                        <SquareX size={14} />
-                      </button>
-                    </Tooltip.Trigger>
-                    <Tooltip.Portal>
-                      <Tooltip.Content
-                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                        sideOffset={5}
-                      >
-                        {t('terminalView.stopAndRemoveFromGroup')}
-                      </Tooltip.Content>
-                    </Tooltip.Portal>
-                  </Tooltip.Root>
-                </Tooltip.Provider>
+                <AppTooltip
+                  content={t('terminalView.stopAndRemoveFromGroup')}
+                  delayDuration={200}
+                  placement="toolbar-trailing"
+                >
+                  <button
+                    onClick={() => {
+                      if (isWindowRunning) {
+                        onStopAndRemoveFromGroup?.(terminalWindow.id);
+                      }
+                    }}
+                    disabled={!isWindowRunning}
+                    className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 transition-colors ${
+                      isWindowRunning
+                        ? 'hover:bg-zinc-700 text-red-500 cursor-pointer'
+                        : 'text-zinc-600 cursor-not-allowed'
+                    }`}
+                  >
+                    <SquareX size={14} />
+                  </button>
+                </AppTooltip>
               </>
             )}
 
-            {/* 停止按钮 - 仅在非嵌入模式下显示 */}
-            {!embedded && (aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput) && (
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={handlePauseWindow}
-                      className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
-                      title={t('terminalView.stop')}
-                    >
-                      <Square size={14} fill="currentColor" />
-                    </button>
-                  </Tooltip.Trigger>
-                  <Tooltip.Portal>
-                    <Tooltip.Content
-                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                      sideOffset={5}
-                    >
-                      {t('terminalView.stop')}
-                    </Tooltip.Content>
-                  </Tooltip.Portal>
-                </Tooltip.Root>
-              </Tooltip.Provider>
+            {/* 停止按钮 - 仅在非嵌入模式且运行中时显示 */}
+            {!embedded && isWindowRunning && (
+              <AppTooltip content={t('terminalView.stop')} placement="toolbar-trailing">
+                <button
+                  onClick={handlePauseWindow}
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
+                >
+                  <Square size={14} fill="currentColor" />
+                </button>
+              </AppTooltip>
+            )}
+
+            {/* 重启/启动按钮 - 非嵌入模式下始终显示 */}
+            {!embedded && (
+              <AppTooltip
+                content={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
+                placement="toolbar-trailing"
+              >
+                <button
+                  onClick={isWindowRunning ? handleRestartWindow : handleStartWindow}
+                  className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
+                    isWindowRunning ? 'text-yellow-500' : 'text-green-500'
+                  }`}
+                >
+                  {isWindowRunning ? <RotateCw size={14} /> : <Play size={14} fill="currentColor" />}
+                </button>
+              </AppTooltip>
             )}
           </div>
         </div>
@@ -640,6 +646,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               isWindowActive={isActive}
               onPaneActivate={handlePaneActivate}
               onPaneClose={handlePaneClose}
+              onPaneExit={handlePaneExit}
             />
           ) : (
             <DropZone
@@ -654,6 +661,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 isWindowActive={isActive}
                 onPaneActivate={handlePaneActivate}
                 onPaneClose={handlePaneClose}
+                onPaneExit={handlePaneExit}
               />
             </DropZone>
           )}
@@ -684,4 +692,3 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 };
 
 TerminalView.displayName = 'TerminalView';
-

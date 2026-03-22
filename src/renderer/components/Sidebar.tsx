@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Menu, Archive, ChevronDown, Settings } from 'lucide-react';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
 import { GroupStatusIcon } from './GroupStatusIcon';
@@ -161,14 +162,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部：切换按钮 */}
         <div className={`h-10 flex items-center border-b border-zinc-800 flex-shrink-0 ${sidebarExpanded ? 'justify-start pl-1' : 'justify-center'}`}>
-          <button
-            onClick={toggleSidebar}
-            className="w-8 h-8 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-all duration-200"
-            aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
-            title={sidebarExpanded ? '折叠侧边栏 (Ctrl+B)' : '展开侧边栏 (Ctrl+B)'}
-          >
-            <Menu size={16} className="transition-transform duration-200" />
-          </button>
+          <Tooltip.Provider>
+            <Tooltip.Root delayDuration={300}>
+              <Tooltip.Trigger asChild>
+                <button
+                  onClick={toggleSidebar}
+                  className="w-8 h-8 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-all duration-200"
+                  aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
+                >
+                  <Menu size={16} className="transition-transform duration-200" />
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                  side="right"
+                  sideOffset={5}
+                >
+                  {sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
         </div>
 
         {/* 标题（仅展开时显示） - 淡入淡出 */}
@@ -179,15 +194,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           >
             <span>Windows</span>
-            <button
-              type="button"
-              role="checkbox"
-              aria-checked={hideGroupedWindows}
-              onClick={() => setHideGroupedWindows(!hideGroupedWindows)}
-              className="flex items-center gap-1.5 cursor-pointer normal-case tracking-normal font-normal"
-              title="勾选后隐藏已加入窗口组的窗口"
-            >
-              <span className="text-[10px] text-zinc-500">{t('sidebar.hideGroupedWindows')}</span>
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={hideGroupedWindows}
+                    onClick={() => setHideGroupedWindows(!hideGroupedWindows)}
+                    className="flex items-center gap-1.5 cursor-pointer normal-case tracking-normal font-normal"
+                  >
+                    <span className="text-[10px] text-zinc-500">{t('sidebar.hideGroupedWindows')}</span>
               <span
                 className={`inline-flex items-center justify-center w-3.5 h-3.5 rounded-sm border transition-colors ${
                   hideGroupedWindows
@@ -201,7 +218,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </svg>
                 )}
               </span>
-            </button>
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                    side="top"
+                    sideOffset={5}
+                  >
+                    勾选后隐藏已加入窗口组的窗口
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
           </div>
         )}
 
@@ -238,16 +267,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {archivedWindows.length > 0 && (
             <div className="border-t border-zinc-800 mt-2">
               {/* 归档标题 */}
-              <button
-                onClick={() => setShowArchived(!showArchived)}
-                className={`
-                  w-full px-3 py-2 flex items-center gap-2
-                  text-xs font-semibold text-zinc-400 tracking-wide
-                  hover:bg-zinc-700 transition-all duration-200
-                  ${!sidebarExpanded ? 'justify-center' : ''}
-                `}
-                title={sidebarExpanded ? undefined : `Archived (${archivedWindows.length})`}
-              >
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={() => setShowArchived(!showArchived)}
+                      className={`
+                        w-full px-3 py-2 flex items-center gap-2
+                        text-xs font-semibold text-zinc-400 tracking-wide
+                        hover:bg-zinc-700 transition-all duration-200
+                        ${!sidebarExpanded ? 'justify-center' : ''}
+                      `}
+                    >
                 {sidebarExpanded ? (
                   <>
                     <ChevronDown
@@ -271,7 +302,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
                   </div>
                 )}
-              </button>
+                    </button>
+                  </Tooltip.Trigger>
+                  {!sidebarExpanded && (
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                        side="right"
+                        sideOffset={5}
+                      >
+                        {`Archived (${archivedWindows.length})`}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  )}
+                </Tooltip.Root>
+              </Tooltip.Provider>
 
               {/* 归档窗口列表 */}
               {showArchived && archivedWindows.map((window) => (
@@ -292,24 +337,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 底部设置按钮 */}
         <div className="border-t border-zinc-800 flex-shrink-0">
-          <button
-            onClick={() => onSettingsClick?.()}
-            className={`
-              w-full h-10 flex items-center gap-2
-              text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700
-              transition-all duration-200
-              ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
-            `}
-            title={sidebarExpanded ? undefined : t('settings.title')}
-            aria-label={t('settings.title')}
-          >
-            <Settings size={16} />
-            {sidebarExpanded && (
-              <span className="text-sm transition-opacity duration-200">
-                {t('settings.title')}
-              </span>
-            )}
-          </button>
+          <Tooltip.Provider>
+            <Tooltip.Root delayDuration={300}>
+              <Tooltip.Trigger asChild>
+                <button
+                  onClick={() => onSettingsClick?.()}
+                  className={`
+                    w-full h-10 flex items-center gap-2
+                    text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700
+                    transition-all duration-200
+                    ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
+                  `}
+                  aria-label={t('settings.title')}
+                >
+                  <Settings size={16} />
+                  {sidebarExpanded && (
+                    <span className="text-sm transition-opacity duration-200">
+                      {t('settings.title')}
+                    </span>
+                  )}
+                </button>
+              </Tooltip.Trigger>
+              {!sidebarExpanded && (
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                    side="right"
+                    sideOffset={5}
+                  >
+                    {t('settings.title')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              )}
+            </Tooltip.Root>
+          </Tooltip.Provider>
         </div>
       </div>
 
@@ -349,14 +410,28 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
 
   if (!isExpanded) {
     return (
-      <button
-        onClick={onClick}
-        className={`w-full h-10 flex items-center justify-center transition-colors ${bgColor}`}
-        title={`${group.name}\n(${windowCount} 个窗口)`}
-        aria-label={group.name}
-      >
-        <GroupStatusIcon group={group} windows={windows} />
-      </button>
+      <Tooltip.Provider>
+        <Tooltip.Root delayDuration={300}>
+          <Tooltip.Trigger asChild>
+            <button
+              onClick={onClick}
+              className={`w-full h-10 flex items-center justify-center transition-colors ${bgColor}`}
+              aria-label={group.name}
+            >
+              <GroupStatusIcon group={group} windows={windows} />
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Portal>
+            <Tooltip.Content
+              className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+              side="right"
+              sideOffset={5}
+            >
+              {`${group.name} (${windowCount} 个窗口)`}
+            </Tooltip.Content>
+          </Tooltip.Portal>
+        </Tooltip.Root>
+      </Tooltip.Provider>
     );
   }
 

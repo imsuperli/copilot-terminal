@@ -208,6 +208,11 @@ export function closePane(
     return null;
   }
 
+  // 如果只剩一个子节点，折叠 SplitNode，直接返回该子节点
+  if (newChildren.length === 1) {
+    return newChildren[0];
+  }
+
   const sizesChanged = newChildren.length !== layout.children.length;
   const newSizes = sizesChanged
     ? normalizeSizes(remainingSizes)

@@ -22,6 +22,10 @@ vi.mock('../SettingsPanel', () => ({
   SettingsPanel: () => null,
 }));
 
+vi.mock('../dnd', () => ({
+  DropZone: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 vi.mock('../ProjectLinks', () => ({
   ProjectLinks: () => null,
 }));
@@ -134,7 +138,7 @@ describe('TerminalView split pane optimistic update', () => {
 
     render(<StoreBackedTerminalView />);
 
-    await userEvent.click(screen.getByTitle('terminalView.splitHorizontal'));
+    await userEvent.click(screen.getByRole('button', { name: 'terminalView.splitHorizontal' }));
 
     expect(screen.getByTestId('split-layout-state').textContent).toContain('pane-1:running:111');
     expect(screen.getByTestId('split-layout-state').textContent).toContain(':restoring:none');
@@ -153,7 +157,7 @@ describe('TerminalView split pane optimistic update', () => {
 
     render(<StoreBackedTerminalView />);
 
-    await userEvent.click(screen.getByTitle('terminalView.splitVertical'));
+    await userEvent.click(screen.getByRole('button', { name: 'terminalView.splitVertical' }));
     expect(screen.getByTestId('split-layout-state').textContent).toContain(':restoring:none');
 
     deferred.reject(new Error('split failed'));

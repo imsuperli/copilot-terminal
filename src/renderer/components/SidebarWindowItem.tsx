@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback, useRef } from 'react';
 import { Activity, Keyboard, Pause, XCircle, Folder } from 'lucide-react';
 import { useDrag } from 'react-dnd';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { IDEIcon } from './icons/IDEIcons';
@@ -151,19 +152,33 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
   if (!isExpanded) {
     return (
       <div ref={dragRef} style={{ opacity: isDragging ? 0.4 : 1 }}>
-        <button
-          onClick={onClick}
-          onContextMenu={onContextMenu}
-          className={`
-            w-full h-10 flex items-center justify-center
-            transition-colors
-            ${bgColor}
-          `}
-          title={`${terminalWindow.name}\n${workingDirectory}`}
-          aria-label={terminalWindow.name}
-        >
-          <StatusIcon className={`h-4 w-4 ${iconColor} ${statusAnimation}`} />
-        </button>
+        <Tooltip.Provider>
+          <Tooltip.Root delayDuration={300}>
+            <Tooltip.Trigger asChild>
+              <button
+                onClick={onClick}
+                onContextMenu={onContextMenu}
+                className={`
+                  w-full h-10 flex items-center justify-center
+                  transition-colors
+                  ${bgColor}
+                `}
+                aria-label={terminalWindow.name}
+              >
+                <StatusIcon className={`h-4 w-4 ${iconColor} ${statusAnimation}`} />
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content
+                className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                side="right"
+                sideOffset={5}
+              >
+                {`${terminalWindow.name}\n${workingDirectory}`}
+              </Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        </Tooltip.Provider>
       </div>
     );
   }
@@ -208,22 +223,49 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
       {isHovered && isExpanded && (
         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-zinc-800 rounded px-1 py-0.5 shadow-lg border border-zinc-700">
           {enabledIDEs.map((ide) => (
-            <button
-              key={ide.id}
-              onClick={(e) => handleIDEClick(e, ide.id)}
-              className="p-1 hover:bg-zinc-700 rounded transition-colors"
-              title={`在 ${ide.name} 中打开`}
-            >
-              <IDEIcon icon={ide.icon || ''} size={12} />
-            </button>
+            <Tooltip.Provider key={ide.id}>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={(e) => handleIDEClick(e, ide.id)}
+                    className="p-1 hover:bg-zinc-700 rounded transition-colors"
+                  >
+                    <IDEIcon icon={ide.icon || ''} size={12} />
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                    side="top"
+                    sideOffset={5}
+                  >
+                    {`在 ${ide.name} 中打开`}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
           ))}
-          <button
-            onClick={handleFolderClick}
-            className="p-1 hover:bg-zinc-700 rounded transition-colors"
-            title="打开文件夹"
-          >
-            <Folder size={12} />
-          </button>
+          <Tooltip.Provider>
+            <Tooltip.Root delayDuration={300}>
+              <Tooltip.Trigger asChild>
+                <button
+                  onClick={handleFolderClick}
+                  className="p-1 hover:bg-zinc-700 rounded transition-colors"
+                >
+                  <Folder size={12} />
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                  side="top"
+                  sideOffset={5}
+                >
+                  打开文件夹
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
         </div>
       )}
     </div>

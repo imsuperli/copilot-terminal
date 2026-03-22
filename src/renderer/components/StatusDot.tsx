@@ -1,5 +1,6 @@
 import React from 'react';
 import { Activity, Keyboard, Pause } from 'lucide-react';
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { WindowStatus } from '../types/window';
 
 export interface StatusDotProps {
@@ -47,15 +48,38 @@ function getStatusIconColor(status: WindowStatus): string {
 function getStatusAnimation(status: WindowStatus): string {
   switch (status) {
     case WindowStatus.Running:
-      // 闪烁效果
       return 'animate-blink';
     case WindowStatus.WaitingForInput:
-      // 呼吸灯效果
       return 'animate-breathe';
     default:
       return '';
   }
 }
+
+/**
+ * Tooltip 包裹器：当 title 存在时用 Radix Tooltip 包裹内容
+ */
+const WithTooltip: React.FC<{ title?: string; children: React.ReactElement }> = ({ title, children }) => {
+  if (!title) return children;
+  return (
+    <Tooltip.Provider>
+      <Tooltip.Root delayDuration={300}>
+        <Tooltip.Trigger asChild>
+          {children}
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+            side="top"
+            sideOffset={14}
+          >
+            {title}
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
+  );
+};
 
 /**
  * StatusDot 组件
@@ -74,12 +98,14 @@ export const StatusDot: React.FC<StatusDotProps> = ({
   const animationClass = getStatusAnimation(status);
 
   const renderIcon = (Icon: typeof Activity) => (
-    <span title={title} className="inline-flex items-center justify-center">
-      <Icon
-        size={iconSize}
-        className={`${iconColor} ${animationClass} ${className}`}
-      />
-    </span>
+    <WithTooltip title={title}>
+      <span className="inline-flex items-center justify-center">
+        <Icon
+          size={iconSize}
+          className={`${iconColor} ${animationClass} ${className}`}
+        />
+      </span>
+    </WithTooltip>
   );
 
   // 使用图标的状态
@@ -97,10 +123,11 @@ export const StatusDot: React.FC<StatusDotProps> = ({
 
   // 其他状态继续使用圆点
   return (
-    <div
-      className={`rounded-full ${dotSizeClass} ${dotColor} ${animationClass} ${className}`}
-      title={title}
-    />
+    <WithTooltip title={title}>
+      <div
+        className={`rounded-full ${dotSizeClass} ${dotColor} ${animationClass} ${className}`}
+      />
+    </WithTooltip>
   );
 };
 

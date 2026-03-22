@@ -2,8 +2,6 @@ import { useEffect, useRef } from 'react';
 
 interface KeyboardShortcutsOptions {
   onCtrlTab?: () => void;
-  onCtrlB?: () => void;
-  onCtrlNumber?: (num: number) => void;
   onEscape?: () => boolean | void; // 返回 true 表示已处理，阻止传播；返回 false 表示未处理，继续传播
   enabled?: boolean;
 }
@@ -33,8 +31,6 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
         // 在 xterm textarea 中，只处理明确的快捷键，其他一律放行
         const isShortcut =
           (e.ctrlKey && e.key === 'Tab') ||
-          (e.ctrlKey && e.key === 'b') ||
-          (e.ctrlKey && e.key >= '1' && e.key <= '9') ||
           (e.key === 'Escape');
 
         if (!isShortcut) {
@@ -46,20 +42,6 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
         opts.onCtrlTab?.();
-        return;
-      }
-
-      // Ctrl+B: 切换侧边栏
-      if (e.ctrlKey && e.key === 'b') {
-        e.preventDefault();
-        opts.onCtrlB?.();
-        return;
-      }
-
-      // Ctrl+1~9: 切换到第 N 个窗口
-      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
-        e.preventDefault();
-        opts.onCtrlNumber?.(parseInt(e.key, 10));
         return;
       }
 

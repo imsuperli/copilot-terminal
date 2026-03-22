@@ -7,6 +7,7 @@ import { StatusDot } from './StatusDot';
 import { useI18n } from '../i18n';
 import { subscribeToPanePtyData } from '../api/ptyDataBus';
 import type { PtyDataPayload, PtyHistorySnapshot } from '../../shared/types/electron-api';
+import { AppTooltip } from './ui/AppTooltip';
 import '../styles/xterm.css';
 
 const completedReplaySessions = new Set<string>();
@@ -153,6 +154,7 @@ export interface TerminalPaneProps {
   isWindowActive: boolean; // 窗口是否是当前激活的窗口
   onActivate: () => void; // 点击激活
   onClose?: () => void; // 关闭窗格（可选，最后一个窗格不显示关闭按钮）
+  onProcessExit?: () => void; // 进程退出回调（委托父组件处理）
 }
 
 /**
@@ -166,6 +168,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   isWindowActive,
   onActivate,
   onClose,
+  onProcessExit,
 }) => {
   const { t } = useI18n();
   const terminalContainerRef = useRef<HTMLDivElement>(null);
@@ -331,6 +334,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     lastStatusRef.current = currentStatus;
   }, [pane.status, forceResizeToContainer]);
 
+  // 进程退出后通知父组件处理
+  useEffect(() => {
+    const isExited = pane.status === WindowStatus.Completed || pane.status === WindowStatus.Error;
+    if (!isExited) return;
+    onProcessExit?.();
+  }, [pane.status, onProcessExit]);
+
   // 当窗格激活且窗口激活时，自动聚焦到终端
   useEffect(() => {
     const shouldFocus = isActive && isWindowActive;
@@ -396,9 +406,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         brightCyan: '#56b6c2',
         brightWhite: '#ffffff',
       },
-      fontFamily: '"Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
+      fontFamily: '"SF Mono", "Menlo", "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
       fontSize: 15,
       lineHeight: 1.2,
+      macOptionIsMeta: true,
+      macOptionClickForcesSelection: true,
       cursorBlink: true,
       cursorStyle: 'block',
       // @ts-ignore - cursorInactiveStyle 是 xterm.js 的有效选项
@@ -612,9 +624,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     terminalContainer?.addEventListener('paste', suppressNativePaste as EventListener, true);
 
     // 告诉 xterm.js 忽略应用级快捷键
+    const isMac = window.electronAPI?.platform === 'darwin';
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
-      // Ctrl+V：粘贴剪贴板内容
-      if (e.type === 'keydown' && e.ctrlKey && e.key.toLowerCase() === 'v' && !e.shiftKey && !e.altKey && !e.metaKey) {
+      // 粘贴：macOS 用 ⌘V，Windows/Linux 用 Ctrl+V
+      const isPaste = e.type === 'keydown' && e.key.toLowerCase() === 'v' && !e.shiftKey && !e.altKey
+        && (isMac ? (e.metaKey && !e.ctrlKey) : (e.ctrlKey && !e.metaKey));
+      if (isPaste) {
         e.preventDefault(); // 阻止浏览器默认粘贴行为（否则会通过 xterm textarea 触发第二次粘贴）
         e.stopPropagation();
         suppressNativePasteUntilRef.current = Date.now() + pasteCaptureBlockMs;
@@ -629,11 +644,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
             }
           });
         }
-        return false; // 阻止 xterm.js 将 Ctrl+V 作为 ^V 发送给 PTY
+        return false; // 阻止 xterm.js 处理粘贴键
       }
 
-      // Ctrl+Enter：发送换行符到 PTY（用于多行输入）
-      if (e.ctrlKey && e.key === 'Enter' && !e.shiftKey) {
+      // Ctrl+Enter / ⌘+Enter：发送换行符到 PTY（用于多行输入）
+      const isCtrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+      if (isCtrlOrCmd && e.key === 'Enter' && !e.shiftKey) {
         // 忽略键盘重复触发
         if (e.repeat) {
           return false;
@@ -655,8 +671,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       if (e.ctrlKey) {
         // 应用级快捷键：不让 xterm 处理
-        if (e.key === 'Tab' || e.key === 'b' ||
-            (e.key >= '1' && e.key <= '9')) {
+        if (e.key === 'Tab') {
           return false; // xterm 不处理，让事件正常传播
         }
       }
@@ -830,17 +845,18 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           </div>
           <div className="flex items-center justify-center w-6 h-6 flex-shrink-0">
             {showCloseButton ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClose?.();
-                }}
-                className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
-                title={t('terminalPane.close')}
-                aria-label={t('terminalPane.close')}
-              >
-                <X size={14} />
-              </button>
+              <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose?.();
+                  }}
+                  className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+                  aria-label={t('terminalPane.close')}
+                >
+                  <X size={14} />
+                </button>
+              </AppTooltip>
             ) : (
               <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
             )}
@@ -852,17 +868,18 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       {!showPaneHeader && (
         <div className="absolute top-1 right-1 z-20">
           {showCloseButton ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose?.();
-              }}
-              className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
-              title={t('terminalPane.close')}
-              aria-label={t('terminalPane.close')}
-            >
-              <X size={14} />
-            </button>
+            <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose?.();
+                }}
+                className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+                aria-label={t('terminalPane.close')}
+              >
+                <X size={14} />
+              </button>
+            </AppTooltip>
           ) : (
             <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
           )}

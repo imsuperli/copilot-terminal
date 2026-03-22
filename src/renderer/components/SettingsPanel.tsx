@@ -7,18 +7,9 @@ import { X, Plus, Trash2, Search, Check, ChevronDown, Globe, Folder, Edit2, Fold
 import { IDEIcon } from './icons/IDEIcons';
 import { notifyIDESettingsUpdated } from '../hooks/useIDESettings';
 import { QuickNavItem } from '../../shared/types/quick-nav';
-import { StatusLineConfig } from '../../shared/types/workspace';
+import { IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
 import { useI18n } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
-
-interface IDEConfig {
-  id: string;
-  name: string;
-  command: string;
-  path?: string;
-  enabled: boolean;
-  icon?: string;
-}
 
 interface ShellProgramOption {
   command: string;
@@ -53,6 +44,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const [ides, setIDEs] = useState<IDEConfig[]>([]);
   const [supportedIDENames, setSupportedIDENames] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string>('');
   const [editingIDE, setEditingIDE] = useState<IDEConfig | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [availableShells, setAvailableShells] = useState<ShellProgramOption[]>([]);
@@ -144,25 +136,59 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
   const handleScanAll = async () => {
     setScanning(true);
+    setScanMessage('');
     try {
       const response = await window.electronAPI.scanIDEs();
       if (response.success && response.data) {
-        // 合并扫描结果和现有配置
         const scannedIDEs = response.data as IDEConfig[];
-        const mergedIDEs = scannedIDEs.map(scanned => {
-          const existing = ides.find(ide => ide.id === scanned.id);
-          return existing ? { ...scanned, enabled: existing.enabled } : scanned;
+        const existingById = new Map(ides.map(ide => [ide.id, ide]));
+        const mergedDetected = scannedIDEs.map(scanned => {
+          const existing = existingById.get(scanned.id);
+          if (!existing) {
+            return scanned;
+          }
+
+          const shouldKeepCustomIcon = existing.iconSourceType === 'custom-image' && Boolean(existing.icon);
+
+          return {
+            ...scanned,
+            enabled: existing.enabled,
+            isCustom: existing.isCustom ?? false,
+            ...(shouldKeepCustomIcon
+              ? {
+                  icon: existing.icon,
+                  iconSourceType: existing.iconSourceType,
+                  iconSourcePath: existing.iconSourcePath || existing.icon,
+                  iconConfidence: existing.iconConfidence ?? 1000,
+                }
+              : {}),
+          };
         });
+
+        const customEntries = ides.filter(ide => ide.isCustom || !ide.detected);
+        const mergedIDEs = [...mergedDetected];
+
+        for (const customEntry of customEntries) {
+          if (!mergedIDEs.some(ide => ide.id === customEntry.id)) {
+            mergedIDEs.push(customEntry);
+          }
+        }
+
         setIDEs(mergedIDEs);
+        setScanMessage(
+          scannedIDEs.length > 0
+            ? t('settings.ide.scanResultFound', { count: scannedIDEs.length })
+            : t('settings.ide.scanResultEmpty')
+        );
 
-        // 保存到设置
         await window.electronAPI.updateSettings({ ides: mergedIDEs });
-
-        // 通知其他组件刷新
         notifyIDESettingsUpdated();
+      } else {
+        setScanMessage(response.error || t('settings.ide.scanResultEmpty'));
       }
     } catch (error) {
       console.error('Failed to scan IDEs:', error);
+      setScanMessage(error instanceof Error ? error.message : t('settings.ide.scanResultError'));
     } finally {
       setScanning(false);
     }
@@ -180,6 +206,35 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       notifyIDESettingsUpdated();
     } catch (error) {
       console.error('Failed to update IDE:', error);
+    }
+  };
+
+  const handleSelectIDEIcon = async (ideId: string) => {
+    try {
+      const currentIDE = ides.find(ide => ide.id === ideId);
+      const response = await window.electronAPI.selectImageFile(currentIDE?.icon);
+      if (!response?.success || !response.data) {
+        return;
+      }
+      const selectedIcon = response.data;
+
+      const updatedIDEs = ides.map(ide => (
+        ide.id === ideId
+          ? {
+              ...ide,
+              icon: selectedIcon,
+              iconSourceType: 'custom-image' as const,
+              iconSourcePath: selectedIcon,
+              iconConfidence: 1000,
+            }
+          : ide
+      ));
+
+      setIDEs(updatedIDEs);
+      await window.electronAPI.updateSettings({ ides: updatedIDEs });
+      notifyIDESettingsUpdated();
+    } catch (error) {
+      console.error('Failed to select IDE icon:', error);
     }
   };
 
@@ -204,6 +259,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       path: '',
       enabled: true,
       icon: '',
+      isCustom: true,
+      detected: false,
     });
     setShowAddDialog(true);
   };
@@ -217,6 +274,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       const ideToSave = {
         ...editingIDE,
         id: editingIDE.id || editingIDE.command.toLowerCase().replace(/\s+/g, '-'),
+        isCustom: editingIDE.isCustom ?? true,
+        detected: editingIDE.detected ?? false,
       };
 
       const response = await window.electronAPI.updateIDEConfig(ideToSave);
@@ -702,6 +761,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <p className="max-w-2xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.quickNav.ideDescription')}</p>
+                            {scanMessage && (
+                              <p className="mt-3 text-sm text-[rgb(var(--muted-foreground))]">{scanMessage}</p>
+                            )}
                           </div>
 
                           <div className="flex flex-wrap gap-3">
@@ -739,22 +801,37 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             >
                               <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                                 <div className="flex min-w-0 flex-1 items-center gap-4">
-                                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectIDEIcon(ide.id)}
+                                    className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] transition-colors hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--accent))]"
+                                    title="点击自定义 IDE Logo"
+                                  >
                                     <IDEIcon icon={ide.icon || ''} size={30} className="text-[rgb(var(--foreground))]" />
-                                  </div>
+                                  </button>
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
                                       <h3 className="text-base font-semibold text-white">{ide.name}</h3>
-                                      {ide.path && (
+                                      {ide.detected && ide.path && (
                                         <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
                                           {t('settings.ide.found')}
                                         </span>
                                       )}
+                                      {ide.source && (
+                                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                          {t('settings.ide.source', { source: ide.source })}
+                                        </span>
+                                      )}
+                                      {ide.version && (
+                                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                          {t('settings.ide.version', { version: ide.version })}
+                                        </span>
+                                      )}
                                     </div>
                                     <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.ide.commandPrefix', { command: ide.command })}</p>
-                                    {ide.path && (
-                                      <p className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]" title={ide.path}>
-                                        {ide.path}
+                                    {(ide.installPath || ide.path) && (
+                                      <p className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]" title={ide.installPath || ide.path}>
+                                        {ide.installPath || ide.path}
                                       </p>
                                     )}
                                   </div>

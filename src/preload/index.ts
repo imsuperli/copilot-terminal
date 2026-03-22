@@ -28,6 +28,7 @@ const electronAPI: ElectronAPI = {
   createDirectory: (path: string) => ipcRenderer.invoke('create-directory', path),
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
   selectExecutableFile: () => ipcRenderer.invoke('select-executable-file'),
+  selectImageFile: (defaultPath?: string) => ipcRenderer.invoke('select-image-file', defaultPath),
   selectAndScanFolder: () => ipcRenderer.invoke('select-and-scan-folder'),
   openFolder: (path: string) => ipcRenderer.invoke('open-folder', { path }),
   openInIDE: (ide: string, path: string) => ipcRenderer.invoke('open-in-ide', { ide, path }),

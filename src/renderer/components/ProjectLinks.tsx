@@ -3,6 +3,7 @@ import * as Tooltip from '@radix-ui/react-tooltip';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ExternalLink, ChevronDown } from 'lucide-react';
 import { ProjectLink } from '../../shared/types/project-config';
+import { AppTooltip } from './ui/AppTooltip';
 
 interface ProjectLinksProps {
   links: ProjectLink[];
@@ -69,7 +70,8 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))] max-w-xs break-all"
+                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))] max-w-xs break-all"
+                  side="top"
                   sideOffset={5}
                 >
                   {link.name}
@@ -133,27 +135,15 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
             {index > 0 && (
               <div className="w-px h-4 bg-zinc-700" />
             )}
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={(e) => handleOpenLink(e, link.url)}
-                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                    title={link.name}
-                  >
-                    <ExternalLink size={14} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-50 shadow-xl border border-zinc-700"
-                    sideOffset={5}
-                  >
-                    {link.name}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
+            <AppTooltip content={link.name} placement="toolbar-trailing">
+              <button
+                onClick={(e) => handleOpenLink(e, link.url)}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                title={link.name}
+              >
+                <ExternalLink size={14} />
+              </button>
+            </AppTooltip>
           </React.Fragment>
         ))}
       </>

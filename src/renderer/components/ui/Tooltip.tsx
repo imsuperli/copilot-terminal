@@ -15,7 +15,8 @@ export function Tooltip({ content, children }: TooltipProps) {
         </RadixTooltip.Trigger>
         <RadixTooltip.Portal>
           <RadixTooltip.Content
-            className="bg-bg-card-hover text-text-primary px-3 py-2 rounded-input text-sm"
+            className="bg-bg-card-hover text-text-primary px-3 py-2 rounded-input text-sm z-[1100]"
+            side="top"
             sideOffset={5}
           >
             {content}

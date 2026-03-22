@@ -180,16 +180,45 @@ export const GroupCard = React.memo<GroupCardProps>(({
         >
           {windowPaths.map((path, index) => (
             <div key={index} className="flex items-center gap-1.5 min-w-0 group/path">
-              <button
-                onClick={(e) => handleButtonClick(e, () => window.electronAPI?.openFolder(path))}
-                className="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity focus:outline-none"
-                title={`在资源管理器中打开: ${path}`}
-              >
-                <FolderOpen size={11} className="text-[rgb(var(--muted-foreground))] group-hover/path:text-[rgb(var(--primary))]" />
-              </button>
-              <span className="text-xs text-[rgb(var(--muted-foreground))] truncate opacity-80" title={path}>
-                {path}
-              </span>
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={(e) => handleButtonClick(e, () => window.electronAPI?.openFolder(path))}
+                      className="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity focus:outline-none"
+                    >
+                      <FolderOpen size={11} className="text-[rgb(var(--muted-foreground))] group-hover/path:text-[rgb(var(--primary))]" />
+                    </button>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                      side="top"
+                      sideOffset={5}
+                    >
+                      {`在资源管理器中打开: ${path}`}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <span className="text-xs text-[rgb(var(--muted-foreground))] truncate opacity-80">
+                      {path}
+                    </span>
+                  </Tooltip.Trigger>
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))] max-w-xs break-all"
+                      side="top"
+                      sideOffset={5}
+                    >
+                      {path}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                </Tooltip.Root>
+              </Tooltip.Provider>
             </div>
           ))}
         </div>
@@ -255,7 +284,8 @@ export const GroupCard = React.memo<GroupCardProps>(({
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                    side="top"
                     sideOffset={5}
                   >
                     归档组
@@ -277,7 +307,8 @@ export const GroupCard = React.memo<GroupCardProps>(({
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                    side="top"
                     sideOffset={5}
                   >
                     取消归档
@@ -300,7 +331,8 @@ export const GroupCard = React.memo<GroupCardProps>(({
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                  side="top"
                   sideOffset={5}
                 >
                   编辑组
@@ -322,7 +354,8 @@ export const GroupCard = React.memo<GroupCardProps>(({
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-50 shadow-xl border border-[rgb(var(--border))]"
+                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                  side="top"
                   sideOffset={5}
                 >
                   删除组

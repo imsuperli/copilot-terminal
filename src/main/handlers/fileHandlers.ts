@@ -1,9 +1,11 @@
 import { ipcMain, dialog, shell } from 'electron';
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, statSync } from 'fs';
+import { dirname } from 'path';
 import { HandlerContext } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
 import { successResponse, errorResponse } from './HandlerResponse';
+import { getOpenInIDEArgs } from '../utils/ideScanner';
 
 export function registerFileHandlers(ctx: HandlerContext) {
   const { mainWindow, getCurrentWorkspace } = ctx;
@@ -83,6 +85,40 @@ export function registerFileHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('select-image-file', async (_event, defaultPath?: string) => {
+    try {
+      if (!mainWindow) throw new Error('Main window not available');
+
+      const dialogOptions: Electron.OpenDialogOptions = {
+        properties: ['openFile'],
+        title: '选择 IDE Logo',
+        filters: [
+          { name: 'Image Files', extensions: ['png', 'jpg', 'jpeg', 'ico', 'svg', 'icns'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      };
+
+      if (defaultPath && existsSync(defaultPath)) {
+        try {
+          const stat = statSync(defaultPath);
+          dialogOptions.defaultPath = stat.isDirectory() ? defaultPath : dirname(defaultPath);
+        } catch {
+          dialogOptions.defaultPath = dirname(defaultPath);
+        }
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, dialogOptions);
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return successResponse(null);
+      }
+
+      return successResponse(result.filePaths[0]);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('open-folder', async (_event, { path }: { path: string }) => {
     try {
       await shell.openPath(path);
@@ -115,10 +151,10 @@ export function registerFileHandlers(ctx: HandlerContext) {
       // 如果配置了路径，使用路径；否则使用命令
       if (ideConfig.path && existsSync(ideConfig.path)) {
         command = ideConfig.path;
-        args = [path];
+        args = getOpenInIDEArgs(ideConfig, path);
       } else {
         command = ideConfig.command;
-        args = [path];
+        args = getOpenInIDEArgs(ideConfig, path);
       }
 
       console.log(`Opening ${ideConfig.name} with command: ${command} ${args.join(' ')}`);
