@@ -1,7 +1,8 @@
 import net from 'net';
 import fs from 'fs/promises';
 import { createHash } from 'crypto';
-import { Client, ClientChannel, ConnectConfig, SFTPWrapper, utils } from 'ssh2';
+import { Client, utils } from 'ssh2';
+import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2';
 import type {
   ActiveSSHPortForward,
   ForwardedPortConfig,
@@ -21,6 +22,7 @@ import {
 } from './SSHTransportSockets';
 import { resolveSSHAlgorithmPreferences } from './SSHAlgorithmCatalog';
 import { SSHSftpSession } from './SSHSftpSession';
+import { connectToX11Display, describeX11DisplaySpec } from './X11Socket';
 
 export interface SSHShellOpenOptions {
   cols: number;
@@ -299,6 +301,10 @@ export class SSHClientConnection implements ISSHConnection {
 
       this.client.on('tcp connection', (details, accept, rejectIncoming) => {
         void this.handleRemoteForwardConnection(details, accept, rejectIncoming);
+      });
+
+      this.client.on('x11', (details, accept, rejectIncoming) => {
+        void this.handleX11Connection(details, accept, rejectIncoming);
       });
 
       this.client.on('ready', () => {
@@ -639,6 +645,26 @@ export class SSHClientConnection implements ISSHConnection {
     socket.once('connect', () => {
       this.bridgeChannelToSocket(channel, socket);
     });
+  }
+
+  private async handleX11Connection(
+    details: { srcIP: string; srcPort: number },
+    accept: () => ClientChannel,
+    reject: () => void,
+  ): Promise<void> {
+    try {
+      const socket = await connectToX11Display();
+      const channel = accept();
+      this.emitServiceData(`[SSH] Forwarded X11 connection from ${details.srcIP}:${details.srcPort} to ${describeX11DisplaySpec()}\r\n`);
+      this.bridgeChannelToSocket(channel, socket);
+    } catch (error) {
+      reject();
+      this.emitServiceData(`[SSH] Failed to connect the local X11 display (${describeX11DisplaySpec()}): ${formatErrorMessage(error)}\r\n`);
+
+      if (process.platform === 'win32') {
+        this.emitServiceData('[SSH] Install and start a local X server such as VcXsrv or Xming before enabling X11 forwarding.\r\n');
+      }
+    }
   }
 
   private findRemotePortForward(host: string, port: number): ActiveSSHPortForward | null {

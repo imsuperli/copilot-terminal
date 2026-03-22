@@ -1,4 +1,4 @@
-import { ClientChannel } from 'ssh2';
+import type { ClientChannel } from 'ssh2';
 import { IPty, SSHSessionConfig } from '../../types/process';
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';

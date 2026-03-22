@@ -185,6 +185,50 @@ describe('registerSSHSessionHandlers', () => {
     });
   });
 
+  it('passes x11 forwarding preferences into the spawned SSH session config', async () => {
+    const processManager = {
+      spawnTerminal: vi.fn().mockResolvedValue({ pid: 2205, sessionId: 'ssh-session-5' }),
+      subscribePtyData: vi.fn().mockReturnValue(vi.fn()),
+      getLatestPaneOutputSeq: vi.fn().mockReturnValue(0),
+    };
+    const sshProfileStore = {
+      get: vi.fn().mockResolvedValue({
+        ...createProfile(),
+        x11: true,
+      }),
+    };
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: { addPane: vi.fn() } as any,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: { add: vi.fn() } as any,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: { get: vi.fn().mockResolvedValue(null) } as any,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('start-ssh-pane');
+    await handler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      profileId: 'profile-1',
+    });
+
+    expect(processManager.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      ssh: expect.objectContaining({
+        x11: true,
+      }),
+    }));
+  });
+
   it('resolves jump host profiles into nested SSH session config', async () => {
     const processManager = {
       spawnTerminal: vi.fn().mockResolvedValue({ pid: 2204, sessionId: 'ssh-session-4' }),
