@@ -75,6 +75,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => activePane ? getPaneCapabilities(activePane) : null,
     [activePane]
   );
+  const visibleIDEs = useMemo(
+    () => activePaneCapabilities?.canOpenInIDE ? enabledIDEs : [],
+    [activePaneCapabilities?.canOpenInIDE, enabledIDEs]
+  );
   const isWindowRunning = aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput;
 
   // 鍒囨崲闈㈡澘鐘舵€?
@@ -491,16 +495,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             )}
 
             {/* 鍔ㄦ€佹覆鏌撳惎鐢ㄧ殑 IDE 鍥炬爣 */}
-            {enabledIDEs.map((ide) => (
+            {visibleIDEs.map((ide) => (
               <AppTooltip
                 key={ide.id}
                 content={t('common.openInIDE', { name: ide.name })}
                 placement="toolbar-trailing"
               >
                 <button
+                  type="button"
+                  aria-label={t('common.openInIDE', { name: ide.name })}
                   onClick={() => handleOpenInIDE(ide.id)}
-                  disabled={!activePaneCapabilities?.canOpenInIDE}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
                   <IDEIcon icon={ide.icon || ''} size={14} />
                 </button>
@@ -510,6 +515,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             {/* 褰掓。鎸夐挳 */}
             <AppTooltip content={t('terminalView.archive')} placement="toolbar-trailing">
               <button
+                type="button"
+                aria-label={t('terminalView.archive')}
                 onClick={handleArchiveWindow}
                 className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
               >
@@ -518,19 +525,24 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </AppTooltip>
 
             {/* 鎵撳紑鏂囦欢澶规寜閽?*/}
-            <AppTooltip content={t('terminalView.openFolder')} placement="toolbar-trailing">
-              <button
-                onClick={handleOpenFolder}
-                disabled={!activePaneCapabilities?.canOpenLocalFolder}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Folder size={14} />
-              </button>
-            </AppTooltip>
+            {activePaneCapabilities?.canOpenLocalFolder && (
+              <AppTooltip content={t('terminalView.openFolder')} placement="toolbar-trailing">
+                <button
+                  type="button"
+                  aria-label={t('terminalView.openFolder')}
+                  onClick={handleOpenFolder}
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                >
+                  <Folder size={14} />
+                </button>
+              </AppTooltip>
+            )}
 
             {activePaneCapabilities?.canOpenSFTP && (
               <AppTooltip content={t('terminalView.openSftp')} placement="toolbar-trailing">
                 <button
+                  type="button"
+                  aria-label={t('terminalView.openSftp')}
                   onClick={handleOpenSSHSftp}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
@@ -542,6 +554,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             {activePaneCapabilities?.canManagePortForwards && (
               <AppTooltip content={t('terminalView.managePortForwards')} placement="toolbar-trailing">
                 <button
+                  type="button"
+                  aria-label={t('terminalView.managePortForwards')}
                   onClick={handleOpenSSHPortForwards}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
@@ -553,6 +567,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             {/* 宸﹀彸鎷嗗垎鎸夐挳 */}
             <AppTooltip content={t('terminalView.splitHorizontal')} placement="toolbar-trailing">
               <button
+                type="button"
                 aria-label={t('terminalView.splitHorizontal')}
                 onClick={() => handleSplitPane('horizontal')}
                 className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
@@ -564,6 +579,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             {/* 涓婁笅鎷嗗垎鎸夐挳 */}
             <AppTooltip content={t('terminalView.splitVertical')} placement="toolbar-trailing">
               <button
+                type="button"
                 aria-label={t('terminalView.splitVertical')}
                 onClick={() => handleSplitPane('vertical')}
                 className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
@@ -582,6 +598,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   placement="toolbar-trailing"
                 >
                   <button
+                    type="button"
                     onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
                     className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
                   >
@@ -595,6 +612,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   placement="toolbar-trailing"
                 >
                   <button
+                    type="button"
                     onClick={() => {
                       if (isWindowRunning) {
                         onStopAndRemoveFromGroup?.(terminalWindow.id);
@@ -617,6 +635,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             {!embedded && isWindowRunning && (
               <AppTooltip content={t('terminalView.stop')} placement="toolbar-trailing">
                 <button
+                  type="button"
                   onClick={handlePauseWindow}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
                 >
@@ -632,6 +651,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 placement="toolbar-trailing"
               >
                 <button
+                  type="button"
                   onClick={isWindowRunning ? handleRestartWindow : handleStartWindow}
                   className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
                     isWindowRunning ? 'text-yellow-500' : 'text-green-500'
