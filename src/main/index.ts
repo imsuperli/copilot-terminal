@@ -14,6 +14,9 @@ import { Workspace } from './types/workspace';
 import { registerAllHandlers } from './handlers';
 import { HandlerContext } from './handlers/HandlerContext';
 import { TmuxCompatService } from './services/TmuxCompatService';
+import { SSHProfileStore } from './services/ssh/SSHProfileStore';
+import { SSHVaultService } from './services/ssh/SSHVaultService';
+import { SSHKnownHostsStore } from './services/ssh/SSHKnownHostsStore';
 import { LayoutNode, Pane } from '../shared/types/window';
 
 let mainWindow: BrowserWindow | null = null;
@@ -27,6 +30,9 @@ let shutdownManager: ShutdownManager | null = null;
 let fileWatcherService: FileWatcherService | null = null;
 let gitBranchWatcher: GitBranchWatcher | null = null;
 let tmuxCompatService: TmuxCompatService | null = null;
+let sshProfileStore: SSHProfileStore | null = null;
+let sshVaultService: SSHVaultService | null = null;
+let sshKnownHostsStore: SSHKnownHostsStore | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 
 // 退出标志，防止重复执行退出逻辑
@@ -239,6 +245,11 @@ app.whenReady().then(async () => {
   // 初始化 AutoSaveManager
   autoSaveManager = new AutoSaveManagerImpl();
 
+  // 初始化 SSH 基础设施
+  sshProfileStore = new SSHProfileStore();
+  sshVaultService = new SSHVaultService();
+  sshKnownHostsStore = new SSHKnownHostsStore();
+
   // 初始化 ProcessManager
   processManager = new ProcessManager(() => currentWorkspace?.settings ?? null);
 
@@ -374,6 +385,9 @@ app.whenReady().then(async () => {
     ptySubscriptionManager,
     gitBranchWatcher,
     tmuxCompatService,
+    sshProfileStore,
+    sshVaultService,
+    sshKnownHostsStore,
     currentWorkspace,
     getCurrentWorkspace: () => currentWorkspace,
     setCurrentWorkspace: (workspace) => { currentWorkspace = workspace; },

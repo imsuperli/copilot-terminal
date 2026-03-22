@@ -44,6 +44,20 @@ const electronAPI: ElectronAPI = {
   updateIDEConfig: (ideConfig: unknown) => ipcRenderer.invoke('update-ide-config', ideConfig),
   deleteIDEConfig: (ideId: string) => ipcRenderer.invoke('delete-ide-config', ideId),
   getIDEIcon: (iconPath: string) => ipcRenderer.invoke('get-ide-icon', iconPath),
+  listSSHProfiles: () => ipcRenderer.invoke('list-ssh-profiles'),
+  getSSHProfile: (profileId: string) => ipcRenderer.invoke('get-ssh-profile', profileId),
+  createSSHProfile: (config: unknown) => ipcRenderer.invoke('create-ssh-profile', config),
+  updateSSHProfile: (profileId: string, patch: unknown) => ipcRenderer.invoke('update-ssh-profile', profileId, patch),
+  deleteSSHProfile: (profileId: string) => ipcRenderer.invoke('delete-ssh-profile', profileId),
+  getSSHCredentialState: (profileId: string) => ipcRenderer.invoke('get-ssh-credential-state', profileId),
+  setSSHPassword: (profileId: string, password: string) => ipcRenderer.invoke('set-ssh-password', profileId, password),
+  clearSSHPassword: (profileId: string) => ipcRenderer.invoke('clear-ssh-password', profileId),
+  setSSHPrivateKeyPassphrase: (profileId: string, keyPath: string, passphrase: string) =>
+    ipcRenderer.invoke('set-ssh-private-key-passphrase', profileId, keyPath, passphrase),
+  clearSSHPrivateKeyPassphrase: (profileId: string, keyPath: string) =>
+    ipcRenderer.invoke('clear-ssh-private-key-passphrase', profileId, keyPath),
+  listKnownHosts: () => ipcRenderer.invoke('list-known-hosts'),
+  removeKnownHost: (entryId: string) => ipcRenderer.invoke('remove-known-host', entryId),
 
   // StatusLine
   statusLineCheckClaudeInstalled: () => ipcRenderer.invoke('statusline-check-claude-installed'),

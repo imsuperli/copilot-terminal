@@ -7,6 +7,9 @@ import { AutoSaveManagerImpl } from '../services/AutoSaveManager';
 import { PtySubscriptionManager } from '../services/PtySubscriptionManager';
 import { GitBranchWatcher } from '../services/GitBranchWatcher';
 import { TmuxCompatService } from '../services/TmuxCompatService';
+import { SSHProfileStore } from '../services/ssh/SSHProfileStore';
+import { SSHVaultService } from '../services/ssh/SSHVaultService';
+import { SSHKnownHostsStore } from '../services/ssh/SSHKnownHostsStore';
 import { Workspace } from '../types/workspace';
 
 /**
@@ -23,6 +26,9 @@ export interface HandlerContext {
   ptySubscriptionManager: PtySubscriptionManager | null;
   gitBranchWatcher: GitBranchWatcher | null;
   tmuxCompatService?: TmuxCompatService | null;
+  sshProfileStore?: SSHProfileStore | null;
+  sshVaultService?: SSHVaultService | null;
+  sshKnownHostsStore?: SSHKnownHostsStore | null;
   currentWorkspace: Workspace | null;
   getCurrentWorkspace: () => Workspace | null;
   setCurrentWorkspace: (workspace: Workspace | null) => void;

@@ -1,6 +1,7 @@
 import { ViewChangedPayload } from './ipc';
 import { ProjectConfig } from './project-config';
 import { QuickNavConfig } from './quick-nav';
+import { KnownHostEntry, SSHCredentialState, SSHProfile, SSHProfileInput, SSHProfilePatch } from './ssh';
 import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
@@ -214,6 +215,18 @@ export interface ElectronAPI {
   updateIDEConfig: (ideConfig: IDEConfig) => Promise<IpcResponse<IDEConfig[]>>;
   deleteIDEConfig: (ideId: string) => Promise<IpcResponse<IDEConfig[]>>;
   getIDEIcon: (iconPath: string) => Promise<IpcResponse<string>>;
+  listSSHProfiles: () => Promise<IpcResponse<SSHProfile[]>>;
+  getSSHProfile: (profileId: string) => Promise<IpcResponse<SSHProfile>>;
+  createSSHProfile: (config: SSHProfileInput) => Promise<IpcResponse<SSHProfile>>;
+  updateSSHProfile: (profileId: string, patch: SSHProfilePatch) => Promise<IpcResponse<SSHProfile>>;
+  deleteSSHProfile: (profileId: string) => Promise<IpcResponse<void>>;
+  getSSHCredentialState: (profileId: string) => Promise<IpcResponse<SSHCredentialState>>;
+  setSSHPassword: (profileId: string, password: string) => Promise<IpcResponse<void>>;
+  clearSSHPassword: (profileId: string) => Promise<IpcResponse<void>>;
+  setSSHPrivateKeyPassphrase: (profileId: string, keyPath: string, passphrase: string) => Promise<IpcResponse<void>>;
+  clearSSHPrivateKeyPassphrase: (profileId: string, keyPath: string) => Promise<IpcResponse<void>>;
+  listKnownHosts: () => Promise<IpcResponse<KnownHostEntry[]>>;
+  removeKnownHost: (entryId: string) => Promise<IpcResponse<void>>;
 
   statusLineCheckClaudeInstalled: () => Promise<IpcResponse<boolean>>;
   statusLineCheckConfigured: () => Promise<IpcResponse<boolean>>;
