@@ -6,6 +6,11 @@ import type { SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
 import type { ISSHHostKeyPromptService } from './SSHHostKeyPromptService';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
+import {
+  createHttpProxySocket,
+  createProxyCommandSocket,
+  createSocksProxySocket,
+} from './SSHTransportSockets';
 
 export interface SSHShellOpenOptions {
   cols: number;
@@ -294,28 +299,60 @@ export class SSHClientConnection implements ISSHConnection {
     return connectConfig;
   }
 
-  private async buildTransportSocket(): Promise<ClientChannel | undefined> {
-    if (!this.ssh.jumpHost) {
-      return undefined;
-    }
-
-    if (!this.connectionPool) {
-      throw new Error(`SSH jump host requires a connection pool for ${this.ssh.host}:${this.ssh.port}`);
-    }
-
-    this.jumpHostLease = await this.connectionPool.acquire(this.ssh.jumpHost, (data) => {
-      this.emitServiceData(data);
-    });
-
-    try {
-      return await this.jumpHostLease.connection.openForwardOut({
-        targetHost: this.ssh.host,
-        targetPort: this.ssh.port,
+  private async buildTransportSocket(): Promise<ConnectConfig['sock'] | undefined> {
+    if (this.ssh.proxyCommand) {
+      this.emitServiceData(`[SSH] Proxy command: ${this.ssh.proxyCommand}\r\n`);
+      return createProxyCommandSocket(this.ssh.proxyCommand, {
+        host: this.ssh.host,
+        port: this.ssh.port,
+        user: this.ssh.user,
       });
-    } catch (error) {
-      await this.releaseJumpHostLease();
-      throw error;
     }
+
+    if (this.ssh.jumpHost) {
+      if (!this.connectionPool) {
+        throw new Error(`SSH jump host requires a connection pool for ${this.ssh.host}:${this.ssh.port}`);
+      }
+
+      this.emitServiceData(`[SSH] Jump host: ${this.ssh.jumpHost.user}@${this.ssh.jumpHost.host}:${this.ssh.jumpHost.port}\r\n`);
+      this.jumpHostLease = await this.connectionPool.acquire(this.ssh.jumpHost, (data) => {
+        this.emitServiceData(data);
+      });
+
+      try {
+        return await this.jumpHostLease.connection.openForwardOut({
+          targetHost: this.ssh.host,
+          targetPort: this.ssh.port,
+        });
+      } catch (error) {
+        await this.releaseJumpHostLease();
+        throw error;
+      }
+    }
+
+    if (this.ssh.socksProxyHost) {
+      this.emitServiceData(`[SSH] SOCKS proxy: ${this.ssh.socksProxyHost}:${this.ssh.socksProxyPort ?? 1080}\r\n`);
+      return createSocksProxySocket({
+        host: this.ssh.socksProxyHost,
+        port: this.ssh.socksProxyPort ?? 1080,
+      }, {
+        host: this.ssh.host,
+        port: this.ssh.port,
+      });
+    }
+
+    if (this.ssh.httpProxyHost) {
+      this.emitServiceData(`[SSH] HTTP proxy: ${this.ssh.httpProxyHost}:${this.ssh.httpProxyPort ?? 8080}\r\n`);
+      return createHttpProxySocket({
+        host: this.ssh.httpProxyHost,
+        port: this.ssh.httpProxyPort ?? 8080,
+      }, {
+        host: this.ssh.host,
+        port: this.ssh.port,
+      });
+    }
+
+    return undefined;
   }
 
   private async verifyHostKey(key: Buffer, knownHosts: KnownHostEntry[]): Promise<boolean> {

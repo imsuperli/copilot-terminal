@@ -199,10 +199,6 @@ async function buildSSHSpawnConfig(
     sshVaultService: HandlerContext['sshVaultService'];
   },
 ): Promise<TerminalConfig> {
-  if (profile.proxyCommand || profile.socksProxyHost || profile.httpProxyHost) {
-    throw new Error('SSH proxy configuration is not supported yet');
-  }
-
   return {
     backend: 'ssh',
     workingDirectory: options.remoteCwd || profile.defaultRemoteCwd || '~',
