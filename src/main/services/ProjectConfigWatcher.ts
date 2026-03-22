@@ -8,15 +8,20 @@ import { FileWatcherService } from './FileWatcherService';
  * 项目配置文件监听器
  * 监听 copilot.json 文件变化，自动重新加载配置
  *
- * 重构后基于 FileWatcherService 实现
+ * 使用单个轮询器检查各窗口 copilot.json 的变更，
+ * 避免为每个恢复窗口创建长期文件 watcher 带来的高 CPU 开销。
  */
 class ProjectConfigWatcher {
-  private fileWatcher: FileWatcherService;
-  private watchers: Map<string, { projectPath: string; unwatch: () => void }> = new Map();
+  private watchers = new Map<string, {
+    projectPath: string;
+    onUpdate: (config: ProjectConfig | null) => void;
+    lastSignature: string | null;
+  }>();
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private isPolling = false;
+  private readonly pollIntervalMs = 3000;
 
-  constructor(fileWatcher: FileWatcherService) {
-    this.fileWatcher = fileWatcher;
-  }
+  constructor(_fileWatcher: FileWatcherService) {}
 
   /**
    * 开始监听窗口的 copilot.json
@@ -31,6 +36,7 @@ class ProjectConfigWatcher {
   ): Promise<void> {
     const existingWatcher = this.watchers.get(windowId);
     if (existingWatcher?.projectPath === projectPath) {
+      existingWatcher.onUpdate = onUpdate;
       return;
     }
 
@@ -45,43 +51,24 @@ class ProjectConfigWatcher {
     const configPath = path.join(projectPath, 'copilot.json');
     console.log(`[ProjectConfigWatcher] Start watching ${configPath} for window ${windowId}`);
 
-    // 监听精确的 copilot.json 文件路径。
-    // 即使文件初始不存在，chokidar 也能在后续创建时触发 add 事件，
-    // 这样可以避免递归监听整个项目目录带来的高 CPU 开销。
-    const unwatch = await this.fileWatcher.watch(
-      configPath,
-      async (event) => {
-        if (event === 'change' || event === 'add') {
-          try {
-            console.log(`[ProjectConfigWatcher] Reloading config for window ${windowId}`);
-            const config = await readProjectConfig(projectPath);
+    const lastSignature = await this.getConfigSignature(projectPath);
+    const trackedWatcher = {
+      projectPath,
+      onUpdate,
+      lastSignature,
+    };
 
-            // 只有成功读取到配置时才更新
-            // 如果 config 为 null（JSON 语法错误或格式验证失败），则保持原有配置不变
-            if (config !== null) {
-              onUpdate(config);
-            } else {
-              console.warn(`[ProjectConfigWatcher] Invalid config for window ${windowId}, keeping existing config`);
-            }
-          } catch (error) {
-            // 捕获异常但不更新配置，保持原有配置不变
-            console.error('[ProjectConfigWatcher] Failed to reload project config:', error);
-            console.warn('[ProjectConfigWatcher] Keeping existing config due to error');
-          }
-        } else if (event === 'unlink') {
-          console.log(`[ProjectConfigWatcher] copilot.json deleted for window ${windowId}`);
-          onUpdate(null);
-        }
-      },
-      {
-        debounce: 500, // 500ms 防抖
-        ignoreInitial: true,
-        awaitWriteFinish: true,
-        stabilityThreshold: 200,
+    this.watchers.set(windowId, trackedWatcher);
+
+    this.ensurePolling();
+
+    if (existingWatcher && existingWatcher.projectPath !== projectPath) {
+      if (trackedWatcher.lastSignature === null) {
+        trackedWatcher.onUpdate(null);
+      } else {
+        this.emitCurrentConfig(windowId, trackedWatcher);
       }
-    );
-
-    this.watchers.set(windowId, { projectPath, unwatch });
+    }
   }
 
   /**
@@ -91,8 +78,8 @@ class ProjectConfigWatcher {
     const watcher = this.watchers.get(windowId);
     if (watcher) {
       console.log(`[ProjectConfigWatcher] Stop watching for window ${windowId}`);
-      watcher.unwatch();
       this.watchers.delete(windowId);
+      this.stopPollingIfIdle();
     }
   }
 
@@ -101,10 +88,8 @@ class ProjectConfigWatcher {
    */
   stopAll(): void {
     console.log('[ProjectConfigWatcher] Stopping all watchers');
-    for (const watcher of this.watchers.values()) {
-      watcher.unwatch();
-    }
     this.watchers.clear();
+    this.stopPolling();
   }
 
   /**
@@ -126,6 +111,105 @@ class ProjectConfigWatcher {
    */
   getWatchedProjectPath(windowId: string): string | undefined {
     return this.watchers.get(windowId)?.projectPath;
+  }
+
+  private ensurePolling(): void {
+    if (this.pollTimer) {
+      return;
+    }
+
+    this.pollTimer = setInterval(() => {
+      void this.poll();
+    }, this.pollIntervalMs);
+    this.pollTimer.unref();
+  }
+
+  private stopPollingIfIdle(): void {
+    if (this.watchers.size === 0) {
+      this.stopPolling();
+    }
+  }
+
+  private stopPolling(): void {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+  }
+
+  private async poll(): Promise<void> {
+    if (this.isPolling || this.watchers.size === 0) {
+      return;
+    }
+
+    this.isPolling = true;
+
+    try {
+      await Promise.all(
+        Array.from(this.watchers.entries()).map(([windowId, watcher]) => this.pollWindow(windowId, watcher))
+      );
+    } finally {
+      this.isPolling = false;
+    }
+  }
+
+  private async pollWindow(
+    windowId: string,
+    watcher: { projectPath: string; onUpdate: (config: ProjectConfig | null) => void; lastSignature: string | null }
+  ): Promise<void> {
+    const currentSignature = await this.getConfigSignature(watcher.projectPath);
+    if (currentSignature === watcher.lastSignature) {
+      return;
+    }
+
+    watcher.lastSignature = currentSignature;
+
+    if (currentSignature === null) {
+      console.log(`[ProjectConfigWatcher] copilot.json deleted for window ${windowId}`);
+      watcher.onUpdate(null);
+      return;
+    }
+
+    this.emitCurrentConfig(windowId, watcher);
+  }
+
+  private emitCurrentConfig(
+    windowId: string,
+    watcher: { projectPath: string; onUpdate: (config: ProjectConfig | null) => void; lastSignature: string | null }
+  ): void {
+    try {
+      console.log(`[ProjectConfigWatcher] Reloading config for window ${windowId}`);
+      const config = readProjectConfig(watcher.projectPath);
+      if (config !== null) {
+        watcher.onUpdate(config);
+      } else {
+        console.warn(`[ProjectConfigWatcher] Invalid config for window ${windowId}, keeping existing config`);
+      }
+    } catch (error) {
+      console.error('[ProjectConfigWatcher] Failed to reload project config:', error);
+      console.warn('[ProjectConfigWatcher] Keeping existing config due to error');
+    }
+  }
+
+  private async getConfigSignature(projectPath: string): Promise<string | null> {
+    const configPath = path.join(projectPath, 'copilot.json');
+
+    try {
+      const stat = await fs.promises.stat(configPath);
+      if (!stat.isFile()) {
+        return null;
+      }
+
+      return `${stat.mtimeMs}:${stat.size}`;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code === 'ENOENT') {
+        return null;
+      }
+
+      console.error(`[ProjectConfigWatcher] Failed to stat ${configPath}:`, error);
+      return null;
+    }
   }
 }
 
