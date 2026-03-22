@@ -502,6 +502,10 @@ describe('registerSSHSessionHandlers', () => {
       }),
       downloadSSHSftpFile: vi.fn().mockResolvedValue(undefined),
       uploadSSHSftpFiles: vi.fn().mockResolvedValue(2),
+      uploadSSHSftpDirectory: vi.fn().mockResolvedValue(5),
+      downloadSSHSftpDirectory: vi.fn().mockResolvedValue(undefined),
+      createSSHSftpDirectory: vi.fn().mockResolvedValue('/srv/app/releases'),
+      deleteSSHSftpEntry: vi.fn().mockResolvedValue(undefined),
     };
 
     mockShowSaveDialog.mockResolvedValue({
@@ -586,6 +590,80 @@ describe('registerSSHSessionHandlers', () => {
       'pane-1',
       '/srv/app',
       ['/tmp/a.txt', '/tmp/b.txt'],
+    );
+
+    mockShowOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ['/tmp/upload-dir'],
+    });
+    const uploadDirectoryHandler = getRegisteredHandler('upload-ssh-sftp-directory');
+    await expect(uploadDirectoryHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      remotePath: '/srv/app',
+    })).resolves.toEqual({
+      success: true,
+      data: {
+        uploadedCount: 5,
+      },
+    });
+    expect(processManager.uploadSSHSftpDirectory).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '/srv/app',
+      '/tmp/upload-dir',
+    );
+
+    mockShowOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ['/tmp/download-root'],
+    });
+    const downloadDirectoryHandler = getRegisteredHandler('download-ssh-sftp-directory');
+    await expect(downloadDirectoryHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      remotePath: '/srv/app/releases',
+      suggestedName: 'releases',
+    })).resolves.toEqual({
+      success: true,
+      data: '/tmp/download-root/releases',
+    });
+    expect(processManager.downloadSSHSftpDirectory).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '/srv/app/releases',
+      '/tmp/download-root/releases',
+    );
+
+    const createDirectoryHandler = getRegisteredHandler('create-ssh-sftp-directory');
+    await expect(createDirectoryHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      parentPath: '/srv/app',
+      name: 'releases',
+    })).resolves.toEqual({
+      success: true,
+      data: '/srv/app/releases',
+    });
+    expect(processManager.createSSHSftpDirectory).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '/srv/app',
+      'releases',
+    );
+
+    const deleteEntryHandler = getRegisteredHandler('delete-ssh-sftp-entry');
+    await expect(deleteEntryHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      remotePath: '/srv/app/releases',
+    })).resolves.toEqual({
+      success: true,
+    });
+    expect(processManager.deleteSSHSftpEntry).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '/srv/app/releases',
     );
   });
 });

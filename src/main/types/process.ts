@@ -107,6 +107,10 @@ export interface IProcessManager {
   listSSHSftpDirectory(windowId: string, paneId: string, path?: string): Promise<SSHSftpDirectoryListing>;
   downloadSSHSftpFile(windowId: string, paneId: string, remotePath: string, localPath: string): Promise<void>;
   uploadSSHSftpFiles(windowId: string, paneId: string, remotePath: string, localPaths: string[]): Promise<number>;
+  uploadSSHSftpDirectory(windowId: string, paneId: string, remotePath: string, localDirectoryPath: string): Promise<number>;
+  downloadSSHSftpDirectory(windowId: string, paneId: string, remotePath: string, localPath: string): Promise<void>;
+  createSSHSftpDirectory(windowId: string, paneId: string, parentPath: string, name: string): Promise<string>;
+  deleteSSHSftpEntry(windowId: string, paneId: string, remotePath: string): Promise<void>;
   listProcesses(): ProcessInfo[];
   getPaneStatus(windowId: string, paneId: string): Promise<import('../../renderer/types/window').WindowStatus>;
   subscribeStatusChange(callback: (pid: number, status: import('../../renderer/types/window').WindowStatus) => void): void;

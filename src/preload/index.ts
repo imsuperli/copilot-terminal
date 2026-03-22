@@ -37,6 +37,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('download-ssh-sftp-file', config),
   uploadSSHSftpFiles: (config: unknown) =>
     ipcRenderer.invoke('upload-ssh-sftp-files', config),
+  uploadSSHSftpDirectory: (config: unknown) =>
+    ipcRenderer.invoke('upload-ssh-sftp-directory', config),
+  downloadSSHSftpDirectory: (config: unknown) =>
+    ipcRenderer.invoke('download-ssh-sftp-directory', config),
+  createSSHSftpDirectory: (config: unknown) =>
+    ipcRenderer.invoke('create-ssh-sftp-directory', config),
+  deleteSSHSftpEntry: (config: unknown) =>
+    ipcRenderer.invoke('delete-ssh-sftp-entry', config),
   checkPtyOutput: (windowId: string, paneId: string) => ipcRenderer.invoke('check-pty-output', { windowId, paneId }),
   startGitWatch: (windowId: string, cwd: string) => ipcRenderer.invoke('start-git-watch', { windowId, cwd }),
   stopGitWatch: (windowId: string) => ipcRenderer.invoke('stop-git-watch', { windowId }),

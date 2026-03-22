@@ -163,6 +163,38 @@ export class SSHPtySession implements IPty {
     return this.connectionLease.connection.uploadSftpFiles(remotePath, localPaths);
   }
 
+  async uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    return this.connectionLease.connection.uploadSftpDirectory(remotePath, localDirectoryPath);
+  }
+
+  async downloadSftpDirectory(remotePath: string, localPath: string): Promise<void> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    await this.connectionLease.connection.downloadSftpDirectory(remotePath, localPath);
+  }
+
+  async createSftpDirectory(parentPath: string, name: string): Promise<string> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    return this.connectionLease.connection.createSftpDirectory(parentPath, name);
+  }
+
+  async deleteSftpEntry(remotePath: string): Promise<void> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    await this.connectionLease.connection.deleteSftpEntry(remotePath);
+  }
+
   private async connect(): Promise<void> {
     this.connectionLease = await this.connectionPool.acquire(this.ssh, (data) => {
       this.emitData(data);

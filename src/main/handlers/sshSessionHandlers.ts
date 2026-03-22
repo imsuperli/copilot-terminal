@@ -1,15 +1,19 @@
 import { randomUUID } from 'crypto';
-import { posix as posixPath } from 'path';
+import { join, posix as posixPath } from 'path';
 import { dialog, ipcMain } from 'electron';
 import {
   AddSSHSessionPortForwardConfig,
   CloneSSHPaneConfig,
+  CreateSSHSftpDirectoryConfig,
   CreateSSHWindowConfig,
+  DeleteSSHSftpEntryConfig,
+  DownloadSSHSftpDirectoryConfig,
   DownloadSSHSftpFileConfig,
   ListSSHSftpDirectoryConfig,
   RemoveSSHSessionPortForwardConfig,
   SSHSessionPortForwardTarget,
   StartSSHPaneConfig,
+  UploadSSHSftpDirectoryConfig,
   UploadSSHSftpFilesConfig,
 } from '../../shared/types/electron-api';
 import { SSHProfile, SSHVaultEntry } from '../../shared/types/ssh';
@@ -277,6 +281,99 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
       );
 
       return successResponse({ uploadedCount });
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('upload-ssh-sftp-directory', async (_event, config: UploadSSHSftpDirectoryConfig) => {
+    try {
+      if (!processManager) {
+        throw new Error('SSH session services are not initialized');
+      }
+
+      if (!mainWindow) {
+        throw new Error('Main window is not available');
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory'],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return successResponse({ uploadedCount: 0 });
+      }
+
+      const uploadedCount = await processManager.uploadSSHSftpDirectory(
+        config.windowId,
+        config.paneId,
+        config.remotePath,
+        result.filePaths[0],
+      );
+
+      return successResponse({ uploadedCount });
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('download-ssh-sftp-directory', async (_event, config: DownloadSSHSftpDirectoryConfig) => {
+    try {
+      if (!processManager) {
+        throw new Error('SSH session services are not initialized');
+      }
+
+      if (!mainWindow) {
+        throw new Error('Main window is not available');
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory', 'createDirectory'],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return successResponse(null);
+      }
+
+      const localPath = join(
+        result.filePaths[0],
+        config.suggestedName?.trim() || posixPath.basename(config.remotePath),
+      );
+      await processManager.downloadSSHSftpDirectory(config.windowId, config.paneId, config.remotePath, localPath);
+      return successResponse(localPath);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('create-ssh-sftp-directory', async (_event, config: CreateSSHSftpDirectoryConfig) => {
+    try {
+      if (!processManager) {
+        throw new Error('SSH session services are not initialized');
+      }
+
+      const trimmedName = config.name.trim();
+      if (!trimmedName || trimmedName.includes('/') || trimmedName.includes('\\')) {
+        throw new Error('Enter a valid directory name.');
+      }
+
+      return successResponse(await processManager.createSSHSftpDirectory(
+        config.windowId,
+        config.paneId,
+        config.parentPath,
+        trimmedName,
+      ));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('delete-ssh-sftp-entry', async (_event, config: DeleteSSHSftpEntryConfig) => {
+    try {
+      if (!processManager) {
+        throw new Error('SSH session services are not initialized');
+      }
+
+      await processManager.deleteSSHSftpEntry(config.windowId, config.paneId, config.remotePath);
+      return successResponse();
     } catch (error) {
       return errorResponse(error);
     }

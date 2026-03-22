@@ -54,6 +54,10 @@ export interface ISSHConnection {
   listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
   downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
   uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
+  uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number>;
+  downloadSftpDirectory(remotePath: string, localPath: string): Promise<void>;
+  createSftpDirectory(parentPath: string, name: string): Promise<string>;
+  deleteSftpEntry(remotePath: string): Promise<void>;
   close(): Promise<void>;
   isClosed(): boolean;
 }
@@ -227,6 +231,26 @@ export class SSHClientConnection implements ISSHConnection {
   async uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number> {
     const session = await this.getSftpSession();
     return session.uploadFiles(remotePath, localPaths);
+  }
+
+  async uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number> {
+    const session = await this.getSftpSession();
+    return session.uploadDirectory(remotePath, localDirectoryPath);
+  }
+
+  async downloadSftpDirectory(remotePath: string, localPath: string): Promise<void> {
+    const session = await this.getSftpSession();
+    await session.downloadEntry(remotePath, localPath);
+  }
+
+  async createSftpDirectory(parentPath: string, name: string): Promise<string> {
+    const session = await this.getSftpSession();
+    return session.createDirectory(parentPath, name);
+  }
+
+  async deleteSftpEntry(remotePath: string): Promise<void> {
+    const session = await this.getSftpSession();
+    await session.deleteEntry(remotePath);
   }
 
   async close(): Promise<void> {

@@ -103,6 +103,24 @@ export interface UploadSSHSftpFilesConfig extends SSHSessionPortForwardTarget {
   remotePath: string;
 }
 
+export interface UploadSSHSftpDirectoryConfig extends SSHSessionPortForwardTarget {
+  remotePath: string;
+}
+
+export interface DownloadSSHSftpDirectoryConfig extends SSHSessionPortForwardTarget {
+  remotePath: string;
+  suggestedName?: string;
+}
+
+export interface CreateSSHSftpDirectoryConfig extends SSHSessionPortForwardTarget {
+  parentPath: string;
+  name: string;
+}
+
+export interface DeleteSSHSftpEntryConfig extends SSHSessionPortForwardTarget {
+  remotePath: string;
+}
+
 export interface StartWindowResult {
   pid: number;
   sessionId: string;
@@ -266,6 +284,10 @@ export interface ElectronAPI {
   listSSHSftpDirectory: (config: ListSSHSftpDirectoryConfig) => Promise<IpcResponse<SSHSftpDirectoryListing>>;
   downloadSSHSftpFile: (config: DownloadSSHSftpFileConfig) => Promise<IpcResponse<string | null>>;
   uploadSSHSftpFiles: (config: UploadSSHSftpFilesConfig) => Promise<IpcResponse<{ uploadedCount: number }>>;
+  uploadSSHSftpDirectory: (config: UploadSSHSftpDirectoryConfig) => Promise<IpcResponse<{ uploadedCount: number }>>;
+  downloadSSHSftpDirectory: (config: DownloadSSHSftpDirectoryConfig) => Promise<IpcResponse<string | null>>;
+  createSSHSftpDirectory: (config: CreateSSHSftpDirectoryConfig) => Promise<IpcResponse<string>>;
+  deleteSSHSftpEntry: (config: DeleteSSHSftpEntryConfig) => Promise<IpcResponse<void>>;
   checkPtyOutput: (windowId: string, paneId: string) => Promise<IpcResponse<CheckPtyOutputResult>>;
   startGitWatch: (windowId: string, cwd: string) => Promise<IpcResponse<void>>;
   stopGitWatch: (windowId: string) => Promise<IpcResponse<void>>;

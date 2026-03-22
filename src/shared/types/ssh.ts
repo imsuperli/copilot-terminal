@@ -44,6 +44,8 @@ export interface SSHSftpEntry {
   path: string;
   isDirectory: boolean;
   isSymbolicLink: boolean;
+  symlinkTargetPath?: string | null;
+  symlinkTargetIsDirectory?: boolean | null;
   size: number;
   modifiedAt: string | null;
 }

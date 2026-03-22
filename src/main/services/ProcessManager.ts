@@ -426,6 +426,41 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     return pty.uploadSftpFiles(remotePath, localPaths);
   }
 
+  async uploadSSHSftpDirectory(
+    windowId: string,
+    paneId: string,
+    remotePath: string,
+    localDirectoryPath: string,
+  ): Promise<number> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.uploadSftpDirectory(remotePath, localDirectoryPath);
+  }
+
+  async downloadSSHSftpDirectory(
+    windowId: string,
+    paneId: string,
+    remotePath: string,
+    localPath: string,
+  ): Promise<void> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    await pty.downloadSftpDirectory(remotePath, localPath);
+  }
+
+  async createSSHSftpDirectory(
+    windowId: string,
+    paneId: string,
+    parentPath: string,
+    name: string,
+  ): Promise<string> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.createSftpDirectory(parentPath, name);
+  }
+
+  async deleteSSHSftpEntry(windowId: string, paneId: string, remotePath: string): Promise<void> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    await pty.deleteSftpEntry(remotePath);
+  }
+
   /**
    * 鐢熸垚 paneIndex 鐨?key
    */
@@ -455,6 +490,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
     downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
     uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
+    uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number>;
+    downloadSftpDirectory(remotePath: string, localPath: string): Promise<void>;
+    createSftpDirectory(parentPath: string, name: string): Promise<string>;
+    deleteSftpEntry(remotePath: string): Promise<void>;
   } {
     const pid = this.getPidByPane(windowId, paneId);
     if (pid === null) {
@@ -1374,12 +1413,20 @@ function isSSHSftpSession(value: unknown): value is {
   listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
   downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
   uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
+  uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number>;
+  downloadSftpDirectory(remotePath: string, localPath: string): Promise<void>;
+  createSftpDirectory(parentPath: string, name: string): Promise<string>;
+  deleteSftpEntry(remotePath: string): Promise<void>;
 } {
   return Boolean(
     value
     && typeof value === 'object'
     && typeof (value as { listSftpDirectory?: unknown }).listSftpDirectory === 'function'
     && typeof (value as { downloadSftpFile?: unknown }).downloadSftpFile === 'function'
-    && typeof (value as { uploadSftpFiles?: unknown }).uploadSftpFiles === 'function',
+    && typeof (value as { uploadSftpFiles?: unknown }).uploadSftpFiles === 'function'
+    && typeof (value as { uploadSftpDirectory?: unknown }).uploadSftpDirectory === 'function'
+    && typeof (value as { downloadSftpDirectory?: unknown }).downloadSftpDirectory === 'function'
+    && typeof (value as { createSftpDirectory?: unknown }).createSftpDirectory === 'function'
+    && typeof (value as { deleteSftpEntry?: unknown }).deleteSftpEntry === 'function'
   );
 }
