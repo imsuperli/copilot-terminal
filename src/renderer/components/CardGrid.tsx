@@ -20,6 +20,7 @@ import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities';
+import { startWindowPanes } from '../utils/paneSessionActions';
 
 // 统一的卡片项类型
 type CardItem =
@@ -226,49 +227,7 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
   );
 
   const startWindow = useCallback(async (win: Window) => {
-    try {
-      // 获取所有窗格
-      const panes = getAllPanes(win.layout);
-
-      // 先批量切到 Restoring，再并发启动所有窗格。
-      for (const pane of panes) {
-        updatePane(win.id, pane.id, { status: WindowStatus.Restoring });
-      }
-
-      await Promise.all(
-        panes.map(async (pane) => {
-          try {
-            const response = await window.electronAPI.startWindow({
-              windowId: win.id,
-              paneId: pane.id,
-              name: win.name,
-              workingDirectory: pane.cwd,
-              command: pane.command,
-            });
-
-            if (response && response.success && response.data) {
-              updatePane(win.id, pane.id, {
-                pid: response.data.pid,
-                sessionId: response.data.sessionId,
-                status: response.data.status,
-              });
-            } else {
-              throw new Error(response?.error || '启动窗格失败');
-            }
-          } catch (paneError) {
-            console.error(`Failed to start pane ${pane.id}:`, paneError);
-            updatePane(win.id, pane.id, { status: WindowStatus.Paused });
-          }
-        })
-      );
-    } catch (error) {
-      console.error('Failed to start window:', error);
-      // 整体启动失败，恢复所有窗格为暂停状态
-      const panes = getAllPanes(win.layout);
-      for (const pane of panes) {
-        updatePane(win.id, pane.id, { status: WindowStatus.Paused });
-      }
-    }
+    await startWindowPanes(win, updatePane);
   }, [updatePane]);
 
   const handleStartWindow = useCallback(async (win: Window) => {

@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
+import { canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { Window } from '../types/window';
-import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { findPaneNode, getAllPanes } from '../utils/layoutHelpers';
 
 interface IpcResponse<T = unknown> {
   success: boolean;
@@ -44,7 +45,15 @@ export function useWindowDirectoryGuard() {
     targetWindow: Window,
     onContinue: (window: Window) => void | Promise<void>
   ) => {
-    const workingDirectory = getCurrentWindowWorkingDirectory(targetWindow);
+    const targetPane = findPaneNode(targetWindow.layout, targetWindow.activePaneId)?.pane
+      ?? getAllPanes(targetWindow.layout)[0];
+
+    if (!targetPane || !canPaneOpenLocalFolder(targetPane)) {
+      await onContinue(targetWindow);
+      return;
+    }
+
+    const workingDirectory = targetPane.cwd;
     if (!workingDirectory) {
       await onContinue(targetWindow);
       return;

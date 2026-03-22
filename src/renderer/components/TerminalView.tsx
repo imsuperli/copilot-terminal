@@ -23,6 +23,11 @@ import {
   canPaneWatchGitBranch,
   getPaneCapabilities,
 } from '../../shared/utils/terminalCapabilities';
+import {
+  createPaneDraftFromSource,
+  startSplitPaneFromSource,
+  startWindowPanes,
+} from '../utils/paneSessionActions';
 
 export interface TerminalViewProps {
   window: Window;
@@ -196,51 +201,36 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       const activePaneId = terminalWindow.activePaneId;
       if (!activePaneId) return;
 
-      // 鑾峰彇褰撳墠婵€娲荤獥鏍肩殑淇℃伅
       const { getPaneById } = useWindowStore.getState();
-      const activePane = getPaneById(terminalWindow.id, activePaneId);
-      const currentCwd = activePane?.cwd || 'D:\\';
-      const currentCommand = activePane?.command || 'pwsh.exe';
+      const sourcePane = getPaneById(terminalWindow.id, activePaneId);
+      if (!sourcePane) {
+        return;
+      }
 
-      // 鍒涘缓鏂扮獥鏍?
       const newPaneId = uuidv4();
-      const newPane: Pane = {
-        id: newPaneId,
-        cwd: currentCwd, // 浣跨敤褰撳墠绐楁牸鐨勫伐浣滅洰褰?
-        command: currentCommand, // 浣跨敤褰撳墠绐楁牸鐨勫懡浠?
-        status: WindowStatus.Restoring,
-        pid: null,
-      };
+      const newPane: Pane = createPaneDraftFromSource(sourcePane, newPaneId);
 
-      // 先把新 pane 插入布局，避免把 PTY 启动耗时直接表现成”拆分很慢”
       splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
 
-      // 异步创建 PTY 进程，完成后再补齐 pid/状态
       try {
-        if (window.electronAPI) {
-          const response = await window.electronAPI.splitPane({
-            workingDirectory: newPane.cwd,
-            command: newPane.command,
-            windowId: terminalWindow.id,
-            paneId: newPaneId,
-          });
+        const response = await startSplitPaneFromSource({
+          sourceWindowId: terminalWindow.id,
+          sourcePane,
+          targetWindowId: terminalWindow.id,
+          targetPaneId: newPaneId,
+        });
 
-          if (response && response.success && response.data) {
-            const paneStillExists = useWindowStore.getState().getPaneById(terminalWindow.id, newPaneId);
-            if (!paneStillExists) {
-              await window.electronAPI.closePane(terminalWindow.id, newPaneId);
-              return;
-            }
-
-            updatePane(terminalWindow.id, newPaneId, {
-              pid: response.data.pid,
-              sessionId: response.data.sessionId,
-              status: WindowStatus.Running,
-            });
-          } else {
-            throw new Error(response?.error || t('terminalView.splitFailed'));
-          }
+        const paneStillExists = useWindowStore.getState().getPaneById(terminalWindow.id, newPaneId);
+        if (!paneStillExists) {
+          await window.electronAPI.closePane(terminalWindow.id, newPaneId);
+          return;
         }
+
+        updatePane(terminalWindow.id, newPaneId, {
+          pid: response.pid,
+          sessionId: response.sessionId,
+          status: response.status,
+        });
       } catch (error) {
         console.error('Failed to split pane:', error);
         closePaneInWindow(terminalWindow.id, newPaneId, { syncProcess: false });
@@ -253,22 +243,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // 澶勭悊鎵撳紑鏂囦欢澶?
   const handleOpenFolder = useCallback(async () => {
     try {
-      // 鑾峰彇绗竴涓獥鏍肩殑宸ヤ綔鐩綍
-      const firstPane = panes[0];
-      if (firstPane && canPaneOpenLocalFolder(firstPane) && window.electronAPI) {
-        await window.electronAPI.openFolder(firstPane.cwd);
+      if (activePane && canPaneOpenLocalFolder(activePane) && window.electronAPI) {
+        await window.electronAPI.openFolder(activePane.cwd);
       }
     } catch (error) {
       console.error('Failed to open folder:', error);
     }
-  }, [panes]);
+  }, [activePane]);
 
   // 澶勭悊鍦?IDE 涓墦寮€
   const handleOpenInIDE = useCallback(async (ide: string) => {
     try {
-      const firstPane = panes[0];
-      if (firstPane && canPaneOpenInIDE(firstPane) && window.electronAPI) {
-        const response = await window.electronAPI.openInIDE(ide, firstPane.cwd);
+      if (activePane && canPaneOpenInIDE(activePane) && window.electronAPI) {
+        const response = await window.electronAPI.openInIDE(ide, activePane.cwd);
         if (!response.success) {
           console.error(`Failed to open in ${ide}:`, response.error);
         }
@@ -276,7 +263,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error(`Failed to open in ${ide}:`, error);
     }
-  }, [panes]);
+  }, [activePane]);
 
   // 澶勭悊鏆傚仠绐楀彛
   const handlePauseWindow = useCallback(async () => {
@@ -292,42 +279,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // 处理启动窗口
   const handleStartWindow = useCallback(async () => {
-    try {
-      const panes = getAllPanes(terminalWindow.layout);
-
-      for (const pane of panes) {
-        updatePane(terminalWindow.id, pane.id, { status: WindowStatus.Restoring });
-      }
-
-      await Promise.all(
-        panes.map(async (pane) => {
-          try {
-            const response = await window.electronAPI.startWindow({
-              windowId: terminalWindow.id,
-              paneId: pane.id,
-              name: terminalWindow.name,
-              workingDirectory: pane.cwd,
-              command: pane.command,
-            });
-
-            if (response && response.success && response.data) {
-              updatePane(terminalWindow.id, pane.id, {
-                pid: response.data.pid,
-                sessionId: response.data.sessionId,
-                status: response.data.status,
-              });
-            } else {
-              throw new Error(response?.error || '启动窗格失败');
-            }
-          } catch (paneError) {
-            console.error(`Failed to start pane ${pane.id}:`, paneError);
-            updatePane(terminalWindow.id, pane.id, { status: WindowStatus.Paused });
-          }
-        })
-      );
-    } catch (error) {
-      console.error('Failed to start window:', error);
-    }
+    await startWindowPanes(terminalWindow, updatePane);
   }, [terminalWindow.id, terminalWindow.name, terminalWindow.layout, updatePane]);
 
   // 处理重启窗口：先停止，再启动
@@ -444,21 +396,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       // 自动启动拖入窗口的所有暂停窗格
       const dragWin = useWindowStore.getState().getWindowById(dragWindowId);
       if (dragWin) {
-        const panes = getAllPanes(dragWin.layout);
-        for (const pane of panes) {
-          if (pane.status === WindowStatus.Paused) {
-            try {
-              await window.electronAPI.startWindow({
-                windowId: dragWin.id,
-                paneId: pane.id,
-                name: dragWin.name,
-                workingDirectory: pane.cwd,
-                command: pane.command,
-              });
-            } catch (error) {
-              console.error(`Failed to auto-start pane ${pane.id}:`, error);
-            }
-          }
+        const pausedPanes = getAllPanes(dragWin.layout).filter((pane) => pane.status === WindowStatus.Paused);
+        if (pausedPanes.length > 0) {
+          await startWindowPanes(dragWin, useWindowStore.getState().updatePane, pausedPanes);
         }
       }
     },
