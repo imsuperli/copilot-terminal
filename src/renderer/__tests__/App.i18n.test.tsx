@@ -9,7 +9,7 @@ import App from '../App';
 
 describe('App i18n', () => {
   it('renders English UI when persisted language is en-US', async () => {
-    vi.mocked(window.electronAPI.getSettings).mockResolvedValueOnce({
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
       success: true,
       data: {
         language: 'en-US',

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SettingsPanel } from '../SettingsPanel';
 import { I18nProvider } from '../../i18n';
@@ -109,5 +109,65 @@ describe('SettingsPanel', () => {
     await user.click(screen.getByRole('tab', { name: /高级设置/ }));
     expect(screen.getByText('Claude Agent Teams 环境变量')).toBeInTheDocument();
     expect(screen.getByText('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1')).toBeInTheDocument();
+  });
+
+  it('manages SSH feature settings and trusted hosts in the advanced tab', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: {
+          useBundledConptyDll: false,
+          defaultShellProgram: '',
+        },
+        features: {
+          sshEnabled: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.listKnownHosts).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'known-host-1',
+          host: 'ssh.example.com',
+          port: 22,
+          algorithm: 'ssh-ed25519',
+          digest: 'SHA256:abc123',
+          createdAt: '2026-03-20T12:00:00.000Z',
+          updatedAt: '2026-03-21T13:00:00.000Z',
+        },
+      ],
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /高级设置/ }));
+
+    expect(await screen.findByText('SSH 终端')).toBeInTheDocument();
+    expect(screen.getByText('ssh.example.com:22')).toBeInTheDocument();
+    expect(screen.getByText(/SHA256:abc123/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('switch', { name: '启用 SSH 终端功能' }));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+      features: {
+        sshEnabled: false,
+      },
+    });
+
+    await user.click(screen.getByRole('button', { name: '删除 ssh.example.com:22 的主机指纹' }));
+
+    expect(window.electronAPI.removeKnownHost).toHaveBeenCalledWith('known-host-1');
+    await waitFor(() => {
+      expect(screen.queryByText('ssh.example.com:22')).not.toBeInTheDocument();
+    });
   });
 });

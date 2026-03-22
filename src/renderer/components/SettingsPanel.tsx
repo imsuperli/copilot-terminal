@@ -6,8 +6,10 @@ import * as Tabs from '@radix-ui/react-tabs';
 import { X, Plus, Trash2, Search, Check, ChevronDown, Globe, Folder, Edit2, FolderOpen, Languages, Compass, Plug, Wrench, Monitor, Command } from 'lucide-react';
 import { IDEIcon } from './icons/IDEIcons';
 import { notifyIDESettingsUpdated } from '../hooks/useIDESettings';
+import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
 import { QuickNavItem } from '../../shared/types/quick-nav';
-import { IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
+import { FeatureSettings, IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
+import { KnownHostEntry } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
 
@@ -37,6 +39,9 @@ const DEFAULT_STATUSLINE_CONFIG: StatusLineConfig = {
   showTime: false,
   showTokens: false,
 };
+const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
+  sshEnabled: true,
+};
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) => {
   const { language, setLanguage, t } = useI18n();
@@ -62,6 +67,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     useBundledConptyDll: true,
     defaultShellProgram: '',
   });
+  const [featureSettings, setFeatureSettings] = useState<FeatureSettings>(DEFAULT_FEATURE_SETTINGS);
+  const [knownHosts, setKnownHosts] = useState<KnownHostEntry[]>([]);
+  const [knownHostsLoading, setKnownHostsLoading] = useState(false);
+  const [knownHostsError, setKnownHostsError] = useState<string | null>(null);
+  const [removingKnownHostId, setRemovingKnownHostId] = useState<string | null>(null);
 
   // tmux 兼容模式配置状态
   const [tmuxSettings, setTmuxSettings] = useState({
@@ -77,12 +87,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       setShowNavDialog(false);
       setEditingIDE(null);
       setEditingNavItem(null);
+      setKnownHostsError(null);
+      setRemovingKnownHostId(null);
       return;
     }
 
-    loadSettings();
-    loadAvailableShells();
-    loadSupportedIDENames();
+    void loadSettings();
+    void loadKnownHosts();
+    void loadAvailableShells();
+    void loadSupportedIDENames();
   }, [open]);
 
   const loadSettings = async () => {
@@ -101,6 +114,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
           useBundledConptyDll: settings.terminal?.useBundledConptyDll ?? true,
           defaultShellProgram: settings.terminal?.defaultShellProgram ?? '',
         });
+        setFeatureSettings({
+          ...DEFAULT_FEATURE_SETTINGS,
+          ...settings.features,
+        });
         setTmuxSettings({
           enabled: settings.tmux?.enabled ?? true,
           autoInjectPath: settings.tmux?.autoInjectPath ?? true,
@@ -109,6 +126,26 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
+    }
+  };
+
+  const loadKnownHosts = async () => {
+    setKnownHostsLoading(true);
+    setKnownHostsError(null);
+
+    try {
+      const response = await window.electronAPI.listKnownHosts();
+      if (response.success && response.data) {
+        setKnownHosts(response.data);
+        return;
+      }
+
+      setKnownHostsError(response.error || t('settings.ssh.knownHostsLoadFailed'));
+    } catch (error) {
+      console.error('Failed to load SSH known hosts:', error);
+      setKnownHostsError(error instanceof Error ? error.message : t('settings.ssh.knownHostsLoadFailed'));
+    } finally {
+      setKnownHostsLoading(false);
     }
   };
 
@@ -457,6 +494,39 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     }
   };
 
+  const handleFeatureSettingsChange = async (updates: Partial<FeatureSettings>) => {
+    const previousConfig = featureSettings;
+    const newConfig = { ...previousConfig, ...updates };
+    setFeatureSettings(newConfig);
+
+    try {
+      await window.electronAPI.updateSettings({ features: newConfig });
+      notifyWorkspaceSettingsUpdated({ features: newConfig });
+    } catch (error) {
+      console.error('Failed to update feature settings:', error);
+      setFeatureSettings(previousConfig);
+    }
+  };
+
+  const handleRemoveKnownHost = async (entryId: string) => {
+    setRemovingKnownHostId(entryId);
+    setKnownHostsError(null);
+
+    try {
+      const response = await window.electronAPI.removeKnownHost(entryId);
+      if (!response.success) {
+        throw new Error(response.error || t('settings.ssh.removeKnownHostFailed'));
+      }
+
+      setKnownHosts((previousEntries) => previousEntries.filter((entry) => entry.id !== entryId));
+    } catch (error) {
+      console.error('Failed to remove SSH known host:', error);
+      setKnownHostsError(error instanceof Error ? error.message : t('settings.ssh.removeKnownHostFailed'));
+    } finally {
+      setRemovingKnownHostId(null);
+    }
+  };
+
   const handleToggleStatusLine = async (enabled: boolean) => {
     await handleStatusLineConfigChange({ enabled });
 
@@ -486,6 +556,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const handleLanguageChange = useCallback(async (nextLanguage: string) => {
     await setLanguage(nextLanguage as AppLanguage);
   }, [setLanguage]);
+
+  const formatKnownHostTimestamp = useCallback((timestamp: string) => {
+    const locale = language === 'zh-CN' ? 'zh-CN' : 'en-US';
+    return new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(timestamp));
+  }, [language]);
 
   const handleSettingsOpenChange = useCallback((nextOpen: boolean) => {
     if (!nextOpen) {
@@ -1096,6 +1174,108 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
               <Tabs.Content value="advanced" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
                 <div className="mx-auto max-w-5xl space-y-6">
+                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+                    <div className="mb-5 flex items-start gap-4">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
+                        <Globe size={20} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-white">{t('settings.advanced.sshSection')}</h3>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.advanced.sshDescription')}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <h4 className="text-base font-semibold text-white">{t('settings.ssh.enableTitle')}</h4>
+                            <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.ssh.enableDescription')}</p>
+                          </div>
+
+                          <Switch.Root
+                            checked={featureSettings.sshEnabled}
+                            onCheckedChange={(checked) => handleFeatureSettingsChange({ sshEnabled: checked })}
+                            aria-label={t('settings.ssh.enableTitle')}
+                            className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
+                          >
+                            <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                          </Switch.Root>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <h4 className="text-base font-semibold text-white">{t('settings.ssh.knownHostsTitle')}</h4>
+                            <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.ssh.knownHostsDescription')}</p>
+                            {knownHostsError && (
+                              <p className="mt-3 text-sm text-[rgb(255,214,214)]">{knownHostsError}</p>
+                            )}
+                          </div>
+
+                          {knownHostsLoading && (
+                            <div className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
+                              {t('common.loading')}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-5">
+                          {knownHosts.length === 0 ? (
+                            <div className="rounded-[20px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--background))] px-5 py-10 text-center">
+                              <Globe size={32} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
+                              <p className="mt-4 text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.ssh.emptyTitle')}</p>
+                              <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.ssh.emptyDescription')}</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {knownHosts.map((entry) => {
+                                const entryTarget = `${entry.host}:${entry.port}`;
+                                const isRemoving = removingKnownHostId === entry.id;
+
+                                return (
+                                  <div
+                                    key={entry.id}
+                                    className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4"
+                                  >
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <h5 className="text-sm font-semibold text-white">{entryTarget}</h5>
+                                          <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                            {entry.algorithm}
+                                          </span>
+                                        </div>
+                                        <p className="mt-3 break-all font-mono text-xs text-[rgb(var(--foreground))]">
+                                          {t('settings.ssh.fingerprint')}: {entry.digest}
+                                        </p>
+                                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted-foreground))]">
+                                          <span>{t('settings.ssh.addedAt')}: {formatKnownHostTimestamp(entry.createdAt)}</span>
+                                          <span>{t('settings.ssh.updatedAt')}: {formatKnownHostTimestamp(entry.updatedAt)}</span>
+                                        </div>
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveKnownHost(entry.id)}
+                                        disabled={isRemoving}
+                                        aria-label={t('settings.ssh.removeKnownHostAria', { host: entry.host, port: entry.port })}
+                                        className="inline-flex h-10 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(255,214,214)] disabled:cursor-not-allowed disabled:opacity-70"
+                                      >
+                                        {isRemoving ? t('common.loading') : t('settings.ssh.removeKnownHost')}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
                   <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
                     {isWindows ? (
                       <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">

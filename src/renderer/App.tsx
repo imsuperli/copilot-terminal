@@ -21,6 +21,7 @@ import { Pane, Window } from './types/window';
 import { WindowGroup } from '../shared/types/window-group';
 import { I18nProvider } from './i18n';
 import { SSHCredentialState, SSHProfile } from '../shared/types/ssh';
+import type { SettingsPatch } from '../shared/types/electron-api';
 import type {
   ClaudeModelUpdatedPayload,
   ProjectConfigUpdatedPayload,
@@ -31,6 +32,7 @@ import type {
 } from '../shared/types/electron-api';
 import './api/ptyDataBus';
 import { getAllPanes } from './utils/layoutHelpers';
+import { WORKSPACE_SETTINGS_UPDATED_EVENT } from './utils/settingsEvents';
 
 function AppContent() {
   const windows = useWindowStore((state) => state.windows);
@@ -76,23 +78,41 @@ function AppContent() {
     fetchVersion();
   }, []);
 
+  const loadWorkspaceSettings = useCallback(async () => {
+    try {
+      const response = await window.electronAPI.getSettings();
+      if (response.success && response.data) {
+        if (response.data.defaultSidebarTab) {
+          setCurrentTab(response.data.defaultSidebarTab);
+        }
+        setSSHEnabled(response.data.features?.sshEnabled ?? true);
+      }
+    } catch (error) {
+      console.error('Failed to load workspace settings:', error);
+    }
+  }, []);
+
   // 从 settings 恢复上次选择的侧边栏标签
   useEffect(() => {
-    const loadDefaultTab = async () => {
-      try {
-        const response = await window.electronAPI.getSettings();
-        if (response.success && response.data) {
-          if (response.data.defaultSidebarTab) {
-            setCurrentTab(response.data.defaultSidebarTab);
-          }
-          setSSHEnabled(response.data.features?.sshEnabled ?? true);
-        }
-      } catch (error) {
-        console.error('Failed to load default sidebar tab:', error);
+    void loadWorkspaceSettings();
+  }, [loadWorkspaceSettings]);
+
+  useEffect(() => {
+    const handleSettingsUpdated = (event: Event) => {
+      const patch = (event as CustomEvent<SettingsPatch | undefined>).detail;
+      if (typeof patch?.features?.sshEnabled === 'boolean') {
+        setSSHEnabled(patch.features.sshEnabled);
+        return;
       }
+
+      void loadWorkspaceSettings();
     };
-    loadDefaultTab();
-  }, []);
+
+    window.addEventListener(WORKSPACE_SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
+    return () => {
+      window.removeEventListener(WORKSPACE_SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
+    };
+  }, [loadWorkspaceSettings]);
 
   const getSSHCredentialState = useCallback(async (profileId: string): Promise<SSHCredentialState> => {
     try {
