@@ -672,6 +672,7 @@ function scoreImageCandidatePath(candidatePath: string, entry: IDECatalogEntry, 
   const normalized = normalizeText(candidatePath).replace(/\\/g, '/');
   const fileName = basename(candidatePath, extname(candidatePath));
   const tokens = getEntrySearchTokens(entry);
+  const extension = extname(candidatePath).toLowerCase();
   let score = 84;
 
   if (isPathWithinRoot(candidatePath, installPath)) {
@@ -682,6 +683,24 @@ function scoreImageCandidatePath(candidatePath: string, entry: IDECatalogEntry, 
   }
   if (includesAnyToken(normalized, ['icon', 'icons', 'logo', 'resources'])) {
     score += 4;
+  }
+  if (includesAnyToken(normalized, ['win32', 'app/resources', 'resources/win32'])) {
+    score += 16;
+  }
+  if (/code[_-]?\d+x\d+/i.test(fileName) || /logo[_-]?\d+x\d+/i.test(fileName)) {
+    score += 18;
+  }
+  if (extension === '.ico' || extension === '.png') {
+    score += 6;
+  }
+  if (extension === '.svg') {
+    score -= 12;
+  }
+  if (includesAnyToken(normalized, ['extensions', 'extension', 'plugins', 'plugin'])) {
+    score -= 28;
+  }
+  if (includesAnyToken(normalized, ['out/media', 'welcome', 'background', 'banner', 'splash', 'walkthrough', 'markdown-language-features'])) {
+    score -= 30;
   }
   if (normalized.includes('/chrome/user data/') || normalized.includes('/web applications/')) {
     score -= 6;
