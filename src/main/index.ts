@@ -9,11 +9,12 @@ import { PtySubscriptionManager } from './services/PtySubscriptionManager';
 import { ShutdownManager, ShutdownContext } from './services/ShutdownManager';
 import { FileWatcherService } from './services/FileWatcherService';
 import { GitBranchWatcher } from './services/GitBranchWatcher';
-import { initProjectConfigWatcher } from './services/ProjectConfigWatcher';
+import { initProjectConfigWatcher, projectConfigWatcher } from './services/ProjectConfigWatcher';
 import { Workspace } from './types/workspace';
 import { registerAllHandlers } from './handlers';
 import { HandlerContext } from './handlers/HandlerContext';
 import { TmuxCompatService } from './services/TmuxCompatService';
+import { LayoutNode, Pane } from '../shared/types/window';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -30,6 +31,19 @@ let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 
 // 退出标志，防止重复执行退出逻辑
 let isQuitting = false;
+
+function getAllPanesFromLayout(layout: LayoutNode): Pane[] {
+  if (layout.type === 'pane') {
+    return [layout.pane];
+  }
+
+  return layout.children.flatMap((child) => getAllPanesFromLayout(child));
+}
+
+function getWindowWorkingDirectory(window: Workspace['windows'][number]): string | null {
+  const panes = getAllPanesFromLayout(window.layout);
+  return panes[0]?.cwd || null;
+}
 
 function createWindow() {
   const preloadPath = path.join(__dirname, '../preload/index.js');
@@ -300,6 +314,40 @@ app.whenReady().then(async () => {
   // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
   initProjectConfigWatcher(fileWatcherService);
 
+  const syncProjectConfigWatchers = async () => {
+    if (!currentWorkspace) {
+      return;
+    }
+
+    const activeWindowIds = new Set(currentWorkspace.windows.map((window) => window.id));
+    const windowsToWatch = currentWorkspace.windows.map((window) => ({
+      id: window.id,
+      cwd: getWindowWorkingDirectory(window),
+    }));
+
+    for (const watchedWindowId of projectConfigWatcher.getWatchedWindowIds()) {
+      if (!activeWindowIds.has(watchedWindowId)) {
+        projectConfigWatcher.stopWatching(watchedWindowId);
+      }
+    }
+
+    for (const { id, cwd } of windowsToWatch) {
+      if (!activeWindowIds.has(id) || !cwd) {
+        projectConfigWatcher.stopWatching(id);
+        continue;
+      }
+
+      await projectConfigWatcher.startWatching(id, cwd, (updatedConfig) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('project-config-updated', {
+            windowId: id,
+            projectConfig: updatedConfig,
+          });
+        }
+      });
+    }
+  };
+
   createWindow();
 
   // 初始化 StatusPoller、ViewSwitcher 和 GitBranchWatcher（需要 mainWindow 已创建）
@@ -329,6 +377,7 @@ app.whenReady().then(async () => {
     currentWorkspace,
     getCurrentWorkspace: () => currentWorkspace,
     setCurrentWorkspace: (workspace) => { currentWorkspace = workspace; },
+    syncProjectConfigWatchers,
   };
   registerAllHandlers(handlerContext);
 
@@ -336,6 +385,7 @@ app.whenReady().then(async () => {
   try {
     const workspace = await workspaceManager.loadWorkspace();
     currentWorkspace = workspace;
+    await syncProjectConfigWatchers();
 
     // 启动自动保存
     if (autoSaveManager && workspaceManager) {

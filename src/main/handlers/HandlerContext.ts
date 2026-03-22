@@ -26,4 +26,5 @@ export interface HandlerContext {
   currentWorkspace: Workspace | null;
   getCurrentWorkspace: () => Workspace | null;
   setCurrentWorkspace: (workspace: Workspace | null) => void;
+  syncProjectConfigWatchers?: () => Promise<void>;
 }

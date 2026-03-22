@@ -32,20 +32,22 @@ class ProjectConfigWatcher {
     // 如果已经在监听，先停止
     this.stopWatching(windowId);
 
-    const configPath = path.join(projectPath, 'copilot.json');
-
-    // 检查文件是否存在
-    if (!fs.existsSync(configPath)) {
-      console.log(`[ProjectConfigWatcher] copilot.json not found for window ${windowId}`);
+    if (!fs.existsSync(projectPath)) {
+      console.log(`[ProjectConfigWatcher] project path not found for window ${windowId}: ${projectPath}`);
       return;
     }
 
+    const configPath = path.join(projectPath, 'copilot.json');
     console.log(`[ProjectConfigWatcher] Start watching ${configPath} for window ${windowId}`);
 
-    // 监听文件变化
+    // 监听项目目录，兼容 copilot.json 后创建/原子替换等场景
     const unwatch = await this.fileWatcher.watch(
-      configPath,
-      async (event) => {
+      projectPath,
+      async (event, changedPath) => {
+        if (path.basename(changedPath) !== 'copilot.json') {
+          return;
+        }
+
         if (event === 'change' || event === 'add') {
           try {
             console.log(`[ProjectConfigWatcher] Reloading config for window ${windowId}`);
@@ -107,6 +109,13 @@ class ProjectConfigWatcher {
    */
   getWatcherCount(): number {
     return this.unwatchers.size;
+  }
+
+  /**
+   * 获取当前正在监听的窗口 ID 列表
+   */
+  getWatchedWindowIds(): string[] {
+    return Array.from(this.unwatchers.keys());
   }
 }
 

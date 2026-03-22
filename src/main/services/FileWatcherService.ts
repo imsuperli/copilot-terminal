@@ -114,9 +114,9 @@ export class FileWatcherService {
 
       // 设置事件监听
       watcher
-        .on('change', () => this.handleEvent(filePath, 'change'))
-        .on('add', () => this.handleEvent(filePath, 'add'))
-        .on('unlink', () => this.handleEvent(filePath, 'unlink'))
+        .on('change', (changedPath: string) => this.handleEvent(filePath, 'change', changedPath))
+        .on('add', (changedPath: string) => this.handleEvent(filePath, 'add', changedPath))
+        .on('unlink', (changedPath: string) => this.handleEvent(filePath, 'unlink', changedPath))
         .on('error', (error: any) => {
           // 忽略错误
         });
@@ -184,14 +184,16 @@ export class FileWatcherService {
   /**
    * 处理文件事件
    */
-  private handleEvent(filePath: string, event: WatchEvent): void {
+  private handleEvent(filePath: string, event: WatchEvent, changedPath?: string): void {
     const watcherInfo = this.watchers.get(filePath);
     if (!watcherInfo) return;
+
+    const eventPath = changedPath || filePath;
 
     // 通知所有订阅者
     for (const callback of watcherInfo.callbacks.values()) {
       try {
-        callback(event, filePath);
+        callback(event, eventPath);
       } catch (error) {
         // 忽略回调错误
       }

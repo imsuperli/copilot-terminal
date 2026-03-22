@@ -5,7 +5,7 @@ import { WindowGroup } from '../../shared/types/window-group';
 import { successResponse, errorResponse } from './HandlerResponse';
 
 export function registerWorkspaceHandlers(ctx: HandlerContext) {
-  const { workspaceManager, autoSaveManager, getCurrentWorkspace, setCurrentWorkspace } = ctx;
+  const { workspaceManager, autoSaveManager, getCurrentWorkspace, setCurrentWorkspace, syncProjectConfigWatchers } = ctx;
 
   // 监听自动保存触发事件
   ipcMain.on('trigger-auto-save', async (_event, windows: Window[], groups?: WindowGroup[]) => {
@@ -42,6 +42,8 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       // 更新全局 currentWorkspace
       setCurrentWorkspace(currentWorkspace);
 
+      await syncProjectConfigWatchers?.();
+
       // 触发自动保存（带防抖）
       autoSaveManager.triggerSave();
     } catch (error) {
@@ -67,6 +69,7 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       if (!workspaceManager) throw new Error('WorkspaceManager not initialized');
       const workspace = await workspaceManager.loadWorkspace();
       setCurrentWorkspace(workspace);
+      await syncProjectConfigWatchers?.();
       return successResponse(workspace);
     } catch (error) {
       return errorResponse(error);
@@ -78,6 +81,7 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       if (!workspaceManager) throw new Error('WorkspaceManager not initialized');
       const workspace = await workspaceManager.loadWorkspace();
       setCurrentWorkspace(workspace);
+      await syncProjectConfigWatchers?.();
       return successResponse(workspace);
     } catch (error) {
       return errorResponse(error);
