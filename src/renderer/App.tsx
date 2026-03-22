@@ -35,6 +35,7 @@ function AppContent() {
   const removeWindow = useWindowStore((state) => state.removeWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
+  const updateWindowRuntime = useWindowStore((state) => state.updateWindowRuntime);
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
   const activeGroupId = useWindowStore((state) => state.activeGroupId);
@@ -175,12 +176,12 @@ function AppContent() {
   // 订阅主进程推送的 git 分支变化事件
   useEffect(() => {
     const unsubscribe = subscribeToWindowGitBranchChange((windowId, gitBranch) => {
-      updateWindow(windowId, { gitBranch });
+      updateWindowRuntime(windowId, { gitBranch });
     });
     return () => {
       unsubscribe();
     };
-  }, [updateWindow]);
+  }, [updateWindowRuntime]);
 
   // 订阅 tmux pane 元数据变化事件
   useEffect(() => {
@@ -245,7 +246,7 @@ function AppContent() {
     if (!window.electronAPI?.onProjectConfigUpdated) return;
 
     const handleProjectConfigUpdate = (_event: unknown, payload: ProjectConfigUpdatedPayload) => {
-      updateWindow(payload.windowId, { projectConfig: payload.projectConfig ?? undefined });
+      updateWindowRuntime(payload.windowId, { projectConfig: payload.projectConfig ?? undefined });
     };
 
     window.electronAPI.onProjectConfigUpdated(handleProjectConfigUpdate);
@@ -253,7 +254,7 @@ function AppContent() {
     return () => {
       window.electronAPI?.offProjectConfigUpdated?.(handleProjectConfigUpdate);
     };
-  }, [updateWindow]);
+  }, [updateWindowRuntime]);
 
   // 订阅主进程推送的 Claude 模型更新事件
   useEffect(() => {

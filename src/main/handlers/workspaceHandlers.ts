@@ -3,6 +3,44 @@ import { HandlerContext } from './HandlerContext';
 import { Window } from '../../shared/types/window';
 import { WindowGroup } from '../../shared/types/window-group';
 import { successResponse, errorResponse } from './HandlerResponse';
+import { LayoutNode } from '../../shared/types/window';
+
+function getWindowWorkingDirectory(layout: LayoutNode): string | null {
+  if (layout.type === 'pane') {
+    return layout.pane.cwd || null;
+  }
+
+  for (const child of layout.children) {
+    const cwd = getWindowWorkingDirectory(child);
+    if (cwd) {
+      return cwd;
+    }
+  }
+
+  return null;
+}
+
+function haveWatchTargetsChanged(previousWindows: Window[], nextWindows: Window[]): boolean {
+  if (previousWindows.length !== nextWindows.length) {
+    return true;
+  }
+
+  const previousTargets = new Map(
+    previousWindows.map((window) => [window.id, getWindowWorkingDirectory(window.layout)])
+  );
+
+  for (const window of nextWindows) {
+    if (!previousTargets.has(window.id)) {
+      return true;
+    }
+
+    if (previousTargets.get(window.id) !== getWindowWorkingDirectory(window.layout)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 export function registerWorkspaceHandlers(ctx: HandlerContext) {
   const { workspaceManager, autoSaveManager, getCurrentWorkspace, setCurrentWorkspace, syncProjectConfigWatchers } = ctx;
@@ -35,6 +73,8 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
         return;
       }
 
+      const shouldSyncProjectConfigWatchers = haveWatchTargetsChanged(currentWorkspace.windows, windows);
+
       // 更新窗口列表和组列表
       currentWorkspace.windows = windows;
       currentWorkspace.groups = groups || [];
@@ -42,7 +82,9 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       // 更新全局 currentWorkspace
       setCurrentWorkspace(currentWorkspace);
 
-      await syncProjectConfigWatchers?.();
+      if (shouldSyncProjectConfigWatchers) {
+        await syncProjectConfigWatchers?.();
+      }
 
       // 触发自动保存（带防抖）
       autoSaveManager.triggerSave();

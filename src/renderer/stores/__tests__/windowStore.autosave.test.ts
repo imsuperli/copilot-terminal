@@ -134,6 +134,37 @@ describe('windowStore auto-save gating', () => {
     expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
   });
 
+  it('does not auto-save runtime-only window metadata updates', () => {
+    const terminalWindow = createSinglePaneWindow('Metadata', 'D:\\repo', 'pwsh.exe');
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      activeWindowId: terminalWindow.id,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    const originalLastActiveAt = terminalWindow.lastActiveAt;
+
+    useWindowStore.getState().updateWindowRuntime(terminalWindow.id, {
+      gitBranch: 'main',
+      projectConfig: {
+        version: '1.0',
+        links: [{ name: 'Repo', url: 'https://example.com/repo' }],
+      },
+    });
+
+    const storedWindow = useWindowStore.getState().windows[0];
+    expect(storedWindow.gitBranch).toBe('main');
+    expect(storedWindow.projectConfig).toEqual({
+      version: '1.0',
+      links: [{ name: 'Repo', url: 'https://example.com/repo' }],
+    });
+    expect(storedWindow.lastActiveAt).toBe(originalLastActiveAt);
+    expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
+  });
+
   it('collapses tmux agent panes and auto-saves the new single-pane layout on pause', () => {
     const terminalWindow = createSinglePaneWindow('Agent Team', 'D:\\repo', 'pwsh.exe');
     const leaderPaneId = terminalWindow.activePaneId;

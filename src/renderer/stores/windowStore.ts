@@ -85,6 +85,7 @@ interface WindowStore {
   syncWindow: (window: Window) => void;
   removeWindow: (id: string) => void;
   updateWindow: (id: string, updates: Partial<Window>) => void;
+  updateWindowRuntime: (id: string, updates: Partial<Window>) => void;
   /**
    * @deprecated 遗留方法，会更新窗口的所有窗格状态为同一个值。
    * 请使用 updatePane 方法来更新单个窗格的状态。
@@ -279,6 +280,15 @@ export const useWindowStore = create<WindowStore>()(
       // 触发自动保存，传递最新的窗口列表和组列表
       const { windows, groups } = get();
       triggerAutoSave(windows, groups);
+    },
+
+    updateWindowRuntime: (id, updates) => {
+      set((state) => {
+        const window = state.windows.find(w => w.id === id);
+        if (window) {
+          Object.assign(window, updates);
+        }
+      });
     },
 
     /**

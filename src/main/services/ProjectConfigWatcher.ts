@@ -12,7 +12,7 @@ import { FileWatcherService } from './FileWatcherService';
  */
 class ProjectConfigWatcher {
   private fileWatcher: FileWatcherService;
-  private unwatchers: Map<string, () => void> = new Map(); // windowId -> unwatch
+  private watchers: Map<string, { projectPath: string; unwatch: () => void }> = new Map();
 
   constructor(fileWatcher: FileWatcherService) {
     this.fileWatcher = fileWatcher;
@@ -29,7 +29,12 @@ class ProjectConfigWatcher {
     projectPath: string,
     onUpdate: (config: ProjectConfig | null) => void
   ): Promise<void> {
-    // 如果已经在监听，先停止
+    const existingWatcher = this.watchers.get(windowId);
+    if (existingWatcher?.projectPath === projectPath) {
+      return;
+    }
+
+    // 如果已经在监听其他路径，先停止
     this.stopWatching(windowId);
 
     if (!fs.existsSync(projectPath)) {
@@ -78,18 +83,18 @@ class ProjectConfigWatcher {
       }
     );
 
-    this.unwatchers.set(windowId, unwatch);
+    this.watchers.set(windowId, { projectPath, unwatch });
   }
 
   /**
    * 停止监听指定窗口
    */
   stopWatching(windowId: string): void {
-    const unwatch = this.unwatchers.get(windowId);
-    if (unwatch) {
+    const watcher = this.watchers.get(windowId);
+    if (watcher) {
       console.log(`[ProjectConfigWatcher] Stop watching for window ${windowId}`);
-      unwatch();
-      this.unwatchers.delete(windowId);
+      watcher.unwatch();
+      this.watchers.delete(windowId);
     }
   }
 
@@ -98,24 +103,31 @@ class ProjectConfigWatcher {
    */
   stopAll(): void {
     console.log('[ProjectConfigWatcher] Stopping all watchers');
-    for (const [windowId, unwatch] of this.unwatchers) {
-      unwatch();
+    for (const watcher of this.watchers.values()) {
+      watcher.unwatch();
     }
-    this.unwatchers.clear();
+    this.watchers.clear();
   }
 
   /**
    * 获取当前监听的窗口数量
    */
   getWatcherCount(): number {
-    return this.unwatchers.size;
+    return this.watchers.size;
   }
 
   /**
    * 获取当前正在监听的窗口 ID 列表
    */
   getWatchedWindowIds(): string[] {
-    return Array.from(this.unwatchers.keys());
+    return Array.from(this.watchers.keys());
+  }
+
+  /**
+   * 获取窗口当前监听的项目路径
+   */
+  getWatchedProjectPath(windowId: string): string | undefined {
+    return this.watchers.get(windowId)?.projectPath;
   }
 }
 
