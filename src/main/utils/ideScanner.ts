@@ -37,6 +37,7 @@ interface DetectedIDECandidate {
 
 interface WindowsShortcutEntry {
   name: string;
+  shortcutPath: string;
   targetPath: string;
   iconLocation?: string;
 }
@@ -689,7 +690,27 @@ function scoreImageCandidatePath(candidatePath: string, entry: IDECatalogEntry, 
   return score;
 }
 
-function listImageFilesNearRoot(rootPath: string, maxDepth = 2): string[] {
+function shouldTraverseImageDirectory(dirPath: string, depth: number): boolean {
+  if (depth <= 1) {
+    return true;
+  }
+
+  return includesAnyToken(dirPath, [
+    'resources',
+    'resource',
+    'assets',
+    'asset',
+    'images',
+    'image',
+    'icons',
+    'icon',
+    'win32',
+    'static',
+    'app',
+  ]);
+}
+
+function listImageFilesNearRoot(rootPath: string, maxDepth = 5): string[] {
   if (!pathExists(rootPath) || !isDirectory(rootPath)) {
     return [];
   }
@@ -712,6 +733,9 @@ function listImageFilesNearRoot(rootPath: string, maxDepth = 2): string[] {
 
     for (const childPath of listDirectoryEntries(current.path)) {
       if (isDirectory(childPath)) {
+        if (!shouldTraverseImageDirectory(childPath, current.depth + 1)) {
+          continue;
+        }
         queue.push({ path: childPath, depth: current.depth + 1 });
         continue;
       }
@@ -736,7 +760,7 @@ function findBestInstallDirectoryIcon(entry: IDECatalogEntry, installPath?: stri
   let best: ResolvedIDEIcon | null = null;
 
   for (const root of roots) {
-    for (const imagePath of listImageFilesNearRoot(root, 2)) {
+    for (const imagePath of listImageFilesNearRoot(root, 5)) {
       const score = scoreImageCandidatePath(imagePath, entry, installPath);
       if (!best || score > best.confidence) {
         best = {
@@ -785,6 +809,13 @@ function resolveWindowsIDEIcon(entry: IDECatalogEntry, candidate: DetectedIDECan
         });
       }
     }
+
+    iconCandidates.push({
+      icon: resolve(shortcut.shortcutPath),
+      sourceType: 'shortcut-file',
+      sourcePath: resolve(shortcut.shortcutPath),
+      confidence: isPathWithinRoot(shortcut.targetPath, installPath) ? 90 : 80,
+    });
 
     if (isWindowsExecutablePath(shortcut.targetPath)) {
       iconCandidates.push({
@@ -1028,6 +1059,7 @@ function getWindowsShortcutEntries(): WindowsShortcutEntry[] {
 
         return {
           name: basename(shortcutPath, '.lnk'),
+          shortcutPath: shortcutPath,
           targetPath: shortcut.target,
           iconLocation: shortcut.icon,
         };
