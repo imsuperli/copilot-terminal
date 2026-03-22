@@ -17,6 +17,7 @@ import { TmuxCompatService } from './services/TmuxCompatService';
 import { SSHProfileStore } from './services/ssh/SSHProfileStore';
 import { SSHVaultService } from './services/ssh/SSHVaultService';
 import { SSHKnownHostsStore } from './services/ssh/SSHKnownHostsStore';
+import { ElectronSSHHostKeyPromptService } from './services/ssh/SSHHostKeyPromptService';
 import { LayoutNode, Pane } from '../shared/types/window';
 
 let mainWindow: BrowserWindow | null = null;
@@ -33,6 +34,7 @@ let tmuxCompatService: TmuxCompatService | null = null;
 let sshProfileStore: SSHProfileStore | null = null;
 let sshVaultService: SSHVaultService | null = null;
 let sshKnownHostsStore: SSHKnownHostsStore | null = null;
+let sshHostKeyPromptService: ElectronSSHHostKeyPromptService | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 
 // 退出标志，防止重复执行退出逻辑
@@ -249,10 +251,14 @@ app.whenReady().then(async () => {
   sshProfileStore = new SSHProfileStore();
   sshVaultService = new SSHVaultService();
   sshKnownHostsStore = new SSHKnownHostsStore();
+  sshHostKeyPromptService = new ElectronSSHHostKeyPromptService({
+    getMainWindow: () => mainWindow,
+  });
 
   // 初始化 ProcessManager
   processManager = new ProcessManager(() => currentWorkspace?.settings ?? null);
   processManager.setSSHKnownHostsStore(sshKnownHostsStore);
+  processManager.setSSHHostKeyPromptService(sshHostKeyPromptService);
 
   processManager.warmupConPtyDll().catch((error) => {
     console.error('[Main] ConPTY DLL warmup failed:', error);

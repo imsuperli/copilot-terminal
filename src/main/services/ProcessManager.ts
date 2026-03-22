@@ -14,6 +14,7 @@ import { getTmuxShimDir } from '../utils/tmux-shim-path';
 import { resolveShellProgram } from '../utils/shell';
 import { ISSHKnownHostsStore } from './ssh/SSHKnownHostsStore';
 import { SSHPtySession } from './ssh/SSHPtySession';
+import { ISSHHostKeyPromptService } from './ssh/SSHHostKeyPromptService';
 
 type PaneHistoryEntry = {
   seq: number;
@@ -64,6 +65,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private readonly getSettings: (() => Settings | null | undefined) | null;
   private tmuxCompatService: ITmuxCompatService | null;
   private sshKnownHostsStore: ISSHKnownHostsStore | null;
+  private sshHostKeyPromptService: ISSHHostKeyPromptService | null;
   private conPtyWarmupPromise: Promise<void> | null;
   private conPtyWarmupCompleted: boolean;
 
@@ -71,6 +73,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     getSettings?: () => Settings | null | undefined,
     tmuxCompatService?: ITmuxCompatService,
     sshKnownHostsStore?: ISSHKnownHostsStore,
+    sshHostKeyPromptService?: ISSHHostKeyPromptService,
   ) {
     super();
     this.processes = new Map();
@@ -90,6 +93,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.getSettings = getSettings ?? null;
     this.tmuxCompatService = tmuxCompatService ?? null;
     this.sshKnownHostsStore = sshKnownHostsStore ?? null;
+    this.sshHostKeyPromptService = sshHostKeyPromptService ?? null;
     this.conPtyWarmupPromise = null;
     this.conPtyWarmupCompleted = false;
     // ??????? StatusDetector ??????? StatusPoller ??????
@@ -104,6 +108,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
   setSSHKnownHostsStore(store: ISSHKnownHostsStore): void {
     this.sshKnownHostsStore = store;
+  }
+
+  setSSHHostKeyPromptService(service: ISSHHostKeyPromptService): void {
+    this.sshHostKeyPromptService = service;
   }
 
   async warmupConPtyDll(): Promise<void> {
@@ -215,6 +223,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         pid,
         ssh: sshConfig,
         knownHostsStore: this.sshKnownHostsStore,
+        hostKeyPromptService: this.sshHostKeyPromptService,
       });
     }
 

@@ -1,13 +1,16 @@
 import fs from 'fs/promises';
 import { createHash } from 'crypto';
-import { Client, ClientChannel, ConnectConfig, ParsedKey } from 'ssh2';
+import { Client, ClientChannel, ConnectConfig, utils } from 'ssh2';
 import { IPty, SSHSessionConfig } from '../../types/process';
+import type { KnownHostEntry } from '../../../shared/types/ssh';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
+import type { ISSHHostKeyPromptService } from './SSHHostKeyPromptService';
 
 export interface SSHPtySessionOptions {
   pid: number;
   ssh: SSHSessionConfig;
   knownHostsStore?: ISSHKnownHostsStore | null;
+  hostKeyPromptService?: ISSHHostKeyPromptService | null;
 }
 
 type ExitEvent = {
@@ -30,14 +33,14 @@ export class SSHPtySession implements IPty {
 
   private readonly ssh: SSHSessionConfig;
   private readonly knownHostsStore: ISSHKnownHostsStore | null;
+  private readonly hostKeyPromptService: ISSHHostKeyPromptService | null;
   private readonly client: Client;
   private channel: ClientChannel | null;
   private readonly dataListeners = new Set<(data: string) => void>();
   private readonly exitListeners = new Set<(event: ExitEvent) => void>();
   private readonly pendingData: string[] = [];
   private pendingExit: ExitEvent | null;
-  private trustOnFirstUse: boolean;
-  private knownHostPersisted: boolean;
+  private hostKeyVerificationError: Error | null;
   private closed: boolean;
 
   private constructor(options: SSHPtySessionOptions) {
@@ -48,11 +51,11 @@ export class SSHPtySession implements IPty {
     this.handleFlowControl = false;
     this.ssh = options.ssh;
     this.knownHostsStore = options.knownHostsStore ?? null;
+    this.hostKeyPromptService = options.hostKeyPromptService ?? null;
     this.client = new Client();
     this.channel = null;
     this.pendingExit = null;
-    this.trustOnFirstUse = false;
-    this.knownHostPersisted = false;
+    this.hostKeyVerificationError = null;
     this.closed = false;
   }
 
@@ -131,8 +134,8 @@ export class SSHPtySession implements IPty {
   }
 
   private async connect(): Promise<void> {
-    const knownHostDigests = await this.loadKnownHostDigests();
-    const connectConfig = await this.buildConnectConfig(knownHostDigests);
+    const knownHosts = await this.loadKnownHosts();
+    const connectConfig = await this.buildConnectConfig(knownHosts);
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -166,10 +169,6 @@ export class SSHPtySession implements IPty {
 
       this.client.on('change password', (message) => {
         rejectOnce(new Error(message || 'SSH server requires a password change before login'));
-      });
-
-      this.client.on('hostkeys', (keys: ParsedKey[]) => {
-        void this.persistKnownHost(keys);
       });
 
       this.client.on('ready', () => {
@@ -218,7 +217,7 @@ export class SSHPtySession implements IPty {
 
       this.client.on('error', (error) => {
         if (!settled) {
-          rejectOnce(error);
+          rejectOnce(this.hostKeyVerificationError ?? error);
           return;
         }
 
@@ -234,7 +233,7 @@ export class SSHPtySession implements IPty {
     });
   }
 
-  private async buildConnectConfig(knownHostDigests: string[]): Promise<ConnectConfig> {
+  private async buildConnectConfig(knownHosts: KnownHostEntry[]): Promise<ConnectConfig> {
     const connectConfig: ConnectConfig = {
       host: this.ssh.host,
       port: this.ssh.port,
@@ -245,7 +244,27 @@ export class SSHPtySession implements IPty {
       readyTimeout: this.ssh.readyTimeout ?? undefined,
       agentForward: this.ssh.agentForward,
       tryKeyboard: this.ssh.authType === 'keyboardInteractive',
-      hostVerifier: (key: Buffer) => this.verifyHostKey(key, knownHostDigests),
+      hostVerifier: (key: Buffer, callback?: (verified: boolean) => void) => {
+        void this.verifyHostKey(key, knownHosts)
+          .then((verified) => {
+            if (callback) {
+              callback(verified);
+              return;
+            }
+
+            return verified;
+          })
+          .catch((error) => {
+            this.hostKeyVerificationError = error instanceof Error
+              ? error
+              : new Error(String(error));
+            if (callback) {
+              callback(false);
+            }
+          });
+
+        return callback ? undefined : false;
+      },
     };
 
     switch (this.ssh.authType) {
@@ -284,46 +303,67 @@ export class SSHPtySession implements IPty {
     return connectConfig;
   }
 
-  private verifyHostKey(key: Buffer, knownHostDigests: string[]): boolean {
+  private async verifyHostKey(key: Buffer, knownHosts: KnownHostEntry[]): Promise<boolean> {
     const digest = formatHostKeyDigest(key);
+    const algorithm = readHostKeyAlgorithm(key);
 
     if (!this.ssh.verifyHostKeys) {
       return true;
     }
 
-    if (knownHostDigests.length === 0) {
-      this.trustOnFirstUse = true;
+    const exactMatch = knownHosts.find((entry) => (
+      entry.algorithm === algorithm && entry.digest === digest
+    ));
+    if (exactMatch) {
       return true;
     }
 
-    return knownHostDigests.includes(digest);
+    const storedEntry = knownHosts.find((entry) => entry.algorithm === algorithm);
+    const reason = storedEntry ? 'mismatch' : 'unknown';
+    const fingerprintLabel = `[SSH] Host key fingerprint (${algorithm}): ${digest}\r\n`;
+    this.emitData(fingerprintLabel);
+    if (storedEntry) {
+      this.emitData(`[SSH] Stored fingerprint: ${storedEntry.digest}\r\n`);
+    }
+
+    if (!this.hostKeyPromptService) {
+      this.hostKeyVerificationError = new Error('SSH host key verification prompt service is unavailable');
+      return false;
+    }
+
+    const decision = await this.hostKeyPromptService.confirm({
+      host: this.ssh.host,
+      port: this.ssh.port,
+      algorithm,
+      fingerprint: digest,
+      reason,
+      ...(storedEntry ? { storedFingerprint: storedEntry.digest } : {}),
+    });
+
+    if (!decision.trusted) {
+      this.hostKeyVerificationError = new Error('SSH host key verification was rejected by the user');
+      return false;
+    }
+
+    if (decision.persist && this.knownHostsStore) {
+      await this.knownHostsStore.upsert({
+        host: this.ssh.host,
+        port: this.ssh.port,
+        algorithm,
+        digest,
+      });
+    }
+
+    return true;
   }
 
-  private async loadKnownHostDigests(): Promise<string[]> {
+  private async loadKnownHosts(): Promise<KnownHostEntry[]> {
     if (!this.ssh.verifyHostKeys || !this.knownHostsStore) {
       return [];
     }
 
     const entries = await this.knownHostsStore.list();
-    return entries
-      .filter((entry) => entry.host === this.ssh.host && entry.port === this.ssh.port)
-      .map((entry) => entry.digest);
-  }
-
-  private async persistKnownHost(keys: ParsedKey[]): Promise<void> {
-    if (!this.trustOnFirstUse || !this.knownHostsStore || this.knownHostPersisted || keys.length === 0) {
-      return;
-    }
-
-    this.knownHostPersisted = true;
-    const key = keys[0];
-
-    await this.knownHostsStore.upsert({
-      host: this.ssh.host,
-      port: this.ssh.port,
-      algorithm: key.type,
-      digest: formatHostKeyDigest(key.getPublicSSH()),
-    });
+    return entries.filter((entry) => entry.host === this.ssh.host && entry.port === this.ssh.port);
   }
 
   private initializeRemoteShell(): void {
@@ -381,4 +421,17 @@ function shellEscape(value: string): string {
 
 function formatHostKeyDigest(key: Buffer): string {
   return `SHA256:${createHash('sha256').update(key).digest('base64')}`;
+}
+
+function readHostKeyAlgorithm(key: Buffer): string {
+  const parsed = utils.parseKey(key) as { type?: string } | Array<{ type?: string }> | Error;
+  if (Array.isArray(parsed)) {
+    return parsed[0]?.type || 'unknown';
+  }
+
+  if (parsed instanceof Error) {
+    return 'unknown';
+  }
+
+  return parsed?.type || 'unknown';
 }
