@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2, Server } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
@@ -17,9 +17,12 @@ interface SidebarProps {
   appName?: string;
   version?: string;
   onCreateWindow?: () => void;
+  onCreateSSHProfile?: () => void;
   onCreateGroup?: () => void;
   isDialogOpen?: boolean;
   onDialogChange?: (open: boolean) => void;
+  sshEnabled?: boolean;
+  sshProfileCount?: number;
   currentTab?: 'all' | 'active' | 'archived' | string;
   onTabChange?: (tab: 'all' | 'active' | 'archived' | string) => void;
   searchQuery?: string;
@@ -30,9 +33,12 @@ export function Sidebar({
   appName = 'Copilot-Terminal',
   version = '0.1.0',
   onCreateWindow,
+  onCreateSSHProfile,
   onCreateGroup,
   isDialogOpen = false,
   onDialogChange,
+  sshEnabled = false,
+  sshProfileCount = 0,
   currentTab = 'active',
   onTabChange,
   searchQuery = '',
@@ -57,8 +63,8 @@ export function Sidebar({
   const archivedGroups = groups.filter(g => g.archived);
 
   // 各标签的计数
-  const allCount = windows.length + groups.length;
-  const activeCount = activeWindows.length + activeGroups.length;
+  const allCount = windows.length + groups.length + (sshEnabled ? sshProfileCount : 0);
+  const activeCount = activeWindows.length + activeGroups.length + (sshEnabled ? sshProfileCount : 0);
   const archivedCount = archivedWindows.length + archivedGroups.length;
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
@@ -596,6 +602,16 @@ export function Sidebar({
             <Plus className="h-4 w-4" />
             <span>{t('common.newTerminal')}</span>
           </button>
+
+          {sshEnabled && (
+            <button
+              onClick={onCreateSSHProfile}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
+            >
+              <Server className="h-4 w-4" />
+              <span>{t('sidebar.newSSHProfile')}</span>
+            </button>
+          )}
 
           {/* Batch button - always show */}
           <button

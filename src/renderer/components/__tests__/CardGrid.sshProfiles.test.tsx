@@ -1,0 +1,104 @@
+import type { ComponentProps } from 'react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { CardGrid } from '../CardGrid';
+import { useWindowStore } from '../../stores/windowStore';
+import { SSHProfile } from '../../../shared/types/ssh';
+
+function createSSHProfile(overrides: Partial<SSHProfile> = {}): SSHProfile {
+  return {
+    id: 'ssh-profile-1',
+    name: 'Prod Bastion',
+    host: '10.0.0.21',
+    port: 22,
+    user: 'root',
+    auth: 'password',
+    privateKeys: [],
+    keepaliveInterval: 30,
+    keepaliveCountMax: 3,
+    readyTimeout: null,
+    verifyHostKeys: true,
+    x11: false,
+    skipBanner: false,
+    agentForward: false,
+    warnOnClose: true,
+    reuseSession: true,
+    forwardedPorts: [],
+    remoteCommand: '',
+    defaultRemoteCwd: '/srv/app',
+    tags: ['prod'],
+    createdAt: '2026-03-22T10:00:00.000Z',
+    updatedAt: '2026-03-22T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function renderCardGrid(props: ComponentProps<typeof CardGrid>) {
+  return render(
+    <DndProvider backend={HTML5Backend}>
+      <CardGrid {...props} />
+    </DndProvider>,
+  );
+}
+
+describe('CardGrid SSH profile cards', () => {
+  beforeEach(() => {
+    useWindowStore.setState({
+      windows: [],
+      groups: [],
+      activeWindowId: null,
+      activeGroupId: null,
+      mruList: [],
+      groupMruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+      hideGroupedWindows: false,
+      customCategories: [],
+    });
+    vi.clearAllMocks();
+  });
+
+  it('renders SSH profile cards and forwards connect actions', async () => {
+    const user = userEvent.setup();
+    const onConnectSSHProfile = vi.fn();
+    const profile = createSSHProfile();
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+      sshCredentialStates: {
+        [profile.id]: {
+          hasPassword: true,
+          hasPassphrase: false,
+        },
+      },
+      onConnectSSHProfile,
+    });
+
+    expect(screen.getByText('Prod Bastion')).toBeInTheDocument();
+    expect(screen.getByText(/root@10.0.0.21:22/)).toBeInTheDocument();
+    expect(screen.getByText('已保存密码')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '连接' }));
+
+    expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
+  });
+
+  it('disables profile deletion when the profile is referenced by existing windows', () => {
+    const profile = createSSHProfile();
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+      sshProfileUsageCounts: {
+        [profile.id]: 2,
+      },
+    });
+
+    expect(screen.getByRole('button', { name: '删除 SSH 配置' })).toBeDisabled();
+    expect(screen.getByText('已被 2 个窗口使用')).toBeInTheDocument();
+  });
+});

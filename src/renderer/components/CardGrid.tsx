@@ -11,11 +11,13 @@ import { EditGroupPanel } from './EditGroupPanel';
 import { CreateGroupDialog } from './CreateGroupDialog';
 import { NewWindowCard } from './NewWindowCard';
 import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
+import { SSHProfileCard } from './SSHProfileCard';
 import { DraggableWindowCard, DraggableGroupCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
 import { Window, WindowStatus } from '../types/window';
 import { WindowGroup } from '../../shared/types/window-group';
+import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
@@ -25,12 +27,21 @@ import { startWindowPanes } from '../utils/paneSessionActions';
 // 统一的卡片项类型
 type CardItem =
   | { type: 'window'; data: Window }
-  | { type: 'group'; data: WindowGroup };
+  | { type: 'group'; data: WindowGroup }
+  | { type: 'sshProfile'; data: SSHProfile };
 
 interface CardGridProps {
   onEnterTerminal?: (window: Window) => void;
   onEnterGroup?: (group: WindowGroup) => void; // TODO: 等待任务 #5 完成后实现组视图
   onCreateWindow?: () => void;
+  sshEnabled?: boolean;
+  sshProfiles?: SSHProfile[];
+  sshCredentialStates?: Record<string, SSHCredentialState>;
+  sshProfileUsageCounts?: Record<string, number>;
+  connectingSSHProfileId?: string | null;
+  onConnectSSHProfile?: (profile: SSHProfile) => void | Promise<void>;
+  onEditSSHProfile?: (profile: SSHProfile) => void;
+  onDeleteSSHProfile?: (profile: SSHProfile) => void | Promise<void>;
   searchQuery?: string;
   currentTab?: 'all' | 'active' | 'archived' | string;
 }
@@ -45,7 +56,21 @@ interface CardGridProps {
  * - 支持组的各种操作（创建、编辑、删除、归档）
  * - 支持批量启动/暂停组内所有窗口
  */
-export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGroup, onCreateWindow, searchQuery = '', currentTab = 'active' }) => {
+export const CardGrid = React.memo<CardGridProps>(({
+  onEnterTerminal,
+  onEnterGroup,
+  onCreateWindow,
+  sshEnabled = false,
+  sshProfiles = [],
+  sshCredentialStates = {},
+  sshProfileUsageCounts = {},
+  connectingSSHProfileId = null,
+  onConnectSSHProfile,
+  onEditSSHProfile,
+  onDeleteSSHProfile,
+  searchQuery = '',
+  currentTab = 'active',
+}) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const removeWindow = useWindowStore((state) => state.removeWindow);
@@ -71,6 +96,10 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
   const [editingGroup, setEditingGroup] = useState<WindowGroup | null>(null);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
 
+  const sortedSSHProfiles = useMemo(
+    () => [...sshProfiles].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    [sshProfiles],
+  );
 
   // 根据 currentTab 过滤和排序卡片项
   const cardItems = useMemo<CardItem[]>(() => {
@@ -135,6 +164,7 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
       return [
         ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
         ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
+        ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
         ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
         ...sortWindows(archivedWindows, 'lastActiveAt').map(w => ({ type: 'window' as const, data: w })),
       ];
@@ -158,8 +188,9 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
     return [
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
+      ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
     ];
-  }, [currentTab, windows, groups, customCategories, hideGroupedWindows]);
+  }, [currentTab, windows, groups, customCategories, hideGroupedWindows, sshEnabled, sortedSSHProfiles]);
 
   // 全局搜索：始终搜索所有终端和组，不受 currentTab 限制
   const allCardItems = useMemo<CardItem[]>(() => {
@@ -175,10 +206,11 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
     return [
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
+      ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
       ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(archivedWindows, 'lastActiveAt').map(w => ({ type: 'window' as const, data: w })),
     ];
-  }, [windows, groups]);
+  }, [groups, sshEnabled, sortedSSHProfiles, windows]);
 
   // 根据搜索关键词过滤卡片项（窗口和组）
   const filteredCardItems = useMemo(() => {
@@ -198,7 +230,9 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
         // 搜索窗口路径
         const panes = getAllPanes(win.layout);
         return panes.some((pane) => pane.cwd.toLowerCase().includes(query));
-      } else {
+      }
+
+      if (item.type === 'group') {
         // 搜索组名称
         const group = item.data;
         if (group.name.toLowerCase().includes(query)) {
@@ -214,8 +248,29 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
           return panes.some(pane => pane.cwd.toLowerCase().includes(query));
         });
       }
+
+      const profile = item.data;
+      return (
+        profile.name.toLowerCase().includes(query)
+        || profile.host.toLowerCase().includes(query)
+        || profile.user.toLowerCase().includes(query)
+        || profile.tags.some((tag) => tag.toLowerCase().includes(query))
+        || (profile.notes?.toLowerCase().includes(query) ?? false)
+      );
     });
   }, [cardItems, allCardItems, searchQuery, windows]);
+
+  const handleConnectSSHProfile = useCallback(async (profile: SSHProfile) => {
+    await onConnectSSHProfile?.(profile);
+  }, [onConnectSSHProfile]);
+
+  const handleEditSSHProfile = useCallback((profile: SSHProfile) => {
+    onEditSSHProfile?.(profile);
+  }, [onEditSSHProfile]);
+
+  const handleDeleteSSHProfile = useCallback(async (profile: SSHProfile) => {
+    await onDeleteSSHProfile?.(profile);
+  }, [onDeleteSSHProfile]);
 
   const handleCardClick = useCallback(
     async (win: Window) => {
@@ -571,24 +626,40 @@ export const CardGrid = React.memo<CardGridProps>(({ onEnterTerminal, onEnterGro
                   </DraggableWindowCard>
                 );
               } else {
-                const group = item.data;
+                if (item.type === 'group') {
+                  const group = item.data;
+                  return (
+                    <DraggableGroupCard
+                      key={`group-${group.id}`}
+                      groupId={group.id}
+                      groupName={group.name}
+                    >
+                      <GroupCard
+                        group={group}
+                        onClick={handleGroupClick}
+                        onDelete={handleDeleteGroup}
+                        onStartAll={handleStartAllWindows}
+                        onPauseAll={handlePauseAllWindows}
+                        onArchive={handleArchiveGroup}
+                        onUnarchive={handleUnarchiveGroup}
+                        onEdit={handleEditGroup}
+                      />
+                    </DraggableGroupCard>
+                  );
+                }
+
+                const profile = item.data;
                 return (
-                  <DraggableGroupCard
-                    key={`group-${group.id}`}
-                    groupId={group.id}
-                    groupName={group.name}
-                  >
-                    <GroupCard
-                      group={group}
-                      onClick={handleGroupClick}
-                      onDelete={handleDeleteGroup}
-                      onStartAll={handleStartAllWindows}
-                      onPauseAll={handlePauseAllWindows}
-                      onArchive={handleArchiveGroup}
-                      onUnarchive={handleUnarchiveGroup}
-                      onEdit={handleEditGroup}
-                    />
-                  </DraggableGroupCard>
+                  <SSHProfileCard
+                    key={`ssh-profile-${profile.id}`}
+                    profile={profile}
+                    credentialState={sshCredentialStates[profile.id]}
+                    inUseCount={sshProfileUsageCounts[profile.id] ?? 0}
+                    isConnecting={connectingSSHProfileId === profile.id}
+                    onConnect={handleConnectSSHProfile}
+                    onEdit={handleEditSSHProfile}
+                    onDelete={handleDeleteSSHProfile}
+                  />
                 );
               }
             })}

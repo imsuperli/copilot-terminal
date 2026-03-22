@@ -1,0 +1,86 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SSHProfileDialog } from '../SSHProfileDialog';
+import { SSHProfile } from '../../../shared/types/ssh';
+
+function createSavedProfile(overrides: Partial<SSHProfile> = {}): SSHProfile {
+  return {
+    id: 'ssh-profile-1',
+    name: 'Prod Bastion',
+    host: '10.0.0.21',
+    port: 22,
+    user: 'root',
+    auth: 'password',
+    privateKeys: [],
+    keepaliveInterval: 30,
+    keepaliveCountMax: 3,
+    readyTimeout: null,
+    verifyHostKeys: true,
+    x11: false,
+    skipBanner: false,
+    agentForward: false,
+    warnOnClose: true,
+    reuseSession: true,
+    forwardedPorts: [],
+    defaultRemoteCwd: '/srv/app',
+    tags: ['prod'],
+    createdAt: '2026-03-22T10:00:00.000Z',
+    updatedAt: '2026-03-22T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('SSHProfileDialog', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('creates a password-based SSH profile and stores the password securely', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    const savedProfile = createSavedProfile();
+
+    vi.mocked(window.electronAPI.createSSHProfile).mockResolvedValueOnce({
+      success: true,
+      data: savedProfile,
+    });
+    vi.mocked(window.electronAPI.getSSHCredentialState).mockResolvedValueOnce({
+      success: true,
+      data: {
+        hasPassword: true,
+        hasPassphrase: false,
+      },
+    });
+
+    render(
+      <SSHProfileDialog
+        open={true}
+        onOpenChange={() => undefined}
+        onSaved={onSaved}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('连接名称'), 'Prod Bastion');
+    await user.type(screen.getByLabelText('主机地址'), '10.0.0.21');
+    await user.clear(screen.getByLabelText('用户名'));
+    await user.type(screen.getByLabelText('用户名'), 'root');
+    await user.type(screen.getByLabelText('密码 / 交互认证密钥'), 'super-secret');
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.createSSHProfile).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Prod Bastion',
+        host: '10.0.0.21',
+        port: 22,
+        user: 'root',
+        auth: 'password',
+      }));
+      expect(window.electronAPI.setSSHPassword).toHaveBeenCalledWith(savedProfile.id, 'super-secret');
+      expect(onSaved).toHaveBeenCalledWith(savedProfile, {
+        hasPassword: true,
+        hasPassphrase: false,
+      });
+    });
+  });
+});

@@ -11,6 +11,7 @@ import { GroupView } from './components/GroupView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
 import { QuickNavPanel } from './components/QuickNavPanel';
+import { SSHProfileDialog } from './components/SSHProfileDialog';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
@@ -19,6 +20,7 @@ import { subscribeToPaneStatusChange, subscribeToWindowGitBranchChange } from '.
 import { Pane, Window } from './types/window';
 import { WindowGroup } from '../shared/types/window-group';
 import { I18nProvider } from './i18n';
+import { SSHCredentialState, SSHProfile } from '../shared/types/ssh';
 import type {
   ClaudeModelUpdatedPayload,
   ProjectConfigUpdatedPayload,
@@ -28,9 +30,11 @@ import type {
   TmuxWindowSyncedPayload,
 } from '../shared/types/electron-api';
 import './api/ptyDataBus';
+import { getAllPanes } from './utils/layoutHelpers';
 
 function AppContent() {
   const windows = useWindowStore((state) => state.windows);
+  const addWindow = useWindowStore((state) => state.addWindow);
   const syncWindow = useWindowStore((state) => state.syncWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
@@ -43,6 +47,12 @@ function AppContent() {
   const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [isSSHDialogOpen, setIsSSHDialogOpen] = useState(false);
+  const [editingSSHProfile, setEditingSSHProfile] = useState<SSHProfile | null>(null);
+  const [sshProfiles, setSSHProfiles] = useState<SSHProfile[]>([]);
+  const [sshCredentialStates, setSSHCredentialStates] = useState<Record<string, SSHCredentialState>>({});
+  const [connectingSSHProfileId, setConnectingSSHProfileId] = useState<string | null>(null);
+  const [sshEnabled, setSSHEnabled] = useState(false);
   const [currentTab, setCurrentTab] = useState<'all' | 'active' | 'archived' | string>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
@@ -71,8 +81,11 @@ function AppContent() {
     const loadDefaultTab = async () => {
       try {
         const response = await window.electronAPI.getSettings();
-        if (response.success && response.data?.defaultSidebarTab) {
-          setCurrentTab(response.data.defaultSidebarTab);
+        if (response.success && response.data) {
+          if (response.data.defaultSidebarTab) {
+            setCurrentTab(response.data.defaultSidebarTab);
+          }
+          setSSHEnabled(Boolean(response.data.features?.sshEnabled));
         }
       } catch (error) {
         console.error('Failed to load default sidebar tab:', error);
@@ -80,6 +93,44 @@ function AppContent() {
     };
     loadDefaultTab();
   }, []);
+
+  const getSSHCredentialState = useCallback(async (profileId: string): Promise<SSHCredentialState> => {
+    try {
+      const response = await window.electronAPI.getSSHCredentialState(profileId);
+      if (response?.success && response.data) {
+        return response.data;
+      }
+    } catch (error) {
+      console.error(`Failed to load SSH credential state for ${profileId}:`, error);
+    }
+
+    return {
+      hasPassword: false,
+      hasPassphrase: false,
+    };
+  }, []);
+
+  const loadSSHProfiles = useCallback(async () => {
+    try {
+      const response = await window.electronAPI.listSSHProfiles();
+      if (!response?.success || !response.data) {
+        return;
+      }
+
+      setSSHProfiles(response.data);
+
+      const entries = await Promise.all(
+        response.data.map(async (profile) => ([profile.id, await getSSHCredentialState(profile.id)] as const)),
+      );
+      setSSHCredentialStates(Object.fromEntries(entries));
+    } catch (error) {
+      console.error('Failed to load SSH profiles:', error);
+    }
+  }, [getSSHCredentialState]);
+
+  useEffect(() => {
+    void loadSSHProfiles();
+  }, [loadSSHProfiles]);
 
   // 工作区恢复
   useWorkspaceRestore();
@@ -275,6 +326,84 @@ function AppContent() {
     setIsDialogOpen(true);
   }, []);
 
+  const handleCreateSSHProfile = useCallback(() => {
+    setEditingSSHProfile(null);
+    setIsSSHDialogOpen(true);
+  }, []);
+
+  const handleEditSSHProfile = useCallback((profile: SSHProfile) => {
+    setEditingSSHProfile(profile);
+    setIsSSHDialogOpen(true);
+  }, []);
+
+  const handleSSHProfileDialogChange = useCallback((open: boolean) => {
+    setIsSSHDialogOpen(open);
+    if (!open) {
+      setEditingSSHProfile(null);
+    }
+  }, []);
+
+  const handleSSHProfileSaved = useCallback((profile: SSHProfile, credentialState: SSHCredentialState) => {
+    setSSHProfiles((previousProfiles) => {
+      const nextProfiles = previousProfiles.some((item) => item.id === profile.id)
+        ? previousProfiles.map((item) => (item.id === profile.id ? profile : item))
+        : [...previousProfiles, profile];
+
+      return nextProfiles;
+    });
+    setSSHCredentialStates((previousStates) => ({
+      ...previousStates,
+      [profile.id]: credentialState,
+    }));
+  }, []);
+
+  const handleDeleteSSHProfile = useCallback(async (profile: SSHProfile) => {
+    if (!window.electronAPI) {
+      return;
+    }
+
+    try {
+      const response = await window.electronAPI.deleteSSHProfile(profile.id);
+      if (!response?.success) {
+        throw new Error(response?.error || `Failed to delete SSH profile ${profile.id}`);
+      }
+
+      setSSHProfiles((previousProfiles) => previousProfiles.filter((item) => item.id !== profile.id));
+      setSSHCredentialStates((previousStates) => {
+        const nextStates = { ...previousStates };
+        delete nextStates[profile.id];
+        return nextStates;
+      });
+    } catch (error) {
+      console.error('Failed to delete SSH profile:', error);
+    }
+  }, []);
+
+  const handleConnectSSHProfile = useCallback(async (profile: SSHProfile) => {
+    if (connectingSSHProfileId) {
+      return;
+    }
+
+    setConnectingSSHProfileId(profile.id);
+    try {
+      const response = await window.electronAPI.createSSHWindow({
+        profileId: profile.id,
+        name: profile.name,
+      });
+
+      if (!response?.success || !response.data) {
+        throw new Error(response?.error || `Failed to connect SSH profile ${profile.id}`);
+      }
+
+      addWindow(response.data);
+      switchToWindow(response.data.id);
+    } catch (error) {
+      console.error('Failed to create SSH window:', error);
+    } finally {
+      setConnectingSSHProfileId(null);
+    }
+  }, [addWindow, connectingSSHProfileId, switchToWindow]);
+
   const handleCreateGroup = useCallback(() => {
     setShowCreateGroupDialog(true);
   }, []);
@@ -355,9 +484,23 @@ function AppContent() {
     () => windows.filter((window) => mountedTerminalWindowIdSet.has(window.id)),
     [windows, mountedTerminalWindowIdSet]
   );
+  const sshProfileUsageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    windows.forEach((window) => {
+      getAllPanes(window.layout).forEach((pane) => {
+        const profileId = pane.ssh?.profileId;
+        if (profileId) {
+          counts[profileId] = (counts[profileId] ?? 0) + 1;
+        }
+      });
+    });
+
+    return counts;
+  }, [windows]);
   const hasActiveWindows = useMemo(
-    () => windows.some(w => !w.archived) || groups.some(g => !g.archived),
-    [windows, groups]
+    () => windows.some(w => !w.archived) || groups.some(g => !g.archived) || (sshEnabled && sshProfiles.length > 0),
+    [groups, sshEnabled, sshProfiles.length, windows]
   );
 
   return (
@@ -376,6 +519,9 @@ function AppContent() {
               appName={appVersion.name}
               version={appVersion.version}
               onCreateWindow={handleCreateWindow}
+              onCreateSSHProfile={handleCreateSSHProfile}
+              sshEnabled={sshEnabled}
+              sshProfileCount={sshProfiles.length}
               onCreateGroup={handleCreateGroup}
               isDialogOpen={isDialogOpen}
               onDialogChange={handleDialogChange}
@@ -393,6 +539,14 @@ function AppContent() {
               onEnterTerminal={handleEnterTerminal}
               onEnterGroup={handleEnterGroup}
               onCreateWindow={handleCreateWindow}
+              sshEnabled={sshEnabled}
+              sshProfiles={sshProfiles}
+              sshCredentialStates={sshCredentialStates}
+              sshProfileUsageCounts={sshProfileUsageCounts}
+              connectingSSHProfileId={connectingSSHProfileId}
+              onConnectSSHProfile={handleConnectSSHProfile}
+              onEditSSHProfile={handleEditSSHProfile}
+              onDeleteSSHProfile={handleDeleteSSHProfile}
               searchQuery={searchQuery}
               currentTab={currentTab}
             />
@@ -469,6 +623,16 @@ function AppContent() {
         <CreateGroupDialog
           open={showCreateGroupDialog}
           onOpenChange={setShowCreateGroupDialog}
+        />
+      )}
+
+      {sshEnabled && (
+        <SSHProfileDialog
+          open={isSSHDialogOpen}
+          onOpenChange={handleSSHProfileDialogChange}
+          profile={editingSSHProfile}
+          credentialState={editingSSHProfile ? sshCredentialStates[editingSSHProfile.id] : null}
+          onSaved={handleSSHProfileSaved}
         />
       )}
     </>
