@@ -4,7 +4,7 @@ import { existsSync } from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { IProcessManager, TerminalConfig, ProcessHandle, ProcessInfo, ProcessStatus } from '../types/process';
+import { IProcessManager, SSHSessionConfig, TerminalConfig, ProcessHandle, ProcessInfo, ProcessStatus } from '../types/process';
 import { Settings } from '../types/workspace';
 import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
@@ -12,6 +12,8 @@ import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
 import { resolveShellProgram } from '../utils/shell';
+import { ISSHKnownHostsStore } from './ssh/SSHKnownHostsStore';
+import { SSHPtySession } from './ssh/SSHPtySession';
 
 type PaneHistoryEntry = {
   seq: number;
@@ -61,10 +63,15 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private readonly PANE_HISTORY_CHAR_LIMIT = 2_000_000;
   private readonly getSettings: (() => Settings | null | undefined) | null;
   private tmuxCompatService: ITmuxCompatService | null;
+  private sshKnownHostsStore: ISSHKnownHostsStore | null;
   private conPtyWarmupPromise: Promise<void> | null;
   private conPtyWarmupCompleted: boolean;
 
-  constructor(getSettings?: () => Settings | null | undefined, tmuxCompatService?: ITmuxCompatService) {
+  constructor(
+    getSettings?: () => Settings | null | undefined,
+    tmuxCompatService?: ITmuxCompatService,
+    sshKnownHostsStore?: ISSHKnownHostsStore,
+  ) {
     super();
     this.processes = new Map();
     this.ptys = new Map();
@@ -82,6 +89,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.cachedSpawnEnvAt = 0;
     this.getSettings = getSettings ?? null;
     this.tmuxCompatService = tmuxCompatService ?? null;
+    this.sshKnownHostsStore = sshKnownHostsStore ?? null;
     this.conPtyWarmupPromise = null;
     this.conPtyWarmupCompleted = false;
     // ??????? StatusDetector ??????? StatusPoller ??????
@@ -92,6 +100,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    */
   setTmuxCompatService(service: ITmuxCompatService): void {
     this.tmuxCompatService = service;
+  }
+
+  setSSHKnownHostsStore(store: ISSHKnownHostsStore): void {
+    this.sshKnownHostsStore = store;
   }
 
   async warmupConPtyDll(): Promise<void> {
@@ -166,31 +178,44 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    */
 
   async spawnTerminal(config: TerminalConfig): Promise<ProcessHandle> {
-    // Validate working directory
-    if (!existsSync(config.workingDirectory)) {
+    const backend = config.backend ?? 'local';
+
+    // Validate working directory for local sessions only.
+    if (backend === 'local' && !existsSync(config.workingDirectory)) {
       throw new Error(`Working directory does not exist: ${config.workingDirectory}`);
     }
-
-    // Resolve the executable and args that will actually be passed to node-pty.
-    const launchCommand = this.resolveLaunchCommand(config);
-
-    await this.ensureTmuxRpcServer(config);
-
 
     // 鍒涘缓 PTY 杩涚▼锛堢湡瀹炴垨 mock锛?
     let ptyProcess: any;
     let pid: number;
     const sessionId = randomUUID();
-    const backend = config.backend ?? 'local';
+    let command = config.command;
 
-    if (pty) {
-      // 浣跨敤鐪熷疄鐨?node-pty
-      ptyProcess = this.createRealPty(config, launchCommand.file, launchCommand.args);
-      pid = ptyProcess.pid;
+    if (backend === 'local') {
+      // Resolve the executable and args that will actually be passed to node-pty.
+      const launchCommand = this.resolveLaunchCommand(config);
+      command = launchCommand.command;
+
+      await this.ensureTmuxRpcServer(config);
+
+      if (pty) {
+        // 浣跨敤鐪熷疄鐨?node-pty
+        ptyProcess = this.createRealPty(config, launchCommand.file, launchCommand.args);
+        pid = ptyProcess.pid;
+      } else {
+        // 浣跨敤 mock PTY
+        pid = this.nextPid++;
+        ptyProcess = this.createMockPty(pid, config);
+      }
     } else {
-      // 浣跨敤 mock PTY
+      const sshConfig = this.requireSSHConfig(config.ssh);
+      command = sshConfig.command ?? command ?? 'shell';
       pid = this.nextPid++;
-      ptyProcess = this.createMockPty(pid, config);
+      ptyProcess = await SSHPtySession.create({
+        pid,
+        ssh: sshConfig,
+        knownHostsStore: this.sshKnownHostsStore,
+      });
     }
 
     // Store process info
@@ -200,7 +225,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       pid,
       status: ProcessStatus.Alive,
       workingDirectory: config.workingDirectory,
-      command: launchCommand.command,
+      command,
+      profileId: config.ssh?.profileId,
       windowId: config.windowId,
       paneId: config.paneId,
     };
@@ -219,7 +245,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.resetPaneHistory(config.paneId);
 
     // Start tracking this PID before registering listeners (avoids race condition)
-    this.statusDetector.trackPid(pid);
+    this.statusDetector.trackPid(pid, { virtual: backend === 'ssh' });
 
     // 绔嬪嵆寮€濮嬬紦瀛?PTY 杈撳嚭锛堝湪浠讳綍璁㈤槄涔嬪墠锛?
     const bufferDisposable = ptyProcess.onData((data: string) => {
@@ -290,7 +316,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const ptyProcess = this.ptys.get(pid);
     if (ptyProcess && typeof ptyProcess.kill === 'function') {
       try {
-        if (platform() === 'win32') {
+        if (processInfo.backend === 'ssh') {
+          ptyProcess.kill('SIGTERM');
+        } else if (platform() === 'win32') {
           // Windows: 浣跨敤 taskkill 寮哄埗缁堟杩涚▼鏍?
           this.killProcessTreeWindows(pid);
         } else {
@@ -516,12 +544,20 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // 绗竴姝ワ細灏濊瘯浼橀泤缁堟锛圫IGTERM锛?
     for (const [pid, pty] of this.ptys.entries()) {
-      pidsToKill.push(pid);
+      const processInfo = this.processes.get(pid);
+      if (processInfo?.backend !== 'ssh') {
+        pidsToKill.push(pid);
+      }
       if (pty && typeof pty.kill === 'function') {
         try {
-          // 鍏堜娇鐢?SIGTERM 浼橀泤缁堟
-          pty.kill('SIGTERM');
-          console.log(`[ProcessManager] Sent SIGTERM to PTY process ${pid}`);
+          if (processInfo?.backend === 'ssh') {
+            pty.kill('SIGTERM');
+            console.log(`[ProcessManager] Closed SSH session for PID ${pid}`);
+          } else {
+            // 鍏堜娇鐢?SIGTERM 浼橀泤缁堟
+            pty.kill('SIGTERM');
+            console.log(`[ProcessManager] Sent SIGTERM to PTY process ${pid}`);
+          }
         } catch (error) {
           // 蹇界暐閿欒锛屽洜涓鸿繘绋嬪彲鑳藉凡缁忛€€鍑?
           if (process.env.NODE_ENV === 'development') {
@@ -563,6 +599,14 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.sessionIdToPid.clear();
 
     console.log('[ProcessManager] Destroy completed');
+  }
+
+  private requireSSHConfig(config?: SSHSessionConfig): SSHSessionConfig {
+    if (!config) {
+      throw new Error('SSH terminal config is missing SSH session details');
+    }
+
+    return config;
   }
 
   /**

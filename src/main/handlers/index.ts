@@ -11,6 +11,7 @@ import { registerSettingsHandlers } from './settingsHandlers';
 import { registerStatusLineHandlers } from './statusLineHandlers';
 import { registerGroupHandlers } from './groupHandlers';
 import { registerSSHProfileHandlers } from './sshProfileHandlers';
+import { registerSSHSessionHandlers } from './sshSessionHandlers';
 
 /**
  * 注册所有 IPC handlers
@@ -44,6 +45,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // SSH 资产与凭据管理
   registerSSHProfileHandlers(ctx);
+
+  // SSH 会话管理
+  registerSSHSessionHandlers(ctx);
 
   // StatusLine 管理 (statusline-configure, statusline-remove, etc.)
   registerStatusLineHandlers(ctx);

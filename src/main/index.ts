@@ -252,6 +252,7 @@ app.whenReady().then(async () => {
 
   // 初始化 ProcessManager
   processManager = new ProcessManager(() => currentWorkspace?.settings ?? null);
+  processManager.setSSHKnownHostsStore(sshKnownHostsStore);
 
   processManager.warmupConPtyDll().catch((error) => {
     console.error('[Main] ConPTY DLL warmup failed:', error);

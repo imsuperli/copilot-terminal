@@ -139,6 +139,19 @@ describe('StatusDetectorImpl', () => {
       // After untrack, no lastOutputTime → WaitingForInput (not Running)
       expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.WaitingForInput);
     });
+
+    it('treats tracked virtual pids as alive until exit is reported', async () => {
+      vi.spyOn(process, 'kill').mockImplementation(() => { throw new Error('ESRCH'); });
+
+      detector.trackPid(mockPid, { virtual: true });
+      expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.WaitingForInput);
+
+      detector.onPtyData(mockPid, 'remote output');
+      expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.Running);
+
+      detector.onProcessExit(mockPid, 0);
+      expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.Completed);
+    });
   });
 
   describe('performance', () => {

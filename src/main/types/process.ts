@@ -1,3 +1,4 @@
+import { SSHAuthType } from '../../shared/types/ssh';
 import { PaneBackend } from '../../shared/types/window';
 
 /**
@@ -28,6 +29,26 @@ export interface TerminalConfig {
   windowId?: string;  // 关联的窗口 ID
   paneId?: string;  // 关联的窗格 ID（用于拆分功能）
   backend?: PaneBackend;
+  ssh?: SSHSessionConfig;
+}
+
+export interface SSHSessionConfig {
+  profileId: string;
+  host: string;
+  port: number;
+  user: string;
+  authType: SSHAuthType;
+  privateKeys: string[];
+  privateKeyPassphrases?: Record<string, string>;
+  password?: string;
+  keepaliveInterval: number;
+  keepaliveCountMax: number;
+  readyTimeout: number | null;
+  verifyHostKeys: boolean;
+  agentForward: boolean;
+  skipBanner?: boolean;
+  remoteCwd?: string;
+  command?: string;
 }
 
 // 进程句柄
@@ -52,6 +73,7 @@ export interface ProcessInfo {
   exitCode?: number;
   workingDirectory: string;
   command?: string;
+  profileId?: string;
   windowId?: string;  // 关联的窗口 ID
   paneId?: string;  // 关联的窗格 ID
 }

@@ -6,7 +6,7 @@ import { WindowStatus } from '../../shared/types/window';
 export interface IStatusDetector {
   detectStatus(pid: number): Promise<WindowStatus>;
   subscribeStatusChange(callback: (pid: number, status: WindowStatus) => void): () => void;
-  trackPid(pid: number): void;
+  trackPid(pid: number, options?: { virtual?: boolean }): void;
   untrackPid(pid: number): void;
   onPtyData(pid: number, data: string): void;
   onProcessExit(pid: number, exitCode: number): void;
@@ -28,6 +28,8 @@ export class StatusDetectorImpl implements IStatusDetector {
   private statusCache = new Map<number, WindowStatus>();
   /** 正在追踪的 PID 集合 */
   private trackedPids = new Set<number>();
+  /** 虚拟 PID 集合（如 SSH channel），不应使用 process.kill 探测。 */
+  private virtualPids = new Set<number>();
   /** 状态变化订阅回调列表 */
   private subscribers: Array<(pid: number, status: WindowStatus) => void> = [];
 
@@ -72,8 +74,11 @@ export class StatusDetectorImpl implements IStatusDetector {
   /**
    * 开始追踪某个 PID
    */
-  trackPid(pid: number): void {
+  trackPid(pid: number, options?: { virtual?: boolean }): void {
     this.trackedPids.add(pid);
+    if (options?.virtual) {
+      this.virtualPids.add(pid);
+    }
     // 初始状态设为 WaitingForInput（shell 启动后等待用户输入）
     // 如果进程正在执行任务，会在下次轮询时更新为 Running
     this.statusCache.set(pid, WindowStatus.WaitingForInput);
@@ -85,6 +90,7 @@ export class StatusDetectorImpl implements IStatusDetector {
    */
   untrackPid(pid: number): void {
     this.trackedPids.delete(pid);
+    this.virtualPids.delete(pid);
     this.lastOutputTime.delete(pid);
     this.exitCodes.delete(pid);
     this.statusCache.delete(pid);
@@ -101,6 +107,7 @@ export class StatusDetectorImpl implements IStatusDetector {
    * 记录进程退出事件（由 ProcessManager 调用）
    */
   onProcessExit(pid: number, exitCode: number): void {
+    this.virtualPids.delete(pid);
     this.exitCodes.set(pid, exitCode);
     // 立即触发状态更新，无需等待 StatusPoller 下次轮询
     const newStatus = exitCode === 0 ? WindowStatus.Completed : WindowStatus.Error;
@@ -112,6 +119,7 @@ export class StatusDetectorImpl implements IStatusDetector {
    */
   destroy(): void {
     this.trackedPids.clear();
+    this.virtualPids.clear();
     this.lastOutputTime.clear();
     this.exitCodes.clear();
     this.statusCache.clear();
@@ -122,6 +130,10 @@ export class StatusDetectorImpl implements IStatusDetector {
    * 检测进程是否存活（使用 signal 0 探测）
    */
   isProcessAlive(pid: number): boolean {
+    if (this.virtualPids.has(pid)) {
+      return !this.exitCodes.has(pid);
+    }
+
     try {
       process.kill(pid, 0);
       return true;

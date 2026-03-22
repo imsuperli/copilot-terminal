@@ -44,8 +44,36 @@ export interface SplitPaneConfig {
   paneId?: string;
 }
 
+export interface CreateSSHWindowConfig {
+  name?: string;
+  profileId: string;
+  remoteCwd?: string;
+  command?: string;
+}
+
+export interface StartSSHPaneConfig {
+  windowId: string;
+  paneId: string;
+  profileId: string;
+  remoteCwd?: string;
+  command?: string;
+}
+
+export interface CloneSSHPaneConfig {
+  sourceWindowId: string;
+  sourcePaneId: string;
+  targetWindowId: string;
+  targetPaneId: string;
+}
+
 export interface StartWindowResult {
   pid: number;
+  sessionId: string;
+  status: WindowStatus;
+}
+
+export interface StartSSHPaneResult {
+  pid: number | null;
   sessionId: string;
   status: WindowStatus;
 }
@@ -185,6 +213,7 @@ export interface ElectronAPI {
   getAppVersion: () => Promise<IpcResponse<AppVersionInfo>>;
 
   createWindow: (config: CreateWindowConfig) => Promise<IpcResponse<Window>>;
+  createSSHWindow: (config: CreateSSHWindowConfig) => Promise<IpcResponse<Window>>;
   killTerminal: (pid: number) => Promise<IpcResponse<void>>;
   getTerminalStatus: (pid: number) => Promise<IpcResponse<unknown>>;
   listTerminals: () => Promise<IpcResponse<unknown[]>>;
@@ -192,6 +221,8 @@ export interface ElectronAPI {
   closeWindow: (windowId: string) => Promise<IpcResponse<void>>;
   deleteWindow: (windowId: string) => Promise<IpcResponse<void>>;
   startWindow: (config: StartWindowConfig) => Promise<IpcResponse<StartWindowResult>>;
+  startSSHPane: (config: StartSSHPaneConfig) => Promise<IpcResponse<StartSSHPaneResult>>;
+  cloneSSHPane: (config: CloneSSHPaneConfig) => Promise<IpcResponse<{ pid: number | null; sessionId: string }>>;
   checkPtyOutput: (windowId: string, paneId: string) => Promise<IpcResponse<CheckPtyOutputResult>>;
   startGitWatch: (windowId: string, cwd: string) => Promise<IpcResponse<void>>;
   stopGitWatch: (windowId: string) => Promise<IpcResponse<void>>;

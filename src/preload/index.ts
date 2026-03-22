@@ -10,6 +10,8 @@ const electronAPI: ElectronAPI = {
   // Terminal management
   createWindow: (config: { name?: string; workingDirectory: string; command?: string }) =>
     ipcRenderer.invoke('create-window', config),
+  createSSHWindow: (config: unknown) =>
+    ipcRenderer.invoke('create-ssh-window', config),
   killTerminal: (pid: number) => ipcRenderer.invoke('kill-terminal', pid),
   getTerminalStatus: (pid: number) => ipcRenderer.invoke('get-terminal-status', pid),
   listTerminals: () => ipcRenderer.invoke('list-terminals'),
@@ -19,6 +21,10 @@ const electronAPI: ElectronAPI = {
   deleteWindow: (windowId: string) => ipcRenderer.invoke('delete-window', { windowId }),
   startWindow: (config: { windowId: string; paneId?: string; name: string; workingDirectory: string; command?: string }) =>
     ipcRenderer.invoke('start-window', config),
+  startSSHPane: (config: unknown) =>
+    ipcRenderer.invoke('start-ssh-pane', config),
+  cloneSSHPane: (config: unknown) =>
+    ipcRenderer.invoke('clone-ssh-pane', config),
   checkPtyOutput: (windowId: string, paneId: string) => ipcRenderer.invoke('check-pty-output', { windowId, paneId }),
   startGitWatch: (windowId: string, cwd: string) => ipcRenderer.invoke('start-git-watch', { windowId, cwd }),
   stopGitWatch: (windowId: string) => ipcRenderer.invoke('stop-git-watch', { windowId }),
