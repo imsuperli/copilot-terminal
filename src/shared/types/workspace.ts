@@ -11,6 +11,9 @@ export interface IDEConfig {
   path?: string;
   enabled: boolean;
   icon?: string;
+  iconSourceType?: 'image-file' | 'shortcut-icon' | 'shortcut-target' | 'uninstall-display-icon' | 'install-dir-icon' | 'executable';
+  iconSourcePath?: string;
+  iconConfidence?: number;
   installPath?: string;
   detected?: boolean;
   source?: string;

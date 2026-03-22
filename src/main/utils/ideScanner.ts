@@ -27,6 +27,9 @@ interface DetectedIDECandidate {
   path: string;
   installPath?: string;
   icon: string;
+  iconSourceType?: IDEConfig['iconSourceType'];
+  iconSourcePath?: string;
+  iconConfidence?: number;
   source: string;
   confidence: number;
   version?: string;
@@ -43,6 +46,13 @@ interface WindowsUninstallEntry {
   displayIcon?: string;
   installLocation?: string;
   displayVersion?: string;
+}
+
+interface ResolvedIDEIcon {
+  icon: string;
+  sourceType: NonNullable<IDEConfig['iconSourceType']>;
+  sourcePath: string;
+  confidence: number;
 }
 
 const CURRENT_PLATFORM = platform() as SupportedPlatform;
@@ -468,6 +478,9 @@ function candidateToIDEConfig(entry: IDECatalogEntry, candidate: DetectedIDECand
     path: candidate.path,
     enabled: true,
     icon: candidate.icon,
+    iconSourceType: candidate.iconSourceType,
+    iconSourcePath: candidate.iconSourcePath || candidate.icon,
+    iconConfidence: candidate.iconConfidence,
     installPath: candidate.installPath,
     detected: true,
     source: candidate.source,
@@ -547,6 +560,11 @@ function pushCandidate(
     path: resolvedBinaryPath,
     installPath: resolvedInstallPath,
     icon: resolvedIconPath,
+    iconSourceType: iconSource
+      ? (isImageFile(resolvedIconPath) ? 'image-file' : 'executable')
+      : 'executable',
+    iconSourcePath: resolvedIconPath,
+    iconConfidence: iconSource ? confidence : 55,
     source,
     confidence,
     version: version || parseVersionFromPath(pathToBinary),
@@ -616,6 +634,216 @@ function findMacAppExecutable(appPath: string, entry: IDECatalogEntry): string |
 function matchesAnyPattern(value: string | undefined | null, patterns: string[]): boolean {
   const normalized = normalizeText(value);
   return patterns.some(pattern => normalized.includes(normalizeText(pattern)));
+}
+
+function includesAnyToken(value: string | undefined | null, tokens: string[]): boolean {
+  const normalized = normalizeText(value).replace(/[^a-z0-9]+/g, ' ');
+  return tokens.some((token) => normalized.includes(normalizeText(token).replace(/[^a-z0-9]+/g, ' ')));
+}
+
+function getEntrySearchTokens(entry: IDECatalogEntry): string[] {
+  return uniqueStrings([
+    entry.id,
+    entry.name,
+    entry.command,
+    ...entry.aliases,
+    ...entry.displayNamePatterns,
+  ])
+    .map(token => normalizeText(token))
+    .filter(token => token.length >= 3);
+}
+
+function normalizeWindowsPath(pathValue: string | undefined | null): string {
+  return normalizeText(pathValue).replace(/\//g, '\\');
+}
+
+function isPathWithinRoot(pathValue: string | undefined | null, rootPath: string | undefined | null): boolean {
+  if (!pathValue || !rootPath) {
+    return false;
+  }
+
+  const normalizedPath = normalizeWindowsPath(pathValue);
+  const normalizedRoot = normalizeWindowsPath(rootPath).replace(/\\+$/, '');
+  return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}\\`);
+}
+
+function scoreImageCandidatePath(candidatePath: string, entry: IDECatalogEntry, installPath?: string): number {
+  const normalized = normalizeText(candidatePath).replace(/\\/g, '/');
+  const fileName = basename(candidatePath, extname(candidatePath));
+  const tokens = getEntrySearchTokens(entry);
+  let score = 84;
+
+  if (isPathWithinRoot(candidatePath, installPath)) {
+    score += 10;
+  }
+  if (includesAnyToken(fileName, tokens)) {
+    score += 8;
+  }
+  if (includesAnyToken(normalized, ['icon', 'icons', 'logo', 'resources'])) {
+    score += 4;
+  }
+  if (normalized.includes('/chrome/user data/') || normalized.includes('/web applications/')) {
+    score -= 6;
+  }
+
+  return score;
+}
+
+function listImageFilesNearRoot(rootPath: string, maxDepth = 2): string[] {
+  if (!pathExists(rootPath) || !isDirectory(rootPath)) {
+    return [];
+  }
+
+  const matches: string[] = [];
+  const queue: Array<{ path: string; depth: number }> = [{ path: rootPath, depth: 0 }];
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) {
+      continue;
+    }
+
+    const resolvedCurrent = resolve(current.path);
+    if (visited.has(resolvedCurrent) || current.depth > maxDepth) {
+      continue;
+    }
+    visited.add(resolvedCurrent);
+
+    for (const childPath of listDirectoryEntries(current.path)) {
+      if (isDirectory(childPath)) {
+        queue.push({ path: childPath, depth: current.depth + 1 });
+        continue;
+      }
+
+      if (!isImageFile(childPath)) {
+        continue;
+      }
+
+      matches.push(childPath);
+    }
+  }
+
+  return uniqueStrings(matches);
+}
+
+function findBestInstallDirectoryIcon(entry: IDECatalogEntry, installPath?: string, binaryPath?: string): ResolvedIDEIcon | null {
+  const roots = uniqueStrings([
+    installPath,
+    binaryPath ? dirname(binaryPath) : undefined,
+  ]).filter(root => Boolean(root) && pathExists(root!));
+
+  let best: ResolvedIDEIcon | null = null;
+
+  for (const root of roots) {
+    for (const imagePath of listImageFilesNearRoot(root, 2)) {
+      const score = scoreImageCandidatePath(imagePath, entry, installPath);
+      if (!best || score > best.confidence) {
+        best = {
+          icon: resolve(imagePath),
+          sourceType: 'install-dir-icon',
+          sourcePath: resolve(imagePath),
+          confidence: score,
+        };
+      }
+    }
+  }
+
+  return best;
+}
+
+function resolveWindowsIDEIcon(entry: IDECatalogEntry, candidate: DetectedIDECandidate): ResolvedIDEIcon {
+  const tokens = getEntrySearchTokens(entry);
+  const installPath = candidate.installPath || dirname(candidate.path);
+  const iconCandidates: ResolvedIDEIcon[] = [];
+
+  for (const shortcut of getWindowsShortcutEntries()) {
+    const shortcutMatches =
+      matchesAnyPattern(shortcut.name, [...entry.displayNamePatterns, ...entry.aliases]) ||
+      isPathWithinRoot(shortcut.targetPath, installPath) ||
+      includesAnyToken(shortcut.targetPath, tokens);
+
+    if (!shortcutMatches) {
+      continue;
+    }
+
+    const resolvedIcon = cleanWindowsRegistryPath(shortcut.iconLocation);
+    if (resolvedIcon) {
+      if (isImageFile(resolvedIcon)) {
+        iconCandidates.push({
+          icon: resolve(resolvedIcon),
+          sourceType: 'shortcut-icon',
+          sourcePath: resolve(resolvedIcon),
+          confidence: scoreImageCandidatePath(resolvedIcon, entry, installPath) + 8,
+        });
+      } else if (isWindowsExecutablePath(resolvedIcon)) {
+        iconCandidates.push({
+          icon: resolve(resolvedIcon),
+          sourceType: 'shortcut-icon',
+          sourcePath: resolve(resolvedIcon),
+          confidence: isPathWithinRoot(resolvedIcon, installPath) ? 82 : 74,
+        });
+      }
+    }
+
+    if (isWindowsExecutablePath(shortcut.targetPath)) {
+      iconCandidates.push({
+        icon: resolve(shortcut.targetPath),
+        sourceType: 'shortcut-target',
+        sourcePath: resolve(shortcut.targetPath),
+        confidence: isPathWithinRoot(shortcut.targetPath, installPath) ? 72 : 64,
+      });
+    }
+  }
+
+  for (const uninstallEntry of getWindowsUninstallEntries()) {
+    if (!matchesAnyPattern(uninstallEntry.displayName, entry.displayNamePatterns)) {
+      continue;
+    }
+
+    const displayIcon = cleanWindowsRegistryPath(uninstallEntry.displayIcon);
+    if (!displayIcon) {
+      continue;
+    }
+
+    if (isImageFile(displayIcon)) {
+      iconCandidates.push({
+        icon: resolve(displayIcon),
+        sourceType: 'uninstall-display-icon',
+        sourcePath: resolve(displayIcon),
+        confidence: scoreImageCandidatePath(displayIcon, entry, installPath),
+      });
+    } else if (isWindowsExecutablePath(displayIcon)) {
+      iconCandidates.push({
+        icon: resolve(displayIcon),
+        sourceType: 'uninstall-display-icon',
+        sourcePath: resolve(displayIcon),
+        confidence: isPathWithinRoot(displayIcon, installPath) ? 68 : 60,
+      });
+    }
+  }
+
+  const installDirectoryIcon = findBestInstallDirectoryIcon(entry, installPath, candidate.path);
+  if (installDirectoryIcon) {
+    iconCandidates.push(installDirectoryIcon);
+  }
+
+  iconCandidates.push({
+    icon: resolve(candidate.path),
+    sourceType: 'executable',
+    sourcePath: resolve(candidate.path),
+    confidence: 55,
+  });
+
+  iconCandidates.sort((left, right) => {
+    const confidenceDiff = right.confidence - left.confidence;
+    if (confidenceDiff !== 0) {
+      return confidenceDiff;
+    }
+    return right.sourcePath.length - left.sourcePath.length;
+  });
+
+  return iconCandidates[0];
 }
 
 function scanPathLookup(entry: IDECatalogEntry): DetectedIDECandidate[] {
@@ -1154,7 +1382,23 @@ function scanCatalog(entry: IDECatalogEntry): DetectedIDECandidate | null {
     candidates = scanLinuxCatalog(entry);
   }
 
-  return pickBestCandidate(candidates);
+  const bestCandidate = pickBestCandidate(candidates);
+  if (!bestCandidate) {
+    return null;
+  }
+
+  if (CURRENT_PLATFORM === 'win32') {
+    const resolvedIcon = resolveWindowsIDEIcon(entry, bestCandidate);
+    return {
+      ...bestCandidate,
+      icon: resolvedIcon.icon,
+      iconSourceType: resolvedIcon.sourceType,
+      iconSourcePath: resolvedIcon.sourcePath,
+      iconConfidence: resolvedIcon.confidence,
+    };
+  }
+
+  return bestCandidate;
 }
 
 export function scanInstalledIDEs(): IDEConfig[] {
@@ -1188,6 +1432,9 @@ export function getDefaultIDEConfigs(): IDEConfig[] {
     command: entry.command,
     enabled: false,
     icon: entry.id,
+    iconSourceType: undefined,
+    iconSourcePath: undefined,
+    iconConfidence: undefined,
     catalogId: entry.id,
     detected: false,
     isCustom: false,
