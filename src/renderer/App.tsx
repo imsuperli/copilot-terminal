@@ -674,6 +674,7 @@ function AppContent() {
           open={isSSHDialogOpen}
           onOpenChange={handleSSHProfileDialogChange}
           profile={editingSSHProfile}
+          profiles={sshProfiles}
           credentialState={editingSSHProfile ? sshCredentialStates[editingSSHProfile.id] : null}
           onSaved={handleSSHProfileSaved}
         />

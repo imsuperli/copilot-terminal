@@ -2,15 +2,25 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { useI18n } from '../i18n';
-import { SSHAuthType, SSHCredentialState, SSHProfile, SSHProfileInput } from '../../shared/types/ssh';
+import {
+  ForwardedPortConfig,
+  SSHAuthType,
+  SSHCredentialState,
+  SSHPortForwardType,
+  SSHProfile,
+  SSHProfileInput,
+} from '../../shared/types/ssh';
 
 interface SSHProfileDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   profile?: SSHProfile | null;
+  profiles?: SSHProfile[];
   credentialState?: SSHCredentialState | null;
   onSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
 }
+
+type SSHRoutingMode = 'direct' | 'jumpHost' | 'proxyCommand' | 'socks' | 'http';
 
 interface SSHProfileFormState {
   name: string;
@@ -29,8 +39,25 @@ interface SSHProfileFormState {
   skipBanner: boolean;
   warnOnClose: boolean;
   reuseSession: boolean;
+  routingMode: SSHRoutingMode;
+  jumpHostProfileId: string;
+  proxyCommand: string;
+  socksProxyHost: string;
+  socksProxyPort: string;
+  httpProxyHost: string;
+  httpProxyPort: string;
+  forwardedPorts: ForwardedPortConfig[];
   tagsText: string;
   notes: string;
+}
+
+interface SSHPortForwardDraft {
+  type: SSHPortForwardType;
+  host: string;
+  port: string;
+  targetAddress: string;
+  targetPort: string;
+  description: string;
 }
 
 const DEFAULT_CREDENTIAL_STATE: SSHCredentialState = {
@@ -65,6 +92,37 @@ function trimOptional(value: string): string | undefined {
   return normalized || undefined;
 }
 
+function resolveRoutingMode(profile?: SSHProfile | null): SSHRoutingMode {
+  if (profile?.proxyCommand) {
+    return 'proxyCommand';
+  }
+
+  if (profile?.socksProxyHost) {
+    return 'socks';
+  }
+
+  if (profile?.httpProxyHost) {
+    return 'http';
+  }
+
+  if (profile?.jumpHostProfileId) {
+    return 'jumpHost';
+  }
+
+  return 'direct';
+}
+
+function createEmptyPortForwardDraft(): SSHPortForwardDraft {
+  return {
+    type: 'local',
+    host: '127.0.0.1',
+    port: '8000',
+    targetAddress: '127.0.0.1',
+    targetPort: '80',
+    description: '',
+  };
+}
+
 function createInitialForm(profile?: SSHProfile | null): SSHProfileFormState {
   return {
     name: profile?.name ?? '',
@@ -83,6 +141,14 @@ function createInitialForm(profile?: SSHProfile | null): SSHProfileFormState {
     skipBanner: profile?.skipBanner ?? false,
     warnOnClose: profile?.warnOnClose ?? true,
     reuseSession: profile?.reuseSession ?? true,
+    routingMode: resolveRoutingMode(profile),
+    jumpHostProfileId: profile?.jumpHostProfileId ?? '',
+    proxyCommand: profile?.proxyCommand ?? '',
+    socksProxyHost: profile?.socksProxyHost ?? '',
+    socksProxyPort: profile?.socksProxyPort ? String(profile.socksProxyPort) : '1080',
+    httpProxyHost: profile?.httpProxyHost ?? '',
+    httpProxyPort: profile?.httpProxyPort ? String(profile.httpProxyPort) : '8080',
+    forwardedPorts: profile?.forwardedPorts ?? [],
     tagsText: profile?.tags.join(', ') ?? '',
     notes: profile?.notes ?? '',
   };
@@ -96,6 +162,7 @@ export function SSHProfileDialog({
   open,
   onOpenChange,
   profile,
+  profiles = [],
   credentialState,
   onSaved,
 }: SSHProfileDialogProps) {
@@ -110,11 +177,16 @@ export function SSHProfileDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [detectKeysMessage, setDetectKeysMessage] = useState('');
   const [isDetectingKeys, setIsDetectingKeys] = useState(false);
+  const [newForward, setNewForward] = useState<SSHPortForwardDraft>(() => createEmptyPortForwardDraft());
 
   const currentCredentialState = readCredentialState(credentialState);
   const currentPrivateKeys = useMemo(
     () => parseLineList(form.privateKeysText),
     [form.privateKeysText],
+  );
+  const availableJumpHosts = useMemo(
+    () => profiles.filter((item) => item.id !== profile?.id),
+    [profile?.id, profiles],
   );
 
   useEffect(() => {
@@ -129,6 +201,7 @@ export function SSHProfileDialog({
     setPassphrases({});
     setSaveError('');
     setDetectKeysMessage('');
+    setNewForward(createEmptyPortForwardDraft());
 
     setTimeout(() => {
       nameInputRef.current?.focus();
@@ -152,14 +225,50 @@ export function SSHProfileDialog({
     }));
   };
 
-  const profileHasUnsupportedRouting = Boolean(
-    profile?.jumpHostProfileId
-    || profile?.proxyCommand
-    || profile?.socksProxyHost
-    || profile?.httpProxyHost,
-  );
-
   const authNeedsPassword = form.auth === 'password' || form.auth === 'keyboardInteractive';
+
+  const handleAddPortForward = () => {
+    setSaveError('');
+
+    const host = newForward.host.trim() || '127.0.0.1';
+    const port = Number(newForward.port);
+    const targetAddress = newForward.targetAddress.trim();
+    const targetPort = Number(newForward.targetPort);
+
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      setSaveError(t('sshProfileDialog.error.forwardBindPort'));
+      return;
+    }
+
+    if (newForward.type !== 'dynamic') {
+      if (!targetAddress) {
+        setSaveError(t('sshProfileDialog.error.forwardTargetRequired'));
+        return;
+      }
+
+      if (!Number.isInteger(targetPort) || targetPort <= 0 || targetPort > 65535) {
+        setSaveError(t('sshProfileDialog.error.forwardTargetPort'));
+        return;
+      }
+    }
+
+    const nextForward: ForwardedPortConfig = {
+      id: window.crypto?.randomUUID?.() ?? `forward-${Date.now()}`,
+      type: newForward.type,
+      host,
+      port,
+      targetAddress: newForward.type === 'dynamic' ? 'socks' : targetAddress,
+      targetPort: newForward.type === 'dynamic' ? 0 : targetPort,
+      ...(newForward.description.trim() ? { description: newForward.description.trim() } : {}),
+    };
+
+    setField('forwardedPorts', [...form.forwardedPorts, nextForward]);
+    setNewForward(createEmptyPortForwardDraft());
+  };
+
+  const handleRemovePortForward = (forwardId: string) => {
+    setField('forwardedPorts', form.forwardedPorts.filter((item) => item.id !== forwardId));
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -176,6 +285,8 @@ export function SSHProfileDialog({
     const keepaliveInterval = Number(form.keepaliveInterval);
     const keepaliveCountMax = Number(form.keepaliveCountMax);
     const readyTimeout = form.readyTimeout.trim() ? Number(form.readyTimeout) : null;
+    const socksProxyPort = Number(form.socksProxyPort);
+    const httpProxyPort = Number(form.httpProxyPort);
 
     if (!name || !host || !user) {
       setSaveError(t('sshProfileDialog.error.required'));
@@ -214,6 +325,53 @@ export function SSHProfileDialog({
       return;
     }
 
+    const jumpHostProfileId = form.routingMode === 'jumpHost'
+      ? form.jumpHostProfileId.trim()
+      : undefined;
+    const proxyCommand = form.routingMode === 'proxyCommand'
+      ? trimOptional(form.proxyCommand)
+      : undefined;
+    const socksProxyHost = form.routingMode === 'socks'
+      ? trimOptional(form.socksProxyHost)
+      : undefined;
+    const httpProxyHost = form.routingMode === 'http'
+      ? trimOptional(form.httpProxyHost)
+      : undefined;
+
+    if (form.routingMode === 'jumpHost' && !jumpHostProfileId) {
+      setSaveError(t('sshProfileDialog.error.jumpHostRequired'));
+      return;
+    }
+
+    if (form.routingMode === 'proxyCommand' && !proxyCommand) {
+      setSaveError(t('sshProfileDialog.error.proxyCommandRequired'));
+      return;
+    }
+
+    if (form.routingMode === 'socks') {
+      if (!socksProxyHost) {
+        setSaveError(t('sshProfileDialog.error.proxyHostRequired'));
+        return;
+      }
+
+      if (!Number.isInteger(socksProxyPort) || socksProxyPort <= 0 || socksProxyPort > 65535) {
+        setSaveError(t('sshProfileDialog.error.proxyPort'));
+        return;
+      }
+    }
+
+    if (form.routingMode === 'http') {
+      if (!httpProxyHost) {
+        setSaveError(t('sshProfileDialog.error.proxyHostRequired'));
+        return;
+      }
+
+      if (!Number.isInteger(httpProxyPort) || httpProxyPort <= 0 || httpProxyPort > 65535) {
+        setSaveError(t('sshProfileDialog.error.proxyPort'));
+        return;
+      }
+    }
+
     const input: SSHProfileInput = {
       name,
       host,
@@ -227,16 +385,16 @@ export function SSHProfileDialog({
       verifyHostKeys: form.verifyHostKeys,
       x11: profile?.x11 ?? false,
       skipBanner: form.skipBanner,
-      jumpHostProfileId: profile?.jumpHostProfileId,
+      jumpHostProfileId,
       agentForward: form.agentForward,
       warnOnClose: form.warnOnClose,
-      proxyCommand: profile?.proxyCommand,
-      socksProxyHost: profile?.socksProxyHost,
-      socksProxyPort: profile?.socksProxyPort,
-      httpProxyHost: profile?.httpProxyHost,
-      httpProxyPort: profile?.httpProxyPort,
+      proxyCommand,
+      socksProxyHost,
+      socksProxyPort: socksProxyHost ? socksProxyPort : undefined,
+      httpProxyHost,
+      httpProxyPort: httpProxyHost ? httpProxyPort : undefined,
       reuseSession: form.reuseSession,
-      forwardedPorts: profile?.forwardedPorts ?? [],
+      forwardedPorts: form.forwardedPorts,
       remoteCommand: trimOptional(form.remoteCommand),
       defaultRemoteCwd: trimOptional(form.defaultRemoteCwd),
       tags,
@@ -442,6 +600,297 @@ export function SSHProfileDialog({
               onChange={(event) => setField('remoteCommand', event.target.value)}
               className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
             />
+          </div>
+        </div>
+
+        <div className="space-y-4 border border-border-subtle rounded-lg px-4 py-4 bg-bg-elevated/40">
+          <div>
+            <h3 className="text-sm font-semibold text-text-primary">
+              {t('sshProfileDialog.routingTitle')}
+            </h3>
+            <p className="mt-1 text-xs text-text-secondary">
+              {t('sshProfileDialog.routingDescription')}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="ssh-profile-routing-mode" className="block text-sm font-medium text-text-primary mb-2">
+                {t('sshProfileDialog.routingModeLabel')}
+              </label>
+              <select
+                id="ssh-profile-routing-mode"
+                value={form.routingMode}
+                onChange={(event) => setField('routingMode', event.target.value as SSHRoutingMode)}
+                className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
+              >
+                <option value="direct">{t('sshProfileDialog.routing.direct')}</option>
+                <option value="jumpHost">{t('sshProfileDialog.routing.jumpHost')}</option>
+                <option value="proxyCommand">{t('sshProfileDialog.routing.proxyCommand')}</option>
+                <option value="socks">{t('sshProfileDialog.routing.socks')}</option>
+                <option value="http">{t('sshProfileDialog.routing.http')}</option>
+              </select>
+            </div>
+
+            {form.routingMode === 'jumpHost' && (
+              <div>
+                <label htmlFor="ssh-profile-jump-host" className="block text-sm font-medium text-text-primary mb-2">
+                  {t('sshProfileDialog.jumpHostLabel')}
+                </label>
+                <select
+                  id="ssh-profile-jump-host"
+                  value={form.jumpHostProfileId}
+                  onChange={(event) => setField('jumpHostProfileId', event.target.value)}
+                  className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
+                >
+                  <option value="">{t('sshProfileDialog.jumpHostPlaceholder')}</option>
+                  {availableJumpHosts.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({item.user}@{item.host}:{item.port})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {form.routingMode === 'proxyCommand' && (
+              <div className="sm:col-span-2">
+                <label htmlFor="ssh-profile-proxy-command" className="block text-sm font-medium text-text-primary mb-2">
+                  {t('sshProfileDialog.proxyCommandLabel')}
+                </label>
+                <input
+                  id="ssh-profile-proxy-command"
+                  type="text"
+                  value={form.proxyCommand}
+                  onChange={(event) => setField('proxyCommand', event.target.value)}
+                  placeholder="ssh -W %h:%p bastion"
+                  className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+                />
+              </div>
+            )}
+
+            {form.routingMode === 'socks' && (
+              <>
+                <div>
+                  <label htmlFor="ssh-profile-socks-host" className="block text-sm font-medium text-text-primary mb-2">
+                    {t('sshProfileDialog.proxyHostLabel')}
+                  </label>
+                  <input
+                    id="ssh-profile-socks-host"
+                    type="text"
+                    value={form.socksProxyHost}
+                    onChange={(event) => setField('socksProxyHost', event.target.value)}
+                    className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ssh-profile-socks-port" className="block text-sm font-medium text-text-primary mb-2">
+                    {t('sshProfileDialog.proxyPortLabel')}
+                  </label>
+                  <input
+                    id="ssh-profile-socks-port"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    value={form.socksProxyPort}
+                    onChange={(event) => setField('socksProxyPort', event.target.value)}
+                    className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+                  />
+                </div>
+              </>
+            )}
+
+            {form.routingMode === 'http' && (
+              <>
+                <div>
+                  <label htmlFor="ssh-profile-http-host" className="block text-sm font-medium text-text-primary mb-2">
+                    {t('sshProfileDialog.proxyHostLabel')}
+                  </label>
+                  <input
+                    id="ssh-profile-http-host"
+                    type="text"
+                    value={form.httpProxyHost}
+                    onChange={(event) => setField('httpProxyHost', event.target.value)}
+                    className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ssh-profile-http-port" className="block text-sm font-medium text-text-primary mb-2">
+                    {t('sshProfileDialog.proxyPortLabel')}
+                  </label>
+                  <input
+                    id="ssh-profile-http-port"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    value={form.httpProxyPort}
+                    onChange={(event) => setField('httpProxyPort', event.target.value)}
+                    className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4 border border-border-subtle rounded-lg px-4 py-4 bg-bg-elevated/40">
+          <div>
+            <h3 className="text-sm font-semibold text-text-primary">
+              {t('sshProfileDialog.portForwardingTitle')}
+            </h3>
+            <p className="mt-1 text-xs text-text-secondary">
+              {t('sshProfileDialog.portForwardingDescription')}
+            </p>
+          </div>
+
+          {form.forwardedPorts.length > 0 && (
+            <div className="space-y-2">
+              {form.forwardedPorts.map((forward) => (
+                <div
+                  key={forward.id}
+                  className="flex items-center justify-between gap-3 rounded border border-border-subtle bg-bg-app px-3 py-2 text-sm text-text-primary"
+                >
+                  <div className="min-w-0">
+                    <div>
+                      {forward.type === 'dynamic'
+                        ? `${t('sshProfileDialog.forwardType.dynamic')}: ${forward.host}:${forward.port} -> SOCKS`
+                        : `${t(`sshProfileDialog.forwardType.${forward.type}`)}: ${forward.host}:${forward.port} -> ${forward.targetAddress}:${forward.targetPort}`}
+                    </div>
+                    {forward.description && (
+                      <div className="text-xs text-text-secondary">
+                        {forward.description}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePortForward(forward.id)}
+                    className="text-xs text-status-error hover:opacity-80"
+                  >
+                    {t('sshProfileDialog.removePortForward')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="ssh-profile-forward-type" className="block text-sm font-medium text-text-primary mb-2">
+                {t('sshProfileDialog.portForwardTypeLabel')}
+              </label>
+              <select
+                id="ssh-profile-forward-type"
+                value={newForward.type}
+                onChange={(event) => setNewForward((previous) => ({
+                  ...previous,
+                  type: event.target.value as SSHPortForwardType,
+                }))}
+                className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
+              >
+                <option value="local">{t('sshProfileDialog.forwardType.local')}</option>
+                <option value="remote">{t('sshProfileDialog.forwardType.remote')}</option>
+                <option value="dynamic">{t('sshProfileDialog.forwardType.dynamic')}</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="ssh-profile-forward-host" className="block text-sm font-medium text-text-primary mb-2">
+                {t('sshProfileDialog.portForwardHostLabel')}
+              </label>
+              <input
+                id="ssh-profile-forward-host"
+                type="text"
+                value={newForward.host}
+                onChange={(event) => setNewForward((previous) => ({
+                  ...previous,
+                  host: event.target.value,
+                }))}
+                className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="ssh-profile-forward-port" className="block text-sm font-medium text-text-primary mb-2">
+                {t('sshProfileDialog.portForwardPortLabel')}
+              </label>
+              <input
+                id="ssh-profile-forward-port"
+                type="number"
+                min="1"
+                max="65535"
+                value={newForward.port}
+                onChange={(event) => setNewForward((previous) => ({
+                  ...previous,
+                  port: event.target.value,
+                }))}
+                className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+              />
+            </div>
+
+            {newForward.type !== 'dynamic' && (
+              <>
+                <div>
+                  <label htmlFor="ssh-profile-forward-target-host" className="block text-sm font-medium text-text-primary mb-2">
+                    {t('sshProfileDialog.portForwardTargetHostLabel')}
+                  </label>
+                  <input
+                    id="ssh-profile-forward-target-host"
+                    type="text"
+                    value={newForward.targetAddress}
+                    onChange={(event) => setNewForward((previous) => ({
+                      ...previous,
+                      targetAddress: event.target.value,
+                    }))}
+                    className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="ssh-profile-forward-target-port" className="block text-sm font-medium text-text-primary mb-2">
+                    {t('sshProfileDialog.portForwardTargetPortLabel')}
+                  </label>
+                  <input
+                    id="ssh-profile-forward-target-port"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    value={newForward.targetPort}
+                    onChange={(event) => setNewForward((previous) => ({
+                      ...previous,
+                      targetPort: event.target.value,
+                    }))}
+                    className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+                  />
+                </div>
+              </>
+            )}
+
+            <div className="sm:col-span-2">
+              <label htmlFor="ssh-profile-forward-description" className="block text-sm font-medium text-text-primary mb-2">
+                {t('sshProfileDialog.portForwardDescriptionLabel')}
+              </label>
+              <input
+                id="ssh-profile-forward-description"
+                type="text"
+                value={newForward.description}
+                onChange={(event) => setNewForward((previous) => ({
+                  ...previous,
+                  description: event.target.value,
+                }))}
+                className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleAddPortForward}
+            >
+              {t('sshProfileDialog.addPortForward')}
+            </Button>
           </div>
         </div>
 
@@ -659,12 +1108,6 @@ export function SSHProfileDialog({
             />
           </div>
         </div>
-
-        {profileHasUnsupportedRouting && (
-          <div className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-3 py-2">
-            {t('sshProfileDialog.unsupportedRoutingHint')}
-          </div>
-        )}
 
         {saveError && (
           <p className="text-sm text-status-error" role="alert">
