@@ -124,7 +124,8 @@ describe('CreateWindowDialog', () => {
     })
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog.className).toContain('max-w-[1180px]')
+    expect(dialog.className).toContain('!w-[min(1240px,96vw)]')
+    expect(dialog.className).toContain('!max-w-none')
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('combobox', { name: /Shell 程序/ }))
