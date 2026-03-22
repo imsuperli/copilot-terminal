@@ -801,24 +801,14 @@ function resolveWindowsIDEIcon(entry: IDECatalogEntry, candidate: DetectedIDECan
   const iconCandidates: ResolvedIDEIcon[] = [];
 
   for (const shortcut of getWindowsShortcutEntries()) {
-    const shortcutNameMatches = matchesAnyPattern(shortcut.name, [...entry.displayNamePatterns, ...entry.aliases]);
-    const shortcutPathMatches = isPathWithinRoot(shortcut.targetPath, installPath) || includesAnyToken(shortcut.targetPath, tokens);
     const shortcutMatches =
-      shortcutNameMatches ||
-      shortcutPathMatches;
+      matchesAnyPattern(shortcut.name, [...entry.displayNamePatterns, ...entry.aliases]) ||
+      isPathWithinRoot(shortcut.targetPath, installPath) ||
+      includesAnyToken(shortcut.targetPath, tokens);
 
     if (!shortcutMatches) {
       continue;
     }
-
-    // Prefer the .lnk file itself so Windows Shell resolves the same icon
-    // the desktop/start-menu would actually display.
-    iconCandidates.push({
-      icon: resolve(shortcut.shortcutPath),
-      sourceType: 'shortcut-file',
-      sourcePath: resolve(shortcut.shortcutPath),
-      confidence: shortcutNameMatches ? 140 : (shortcutPathMatches ? 132 : 120),
-    });
 
     const resolvedIcon = cleanWindowsRegistryPath(shortcut.iconLocation);
     if (resolvedIcon) {
@@ -827,24 +817,31 @@ function resolveWindowsIDEIcon(entry: IDECatalogEntry, candidate: DetectedIDECan
           icon: resolve(resolvedIcon),
           sourceType: 'shortcut-icon',
           sourcePath: resolve(resolvedIcon),
-          confidence: scoreImageCandidatePath(resolvedIcon, entry, installPath) + 24,
+          confidence: scoreImageCandidatePath(resolvedIcon, entry, installPath) + 8,
         });
       } else if (isWindowsExecutablePath(resolvedIcon)) {
         iconCandidates.push({
           icon: resolve(resolvedIcon),
           sourceType: 'shortcut-icon',
           sourcePath: resolve(resolvedIcon),
-          confidence: shortcutNameMatches ? 128 : (isPathWithinRoot(resolvedIcon, installPath) ? 120 : 112),
+          confidence: isPathWithinRoot(resolvedIcon, installPath) ? 82 : 74,
         });
       }
     }
+
+    iconCandidates.push({
+      icon: resolve(shortcut.shortcutPath),
+      sourceType: 'shortcut-file',
+      sourcePath: resolve(shortcut.shortcutPath),
+      confidence: isPathWithinRoot(shortcut.targetPath, installPath) ? 90 : 80,
+    });
 
     if (isWindowsExecutablePath(shortcut.targetPath)) {
       iconCandidates.push({
         icon: resolve(shortcut.targetPath),
         sourceType: 'shortcut-target',
         sourcePath: resolve(shortcut.targetPath),
-        confidence: shortcutNameMatches ? 116 : (isPathWithinRoot(shortcut.targetPath, installPath) ? 108 : 96),
+        confidence: isPathWithinRoot(shortcut.targetPath, installPath) ? 72 : 64,
       });
     }
   }
