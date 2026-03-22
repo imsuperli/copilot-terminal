@@ -1,5 +1,6 @@
 import { ClientChannel } from 'ssh2';
 import { IPty, SSHSessionConfig } from '../../types/process';
+import { ActiveSSHPortForward, ForwardedPortConfig } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
 
 export interface SSHPtySessionOptions {
@@ -116,6 +117,26 @@ export class SSHPtySession implements IPty {
         this.exitListeners.delete(listener);
       },
     };
+  }
+
+  listPortForwards(): ActiveSSHPortForward[] {
+    return this.connectionLease?.connection.listPortForwards() ?? [];
+  }
+
+  async addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    return this.connectionLease.connection.addPortForward(config);
+  }
+
+  async removePortForward(forwardId: string): Promise<void> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    await this.connectionLease.connection.removePortForward(forwardId);
   }
 
   private async connect(): Promise<void> {

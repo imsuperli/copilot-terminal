@@ -8,6 +8,7 @@ import { IProcessManager, SSHSessionConfig, TerminalConfig, ProcessHandle, Proce
 import { Settings } from '../types/workspace';
 import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
+import { ActiveSSHPortForward, ForwardedPortConfig } from '../../shared/types/ssh';
 import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
@@ -381,11 +382,48 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     return this.sessionIndex.get(paneKey) ?? null;
   }
 
+  listSSHPortForwards(windowId: string, paneId: string): ActiveSSHPortForward[] {
+    const pty = this.requireSSHPortForwardSession(windowId, paneId);
+    return pty.listPortForwards();
+  }
+
+  async addSSHPortForward(
+    windowId: string,
+    paneId: string,
+    forward: ForwardedPortConfig,
+  ): Promise<ActiveSSHPortForward> {
+    const pty = this.requireSSHPortForwardSession(windowId, paneId);
+    return pty.addPortForward(forward);
+  }
+
+  async removeSSHPortForward(windowId: string, paneId: string, forwardId: string): Promise<void> {
+    const pty = this.requireSSHPortForwardSession(windowId, paneId);
+    await pty.removePortForward(forwardId);
+  }
+
   /**
    * 鐢熸垚 paneIndex 鐨?key
    */
   private getPaneKey(windowId: string | undefined, paneId: string | undefined): string {
     return `${windowId ?? ''}:${paneId ?? ''}`;
+  }
+
+  private requireSSHPortForwardSession(windowId: string, paneId: string): {
+    listPortForwards(): ActiveSSHPortForward[];
+    addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
+    removePortForward(forwardId: string): Promise<void>;
+  } {
+    const pid = this.getPidByPane(windowId, paneId);
+    if (pid === null) {
+      throw new Error(`Pane not found: ${windowId}/${paneId}`);
+    }
+
+    const pty = this.ptys.get(pid);
+    if (!pty || !isSSHPortForwardSession(pty)) {
+      throw new Error(`SSH session not found for pane: ${windowId}/${paneId}`);
+    }
+
+    return pty;
   }
 
   /**
@@ -1273,4 +1311,18 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const message = error instanceof Error ? error.message : String(error);
     return /Cannot resize a pty that has already exited/i.test(message);
   }
+}
+
+function isSSHPortForwardSession(value: unknown): value is {
+  listPortForwards(): ActiveSSHPortForward[];
+  addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
+  removePortForward(forwardId: string): Promise<void>;
+} {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { listPortForwards?: unknown }).listPortForwards === 'function'
+    && typeof (value as { addPortForward?: unknown }).addPortForward === 'function'
+    && typeof (value as { removePortForward?: unknown }).removePortForward === 'function',
+  );
 }

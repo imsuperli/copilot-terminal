@@ -326,4 +326,110 @@ describe('registerSSHSessionHandlers', () => {
       },
     });
   });
+
+  it('manages active SSH session port forwards through the process manager', async () => {
+    const processManager = {
+      listSSHPortForwards: vi.fn().mockReturnValue([
+        {
+          id: 'forward-1',
+          type: 'local',
+          host: '127.0.0.1',
+          port: 15432,
+          targetAddress: '10.0.0.21',
+          targetPort: 5432,
+          source: 'profile',
+        },
+      ]),
+      addSSHPortForward: vi.fn().mockResolvedValue({
+        id: 'forward-2',
+        type: 'remote',
+        host: '0.0.0.0',
+        port: 18080,
+        targetAddress: '127.0.0.1',
+        targetPort: 8080,
+        source: 'session',
+      }),
+      removeSSHPortForward: vi.fn().mockResolvedValue(undefined),
+    };
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: null,
+      sshVaultService: null,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const listHandler = getRegisteredHandler('list-ssh-session-port-forwards');
+    await expect(listHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+    })).resolves.toEqual({
+      success: true,
+      data: [
+        {
+          id: 'forward-1',
+          type: 'local',
+          host: '127.0.0.1',
+          port: 15432,
+          targetAddress: '10.0.0.21',
+          targetPort: 5432,
+          source: 'profile',
+        },
+      ],
+    });
+    expect(processManager.listSSHPortForwards).toHaveBeenCalledWith('win-1', 'pane-1');
+
+    const addHandler = getRegisteredHandler('add-ssh-session-port-forward');
+    await expect(addHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      forward: {
+        id: 'forward-2',
+        type: 'remote',
+        host: '0.0.0.0',
+        port: 18080,
+        targetAddress: '127.0.0.1',
+        targetPort: 8080,
+      },
+    })).resolves.toEqual({
+      success: true,
+      data: {
+        id: 'forward-2',
+        type: 'remote',
+        host: '0.0.0.0',
+        port: 18080,
+        targetAddress: '127.0.0.1',
+        targetPort: 8080,
+        source: 'session',
+      },
+    });
+    expect(processManager.addSSHPortForward).toHaveBeenCalledWith('win-1', 'pane-1', {
+      id: 'forward-2',
+      type: 'remote',
+      host: '0.0.0.0',
+      port: 18080,
+      targetAddress: '127.0.0.1',
+      targetPort: 8080,
+    });
+
+    const removeHandler = getRegisteredHandler('remove-ssh-session-port-forward');
+    await expect(removeHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      forwardId: 'forward-2',
+    })).resolves.toEqual({
+      success: true,
+    });
+    expect(processManager.removeSSHPortForward).toHaveBeenCalledWith('win-1', 'pane-1', 'forward-2');
+  });
 });

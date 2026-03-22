@@ -2,7 +2,7 @@ import net from 'net';
 import fs from 'fs/promises';
 import { createHash } from 'crypto';
 import { Client, ClientChannel, ConnectConfig, utils } from 'ssh2';
-import type { ForwardedPortConfig, KnownHostEntry } from '../../../shared/types/ssh';
+import type { ActiveSSHPortForward, ForwardedPortConfig, KnownHostEntry, SSHPortForwardSource } from '../../../shared/types/ssh';
 import type { SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
 import type { ISSHHostKeyPromptService } from './SSHHostKeyPromptService';
@@ -34,11 +34,24 @@ export interface SSHClientConnectionDependencies {
 
 export interface ISSHConnection {
   connect(serviceListener?: (data: string) => void): Promise<void>;
+  attachServiceListener(listener: (data: string) => void): () => void;
   openShell(options: SSHShellOpenOptions): Promise<ClientChannel>;
   openForwardOut(options: SSHForwardOutOptions): Promise<ClientChannel>;
+  listPortForwards(): ActiveSSHPortForward[];
+  addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
+  removePortForward(forwardId: string): Promise<void>;
   close(): Promise<void>;
   isClosed(): boolean;
 }
+
+type ActivePortForwardState = {
+  forward: ActiveSSHPortForward;
+  listener?: ActivePortForwardListener;
+  remoteBind?: {
+    host: string;
+    port: number;
+  };
+};
 
 export class SSHClientConnection implements ISSHConnection {
   private readonly ssh: SSHSessionConfig;
@@ -46,12 +59,13 @@ export class SSHClientConnection implements ISSHConnection {
   private readonly hostKeyPromptService: ISSHHostKeyPromptService | null;
   private readonly connectionPool: ISSHConnectionPool | null;
   private readonly client: Client;
-  private readonly connectListeners = new Set<(data: string) => void>();
+  private readonly serviceListeners = new Set<(data: string) => void>();
   private connectPromise: Promise<void> | null;
   private jumpHostLease: SSHConnectionPoolLease | null;
   private forwardedPortsConfigured: boolean;
-  private readonly localPortForwards = new Map<string, ActivePortForwardListener>();
-  private readonly remotePortForwards = new Map<string, ForwardedPortConfig>();
+  private readonly activePortForwards = new Map<string, ActivePortForwardState>();
+  private readonly remotePortForwardKeys = new Map<string, string>();
+  private portForwardMutationQueue: Promise<void>;
   private ready: boolean;
   private closed: boolean;
   private hostKeyVerificationError: Error | null;
@@ -65,6 +79,7 @@ export class SSHClientConnection implements ISSHConnection {
     this.connectPromise = null;
     this.jumpHostLease = null;
     this.forwardedPortsConfigured = false;
+    this.portForwardMutationQueue = Promise.resolve();
     this.ready = false;
     this.closed = false;
     this.hostKeyVerificationError = null;
@@ -75,23 +90,29 @@ export class SSHClientConnection implements ISSHConnection {
       throw new Error(`SSH connection is already closed for ${this.ssh.user}@${this.ssh.host}`);
     }
 
-    if (this.ready) {
-      return;
+    if (serviceListener) {
+      this.attachServiceListener(serviceListener);
     }
 
-    if (serviceListener) {
-      this.connectListeners.add(serviceListener);
+    if (this.ready) {
+      return;
     }
 
     if (this.connectPromise) {
       return this.connectPromise;
     }
 
-    this.connectPromise = this.performConnect().finally(() => {
-      this.connectListeners.clear();
-    });
+    this.connectPromise = this.performConnect();
 
     return this.connectPromise;
+  }
+
+  attachServiceListener(listener: (data: string) => void): () => void {
+    this.serviceListeners.add(listener);
+
+    return () => {
+      this.serviceListeners.delete(listener);
+    };
   }
 
   async openShell(options: SSHShellOpenOptions): Promise<ClientChannel> {
@@ -131,6 +152,41 @@ export class SSHClientConnection implements ISSHConnection {
           resolve(stream);
         },
       );
+    });
+  }
+
+  listPortForwards(): ActiveSSHPortForward[] {
+    return Array.from(this.activePortForwards.values()).map((state) => ({ ...state.forward }));
+  }
+
+  async addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward> {
+    await this.connect();
+
+    return this.runPortForwardMutation(async () => {
+      const existing = this.activePortForwards.get(config.id);
+      if (existing) {
+        if (areForwardConfigsEquivalent(existing.forward, config)) {
+          return { ...existing.forward };
+        }
+
+        throw new Error(`SSH forwarded port id already exists: ${config.id}`);
+      }
+
+      const state = await this.activatePortForward(config, 'session');
+      this.emitServiceData(`[SSH] Forwarded ${formatForwardedPort(state.forward)}\r\n`);
+      return { ...state.forward };
+    });
+  }
+
+  async removePortForward(forwardId: string): Promise<void> {
+    await this.runPortForwardMutation(async () => {
+      const state = this.activePortForwards.get(forwardId);
+      if (!state) {
+        return;
+      }
+
+      await this.deactivatePortForward(state);
+      this.emitServiceData(`[SSH] Stopped forwarding ${formatForwardedPort(state.forward)}\r\n`);
     });
   }
 
@@ -378,20 +434,29 @@ export class SSHClientConnection implements ISSHConnection {
 
     for (const forward of this.ssh.forwardedPorts) {
       try {
-        if (forward.type === 'remote') {
-          await this.startRemotePortForward(forward);
-        } else {
-          await this.startLocalPortForward(forward);
-        }
-
-        this.emitServiceData(`[SSH] Forwarded ${formatForwardedPort(forward)}\r\n`);
+        const state = await this.activatePortForward(forward, 'profile');
+        this.emitServiceData(`[SSH] Forwarded ${formatForwardedPort(state.forward)}\r\n`);
       } catch (error) {
         this.emitServiceData(`[SSH] Failed to forward ${formatForwardedPort(forward)}: ${formatErrorMessage(error)}\r\n`);
       }
     }
   }
 
-  private async startLocalPortForward(config: ForwardedPortConfig): Promise<void> {
+  private async activatePortForward(
+    config: ForwardedPortConfig,
+    source: SSHPortForwardSource,
+  ): Promise<ActivePortForwardState> {
+    if (config.type === 'remote') {
+      return this.startRemotePortForward(config, source);
+    }
+
+    return this.startLocalPortForward(config, source);
+  }
+
+  private async startLocalPortForward(
+    config: ForwardedPortConfig,
+    source: SSHPortForwardSource,
+  ): Promise<ActivePortForwardState> {
     const listener = await startPortForwardListener(config, async (request) => {
       let channel: ClientChannel | null = null;
 
@@ -412,10 +477,22 @@ export class SSHClientConnection implements ISSHConnection {
       this.bridgeChannelToSocket(channel, socket);
     });
 
-    this.localPortForwards.set(config.id, listener);
+    const state: ActivePortForwardState = {
+      forward: {
+        ...config,
+        source,
+      },
+      listener,
+    };
+
+    this.activePortForwards.set(config.id, state);
+    return state;
   }
 
-  private async startRemotePortForward(config: ForwardedPortConfig): Promise<void> {
+  private async startRemotePortForward(
+    config: ForwardedPortConfig,
+    source: SSHPortForwardSource,
+  ): Promise<ActivePortForwardState> {
     const boundPort = await new Promise<number>((resolve, reject) => {
       this.client.forwardIn(config.host, config.port, (error, port) => {
         if (error) {
@@ -427,7 +504,21 @@ export class SSHClientConnection implements ISSHConnection {
       });
     });
 
-    this.remotePortForwards.set(getRemoteForwardKey(config.host, boundPort), config);
+    const state: ActivePortForwardState = {
+      forward: {
+        ...config,
+        port: boundPort,
+        source,
+      },
+      remoteBind: {
+        host: config.host,
+        port: boundPort,
+      },
+    };
+
+    this.activePortForwards.set(config.id, state);
+    this.remotePortForwardKeys.set(getRemoteForwardKey(config.host, boundPort), config.id);
+    return state;
   }
 
   private async handleRemoteForwardConnection(
@@ -462,13 +553,21 @@ export class SSHClientConnection implements ISSHConnection {
     });
   }
 
-  private findRemotePortForward(host: string, port: number): ForwardedPortConfig | null {
-    const direct = this.remotePortForwards.get(getRemoteForwardKey(host, port));
-    if (direct) {
-      return direct;
+  private findRemotePortForward(host: string, port: number): ActiveSSHPortForward | null {
+    const directId = this.remotePortForwardKeys.get(getRemoteForwardKey(host, port));
+    if (directId) {
+      const directState = this.activePortForwards.get(directId);
+      if (directState) {
+        return directState.forward;
+      }
     }
 
-    for (const forward of this.remotePortForwards.values()) {
+    for (const state of this.activePortForwards.values()) {
+      const forward = state.forward;
+      if (forward.type !== 'remote') {
+        continue;
+      }
+
       if (forward.port !== port) {
         continue;
       }
@@ -479,6 +578,31 @@ export class SSHClientConnection implements ISSHConnection {
     }
 
     return null;
+  }
+
+  private async deactivatePortForward(state: ActivePortForwardState): Promise<void> {
+    this.activePortForwards.delete(state.forward.id);
+
+    if (state.listener) {
+      await state.listener.dispose();
+      return;
+    }
+
+    if (!state.remoteBind) {
+      return;
+    }
+
+    const { host, port } = state.remoteBind;
+    this.remotePortForwardKeys.delete(getRemoteForwardKey(host, port));
+    await new Promise<void>((resolve) => {
+      try {
+        this.client.unforwardIn(host, port, () => {
+          resolve();
+        });
+      } catch {
+        resolve();
+      }
+    });
   }
 
   private bridgeChannelToSocket(channel: ClientChannel, socket: net.Socket): void {
@@ -513,20 +637,23 @@ export class SSHClientConnection implements ISSHConnection {
   }
 
   private async disposeConfiguredPortForwards(): Promise<void> {
-    const localForwards = Array.from(this.localPortForwards.values());
-    this.localPortForwards.clear();
+    const activeForwards = Array.from(this.activePortForwards.values());
+    this.activePortForwards.clear();
+    this.remotePortForwardKeys.clear();
 
-    await Promise.allSettled(localForwards.map(async (listener) => {
-      await listener.dispose();
-    }));
+    await Promise.allSettled(activeForwards.map(async (state) => {
+      if (state.listener) {
+        await state.listener.dispose();
+        return;
+      }
 
-    const remoteForwards = Array.from(this.remotePortForwards.values());
-    this.remotePortForwards.clear();
+      if (!state.remoteBind) {
+        return;
+      }
 
-    await Promise.allSettled(remoteForwards.map(async (forward) => {
       await new Promise<void>((resolve) => {
         try {
-          this.client.unforwardIn(forward.host, forward.port, () => {
+          this.client.unforwardIn(state.remoteBind!.host, state.remoteBind!.port, () => {
             resolve();
           });
         } catch {
@@ -537,8 +664,25 @@ export class SSHClientConnection implements ISSHConnection {
   }
 
   private emitServiceData(data: string): void {
-    for (const listener of this.connectListeners) {
+    for (const listener of this.serviceListeners) {
       listener(data);
+    }
+  }
+
+  private async runPortForwardMutation<T>(operation: () => Promise<T>): Promise<T> {
+    let releaseQueue = () => {};
+    const next = new Promise<void>((resolve) => {
+      releaseQueue = resolve;
+    });
+    const previous = this.portForwardMutationQueue;
+    this.portForwardMutationQueue = previous.finally(() => next);
+
+    await previous;
+
+    try {
+      return await operation();
+    } finally {
+      releaseQueue();
     }
   }
 
@@ -643,6 +787,20 @@ function formatForwardedPort(forward: ForwardedPortConfig): string {
   }
 
   return `(local) ${forward.host}:${forward.port} -> (remote) ${forward.targetAddress}:${forward.targetPort}`;
+}
+
+function areForwardConfigsEquivalent(
+  left: Pick<ForwardedPortConfig, 'type' | 'host' | 'port' | 'targetAddress' | 'targetPort' | 'description'>,
+  right: Pick<ForwardedPortConfig, 'type' | 'host' | 'port' | 'targetAddress' | 'targetPort' | 'description'>,
+): boolean {
+  return (
+    left.type === right.type
+    && left.host === right.host
+    && left.port === right.port
+    && left.targetAddress === right.targetAddress
+    && left.targetPort === right.targetPort
+    && (left.description ?? '') === (right.description ?? '')
+  );
 }
 
 function getRemoteForwardKey(host: string, port: number): string {

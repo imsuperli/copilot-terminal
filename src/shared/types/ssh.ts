@@ -19,6 +19,12 @@ export interface ForwardedPortConfig {
   description?: string;
 }
 
+export type SSHPortForwardSource = 'profile' | 'session';
+
+export interface ActiveSSHPortForward extends ForwardedPortConfig {
+  source: SSHPortForwardSource;
+}
+
 export interface KnownHostEntry {
   id: string;
   host: string;

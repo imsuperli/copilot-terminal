@@ -25,6 +25,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('start-ssh-pane', config),
   cloneSSHPane: (config: unknown) =>
     ipcRenderer.invoke('clone-ssh-pane', config),
+  listSSHSessionPortForwards: (config: unknown) =>
+    ipcRenderer.invoke('list-ssh-session-port-forwards', config),
+  addSSHSessionPortForward: (config: unknown) =>
+    ipcRenderer.invoke('add-ssh-session-port-forward', config),
+  removeSSHSessionPortForward: (config: unknown) =>
+    ipcRenderer.invoke('remove-ssh-session-port-forward', config),
   checkPtyOutput: (windowId: string, paneId: string) => ipcRenderer.invoke('check-pty-output', { windowId, paneId }),
   startGitWatch: (windowId: string, cwd: string) => ipcRenderer.invoke('start-git-watch', { windowId, cwd }),
   stopGitWatch: (windowId: string) => ipcRenderer.invoke('stop-git-watch', { windowId }),

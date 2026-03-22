@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play } from 'lucide-react';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -17,6 +17,7 @@ import { DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
+import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import {
   canPaneOpenInIDE,
   canPaneOpenLocalFolder,
@@ -78,6 +79,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // 鍒囨崲闈㈡澘鐘舵€?
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [sshPortForwardTarget, setSSHPortForwardTarget] = useState<{ windowId: string; paneId: string } | null>(null);
 
   // Store
   const {
@@ -281,6 +283,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const handleStartWindow = useCallback(async () => {
     await startWindowPanes(terminalWindow, updatePane);
   }, [terminalWindow.id, terminalWindow.name, terminalWindow.layout, updatePane]);
+
+  const handleOpenSSHPortForwards = useCallback(() => {
+    if (!activePane || !activePaneCapabilities?.canManagePortForwards) {
+      return;
+    }
+
+    setSSHPortForwardTarget({
+      windowId: terminalWindow.id,
+      paneId: activePane.id,
+    });
+  }, [activePane, activePaneCapabilities, terminalWindow.id]);
 
   // 处理重启窗口：先停止，再启动
   const handleRestartWindow = useCallback(async () => {
@@ -501,6 +514,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </button>
             </AppTooltip>
 
+            {activePaneCapabilities?.canManagePortForwards && (
+              <AppTooltip content={t('terminalView.managePortForwards')} placement="toolbar-trailing">
+                <button
+                  onClick={handleOpenSSHPortForwards}
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                >
+                  <Waypoints size={14} />
+                </button>
+              </AppTooltip>
+            )}
+
             {/* 宸﹀彸鎷嗗垎鎸夐挳 */}
             <AppTooltip content={t('terminalView.splitHorizontal')} placement="toolbar-trailing">
               <button
@@ -643,8 +667,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         open={isSettingsPanelOpen}
         onClose={() => setIsSettingsPanelOpen(false)}
       />
-
       </>)}
+
+      <SSHPortForwardDialog
+        open={Boolean(sshPortForwardTarget)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setSSHPortForwardTarget(null);
+          }
+        }}
+        windowId={sshPortForwardTarget?.windowId ?? null}
+        paneId={sshPortForwardTarget?.paneId ?? null}
+      />
     </div>
   );
 };

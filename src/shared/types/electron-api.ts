@@ -1,7 +1,16 @@
 import { ViewChangedPayload } from './ipc';
 import { ProjectConfig } from './project-config';
 import { QuickNavConfig } from './quick-nav';
-import { KnownHostEntry, SSHCredentialState, SSHImportResult, SSHProfile, SSHProfileInput, SSHProfilePatch } from './ssh';
+import {
+  ActiveSSHPortForward,
+  ForwardedPortConfig,
+  KnownHostEntry,
+  SSHCredentialState,
+  SSHImportResult,
+  SSHProfile,
+  SSHProfileInput,
+  SSHProfilePatch,
+} from './ssh';
 import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
@@ -64,6 +73,19 @@ export interface CloneSSHPaneConfig {
   sourcePaneId: string;
   targetWindowId: string;
   targetPaneId: string;
+}
+
+export interface SSHSessionPortForwardTarget {
+  windowId: string;
+  paneId: string;
+}
+
+export interface AddSSHSessionPortForwardConfig extends SSHSessionPortForwardTarget {
+  forward: ForwardedPortConfig;
+}
+
+export interface RemoveSSHSessionPortForwardConfig extends SSHSessionPortForwardTarget {
+  forwardId: string;
 }
 
 export interface StartWindowResult {
@@ -223,6 +245,9 @@ export interface ElectronAPI {
   startWindow: (config: StartWindowConfig) => Promise<IpcResponse<StartWindowResult>>;
   startSSHPane: (config: StartSSHPaneConfig) => Promise<IpcResponse<StartSSHPaneResult>>;
   cloneSSHPane: (config: CloneSSHPaneConfig) => Promise<IpcResponse<{ pid: number | null; sessionId: string }>>;
+  listSSHSessionPortForwards: (config: SSHSessionPortForwardTarget) => Promise<IpcResponse<ActiveSSHPortForward[]>>;
+  addSSHSessionPortForward: (config: AddSSHSessionPortForwardConfig) => Promise<IpcResponse<ActiveSSHPortForward>>;
+  removeSSHSessionPortForward: (config: RemoveSSHSessionPortForwardConfig) => Promise<IpcResponse<void>>;
   checkPtyOutput: (windowId: string, paneId: string) => Promise<IpcResponse<CheckPtyOutputResult>>;
   startGitWatch: (windowId: string, cwd: string) => Promise<IpcResponse<void>>;
   stopGitWatch: (windowId: string) => Promise<IpcResponse<void>>;

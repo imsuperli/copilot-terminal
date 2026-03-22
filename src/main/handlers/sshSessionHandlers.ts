@@ -1,8 +1,11 @@
 import { randomUUID } from 'crypto';
 import { ipcMain } from 'electron';
 import {
+  AddSSHSessionPortForwardConfig,
   CloneSSHPaneConfig,
   CreateSSHWindowConfig,
+  RemoveSSHSessionPortForwardConfig,
+  SSHSessionPortForwardTarget,
   StartSSHPaneConfig,
 } from '../../shared/types/electron-api';
 import { SSHProfile, SSHVaultEntry } from '../../shared/types/ssh';
@@ -167,6 +170,43 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
         pid: handle.pid,
         sessionId: handle.sessionId,
       });
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('list-ssh-session-port-forwards', async (_event, config: SSHSessionPortForwardTarget) => {
+    try {
+      if (!processManager) {
+        throw new Error('SSH session services are not initialized');
+      }
+
+      return successResponse(processManager.listSSHPortForwards(config.windowId, config.paneId));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('add-ssh-session-port-forward', async (_event, config: AddSSHSessionPortForwardConfig) => {
+    try {
+      if (!processManager) {
+        throw new Error('SSH session services are not initialized');
+      }
+
+      return successResponse(await processManager.addSSHPortForward(config.windowId, config.paneId, config.forward));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('remove-ssh-session-port-forward', async (_event, config: RemoveSSHSessionPortForwardConfig) => {
+    try {
+      if (!processManager) {
+        throw new Error('SSH session services are not initialized');
+      }
+
+      await processManager.removeSSHPortForward(config.windowId, config.paneId, config.forwardId);
+      return successResponse();
     } catch (error) {
       return errorResponse(error);
     }

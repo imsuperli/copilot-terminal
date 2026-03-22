@@ -1,4 +1,4 @@
-import { ForwardedPortConfig, SSHAuthType } from '../../shared/types/ssh';
+import { ActiveSSHPortForward, ForwardedPortConfig, SSHAuthType } from '../../shared/types/ssh';
 import { PaneBackend } from '../../shared/types/window';
 
 /**
@@ -93,6 +93,9 @@ export interface IProcessManager {
   killProcess(pid: number): Promise<void>;
   getProcessStatus(pid: number): ProcessInfo | null;
   getSessionIdByPane(windowId: string, paneId?: string): string | null;
+  listSSHPortForwards(windowId: string, paneId: string): ActiveSSHPortForward[];
+  addSSHPortForward(windowId: string, paneId: string, forward: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
+  removeSSHPortForward(windowId: string, paneId: string, forwardId: string): Promise<void>;
   listProcesses(): ProcessInfo[];
   getPaneStatus(windowId: string, paneId: string): Promise<import('../../renderer/types/window').WindowStatus>;
   subscribeStatusChange(callback: (pid: number, status: import('../../renderer/types/window').WindowStatus) => void): void;

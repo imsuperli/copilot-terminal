@@ -53,8 +53,18 @@ export class SSHConnectionPool implements ISSHConnectionPool {
   async acquire(config: SSHSessionConfig, serviceListener?: (data: string) => void): Promise<SSHConnectionPoolLease> {
     if (!config.reuseSession) {
       const connection = this.createConnection(config, this.getDependencies());
-      await connection.connect(serviceListener);
-      return this.createOneShotLease(connection);
+      const detachServiceListener = serviceListener
+        ? connection.attachServiceListener(serviceListener)
+        : null;
+
+      try {
+        await connection.connect();
+      } catch (error) {
+        detachServiceListener?.();
+        throw error;
+      }
+
+      return this.createOneShotLease(connection, detachServiceListener);
     }
 
     const key = buildSSHConnectionKey(config);
@@ -74,10 +84,14 @@ export class SSHConnectionPool implements ISSHConnectionPool {
     }
 
     entry.refCount += 1;
+    const detachServiceListener = serviceListener
+      ? entry.connection.attachServiceListener(serviceListener)
+      : null;
 
     try {
-      await entry.connection.connect(serviceListener);
+      await entry.connection.connect();
     } catch (error) {
+      detachServiceListener?.();
       await this.releaseEntry(key, entry);
       throw error;
     }
@@ -91,6 +105,7 @@ export class SSHConnectionPool implements ISSHConnectionPool {
         }
 
         released = true;
+        detachServiceListener?.();
         await this.releaseEntry(key, entry as PooledConnectionEntry);
       },
     };
@@ -112,7 +127,10 @@ export class SSHConnectionPool implements ISSHConnectionPool {
     };
   }
 
-  private createOneShotLease(connection: ISSHConnection): SSHConnectionPoolLease {
+  private createOneShotLease(
+    connection: ISSHConnection,
+    detachServiceListener: (() => void) | null,
+  ): SSHConnectionPoolLease {
     let released = false;
 
     return {
@@ -123,6 +141,7 @@ export class SSHConnectionPool implements ISSHConnectionPool {
         }
 
         released = true;
+        detachServiceListener?.();
         await connection.close();
       },
     };
