@@ -72,7 +72,7 @@ Object.defineProperty(window, 'electronAPI', {
     setActivePane: vi.fn().mockResolvedValue(undefined),
     onViewChanged: vi.fn(),
     offViewChanged: vi.fn(),
-    getSettings: vi.fn().mockResolvedValue({ success: true, data: { language: 'zh-CN', ides: [], quickNav: { items: [] }, terminal: { useBundledConptyDll: false, defaultShellProgram: '' } } }),
+    getSettings: vi.fn().mockResolvedValue({ success: true, data: { language: 'zh-CN', ides: [], quickNav: { items: [] }, terminal: { useBundledConptyDll: false, defaultShellProgram: '' }, features: { sshEnabled: true } } }),
     updateSettings: vi.fn().mockResolvedValue({ success: true, data: {} }),
     getAvailableShells: vi.fn().mockResolvedValue({ success: true, data: [
       { command: 'pwsh.exe', path: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', isDefault: true },

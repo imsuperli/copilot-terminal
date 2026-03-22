@@ -85,7 +85,7 @@ function AppContent() {
           if (response.data.defaultSidebarTab) {
             setCurrentTab(response.data.defaultSidebarTab);
           }
-          setSSHEnabled(Boolean(response.data.features?.sshEnabled));
+          setSSHEnabled(response.data.features?.sshEnabled ?? true);
         }
       } catch (error) {
         console.error('Failed to load default sidebar tab:', error);

@@ -765,7 +765,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         enableForAllPanes: settings?.tmux?.enableForAllPanes ?? defaults.tmux?.enableForAllPanes ?? true,
       },
       features: {
-        sshEnabled: settings?.features?.sshEnabled ?? defaults.features?.sshEnabled ?? false,
+        sshEnabled: settings?.features?.sshEnabled ?? defaults.features?.sshEnabled ?? true,
       },
       customCategories: settings?.customCategories ?? defaults.customCategories,
       defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
@@ -798,7 +798,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         enableForAllPanes: true,
       },
       features: {
-        sshEnabled: false,
+        sshEnabled: true,
       },
       customCategories: [],
       defaultSidebarTab: 'active',
