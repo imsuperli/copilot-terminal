@@ -226,7 +226,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       }
     } else {
       const sshConfig = this.requireSSHConfig(config.ssh);
-      command = sshConfig.command ?? command ?? 'shell';
+      command = sshConfig.command ?? command ?? '';
       pid = this.nextPid++;
       ptyProcess = await SSHPtySession.create({
         pid,

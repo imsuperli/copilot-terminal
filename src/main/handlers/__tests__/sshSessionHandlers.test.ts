@@ -185,6 +185,54 @@ describe('registerSSHSessionHandlers', () => {
     });
   });
 
+  it('does not synthesize a fake shell command when a profile has no remote command', async () => {
+    const processManager = {
+      spawnTerminal: vi.fn().mockResolvedValue({ pid: 2206, sessionId: 'ssh-session-6' }),
+      subscribePtyData: vi.fn().mockReturnValue(vi.fn()),
+      getLatestPaneOutputSeq: vi.fn().mockReturnValue(0),
+    };
+    const sshProfileStore = {
+      get: vi.fn().mockResolvedValue(createProfile()),
+    };
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: { addPane: vi.fn() } as any,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: { add: vi.fn() } as any,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: { get: vi.fn().mockResolvedValue(null) } as any,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('create-ssh-window');
+    const response = await handler({}, {
+      profileId: 'profile-1',
+    });
+
+    expect(processManager.spawnTerminal).toHaveBeenCalledWith(expect.not.objectContaining({
+      command: 'shell',
+    }));
+    expect(response).toMatchObject({
+      success: true,
+      data: {
+        layout: {
+          type: 'pane',
+          pane: {
+            command: '',
+          },
+        },
+      },
+    });
+  });
+
   it('passes x11 forwarding preferences into the spawned SSH session config', async () => {
     const processManager = {
       spawnTerminal: vi.fn().mockResolvedValue({ pid: 2205, sessionId: 'ssh-session-5' }),

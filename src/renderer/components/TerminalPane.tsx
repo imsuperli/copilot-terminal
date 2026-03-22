@@ -406,7 +406,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         brightCyan: '#56b6c2',
         brightWhite: '#ffffff',
       },
-      fontFamily: '"SF Mono", "Menlo", "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
+      fontFamily: '"MesloLGS NF", "JetBrainsMono Nerd Font", "Symbols Nerd Font Mono", "CaskaydiaCove Nerd Font", "SF Mono", "Menlo", "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
       fontSize: 15,
       lineHeight: 1.2,
       macOptionIsMeta: true,

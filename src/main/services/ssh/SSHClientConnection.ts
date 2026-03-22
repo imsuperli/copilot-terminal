@@ -140,25 +140,34 @@ export class SSHClientConnection implements ISSHConnection {
   async openShell(options: SSHShellOpenOptions): Promise<ClientChannel> {
     await this.connect();
 
+    const shellEnv = buildRemoteShellEnv();
+
     return new Promise<ClientChannel>((resolve, reject) => {
-      this.client.shell({
-        term: 'xterm-256color',
-        cols: Math.max(options.cols, 1),
-        rows: Math.max(options.rows, 1),
-      }, options.x11 ? {
-        x11: {
-          single: false,
-          protocol: 'MIT-MAGIC-COOKIE-1',
-          screen: 0,
+      this.client.shell(
+        {
+          term: 'xterm-256color',
+          cols: Math.max(options.cols, 1),
+          rows: Math.max(options.rows, 1),
         },
-      } : {}, (error, stream) => {
+        {
+          ...(Object.keys(shellEnv).length > 0 ? { env: shellEnv } : {}),
+          ...(options.x11 ? {
+            x11: {
+              single: false,
+              protocol: 'MIT-MAGIC-COOKIE-1',
+              screen: 0,
+            },
+          } : {}),
+        },
+        (error, stream) => {
         if (error) {
           reject(error);
           return;
         }
 
         resolve(stream);
-      });
+        },
+      );
     });
   }
 
@@ -925,6 +934,25 @@ function formatForwardedPort(forward: ForwardedPortConfig): string {
   }
 
   return `(local) ${forward.host}:${forward.port} -> (remote) ${forward.targetAddress}:${forward.targetPort}`;
+}
+
+function buildRemoteShellEnv(): Record<string, string> {
+  const env: Record<string, string> = {
+    COLORTERM: 'truecolor',
+    TERM_PROGRAM: 'Copilot-Terminal',
+  };
+  const locale = process.env.LC_CTYPE || process.env.LANG;
+
+  if (locale) {
+    env.LANG = process.env.LANG || locale;
+    env.LC_CTYPE = process.env.LC_CTYPE || locale;
+  }
+
+  if (process.env.TERM_PROGRAM_VERSION) {
+    env.TERM_PROGRAM_VERSION = process.env.TERM_PROGRAM_VERSION;
+  }
+
+  return env;
 }
 
 function areForwardConfigsEquivalent(

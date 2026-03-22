@@ -1,4 +1,5 @@
 import type { ClientChannel } from 'ssh2';
+import { StringDecoder } from 'string_decoder';
 import { IPty, SSHSessionConfig } from '../../types/process';
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
@@ -34,6 +35,8 @@ export class SSHPtySession implements IPty {
   private readonly dataListeners = new Set<(data: string) => void>();
   private readonly exitListeners = new Set<(event: ExitEvent) => void>();
   private readonly pendingData: string[] = [];
+  private readonly stdoutDecoder: StringDecoder;
+  private readonly stderrDecoder: StringDecoder;
   private pendingExit: ExitEvent | null;
   private closed: boolean;
 
@@ -47,6 +50,8 @@ export class SSHPtySession implements IPty {
     this.connectionPool = options.connectionPool;
     this.channel = null;
     this.connectionLease = null;
+    this.stdoutDecoder = new StringDecoder('utf8');
+    this.stderrDecoder = new StringDecoder('utf8');
     this.pendingExit = null;
     this.closed = false;
   }
@@ -210,10 +215,16 @@ export class SSHPtySession implements IPty {
       this.channel = stream;
 
       stream.on('data', (data: Buffer | string) => {
-        this.emitData(toUtf8(data));
+        const decoded = decodeChunk(data, this.stdoutDecoder);
+        if (decoded) {
+          this.emitData(decoded);
+        }
       });
       stream.stderr?.on('data', (data: Buffer | string) => {
-        this.emitData(toUtf8(data));
+        const decoded = decodeChunk(data, this.stderrDecoder);
+        if (decoded) {
+          this.emitData(decoded);
+        }
       });
       stream.on('exit', (code?: number, signal?: number | string) => {
         this.emitExit({
@@ -222,6 +233,8 @@ export class SSHPtySession implements IPty {
         });
       });
       stream.on('close', () => {
+        this.flushDecoder(this.stdoutDecoder);
+        this.flushDecoder(this.stderrDecoder);
         this.channel = null;
         void this.releaseConnectionLease();
         this.emitExit(this.pendingExit ?? { exitCode: 0 });
@@ -252,7 +265,14 @@ export class SSHPtySession implements IPty {
     }
 
     if (commands.length > 0) {
-      this.channel.write(`${commands.join('\n')}\n`);
+      this.channel.write(`${commands.join('\r')}\r`);
+    }
+  }
+
+  private flushDecoder(decoder: StringDecoder): void {
+    const remainder = decoder.end();
+    if (remainder) {
+      this.emitData(remainder);
     }
   }
 
@@ -289,8 +309,8 @@ export class SSHPtySession implements IPty {
   }
 }
 
-function toUtf8(value: Buffer | string): string {
-  return typeof value === 'string' ? value : value.toString('utf8');
+function decodeChunk(value: Buffer | string, decoder: StringDecoder): string {
+  return typeof value === 'string' ? value : decoder.write(value);
 }
 
 function shellEscape(value: string): string {

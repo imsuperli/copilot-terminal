@@ -406,10 +406,12 @@ async function buildSSHSpawnConfig(
     sshVaultService: HandlerContext['sshVaultService'];
   },
 ): Promise<TerminalConfig> {
+  const remoteCommand = options.command || profile.remoteCommand || undefined;
+
   return {
     backend: 'ssh',
     workingDirectory: options.remoteCwd || profile.defaultRemoteCwd || '~',
-    command: options.command || profile.remoteCommand || 'shell',
+    command: remoteCommand,
     windowId: options.windowId,
     paneId: options.paneId,
     ssh: await buildSSHSessionConfig(profile, vaultEntry, {
@@ -499,10 +501,12 @@ function createSshPaneDraft(
     command?: string;
   },
 ): Pane {
+  const remoteCommand = options.command || profile.remoteCommand || '';
+
   const pane: Pane = {
     id: options.paneId,
     cwd: options.remoteCwd || profile.defaultRemoteCwd || '~',
-    command: options.command || profile.remoteCommand || 'shell',
+    command: remoteCommand,
     status: WindowStatus.Restoring,
     pid: null,
     backend: 'ssh',
