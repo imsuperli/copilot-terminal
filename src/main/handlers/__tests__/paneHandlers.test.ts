@@ -72,6 +72,19 @@ describe('registerPaneHandlers', () => {
       success: true,
       data: { pid: 321, sessionId: 'session-321' },
     });
+
+    const outputSubscriber = processManager.subscribePtyData.mock.calls[0]?.[1];
+    expect(outputSubscriber).toBeTypeOf('function');
+
+    outputSubscriber?.('pwd\r\n', 7);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty-data', {
+      windowId: 'win-1',
+      paneId: 'pane-2',
+      data: 'pwd\r\n',
+      seq: 7,
+    });
   });
 
   it('removes closed pane from StatusPoller', async () => {

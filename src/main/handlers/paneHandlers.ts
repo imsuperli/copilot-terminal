@@ -23,7 +23,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
       const handle = await processManager.spawnTerminal(config);
 
       // 订阅 PTY 数据
-      const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
+      const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string, seq?: number) => {
         // 使用 setImmediate 让 IPC 发送完全异步化，避免阻塞 PTY 数据流
         if (mainWindow && !mainWindow.isDestroyed()) {
           setImmediate(() => {
@@ -32,7 +32,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
                 windowId: config.windowId,
                 paneId: config.paneId,
                 data,
-                seq: config.paneId ? processManager.getLatestPaneOutputSeq(config.paneId) : undefined,
+                seq,
               });
             }
           });

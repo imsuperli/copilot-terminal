@@ -23,6 +23,11 @@ type PaneHistoryEntry = {
   data: string;
 };
 
+type PtyOutputChunk = {
+  data: string;
+  seq?: number;
+};
+
 type PaneHistoryBuffer = {
   entries: PaneHistoryEntry[];
   totalLength: number;
@@ -51,7 +56,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private ptys: Map<number, any>;
   private ptyDisposables: Map<number, Array<{ dispose: () => void }>>;
   private processCleanupTimers: Map<number, NodeJS.Timeout>;
-  private ptyOutputBuffers: Map<number, string[]>; // 缂撳瓨 PTY 鍒濆杈撳嚭
+  private ptyOutputBuffers: Map<number, PtyOutputChunk[]>; // 缂撳瓨 PTY 鍒濆杈撳嚭
+  private ptyDataSubscribers: Map<number, Set<(chunk: PtyOutputChunk) => void>>;
   private paneHistoryBuffers: Map<string, PaneHistoryBuffer>;
   private paneIndex: Map<string, number>; // "windowId:paneId" 鈫?pid 绱㈠紩锛岀敤浜?O(1) 鏌ユ壘
   private sessionIndex: Map<string, string>; // "windowId:paneId" -> sessionId
@@ -84,6 +90,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.ptyDisposables = new Map();
     this.processCleanupTimers = new Map();
     this.ptyOutputBuffers = new Map();
+    this.ptyDataSubscribers = new Map();
     this.paneHistoryBuffers = new Map();
     this.paneIndex = new Map();
     this.sessionIndex = new Map();
@@ -266,16 +273,23 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // 绔嬪嵆寮€濮嬬紦瀛?PTY 杈撳嚭锛堝湪浠讳綍璁㈤槄涔嬪墠锛?
     const bufferDisposable = ptyProcess.onData((data: string) => {
+      const seq = this.appendPaneHistory(config.paneId, data);
       const buffer = this.ptyOutputBuffers.get(pid);
       if (buffer) {
-        buffer.push(data);
+        buffer.push({ data, seq });
         // 闄愬埗缂撳啿鍖哄ぇ灏忥紝閬垮厤鍐呭瓨娉勬紡锛堝鍔犲埌 500 鏉℃秷鎭紝瑕嗙洊鏇村鍚姩杈撳嚭锛?
         if (buffer.length > 500) {
           buffer.shift();
         }
       }
 
-      this.appendPaneHistory(config.paneId, data);
+      const subscribers = this.ptyDataSubscribers.get(pid);
+      if (subscribers && subscribers.size > 0) {
+        const chunk = { data, seq };
+        for (const subscriber of subscribers) {
+          subscriber(chunk);
+        }
+      }
     });
 
     // Register PTY listeners for status detection and save disposables
@@ -580,14 +594,12 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    *
    * 娉ㄦ剰锛氶娆¤闃呮椂浼氬厛鍙戦€佺紦瀛樼殑鍒濆杈撳嚭锛岄伩鍏嶇珵鎬佹潯浠跺鑷存暟鎹涪澶?
    */
-  subscribePtyData(pid: number, callback: (data: string) => void): () => void {
-    const pty = this.ptys.get(pid);
-    if (!pty) return () => {};
+  subscribePtyData(pid: number, callback: (data: string, seq?: number) => void): () => void {
+    if (!this.ptys.has(pid)) return () => {};
 
-    // 鍖呰鍥炶皟锛屾坊鍔犻敊璇鐞嗭紝闃叉鍥炶皟寮傚父涓柇 PTY 鏁版嵁娴?
-    const safeCallback = (data: string) => {
+    const safeCallback = (chunk: PtyOutputChunk) => {
       try {
-        callback(data);
+        callback(chunk.data, chunk.seq);
       } catch (error) {
         console.error(`[ProcessManager] PTY data callback error for pid ${pid}:`, error);
         // 涓嶈璁╅敊璇腑鏂?PTY 鏁版嵁娴?
@@ -599,21 +611,28 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     if (buffer && buffer.length > 0) {
       // 浣跨敤 setImmediate 寮傛鍙戦€侊紝閬垮厤闃诲
       setImmediate(() => {
-        for (const data of buffer) {
-          safeCallback(data);
+        for (const chunk of buffer) {
+          safeCallback(chunk);
         }
       });
       // 娓呯┖缂撳啿鍖猴紝閬垮厤閲嶅鍙戦€?
       this.ptyOutputBuffers.delete(pid);
     }
 
-    // node-pty 鐨?onData 杩斿洖涓€涓?disposable 瀵硅薄
-    const disposable = pty.onData(safeCallback);
+    const subscribers = this.ptyDataSubscribers.get(pid) ?? new Set<(chunk: PtyOutputChunk) => void>();
+    subscribers.add(safeCallback);
+    this.ptyDataSubscribers.set(pid, subscribers);
 
     // 杩斿洖娓呯悊鍑芥暟
     return () => {
-      if (disposable && typeof disposable.dispose === 'function') {
-        disposable.dispose();
+      const currentSubscribers = this.ptyDataSubscribers.get(pid);
+      if (!currentSubscribers) {
+        return;
+      }
+
+      currentSubscribers.delete(safeCallback);
+      if (currentSubscribers.size === 0) {
+        this.ptyDataSubscribers.delete(pid);
       }
     };
   }
@@ -1343,9 +1362,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     });
   }
 
-  private appendPaneHistory(paneId: string | undefined, data: string): void {
+  private appendPaneHistory(paneId: string | undefined, data: string): number | undefined {
     if (!paneId || !data) {
-      return;
+      return undefined;
     }
 
     const history = this.paneHistoryBuffers.get(paneId) ?? {
@@ -1372,6 +1391,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     }
 
     this.paneHistoryBuffers.set(paneId, history);
+    return seq;
   }
 
   private scheduleProcessCleanup(pid: number): void {
@@ -1382,6 +1402,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const cleanupTimer = setTimeout(() => {
       this.processCleanupTimers.delete(pid);
       this.processes.delete(pid);
+      this.ptyDataSubscribers.delete(pid);
       this.statusDetector.untrackPid(pid);
     }, 1000);
     cleanupTimer.unref();

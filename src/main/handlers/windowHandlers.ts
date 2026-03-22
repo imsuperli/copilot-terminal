@@ -114,7 +114,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       statusPoller?.addWindow(windowId, handle.pid, paneId);
 
       // 订阅 PTY 数据，推送到渲染进程
-      const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
+      const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string, seq?: number) => {
         // 使用 setImmediate 让 IPC 发送完全异步化，避免阻塞 PTY 数据流
         if (mainWindow && !mainWindow.isDestroyed()) {
           setImmediate(() => {
@@ -123,7 +123,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
                 windowId,
                 paneId,
                 data,
-                seq: paneId ? processManager.getLatestPaneOutputSeq(paneId) : undefined,
+                seq,
               });
             }
           });
@@ -196,7 +196,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       statusPoller?.addWindow(windowId, handle.pid, paneId);
 
       // 订阅 PTY 数据，推送到渲染进程
-      const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string) => {
+      const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string, seq?: number) => {
         // 使用 setImmediate 让 IPC 发送完全异步化，避免阻塞 PTY 数据流
         if (mainWindow && !mainWindow.isDestroyed()) {
           setImmediate(() => {
@@ -205,7 +205,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
                 windowId,
                 paneId,
                 data,
-                seq: paneId ? processManager.getLatestPaneOutputSeq(paneId) : undefined,
+                seq,
               });
             }
           });

@@ -10,6 +10,8 @@ export interface SSHSftpSessionOptions {
 
 export class SSHSftpSession {
   private readonly getWrapper: () => Promise<SFTPWrapper>;
+  private homeDirectoryPromise: Promise<string> | null = null;
+  private currentDirectoryPromise: Promise<string> | null = null;
 
   constructor(options: SSHSftpSessionOptions) {
     this.getWrapper = options.getWrapper;
@@ -17,7 +19,7 @@ export class SSHSftpSession {
 
   async listDirectory(targetPath?: string): Promise<SSHSftpDirectoryListing> {
     const wrapper = await this.getWrapper();
-    const resolvedPath = await this.realpath(wrapper, targetPath ?? '.');
+    const resolvedPath = await this.resolveExistingPath(wrapper, targetPath ?? '.');
     const entries = await this.readdir(wrapper, resolvedPath);
     const mappedEntries = await Promise.all(entries.map((entry) => this.mapEntry(wrapper, resolvedPath, entry)));
 
@@ -29,7 +31,7 @@ export class SSHSftpSession {
 
   async downloadFile(remotePath: string, localPath: string): Promise<void> {
     const wrapper = await this.getWrapper();
-    const resolvedRemotePath = await this.realpath(wrapper, remotePath);
+    const resolvedRemotePath = await this.resolveExistingPath(wrapper, remotePath);
     await this.fastGet(wrapper, resolvedRemotePath, localPath);
   }
 
@@ -39,7 +41,7 @@ export class SSHSftpSession {
     }
 
     const wrapper = await this.getWrapper();
-    const resolvedRemotePath = await this.realpath(wrapper, remotePath);
+    const resolvedRemotePath = await this.resolveExistingPath(wrapper, remotePath);
 
     for (const localPath of localPaths) {
       const remoteFilePath = posixPath.join(resolvedRemotePath, basename(localPath));
@@ -60,7 +62,7 @@ export class SSHSftpSession {
 
   async uploadDirectory(remotePath: string, localDirectoryPath: string): Promise<number> {
     const wrapper = await this.getWrapper();
-    const resolvedRemotePath = await this.realpath(wrapper, remotePath);
+    const resolvedRemotePath = await this.resolveExistingPath(wrapper, remotePath);
     const remoteDirectoryPath = posixPath.join(resolvedRemotePath, basename(localDirectoryPath));
     await this.mkdir(wrapper, remoteDirectoryPath);
     return this.uploadDirectoryRecursive(wrapper, remoteDirectoryPath, localDirectoryPath);
@@ -73,7 +75,7 @@ export class SSHSftpSession {
 
   async createDirectory(parentPath: string, name: string): Promise<string> {
     const wrapper = await this.getWrapper();
-    const resolvedParentPath = await this.realpath(wrapper, parentPath);
+    const resolvedParentPath = await this.resolveExistingPath(wrapper, parentPath);
     const nextPath = posixPath.join(resolvedParentPath, name);
     await this.mkdir(wrapper, nextPath);
     return nextPath;
@@ -95,6 +97,53 @@ export class SSHSftpSession {
         resolve(absolutePath);
       });
     });
+  }
+
+  private async resolveExistingPath(wrapper: SFTPWrapper, targetPath: string): Promise<string> {
+    const normalizedTarget = normalizeTargetPath(targetPath);
+
+    if (!normalizedTarget || normalizedTarget === '.') {
+      return this.getCurrentDirectory(wrapper);
+    }
+
+    if (normalizedTarget === '~') {
+      return this.getHomeDirectory(wrapper);
+    }
+
+    if (normalizedTarget.startsWith('~/')) {
+      const homeDirectory = await this.getHomeDirectory(wrapper);
+      const suffix = normalizedTarget.slice(2);
+      return posixPath.normalize(posixPath.join(homeDirectory, suffix));
+    }
+
+    if (normalizedTarget.startsWith('/')) {
+      return this.realpath(wrapper, posixPath.normalize(normalizedTarget));
+    }
+
+    const currentDirectory = await this.getCurrentDirectory(wrapper);
+    return this.realpath(wrapper, posixPath.normalize(posixPath.join(currentDirectory, normalizedTarget)));
+  }
+
+  private async getCurrentDirectory(wrapper: SFTPWrapper): Promise<string> {
+    if (!this.currentDirectoryPromise) {
+      this.currentDirectoryPromise = this.realpath(wrapper, '.').catch((error) => {
+        this.currentDirectoryPromise = null;
+        throw error;
+      });
+    }
+
+    return this.currentDirectoryPromise;
+  }
+
+  private async getHomeDirectory(wrapper: SFTPWrapper): Promise<string> {
+    if (!this.homeDirectoryPromise) {
+      this.homeDirectoryPromise = this.realpath(wrapper, '.').catch((error) => {
+        this.homeDirectoryPromise = null;
+        throw error;
+      });
+    }
+
+    return this.homeDirectoryPromise;
   }
 
   private async readdir(wrapper: SFTPWrapper, targetPath: string): Promise<FileEntryWithStats[]> {
@@ -241,7 +290,7 @@ export class SSHSftpSession {
     remotePath: string,
     localPath: string,
   ): Promise<void> {
-    const resolvedRemotePath = await this.realpath(wrapper, remotePath);
+    const resolvedRemotePath = await this.resolveExistingPath(wrapper, remotePath);
     const remoteStats = await this.stat(wrapper, resolvedRemotePath);
 
     if (!remoteStats.isDirectory()) {
@@ -292,7 +341,7 @@ export class SSHSftpSession {
     }
 
     try {
-      const targetPath = await this.realpath(wrapper, mappedEntry.path);
+      const targetPath = await this.resolveExistingPath(wrapper, mappedEntry.path);
       const targetStats = await this.stat(wrapper, targetPath);
 
       return {
@@ -308,6 +357,10 @@ export class SSHSftpSession {
       };
     }
   }
+}
+
+function normalizeTargetPath(value: string): string {
+  return value.trim();
 }
 
 function mapSftpEntry(parentPath: string, entry: FileEntryWithStats): SSHSftpEntry {

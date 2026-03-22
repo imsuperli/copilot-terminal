@@ -548,7 +548,7 @@ function subscribePaneOutput(params: {
     pid,
   } = params;
 
-  const unsubscribe = processManager.subscribePtyData(pid, (data: string) => {
+  const unsubscribe = processManager.subscribePtyData(pid, (data: string, seq?: number) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       setImmediate(() => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -556,7 +556,7 @@ function subscribePaneOutput(params: {
             windowId,
             paneId,
             data,
-            seq: processManager.getLatestPaneOutputSeq(paneId),
+            seq,
           });
         }
       });

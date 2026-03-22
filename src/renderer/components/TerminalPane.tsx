@@ -680,11 +680,17 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     });
 
     // 监听用户输入
-    const disposable = terminal.onData((data) => {
+    const dataDisposable = terminal.onData((data) => {
       // 新会话的首次回放里，xterm 生成的协议响应仍然要回给 PTY；
       // 只有同一会话后续的补回放才需要屏蔽 synthetic reply。
       if (window.electronAPI && !suppressPtyWriteRef.current) {
         window.electronAPI.ptyWrite(windowId, pane.id, data, { source: 'xterm.onData' });
+      }
+    });
+
+    const binaryDisposable = terminal.onBinary?.((data) => {
+      if (window.electronAPI && !suppressPtyWriteRef.current) {
+        window.electronAPI.ptyWrite(windowId, pane.id, data, { source: 'xterm.onBinary' });
       }
     });
 
@@ -728,7 +734,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       lastAppliedSeqRef.current = 0;
       suppressPtyWriteRef.current = false;
       hasCompletedReplayForCurrentSessionRef.current = false;
-      disposable.dispose();
+      dataDisposable.dispose();
+      binaryDisposable?.dispose();
       selectionDisposable.dispose();
       unsubscribePtyData();
       window.removeEventListener('resize', handleResize);

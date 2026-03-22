@@ -279,13 +279,13 @@ app.whenReady().then(async () => {
     onPaneProcessStopped: ({ paneId }) => {
       statusPoller?.removePane(paneId);
     },
-    onPaneData: ({ windowId, paneId, data }) => {
+    onPaneData: ({ windowId, paneId, data, seq }) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('pty-data', {
           windowId,
           paneId,
           data,
-          seq: processManager?.getLatestPaneOutputSeq(paneId) ?? 0,
+          seq,
         });
       }
     },

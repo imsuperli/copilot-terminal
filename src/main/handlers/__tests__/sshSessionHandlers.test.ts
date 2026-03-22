@@ -137,6 +137,19 @@ describe('registerSSHSessionHandlers', () => {
         },
       },
     });
+
+    const outputSubscriber = processManager.subscribePtyData.mock.calls[0]?.[1];
+    expect(outputSubscriber).toBeTypeOf('function');
+
+    outputSubscriber?.('pwd\r\n/root\r\n', 11);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty-data', {
+      windowId: expect.any(String),
+      paneId: expect.any(String),
+      data: 'pwd\r\n/root\r\n',
+      seq: 11,
+    });
   });
 
   it('starts paused SSH panes from profile data', async () => {

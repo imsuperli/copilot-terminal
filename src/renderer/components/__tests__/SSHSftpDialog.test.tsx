@@ -252,6 +252,48 @@ describe('SSHSftpDialog', () => {
     });
   });
 
+  it('falls back to the remote home directory when the initial path does not exist', async () => {
+    vi.mocked(window.electronAPI.listSSHSftpDirectory)
+      .mockResolvedValueOnce({
+        success: false,
+        error: 'No such file',
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          path: '/home/root',
+          entries: [],
+        },
+      });
+
+    render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="~"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenNthCalledWith(1, {
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '~',
+      });
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenNthCalledWith(2, {
+        windowId: 'win-1',
+        paneId: 'pane-1',
+      });
+    });
+
+    expect(await screen.findByDisplayValue('/home/root')).toBeInTheDocument();
+  });
+
   it('creates and deletes remote directories', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.listSSHSftpDirectory)

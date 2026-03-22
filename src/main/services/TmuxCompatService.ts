@@ -29,7 +29,7 @@ import * as path from 'path';
 export interface ITmuxProcessManager extends IProcessManager {
   getPidByPane(windowId: string, paneId?: string): number | null;
   writeToPty(pid: number, data: string): void;
-  subscribePtyData?(pid: number, callback: (data: string) => void): () => void;
+  subscribePtyData?(pid: number, callback: (data: string, seq?: number) => void): () => void;
   rebindPaneProcess?(oldWindowId: string, paneId: string, newWindowId: string, newPaneId?: string): void;
 }
 
@@ -52,7 +52,7 @@ export interface TmuxCompatServiceConfig {
   onPaneProcessStopped?: (payload: { windowId: string; paneId: string; pid?: number }) => void;
 
   /** 闂傚倷绀侀幖顐λ囬柆宥呯？闁圭増婢樼粈鍫熺箾閸℃ê绔惧ù?PTY 闂傚倸鍊峰ù鍥ь浖閵娾晜鍤勯柤绋跨仛濞呯姵淇婇妶鍌氫壕闂佷紮绲介悘姘辩箔閻旂厧鐒垫い鎺嗗亾闁伙絽鍢查～婵嬫嚋闂堟稐缃曢梻浣稿閸嬫挾绱為崱妞曟椽顢楅崟顑芥嫼闂佸憡绻傜€氼厼锕㈡导瀛樼厵闂侇偅绋栭崗宀勬煙楠炲灝鐏╅摶锝夋煠濞村娅囬柣?*/
-  onPaneData?: (payload: { windowId: string; paneId: string; data: string }) => void;
+  onPaneData?: (payload: { windowId: string; paneId: string; data: string; seq?: number }) => void;
 
   /** 闂傚倸鍊风粈渚€骞栭銈傚亾濮樺崬鍘寸€规洝顫夌€靛ジ寮堕幋鐘垫毎濠电偞鎸婚崺鍐磻閹惧灈鍋撶憴鍕８闁稿海鏁婚妴浣糕槈濮楀棛鍙嗛梺鍛婃处閸撴岸顢樿ぐ鎺撯拺闁煎鍊曞瓭濡炪倖鍨甸幊妯虹暦椤栫偛绠柤鎭掑劚閸撱劌顪冮妶鍡欏⒈闁稿绋撻悮鎯ь吋婢跺鍘繝銏ｆ硾閻楀棝宕濋妶鍥╃＜?*/
   debug?: boolean;
@@ -505,9 +505,9 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       && (this.config.onPaneData || this.paneStartupBarriers.has(paneId));
 
     if (shouldSubscribeToPtyData && this.config.processManager.subscribePtyData) {
-      const unsubscribe = this.config.processManager.subscribePtyData(pid, (data: string) => {
+      const unsubscribe = this.config.processManager.subscribePtyData(pid, (data: string, seq?: number) => {
         this.releasePaneStartupBarrierOnOutput(paneId, data);
-        this.config.onPaneData?.({ windowId, paneId, data });
+        this.config.onPaneData?.({ windowId, paneId, data, seq });
       });
 
       this.paneSubscriptions.set(paneId, unsubscribe);
@@ -3049,4 +3049,3 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     return this.reversePaneIdMap.get(reverseKey);
   }
 }
-

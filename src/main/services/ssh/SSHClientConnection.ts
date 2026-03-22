@@ -937,22 +937,27 @@ function formatForwardedPort(forward: ForwardedPortConfig): string {
 }
 
 function buildRemoteShellEnv(): Record<string, string> {
+  const utf8Locale = resolvePreferredUtf8Locale();
   const env: Record<string, string> = {
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Copilot-Terminal',
+    LANG: process.env.LANG || utf8Locale,
+    LC_CTYPE: process.env.LC_CTYPE || process.env.LANG || utf8Locale,
   };
-  const locale = process.env.LC_CTYPE || process.env.LANG;
-
-  if (locale) {
-    env.LANG = process.env.LANG || locale;
-    env.LC_CTYPE = process.env.LC_CTYPE || locale;
-  }
 
   if (process.env.TERM_PROGRAM_VERSION) {
     env.TERM_PROGRAM_VERSION = process.env.TERM_PROGRAM_VERSION;
   }
 
   return env;
+}
+
+function resolvePreferredUtf8Locale(): string {
+  if (process.platform === 'win32') {
+    return 'en_US.UTF-8';
+  }
+
+  return 'C.UTF-8';
 }
 
 function areForwardConfigsEquivalent(

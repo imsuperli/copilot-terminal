@@ -1,8 +1,4 @@
-type PtyDataPayload = {
-  windowId: string;
-  paneId?: string;
-  data: string;
-};
+import type { PtyDataPayload } from '../../shared/types/electron-api';
 
 type PtyDataSubscriber = (payload: PtyDataPayload) => void;
 
@@ -102,4 +98,3 @@ export function subscribeToPanePtyData(
     }
   };
 }
-

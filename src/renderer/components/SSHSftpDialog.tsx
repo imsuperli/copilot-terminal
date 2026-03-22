@@ -68,7 +68,27 @@ export function SSHSftpDialog({
       setListing(response.data);
       setPathInput(response.data.path);
     } catch (loadError) {
-      setError((loadError as Error).message || t('sshSftpDialog.loadError'));
+      const errorMessage = (loadError as Error).message || t('sshSftpDialog.loadError');
+
+      if (targetPath && shouldFallbackToHomeDirectory(errorMessage)) {
+        try {
+          const fallbackResponse = await window.electronAPI.listSSHSftpDirectory({
+            windowId,
+            paneId,
+          });
+
+          if (fallbackResponse.success && fallbackResponse.data) {
+            setListing(fallbackResponse.data);
+            setPathInput(fallbackResponse.data.path);
+            setError('');
+            return;
+          }
+        } catch {
+          // Keep the original error message when the fallback also fails.
+        }
+      }
+
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -587,4 +607,8 @@ function getParentSftpPath(value: string): string {
   }
 
   return `/${segments.slice(0, -1).join('/')}`;
+}
+
+function shouldFallbackToHomeDirectory(message: string): boolean {
+  return message.trim().toLowerCase().includes('no such file');
 }
