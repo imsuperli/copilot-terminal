@@ -50,6 +50,34 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
     () => profile.tags.slice(0, 3),
     [profile.tags],
   );
+  const routingBadges = useMemo(() => {
+    const badges: string[] = [];
+
+    if (profile.jumpHostProfileId) {
+      badges.push(t('sshProfileCard.jumpHost'));
+    }
+
+    if (profile.proxyCommand) {
+      badges.push(t('sshProfileCard.proxyCommand'));
+    } else if (profile.socksProxyHost) {
+      badges.push(t('sshProfileCard.socksProxy'));
+    } else if (profile.httpProxyHost) {
+      badges.push(t('sshProfileCard.httpProxy'));
+    }
+
+    if (profile.forwardedPorts.length > 0) {
+      badges.push(t('sshProfileCard.forwardedPorts', { count: profile.forwardedPorts.length }));
+    }
+
+    return badges;
+  }, [
+    profile.forwardedPorts.length,
+    profile.httpProxyHost,
+    profile.jumpHostProfileId,
+    profile.proxyCommand,
+    profile.socksProxyHost,
+    t,
+  ]);
 
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -155,6 +183,15 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                 {t('sshProfileCard.inUse', { count: inUseCount })}
               </span>
             )}
+
+            {routingBadges.map((badge) => (
+              <span
+                key={badge}
+                className="text-xs text-zinc-300 bg-zinc-800 px-2 py-1 rounded-full"
+              >
+                {badge}
+              </span>
+            ))}
 
             {visibleTags.map((tag) => (
               <span

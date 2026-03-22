@@ -87,6 +87,40 @@ describe('CardGrid SSH profile cards', () => {
     expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
   });
 
+  it('surfaces ssh routing metadata on profile cards', () => {
+    const profile = createSSHProfile({
+      jumpHostProfileId: 'jump-1',
+      socksProxyHost: '127.0.0.1',
+      forwardedPorts: [
+        {
+          id: 'forward-1',
+          type: 'local',
+          localHost: '127.0.0.1',
+          localPort: 15432,
+          remoteHost: '10.0.0.22',
+          remotePort: 5432,
+        },
+        {
+          id: 'forward-2',
+          type: 'remote',
+          remoteHost: '0.0.0.0',
+          remotePort: 18080,
+          localHost: '127.0.0.1',
+          localPort: 8080,
+        },
+      ],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+    });
+
+    expect(screen.getByText('跳板机')).toBeInTheDocument();
+    expect(screen.getByText('SOCKS 代理')).toBeInTheDocument();
+    expect(screen.getByText('2 个转发')).toBeInTheDocument();
+  });
+
   it('disables profile deletion when the profile is referenced by existing windows', () => {
     const profile = createSSHProfile();
 
