@@ -1,7 +1,7 @@
 import { ViewChangedPayload } from './ipc';
 import { ProjectConfig } from './project-config';
 import { QuickNavConfig } from './quick-nav';
-import { KnownHostEntry, SSHCredentialState, SSHProfile, SSHProfileInput, SSHProfilePatch } from './ssh';
+import { KnownHostEntry, SSHCredentialState, SSHImportResult, SSHProfile, SSHProfileInput, SSHProfilePatch } from './ssh';
 import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
@@ -251,6 +251,8 @@ export interface ElectronAPI {
   createSSHProfile: (config: SSHProfileInput) => Promise<IpcResponse<SSHProfile>>;
   updateSSHProfile: (profileId: string, patch: SSHProfilePatch) => Promise<IpcResponse<SSHProfile>>;
   deleteSSHProfile: (profileId: string) => Promise<IpcResponse<void>>;
+  importOpenSSHProfiles: () => Promise<IpcResponse<SSHImportResult>>;
+  detectLocalSSHPrivateKeys: () => Promise<IpcResponse<string[]>>;
   getSSHCredentialState: (profileId: string) => Promise<IpcResponse<SSHCredentialState>>;
   setSSHPassword: (profileId: string, password: string) => Promise<IpcResponse<void>>;
   clearSSHPassword: (profileId: string) => Promise<IpcResponse<void>>;

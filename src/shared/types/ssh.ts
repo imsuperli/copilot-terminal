@@ -72,6 +72,13 @@ export interface SSHCredentialState {
   hasPassphrase: boolean;
 }
 
+export interface SSHImportResult {
+  profiles: SSHProfile[];
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+}
+
 export type SSHVaultStorageMode = 'electron-safe-storage' | 'plain-text-fallback';
 
 export interface SSHVaultEntry {

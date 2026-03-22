@@ -6,10 +6,22 @@ const { mockIpcHandle } = vi.hoisted(() => ({
   mockIpcHandle: vi.fn(),
 }));
 
+const { mockImportProfiles, mockDetectPrivateKeys } = vi.hoisted(() => ({
+  mockImportProfiles: vi.fn(),
+  mockDetectPrivateKeys: vi.fn(),
+}));
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: mockIpcHandle,
   },
+}));
+
+vi.mock('../../services/ssh/OpenSSHProfileImporter', () => ({
+  OpenSSHProfileImporter: vi.fn().mockImplementation(() => ({
+    importProfiles: mockImportProfiles,
+    detectPrivateKeys: mockDetectPrivateKeys,
+  })),
 }));
 
 function getRegisteredHandler(channel: string) {
@@ -21,6 +33,10 @@ function getRegisteredHandler(channel: string) {
 describe('registerSSHProfileHandlers', () => {
   beforeEach(() => {
     mockIpcHandle.mockReset();
+    mockImportProfiles.mockReset();
+    mockDetectPrivateKeys.mockReset();
+    mockImportProfiles.mockResolvedValue([]);
+    mockDetectPrivateKeys.mockResolvedValue([]);
   });
 
   it('creates and lists SSH profiles through the profile store', async () => {
@@ -29,6 +45,7 @@ describe('registerSSHProfileHandlers', () => {
       get: vi.fn(),
       create: vi.fn().mockResolvedValue({ id: 'profile-1', name: 'prod-web-01' }),
       update: vi.fn(),
+      upsert: vi.fn(),
       remove: vi.fn(),
     };
 
@@ -72,6 +89,7 @@ describe('registerSSHProfileHandlers', () => {
       get: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      upsert: vi.fn(),
       remove: vi.fn().mockResolvedValue(undefined),
     };
     const sshVaultService = {
@@ -137,6 +155,7 @@ describe('registerSSHProfileHandlers', () => {
     const credentialStateHandler = getRegisteredHandler('get-ssh-credential-state');
     const setPasswordHandler = getRegisteredHandler('set-ssh-password');
     const setPassphraseHandler = getRegisteredHandler('set-ssh-private-key-passphrase');
+    const detectPrivateKeysHandler = getRegisteredHandler('detect-local-ssh-private-keys');
     const listKnownHostsHandler = getRegisteredHandler('list-known-hosts');
     const removeKnownHostHandler = getRegisteredHandler('remove-known-host');
 
@@ -152,11 +171,96 @@ describe('registerSSHProfileHandlers', () => {
       success: true,
       data: [{ id: 'host-1' }],
     });
+    expect(await detectPrivateKeysHandler({})).toEqual({
+      success: true,
+      data: [],
+    });
 
     await removeKnownHostHandler({}, 'host-1');
 
     expect(sshVaultService.setPassword).toHaveBeenCalledWith('profile-1', 'secret');
     expect(sshVaultService.setPrivateKeyPassphrase).toHaveBeenCalledWith('profile-1', '/keys/id_ed25519', 'key-secret');
     expect(sshKnownHostsStore.remove).toHaveBeenCalledWith('host-1');
+  });
+
+  it('imports OpenSSH profiles through the importer service and upserts them into the store', async () => {
+    mockImportProfiles.mockResolvedValue([
+      {
+        id: 'openssh-config:app',
+        input: {
+          name: 'app (.ssh/config)',
+          host: '10.0.0.21',
+          port: 2222,
+          user: 'deploy',
+          auth: 'publicKey',
+          privateKeys: ['/home/test/.ssh/id_ed25519'],
+          keepaliveInterval: 15,
+          keepaliveCountMax: 4,
+          readyTimeout: 10000,
+          verifyHostKeys: true,
+          x11: false,
+          skipBanner: false,
+          agentForward: true,
+          warnOnClose: true,
+          reuseSession: true,
+          forwardedPorts: [],
+          tags: [],
+        },
+      },
+    ]);
+
+    const sshProfileStore = {
+      list: vi.fn().mockResolvedValue([]),
+      get: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      upsert: vi.fn().mockImplementation(async (profile) => profile),
+      remove: vi.fn(),
+    };
+
+    registerSSHProfileHandlers({
+      mainWindow: null,
+      processManager: null,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: null,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const importHandler = getRegisteredHandler('import-openssh-profiles');
+    const response = await importHandler({});
+
+    expect(mockImportProfiles).toHaveBeenCalledTimes(1);
+    expect(sshProfileStore.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'openssh-config:app',
+      name: 'app (.ssh/config)',
+      host: '10.0.0.21',
+      port: 2222,
+      user: 'deploy',
+      auth: 'publicKey',
+      privateKeys: ['/home/test/.ssh/id_ed25519'],
+    }));
+    expect(response).toEqual({
+      success: true,
+      data: {
+        profiles: [
+          expect.objectContaining({
+            id: 'openssh-config:app',
+            name: 'app (.ssh/config)',
+          }),
+        ],
+        createdCount: 1,
+        updatedCount: 0,
+        skippedCount: 0,
+      },
+    });
   });
 });

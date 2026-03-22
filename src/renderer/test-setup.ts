@@ -90,6 +90,8 @@ Object.defineProperty(window, 'electronAPI', {
     createSSHProfile: vi.fn().mockResolvedValue({ success: true, data: {} }),
     updateSSHProfile: vi.fn().mockResolvedValue({ success: true, data: {} }),
     deleteSSHProfile: vi.fn().mockResolvedValue({ success: true }),
+    importOpenSSHProfiles: vi.fn().mockResolvedValue({ success: true, data: { profiles: [], createdCount: 0, updatedCount: 0, skippedCount: 0 } }),
+    detectLocalSSHPrivateKeys: vi.fn().mockResolvedValue({ success: true, data: [] }),
     getSSHCredentialState: vi.fn().mockResolvedValue({ success: true, data: { hasPassword: false, hasPassphrase: false } }),
     setSSHPassword: vi.fn().mockResolvedValue({ success: true }),
     clearSSHPassword: vi.fn().mockResolvedValue({ success: true }),

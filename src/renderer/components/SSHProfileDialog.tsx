@@ -108,6 +108,8 @@ export function SSHProfileDialog({
   const [passphrases, setPassphrases] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [detectKeysMessage, setDetectKeysMessage] = useState('');
+  const [isDetectingKeys, setIsDetectingKeys] = useState(false);
 
   const currentCredentialState = readCredentialState(credentialState);
   const currentPrivateKeys = useMemo(
@@ -126,6 +128,7 @@ export function SSHProfileDialog({
     setClearStoredPassphrases(false);
     setPassphrases({});
     setSaveError('');
+    setDetectKeysMessage('');
 
     setTimeout(() => {
       nameInputRef.current?.focus();
@@ -304,6 +307,34 @@ export function SSHProfileDialog({
     }
   };
 
+  const handleDetectPrivateKeys = async () => {
+    setDetectKeysMessage('');
+    setIsDetectingKeys(true);
+
+    try {
+      const response = await window.electronAPI.detectLocalSSHPrivateKeys();
+      if (!response?.success || !response.data) {
+        throw new Error(response?.error || t('sshProfileDialog.detectKeysError'));
+      }
+
+      if (response.data.length === 0) {
+        setDetectKeysMessage(t('sshProfileDialog.detectKeysEmpty'));
+        return;
+      }
+
+      const mergedKeys = uniqueList([
+        ...parseLineList(form.privateKeysText),
+        ...response.data,
+      ]);
+      setField('privateKeysText', mergedKeys.join('\n'));
+      setDetectKeysMessage(t('sshProfileDialog.detectKeysSuccess', { count: response.data.length }));
+    } catch (error) {
+      setDetectKeysMessage((error as Error).message || t('sshProfileDialog.detectKeysError'));
+    } finally {
+      setIsDetectingKeys(false);
+    }
+  };
+
   return (
     <Dialog
       open={open}
@@ -416,9 +447,19 @@ export function SSHProfileDialog({
 
         {form.auth === 'publicKey' && (
           <div>
-            <label htmlFor="ssh-profile-keys" className="block text-sm font-medium text-text-primary mb-2">
-              {t('sshProfileDialog.privateKeysLabel')}
-            </label>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label htmlFor="ssh-profile-keys" className="block text-sm font-medium text-text-primary">
+                {t('sshProfileDialog.privateKeysLabel')}
+              </label>
+              <button
+                type="button"
+                onClick={handleDetectPrivateKeys}
+                disabled={isDetectingKeys}
+                className="text-xs text-status-running hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDetectingKeys ? t('common.loading') : t('sshProfileDialog.detectKeys')}
+              </button>
+            </div>
             <textarea
               id="ssh-profile-keys"
               value={form.privateKeysText}
@@ -427,6 +468,11 @@ export function SSHProfileDialog({
               rows={4}
               className="w-full px-3 py-2 bg-bg-app border border-border-subtle rounded text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
             />
+            {detectKeysMessage && (
+              <p className="mt-2 text-xs text-text-secondary">
+                {detectKeysMessage}
+              </p>
+            )}
 
             {currentPrivateKeys.length > 0 && (
               <div className="mt-3 space-y-3">

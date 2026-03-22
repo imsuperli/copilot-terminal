@@ -83,4 +83,34 @@ describe('SSHProfileDialog', () => {
       });
     });
   });
+
+  it('detects local private keys and appends them to the public key list', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.detectLocalSSHPrivateKeys).mockResolvedValueOnce({
+      success: true,
+      data: ['/home/test/.ssh/id_ed25519', '/home/test/.ssh/id_rsa'],
+    });
+
+    render(
+      <SSHProfileDialog
+        open={true}
+        onOpenChange={() => undefined}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText('认证方式'), 'publicKey');
+    await user.type(screen.getByLabelText('私钥路径'), '/existing/key');
+    await user.click(screen.getByRole('button', { name: '自动检测私钥' }));
+
+    expect(window.electronAPI.detectLocalSSHPrivateKeys).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.getByLabelText('私钥路径')).toHaveValue([
+        '/existing/key',
+        '/home/test/.ssh/id_ed25519',
+        '/home/test/.ssh/id_rsa',
+      ].join('\n'));
+    });
+    expect(screen.getByText('已追加 2 个本机私钥。')).toBeInTheDocument();
+  });
 });

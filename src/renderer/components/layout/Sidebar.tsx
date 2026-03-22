@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2, Server } from 'lucide-react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2, Server, Download } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
@@ -18,6 +18,7 @@ interface SidebarProps {
   version?: string;
   onCreateWindow?: () => void;
   onCreateSSHProfile?: () => void;
+  onImportSSHProfiles?: () => void;
   onCreateGroup?: () => void;
   isDialogOpen?: boolean;
   onDialogChange?: (open: boolean) => void;
@@ -27,6 +28,7 @@ interface SidebarProps {
   onTabChange?: (tab: 'all' | 'active' | 'archived' | string) => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
+  importingSSHProfiles?: boolean;
 }
 
 export function Sidebar({
@@ -34,6 +36,7 @@ export function Sidebar({
   version = '0.1.0',
   onCreateWindow,
   onCreateSSHProfile,
+  onImportSSHProfiles,
   onCreateGroup,
   isDialogOpen = false,
   onDialogChange,
@@ -43,6 +46,7 @@ export function Sidebar({
   onTabChange,
   searchQuery = '',
   onSearchChange,
+  importingSSHProfiles = false,
 }: SidebarProps) {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
@@ -604,13 +608,24 @@ export function Sidebar({
           </button>
 
           {sshEnabled && (
-            <button
-              onClick={onCreateSSHProfile}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
-            >
-              <Server className="h-4 w-4" />
-              <span>{t('sidebar.newSSHProfile')}</span>
-            </button>
+            <>
+              <button
+                onClick={onCreateSSHProfile}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-opacity"
+              >
+                <Server className="h-4 w-4" />
+                <span>{t('sidebar.newSSHProfile')}</span>
+              </button>
+
+              <button
+                onClick={onImportSSHProfiles}
+                disabled={importingSSHProfiles}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] font-medium hover:bg-[rgb(var(--accent))] transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <Download className="h-4 w-4" />
+                <span>{importingSSHProfiles ? t('sidebar.importSSHProfilesLoading') : t('sidebar.importSSHProfiles')}</span>
+              </button>
+            </>
           )}
 
           {/* Batch button - always show */}

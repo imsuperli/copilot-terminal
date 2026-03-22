@@ -239,7 +239,8 @@ export class SSHPtySession implements IPty {
       host: this.ssh.host,
       port: this.ssh.port,
       username: this.ssh.user,
-      keepaliveInterval: this.ssh.keepaliveInterval,
+      // Profile values are stored in seconds to match the UI and OpenSSH config semantics.
+      keepaliveInterval: this.ssh.keepaliveInterval > 0 ? this.ssh.keepaliveInterval * 1000 : 0,
       keepaliveCountMax: this.ssh.keepaliveCountMax,
       readyTimeout: this.ssh.readyTimeout ?? undefined,
       agentForward: this.ssh.agentForward,

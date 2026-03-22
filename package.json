@@ -78,6 +78,7 @@
     "react-dnd": "^16.0.1",
     "react-dnd-html5-backend": "^16.0.1",
     "react-dom": "^18.2.0",
+    "ssh-config": "^5.1.0",
     "ssh2": "^1.17.0",
     "uuid": "^13.0.0",
     "zustand": "^5.0.11"

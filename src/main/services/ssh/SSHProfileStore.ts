@@ -27,6 +27,7 @@ export interface ISSHProfileStore {
   get(id: string): Promise<SSHProfile | null>;
   create(input: SSHProfileInput): Promise<SSHProfile>;
   update(id: string, patch: SSHProfilePatch): Promise<SSHProfile>;
+  upsert(profile: SSHProfile): Promise<SSHProfile>;
   remove(id: string): Promise<void>;
 }
 
@@ -95,6 +96,28 @@ export class SSHProfileStore implements ISSHProfileStore {
     data.profiles[index] = updated;
     await this.writeData(data.profiles);
     return updated;
+  }
+
+  async upsert(profile: SSHProfile): Promise<SSHProfile> {
+    const profileId = requireNonEmptyString(profile.id, 'SSH profile id');
+    const data = await this.readData();
+    const index = data.profiles.findIndex((item) => item.id === profileId);
+    const current = index >= 0 ? data.profiles[index] : null;
+    const normalized = normalizeProfile({
+      ...profile,
+      id: profileId,
+      createdAt: current?.createdAt ?? profile.createdAt ?? this.now(),
+      updatedAt: this.now(),
+    });
+
+    if (index >= 0) {
+      data.profiles[index] = normalized;
+    } else {
+      data.profiles.push(normalized);
+    }
+
+    await this.writeData(data.profiles);
+    return normalized;
   }
 
   async remove(id: string): Promise<void> {

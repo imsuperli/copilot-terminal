@@ -1,7 +1,8 @@
 import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
 import { errorResponse, successResponse } from './HandlerResponse';
-import { SSHProfileInput, SSHProfilePatch } from '../../shared/types/ssh';
+import { SSHImportResult, SSHProfile, SSHProfileInput, SSHProfilePatch } from '../../shared/types/ssh';
+import { OpenSSHProfileImporter } from '../services/ssh/OpenSSHProfileImporter';
 
 export function registerSSHProfileHandlers(ctx: HandlerContext) {
   const {
@@ -9,6 +10,7 @@ export function registerSSHProfileHandlers(ctx: HandlerContext) {
     sshVaultService,
     sshKnownHostsStore,
   } = ctx;
+  const openSSHImporter = new OpenSSHProfileImporter();
 
   ipcMain.handle('list-ssh-profiles', async () => {
     try {
@@ -73,6 +75,50 @@ export function registerSSHProfileHandlers(ctx: HandlerContext) {
       await sshVaultService?.remove(profileId);
 
       return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('import-openssh-profiles', async () => {
+    try {
+      if (!sshProfileStore) {
+        throw new Error('SSH profile store not initialized');
+      }
+
+      const importedProfiles = await openSSHImporter.importProfiles();
+      const existingProfiles = new Map((await sshProfileStore.list()).map((profile) => [profile.id, profile]));
+      const savedProfiles: SSHProfile[] = [];
+      let createdCount = 0;
+      let updatedCount = 0;
+
+      for (const importedProfile of importedProfiles) {
+        const existingProfile = existingProfiles.get(importedProfile.id);
+        const mergedProfile = mergeImportedProfile(existingProfile, importedProfile.id, importedProfile.input);
+        const savedProfile = await sshProfileStore.upsert(mergedProfile);
+
+        savedProfiles.push(savedProfile);
+        if (existingProfile) {
+          updatedCount += 1;
+        } else {
+          createdCount += 1;
+        }
+      }
+
+      return successResponse<SSHImportResult>({
+        profiles: savedProfiles,
+        createdCount,
+        updatedCount,
+        skippedCount: 0,
+      });
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('detect-local-ssh-private-keys', async () => {
+    try {
+      return successResponse(await openSSHImporter.detectPrivateKeys());
     } catch (error) {
       return errorResponse(error);
     }
@@ -166,4 +212,46 @@ export function registerSSHProfileHandlers(ctx: HandlerContext) {
       return errorResponse(error);
     }
   });
+}
+
+function mergeImportedProfile(
+  existingProfile: SSHProfile | undefined,
+  importedProfileId: string,
+  importedInput: SSHProfileInput,
+): SSHProfile {
+  const timestamp = new Date().toISOString();
+
+  return {
+    id: importedProfileId,
+    name: importedInput.name,
+    host: importedInput.host,
+    port: importedInput.port,
+    user: importedInput.user,
+    auth: importedInput.auth,
+    privateKeys: importedInput.privateKeys,
+    keepaliveInterval: importedInput.keepaliveInterval,
+    keepaliveCountMax: importedInput.keepaliveCountMax,
+    readyTimeout: importedInput.readyTimeout,
+    verifyHostKeys: existingProfile?.verifyHostKeys ?? importedInput.verifyHostKeys,
+    x11: importedInput.x11,
+    skipBanner: existingProfile?.skipBanner ?? importedInput.skipBanner,
+    ...(importedInput.jumpHostProfileId ? { jumpHostProfileId: importedInput.jumpHostProfileId } : {}),
+    agentForward: importedInput.agentForward,
+    warnOnClose: existingProfile?.warnOnClose ?? importedInput.warnOnClose,
+    ...(importedInput.proxyCommand ? { proxyCommand: importedInput.proxyCommand } : {}),
+    ...(importedInput.socksProxyHost ? { socksProxyHost: importedInput.socksProxyHost } : {}),
+    ...(importedInput.socksProxyPort !== undefined ? { socksProxyPort: importedInput.socksProxyPort } : {}),
+    ...(importedInput.httpProxyHost ? { httpProxyHost: importedInput.httpProxyHost } : {}),
+    ...(importedInput.httpProxyPort !== undefined ? { httpProxyPort: importedInput.httpProxyPort } : {}),
+    reuseSession: existingProfile?.reuseSession ?? importedInput.reuseSession,
+    forwardedPorts: importedInput.forwardedPorts,
+    ...(importedInput.remoteCommand ? { remoteCommand: importedInput.remoteCommand } : {}),
+    ...(importedInput.defaultRemoteCwd ? { defaultRemoteCwd: importedInput.defaultRemoteCwd } : {}),
+    tags: existingProfile?.tags ?? importedInput.tags,
+    ...(existingProfile?.notes ? { notes: existingProfile.notes } : importedInput.notes ? { notes: importedInput.notes } : {}),
+    ...(existingProfile?.icon ? { icon: existingProfile.icon } : importedInput.icon ? { icon: importedInput.icon } : {}),
+    ...(existingProfile?.color ? { color: existingProfile.color } : importedInput.color ? { color: importedInput.color } : {}),
+    createdAt: existingProfile?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  };
 }
