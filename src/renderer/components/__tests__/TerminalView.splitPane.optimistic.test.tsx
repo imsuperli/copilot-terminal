@@ -133,7 +133,7 @@ describe('TerminalView split pane optimistic update', () => {
   });
 
   it('renders the new pane immediately while split IPC is still pending', async () => {
-    const deferred = createDeferred<{ success: boolean; data: { pid: number } }>();
+    const deferred = createDeferred<{ success: boolean; data: { pid: number; sessionId: string } }>();
     vi.mocked(window.electronAPI.splitPane).mockReturnValueOnce(deferred.promise as Promise<any>);
 
     render(<StoreBackedTerminalView />);
@@ -143,7 +143,7 @@ describe('TerminalView split pane optimistic update', () => {
     expect(screen.getByTestId('split-layout-state').textContent).toContain('pane-1:running:111');
     expect(screen.getByTestId('split-layout-state').textContent).toContain(':restoring:none');
 
-    deferred.resolve({ success: true, data: { pid: 222 } });
+    deferred.resolve({ success: true, data: { pid: 222, sessionId: 'session-222' } });
 
     await waitFor(() => {
       expect(screen.getByTestId('split-layout-state').textContent).toContain(':running:222');

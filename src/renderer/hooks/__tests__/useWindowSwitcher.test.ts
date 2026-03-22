@@ -34,7 +34,7 @@ describe('useWindowSwitcher', () => {
   it('switches to terminal view before startWindow resolves', async () => {
     let resolveStartWindow: ((value: {
       success: true;
-      data: { pid: number; status: WindowStatus };
+      data: { pid: number; sessionId: string; status: WindowStatus };
     }) => void) | null = null;
 
     const startWindowSpy = vi.fn().mockImplementation(() => new Promise((resolve) => {
@@ -57,7 +57,7 @@ describe('useWindowSwitcher', () => {
     await act(async () => {
       resolveStartWindow?.({
         success: true,
-        data: { pid: 1234, status: WindowStatus.WaitingForInput },
+        data: { pid: 1234, sessionId: 'session-1234', status: WindowStatus.WaitingForInput },
       });
     });
 
@@ -65,6 +65,7 @@ describe('useWindowSwitcher', () => {
       expect(useWindowStore.getState().getPaneById('window-1', 'pane-1')).toMatchObject({
         status: WindowStatus.WaitingForInput,
         pid: 1234,
+        sessionId: 'session-1234',
       });
     });
   });

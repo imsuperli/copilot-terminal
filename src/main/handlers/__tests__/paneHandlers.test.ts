@@ -27,7 +27,7 @@ describe('registerPaneHandlers', () => {
   it('registers split-pane created PTY with StatusPoller', async () => {
     const unsubscribe = vi.fn();
     const processManager = {
-      spawnTerminal: vi.fn().mockResolvedValue({ pid: 321 }),
+      spawnTerminal: vi.fn().mockResolvedValue({ pid: 321, sessionId: 'session-321' }),
       subscribePtyData: vi.fn().mockReturnValue(unsubscribe),
       listProcesses: vi.fn().mockReturnValue([]),
       killProcess: vi.fn(),
@@ -62,7 +62,7 @@ describe('registerPaneHandlers', () => {
       command: 'pwsh.exe',
     };
 
-    const response = await splitPaneHandler({}, config) as { success: boolean; data?: { pid: number } };
+    const response = await splitPaneHandler({}, config) as { success: boolean; data?: { pid: number; sessionId: string } };
 
     expect(processManager.spawnTerminal).toHaveBeenCalledWith(config);
     expect(statusPoller.addPane).toHaveBeenCalledWith('win-1', 'pane-2', 321);
@@ -70,7 +70,7 @@ describe('registerPaneHandlers', () => {
     expect(ptySubscriptionManager.add).toHaveBeenCalledWith('pane-2', unsubscribe);
     expect(response).toEqual({
       success: true,
-      data: { pid: 321 },
+      data: { pid: 321, sessionId: 'session-321' },
     });
   });
 

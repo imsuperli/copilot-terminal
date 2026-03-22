@@ -6,8 +6,9 @@ import { resolveShellProgram } from '../utils/shell';
 import { scanSubfolders } from '../utils/folderScanner';
 import { readProjectConfig } from '../utils/project-config';
 import { projectConfigWatcher } from '../services/ProjectConfigWatcher';
-import { WindowStatus } from '../../shared/types/window';
+import { Pane, WindowStatus } from '../../shared/types/window';
 import { successResponse, errorResponse } from './HandlerResponse';
+import { getPaneCapabilities } from '../../shared/utils/terminalCapabilities';
 
 /**
  * 注册窗口管理相关的 IPC handlers
@@ -72,12 +73,23 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       const projectConfig = readProjectConfig(safePath);
 
       // 创建 Pane 对象（使用安全路径）
-      const pane = {
+      const pane: Pane = {
         id: paneId,
         cwd: safePath,
         command: command,
         status: WindowStatus.Running as WindowStatus,
         pid: handle.pid,
+        sessionId: handle.sessionId,
+        backend: 'local' as const,
+        capabilities: getPaneCapabilities({
+          id: paneId,
+          cwd: safePath,
+          command: command,
+          status: WindowStatus.Running as WindowStatus,
+          pid: handle.pid,
+          sessionId: handle.sessionId,
+          backend: 'local' as const,
+        }),
       };
 
       // 创建布局树（单个窗格）
@@ -221,6 +233,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
 
       return successResponse({
         pid: handle.pid,
+        sessionId: handle.sessionId,
         status: WindowStatus.WaitingForInput,
       });
     } catch (error) {

@@ -45,6 +45,7 @@ export interface SplitPaneConfig {
 
 export interface StartWindowResult {
   pid: number;
+  sessionId: string;
   status: WindowStatus;
 }
 
@@ -250,7 +251,7 @@ export interface ElectronAPI {
   onPtyData: (callback: ElectronEventHandler<PtyDataPayload>) => void;
   offPtyData: (callback: ElectronEventHandler<PtyDataPayload>) => void;
 
-  splitPane: (config: SplitPaneConfig) => Promise<IpcResponse<{ pid: number }>>;
+  splitPane: (config: SplitPaneConfig) => Promise<IpcResponse<{ pid: number; sessionId: string }>>;
   closePane: (windowId: string, paneId: string) => Promise<IpcResponse<void>>;
 
   switchToTerminalView: (windowId: string) => Promise<IpcResponse<void>>;

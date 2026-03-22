@@ -60,13 +60,20 @@ export const GroupView: React.FC<GroupViewProps> = ({
         for (const pane of panes) {
           if (pane.status === WindowStatus.Paused) {
             try {
-              await window.electronAPI.startWindow({
+              const response = await window.electronAPI.startWindow({
                 windowId: win.id,
                 paneId: pane.id,
                 name: win.name,
                 workingDirectory: pane.cwd,
                 command: pane.command,
               });
+              if (response.success && response.data) {
+                useWindowStore.getState().updatePane(win.id, pane.id, {
+                  pid: response.data.pid,
+                  sessionId: response.data.sessionId,
+                  status: response.data.status,
+                });
+              }
             } catch (error) {
               console.error(`Failed to auto-start pane ${pane.id} in window ${win.id}:`, error);
             }
@@ -189,13 +196,20 @@ export const GroupView: React.FC<GroupViewProps> = ({
           for (const pane of panes) {
             if (pane.status === WindowStatus.Paused) {
               try {
-                await window.electronAPI.startWindow({
+                const response = await window.electronAPI.startWindow({
                   windowId: dragWin.id,
                   paneId: pane.id,
                   name: dragWin.name,
                   workingDirectory: pane.cwd,
                   command: pane.command,
                 });
+                if (response.success && response.data) {
+                  useWindowStore.getState().updatePane(dragWin.id, pane.id, {
+                    pid: response.data.pid,
+                    sessionId: response.data.sessionId,
+                    status: response.data.status,
+                  });
+                }
               } catch (error) {
                 console.error(`Failed to auto-start pane ${pane.id}:`, error);
               }
@@ -275,13 +289,20 @@ export const GroupView: React.FC<GroupViewProps> = ({
         try {
           const firstPane = getAllPanes(win.layout)[0];
           if (firstPane) {
-            await window.electronAPI.startWindow({
+            const response = await window.electronAPI.startWindow({
               windowId: win.id,
               paneId: firstPane.id,
               name: win.name,
               workingDirectory: firstPane.cwd,
               command: firstPane.command,
             });
+            if (response.success && response.data) {
+              useWindowStore.getState().updatePane(win.id, firstPane.id, {
+                pid: response.data.pid,
+                sessionId: response.data.sessionId,
+                status: response.data.status,
+              });
+            }
           }
         } catch (error) {
           console.error(`Failed to start window ${win.id}:`, error);

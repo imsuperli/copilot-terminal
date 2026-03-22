@@ -51,6 +51,7 @@ export function useWindowSwitcher(onSwitchView: (windowId: string) => void | Pro
             if (response && response.success && response.data) {
               updatePane(win.id, pane.id, {
                 pid: response.data.pid,
+                sessionId: response.data.sessionId,
                 status: response.data.status,
               });
             } else {

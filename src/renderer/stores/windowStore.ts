@@ -26,6 +26,7 @@ let autoSaveEnabled = true;
 const runtimeOnlyPaneFields = new Set<keyof Pane>([
   'status',
   'pid',
+  'sessionId',
   'lastOutput',
   'title',
   'borderColor',

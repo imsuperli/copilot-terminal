@@ -49,7 +49,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
         statusPoller?.addPane(config.windowId, config.paneId, handle.pid);
       }
 
-      return successResponse({ pid: handle.pid });
+      return successResponse({ pid: handle.pid, sessionId: handle.sessionId });
     } catch (error) {
       return errorResponse(error);
     }

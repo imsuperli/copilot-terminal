@@ -234,6 +234,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
             updatePane(terminalWindow.id, newPaneId, {
               pid: response.data.pid,
+              sessionId: response.data.sessionId,
               status: WindowStatus.Running,
             });
           } else {
@@ -312,6 +313,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             if (response && response.success && response.data) {
               updatePane(terminalWindow.id, pane.id, {
                 pid: response.data.pid,
+                sessionId: response.data.sessionId,
                 status: response.data.status,
               });
             } else {

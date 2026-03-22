@@ -3,6 +3,7 @@ import { platform, tmpdir } from 'os';
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import { IProcessManager, TerminalConfig, ProcessHandle, ProcessInfo, ProcessStatus } from '../types/process';
 import { Settings } from '../types/workspace';
 import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
@@ -48,6 +49,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private ptyOutputBuffers: Map<number, string[]>; // 缂撳瓨 PTY 鍒濆杈撳嚭
   private paneHistoryBuffers: Map<string, PaneHistoryBuffer>;
   private paneIndex: Map<string, number>; // "windowId:paneId" 鈫?pid 绱㈠紩锛岀敤浜?O(1) 鏌ユ壘
+  private sessionIndex: Map<string, string>; // "windowId:paneId" -> sessionId
+  private pidToSessionId: Map<number, string>;
+  private sessionIdToPid: Map<string, number>;
   private nextPid: number;
   private statusDetector: IStatusDetector;
   private cachedSpawnEnv: NodeJS.ProcessEnv | null;
@@ -69,6 +73,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.ptyOutputBuffers = new Map();
     this.paneHistoryBuffers = new Map();
     this.paneIndex = new Map();
+    this.sessionIndex = new Map();
+    this.pidToSessionId = new Map();
+    this.sessionIdToPid = new Map();
     this.nextPid = 1000;  // Start from 1000 for mock PIDs
     this.statusDetector = new StatusDetectorImpl();
     this.cachedSpawnEnv = null;
@@ -173,6 +180,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     // 鍒涘缓 PTY 杩涚▼锛堢湡瀹炴垨 mock锛?
     let ptyProcess: any;
     let pid: number;
+    const sessionId = randomUUID();
+    const backend = config.backend ?? 'local';
 
     if (pty) {
       // 浣跨敤鐪熷疄鐨?node-pty
@@ -186,6 +195,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // Store process info
     const processInfo: ProcessInfo = {
+      sessionId,
+      backend,
       pid,
       status: ProcessStatus.Alive,
       workingDirectory: config.workingDirectory,
@@ -199,6 +210,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     // 缁存姢 paneIndex 绱㈠紩锛岀敤浜?O(1) 鏌ユ壘
     const paneKey = this.getPaneKey(config.windowId, config.paneId);
     this.paneIndex.set(paneKey, pid);
+    this.sessionIndex.set(paneKey, sessionId);
+    this.pidToSessionId.set(pid, sessionId);
+    this.sessionIdToPid.set(sessionId, pid);
 
     // 鍒濆鍖栬緭鍑虹紦鍐插尯锛岀敤浜庣紦瀛樻棭鏈熻緭鍑猴紙閬垮厤绔炴€佹潯浠跺鑷存暟鎹涪澶憋級
     this.ptyOutputBuffers.set(pid, []);
@@ -252,6 +266,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     return {
       pid,
+      sessionId,
       pty: ptyProcess,
     };
   }
@@ -315,6 +330,11 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   getPidByPane(windowId: string, paneId?: string): number | null {
     const paneKey = this.getPaneKey(windowId, paneId);
     return this.paneIndex.get(paneKey) ?? null;
+  }
+
+  getSessionIdByPane(windowId: string, paneId?: string): string | null {
+    const paneKey = this.getPaneKey(windowId, paneId);
+    return this.sessionIndex.get(paneKey) ?? null;
   }
 
   /**
@@ -538,6 +558,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.ptys.clear();
     this.paneHistoryBuffers.clear();
     this.paneIndex.clear();
+    this.sessionIndex.clear();
+    this.pidToSessionId.clear();
+    this.sessionIdToPid.clear();
 
     console.log('[ProcessManager] Destroy completed');
   }
@@ -1059,11 +1082,16 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     if (!pid) {
       return;
     }
+    const sessionId = this.sessionIndex.get(oldKey) ?? null;
 
     const newKey = this.getPaneKey(newWindowId, newPaneId);
     if (oldKey !== newKey) {
       this.paneIndex.delete(oldKey);
       this.paneIndex.set(newKey, pid);
+      if (sessionId) {
+        this.sessionIndex.delete(oldKey);
+        this.sessionIndex.set(newKey, sessionId);
+      }
     }
 
     if (paneId !== newPaneId) {
@@ -1109,6 +1137,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     const paneKey = this.getPaneKey(processInfo.windowId, processInfo.paneId);
     this.paneIndex.delete(paneKey);
+    this.sessionIndex.delete(paneKey);
+    this.pidToSessionId.delete(pid);
+    this.sessionIdToPid.delete(processInfo.sessionId);
 
     processInfo.status = ProcessStatus.Exited;
     processInfo.exitCode = exitCode;
