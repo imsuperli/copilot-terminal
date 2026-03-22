@@ -39,6 +39,20 @@ export interface ActiveSSHPortForward extends ForwardedPortConfig {
   source: SSHPortForwardSource;
 }
 
+export interface SSHSftpEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  isSymbolicLink: boolean;
+  size: number;
+  modifiedAt: string | null;
+}
+
+export interface SSHSftpDirectoryListing {
+  path: string;
+  entries: SSHSftpEntry[];
+}
+
 export interface KnownHostEntry {
   id: string;
   host: string;

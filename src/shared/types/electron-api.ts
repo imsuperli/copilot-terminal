@@ -11,6 +11,7 @@ import {
   SSHProfile,
   SSHProfileInput,
   SSHProfilePatch,
+  SSHSftpDirectoryListing,
 } from './ssh';
 import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
@@ -87,6 +88,19 @@ export interface AddSSHSessionPortForwardConfig extends SSHSessionPortForwardTar
 
 export interface RemoveSSHSessionPortForwardConfig extends SSHSessionPortForwardTarget {
   forwardId: string;
+}
+
+export interface ListSSHSftpDirectoryConfig extends SSHSessionPortForwardTarget {
+  path?: string;
+}
+
+export interface DownloadSSHSftpFileConfig extends SSHSessionPortForwardTarget {
+  remotePath: string;
+  suggestedName?: string;
+}
+
+export interface UploadSSHSftpFilesConfig extends SSHSessionPortForwardTarget {
+  remotePath: string;
 }
 
 export interface StartWindowResult {
@@ -249,6 +263,9 @@ export interface ElectronAPI {
   listSSHSessionPortForwards: (config: SSHSessionPortForwardTarget) => Promise<IpcResponse<ActiveSSHPortForward[]>>;
   addSSHSessionPortForward: (config: AddSSHSessionPortForwardConfig) => Promise<IpcResponse<ActiveSSHPortForward>>;
   removeSSHSessionPortForward: (config: RemoveSSHSessionPortForwardConfig) => Promise<IpcResponse<void>>;
+  listSSHSftpDirectory: (config: ListSSHSftpDirectoryConfig) => Promise<IpcResponse<SSHSftpDirectoryListing>>;
+  downloadSSHSftpFile: (config: DownloadSSHSftpFileConfig) => Promise<IpcResponse<string | null>>;
+  uploadSSHSftpFiles: (config: UploadSSHSftpFilesConfig) => Promise<IpcResponse<{ uploadedCount: number }>>;
   checkPtyOutput: (windowId: string, paneId: string) => Promise<IpcResponse<CheckPtyOutputResult>>;
   startGitWatch: (windowId: string, cwd: string) => Promise<IpcResponse<void>>;
   stopGitWatch: (windowId: string) => Promise<IpcResponse<void>>;

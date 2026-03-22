@@ -1,8 +1,14 @@
 import net from 'net';
 import fs from 'fs/promises';
 import { createHash } from 'crypto';
-import { Client, ClientChannel, ConnectConfig, utils } from 'ssh2';
-import type { ActiveSSHPortForward, ForwardedPortConfig, KnownHostEntry, SSHPortForwardSource } from '../../../shared/types/ssh';
+import { Client, ClientChannel, ConnectConfig, SFTPWrapper, utils } from 'ssh2';
+import type {
+  ActiveSSHPortForward,
+  ForwardedPortConfig,
+  KnownHostEntry,
+  SSHPortForwardSource,
+  SSHSftpDirectoryListing,
+} from '../../../shared/types/ssh';
 import type { SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
 import type { ISSHHostKeyPromptService } from './SSHHostKeyPromptService';
@@ -14,10 +20,12 @@ import {
   createSocksProxySocket,
 } from './SSHTransportSockets';
 import { resolveSSHAlgorithmPreferences } from './SSHAlgorithmCatalog';
+import { SSHSftpSession } from './SSHSftpSession';
 
 export interface SSHShellOpenOptions {
   cols: number;
   rows: number;
+  x11?: boolean;
 }
 
 export interface SSHForwardOutOptions {
@@ -41,6 +49,9 @@ export interface ISSHConnection {
   listPortForwards(): ActiveSSHPortForward[];
   addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
   removePortForward(forwardId: string): Promise<void>;
+  listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
+  downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
+  uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
   close(): Promise<void>;
   isClosed(): boolean;
 }
@@ -67,6 +78,8 @@ export class SSHClientConnection implements ISSHConnection {
   private readonly activePortForwards = new Map<string, ActivePortForwardState>();
   private readonly remotePortForwardKeys = new Map<string, string>();
   private portForwardMutationQueue: Promise<void>;
+  private sftpWrapperPromise: Promise<SFTPWrapper> | null;
+  private sftpSession: SSHSftpSession | null;
   private ready: boolean;
   private closed: boolean;
   private hostKeyVerificationError: Error | null;
@@ -81,6 +94,8 @@ export class SSHClientConnection implements ISSHConnection {
     this.jumpHostLease = null;
     this.forwardedPortsConfigured = false;
     this.portForwardMutationQueue = Promise.resolve();
+    this.sftpWrapperPromise = null;
+    this.sftpSession = null;
     this.ready = false;
     this.closed = false;
     this.hostKeyVerificationError = null;
@@ -124,7 +139,13 @@ export class SSHClientConnection implements ISSHConnection {
         term: 'xterm-256color',
         cols: Math.max(options.cols, 1),
         rows: Math.max(options.rows, 1),
-      }, (error, stream) => {
+      }, options.x11 ? {
+        x11: {
+          single: false,
+          protocol: 'MIT-MAGIC-COOKIE-1',
+          screen: 0,
+        },
+      } : {}, (error, stream) => {
         if (error) {
           reject(error);
           return;
@@ -191,11 +212,28 @@ export class SSHClientConnection implements ISSHConnection {
     });
   }
 
+  async listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing> {
+    const session = await this.getSftpSession();
+    return session.listDirectory(path);
+  }
+
+  async downloadSftpFile(remotePath: string, localPath: string): Promise<void> {
+    const session = await this.getSftpSession();
+    await session.downloadFile(remotePath, localPath);
+  }
+
+  async uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number> {
+    const session = await this.getSftpSession();
+    return session.uploadFiles(remotePath, localPaths);
+  }
+
   async close(): Promise<void> {
     const alreadyClosed = this.closed;
 
     this.closed = true;
     this.ready = false;
+    this.sftpSession = null;
+    this.sftpWrapperPromise = null;
     await this.disposeConfiguredPortForwards();
 
     if (!alreadyClosed) {
@@ -433,6 +471,46 @@ export class SSHClientConnection implements ISSHConnection {
     }
 
     return undefined;
+  }
+
+  private async getSftpSession(): Promise<SSHSftpSession> {
+    if (this.sftpSession) {
+      return this.sftpSession;
+    }
+
+    this.sftpSession = new SSHSftpSession({
+      getWrapper: async () => this.getSftpWrapper(),
+    });
+
+    return this.sftpSession;
+  }
+
+  private async getSftpWrapper(): Promise<SFTPWrapper> {
+    await this.connect();
+
+    if (this.closed) {
+      throw new Error(`SSH connection is already closed for ${this.ssh.user}@${this.ssh.host}`);
+    }
+
+    if (this.sftpWrapperPromise) {
+      return this.sftpWrapperPromise;
+    }
+
+    this.sftpWrapperPromise = new Promise<SFTPWrapper>((resolve, reject) => {
+      this.client.sftp((error, sftp) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(sftp);
+      });
+    }).catch((error) => {
+      this.sftpWrapperPromise = null;
+      throw error;
+    });
+
+    return this.sftpWrapperPromise;
   }
 
   private async configureConfiguredPortForwards(): Promise<void> {

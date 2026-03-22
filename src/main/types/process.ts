@@ -3,6 +3,7 @@ import {
   ForwardedPortConfig,
   SSHAlgorithmPreferences,
   SSHAuthType,
+  SSHSftpDirectoryListing,
 } from '../../shared/types/ssh';
 import { PaneBackend } from '../../shared/types/window';
 
@@ -61,6 +62,7 @@ export interface SSHSessionConfig {
   httpProxyPort?: number;
   forwardedPorts: ForwardedPortConfig[];
   algorithms?: SSHAlgorithmPreferences;
+  x11?: boolean;
   skipBanner?: boolean;
   remoteCwd?: string;
   command?: string;
@@ -102,6 +104,9 @@ export interface IProcessManager {
   listSSHPortForwards(windowId: string, paneId: string): ActiveSSHPortForward[];
   addSSHPortForward(windowId: string, paneId: string, forward: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
   removeSSHPortForward(windowId: string, paneId: string, forwardId: string): Promise<void>;
+  listSSHSftpDirectory(windowId: string, paneId: string, path?: string): Promise<SSHSftpDirectoryListing>;
+  downloadSSHSftpFile(windowId: string, paneId: string, remotePath: string, localPath: string): Promise<void>;
+  uploadSSHSftpFiles(windowId: string, paneId: string, remotePath: string, localPaths: string[]): Promise<number>;
   listProcesses(): ProcessInfo[];
   getPaneStatus(windowId: string, paneId: string): Promise<import('../../renderer/types/window').WindowStatus>;
   subscribeStatusChange(callback: (pid: number, status: import('../../renderer/types/window').WindowStatus) => void): void;

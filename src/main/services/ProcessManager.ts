@@ -8,7 +8,7 @@ import { IProcessManager, SSHSessionConfig, TerminalConfig, ProcessHandle, Proce
 import { Settings } from '../types/workspace';
 import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
-import { ActiveSSHPortForward, ForwardedPortConfig } from '../../shared/types/ssh';
+import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing } from '../../shared/types/ssh';
 import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
@@ -401,6 +401,31 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     await pty.removePortForward(forwardId);
   }
 
+  async listSSHSftpDirectory(windowId: string, paneId: string, path?: string): Promise<SSHSftpDirectoryListing> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.listSftpDirectory(path);
+  }
+
+  async downloadSSHSftpFile(
+    windowId: string,
+    paneId: string,
+    remotePath: string,
+    localPath: string,
+  ): Promise<void> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    await pty.downloadSftpFile(remotePath, localPath);
+  }
+
+  async uploadSSHSftpFiles(
+    windowId: string,
+    paneId: string,
+    remotePath: string,
+    localPaths: string[],
+  ): Promise<number> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.uploadSftpFiles(remotePath, localPaths);
+  }
+
   /**
    * 鐢熸垚 paneIndex 鐨?key
    */
@@ -421,6 +446,24 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const pty = this.ptys.get(pid);
     if (!pty || !isSSHPortForwardSession(pty)) {
       throw new Error(`SSH session not found for pane: ${windowId}/${paneId}`);
+    }
+
+    return pty;
+  }
+
+  private requireSSHSftpSession(windowId: string, paneId: string): {
+    listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
+    downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
+    uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
+  } {
+    const pid = this.getPidByPane(windowId, paneId);
+    if (pid === null) {
+      throw new Error(`Pane not found: ${windowId}/${paneId}`);
+    }
+
+    const pty = this.ptys.get(pid);
+    if (!pty || !isSSHSftpSession(pty)) {
+      throw new Error(`SSH SFTP session not found for pane: ${windowId}/${paneId}`);
     }
 
     return pty;
@@ -1324,5 +1367,19 @@ function isSSHPortForwardSession(value: unknown): value is {
     && typeof (value as { listPortForwards?: unknown }).listPortForwards === 'function'
     && typeof (value as { addPortForward?: unknown }).addPortForward === 'function'
     && typeof (value as { removePortForward?: unknown }).removePortForward === 'function',
+  );
+}
+
+function isSSHSftpSession(value: unknown): value is {
+  listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
+  downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
+  uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
+} {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { listSftpDirectory?: unknown }).listSftpDirectory === 'function'
+    && typeof (value as { downloadSftpFile?: unknown }).downloadSftpFile === 'function'
+    && typeof (value as { uploadSftpFiles?: unknown }).uploadSftpFiles === 'function',
   );
 }

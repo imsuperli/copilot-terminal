@@ -3,13 +3,19 @@ import { registerSSHSessionHandlers } from '../sshSessionHandlers';
 import type { HandlerContext } from '../HandlerContext';
 import { WindowStatus } from '../../../shared/types/window';
 
-const { mockIpcHandle } = vi.hoisted(() => ({
+const { mockIpcHandle, mockShowOpenDialog, mockShowSaveDialog } = vi.hoisted(() => ({
   mockIpcHandle: vi.fn(),
+  mockShowOpenDialog: vi.fn(),
+  mockShowSaveDialog: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
   ipcMain: {
     handle: mockIpcHandle,
+  },
+  dialog: {
+    showOpenDialog: mockShowOpenDialog,
+    showSaveDialog: mockShowSaveDialog,
   },
 }));
 
@@ -47,6 +53,8 @@ function createProfile() {
 describe('registerSSHSessionHandlers', () => {
   beforeEach(() => {
     mockIpcHandle.mockReset();
+    mockShowOpenDialog.mockReset();
+    mockShowSaveDialog.mockReset();
   });
 
   it('creates SSH windows and wires pane output subscriptions', async () => {
@@ -431,5 +439,109 @@ describe('registerSSHSessionHandlers', () => {
       success: true,
     });
     expect(processManager.removeSSHPortForward).toHaveBeenCalledWith('win-1', 'pane-1', 'forward-2');
+  });
+
+  it('lists and transfers files through the active SSH SFTP session', async () => {
+    const processManager = {
+      listSSHSftpDirectory: vi.fn().mockResolvedValue({
+        path: '/srv/app',
+        entries: [
+          {
+            name: 'release.tar.gz',
+            path: '/srv/app/release.tar.gz',
+            isDirectory: false,
+            isSymbolicLink: false,
+            size: 4096,
+            modifiedAt: '2026-03-22T10:00:00.000Z',
+          },
+        ],
+      }),
+      downloadSSHSftpFile: vi.fn().mockResolvedValue(undefined),
+      uploadSSHSftpFiles: vi.fn().mockResolvedValue(2),
+    };
+
+    mockShowSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: '/tmp/release.tar.gz',
+    });
+    mockShowOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/tmp/a.txt', '/tmp/b.txt'],
+    });
+
+    registerSSHSessionHandlers({
+      mainWindow: {} as any,
+      processManager: processManager as any,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: null,
+      sshVaultService: null,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const listHandler = getRegisteredHandler('list-ssh-sftp-directory');
+    await expect(listHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      path: '/srv/app',
+    })).resolves.toEqual({
+      success: true,
+      data: {
+        path: '/srv/app',
+        entries: [
+          {
+            name: 'release.tar.gz',
+            path: '/srv/app/release.tar.gz',
+            isDirectory: false,
+            isSymbolicLink: false,
+            size: 4096,
+            modifiedAt: '2026-03-22T10:00:00.000Z',
+          },
+        ],
+      },
+    });
+    expect(processManager.listSSHSftpDirectory).toHaveBeenCalledWith('win-1', 'pane-1', '/srv/app');
+
+    const downloadHandler = getRegisteredHandler('download-ssh-sftp-file');
+    await expect(downloadHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      remotePath: '/srv/app/release.tar.gz',
+      suggestedName: 'release.tar.gz',
+    })).resolves.toEqual({
+      success: true,
+      data: '/tmp/release.tar.gz',
+    });
+    expect(processManager.downloadSSHSftpFile).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '/srv/app/release.tar.gz',
+      '/tmp/release.tar.gz',
+    );
+
+    const uploadHandler = getRegisteredHandler('upload-ssh-sftp-files');
+    await expect(uploadHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      remotePath: '/srv/app',
+    })).resolves.toEqual({
+      success: true,
+      data: {
+        uploadedCount: 2,
+      },
+    });
+    expect(processManager.uploadSSHSftpFiles).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '/srv/app',
+      ['/tmp/a.txt', '/tmp/b.txt'],
+    );
   });
 });

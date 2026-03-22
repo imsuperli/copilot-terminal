@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints } from 'lucide-react';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -18,6 +18,7 @@ import type { WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
+import { SSHSftpDialog } from './SSHSftpDialog';
 import {
   canPaneOpenInIDE,
   canPaneOpenLocalFolder,
@@ -80,6 +81,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [sshPortForwardTarget, setSSHPortForwardTarget] = useState<{ windowId: string; paneId: string } | null>(null);
+  const [sshSftpTarget, setSSHSftpTarget] = useState<{ windowId: string; paneId: string; initialPath?: string } | null>(null);
 
   // Store
   const {
@@ -292,6 +294,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     setSSHPortForwardTarget({
       windowId: terminalWindow.id,
       paneId: activePane.id,
+    });
+  }, [activePane, activePaneCapabilities, terminalWindow.id]);
+
+  const handleOpenSSHSftp = useCallback(() => {
+    if (!activePane || !activePaneCapabilities?.canOpenSFTP) {
+      return;
+    }
+
+    setSSHSftpTarget({
+      windowId: terminalWindow.id,
+      paneId: activePane.id,
+      initialPath: activePane.ssh?.remoteCwd ?? activePane.cwd,
     });
   }, [activePane, activePaneCapabilities, terminalWindow.id]);
 
@@ -514,6 +528,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </button>
             </AppTooltip>
 
+            {activePaneCapabilities?.canOpenSFTP && (
+              <AppTooltip content={t('terminalView.openSftp')} placement="toolbar-trailing">
+                <button
+                  onClick={handleOpenSSHSftp}
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                >
+                  <FolderTree size={14} />
+                </button>
+              </AppTooltip>
+            )}
+
             {activePaneCapabilities?.canManagePortForwards && (
               <AppTooltip content={t('terminalView.managePortForwards')} placement="toolbar-trailing">
                 <button
@@ -678,6 +703,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         }}
         windowId={sshPortForwardTarget?.windowId ?? null}
         paneId={sshPortForwardTarget?.paneId ?? null}
+      />
+      <SSHSftpDialog
+        open={Boolean(sshSftpTarget)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setSSHSftpTarget(null);
+          }
+        }}
+        windowId={sshSftpTarget?.windowId ?? null}
+        paneId={sshSftpTarget?.paneId ?? null}
+        initialPath={sshSftpTarget?.initialPath ?? null}
       />
     </div>
   );

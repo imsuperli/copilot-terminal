@@ -1,6 +1,6 @@
 import { ClientChannel } from 'ssh2';
 import { IPty, SSHSessionConfig } from '../../types/process';
-import { ActiveSSHPortForward, ForwardedPortConfig } from '../../../shared/types/ssh';
+import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
 
 export interface SSHPtySessionOptions {
@@ -139,6 +139,30 @@ export class SSHPtySession implements IPty {
     await this.connectionLease.connection.removePortForward(forwardId);
   }
 
+  async listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    return this.connectionLease.connection.listSftpDirectory(path);
+  }
+
+  async downloadSftpFile(remotePath: string, localPath: string): Promise<void> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    await this.connectionLease.connection.downloadSftpFile(remotePath, localPath);
+  }
+
+  async uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    return this.connectionLease.connection.uploadSftpFiles(remotePath, localPaths);
+  }
+
   private async connect(): Promise<void> {
     this.connectionLease = await this.connectionPool.acquire(this.ssh, (data) => {
       this.emitData(data);
@@ -148,6 +172,7 @@ export class SSHPtySession implements IPty {
       const stream = await this.connectionLease.connection.openShell({
         cols: this.cols,
         rows: this.rows,
+        x11: this.ssh.x11,
       });
 
       this.channel = stream;

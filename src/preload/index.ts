@@ -31,6 +31,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('add-ssh-session-port-forward', config),
   removeSSHSessionPortForward: (config: unknown) =>
     ipcRenderer.invoke('remove-ssh-session-port-forward', config),
+  listSSHSftpDirectory: (config: unknown) =>
+    ipcRenderer.invoke('list-ssh-sftp-directory', config),
+  downloadSSHSftpFile: (config: unknown) =>
+    ipcRenderer.invoke('download-ssh-sftp-file', config),
+  uploadSSHSftpFiles: (config: unknown) =>
+    ipcRenderer.invoke('upload-ssh-sftp-files', config),
   checkPtyOutput: (windowId: string, paneId: string) => ipcRenderer.invoke('check-pty-output', { windowId, paneId }),
   startGitWatch: (windowId: string, cwd: string) => ipcRenderer.invoke('start-git-watch', { windowId, cwd }),
   stopGitWatch: (windowId: string) => ipcRenderer.invoke('stop-git-watch', { windowId }),
