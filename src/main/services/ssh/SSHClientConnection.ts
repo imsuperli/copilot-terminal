@@ -1,11 +1,13 @@
+import net from 'net';
 import fs from 'fs/promises';
 import { createHash } from 'crypto';
 import { Client, ClientChannel, ConnectConfig, utils } from 'ssh2';
-import type { KnownHostEntry } from '../../../shared/types/ssh';
+import type { ForwardedPortConfig, KnownHostEntry } from '../../../shared/types/ssh';
 import type { SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
 import type { ISSHHostKeyPromptService } from './SSHHostKeyPromptService';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
+import { ActivePortForwardListener, startPortForwardListener } from './SSHPortForwarding';
 import {
   createHttpProxySocket,
   createProxyCommandSocket,
@@ -47,6 +49,9 @@ export class SSHClientConnection implements ISSHConnection {
   private readonly connectListeners = new Set<(data: string) => void>();
   private connectPromise: Promise<void> | null;
   private jumpHostLease: SSHConnectionPoolLease | null;
+  private forwardedPortsConfigured: boolean;
+  private readonly localPortForwards = new Map<string, ActivePortForwardListener>();
+  private readonly remotePortForwards = new Map<string, ForwardedPortConfig>();
   private ready: boolean;
   private closed: boolean;
   private hostKeyVerificationError: Error | null;
@@ -59,6 +64,7 @@ export class SSHClientConnection implements ISSHConnection {
     this.client = new Client();
     this.connectPromise = null;
     this.jumpHostLease = null;
+    this.forwardedPortsConfigured = false;
     this.ready = false;
     this.closed = false;
     this.hostKeyVerificationError = null;
@@ -133,6 +139,7 @@ export class SSHClientConnection implements ISSHConnection {
 
     this.closed = true;
     this.ready = false;
+    await this.disposeConfiguredPortForwards();
 
     if (!alreadyClosed) {
       try {
@@ -195,6 +202,10 @@ export class SSHClientConnection implements ISSHConnection {
         rejectOnce(new Error(message || 'SSH server requires a password change before login'));
       });
 
+      this.client.on('tcp connection', (details, accept, rejectIncoming) => {
+        void this.handleRemoteForwardConnection(details, accept, rejectIncoming);
+      });
+
       this.client.on('ready', () => {
         if (settled) {
           return;
@@ -202,7 +213,10 @@ export class SSHClientConnection implements ISSHConnection {
 
         settled = true;
         this.ready = true;
-        resolve();
+        void this.configureConfiguredPortForwards()
+          .finally(() => {
+            resolve();
+          });
       });
 
       this.client.on('error', (error) => {
@@ -355,6 +369,188 @@ export class SSHClientConnection implements ISSHConnection {
     return undefined;
   }
 
+  private async configureConfiguredPortForwards(): Promise<void> {
+    if (this.forwardedPortsConfigured) {
+      return;
+    }
+
+    this.forwardedPortsConfigured = true;
+
+    for (const forward of this.ssh.forwardedPorts) {
+      try {
+        if (forward.type === 'remote') {
+          await this.startRemotePortForward(forward);
+        } else {
+          await this.startLocalPortForward(forward);
+        }
+
+        this.emitServiceData(`[SSH] Forwarded ${formatForwardedPort(forward)}\r\n`);
+      } catch (error) {
+        this.emitServiceData(`[SSH] Failed to forward ${formatForwardedPort(forward)}: ${formatErrorMessage(error)}\r\n`);
+      }
+    }
+  }
+
+  private async startLocalPortForward(config: ForwardedPortConfig): Promise<void> {
+    const listener = await startPortForwardListener(config, async (request) => {
+      let channel: ClientChannel | null = null;
+
+      try {
+        channel = await this.openForwardOut({
+          sourceHost: request.sourceAddress ?? '127.0.0.1',
+          sourcePort: request.sourcePort ?? 0,
+          targetHost: request.targetAddress,
+          targetPort: request.targetPort,
+        });
+      } catch (error) {
+        request.reject();
+        this.emitServiceData(`[SSH] Rejected forwarded connection via ${formatForwardedPort(config)}: ${formatErrorMessage(error)}\r\n`);
+        return;
+      }
+
+      const socket = request.accept();
+      this.bridgeChannelToSocket(channel, socket);
+    });
+
+    this.localPortForwards.set(config.id, listener);
+  }
+
+  private async startRemotePortForward(config: ForwardedPortConfig): Promise<void> {
+    const boundPort = await new Promise<number>((resolve, reject) => {
+      this.client.forwardIn(config.host, config.port, (error, port) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(port ?? config.port);
+      });
+    });
+
+    this.remotePortForwards.set(getRemoteForwardKey(config.host, boundPort), config);
+  }
+
+  private async handleRemoteForwardConnection(
+    details: { srcIP: string; srcPort: number; destIP: string; destPort: number },
+    accept: () => ClientChannel,
+    reject: () => void,
+  ): Promise<void> {
+    const forward = this.findRemotePortForward(details.destIP, details.destPort);
+    if (!forward) {
+      reject();
+      this.emitServiceData(`[SSH] Rejected incoming remote forward for ${details.destIP}:${details.destPort}\r\n`);
+      return;
+    }
+
+    const channel = accept();
+    const socket = net.connect(forward.targetPort, forward.targetAddress);
+    const rejectChannel = () => {
+      try {
+        channel.close();
+      } catch {
+        // Ignore teardown races while rejecting the forwarded channel.
+      }
+    };
+
+    socket.once('error', (error) => {
+      this.emitServiceData(`[SSH] Local target ${forward.targetAddress}:${forward.targetPort} rejected remote forward ${formatForwardedPort(forward)}: ${formatErrorMessage(error)}\r\n`);
+      rejectChannel();
+    });
+
+    socket.once('connect', () => {
+      this.bridgeChannelToSocket(channel, socket);
+    });
+  }
+
+  private findRemotePortForward(host: string, port: number): ForwardedPortConfig | null {
+    const direct = this.remotePortForwards.get(getRemoteForwardKey(host, port));
+    if (direct) {
+      return direct;
+    }
+
+    for (const forward of this.remotePortForwards.values()) {
+      if (forward.port !== port) {
+        continue;
+      }
+
+      if (isRemoteForwardWildcard(forward.host) || forward.host === host) {
+        return forward;
+      }
+    }
+
+    return null;
+  }
+
+  private bridgeChannelToSocket(channel: ClientChannel, socket: net.Socket): void {
+    channel.on('data', (data: Buffer | string) => {
+      socket.write(typeof data === 'string' ? Buffer.from(data, 'utf8') : data);
+    });
+    channel.stderr?.on('data', (data: Buffer | string) => {
+      socket.write(typeof data === 'string' ? Buffer.from(data, 'utf8') : data);
+    });
+    channel.on('close', () => {
+      socket.destroy();
+    });
+    channel.on('end', () => {
+      socket.end();
+    });
+    channel.on('error', () => {
+      socket.destroy();
+    });
+
+    socket.on('data', (data) => {
+      channel.write(data);
+    });
+    socket.on('close', () => {
+      channel.close();
+    });
+    socket.on('end', () => {
+      channel.end();
+    });
+    socket.on('error', () => {
+      channel.close();
+    });
+  }
+
+  private async disposeConfiguredPortForwards(): Promise<void> {
+    const localForwards = Array.from(this.localPortForwards.values());
+    this.localPortForwards.clear();
+
+    await Promise.allSettled(localForwards.map(async (listener) => {
+      await listener.dispose();
+    }));
+
+    const remoteForwards = Array.from(this.remotePortForwards.values());
+    this.remotePortForwards.clear();
+
+    await Promise.allSettled(remoteForwards.map(async (forward) => {
+      await new Promise<void>((resolve) => {
+        try {
+          this.client.unforwardIn(forward.host, forward.port, () => {
+            resolve();
+          });
+        } catch {
+          resolve();
+        }
+      });
+    }));
+  }
+
+  private emitServiceData(data: string): void {
+    for (const listener of this.connectListeners) {
+      listener(data);
+    }
+  }
+
+  private async releaseJumpHostLease(): Promise<void> {
+    if (!this.jumpHostLease) {
+      return;
+    }
+
+    const lease = this.jumpHostLease;
+    this.jumpHostLease = null;
+    await lease.release();
+  }
   private async verifyHostKey(key: Buffer, knownHosts: KnownHostEntry[]): Promise<boolean> {
     const digest = formatHostKeyDigest(key);
     const algorithm = readHostKeyAlgorithm(key);
@@ -418,21 +614,6 @@ export class SSHClientConnection implements ISSHConnection {
     return entries.filter((entry) => entry.host === this.ssh.host && entry.port === this.ssh.port);
   }
 
-  private emitServiceData(data: string): void {
-    for (const listener of this.connectListeners) {
-      listener(data);
-    }
-  }
-
-  private async releaseJumpHostLease(): Promise<void> {
-    if (!this.jumpHostLease) {
-      return;
-    }
-
-    const lease = this.jumpHostLease;
-    this.jumpHostLease = null;
-    await lease.release();
-  }
 }
 
 function formatHostKeyDigest(key: Buffer): string {
@@ -450,4 +631,28 @@ function readHostKeyAlgorithm(key: Buffer): string {
   }
 
   return parsed?.type || 'unknown';
+}
+
+function formatForwardedPort(forward: ForwardedPortConfig): string {
+  if (forward.type === 'dynamic') {
+    return `(dynamic) ${forward.host}:${forward.port}`;
+  }
+
+  if (forward.type === 'remote') {
+    return `(remote) ${forward.host}:${forward.port} -> (local) ${forward.targetAddress}:${forward.targetPort}`;
+  }
+
+  return `(local) ${forward.host}:${forward.port} -> (remote) ${forward.targetAddress}:${forward.targetPort}`;
+}
+
+function getRemoteForwardKey(host: string, port: number): string {
+  return `${host}:${port}`;
+}
+
+function isRemoteForwardWildcard(host: string): boolean {
+  return host === '' || host === '0.0.0.0' || host === '::' || host === 'localhost';
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

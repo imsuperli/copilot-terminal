@@ -165,5 +165,14 @@ export function buildSSHConnectionKey(config: SSHSessionConfig): string {
     socksProxyPort: config.socksProxyPort ?? null,
     httpProxyHost: config.httpProxyHost ?? null,
     httpProxyPort: config.httpProxyPort ?? null,
+    forwardedPorts: config.forwardedPorts.map((forward) => ({
+      id: forward.id,
+      type: forward.type,
+      host: forward.host,
+      port: forward.port,
+      targetAddress: forward.targetAddress,
+      targetPort: forward.targetPort,
+      description: forward.description ?? null,
+    })),
   });
 }

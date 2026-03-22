@@ -17,6 +17,7 @@ function createSSHConfig(overrides: Partial<SSHSessionConfig> = {}): SSHSessionC
     verifyHostKeys: true,
     agentForward: false,
     reuseSession: true,
+    forwardedPorts: [],
     ...overrides,
   };
 }

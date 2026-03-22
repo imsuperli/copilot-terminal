@@ -1,4 +1,4 @@
-import { SSHAuthType } from '../../shared/types/ssh';
+import { ForwardedPortConfig, SSHAuthType } from '../../shared/types/ssh';
 import { PaneBackend } from '../../shared/types/window';
 
 /**
@@ -54,6 +54,7 @@ export interface SSHSessionConfig {
   socksProxyPort?: number;
   httpProxyHost?: string;
   httpProxyPort?: number;
+  forwardedPorts: ForwardedPortConfig[];
   skipBanner?: boolean;
   remoteCwd?: string;
   command?: string;
