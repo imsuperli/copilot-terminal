@@ -148,10 +148,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
             return scanned;
           }
 
+          const shouldKeepCustomIcon = existing.iconSourceType === 'custom-image' && Boolean(existing.icon);
+
           return {
             ...scanned,
             enabled: existing.enabled,
             isCustom: existing.isCustom ?? false,
+            ...(shouldKeepCustomIcon
+              ? {
+                  icon: existing.icon,
+                  iconSourceType: existing.iconSourceType,
+                  iconSourcePath: existing.iconSourcePath || existing.icon,
+                  iconConfidence: existing.iconConfidence ?? 1000,
+                }
+              : {}),
           };
         });
 
@@ -196,6 +206,34 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       notifyIDESettingsUpdated();
     } catch (error) {
       console.error('Failed to update IDE:', error);
+    }
+  };
+
+  const handleSelectIDEIcon = async (ideId: string) => {
+    try {
+      const response = await window.electronAPI.selectImageFile();
+      if (!response?.success || !response.data) {
+        return;
+      }
+      const selectedIcon = response.data;
+
+      const updatedIDEs = ides.map(ide => (
+        ide.id === ideId
+          ? {
+              ...ide,
+              icon: selectedIcon,
+              iconSourceType: 'custom-image' as const,
+              iconSourcePath: selectedIcon,
+              iconConfidence: 1000,
+            }
+          : ide
+      ));
+
+      setIDEs(updatedIDEs);
+      await window.electronAPI.updateSettings({ ides: updatedIDEs });
+      notifyIDESettingsUpdated();
+    } catch (error) {
+      console.error('Failed to select IDE icon:', error);
     }
   };
 
@@ -762,9 +800,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             >
                               <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                                 <div className="flex min-w-0 flex-1 items-center gap-4">
-                                  <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectIDEIcon(ide.id)}
+                                    className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] transition-colors hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--accent))]"
+                                    title="点击自定义 IDE Logo"
+                                  >
                                     <IDEIcon icon={ide.icon || ''} size={30} className="text-[rgb(var(--foreground))]" />
-                                  </div>
+                                  </button>
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
                                       <h3 className="text-base font-semibold text-white">{ide.name}</h3>

@@ -196,6 +196,7 @@ export interface ElectronAPI {
   createDirectory: (path: string) => Promise<IpcResponse<string>>;
   selectDirectory: () => Promise<IpcResponse<string | null>>;
   selectExecutableFile: () => Promise<IpcResponse<string | null>>;
+  selectImageFile: () => Promise<IpcResponse<string | null>>;
   selectAndScanFolder: () => Promise<IpcResponse<SelectAndScanFolderResult>>;
   openFolder: (path: string) => Promise<IpcResponse<void>>;
   openInIDE: (ide: string, path: string) => Promise<IpcResponse<void>>;

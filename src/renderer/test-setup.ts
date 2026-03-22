@@ -40,6 +40,7 @@ Object.defineProperty(window, 'electronAPI', {
     createDirectory: vi.fn().mockResolvedValue({ success: true }),
     selectDirectory: vi.fn().mockResolvedValue({ success: true, data: null }),
     selectExecutableFile: vi.fn().mockResolvedValue({ success: true, data: null }),
+    selectImageFile: vi.fn().mockResolvedValue({ success: true, data: null }),
     openFolder: vi.fn().mockResolvedValue(undefined),
     onWindowStatusChanged: vi.fn(),
     offWindowStatusChanged: vi.fn(),
