@@ -211,7 +211,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
   const handleSelectIDEIcon = async (ideId: string) => {
     try {
-      const response = await window.electronAPI.selectImageFile();
+      const currentIDE = ides.find(ide => ide.id === ideId);
+      const response = await window.electronAPI.selectImageFile(currentIDE?.icon);
       if (!response?.success || !response.data) {
         return;
       }

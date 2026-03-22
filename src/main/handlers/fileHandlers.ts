@@ -1,6 +1,7 @@
 import { ipcMain, dialog, shell } from 'electron';
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, statSync } from 'fs';
+import { dirname } from 'path';
 import { HandlerContext } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
 import { successResponse, errorResponse } from './HandlerResponse';
@@ -84,18 +85,29 @@ export function registerFileHandlers(ctx: HandlerContext) {
     }
   });
 
-  ipcMain.handle('select-image-file', async () => {
+  ipcMain.handle('select-image-file', async (_event, defaultPath?: string) => {
     try {
       if (!mainWindow) throw new Error('Main window not available');
 
-      const result = await dialog.showOpenDialog(mainWindow, {
+      const dialogOptions: Electron.OpenDialogOptions = {
         properties: ['openFile'],
         title: '选择 IDE Logo',
         filters: [
           { name: 'Image Files', extensions: ['png', 'jpg', 'jpeg', 'ico', 'svg', 'icns'] },
           { name: 'All Files', extensions: ['*'] },
         ],
-      });
+      };
+
+      if (defaultPath && existsSync(defaultPath)) {
+        try {
+          const stat = statSync(defaultPath);
+          dialogOptions.defaultPath = stat.isDirectory() ? defaultPath : dirname(defaultPath);
+        } catch {
+          dialogOptions.defaultPath = dirname(defaultPath);
+        }
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, dialogOptions);
 
       if (result.canceled || result.filePaths.length === 0) {
         return successResponse(null);
