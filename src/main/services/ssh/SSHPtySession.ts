@@ -1,16 +1,11 @@
-import fs from 'fs/promises';
-import { createHash } from 'crypto';
-import { Client, ClientChannel, ConnectConfig, utils } from 'ssh2';
+import { ClientChannel } from 'ssh2';
 import { IPty, SSHSessionConfig } from '../../types/process';
-import type { KnownHostEntry } from '../../../shared/types/ssh';
-import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
-import type { ISSHHostKeyPromptService } from './SSHHostKeyPromptService';
+import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
 
 export interface SSHPtySessionOptions {
   pid: number;
   ssh: SSHSessionConfig;
-  knownHostsStore?: ISSHKnownHostsStore | null;
-  hostKeyPromptService?: ISSHHostKeyPromptService | null;
+  connectionPool: ISSHConnectionPool;
 }
 
 type ExitEvent = {
@@ -32,15 +27,13 @@ export class SSHPtySession implements IPty {
   handleFlowControl: boolean;
 
   private readonly ssh: SSHSessionConfig;
-  private readonly knownHostsStore: ISSHKnownHostsStore | null;
-  private readonly hostKeyPromptService: ISSHHostKeyPromptService | null;
-  private readonly client: Client;
+  private readonly connectionPool: ISSHConnectionPool;
   private channel: ClientChannel | null;
+  private connectionLease: SSHConnectionPoolLease | null;
   private readonly dataListeners = new Set<(data: string) => void>();
   private readonly exitListeners = new Set<(event: ExitEvent) => void>();
   private readonly pendingData: string[] = [];
   private pendingExit: ExitEvent | null;
-  private hostKeyVerificationError: Error | null;
   private closed: boolean;
 
   private constructor(options: SSHPtySessionOptions) {
@@ -50,12 +43,10 @@ export class SSHPtySession implements IPty {
     this.process = `ssh:${options.ssh.user}@${options.ssh.host}`;
     this.handleFlowControl = false;
     this.ssh = options.ssh;
-    this.knownHostsStore = options.knownHostsStore ?? null;
-    this.hostKeyPromptService = options.hostKeyPromptService ?? null;
-    this.client = new Client();
+    this.connectionPool = options.connectionPool;
     this.channel = null;
+    this.connectionLease = null;
     this.pendingExit = null;
-    this.hostKeyVerificationError = null;
     this.closed = false;
   }
 
@@ -90,13 +81,7 @@ export class SSHPtySession implements IPty {
       // Ignore channel teardown failures during shutdown.
     }
 
-    try {
-      this.client.end();
-      this.client.destroy();
-    } catch {
-      // Ignore client teardown failures during shutdown.
-    }
-
+    void this.releaseConnectionLease();
     this.emitExit({ exitCode: 0 });
   }
 
@@ -134,236 +119,41 @@ export class SSHPtySession implements IPty {
   }
 
   private async connect(): Promise<void> {
-    const knownHosts = await this.loadKnownHosts();
-    const connectConfig = await this.buildConnectConfig(knownHosts);
+    this.connectionLease = await this.connectionPool.acquire(this.ssh, (data) => {
+      this.emitData(data);
+    });
 
-    await new Promise<void>((resolve, reject) => {
-      let settled = false;
-
-      const rejectOnce = (error: Error) => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-        reject(error);
-      };
-
-      this.client.setNoDelay(true);
-
-      this.client.on('banner', (message) => {
-        if (!this.ssh.skipBanner) {
-          this.emitData(`${message}\r\n`);
-        }
+    try {
+      const stream = await this.connectionLease.connection.openShell({
+        cols: this.cols,
+        rows: this.rows,
       });
 
-      this.client.on('keyboard-interactive', (_name, instructions, _lang, prompts, finish) => {
-        if (!this.ssh.password) {
-          rejectOnce(new Error(instructions || 'SSH keyboard-interactive authentication requires a stored secret'));
-          finish(prompts.map(() => ''));
-          return;
-        }
+      this.channel = stream;
 
-        finish(prompts.map(() => this.ssh.password as string));
+      stream.on('data', (data: Buffer | string) => {
+        this.emitData(toUtf8(data));
       });
-
-      this.client.on('change password', (message) => {
-        rejectOnce(new Error(message || 'SSH server requires a password change before login'));
+      stream.stderr?.on('data', (data: Buffer | string) => {
+        this.emitData(toUtf8(data));
       });
-
-      this.client.on('ready', () => {
-        this.client.shell({
-          term: 'xterm-256color',
-          cols: this.cols,
-          rows: this.rows,
-        }, (error, stream) => {
-          if (error) {
-            rejectOnce(error);
-            return;
-          }
-
-          this.channel = stream;
-
-          stream.on('data', (data: Buffer | string) => {
-            this.emitData(toUtf8(data));
-          });
-          stream.stderr?.on('data', (data: Buffer | string) => {
-            this.emitData(toUtf8(data));
-          });
-          stream.on('exit', (code?: number, signal?: number | string) => {
-            this.emitExit({
-              exitCode: typeof code === 'number' ? code : 0,
-              signal: typeof signal === 'number' ? signal : undefined,
-            });
-          });
-          stream.on('close', () => {
-            this.channel = null;
-            try {
-              this.client.end();
-            } catch {
-              // Ignore close races.
-            }
-            this.emitExit(this.pendingExit ?? { exitCode: 0 });
-          });
-
-          if (!settled) {
-            settled = true;
-            resolve();
-          }
-
-          this.initializeRemoteShell();
+      stream.on('exit', (code?: number, signal?: number | string) => {
+        this.emitExit({
+          exitCode: typeof code === 'number' ? code : 0,
+          signal: typeof signal === 'number' ? signal : undefined,
         });
       });
-
-      this.client.on('error', (error) => {
-        if (!settled) {
-          rejectOnce(this.hostKeyVerificationError ?? error);
-          return;
-        }
-
-        this.emitData(`[SSH] ${error.message}\r\n`);
-        this.emitExit({ exitCode: 1 });
-      });
-
-      this.client.on('close', () => {
+      stream.on('close', () => {
+        this.channel = null;
+        void this.releaseConnectionLease();
         this.emitExit(this.pendingExit ?? { exitCode: 0 });
       });
 
-      this.client.connect(connectConfig);
-    });
-  }
-
-  private async buildConnectConfig(knownHosts: KnownHostEntry[]): Promise<ConnectConfig> {
-    const connectConfig: ConnectConfig = {
-      host: this.ssh.host,
-      port: this.ssh.port,
-      username: this.ssh.user,
-      // Profile values are stored in seconds to match the UI and OpenSSH config semantics.
-      keepaliveInterval: this.ssh.keepaliveInterval > 0 ? this.ssh.keepaliveInterval * 1000 : 0,
-      keepaliveCountMax: this.ssh.keepaliveCountMax,
-      readyTimeout: this.ssh.readyTimeout ?? undefined,
-      agentForward: this.ssh.agentForward,
-      tryKeyboard: this.ssh.authType === 'keyboardInteractive',
-      hostVerifier: (key: Buffer, callback?: (verified: boolean) => void) => {
-        void this.verifyHostKey(key, knownHosts)
-          .then((verified) => {
-            if (callback) {
-              callback(verified);
-              return;
-            }
-
-            return verified;
-          })
-          .catch((error) => {
-            this.hostKeyVerificationError = error instanceof Error
-              ? error
-              : new Error(String(error));
-            if (callback) {
-              callback(false);
-            }
-          });
-
-        return callback ? undefined : false;
-      },
-    };
-
-    switch (this.ssh.authType) {
-      case 'password':
-        if (!this.ssh.password) {
-          throw new Error('SSH password authentication requires a stored password');
-        }
-        connectConfig.password = this.ssh.password;
-        break;
-      case 'publicKey': {
-        const keyPath = this.ssh.privateKeys[0];
-        if (!keyPath) {
-          throw new Error('SSH public key authentication requires at least one private key path');
-        }
-
-        connectConfig.privateKey = await fs.readFile(keyPath, 'utf8');
-        connectConfig.passphrase = this.ssh.privateKeyPassphrases?.[keyPath];
-        break;
-      }
-      case 'agent': {
-        const agent = process.platform === 'win32' ? 'pageant' : process.env.SSH_AUTH_SOCK;
-        if (!agent) {
-          throw new Error('SSH agent authentication requested but no local agent is available');
-        }
-
-        connectConfig.agent = agent;
-        break;
-      }
-      case 'keyboardInteractive':
-        connectConfig.tryKeyboard = true;
-        break;
-      default:
-        throw new Error(`Unsupported SSH auth type: ${String(this.ssh.authType)}`);
+      this.initializeRemoteShell();
+    } catch (error) {
+      await this.releaseConnectionLease();
+      throw error;
     }
-
-    return connectConfig;
-  }
-
-  private async verifyHostKey(key: Buffer, knownHosts: KnownHostEntry[]): Promise<boolean> {
-    const digest = formatHostKeyDigest(key);
-    const algorithm = readHostKeyAlgorithm(key);
-
-    if (!this.ssh.verifyHostKeys) {
-      return true;
-    }
-
-    const exactMatch = knownHosts.find((entry) => (
-      entry.algorithm === algorithm && entry.digest === digest
-    ));
-    if (exactMatch) {
-      return true;
-    }
-
-    const storedEntry = knownHosts.find((entry) => entry.algorithm === algorithm);
-    const reason = storedEntry ? 'mismatch' : 'unknown';
-    const fingerprintLabel = `[SSH] Host key fingerprint (${algorithm}): ${digest}\r\n`;
-    this.emitData(fingerprintLabel);
-    if (storedEntry) {
-      this.emitData(`[SSH] Stored fingerprint: ${storedEntry.digest}\r\n`);
-    }
-
-    if (!this.hostKeyPromptService) {
-      this.hostKeyVerificationError = new Error('SSH host key verification prompt service is unavailable');
-      return false;
-    }
-
-    const decision = await this.hostKeyPromptService.confirm({
-      host: this.ssh.host,
-      port: this.ssh.port,
-      algorithm,
-      fingerprint: digest,
-      reason,
-      ...(storedEntry ? { storedFingerprint: storedEntry.digest } : {}),
-    });
-
-    if (!decision.trusted) {
-      this.hostKeyVerificationError = new Error('SSH host key verification was rejected by the user');
-      return false;
-    }
-
-    if (decision.persist && this.knownHostsStore) {
-      await this.knownHostsStore.upsert({
-        host: this.ssh.host,
-        port: this.ssh.port,
-        algorithm,
-        digest,
-      });
-    }
-
-    return true;
-  }
-
-  private async loadKnownHosts(): Promise<KnownHostEntry[]> {
-    if (!this.ssh.verifyHostKeys || !this.knownHostsStore) {
-      return [];
-    }
-
-    const entries = await this.knownHostsStore.list();
-    return entries.filter((entry) => entry.host === this.ssh.host && entry.port === this.ssh.port);
   }
 
   private initializeRemoteShell(): void {
@@ -409,6 +199,16 @@ export class SSHPtySession implements IPty {
       listener(event);
     }
   }
+
+  private async releaseConnectionLease(): Promise<void> {
+    if (!this.connectionLease) {
+      return;
+    }
+
+    const lease = this.connectionLease;
+    this.connectionLease = null;
+    await lease.release();
+  }
 }
 
 function toUtf8(value: Buffer | string): string {
@@ -417,21 +217,4 @@ function toUtf8(value: Buffer | string): string {
 
 function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function formatHostKeyDigest(key: Buffer): string {
-  return `SHA256:${createHash('sha256').update(key).digest('base64')}`;
-}
-
-function readHostKeyAlgorithm(key: Buffer): string {
-  const parsed = utils.parseKey(key) as { type?: string } | Array<{ type?: string }> | Error;
-  if (Array.isArray(parsed)) {
-    return parsed[0]?.type || 'unknown';
-  }
-
-  if (parsed instanceof Error) {
-    return 'unknown';
-  }
-
-  return parsed?.type || 'unknown';
 }

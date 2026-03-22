@@ -1,0 +1,82 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { SSHSessionConfig } from '../../types/process';
+import { buildSSHConnectionKey, SSHConnectionPool } from '../ssh/SSHConnectionPool';
+
+function createSSHConfig(overrides: Partial<SSHSessionConfig> = {}): SSHSessionConfig {
+  return {
+    profileId: 'profile-1',
+    host: '10.0.0.21',
+    port: 22,
+    user: 'root',
+    authType: 'password',
+    privateKeys: [],
+    password: 'secret',
+    keepaliveInterval: 30,
+    keepaliveCountMax: 3,
+    readyTimeout: null,
+    verifyHostKeys: true,
+    agentForward: false,
+    reuseSession: true,
+    ...overrides,
+  };
+}
+
+describe('SSHConnectionPool', () => {
+  it('reuses the same connection while matching reusable sessions are active', async () => {
+    const connect = vi.fn().mockResolvedValue(undefined);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const firstConnection = {
+      connect,
+      close,
+      isClosed: vi.fn().mockReturnValue(false),
+    };
+    const createConnection = vi.fn().mockReturnValue(firstConnection);
+    const pool = new SSHConnectionPool({ createConnection });
+    const config = createSSHConfig();
+
+    const leaseA = await pool.acquire(config);
+    const leaseB = await pool.acquire(config);
+
+    expect(createConnection).toHaveBeenCalledTimes(1);
+    expect(leaseA.connection).toBe(leaseB.connection);
+
+    await leaseA.release();
+    expect(close).not.toHaveBeenCalled();
+
+    await leaseB.release();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates dedicated connections when reuseSession is disabled', async () => {
+    const createConnection = vi.fn()
+      .mockReturnValueOnce({
+        connect: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        isClosed: vi.fn().mockReturnValue(false),
+      })
+      .mockReturnValueOnce({
+        connect: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        isClosed: vi.fn().mockReturnValue(false),
+      });
+    const pool = new SSHConnectionPool({ createConnection });
+    const config = createSSHConfig({ reuseSession: false });
+
+    const leaseA = await pool.acquire(config);
+    const leaseB = await pool.acquire(config);
+
+    expect(createConnection).toHaveBeenCalledTimes(2);
+    expect(leaseA.connection).not.toBe(leaseB.connection);
+  });
+
+  it('includes routing and verification settings in the reuse key', () => {
+    const baseKey = buildSSHConnectionKey(createSSHConfig());
+    const jumpKey = buildSSHConnectionKey(createSSHConfig({ jumpHostProfileId: 'jump-1' }));
+    const proxyKey = buildSSHConnectionKey(createSSHConfig({ proxyCommand: 'nc %h %p' }));
+    const relaxedVerifyKey = buildSSHConnectionKey(createSSHConfig({ verifyHostKeys: false }));
+
+    expect(jumpKey).not.toBe(baseKey);
+    expect(proxyKey).not.toBe(baseKey);
+    expect(relaxedVerifyKey).not.toBe(baseKey);
+  });
+});

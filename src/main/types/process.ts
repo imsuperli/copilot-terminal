@@ -46,6 +46,13 @@ export interface SSHSessionConfig {
   readyTimeout: number | null;
   verifyHostKeys: boolean;
   agentForward: boolean;
+  reuseSession: boolean;
+  jumpHostProfileId?: string;
+  proxyCommand?: string;
+  socksProxyHost?: string;
+  socksProxyPort?: number;
+  httpProxyHost?: string;
+  httpProxyPort?: number;
   skipBanner?: boolean;
   remoteCwd?: string;
   command?: string;

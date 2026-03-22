@@ -106,6 +106,7 @@ describe('registerSSHSessionHandlers', () => {
       ssh: expect.objectContaining({
         profileId: 'profile-1',
         password: 'secret',
+        reuseSession: true,
         remoteCwd: '/srv/app',
         command: 'bash',
       }),

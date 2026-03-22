@@ -12,6 +12,7 @@ import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
 import { resolveShellProgram } from '../utils/shell';
+import { ISSHConnectionPool, SSHConnectionPool } from './ssh/SSHConnectionPool';
 import { ISSHKnownHostsStore } from './ssh/SSHKnownHostsStore';
 import { SSHPtySession } from './ssh/SSHPtySession';
 import { ISSHHostKeyPromptService } from './ssh/SSHHostKeyPromptService';
@@ -66,6 +67,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private tmuxCompatService: ITmuxCompatService | null;
   private sshKnownHostsStore: ISSHKnownHostsStore | null;
   private sshHostKeyPromptService: ISSHHostKeyPromptService | null;
+  private readonly sshConnectionPool: ISSHConnectionPool;
   private conPtyWarmupPromise: Promise<void> | null;
   private conPtyWarmupCompleted: boolean;
 
@@ -94,6 +96,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.tmuxCompatService = tmuxCompatService ?? null;
     this.sshKnownHostsStore = sshKnownHostsStore ?? null;
     this.sshHostKeyPromptService = sshHostKeyPromptService ?? null;
+    this.sshConnectionPool = new SSHConnectionPool({
+      knownHostsStore: this.sshKnownHostsStore,
+      hostKeyPromptService: this.sshHostKeyPromptService,
+    });
     this.conPtyWarmupPromise = null;
     this.conPtyWarmupCompleted = false;
     // ??????? StatusDetector ??????? StatusPoller ??????
@@ -108,10 +114,12 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
   setSSHKnownHostsStore(store: ISSHKnownHostsStore): void {
     this.sshKnownHostsStore = store;
+    this.sshConnectionPool.setKnownHostsStore(store);
   }
 
   setSSHHostKeyPromptService(service: ISSHHostKeyPromptService): void {
     this.sshHostKeyPromptService = service;
+    this.sshConnectionPool.setHostKeyPromptService(service);
   }
 
   async warmupConPtyDll(): Promise<void> {
@@ -222,8 +230,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       ptyProcess = await SSHPtySession.create({
         pid,
         ssh: sshConfig,
-        knownHostsStore: this.sshKnownHostsStore,
-        hostKeyPromptService: this.sshHostKeyPromptService,
+        connectionPool: this.sshConnectionPool,
       });
     }
 
@@ -606,6 +613,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.sessionIndex.clear();
     this.pidToSessionId.clear();
     this.sessionIdToPid.clear();
+    await this.sshConnectionPool.destroy();
 
     console.log('[ProcessManager] Destroy completed');
   }
