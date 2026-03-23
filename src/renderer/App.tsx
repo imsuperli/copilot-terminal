@@ -12,6 +12,7 @@ import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
 import { QuickNavPanel } from './components/QuickNavPanel';
 import { SSHProfileDialog } from './components/SSHProfileDialog';
+import { SSHHostKeyPromptDialog } from './components/SSHHostKeyPromptDialog';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
@@ -25,6 +26,7 @@ import type { SettingsPatch } from '../shared/types/electron-api';
 import type {
   ClaudeModelUpdatedPayload,
   ProjectConfigUpdatedPayload,
+  SSHHostKeyPromptPayload,
   TmuxPaneStyleChangedPayload,
   TmuxPaneTitleChangedPayload,
   TmuxWindowRemovedPayload,
@@ -79,6 +81,7 @@ function AppContent() {
   const [currentTab, setCurrentTab] = useState<'all' | 'active' | 'archived' | string>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
+  const [sshHostKeyPromptQueue, setSSHHostKeyPromptQueue] = useState<SSHHostKeyPromptPayload[]>([]);
   const [appVersion, setAppVersion] = useState<{ name: string; version: string }>({
     name: 'Copilot-Terminal',
     version: '1.0.0',
@@ -264,6 +267,26 @@ function AppContent() {
       unsubscribe();
     };
   }, [updatePane]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.onSSHHostKeyPrompt) {
+      return;
+    }
+
+    const handleSSHHostKeyPrompt = (_event: unknown, payload: SSHHostKeyPromptPayload) => {
+      setSSHHostKeyPromptQueue((currentQueue) => (
+        currentQueue.some((entry) => entry.requestId === payload.requestId)
+          ? currentQueue
+          : [...currentQueue, payload]
+      ));
+    };
+
+    window.electronAPI.onSSHHostKeyPrompt(handleSSHHostKeyPrompt);
+
+    return () => {
+      window.electronAPI?.offSSHHostKeyPrompt?.(handleSSHHostKeyPrompt);
+    };
+  }, []);
 
   // 订阅主进程推送的 git 分支变化事件
   useEffect(() => {
@@ -537,6 +560,7 @@ function AppContent() {
     () => groups.find(g => g.id === activeGroupId),
     [groups, activeGroupId]
   );
+  const activeSSHHostKeyPrompt = sshHostKeyPromptQueue[0] ?? null;
 
   const mountedTerminalWindowIdSet = useMemo(
     () => new Set(mountedTerminalWindowIds),
@@ -564,6 +588,20 @@ function AppContent() {
     () => windows.some(w => !w.archived) || groups.some(g => !g.archived) || (sshEnabled && sshProfiles.length > 0),
     [groups, sshEnabled, sshProfiles.length, windows]
   );
+
+  const handleSSHHostKeyPromptDecision = useCallback((decision: { trusted: boolean; persist: boolean }) => {
+    setSSHHostKeyPromptQueue((currentQueue) => {
+      const currentPrompt = currentQueue[0];
+      if (currentPrompt) {
+        window.electronAPI.respondSSHHostKeyPrompt({
+          requestId: currentPrompt.requestId,
+          ...decision,
+        });
+      }
+
+      return currentQueue.slice(1);
+    });
+  }, []);
 
   return (
     <>
@@ -701,6 +739,11 @@ function AppContent() {
           onSaved={handleSSHProfileSaved}
         />
       )}
+
+      <SSHHostKeyPromptDialog
+        request={activeSSHHostKeyPrompt}
+        onDecision={handleSSHHostKeyPromptDecision}
+      />
     </>
   );
 }

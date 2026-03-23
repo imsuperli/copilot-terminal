@@ -12,7 +12,10 @@ import type {
 } from '../../../shared/types/ssh';
 import type { SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
-import type { ISSHHostKeyPromptService } from './SSHHostKeyPromptService';
+import type {
+  ISSHHostKeyPromptService,
+  SSHHostKeyPromptDecision,
+} from './SSHHostKeyPromptService';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
 import { ActivePortForwardListener, startPortForwardListener } from './SSHPortForwarding';
 import {
@@ -71,6 +74,12 @@ type ActivePortForwardState = {
   };
 };
 
+interface ConnectTimeoutController {
+  pause(): void;
+  resume(): void;
+  dispose(): void;
+}
+
 export class SSHClientConnection implements ISSHConnection {
   private readonly ssh: SSHSessionConfig;
   private readonly knownHostsStore: ISSHKnownHostsStore | null;
@@ -89,6 +98,7 @@ export class SSHClientConnection implements ISSHConnection {
   private ready: boolean;
   private closed: boolean;
   private hostKeyVerificationError: Error | null;
+  private connectTimeoutController: ConnectTimeoutController | null;
 
   constructor(ssh: SSHSessionConfig, dependencies: SSHClientConnectionDependencies = {}) {
     this.ssh = ssh;
@@ -105,6 +115,7 @@ export class SSHClientConnection implements ISSHConnection {
     this.ready = false;
     this.closed = false;
     this.hostKeyVerificationError = null;
+    this.connectTimeoutController = null;
   }
 
   async connect(serviceListener?: (data: string) => void): Promise<void> {
@@ -305,10 +316,29 @@ export class SSHClientConnection implements ISSHConnection {
         }
 
         settled = true;
+        this.disposeConnectTimeoutController();
         this.closed = true;
         this.ready = false;
         reject(error);
       };
+
+      this.connectTimeoutController = createConnectTimeoutController(this.ssh.readyTimeout, () => {
+        this.hostKeyVerificationError = new Error('Timed out while waiting for handshake');
+
+        try {
+          this.client.end();
+        } catch {
+          // Ignore connection teardown races during timeout handling.
+        }
+
+        try {
+          this.client.destroy();
+        } catch {
+          // Ignore connection teardown races during timeout handling.
+        }
+
+        rejectOnce(this.hostKeyVerificationError);
+      });
 
       this.client.setNoDelay(true);
 
@@ -346,6 +376,7 @@ export class SSHClientConnection implements ISSHConnection {
         }
 
         settled = true;
+        this.disposeConnectTimeoutController();
         this.ready = true;
         void this.configureConfiguredPortForwards()
           .finally(() => {
@@ -387,7 +418,6 @@ export class SSHClientConnection implements ISSHConnection {
       username: this.ssh.user,
       keepaliveInterval: this.ssh.keepaliveInterval > 0 ? this.ssh.keepaliveInterval * 1000 : 0,
       keepaliveCountMax: this.ssh.keepaliveCountMax,
-      readyTimeout: this.ssh.readyTimeout ?? undefined,
       agentForward: this.ssh.agentForward,
       tryKeyboard: this.ssh.authType === 'keyboardInteractive',
       algorithms: connectAlgorithms,
@@ -870,14 +900,21 @@ export class SSHClientConnection implements ISSHConnection {
       return false;
     }
 
-    const decision = await this.hostKeyPromptService.confirm({
-      host: this.ssh.host,
-      port: this.ssh.port,
-      algorithm,
-      fingerprint: digest,
-      reason,
-      ...(storedEntry ? { storedFingerprint: storedEntry.digest } : {}),
-    });
+    this.connectTimeoutController?.pause();
+
+    let decision: SSHHostKeyPromptDecision;
+    try {
+      decision = await this.hostKeyPromptService.confirm({
+        host: this.ssh.host,
+        port: this.ssh.port,
+        algorithm,
+        fingerprint: digest,
+        reason,
+        ...(storedEntry ? { storedFingerprint: storedEntry.digest } : {}),
+      });
+    } finally {
+      this.connectTimeoutController?.resume();
+    }
 
     if (!decision.trusted) {
       this.hostKeyVerificationError = new Error('SSH host key verification was rejected by the user');
@@ -903,6 +940,11 @@ export class SSHClientConnection implements ISSHConnection {
 
     const entries = await this.knownHostsStore.list();
     return entries.filter((entry) => entry.host === this.ssh.host && entry.port === this.ssh.port);
+  }
+
+  private disposeConnectTimeoutController(): void {
+    this.connectTimeoutController?.dispose();
+    this.connectTimeoutController = null;
   }
 
 }
@@ -958,6 +1000,72 @@ function resolvePreferredUtf8Locale(): string {
   }
 
   return 'C.UTF-8';
+}
+
+function createConnectTimeoutController(
+  timeoutMs: number | null,
+  onTimeout: () => void,
+): ConnectTimeoutController | null {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return null;
+  }
+
+  let timer: NodeJS.Timeout | null = null;
+  let remainingMs = timeoutMs;
+  let startedAt = 0;
+  let paused = false;
+  let disposed = false;
+
+  const clearTimer = () => {
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    timer = null;
+  };
+
+  const schedule = () => {
+    if (disposed || paused) {
+      return;
+    }
+
+    clearTimer();
+    startedAt = Date.now();
+    timer = setTimeout(() => {
+      timer = null;
+      remainingMs = 0;
+      onTimeout();
+    }, remainingMs);
+  };
+
+  schedule();
+
+  return {
+    pause() {
+      if (disposed || paused) {
+        return;
+      }
+
+      paused = true;
+      if (timer) {
+        remainingMs = Math.max(remainingMs - (Date.now() - startedAt), 1);
+        clearTimer();
+      }
+    },
+    resume() {
+      if (disposed || !paused) {
+        return;
+      }
+
+      paused = false;
+      schedule();
+    },
+    dispose() {
+      disposed = true;
+      clearTimer();
+    },
+  };
 }
 
 function areForwardConfigsEquivalent(

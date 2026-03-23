@@ -1,4 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import {
+  SSH_HOST_KEY_PROMPT_CHANNEL,
+  SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL,
+} from '../shared/types/electron-api';
 import type { ElectronAPI, PtyWriteMetadata } from '../shared/types/electron-api';
 
 // 暴露受控的 IPC API 到渲染进程
@@ -87,6 +91,15 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('clear-ssh-private-key-passphrase', profileId, keyPath),
   listKnownHosts: () => ipcRenderer.invoke('list-known-hosts'),
   removeKnownHost: (entryId: string) => ipcRenderer.invoke('remove-known-host', entryId),
+  onSSHHostKeyPrompt: (callback) => {
+    ipcRenderer.on(SSH_HOST_KEY_PROMPT_CHANNEL, callback);
+  },
+  offSSHHostKeyPrompt: (callback) => {
+    ipcRenderer.removeListener(SSH_HOST_KEY_PROMPT_CHANNEL, callback);
+  },
+  respondSSHHostKeyPrompt: (response) => {
+    ipcRenderer.send(SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL, response);
+  },
 
   // StatusLine
   statusLineCheckClaudeInstalled: () => ipcRenderer.invoke('statusline-check-claude-installed'),

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SSHSessionConfig } from '../../types/process';
 import { SSHClientConnection } from '../ssh/SSHClientConnection';
@@ -24,6 +25,7 @@ function createSSHConfig(overrides: Partial<SSHSessionConfig> = {}): SSHSessionC
 
 describe('SSHClientConnection', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 
@@ -70,4 +72,100 @@ describe('SSHClientConnection', () => {
       expect.any(Function),
     );
   });
+
+  it('pauses the handshake timeout while waiting for host-key confirmation', async () => {
+    vi.useFakeTimers();
+
+    const promptDeferred = createDeferred<{ trusted: boolean; persist: boolean }>();
+    const fakeClient = new FakeSSHClient();
+    const connection = new SSHClientConnection(
+      createSSHConfig({ readyTimeout: 50 }),
+      {
+        hostKeyPromptService: {
+          confirm: vi.fn().mockReturnValue(promptDeferred.promise),
+        },
+      },
+    );
+
+    (connection as any).client = fakeClient;
+
+    const connectPromise = connection.connect();
+    let settled = false;
+    void connectPromise.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await flushPromises();
+    const connectConfig = fakeClient.lastConnectConfig!;
+    const verifierCallback = vi.fn();
+
+    connectConfig.hostVerifier?.(Buffer.from('host-key'), verifierCallback);
+    await vi.advanceTimersByTimeAsync(80);
+
+    expect(settled).toBe(false);
+
+    promptDeferred.resolve({ trusted: true, persist: false });
+    await vi.advanceTimersByTimeAsync(0);
+    fakeClient.emit('ready');
+
+    await expect(connectPromise).resolves.toBeUndefined();
+    expect(verifierCallback).toHaveBeenCalledWith(true);
+  });
+
+  it('rejects when the SSH handshake exceeds the configured timeout', async () => {
+    vi.useFakeTimers();
+
+    const fakeClient = new FakeSSHClient();
+    const connection = new SSHClientConnection(createSSHConfig({ readyTimeout: 50 }));
+    (connection as any).client = fakeClient;
+
+    const connectPromise = connection.connect();
+    const rejectedPromise = connectPromise.then(
+      () => null,
+      (error) => error as Error,
+    );
+    await flushPromises();
+
+    await vi.advanceTimersByTimeAsync(60);
+
+    await expect(rejectedPromise).resolves.toBeInstanceOf(Error);
+    await expect(rejectedPromise).resolves.toMatchObject({
+      message: 'Timed out while waiting for handshake',
+    });
+    expect(fakeClient.end).toHaveBeenCalledTimes(1);
+    expect(fakeClient.destroy).toHaveBeenCalledTimes(1);
+  });
 });
+
+class FakeSSHClient extends EventEmitter {
+  lastConnectConfig: any;
+  readonly end = vi.fn();
+  readonly destroy = vi.fn();
+  readonly setNoDelay = vi.fn();
+
+  connect(config: any): void {
+    this.lastConnectConfig = config;
+  }
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
+async function flushPromises(count = 4): Promise<void> {
+  for (let index = 0; index < count; index += 1) {
+    await Promise.resolve();
+  }
+}

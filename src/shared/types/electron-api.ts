@@ -121,6 +121,27 @@ export interface DeleteSSHSftpEntryConfig extends SSHSessionPortForwardTarget {
   remotePath: string;
 }
 
+export const SSH_HOST_KEY_PROMPT_CHANNEL = 'ssh-host-key-prompt';
+export const SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL = 'ssh-host-key-prompt-response';
+
+export type SSHHostKeyPromptReason = 'unknown' | 'mismatch';
+
+export interface SSHHostKeyPromptPayload {
+  requestId: string;
+  host: string;
+  port: number;
+  algorithm: string;
+  fingerprint: string;
+  reason: SSHHostKeyPromptReason;
+  storedFingerprint?: string;
+}
+
+export interface SSHHostKeyPromptResponse {
+  requestId: string;
+  trusted: boolean;
+  persist: boolean;
+}
+
 export interface StartWindowResult {
   pid: number;
   sessionId: string;
@@ -326,6 +347,9 @@ export interface ElectronAPI {
   clearSSHPrivateKeyPassphrase: (profileId: string, keyPath: string) => Promise<IpcResponse<void>>;
   listKnownHosts: () => Promise<IpcResponse<KnownHostEntry[]>>;
   removeKnownHost: (entryId: string) => Promise<IpcResponse<void>>;
+  onSSHHostKeyPrompt: (callback: ElectronEventHandler<SSHHostKeyPromptPayload>) => void;
+  offSSHHostKeyPrompt: (callback: ElectronEventHandler<SSHHostKeyPromptPayload>) => void;
+  respondSSHHostKeyPrompt: (response: SSHHostKeyPromptResponse) => void;
 
   statusLineCheckClaudeInstalled: () => Promise<IpcResponse<boolean>>;
   statusLineCheckConfigured: () => Promise<IpcResponse<boolean>>;

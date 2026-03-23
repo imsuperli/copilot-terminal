@@ -1,6 +1,16 @@
-import { BrowserWindow, dialog } from 'electron';
+import { randomUUID } from 'crypto';
+import { BrowserWindow, ipcMain } from 'electron';
+import {
+  SSH_HOST_KEY_PROMPT_CHANNEL,
+  SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL,
+} from '../../../shared/types/electron-api';
+import type {
+  SSHHostKeyPromptPayload,
+  SSHHostKeyPromptReason,
+  SSHHostKeyPromptResponse,
+} from '../../../shared/types/electron-api';
 
-export type SSHHostKeyPromptReason = 'unknown' | 'mismatch';
+export type { SSHHostKeyPromptReason };
 
 export interface SSHHostKeyPromptRequest {
   host: string;
@@ -32,56 +42,49 @@ export class ElectronSSHHostKeyPromptService implements ISSHHostKeyPromptService
   }
 
   async confirm(request: SSHHostKeyPromptRequest): Promise<SSHHostKeyPromptDecision> {
-    const buttons = [
-      'Cancel',
-      'Trust Once',
-      request.reason === 'mismatch' ? 'Update Fingerprint and Trust' : 'Trust and Save',
-    ];
-    const options = {
-      type: request.reason === 'mismatch' ? 'warning' : 'question',
-      buttons,
-      defaultId: 2,
-      cancelId: 0,
-      noLink: true,
-      title: 'SSH Host Key Verification',
-      message: request.reason === 'mismatch'
-        ? `Host key fingerprint changed for ${request.host}:${request.port}`
-        : `First-time SSH connection to ${request.host}:${request.port}`,
-      detail: buildPromptDetail(request),
-    } as const;
     const parentWindow = this.getMainWindow?.() ?? null;
 
-    const response = parentWindow
-      ? await dialog.showMessageBox(parentWindow, options)
-      : await dialog.showMessageBox(options);
-
-    if (response.response === 1) {
-      return { trusted: true, persist: false };
+    if (!parentWindow || parentWindow.isDestroyed() || parentWindow.webContents.isDestroyed()) {
+      return { trusted: false, persist: false };
     }
 
-    if (response.response === 2) {
-      return { trusted: true, persist: true };
-    }
+    const payload: SSHHostKeyPromptPayload = {
+      requestId: randomUUID(),
+      ...request,
+    };
 
-    return { trusted: false, persist: false };
+    return new Promise<SSHHostKeyPromptDecision>((resolve) => {
+      let settled = false;
+
+      const settle = (decision: SSHHostKeyPromptDecision) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        ipcMain.removeListener(SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL, handleResponse);
+        parentWindow.removeListener('closed', handleClosed);
+        resolve(decision);
+      };
+
+      const handleResponse = (_event: unknown, response: SSHHostKeyPromptResponse) => {
+        if (!response || response.requestId !== payload.requestId) {
+          return;
+        }
+
+        settle({
+          trusted: Boolean(response.trusted),
+          persist: Boolean(response.persist),
+        });
+      };
+
+      const handleClosed = () => {
+        settle({ trusted: false, persist: false });
+      };
+
+      ipcMain.on(SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL, handleResponse);
+      parentWindow.once('closed', handleClosed);
+      parentWindow.webContents.send(SSH_HOST_KEY_PROMPT_CHANNEL, payload);
+    });
   }
-}
-
-function buildPromptDetail(request: SSHHostKeyPromptRequest): string {
-  const lines = [
-    `Algorithm: ${request.algorithm}`,
-    `Presented fingerprint: ${request.fingerprint}`,
-  ];
-
-  if (request.storedFingerprint) {
-    lines.push(`Stored fingerprint: ${request.storedFingerprint}`);
-  }
-
-  lines.push(
-    request.reason === 'mismatch'
-      ? 'The stored fingerprint does not match the server response. Continue only if you trust the new host key.'
-      : 'This host is not in the trusted hosts list yet.',
-  );
-
-  return lines.join('\n');
 }
