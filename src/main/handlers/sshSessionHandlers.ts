@@ -158,7 +158,7 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
       const handle = await processManager.spawnTerminal(await buildSSHSpawnConfig(profile, vaultEntry, {
         windowId: config.targetWindowId,
         paneId: config.targetPaneId,
-        remoteCwd: sourcePane.ssh.remoteCwd ?? sourcePane.cwd,
+        remoteCwd: resolvePaneRemoteCwd(sourcePane),
         command: sourcePane.command,
       }, {
         sshProfileStore,
@@ -437,16 +437,17 @@ async function buildSSHSpawnConfig(
     sshVaultService: HandlerContext['sshVaultService'];
   },
 ): Promise<TerminalConfig> {
+  const remoteCwd = resolveSSHRemoteCwd(options.remoteCwd, profile.defaultRemoteCwd);
   const remoteCommand = options.command || profile.remoteCommand || undefined;
 
   return {
     backend: 'ssh',
-    workingDirectory: options.remoteCwd || profile.defaultRemoteCwd || '~',
+    workingDirectory: remoteCwd ?? '~',
     command: remoteCommand,
     windowId: options.windowId,
     paneId: options.paneId,
     ssh: await buildSSHSessionConfig(profile, vaultEntry, {
-      remoteCwd: options.remoteCwd,
+      remoteCwd,
       command: options.command,
     }, {
       sshProfileStore: context.sshProfileStore,
@@ -470,6 +471,7 @@ async function buildSSHSessionConfig(
   },
 ): Promise<SSHSessionConfig> {
   const nextContext = context;
+  const remoteCwd = resolveSSHRemoteCwd(options.remoteCwd, profile.defaultRemoteCwd);
 
   if (nextContext.visitedProfileIds.has(profile.id)) {
     throw new Error(`SSH jump host chain contains a loop at profile ${profile.id}`);
@@ -516,7 +518,7 @@ async function buildSSHSessionConfig(
       ...(profile.algorithms ? { algorithms: profile.algorithms } : {}),
       x11: profile.x11,
       skipBanner: profile.skipBanner,
-      ...(options.remoteCwd || profile.defaultRemoteCwd ? { remoteCwd: options.remoteCwd || profile.defaultRemoteCwd } : {}),
+      ...(remoteCwd ? { remoteCwd } : {}),
       ...(options.command || profile.remoteCommand ? { command: options.command || profile.remoteCommand } : {}),
     };
   } finally {
@@ -532,11 +534,12 @@ function createSshPaneDraft(
     command?: string;
   },
 ): Pane {
+  const remoteCwd = resolveSSHRemoteCwd(options.remoteCwd, profile.defaultRemoteCwd);
   const remoteCommand = options.command || profile.remoteCommand || '';
 
   const pane: Pane = {
     id: options.paneId,
-    cwd: options.remoteCwd || profile.defaultRemoteCwd || '~',
+    cwd: remoteCwd ?? '~',
     command: remoteCommand,
     status: WindowStatus.Restoring,
     pid: null,
@@ -547,7 +550,7 @@ function createSshPaneDraft(
       port: profile.port,
       user: profile.user,
       authType: profile.auth,
-      ...(options.remoteCwd || profile.defaultRemoteCwd ? { remoteCwd: options.remoteCwd || profile.defaultRemoteCwd } : {}),
+      ...(remoteCwd ? { remoteCwd } : {}),
       ...(profile.jumpHostProfileId ? { jumpHostProfileId: profile.jumpHostProfileId } : {}),
       ...(profile.proxyCommand ? { proxyCommand: profile.proxyCommand } : {}),
       reuseSession: profile.reuseSession,
@@ -620,4 +623,46 @@ function findPaneInLayout(layout: Window['layout'], paneId: string): Pane | null
   }
 
   return null;
+}
+
+function resolvePaneRemoteCwd(pane: Pane): string | undefined {
+  return resolveSSHRemoteCwd(pane.ssh?.remoteCwd, pane.cwd);
+}
+
+function resolveSSHRemoteCwd(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    const normalized = normalizeSSHRemoteCwd(value);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeSSHRemoteCwd(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  let normalized = value.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  normalized = unwrapBalancedQuotes(normalized);
+  if (!normalized || normalized === '~') {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function unwrapBalancedQuotes(value: string): string {
+  const quote = value[0];
+  if ((quote === '\'' || quote === '"') && value[value.length - 1] === quote) {
+    return value.slice(1, -1).trim();
+  }
+
+  return value;
 }

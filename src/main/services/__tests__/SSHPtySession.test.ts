@@ -124,6 +124,53 @@ describe('SSHPtySession', () => {
     vi.useRealTimers();
   });
 
+  it('skips an explicit cd when the configured remote cwd resolves to the SSH home directory', async () => {
+    vi.useFakeTimers();
+    const channel = createMockChannel();
+    const openShell = vi.fn().mockResolvedValue(channel);
+
+    await SSHPtySession.create({
+      pid: 2204,
+      ssh: {
+        profileId: 'profile-1',
+        host: '10.0.0.21',
+        port: 22,
+        user: 'root',
+        authType: 'password',
+        privateKeys: [],
+        password: 'secret',
+        keepaliveInterval: 30,
+        keepaliveCountMax: 3,
+        readyTimeout: null,
+        verifyHostKeys: true,
+        agentForward: false,
+        reuseSession: true,
+        forwardedPorts: [],
+        remoteCwd: "'~'",
+      },
+      connectionPool: {
+        acquire: vi.fn().mockResolvedValue({
+          connection: {
+            openShell,
+            listPortForwards: vi.fn().mockReturnValue([]),
+            addPortForward: vi.fn(),
+            removePortForward: vi.fn(),
+            listSftpDirectory: vi.fn(),
+            downloadSftpFile: vi.fn(),
+            uploadSftpFiles: vi.fn(),
+          },
+          release: vi.fn().mockResolvedValue(undefined),
+        }),
+      } as any,
+    });
+
+    channel.emit('data', 'Welcome\r\n');
+    await vi.advanceTimersByTimeAsync(40);
+
+    expect(channel.write).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('decodes split utf8 chunks without garbling the terminal output', async () => {
     const channel = createMockChannel();
     const openShell = vi.fn().mockResolvedValue(channel);

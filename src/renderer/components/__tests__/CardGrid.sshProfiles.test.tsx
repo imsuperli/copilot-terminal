@@ -115,6 +115,7 @@ describe('CardGrid SSH profile cards', () => {
     expect(screen.getByText('Prod Bastion')).toBeInTheDocument();
     expect(screen.getByText(/root@10.0.0.21:22/)).toBeInTheDocument();
     expect(screen.getByText('已保存密码')).toBeInTheDocument();
+    expect(screen.queryByText('密码')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '启动' }));
 

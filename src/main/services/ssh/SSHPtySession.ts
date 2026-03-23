@@ -347,7 +347,7 @@ function hasShellInitialization(ssh: SSHSessionConfig): boolean {
 
 function buildShellInitializationCommands(ssh: SSHSessionConfig): string[] {
   const commands: string[] = [];
-  const remoteCwd = ssh.remoteCwd?.trim();
+  const remoteCwd = normalizeRemoteCwdForShellInitialization(ssh.remoteCwd);
   const startupCommand = ssh.command?.trim();
 
   if (remoteCwd) {
@@ -359,6 +359,24 @@ function buildShellInitializationCommands(ssh: SSHSessionConfig): string[] {
   }
 
   return commands;
+}
+
+function normalizeRemoteCwdForShellInitialization(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  let normalized = value.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  normalized = unwrapBalancedQuotes(normalized);
+  if (!normalized || normalized === '~') {
+    return undefined;
+  }
+
+  return normalized;
 }
 
 function formatRemoteCdTarget(value: string): string {
@@ -385,4 +403,13 @@ function shellDoubleQuote(value: string): string {
 
 function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function unwrapBalancedQuotes(value: string): string {
+  const quote = value[0];
+  if ((quote === '\'' || quote === '"') && value[value.length - 1] === quote) {
+    return value.slice(1, -1).trim();
+  }
+
+  return value;
 }

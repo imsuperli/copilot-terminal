@@ -5,7 +5,7 @@ import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { getStatusLabelKey } from '../utils/statusHelpers';
-import { useI18n, type TranslationKey } from '../i18n';
+import { useI18n } from '../i18n';
 import { StatusDot } from './StatusDot';
 
 interface SSHProfileCardProps {
@@ -19,19 +19,6 @@ interface SSHProfileCardProps {
   onStartWindow?: (window: Window) => void;
   onEdit?: (profile: SSHProfile) => void;
   onDelete?: (profile: SSHProfile) => void;
-}
-
-function getAuthLabel(auth: SSHProfile['auth']): TranslationKey {
-  switch (auth) {
-    case 'password':
-      return 'ssh.auth.password';
-    case 'publicKey':
-      return 'ssh.auth.publicKey';
-    case 'agent':
-      return 'ssh.auth.agent';
-    case 'keyboardInteractive':
-      return 'ssh.auth.keyboardInteractive';
-  }
 }
 
 export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
@@ -63,10 +50,6 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   const targetLabel = useMemo(
     () => `${profile.user}@${profile.host}:${profile.port}`,
     [profile.host, profile.port, profile.user],
-  );
-  const authLabel = useMemo(
-    () => t(getAuthLabel(profile.auth)),
-    [profile.auth, t],
   );
   const visibleTags = useMemo(
     () => profile.tags.slice(0, 3),
@@ -177,9 +160,6 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                 title={statusTooltip ?? undefined}
               />
             )}
-            <span className="text-xs text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
-              {authLabel}
-            </span>
           </div>
         </div>
 

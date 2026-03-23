@@ -152,6 +152,48 @@ describe('registerSSHSessionHandlers', () => {
     });
   });
 
+  it('treats a quoted home directory as the SSH default instead of sending a literal cd target', async () => {
+    const processManager = {
+      spawnTerminal: vi.fn().mockResolvedValue({ pid: 2201, sessionId: 'ssh-session-1' }),
+      subscribePtyData: vi.fn().mockReturnValue(vi.fn()),
+      getLatestPaneOutputSeq: vi.fn().mockReturnValue(0),
+    };
+    const sshProfileStore = {
+      get: vi.fn().mockResolvedValue(createProfile()),
+    };
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: { addPane: vi.fn() } as any,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: { add: vi.fn() } as any,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: { get: vi.fn().mockResolvedValue(null) } as any,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('create-ssh-window');
+    await handler({}, {
+      profileId: 'profile-1',
+      remoteCwd: "'~'",
+    });
+
+    expect(processManager.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      backend: 'ssh',
+      workingDirectory: '~',
+      ssh: expect.not.objectContaining({
+        remoteCwd: expect.anything(),
+      }),
+    }));
+  });
+
   it('starts paused SSH panes from profile data', async () => {
     const processManager = {
       spawnTerminal: vi.fn().mockResolvedValue({ pid: 2202, sessionId: 'ssh-session-2' }),
