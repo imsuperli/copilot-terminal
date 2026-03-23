@@ -34,6 +34,26 @@ import './api/ptyDataBus';
 import { getAllPanes } from './utils/layoutHelpers';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from './utils/settingsEvents';
 
+function findReusableSSHWindow(windows: Window[], profileId: string): Window | null {
+  const matchedWindows = windows.filter((window) => {
+    if (window.archived) {
+      return false;
+    }
+
+    return getAllPanes(window.layout).some((pane) => pane.ssh?.profileId === profileId);
+  });
+
+  if (matchedWindows.length === 0) {
+    return null;
+  }
+
+  matchedWindows.sort((left, right) => (
+    new Date(right.lastActiveAt).getTime() - new Date(left.lastActiveAt).getTime()
+  ));
+
+  return matchedWindows[0] ?? null;
+}
+
 function AppContent() {
   const windows = useWindowStore((state) => state.windows);
   const addWindow = useWindowStore((state) => state.addWindow);
@@ -420,6 +440,12 @@ function AppContent() {
       return;
     }
 
+    const reusableWindow = findReusableSSHWindow(windows, profile.id);
+    if (reusableWindow) {
+      switchToWindow(reusableWindow.id);
+      return;
+    }
+
     setConnectingSSHProfileId(profile.id);
     try {
       const response = await window.electronAPI.createSSHWindow({
@@ -438,7 +464,7 @@ function AppContent() {
     } finally {
       setConnectingSSHProfileId(null);
     }
-  }, [addWindow, connectingSSHProfileId, switchToWindow]);
+  }, [addWindow, connectingSSHProfileId, switchToWindow, windows]);
 
   const handleCreateGroup = useCallback(() => {
     setShowCreateGroupDialog(true);

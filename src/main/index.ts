@@ -50,7 +50,8 @@ function getAllPanesFromLayout(layout: LayoutNode): Pane[] {
 
 function getWindowWorkingDirectory(window: Workspace['windows'][number]): string | null {
   const panes = getAllPanesFromLayout(window.layout);
-  return panes[0]?.cwd || null;
+  const localPane = panes.find((pane) => pane.backend !== 'ssh' && pane.cwd);
+  return localPane?.cwd || null;
 }
 
 function createWindow() {

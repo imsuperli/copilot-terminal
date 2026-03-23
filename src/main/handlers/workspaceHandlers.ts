@@ -7,6 +7,10 @@ import { LayoutNode } from '../../shared/types/window';
 
 function getWindowWorkingDirectory(layout: LayoutNode): string | null {
   if (layout.type === 'pane') {
+    if (layout.pane.backend === 'ssh') {
+      return null;
+    }
+
     return layout.pane.cwd || null;
   }
 
