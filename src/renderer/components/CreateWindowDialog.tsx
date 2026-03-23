@@ -598,7 +598,7 @@ export function CreateWindowDialog({
   ) => (
     <Tabs.Trigger
       value={value}
-      className="inline-flex items-center gap-2 rounded-full border border-transparent px-4 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-bg-hover/70 data-[state=active]:border-status-running/30 data-[state=active]:bg-status-running/10 data-[state=active]:text-text-primary"
+      className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-transparent px-3.5 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-bg-hover/70 data-[state=active]:border-status-running/30 data-[state=active]:bg-status-running/12 data-[state=active]:text-text-primary"
     >
       <span className="text-status-running">
         {icon}
@@ -614,7 +614,7 @@ export function CreateWindowDialog({
     <Tabs.Trigger
       key={value}
       value={value}
-      className="rounded-full border border-transparent px-4 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-bg-hover/70 data-[state=active]:border-status-running/35 data-[state=active]:bg-status-running/10 data-[state=active]:text-text-primary"
+      className="rounded-[16px] border border-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-bg-hover/70 data-[state=active]:border-status-running/35 data-[state=active]:bg-status-running/12 data-[state=active]:text-text-primary"
     >
       {title}
     </Tabs.Trigger>
@@ -624,8 +624,8 @@ export function CreateWindowDialog({
     label: string,
     value: string,
   ) => (
-    <div className="rounded-[20px] border border-border-subtle bg-bg-app/60 px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-secondary">
+    <div className="rounded-[18px] border border-border-subtle bg-bg-app/58 px-3.5 py-3">
+      <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-secondary">
         {label}
       </div>
       <div className="mt-1 truncate text-sm font-semibold text-text-primary" title={value}>
@@ -642,7 +642,7 @@ export function CreateWindowDialog({
   ) => (
     <label
       htmlFor={id}
-      className="flex items-start gap-3 rounded-2xl border border-border-subtle bg-bg-app/50 px-4 py-3 text-sm text-text-primary"
+      className="flex items-start gap-3 rounded-[18px] border border-border-subtle bg-bg-app/48 px-3.5 py-3 text-sm text-text-primary"
     >
       <input
         id={id}
@@ -655,6 +655,35 @@ export function CreateWindowDialog({
     </label>
   )
 
+  const sectionShellClassName = 'rounded-[24px] border border-border-subtle bg-[linear-gradient(180deg,rgba(30,30,36,0.96),rgba(19,19,23,0.98))] shadow-[0_18px_44px_rgba(0,0,0,0.18)]'
+  const fieldLabelClassName = 'mb-1.5 block text-[13px] font-medium text-text-primary'
+  const textFieldClassName = 'w-full rounded-[18px] border border-border-subtle bg-bg-app/88 px-3.5 py-2.5 text-sm text-text-primary placeholder-text-disabled shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,background-color,box-shadow] focus:bg-bg-app focus:outline-none focus:ring-2 focus:ring-status-running/80'
+  const selectTriggerClassName = 'flex w-full min-w-0 items-center justify-between gap-2 rounded-[18px] border border-border-subtle bg-bg-app/88 px-3.5 py-2.5 text-left text-sm text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,background-color,box-shadow] focus:bg-bg-app focus:outline-none focus:ring-2 focus:ring-status-running/80'
+  const selectMenuClassName = 'z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[18px] border border-border-subtle bg-bg-card shadow-2xl'
+  const selectItemClassName = 'flex cursor-pointer items-center justify-between gap-2 rounded-[14px] px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:bg-bg-hover'
+  const compactButtonClassName = 'h-11 rounded-[18px] px-4 text-sm'
+  const asideCardClassName = `${sectionShellClassName} p-4`
+  const localSummaryName = name.trim() || placeholderName
+  const localSummaryDirectory = workingDirectory.trim() || t('createWindow.workingDirectoryPlaceholder')
+  const localSummaryShell = selectedShellValue === AUTO_SHELL_OPTION_VALUE
+    ? autoShellLabel
+    : (effectiveSelectedShell || autoShellLabel)
+  const localStatusLabel = pathError
+    ? t('createWindow.localStatusError')
+    : isValidating
+      ? t('common.validating')
+      : workingDirectory.trim()
+        ? t('createWindow.localStatusReady')
+        : t('createWindow.localStatusIdle')
+  const localStatusClassName = pathError
+    ? 'border-status-error/35 bg-status-error/10 text-status-error'
+    : workingDirectory.trim() && !isValidating
+      ? 'border-status-running/35 bg-status-running/12 text-status-running'
+      : 'border-border-subtle bg-bg-app/80 text-text-secondary'
+  const activeModeHint = activeTab === 'ssh' && sshEnabled
+    ? t('createWindow.mode.sshHint')
+    : t('createWindow.mode.localHint')
+
   return (
     <Dialog
       open={open}
@@ -665,166 +694,262 @@ export function CreateWindowDialog({
         }
       }}
       title={t('createWindow.unifiedTitle')}
-      contentClassName="!w-[min(1240px,96vw)] !max-w-none max-h-[92vh] overflow-hidden"
+      description={t('createWindow.unifiedDescription')}
+      showCloseButton
+      closeLabel={t('common.close')}
+      contentClassName="!w-[min(1240px,96vw)] !max-w-none flex max-h-[92vh] flex-col overflow-hidden rounded-[30px] border border-border-subtle/90 bg-bg-card/98 backdrop-blur-sm"
+      headerClassName="border-b border-border-subtle/80 px-5 pt-5 pb-4"
+      bodyClassName="min-h-0 flex-1 px-5 pb-5"
+      titleClassName="text-[22px] tracking-[-0.01em]"
+      descriptionClassName="max-w-3xl text-sm leading-6"
     >
-      <form onSubmit={handleSubmit} role="form" className="flex max-h-[calc(92vh-88px)] flex-col">
+      <form onSubmit={handleSubmit} role="form" className="flex h-full min-h-0 flex-col">
         <Tabs.Root
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as CreateWindowTab)}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <Tabs.List
-            className={`inline-flex w-fit flex-wrap gap-1 rounded-full border border-border-subtle bg-bg-app/70 p-1 ${sshEnabled ? '' : ''}`}
-            aria-label={t('createWindow.modeTabsAriaLabel')}
-          >
-            {renderTabTrigger(
-              'local',
-              <Terminal size={18} />,
-              t('createWindow.mode.local'),
-            )}
-            {sshEnabled && renderTabTrigger(
-              'ssh',
-              <Server size={18} />,
-              t('createWindow.mode.ssh'),
-            )}
-          </Tabs.List>
-
-          <div className="mt-5 min-h-0 flex-1 overflow-y-auto pr-1">
-            <Tabs.Content value="local" className="data-[state=inactive]:hidden">
-              <div className="mx-auto max-w-4xl space-y-5">
-                <section className="rounded-[26px] border border-border-subtle bg-bg-card p-6 shadow-[0_18px_48px_rgba(0,0,0,0.12)]">
-                  <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-                    <div>
-                      <label htmlFor="window-name" className="mb-2 block text-sm font-medium text-text-primary">
-                        {t('createWindow.nameLabel')}
-                      </label>
-                      <input
-                        id="window-name"
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder={placeholderName}
-                        className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="command" className="mb-2 block text-sm font-medium text-text-primary">
-                        {t('createWindow.shellLabel')}
-                      </label>
-                      <div className="flex gap-2">
-                        <div className="min-w-0 flex-1">
-                          <Select.Root
-                            value={selectedShellValue}
-                            onValueChange={(value) => updateLocalCommand(value === AUTO_SHELL_OPTION_VALUE ? '' : value)}
-                          >
-                            <Select.Trigger
-                              id="command"
-                              className="flex w-full min-w-0 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-left text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
-                            >
-                              <span className="min-w-0 flex-1 truncate">
-                                <Select.Value placeholder={t('createWindow.shellPlaceholder')} />
-                              </span>
-                              <Select.Icon className="shrink-0">
-                                <ChevronDown size={16} className="text-text-secondary" />
-                              </Select.Icon>
-                            </Select.Trigger>
-
-                            <Select.Portal>
-                              <Select.Content
-                                position="popper"
-                                side="bottom"
-                                align="start"
-                                sideOffset={6}
-                                className="z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-border-subtle bg-bg-card shadow-2xl"
-                              >
-                                <Select.Viewport className="p-1">
-                                  <Select.Item value={AUTO_SHELL_OPTION_VALUE} className="flex cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:bg-bg-hover">
-                                    <Select.ItemText className="truncate">
-                                      {autoShellLabel}
-                                    </Select.ItemText>
-                                    <Select.ItemIndicator className="shrink-0">
-                                      <Check size={14} />
-                                    </Select.ItemIndicator>
-                                  </Select.Item>
-                                  {filteredShellOptions.map((shell) => (
-                                    <Select.Item
-                                      key={shell.path}
-                                      value={shell.path}
-                                      className="flex cursor-pointer items-center justify-between gap-2 rounded-xl px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:bg-bg-hover"
-                                    >
-                                      <Select.ItemText className="truncate">
-                                        {shell.path}
-                                      </Select.ItemText>
-                                      <Select.ItemIndicator className="shrink-0">
-                                        <Check size={14} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                  ))}
-                                </Select.Viewport>
-                              </Select.Content>
-                            </Select.Portal>
-                          </Select.Root>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={handleSelectCustomShell}
-                          className="shrink-0 rounded-2xl"
-                        >
-                          {t('settings.general.defaultShellCustomButton')}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="lg:col-span-2">
-                      <label htmlFor="working-directory" className="mb-2 block text-sm font-medium text-text-primary">
-                        {t('createWindow.workingDirectoryLabel')} <span className="text-status-error">*</span>
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          id="working-directory"
-                          ref={workingDirInputRef}
-                          type="text"
-                          value={workingDirectory}
-                          onChange={(e) => setWorkingDirectory(e.target.value)}
-                          placeholder={t('createWindow.workingDirectoryPlaceholder')}
-                          required
-                          aria-describedby={pathError ? 'path-error' : undefined}
-                          className={`flex-1 rounded-2xl border bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 ${
-                            pathError
-                              ? 'border-status-error focus:ring-status-error'
-                              : 'border-border-subtle focus:ring-status-running'
-                          }`}
-                        />
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={handleSelectDirectory}
-                          className="shrink-0 rounded-2xl"
-                        >
-                          {t('common.browse')}
-                        </Button>
-                      </div>
-                      <div className="mt-1 h-5">
-                        {pathError && (
-                          <p id="path-error" className="text-sm text-status-error" role="alert">
-                            {pathError}
-                          </p>
-                        )}
-                        {!pathError && isValidating && (
-                          <p className="text-sm text-text-secondary" aria-live="polite">{t('common.validating')}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {createError && (
-                  <div className="rounded-2xl border border-status-error bg-status-error/10 p-4" role="alert">
-                    <p className="text-sm text-status-error">{createError}</p>
-                  </div>
+          <div className="rounded-[22px] border border-border-subtle bg-[linear-gradient(180deg,rgba(28,28,34,0.96),rgba(18,18,22,0.98))] p-3 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <Tabs.List
+                className="inline-flex w-fit flex-wrap gap-1 rounded-[20px] border border-border-subtle bg-bg-app/75 p-1.5"
+                aria-label={t('createWindow.modeTabsAriaLabel')}
+              >
+                {renderTabTrigger(
+                  'local',
+                  <Terminal size={18} />,
+                  t('createWindow.mode.local'),
                 )}
+                {sshEnabled && renderTabTrigger(
+                  'ssh',
+                  <Server size={18} />,
+                  t('createWindow.mode.ssh'),
+                )}
+              </Tabs.List>
+
+              <p className="max-w-2xl text-sm leading-6 text-text-secondary">
+                {activeModeHint}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+            <Tabs.Content value="local" className="data-[state=inactive]:hidden">
+              <div className="mx-auto max-w-[1120px]">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="min-w-0 space-y-4">
+                    <section className={`${sectionShellClassName} p-4 md:p-5`}>
+                      <div className="mb-4 flex flex-col gap-3 border-b border-border-subtle/80 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                            {t('createWindow.mode.local')}
+                          </div>
+                          <h3 className="mt-2 text-lg font-semibold text-text-primary">
+                            {t('createWindow.localSectionTitle')}
+                          </h3>
+                          <p className="mt-1 max-w-2xl text-sm leading-6 text-text-secondary">
+                            {t('createWindow.localSectionDescription')}
+                          </p>
+                        </div>
+
+                        <div className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium ${localStatusClassName}`}>
+                          {localStatusLabel}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                        <div>
+                          <label htmlFor="window-name" className={fieldLabelClassName}>
+                            {t('createWindow.nameLabel')}
+                          </label>
+                          <input
+                            id="window-name"
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder={placeholderName}
+                            className={textFieldClassName}
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="command" className={fieldLabelClassName}>
+                            {t('createWindow.shellLabel')}
+                          </label>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <div className="min-w-0 flex-1">
+                              <Select.Root
+                                value={selectedShellValue}
+                                onValueChange={(value) => updateLocalCommand(value === AUTO_SHELL_OPTION_VALUE ? '' : value)}
+                              >
+                                <Select.Trigger
+                                  id="command"
+                                  className={selectTriggerClassName}
+                                >
+                                  <span className="min-w-0 flex-1 truncate">
+                                    <Select.Value placeholder={t('createWindow.shellPlaceholder')} />
+                                  </span>
+                                  <Select.Icon className="shrink-0">
+                                    <ChevronDown size={16} className="text-text-secondary" />
+                                  </Select.Icon>
+                                </Select.Trigger>
+
+                                <Select.Portal>
+                                  <Select.Content
+                                    position="popper"
+                                    side="bottom"
+                                    align="start"
+                                    sideOffset={6}
+                                    className={selectMenuClassName}
+                                  >
+                                    <Select.Viewport className="p-1">
+                                      <Select.Item value={AUTO_SHELL_OPTION_VALUE} className={selectItemClassName}>
+                                        <Select.ItemText className="truncate">
+                                          {autoShellLabel}
+                                        </Select.ItemText>
+                                        <Select.ItemIndicator className="shrink-0">
+                                          <Check size={14} />
+                                        </Select.ItemIndicator>
+                                      </Select.Item>
+                                      {filteredShellOptions.map((shell) => (
+                                        <Select.Item
+                                          key={shell.path}
+                                          value={shell.path}
+                                          className={selectItemClassName}
+                                        >
+                                          <Select.ItemText className="truncate">
+                                            {shell.path}
+                                          </Select.ItemText>
+                                          <Select.ItemIndicator className="shrink-0">
+                                            <Check size={14} />
+                                          </Select.ItemIndicator>
+                                        </Select.Item>
+                                      ))}
+                                    </Select.Viewport>
+                                  </Select.Content>
+                                </Select.Portal>
+                              </Select.Root>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={handleSelectCustomShell}
+                              className={`${compactButtonClassName} shrink-0`}
+                            >
+                              {t('settings.general.defaultShellCustomButton')}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="lg:col-span-2">
+                          <label htmlFor="working-directory" className={fieldLabelClassName}>
+                            {t('createWindow.workingDirectoryLabel')} <span className="text-status-error">*</span>
+                          </label>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                              id="working-directory"
+                              ref={workingDirInputRef}
+                              type="text"
+                              value={workingDirectory}
+                              onChange={(e) => setWorkingDirectory(e.target.value)}
+                              placeholder={t('createWindow.workingDirectoryPlaceholder')}
+                              required
+                              aria-describedby={pathError ? 'path-error' : undefined}
+                              className={`flex-1 ${textFieldClassName} ${
+                                pathError
+                                  ? 'border-status-error focus:ring-status-error/80'
+                                  : ''
+                              }`}
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={handleSelectDirectory}
+                              className={`${compactButtonClassName} shrink-0`}
+                            >
+                              {t('common.browse')}
+                            </Button>
+                          </div>
+                          <div className="mt-1 min-h-[20px]">
+                            {pathError && (
+                              <p id="path-error" className="text-sm text-status-error" role="alert">
+                                {pathError}
+                              </p>
+                            )}
+                            {!pathError && isValidating && (
+                              <p className="text-sm text-text-secondary" aria-live="polite">
+                                {t('common.validating')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    {createError && (
+                      <div className="rounded-[20px] border border-status-error bg-status-error/10 px-4 py-3" role="alert">
+                        <p className="text-sm text-status-error">{createError}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <aside className="self-start space-y-4 xl:sticky xl:top-0">
+                    <section className={asideCardClassName}>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                        {t('createWindow.localPreviewTitle')}
+                      </div>
+
+                      <div className="mt-3 rounded-[20px] border border-border-subtle bg-bg-app/60 px-4 py-4">
+                        <div className="truncate text-lg font-semibold text-text-primary" title={localSummaryName}>
+                          {localSummaryName}
+                        </div>
+                        <div className={`mt-3 inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium ${localStatusClassName}`}>
+                          {localStatusLabel}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-3">
+                        <div className="rounded-[18px] border border-border-subtle bg-bg-app/45 px-3.5 py-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                            {t('createWindow.workingDirectoryLabel')}
+                          </div>
+                          <div className="mt-1 break-all text-sm font-medium text-text-primary">
+                            {localSummaryDirectory}
+                          </div>
+                        </div>
+
+                        <div className="rounded-[18px] border border-border-subtle bg-bg-app/45 px-3.5 py-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                            {t('createWindow.shellLabel')}
+                          </div>
+                          <div className="mt-1 break-all text-sm font-medium text-text-primary">
+                            {localSummaryShell}
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className={asideCardClassName}>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                        {t('createWindow.localSectionTitle')}
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-text-secondary">
+                        {t('createWindow.mode.localHint')}
+                      </p>
+
+                      <div className="mt-4 space-y-2">
+                        <div className="flex items-center justify-between rounded-[16px] border border-border-subtle bg-bg-app/45 px-3.5 py-3 text-sm text-text-primary">
+                          <span>{t('createWindow.workingDirectoryLabel')}</span>
+                          <span className="text-xs font-medium text-status-error">*</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-[16px] border border-border-subtle bg-bg-app/45 px-3.5 py-3 text-sm text-text-primary">
+                          <span>{t('createWindow.shellLabel')}</span>
+                          <span className="text-xs text-text-secondary">{t('createWindow.shellAutoFallback')}</span>
+                        </div>
+                      </div>
+                    </section>
+                  </aside>
+                </div>
               </div>
             </Tabs.Content>
 
@@ -833,475 +958,515 @@ export function CreateWindowDialog({
                 <Tabs.Root
                   value={activeSSHSettingsTab}
                   onValueChange={(value) => setActiveSSHSettingsTab(value as SSHSettingsTab)}
-                  className="mx-auto max-w-5xl space-y-4"
+                  className="mx-auto max-w-[1120px]"
                 >
-                  <section className="rounded-[26px] border border-border-subtle bg-bg-card p-6 shadow-[0_18px_48px_rgba(0,0,0,0.12)]">
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
-                      <div className="rounded-[22px] border border-border-subtle bg-bg-app/65 px-5 py-4">
-                        <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-secondary">
+                  <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+                    <aside className="self-start space-y-4 xl:sticky xl:top-0">
+                      <section className={asideCardClassName}>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
                           {t('createWindow.sshPreviewTitle')}
                         </div>
-                        <div className="mt-2 truncate text-lg font-semibold text-text-primary" title={sshSummaryName}>
-                          {sshSummaryName}
-                        </div>
-                        <div className="mt-1 truncate text-sm text-text-secondary">
-                          {sshSummaryUser}@{sshSummaryHost}:{sshForm.port.trim() || '22'}
-                        </div>
-                      </div>
+                        <p className="mt-2 text-sm leading-6 text-text-secondary">
+                          {t('createWindow.sshPreviewDescription')}
+                        </p>
 
-                      {renderSSHSummaryItem(t('sshProfileDialog.authLabel'), sshSummaryAuth)}
-                      {renderSSHSummaryItem(t('createWindow.sshRoutingTitle'), sshSummaryRoute)}
-                      {renderSSHSummaryItem(t('sshProfileDialog.remoteCwdLabel'), sshSummaryRemoteCwd)}
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {sshForm.verifyHostKeys && (
-                        <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1 text-xs text-text-primary">
-                          {t('sshProfileDialog.verifyHostKeys')}
-                        </span>
-                      )}
-                      {sshForm.reuseSession && (
-                        <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1 text-xs text-text-primary">
-                          {t('sshProfileDialog.reuseSession')}
-                        </span>
-                      )}
-                      {sshForm.warnOnClose && (
-                        <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1 text-xs text-text-primary">
-                          {t('sshProfileDialog.warnOnClose')}
-                        </span>
-                      )}
-                      {sshForm.keepaliveInterval.trim() && (
-                        <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1 text-xs text-text-primary">
-                          {t('createWindow.sshDefaultsKeepalive', { seconds: sshForm.keepaliveInterval.trim() || '30' })}
-                        </span>
-                      )}
-                      {sshForm.x11 && (
-                        <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1 text-xs text-text-primary">
-                          X11
-                        </span>
-                      )}
-                    </div>
-                  </section>
-
-                  {sshError && (
-                    <div className="rounded-[22px] border border-status-error bg-status-error/10 px-4 py-3" role="alert">
-                      <p className="text-sm text-status-error">{sshError}</p>
-                    </div>
-                  )}
-
-                  <section className="rounded-[26px] border border-border-subtle bg-bg-card p-5 shadow-[0_18px_48px_rgba(0,0,0,0.12)]">
-                    <Tabs.List
-                      className="mb-5 flex flex-wrap gap-2 rounded-[22px] border border-border-subtle bg-bg-app/70 p-2"
-                      aria-label={t('createWindow.sshSettingsTabsAriaLabel')}
-                    >
-                      {renderSSHSettingsTrigger('basic', t('createWindow.sshSections.basic'))}
-                      {renderSSHSettingsTrigger('auth', t('createWindow.sshSections.auth'))}
-                      {renderSSHSettingsTrigger('routing', t('createWindow.sshSections.routing'))}
-                      {renderSSHSettingsTrigger('session', t('createWindow.sshSections.session'))}
-                    </Tabs.List>
-
-                    <Tabs.Content value="basic" className="space-y-5 data-[state=inactive]:hidden">
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_180px]">
-                        <div>
-                          <label htmlFor="ssh-profile-name" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.nameLabel')}
-                          </label>
-                          <input
-                            id="ssh-profile-name"
-                            ref={sshNameInputRef}
-                            type="text"
-                            value={sshForm.name}
-                            onChange={(event) => setSSHField('name', event.target.value)}
-                            placeholder={sshForm.host.trim() || 'Prod Ubuntu'}
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-
-                        <div>
-                          <label htmlFor="ssh-host" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.hostLabel')} <span className="text-status-error">*</span>
-                          </label>
-                          <input
-                            id="ssh-host"
-                            type="text"
-                            value={sshForm.host}
-                            onChange={(event) => setSSHField('host', event.target.value)}
-                            placeholder="example.com"
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-
-                        <div>
-                          <label htmlFor="ssh-port" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.portLabel')}
-                          </label>
-                          <input
-                            id="ssh-port"
-                            type="number"
-                            min={1}
-                            max={65535}
-                            value={sshForm.port}
-                            onChange={(event) => setSSHField('port', event.target.value)}
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-
-                        <div className="xl:col-span-2">
-                          <label htmlFor="ssh-user" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.userLabel')} <span className="text-status-error">*</span>
-                          </label>
-                          <input
-                            id="ssh-user"
-                            type="text"
-                            value={sshForm.user}
-                            onChange={(event) => setSSHField('user', event.target.value)}
-                            placeholder="root"
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-                      </div>
-                    </Tabs.Content>
-
-                    <Tabs.Content value="auth" className="space-y-5 data-[state=inactive]:hidden">
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                        <div>
-                          <label htmlFor="ssh-auth" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.authLabel')}
-                          </label>
-                          <select
-                            id="ssh-auth"
-                            value={sshForm.auth}
-                            onChange={(event) => setSSHField('auth', event.target.value as SSHAuthType)}
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
-                          >
-                            <option value="password">{t('createWindow.sshAuth.password')}</option>
-                            <option value="publicKey">{t('createWindow.sshAuth.publicKey')}</option>
-                            <option value="agent">{t('createWindow.sshAuth.agent')}</option>
-                            <option value="keyboardInteractive">{t('createWindow.sshAuth.keyboardInteractive')}</option>
-                          </select>
-                        </div>
-
-                        {sshAuthNeedsPassword && (
-                          <div>
-                            <label htmlFor="ssh-password" className="mb-2 block text-sm font-medium text-text-primary">
-                              {t('sshProfileDialog.passwordLabel')} <span className="text-status-error">*</span>
-                            </label>
-                            <input
-                              id="ssh-password"
-                              type="password"
-                              value={sshPassword}
-                              onChange={(event) => setSSHPassword(event.target.value)}
-                              placeholder={t('sshProfileDialog.passwordPlaceholder')}
-                              className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                            />
+                        <div className="mt-4 rounded-[20px] border border-border-subtle bg-bg-app/62 px-4 py-4">
+                          <div className="truncate text-lg font-semibold text-text-primary" title={sshSummaryName}>
+                            {sshSummaryName}
                           </div>
-                        )}
-                      </div>
-
-                      {sshForm.auth === 'publicKey' && (
-                        <div className="rounded-[24px] border border-border-subtle bg-bg-app/55 p-5">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div className="text-sm font-medium text-text-primary">{t('sshProfileDialog.privateKeysLabel')}</div>
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              onClick={handleDetectPrivateKeys}
-                              className="rounded-2xl"
-                            >
-                              {isDetectingKeys ? t('common.loading') : t('sshProfileDialog.detectKeys')}
-                            </Button>
+                          <div className="mt-1 truncate text-sm text-text-secondary">
+                            {sshSummaryUser}@{sshSummaryHost}:{sshForm.port.trim() || '22'}
                           </div>
+                        </div>
 
-                          <textarea
-                            value={sshForm.privateKeysText}
-                            onChange={(event) => setSSHField('privateKeysText', event.target.value)}
-                            rows={4}
-                            placeholder={t('sshProfileDialog.privateKeysPlaceholder')}
-                            className="mt-4 w-full rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
+                        <div className="mt-3 space-y-3">
+                          {renderSSHSummaryItem(t('sshProfileDialog.authLabel'), sshSummaryAuth)}
+                          {renderSSHSummaryItem(t('createWindow.sshRoutingTitle'), sshSummaryRoute)}
+                          {renderSSHSummaryItem(t('sshProfileDialog.remoteCwdLabel'), sshSummaryRemoteCwd)}
+                        </div>
+                      </section>
 
-                          <div className="mt-2 min-h-[20px]">
-                            {detectKeysMessage && (
-                              <p className="text-xs text-text-secondary">{detectKeysMessage}</p>
+                      <section className={asideCardClassName}>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                          {t('createWindow.sshDefaultsTitle')}
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {sshForm.verifyHostKeys && (
+                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                              {t('sshProfileDialog.verifyHostKeys')}
+                            </span>
+                          )}
+                          {sshForm.reuseSession && (
+                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                              {t('sshProfileDialog.reuseSession')}
+                            </span>
+                          )}
+                          {sshForm.warnOnClose && (
+                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                              {t('sshProfileDialog.warnOnClose')}
+                            </span>
+                          )}
+                          {sshForm.keepaliveInterval.trim() && (
+                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                              {t('createWindow.sshDefaultsKeepalive', { seconds: sshForm.keepaliveInterval.trim() || '30' })}
+                            </span>
+                          )}
+                          {sshForm.x11 && (
+                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                              X11
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="mt-4 text-xs leading-5 text-text-secondary">
+                          {t('createWindow.sshAdvancedEditHint')}
+                        </p>
+                      </section>
+                    </aside>
+
+                    <div className="min-w-0 space-y-4">
+                      {sshError && (
+                        <div className="rounded-[20px] border border-status-error bg-status-error/10 px-4 py-3" role="alert">
+                          <p className="text-sm text-status-error">{sshError}</p>
+                        </div>
+                      )}
+
+                      <section className={`${sectionShellClassName} p-4 md:p-5`}>
+                        <Tabs.List
+                          className="mb-4 flex flex-wrap gap-2 rounded-[20px] border border-border-subtle bg-bg-app/70 p-1.5"
+                          aria-label={t('createWindow.sshSettingsTabsAriaLabel')}
+                        >
+                          {renderSSHSettingsTrigger('basic', t('createWindow.sshSections.basic'))}
+                          {renderSSHSettingsTrigger('auth', t('createWindow.sshSections.auth'))}
+                          {renderSSHSettingsTrigger('routing', t('createWindow.sshSections.routing'))}
+                          {renderSSHSettingsTrigger('session', t('createWindow.sshSections.session'))}
+                        </Tabs.List>
+
+                        <Tabs.Content value="basic" className="space-y-4 data-[state=inactive]:hidden">
+                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_180px]">
+                            <div>
+                              <label htmlFor="ssh-profile-name" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.nameLabel')}
+                              </label>
+                              <input
+                                id="ssh-profile-name"
+                                ref={sshNameInputRef}
+                                type="text"
+                                value={sshForm.name}
+                                onChange={(event) => setSSHField('name', event.target.value)}
+                                placeholder={sshForm.host.trim() || 'Prod Ubuntu'}
+                                className={textFieldClassName}
+                              />
+                            </div>
+
+                            <div>
+                              <label htmlFor="ssh-host" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.hostLabel')} <span className="text-status-error">*</span>
+                              </label>
+                              <input
+                                id="ssh-host"
+                                type="text"
+                                value={sshForm.host}
+                                onChange={(event) => setSSHField('host', event.target.value)}
+                                placeholder="example.com"
+                                className={textFieldClassName}
+                              />
+                            </div>
+
+                            <div>
+                              <label htmlFor="ssh-port" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.portLabel')}
+                              </label>
+                              <input
+                                id="ssh-port"
+                                type="number"
+                                min={1}
+                                max={65535}
+                                value={sshForm.port}
+                                onChange={(event) => setSSHField('port', event.target.value)}
+                                className={textFieldClassName}
+                              />
+                            </div>
+
+                            <div className="xl:col-span-2">
+                              <label htmlFor="ssh-user" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.userLabel')} <span className="text-status-error">*</span>
+                              </label>
+                              <input
+                                id="ssh-user"
+                                type="text"
+                                value={sshForm.user}
+                                onChange={(event) => setSSHField('user', event.target.value)}
+                                placeholder="root"
+                                className={textFieldClassName}
+                              />
+                            </div>
+                          </div>
+                        </Tabs.Content>
+
+                        <Tabs.Content value="auth" className="space-y-4 data-[state=inactive]:hidden">
+                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                            <div>
+                              <label htmlFor="ssh-auth" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.authLabel')}
+                              </label>
+                              <select
+                                id="ssh-auth"
+                                value={sshForm.auth}
+                                onChange={(event) => setSSHField('auth', event.target.value as SSHAuthType)}
+                                className={textFieldClassName}
+                              >
+                                <option value="password">{t('createWindow.sshAuth.password')}</option>
+                                <option value="publicKey">{t('createWindow.sshAuth.publicKey')}</option>
+                                <option value="agent">{t('createWindow.sshAuth.agent')}</option>
+                                <option value="keyboardInteractive">{t('createWindow.sshAuth.keyboardInteractive')}</option>
+                              </select>
+                            </div>
+
+                            {sshAuthNeedsPassword && (
+                              <div>
+                                <label htmlFor="ssh-password" className={fieldLabelClassName}>
+                                  {t('sshProfileDialog.passwordLabel')} <span className="text-status-error">*</span>
+                                </label>
+                                <input
+                                  id="ssh-password"
+                                  type="password"
+                                  value={sshPassword}
+                                  onChange={(event) => setSSHPassword(event.target.value)}
+                                  placeholder={t('sshProfileDialog.passwordPlaceholder')}
+                                  className={textFieldClassName}
+                                />
+                              </div>
                             )}
                           </div>
 
-                          {currentPrivateKeys.length > 0 && (
-                            <div className="mt-3">
-                              <button
-                                type="button"
-                                onClick={() => setShowSSHPassphrases((previous) => !previous)}
-                                className="flex items-center gap-2 text-sm font-medium text-text-primary"
-                              >
-                                {showSSHPassphrases ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                <span>{showSSHPassphrases ? t('createWindow.sshPassphrasesHide') : t('createWindow.sshPassphrasesShow')}</span>
-                              </button>
+                          {sshForm.auth === 'publicKey' && (
+                            <div className="rounded-[20px] border border-border-subtle bg-bg-app/55 p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                  <div className="text-sm font-medium text-text-primary">
+                                    {t('sshProfileDialog.privateKeysLabel')}
+                                  </div>
+                                  <p className="mt-1 text-sm leading-6 text-text-secondary">
+                                    {t('createWindow.sshPublicKeyHint')}
+                                  </p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  onClick={handleDetectPrivateKeys}
+                                  className={`${compactButtonClassName} shrink-0`}
+                                >
+                                  {isDetectingKeys ? t('common.loading') : t('sshProfileDialog.detectKeys')}
+                                </Button>
+                              </div>
 
-                              {showSSHPassphrases && (
-                                <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                                  {currentPrivateKeys.map((keyPath) => (
-                                    <div key={keyPath}>
-                                      <label className="mb-1 block truncate text-xs text-text-secondary" title={keyPath}>
-                                        {keyPath}
-                                      </label>
-                                      <input
-                                        type="password"
-                                        value={sshPassphrases[keyPath] ?? ''}
-                                        onChange={(event) => setSSHPassphrases((previous) => ({
-                                          ...previous,
-                                          [keyPath]: event.target.value,
-                                        }))}
-                                        placeholder={t('sshProfileDialog.passphraseInputPlaceholder')}
-                                        className="w-full rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                                      />
+                              <textarea
+                                value={sshForm.privateKeysText}
+                                onChange={(event) => setSSHField('privateKeysText', event.target.value)}
+                                rows={4}
+                                placeholder={t('sshProfileDialog.privateKeysPlaceholder')}
+                                className={`${textFieldClassName} mt-4 min-h-[108px] resize-y bg-bg-card`}
+                              />
+
+                              <div className="mt-2 min-h-[20px]">
+                                {detectKeysMessage && (
+                                  <p className="text-xs text-text-secondary">{detectKeysMessage}</p>
+                                )}
+                              </div>
+
+                              {currentPrivateKeys.length > 0 && (
+                                <div className="mt-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowSSHPassphrases((previous) => !previous)}
+                                    className="flex items-center gap-2 text-sm font-medium text-text-primary"
+                                  >
+                                    {showSSHPassphrases ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                    <span>{showSSHPassphrases ? t('createWindow.sshPassphrasesHide') : t('createWindow.sshPassphrasesShow')}</span>
+                                  </button>
+
+                                  {showSSHPassphrases && (
+                                    <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                                      {currentPrivateKeys.map((keyPath) => (
+                                        <div key={keyPath}>
+                                          <label className="mb-1 block truncate text-xs text-text-secondary" title={keyPath}>
+                                            {keyPath}
+                                          </label>
+                                          <input
+                                            type="password"
+                                            value={sshPassphrases[keyPath] ?? ''}
+                                            onChange={(event) => setSSHPassphrases((previous) => ({
+                                              ...previous,
+                                              [keyPath]: event.target.value,
+                                            }))}
+                                            placeholder={t('sshProfileDialog.passphraseInputPlaceholder')}
+                                            className={`${textFieldClassName} bg-bg-card`}
+                                          />
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
+                                  )}
                                 </div>
                               )}
                             </div>
                           )}
-                        </div>
-                      )}
 
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {renderBooleanField('ssh-agent-forward', sshForm.agentForward, t('sshProfileDialog.agentForward'), (checked) => setSSHField('agentForward', checked))}
-                        {renderBooleanField('ssh-verify-host-keys', sshForm.verifyHostKeys, t('sshProfileDialog.verifyHostKeys'), (checked) => setSSHField('verifyHostKeys', checked))}
-                      </div>
-                    </Tabs.Content>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {renderBooleanField('ssh-agent-forward', sshForm.agentForward, t('sshProfileDialog.agentForward'), (checked) => setSSHField('agentForward', checked))}
+                            {renderBooleanField('ssh-verify-host-keys', sshForm.verifyHostKeys, t('sshProfileDialog.verifyHostKeys'), (checked) => setSSHField('verifyHostKeys', checked))}
+                          </div>
+                        </Tabs.Content>
 
-                    <Tabs.Content value="routing" className="space-y-5 data-[state=inactive]:hidden">
-                      <Tabs.Root
-                        value={sshForm.routingMode}
-                        onValueChange={(value) => setSSHField('routingMode', value as SSHRoutingMode)}
-                      >
-                        <Tabs.List className="flex flex-wrap gap-2">
-                          {(['direct', 'jumpHost', 'proxyCommand', 'socks', 'http'] as SSHRoutingMode[]).map((mode) => (
-                            <Tabs.Trigger
-                              key={mode}
-                              value={mode}
-                              className="rounded-full border border-border-subtle bg-bg-app px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover data-[state=active]:border-status-running/40 data-[state=active]:bg-status-running/10 data-[state=active]:text-text-primary"
-                            >
-                              {t(`sshProfileDialog.routing.${mode}` as any)}
-                            </Tabs.Trigger>
-                          ))}
-                        </Tabs.List>
-
-                        <div className="mt-4 rounded-[24px] border border-border-subtle bg-bg-app/55 p-5">
-                          <Tabs.Content value="direct" className="data-[state=inactive]:hidden">
-                            <div className="rounded-2xl border border-border-subtle bg-bg-card px-4 py-4 text-sm font-medium text-text-primary">
-                              {sshSummaryHost}:{sshForm.port.trim() || '22'}
-                            </div>
-                          </Tabs.Content>
-
-                          <Tabs.Content value="jumpHost" className="data-[state=inactive]:hidden">
-                            <label htmlFor="ssh-jump-host" className="mb-2 block text-sm font-medium text-text-primary">
-                              {t('sshProfileDialog.jumpHostLabel')}
-                            </label>
-                            <select
-                              id="ssh-jump-host"
-                              value={sshForm.jumpHostProfileId}
-                              onChange={(event) => setSSHField('jumpHostProfileId', event.target.value)}
-                              className="w-full rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
-                            >
-                              <option value="">{t('sshProfileDialog.jumpHostPlaceholder')}</option>
-                              {availableJumpHosts.map((profile) => (
-                                <option key={profile.id} value={profile.id}>
-                                  {profile.name}
-                                </option>
+                        <Tabs.Content value="routing" className="space-y-4 data-[state=inactive]:hidden">
+                          <Tabs.Root
+                            value={sshForm.routingMode}
+                            onValueChange={(value) => setSSHField('routingMode', value as SSHRoutingMode)}
+                          >
+                            <Tabs.List className="grid grid-cols-2 gap-2 xl:grid-cols-5">
+                              {(['direct', 'jumpHost', 'proxyCommand', 'socks', 'http'] as SSHRoutingMode[]).map((mode) => (
+                                <Tabs.Trigger
+                                  key={mode}
+                                  value={mode}
+                                  className="rounded-[16px] border border-border-subtle bg-bg-app px-3 py-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover data-[state=active]:border-status-running/40 data-[state=active]:bg-status-running/12 data-[state=active]:text-text-primary"
+                                >
+                                  {t(`sshProfileDialog.routing.${mode}` as any)}
+                                </Tabs.Trigger>
                               ))}
-                            </select>
-                          </Tabs.Content>
+                            </Tabs.List>
 
-                          <Tabs.Content value="proxyCommand" className="data-[state=inactive]:hidden">
-                            <label htmlFor="ssh-proxy-command" className="mb-2 block text-sm font-medium text-text-primary">
-                              {t('sshProfileDialog.proxyCommandLabel')}
-                            </label>
-                            <input
-                              id="ssh-proxy-command"
-                              type="text"
-                              value={sshForm.proxyCommand}
-                              onChange={(event) => setSSHField('proxyCommand', event.target.value)}
-                              placeholder="ssh -W %h:%p bastion"
-                              className="w-full rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                            />
-                          </Tabs.Content>
+                            <div className="mt-4 rounded-[20px] border border-border-subtle bg-bg-app/55 p-4">
+                              <Tabs.Content value="direct" className="data-[state=inactive]:hidden">
+                                <div className="rounded-[18px] border border-border-subtle bg-bg-card px-4 py-4">
+                                  <div className="text-sm font-semibold text-text-primary">
+                                    {sshSummaryHost}:{sshForm.port.trim() || '22'}
+                                  </div>
+                                  <p className="mt-1 text-sm leading-6 text-text-secondary">
+                                    {t('createWindow.sshRouteDirectHint')}
+                                  </p>
+                                </div>
+                              </Tabs.Content>
 
-                          <Tabs.Content value="socks" className="grid gap-4 xl:grid-cols-2 data-[state=inactive]:hidden">
+                              <Tabs.Content value="jumpHost" className="data-[state=inactive]:hidden">
+                                <label htmlFor="ssh-jump-host" className={fieldLabelClassName}>
+                                  {t('sshProfileDialog.jumpHostLabel')}
+                                </label>
+                                <select
+                                  id="ssh-jump-host"
+                                  value={sshForm.jumpHostProfileId}
+                                  onChange={(event) => setSSHField('jumpHostProfileId', event.target.value)}
+                                  className={`${textFieldClassName} bg-bg-card`}
+                                >
+                                  <option value="">{t('sshProfileDialog.jumpHostPlaceholder')}</option>
+                                  {availableJumpHosts.map((profile) => (
+                                    <option key={profile.id} value={profile.id}>
+                                      {profile.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Tabs.Content>
+
+                              <Tabs.Content value="proxyCommand" className="data-[state=inactive]:hidden">
+                                <label htmlFor="ssh-proxy-command" className={fieldLabelClassName}>
+                                  {t('sshProfileDialog.proxyCommandLabel')}
+                                </label>
+                                <input
+                                  id="ssh-proxy-command"
+                                  type="text"
+                                  value={sshForm.proxyCommand}
+                                  onChange={(event) => setSSHField('proxyCommand', event.target.value)}
+                                  placeholder="ssh -W %h:%p bastion"
+                                  className={`${textFieldClassName} bg-bg-card`}
+                                />
+                              </Tabs.Content>
+
+                              <Tabs.Content value="socks" className="grid gap-4 xl:grid-cols-2 data-[state=inactive]:hidden">
+                                <div>
+                                  <label htmlFor="ssh-socks-host" className={fieldLabelClassName}>
+                                    {t('sshProfileDialog.proxyHostLabel')}
+                                  </label>
+                                  <input
+                                    id="ssh-socks-host"
+                                    type="text"
+                                    value={sshForm.socksProxyHost}
+                                    onChange={(event) => setSSHField('socksProxyHost', event.target.value)}
+                                    placeholder="127.0.0.1"
+                                    className={`${textFieldClassName} bg-bg-card`}
+                                  />
+                                </div>
+                                <div>
+                                  <label htmlFor="ssh-socks-port" className={fieldLabelClassName}>
+                                    {t('sshProfileDialog.proxyPortLabel')}
+                                  </label>
+                                  <input
+                                    id="ssh-socks-port"
+                                    type="number"
+                                    min={1}
+                                    max={65535}
+                                    value={sshForm.socksProxyPort}
+                                    onChange={(event) => setSSHField('socksProxyPort', event.target.value)}
+                                    className={`${textFieldClassName} bg-bg-card`}
+                                  />
+                                </div>
+                              </Tabs.Content>
+
+                              <Tabs.Content value="http" className="grid gap-4 xl:grid-cols-2 data-[state=inactive]:hidden">
+                                <div>
+                                  <label htmlFor="ssh-http-host" className={fieldLabelClassName}>
+                                    {t('sshProfileDialog.proxyHostLabel')}
+                                  </label>
+                                  <input
+                                    id="ssh-http-host"
+                                    type="text"
+                                    value={sshForm.httpProxyHost}
+                                    onChange={(event) => setSSHField('httpProxyHost', event.target.value)}
+                                    placeholder="proxy.example.com"
+                                    className={`${textFieldClassName} bg-bg-card`}
+                                  />
+                                </div>
+                                <div>
+                                  <label htmlFor="ssh-http-port" className={fieldLabelClassName}>
+                                    {t('sshProfileDialog.proxyPortLabel')}
+                                  </label>
+                                  <input
+                                    id="ssh-http-port"
+                                    type="number"
+                                    min={1}
+                                    max={65535}
+                                    value={sshForm.httpProxyPort}
+                                    onChange={(event) => setSSHField('httpProxyPort', event.target.value)}
+                                    className={`${textFieldClassName} bg-bg-card`}
+                                  />
+                                </div>
+                              </Tabs.Content>
+                            </div>
+                          </Tabs.Root>
+                        </Tabs.Content>
+
+                        <Tabs.Content value="session" className="space-y-4 data-[state=inactive]:hidden">
+                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                             <div>
-                              <label htmlFor="ssh-socks-host" className="mb-2 block text-sm font-medium text-text-primary">
-                                {t('sshProfileDialog.proxyHostLabel')}
+                              <label htmlFor="ssh-remote-cwd" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.remoteCwdLabel')}
                               </label>
                               <input
-                                id="ssh-socks-host"
+                                id="ssh-remote-cwd"
                                 type="text"
-                                value={sshForm.socksProxyHost}
-                                onChange={(event) => setSSHField('socksProxyHost', event.target.value)}
-                                placeholder="127.0.0.1"
-                                className="w-full rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
+                                value={sshForm.defaultRemoteCwd}
+                                onChange={(event) => setSSHField('defaultRemoteCwd', event.target.value)}
+                                placeholder="/srv/app"
+                                className={textFieldClassName}
                               />
                             </div>
+
                             <div>
-                              <label htmlFor="ssh-socks-port" className="mb-2 block text-sm font-medium text-text-primary">
-                                {t('sshProfileDialog.proxyPortLabel')}
+                              <label htmlFor="ssh-remote-command" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.remoteCommandLabel')}
                               </label>
                               <input
-                                id="ssh-socks-port"
+                                id="ssh-remote-command"
+                                type="text"
+                                value={sshForm.remoteCommand}
+                                onChange={(event) => setSSHField('remoteCommand', event.target.value)}
+                                placeholder="tmux new -A -s work"
+                                className={textFieldClassName}
+                              />
+                            </div>
+
+                            <div>
+                              <label htmlFor="ssh-keepalive-interval" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.keepaliveIntervalLabel')}
+                              </label>
+                              <input
+                                id="ssh-keepalive-interval"
+                                type="number"
+                                min={0}
+                                value={sshForm.keepaliveInterval}
+                                onChange={(event) => setSSHField('keepaliveInterval', event.target.value)}
+                                className={textFieldClassName}
+                              />
+                            </div>
+
+                            <div>
+                              <label htmlFor="ssh-keepalive-count" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.keepaliveCountLabel')}
+                              </label>
+                              <input
+                                id="ssh-keepalive-count"
+                                type="number"
+                                min={0}
+                                value={sshForm.keepaliveCountMax}
+                                onChange={(event) => setSSHField('keepaliveCountMax', event.target.value)}
+                                className={textFieldClassName}
+                              />
+                            </div>
+
+                            <div className="xl:col-span-2">
+                              <label htmlFor="ssh-ready-timeout" className={fieldLabelClassName}>
+                                {t('sshProfileDialog.readyTimeoutLabel')}
+                              </label>
+                              <input
+                                id="ssh-ready-timeout"
                                 type="number"
                                 min={1}
-                                max={65535}
-                                value={sshForm.socksProxyPort}
-                                onChange={(event) => setSSHField('socksProxyPort', event.target.value)}
-                                className="w-full rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
+                                value={sshForm.readyTimeout}
+                                onChange={(event) => setSSHField('readyTimeout', event.target.value)}
+                                placeholder="15000"
+                                className={textFieldClassName}
                               />
                             </div>
-                          </Tabs.Content>
+                          </div>
 
-                          <Tabs.Content value="http" className="grid gap-4 xl:grid-cols-2 data-[state=inactive]:hidden">
-                            <div>
-                              <label htmlFor="ssh-http-host" className="mb-2 block text-sm font-medium text-text-primary">
-                                {t('sshProfileDialog.proxyHostLabel')}
-                              </label>
-                              <input
-                                id="ssh-http-host"
-                                type="text"
-                                value={sshForm.httpProxyHost}
-                                onChange={(event) => setSSHField('httpProxyHost', event.target.value)}
-                                placeholder="proxy.example.com"
-                                className="w-full rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                              />
-                            </div>
-                            <div>
-                              <label htmlFor="ssh-http-port" className="mb-2 block text-sm font-medium text-text-primary">
-                                {t('sshProfileDialog.proxyPortLabel')}
-                              </label>
-                              <input
-                                id="ssh-http-port"
-                                type="number"
-                                min={1}
-                                max={65535}
-                                value={sshForm.httpProxyPort}
-                                onChange={(event) => setSSHField('httpProxyPort', event.target.value)}
-                                className="w-full rounded-2xl border border-border-subtle bg-bg-card px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
-                              />
-                            </div>
-                          </Tabs.Content>
-                        </div>
-                      </Tabs.Root>
-                    </Tabs.Content>
-
-                    <Tabs.Content value="session" className="space-y-5 data-[state=inactive]:hidden">
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                        <div>
-                          <label htmlFor="ssh-remote-cwd" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.remoteCwdLabel')}
-                          </label>
-                          <input
-                            id="ssh-remote-cwd"
-                            type="text"
-                            value={sshForm.defaultRemoteCwd}
-                            onChange={(event) => setSSHField('defaultRemoteCwd', event.target.value)}
-                            placeholder="/srv/app"
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-
-                        <div>
-                          <label htmlFor="ssh-remote-command" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.remoteCommandLabel')}
-                          </label>
-                          <input
-                            id="ssh-remote-command"
-                            type="text"
-                            value={sshForm.remoteCommand}
-                            onChange={(event) => setSSHField('remoteCommand', event.target.value)}
-                            placeholder="tmux new -A -s work"
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-
-                        <div>
-                          <label htmlFor="ssh-keepalive-interval" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.keepaliveIntervalLabel')}
-                          </label>
-                          <input
-                            id="ssh-keepalive-interval"
-                            type="number"
-                            min={0}
-                            value={sshForm.keepaliveInterval}
-                            onChange={(event) => setSSHField('keepaliveInterval', event.target.value)}
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-
-                        <div>
-                          <label htmlFor="ssh-keepalive-count" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.keepaliveCountLabel')}
-                          </label>
-                          <input
-                            id="ssh-keepalive-count"
-                            type="number"
-                            min={0}
-                            value={sshForm.keepaliveCountMax}
-                            onChange={(event) => setSSHField('keepaliveCountMax', event.target.value)}
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-
-                        <div className="xl:col-span-2">
-                          <label htmlFor="ssh-ready-timeout" className="mb-2 block text-sm font-medium text-text-primary">
-                            {t('sshProfileDialog.readyTimeoutLabel')}
-                          </label>
-                          <input
-                            id="ssh-ready-timeout"
-                            type="number"
-                            min={1}
-                            value={sshForm.readyTimeout}
-                            onChange={(event) => setSSHField('readyTimeout', event.target.value)}
-                            placeholder="15000"
-                            className="w-full rounded-2xl border border-border-subtle bg-bg-app px-4 py-3 text-text-primary placeholder-text-disabled focus:outline-none focus:ring-2 focus:ring-status-running"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {renderBooleanField('ssh-reuse-session', sshForm.reuseSession, t('sshProfileDialog.reuseSession'), (checked) => setSSHField('reuseSession', checked))}
-                        {renderBooleanField('ssh-warn-close', sshForm.warnOnClose, t('sshProfileDialog.warnOnClose'), (checked) => setSSHField('warnOnClose', checked))}
-                        {renderBooleanField('ssh-skip-banner', sshForm.skipBanner, t('sshProfileDialog.skipBanner'), (checked) => setSSHField('skipBanner', checked))}
-                        {renderBooleanField('ssh-x11', sshForm.x11, t('createWindow.sshX11Label'), (checked) => setSSHField('x11', checked))}
-                      </div>
-                    </Tabs.Content>
-                  </section>
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {renderBooleanField('ssh-reuse-session', sshForm.reuseSession, t('sshProfileDialog.reuseSession'), (checked) => setSSHField('reuseSession', checked))}
+                            {renderBooleanField('ssh-warn-close', sshForm.warnOnClose, t('sshProfileDialog.warnOnClose'), (checked) => setSSHField('warnOnClose', checked))}
+                            {renderBooleanField('ssh-skip-banner', sshForm.skipBanner, t('sshProfileDialog.skipBanner'), (checked) => setSSHField('skipBanner', checked))}
+                            {renderBooleanField('ssh-x11', sshForm.x11, t('createWindow.sshX11Label'), (checked) => setSSHField('x11', checked))}
+                          </div>
+                        </Tabs.Content>
+                      </section>
+                    </div>
+                  </div>
                 </Tabs.Root>
               </Tabs.Content>
             )}
           </div>
         </Tabs.Root>
 
-        <div className="mt-6 flex justify-end gap-3 border-t border-border-subtle pt-4">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => {
-              onOpenChange(false)
-              resetDialog()
-            }}
-            className="rounded-2xl"
-          >
-            {t('common.cancel')}
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={activeTab === 'local'
-              ? (!workingDirectory || !!pathError || isValidating || isCreating)
-              : isSavingSSH}
-            aria-busy={activeTab === 'local' ? isCreating : isSavingSSH}
-            className="rounded-2xl"
-          >
+        <div className="mt-4 flex flex-col gap-3 border-t border-border-subtle/80 bg-bg-card/95 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="max-w-2xl text-sm leading-6 text-text-secondary">
             {activeTab === 'local'
-              ? (isCreating ? t('common.creating') : t('common.create'))
-              : (isSavingSSH ? t('createWindow.sshSaving') : t('createWindow.sshSave'))}
-          </Button>
+              ? t('createWindow.mode.localHint')
+              : t('createWindow.sshPreviewSaveHint')}
+          </p>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                onOpenChange(false)
+                resetDialog()
+              }}
+              className={compactButtonClassName}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={activeTab === 'local'
+                ? (!workingDirectory || !!pathError || isValidating || isCreating)
+                : isSavingSSH}
+              aria-busy={activeTab === 'local' ? isCreating : isSavingSSH}
+              className={compactButtonClassName}
+            >
+              {activeTab === 'local'
+                ? (isCreating ? t('common.creating') : t('common.create'))
+                : (isSavingSSH ? t('createWindow.sshSaving') : t('createWindow.sshSave'))}
+            </Button>
+          </div>
         </div>
       </form>
     </Dialog>

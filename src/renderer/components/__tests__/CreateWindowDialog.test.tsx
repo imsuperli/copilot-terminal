@@ -120,7 +120,7 @@ describe('CreateWindowDialog', () => {
     expect(screen.getByRole('combobox', { name: /Shell 程序/ })).toBeInTheDocument()
 
     await waitFor(() => {
-      expect(screen.getByText('(默认)C:\\Program Files\\PowerShell\\7\\pwsh.exe')).toBeInTheDocument()
+      expect(screen.getAllByText('(默认)C:\\Program Files\\PowerShell\\7\\pwsh.exe').length).toBeGreaterThan(0)
     })
 
     const dialog = screen.getByRole('dialog')
