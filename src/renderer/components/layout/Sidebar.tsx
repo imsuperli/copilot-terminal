@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2, Download } from 'lucide-react';
+import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
@@ -19,7 +19,6 @@ interface SidebarProps {
   appName?: string;
   version?: string;
   onCreateWindow?: () => void;
-  onImportSSHProfiles?: () => void;
   onCreateGroup?: () => void;
   isDialogOpen?: boolean;
   onDialogChange?: (open: boolean) => void;
@@ -31,14 +30,12 @@ interface SidebarProps {
   onTabChange?: (tab: 'all' | 'active' | 'archived' | string) => void;
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
-  importingSSHProfiles?: boolean;
 }
 
 export function Sidebar({
   appName = 'Copilot-Terminal',
   version = '0.1.0',
   onCreateWindow,
-  onImportSSHProfiles,
   onCreateGroup,
   isDialogOpen = false,
   onDialogChange,
@@ -50,7 +47,6 @@ export function Sidebar({
   onTabChange,
   searchQuery = '',
   onSearchChange,
-  importingSSHProfiles = false,
 }: SidebarProps) {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
@@ -83,9 +79,9 @@ export function Sidebar({
   const activeGroups = groups.filter(g => !g.archived);
   const archivedGroups = groups.filter(g => g.archived);
 
-  // 按类型分类窗口
-  const localActiveWindows = activeVisibleWindows.filter(w => w.kind !== 'ssh');
-  const sshActiveWindows = activeVisibleWindows.filter(w => w.kind === 'ssh');
+  // 按类型分类窗口（包含所有窗口，不过滤 standaloneSSHWindowIds）
+  const localActiveWindows = activeWindows.filter(w => w.kind !== 'ssh');
+  const sshActiveWindows = activeWindows.filter(w => w.kind === 'ssh');
 
   // 各标签的计数
   const allCount = activeVisibleWindows.length + archivedVisibleWindows.length + groups.length + (sshEnabled ? sshProfileCount : 0);

@@ -634,9 +634,13 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'sidebar.clearActiveWindows': 'Clear active terminals',
   'sidebar.clearArchivedWindows': 'Clear archived terminals',
   'sidebar.clearAllWindows': 'Clear all terminals',
+  'sidebar.clearLocalWindows': 'Clear local terminals',
+  'sidebar.clearSSHWindows': 'Clear remote terminals',
   'sidebar.clearArchived': 'Clear archived',
   'sidebar.confirmClearActiveTitle': 'Clear all terminals',
   'sidebar.confirmClearArchivedTitle': 'Clear all archived terminals',
+  'sidebar.confirmClearLocalTitle': 'Clear all local terminals',
+  'sidebar.confirmClearSSHTitle': 'Clear all remote terminals',
   'sidebar.confirmClearActiveDescription': 'Delete all {count} windows? This action cannot be undone.',
   'sidebar.confirmClearArchivedDescription': 'Delete all {count} archived windows? This action cannot be undone.',
 

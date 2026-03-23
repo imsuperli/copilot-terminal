@@ -76,7 +76,6 @@ function AppContent() {
   const [sshProfiles, setSSHProfiles] = useState<SSHProfile[]>([]);
   const [sshCredentialStates, setSSHCredentialStates] = useState<Record<string, SSHCredentialState>>({});
   const [connectingSSHProfileId, setConnectingSSHProfileId] = useState<string | null>(null);
-  const [importingSSHProfiles, setImportingSSHProfiles] = useState(false);
   const [sshEnabled, setSSHEnabled] = useState(false);
   const [currentTab, setCurrentTab] = useState<'all' | 'active' | 'archived' | string>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
@@ -438,26 +437,6 @@ function AppContent() {
     }
   }, []);
 
-  const handleImportSSHProfiles = useCallback(async () => {
-    if (importingSSHProfiles) {
-      return;
-    }
-
-    setImportingSSHProfiles(true);
-    try {
-      const response = await window.electronAPI.importOpenSSHProfiles();
-      if (!response?.success) {
-        throw new Error(response?.error || 'Failed to import OpenSSH profiles');
-      }
-
-      await loadSSHProfiles();
-    } catch (error) {
-      console.error('Failed to import OpenSSH profiles:', error);
-    } finally {
-      setImportingSSHProfiles(false);
-    }
-  }, [importingSSHProfiles, loadSSHProfiles]);
-
   const handleConnectSSHProfile = useCallback(async (profile: SSHProfile) => {
     if (connectingSSHProfileId) {
       return;
@@ -605,11 +584,9 @@ function AppContent() {
               appName={appVersion.name}
               version={appVersion.version}
               onCreateWindow={handleCreateWindow}
-              onImportSSHProfiles={handleImportSSHProfiles}
               sshEnabled={sshEnabled}
               sshProfiles={sshProfiles}
               onSSHProfileSaved={handleSSHProfileSaved}
-              importingSSHProfiles={importingSSHProfiles}
               sshProfileCount={sshProfiles.length}
               onCreateGroup={handleCreateGroup}
               isDialogOpen={isDialogOpen}
