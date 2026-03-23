@@ -719,7 +719,7 @@ export function CreateWindowDialog({
     </label>
   )
 
-  const sectionShellClassName = 'rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_12px_28px_rgba(0,0,0,0.22)]'
+  const sectionShellClassName = 'rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_8px_20px_rgba(0,0,0,0.18)]'
   const fieldLabelClassName = 'mb-1.5 block text-[13px] font-medium text-[rgb(var(--foreground))]'
   const textFieldClassName = 'w-full rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-2.5 text-sm text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] [color-scheme:dark] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-[border-color,box-shadow] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]'
   const selectTriggerClassName = 'flex w-full min-w-0 items-center justify-between gap-2 rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-2.5 text-left text-sm text-[rgb(var(--foreground))] [color-scheme:dark] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-[border-color,box-shadow] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]'
@@ -757,10 +757,10 @@ export function CreateWindowDialog({
       title={isEditingSSHProfile ? t('sshProfileDialog.editTitle') : t('createWindow.unifiedTitle')}
       showCloseButton
       closeLabel={t('common.close')}
-      contentClassName="!w-[min(1240px,96vw)] !max-w-none flex max-h-[92vh] flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]"
-      headerClassName="border-b border-[rgb(var(--border))] px-5 pt-5 pb-4"
-      bodyClassName="min-h-0 flex-1 px-5 pb-5 [color-scheme:dark]"
-      titleClassName="text-[22px] tracking-[-0.01em]"
+      contentClassName="!w-[min(920px,94vw)] !max-w-none flex max-h-[90vh] flex-col overflow-hidden rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]"
+      headerClassName="border-b border-[rgb(var(--border))] px-4 pt-4 pb-3"
+      bodyClassName="min-h-0 flex-1 px-4 pb-4 [color-scheme:dark]"
+      titleClassName="text-[20px] tracking-[-0.01em]"
     >
       <form onSubmit={handleSubmit} role="form" className="flex h-full min-h-0 flex-col">
         <Tabs.Root
@@ -768,9 +768,9 @@ export function CreateWindowDialog({
           onValueChange={(value) => setActiveTab(value as CreateWindowTab)}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-2.5">
+          <div className="rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-2">
             <Tabs.List
-              className="inline-flex w-fit flex-wrap gap-1 rounded-[16px]"
+              className="inline-flex w-fit flex-wrap gap-1 rounded-[14px]"
               aria-label={t('createWindow.modeTabsAriaLabel')}
             >
               {!isEditingSSHProfile && renderTabTrigger(
@@ -788,10 +788,9 @@ export function CreateWindowDialog({
 
           <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
             <Tabs.Content value="local" className="data-[state=inactive]:hidden">
-              <div className="mx-auto max-w-[1120px]">
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="min-w-0 space-y-4">
-                    <section className={`${sectionShellClassName} p-4 md:p-5`}>
+              <div className="mx-auto max-w-[880px]">
+                <div className="space-y-4">
+                    <section className={`${sectionShellClassName} p-4`}>
                       <div className="mb-4 flex flex-col gap-3 border-b border-[rgb(var(--border))] pb-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
@@ -941,61 +940,6 @@ export function CreateWindowDialog({
                         <p className="text-sm text-status-error">{createError}</p>
                       </div>
                     )}
-                  </div>
-
-                  <aside className="self-start space-y-4 xl:sticky xl:top-0">
-                    <section className={asideCardClassName}>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
-                        {t('createWindow.localPreviewTitle')}
-                      </div>
-
-                      <div className="mt-3 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-4">
-                        <div className="truncate text-lg font-semibold text-[rgb(var(--foreground))]" title={localSummaryName}>
-                          {localSummaryName}
-                        </div>
-                        <div className={`mt-3 inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium ${localStatusClassName}`}>
-                          {localStatusLabel}
-                        </div>
-                      </div>
-
-                      <div className="mt-3 space-y-3">
-                        <div className="rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
-                            {t('createWindow.workingDirectoryLabel')}
-                          </div>
-                          <div className="mt-1 break-all text-sm font-medium text-[rgb(var(--foreground))]">
-                            {localSummaryDirectory}
-                          </div>
-                        </div>
-
-                        <div className="rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
-                            {t('createWindow.shellLabel')}
-                          </div>
-                          <div className="mt-1 break-all text-sm font-medium text-[rgb(var(--foreground))]">
-                            {localSummaryShell}
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-
-                    <section className={asideCardClassName}>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
-                        {t('createWindow.localSectionTitle')}
-                      </div>
-
-                      <div className="mt-4 space-y-2">
-                        <div className="flex items-center justify-between rounded-[14px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3 text-sm text-[rgb(var(--foreground))]">
-                          <span>{t('createWindow.workingDirectoryLabel')}</span>
-                          <span className="text-xs font-medium text-status-error">*</span>
-                        </div>
-                        <div className="flex items-center justify-between rounded-[14px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3 text-sm text-[rgb(var(--foreground))]">
-                          <span>{t('createWindow.shellLabel')}</span>
-                          <span className="text-xs text-[rgb(var(--muted-foreground))]">{t('createWindow.shellAutoFallback')}</span>
-                        </div>
-                      </div>
-                    </section>
-                  </aside>
                 </div>
               </div>
             </Tabs.Content>
@@ -1005,74 +949,16 @@ export function CreateWindowDialog({
                 <Tabs.Root
                   value={activeSSHSettingsTab}
                   onValueChange={(value) => setActiveSSHSettingsTab(value as SSHSettingsTab)}
-                  className="mx-auto max-w-[1120px]"
+                  className="mx-auto max-w-[880px]"
                 >
-                  <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-                    <aside className="self-start space-y-4 xl:sticky xl:top-0">
-                      <section className={asideCardClassName}>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
-                          {t('createWindow.sshPreviewTitle')}
-                        </div>
-
-                        <div className="mt-3 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-4">
-                          <div className="truncate text-lg font-semibold text-[rgb(var(--foreground))]" title={sshSummaryName}>
-                            {sshSummaryName}
-                          </div>
-                          <div className="mt-1 truncate text-sm text-[rgb(var(--muted-foreground))]">
-                            {sshSummaryUser}@{sshSummaryHost}:{sshForm.port.trim() || '22'}
-                          </div>
-                        </div>
-
-                        <div className="mt-3 space-y-3">
-                          {renderSSHSummaryItem(t('sshProfileDialog.authLabel'), sshSummaryAuth)}
-                          {renderSSHSummaryItem(t('createWindow.sshRoutingTitle'), sshSummaryRoute)}
-                          {renderSSHSummaryItem(t('sshProfileDialog.remoteCwdLabel'), sshSummaryRemoteCwd)}
-                        </div>
-                      </section>
-
-                      <section className={asideCardClassName}>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
-                          {t('createWindow.sshDefaultsTitle')}
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {sshForm.verifyHostKeys && (
-                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
-                              {t('sshProfileDialog.verifyHostKeys')}
-                            </span>
-                          )}
-                          {sshForm.reuseSession && (
-                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
-                              {t('sshProfileDialog.reuseSession')}
-                            </span>
-                          )}
-                          {sshForm.warnOnClose && (
-                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
-                              {t('sshProfileDialog.warnOnClose')}
-                            </span>
-                          )}
-                          {sshForm.keepaliveInterval.trim() && (
-                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
-                              {t('createWindow.sshDefaultsKeepalive', { seconds: sshForm.keepaliveInterval.trim() || '30' })}
-                            </span>
-                          )}
-                          {sshForm.x11 && (
-                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
-                              X11
-                            </span>
-                          )}
-                        </div>
-                      </section>
-                    </aside>
-
-                    <div className="min-w-0 space-y-4">
+                  <div className="space-y-4">
                       {sshError && (
                         <div className="rounded-[18px] border border-status-error bg-status-error/10 px-4 py-3" role="alert">
                           <p className="text-sm text-status-error">{sshError}</p>
                         </div>
                       )}
 
-                      <section className={`${sectionShellClassName} p-4 md:p-5`}>
+                      <section className={`${sectionShellClassName} p-4`}>
                         <Tabs.List
                           className="mb-4 flex flex-wrap gap-2 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-1.5"
                           aria-label={t('createWindow.sshSettingsTabsAriaLabel')}
@@ -1463,7 +1349,6 @@ export function CreateWindowDialog({
                           </div>
                         </Tabs.Content>
                       </section>
-                    </div>
                   </div>
                 </Tabs.Root>
               </Tabs.Content>
