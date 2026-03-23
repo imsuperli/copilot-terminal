@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SSHSessionStatusBar } from '../SSHSessionStatusBar';
+import { WindowStatus } from '../../types/window';
 
 describe('SSHSessionStatusBar', () => {
   beforeEach(() => {
@@ -33,6 +34,7 @@ describe('SSHSessionStatusBar', () => {
       <SSHSessionStatusBar
         windowId="win-1"
         paneId="pane-1"
+        paneStatus={WindowStatus.WaitingForInput}
         currentCwd="/srv/app"
       />,
     );
@@ -61,6 +63,7 @@ describe('SSHSessionStatusBar', () => {
       <SSHSessionStatusBar
         windowId="win-1"
         paneId="pane-1"
+        paneStatus={WindowStatus.Running}
         currentCwd="/srv/app"
       />,
     );
@@ -87,11 +90,52 @@ describe('SSHSessionStatusBar', () => {
       <SSHSessionStatusBar
         windowId="win-1"
         paneId="pane-1"
+        paneStatus={WindowStatus.Running}
         currentCwd="/srv/app"
         onClose={onClose}
       />,
     );
 
     expect(await screen.findByRole('button', { name: '隐藏 SSH 监控' })).toBeInTheDocument();
+  });
+
+  it('does not query metrics for paused panes', () => {
+    render(
+      <SSHSessionStatusBar
+        windowId="win-1"
+        paneId="pane-1"
+        paneStatus={WindowStatus.Paused}
+        currentCwd="/srv/app"
+      />,
+    );
+
+    expect(window.electronAPI.getSSHSessionMetrics).not.toHaveBeenCalled();
+    expect(screen.getAllByText('--').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the status bar quiet when the main process reports no active metrics session', async () => {
+    vi.mocked(window.electronAPI.getSSHSessionMetrics).mockResolvedValueOnce({
+      success: true,
+      data: null,
+    });
+
+    render(
+      <SSHSessionStatusBar
+        windowId="win-1"
+        paneId="pane-1"
+        paneStatus={WindowStatus.WaitingForInput}
+        currentCwd="/srv/app"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.getSSHSessionMetrics).toHaveBeenCalledWith({
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app',
+      });
+    });
+
+    expect(screen.queryByText('监控不可用')).not.toBeInTheDocument();
   });
 });

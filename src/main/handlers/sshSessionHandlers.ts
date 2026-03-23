@@ -245,6 +245,10 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
 
       return successResponse(await processManager.getSSHSessionMetrics(config.windowId, config.paneId, config.path));
     } catch (error) {
+      if (isExpectedMissingSSHSessionError(error)) {
+        return successResponse(null);
+      }
+
       return errorResponse(error);
     }
   });
@@ -395,6 +399,16 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
       return errorResponse(error);
     }
   });
+}
+
+function isExpectedMissingSSHSessionError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.startsWith('Pane not found:')
+    || error.message.startsWith('SSH SFTP session not found')
+    || error.message.startsWith('Process already exited:');
 }
 
 async function requireSSHProfile(

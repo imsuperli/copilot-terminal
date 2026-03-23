@@ -727,4 +727,42 @@ describe('registerSSHSessionHandlers', () => {
       '/srv/app/releases',
     );
   });
+
+  it('returns a quiet empty metrics response when the ssh pane is no longer active', async () => {
+    const processManager = {
+      getSSHSessionMetrics: vi.fn().mockRejectedValue(new Error('Pane not found: win-1/pane-1')),
+    };
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: null,
+      sshVaultService: null,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('get-ssh-session-metrics');
+    await expect(handler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      path: '/srv/app',
+    })).resolves.toEqual({
+      success: true,
+      data: null,
+    });
+    expect(processManager.getSSHSessionMetrics).toHaveBeenCalledWith('win-1', 'pane-1', '/srv/app');
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+    consoleErrorSpy.mockRestore();
+  });
 });

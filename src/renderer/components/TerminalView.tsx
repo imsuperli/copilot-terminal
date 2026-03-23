@@ -736,6 +736,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           <SSHSessionStatusBar
             windowId={terminalWindow.id}
             paneId={activePane?.id ?? null}
+            paneStatus={activePane?.status ?? null}
             currentCwd={activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null}
             onClose={() => setSSHMetricsOpen(false)}
           />

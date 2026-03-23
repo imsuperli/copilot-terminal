@@ -308,7 +308,7 @@ export interface ElectronAPI {
   addSSHSessionPortForward: (config: AddSSHSessionPortForwardConfig) => Promise<IpcResponse<ActiveSSHPortForward>>;
   removeSSHSessionPortForward: (config: RemoveSSHSessionPortForwardConfig) => Promise<IpcResponse<void>>;
   listSSHSftpDirectory: (config: ListSSHSftpDirectoryConfig) => Promise<IpcResponse<SSHSftpDirectoryListing>>;
-  getSSHSessionMetrics: (config: GetSSHSessionMetricsConfig) => Promise<IpcResponse<SSHSessionMetrics>>;
+  getSSHSessionMetrics: (config: GetSSHSessionMetricsConfig) => Promise<IpcResponse<SSHSessionMetrics | null>>;
   downloadSSHSftpFile: (config: DownloadSSHSftpFileConfig) => Promise<IpcResponse<string | null>>;
   uploadSSHSftpFiles: (config: UploadSSHSftpFilesConfig) => Promise<IpcResponse<{ uploadedCount: number }>>;
   uploadSSHSftpDirectory: (config: UploadSSHSftpDirectoryConfig) => Promise<IpcResponse<{ uploadedCount: number }>>;

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, AlertCircle, FolderKanban, HardDrive, MemoryStick, Server, X } from 'lucide-react';
 import type { SSHSessionMetrics } from '../../shared/types/ssh';
+import { WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 import { AppTooltip } from './ui/AppTooltip';
 
@@ -9,6 +10,7 @@ const METRICS_REFRESH_INTERVAL_MS = 15000;
 interface SSHSessionStatusBarProps {
   windowId: string | null;
   paneId: string | null;
+  paneStatus?: WindowStatus | null;
   currentCwd?: string | null;
   onClose?: () => void;
 }
@@ -16,6 +18,7 @@ interface SSHSessionStatusBarProps {
 export function SSHSessionStatusBar({
   windowId,
   paneId,
+  paneStatus,
   currentCwd,
   onClose,
 }: SSHSessionStatusBarProps) {
@@ -25,9 +28,10 @@ export function SSHSessionStatusBar({
   const [error, setError] = useState('');
 
   const targetPath = useMemo(() => currentCwd?.trim() || undefined, [currentCwd]);
+  const canQueryMetrics = paneStatus === WindowStatus.Running || paneStatus === WindowStatus.WaitingForInput;
 
   const loadMetrics = useCallback(async () => {
-    if (!windowId || !paneId || !window.electronAPI?.getSSHSessionMetrics) {
+    if (!windowId || !paneId || !canQueryMetrics || !window.electronAPI?.getSSHSessionMetrics) {
       return;
     }
 
@@ -41,8 +45,14 @@ export function SSHSessionStatusBar({
         ...(targetPath ? { path: targetPath } : {}),
       });
 
-      if (!response.success || !response.data) {
+      if (!response.success) {
         throw new Error(response.error || t('sshSessionStatusBar.loadError'));
+      }
+
+      if (!response.data) {
+        setMetrics(null);
+        setError('');
+        return;
       }
 
       setMetrics(response.data);
@@ -51,10 +61,17 @@ export function SSHSessionStatusBar({
     } finally {
       setIsLoading(false);
     }
-  }, [paneId, t, targetPath, windowId]);
+  }, [canQueryMetrics, paneId, t, targetPath, windowId]);
 
   useEffect(() => {
     if (!windowId || !paneId) {
+      return;
+    }
+
+    if (!canQueryMetrics) {
+      setIsLoading(false);
+      setMetrics(null);
+      setError('');
       return;
     }
 
@@ -67,7 +84,7 @@ export function SSHSessionStatusBar({
     return () => {
       window.clearInterval(timer);
     };
-  }, [loadMetrics, paneId, windowId]);
+  }, [canQueryMetrics, loadMetrics, paneId, windowId]);
 
   if (!windowId || !paneId) {
     return null;
