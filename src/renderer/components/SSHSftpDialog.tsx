@@ -1,19 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  ArrowUp,
   CheckCircle2,
   ChevronRight,
+  Crosshair,
   Download,
   Filter,
   Folder,
   FolderPlus,
   FolderUp,
-  HardDriveDownload,
-  HardDriveUpload,
   HelpCircle,
   Info,
   RefreshCw,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import type { SSHSftpDirectoryListing, SSHSftpEntry } from '../../shared/types/ssh';
@@ -66,6 +67,7 @@ export function SSHSftpDialog({
   const [showHelp, setShowHelp] = useState(false);
   const [isEditingPath, setIsEditingPath] = useState(false);
   const [followTerminalCwd, setFollowTerminalCwd] = useState(true);
+  const [selectedEntryPath, setSelectedEntryPath] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState<PanelNotice | null>(null);
   const [panelWidth, setPanelWidth] = useState<number>(() => readStoredPanelWidth());
@@ -148,6 +150,7 @@ export function SSHSftpDialog({
     setDirectoryName('');
     setCreatingDirectory(false);
     setDeletingEntry(null);
+    setSelectedEntryPath(null);
     setShowHelp(false);
     setIsEditingPath(false);
     setFollowTerminalCwd(true);
@@ -225,6 +228,7 @@ export function SSHSftpDialog({
 
   const handleManualNavigate = useCallback(async (targetPath: string) => {
     setFollowTerminalCwd(false);
+    setSelectedEntryPath(null);
     await loadDirectory(targetPath);
   }, [loadDirectory]);
 
@@ -239,12 +243,23 @@ export function SSHSftpDialog({
     setIsEditingPath(false);
   }, [handleManualNavigate, pathInput]);
 
+  const handlePathEditorBlur = useCallback((event: React.FocusEvent<HTMLFormElement>) => {
+    const nextFocusedElement = event.relatedTarget as Node | null;
+    if (nextFocusedElement && event.currentTarget.contains(nextFocusedElement)) {
+      return;
+    }
+
+    setPathInput(listing?.path || currentCwd || initialPath || '~');
+    setIsEditingPath(false);
+  }, [currentCwd, initialPath, listing?.path]);
+
   const handleNavigateUp = useCallback(async () => {
     const currentPathValue = listing?.path;
     if (!currentPathValue) {
       return;
     }
 
+    setSelectedEntryPath(null);
     await handleManualNavigate(getParentSftpPath(currentPathValue));
   }, [handleManualNavigate, listing?.path]);
 
@@ -255,6 +270,7 @@ export function SSHSftpDialog({
     }
 
     setFollowTerminalCwd(true);
+    setSelectedEntryPath(null);
     await loadDirectory(nextPath);
   }, [currentCwd, loadDirectory]);
 
@@ -530,6 +546,7 @@ export function SSHSftpDialog({
           entries: currentListing.entries.filter((entry) => entry.path !== deletingEntry.path),
         };
       });
+      setSelectedEntryPath((currentPath) => (currentPath === deletingEntry.path ? null : currentPath));
       setDeletingEntry(null);
       await loadDirectory(listing.path);
       showNotice({
@@ -654,7 +671,11 @@ export function SSHSftpDialog({
         <div className="border-b border-zinc-800 px-3 py-3">
           <div className="mb-2 flex items-center gap-2">
             {isEditingPath ? (
-              <form className="flex min-w-0 flex-1 items-center gap-2" onSubmit={handleSubmitPath}>
+              <form
+                className="flex min-w-0 flex-1 items-center gap-2"
+                onSubmit={handleSubmitPath}
+                onBlur={handlePathEditorBlur}
+              >
                 <input
                   autoFocus
                   value={pathInput}
@@ -682,14 +703,14 @@ export function SSHSftpDialog({
                 <button
                   type="button"
                   onClick={() => setIsEditingPath(true)}
-                  className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-md border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto rounded-md border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-left"
                   data-testid="ssh-sftp-breadcrumbs"
                 >
                   {pathSegments.map((segment, index) => (
                     <React.Fragment key={segment.path}>
-                      {index > 0 && <ChevronRight size={12} className="shrink-0 text-zinc-600" />}
+                      {index > 0 && <ChevronRight size={11} className="shrink-0 text-zinc-600" />}
                       <span
-                        className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                        className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
                       >
                         {segment.label}
                       </span>
@@ -711,7 +732,7 @@ export function SSHSftpDialog({
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <IconToolbarButton
               label={t('sshSftpDialog.up')}
-              icon={<FolderUp size={14} />}
+              icon={<ArrowUp size={14} />}
               onClick={() => void handleNavigateUp()}
               disabled={isLoading || !listing}
             />
@@ -723,20 +744,20 @@ export function SSHSftpDialog({
             />
             <IconToolbarButton
               label={t('sshSftpDialog.syncCwd')}
-              icon={<Folder size={14} />}
+              icon={<Crosshair size={14} />}
               onClick={() => void handleSyncCurrentCwd()}
               disabled={!currentCwd?.trim()}
               active={followTerminalCwd}
             />
             <IconToolbarButton
               label={t('sshSftpDialog.uploadFiles')}
-              icon={<HardDriveUpload size={14} />}
+              icon={<Upload size={14} />}
               onClick={() => void handleUploadFiles()}
               disabled={!listing || isUploadingFiles}
             />
             <IconToolbarButton
               label={t('sshSftpDialog.uploadDirectory')}
-              icon={<HardDriveDownload size={14} />}
+              icon={<FolderUp size={14} />}
               onClick={() => void handleUploadDirectory()}
               disabled={!listing || isUploadingDirectory}
             />
@@ -842,27 +863,36 @@ export function SSHSftpDialog({
             {filteredEntries.map((entry) => {
               const isDirectory = isDirectoryEntry(entry);
               const isDownloading = downloadingPath === entry.path;
+              const isSelected = selectedEntryPath === entry.path;
 
               return (
                 <div
                   key={entry.path}
-                  className="group flex items-center gap-2 rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-zinc-800 hover:bg-zinc-900/80"
+                  className={`group flex items-center gap-2 rounded-lg border px-2 py-2 transition-colors ${
+                    isSelected
+                      ? 'border-blue-500/40 bg-blue-500/10'
+                      : 'border-transparent hover:border-zinc-800 hover:bg-zinc-900/80'
+                  }`}
                 >
                   <button
                     type="button"
                     aria-label={entry.name}
-                    onClick={() => void (
-                      isDirectory
-                        ? handleManualNavigate(entry.symlinkTargetPath || entry.path)
-                        : handleDownloadFile(entry)
-                    )}
+                    onClick={() => {
+                      if (isDirectory) {
+                        setSelectedEntryPath(null);
+                        void handleManualNavigate(entry.symlinkTargetPath || entry.path);
+                        return;
+                      }
+
+                      setSelectedEntryPath(entry.path);
+                    }}
                     className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     title={entry.path}
                   >
                     {isDirectory ? (
                       <Folder size={16} className="shrink-0 text-blue-400" />
                     ) : (
-                      <Download size={16} className="shrink-0 text-zinc-500" />
+                      <span className="w-4 shrink-0" />
                     )}
 
                     <div className="min-w-0">
@@ -883,15 +913,19 @@ export function SSHSftpDialog({
                     </div>
                   </button>
 
-                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  <div className={`flex shrink-0 items-center gap-1 transition-opacity ${
+                    isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                  }`}>
                     {isDirectory ? (
                       <>
                         <InlineActionButton
                           label={t('sshSftpDialog.open')}
+                          icon={<Folder size={13} />}
                           onClick={() => void handleManualNavigate(entry.symlinkTargetPath || entry.path)}
                         />
                         <InlineActionButton
                           label={isDownloading ? t('common.loading') : t('sshSftpDialog.downloadDirectory')}
+                          icon={<Download size={13} />}
                           onClick={() => void handleDownloadDirectory(entry)}
                           disabled={isDownloading}
                         />
@@ -899,6 +933,7 @@ export function SSHSftpDialog({
                     ) : (
                       <InlineActionButton
                         label={isDownloading ? t('common.loading') : t('sshSftpDialog.download')}
+                        icon={isDownloading ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
                         onClick={() => void handleDownloadFile(entry)}
                         disabled={isDownloading}
                       />
@@ -975,22 +1010,27 @@ function IconToolbarButton({
 
 function InlineActionButton({
   label,
+  icon,
   onClick,
   disabled = false,
 }: {
   label: string;
+  icon: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="rounded-md px-2 py-1 text-xs font-medium text-blue-300 transition-colors hover:bg-blue-500/10 hover:text-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
-    >
-      {label}
-    </button>
+    <AppTooltip content={label}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        disabled={disabled}
+        className="flex h-7 w-7 items-center justify-center rounded-md text-blue-300 transition-colors hover:bg-blue-500/10 hover:text-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {icon}
+      </button>
+    </AppTooltip>
   );
 }
 

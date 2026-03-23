@@ -126,6 +126,47 @@ describe('SSHSftpDialog', () => {
     expect(screen.getByTestId('ssh-sftp-breadcrumbs')).toBeInTheDocument();
   });
 
+  it('restores breadcrumbs when path editing loses focus', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.listSSHSftpDirectory).mockResolvedValueOnce({
+      success: true,
+      data: {
+        path: '/srv/app',
+        entries: [],
+      },
+    });
+
+    render(
+      <div>
+        <SSHSftpDialog
+          open={true}
+          onOpenChange={() => undefined}
+          windowId="win-1"
+          paneId="pane-1"
+          initialPath="/srv/app"
+        />
+        <button type="button">outside</button>
+      </div>,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledWith({
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app',
+      });
+    });
+
+    await user.click(screen.getByTestId('ssh-sftp-breadcrumbs'));
+    const pathInput = screen.getByTestId('ssh-sftp-path-input');
+    await user.clear(pathInput);
+    await user.type(pathInput, '/tmp/should-not-apply');
+    await user.click(screen.getByRole('button', { name: 'outside' }));
+
+    expect(screen.getByTestId('ssh-sftp-breadcrumbs')).toBeInTheDocument();
+    expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledTimes(1);
+  });
+
   it('uses a narrower default width and supports drag resizing', async () => {
     vi.mocked(window.electronAPI.listSSHSftpDirectory).mockResolvedValueOnce({
       success: true,
@@ -297,7 +338,10 @@ describe('SSHSftpDialog', () => {
       expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledTimes(1);
     });
 
-    await user.click(screen.getByRole('button', { name: /下载/i }));
+    await user.click(screen.getByRole('button', { name: 'release.tar.gz' }));
+    expect(window.electronAPI.downloadSSHSftpFile).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: '下载' }));
 
     await waitFor(() => {
       expect(window.electronAPI.downloadSSHSftpFile).toHaveBeenCalledWith({
