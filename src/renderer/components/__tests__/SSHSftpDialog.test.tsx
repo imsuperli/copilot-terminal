@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SSHSftpDialog } from '../SSHSftpDialog';
@@ -6,6 +6,7 @@ import { SSHSftpDialog } from '../SSHSftpDialog';
 describe('SSHSftpDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
   });
 
   it('loads a remote directory and navigates into folders', async () => {
@@ -123,6 +124,37 @@ describe('SSHSftpDialog', () => {
     });
 
     expect(screen.getByTestId('ssh-sftp-breadcrumbs')).toBeInTheDocument();
+  });
+
+  it('uses a narrower default width and supports drag resizing', async () => {
+    vi.mocked(window.electronAPI.listSSHSftpDirectory).mockResolvedValueOnce({
+      success: true,
+      data: {
+        path: '/srv/app',
+        entries: [],
+      },
+    });
+
+    render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/srv/app"
+      />,
+    );
+
+    const panel = await screen.findByTestId('ssh-sftp-panel');
+    const resizeHandle = screen.getByTestId('ssh-sftp-resize-handle');
+
+    expect(panel).toHaveStyle({ width: '288px' });
+
+    fireEvent.mouseDown(resizeHandle, { clientX: 288 });
+    fireEvent.mouseMove(window, { clientX: 360 });
+    fireEvent.mouseUp(window);
+
+    expect(panel).toHaveStyle({ width: '360px' });
   });
 
   it('treats symlinked directories as navigable folders', async () => {

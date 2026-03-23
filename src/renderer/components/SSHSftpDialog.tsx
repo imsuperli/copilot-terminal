@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowRight,
   CheckCircle2,
   ChevronRight,
   Download,
@@ -36,6 +37,11 @@ type PanelNotice = {
   detail?: string;
 };
 
+const SSH_SFTP_PANEL_WIDTH_STORAGE_KEY = 'ssh-sftp-panel-width';
+const SSH_SFTP_PANEL_DEFAULT_WIDTH = 288;
+const SSH_SFTP_PANEL_MIN_WIDTH = 240;
+const SSH_SFTP_PANEL_MAX_WIDTH = 520;
+
 export function SSHSftpDialog({
   open,
   onOpenChange,
@@ -62,8 +68,11 @@ export function SSHSftpDialog({
   const [followTerminalCwd, setFollowTerminalCwd] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState<PanelNotice | null>(null);
+  const [panelWidth, setPanelWidth] = useState<number>(() => readStoredPanelWidth());
+  const [isResizing, setIsResizing] = useState(false);
   const lastLoadedPathRef = useRef<string | null>(null);
   const noticeIdRef = useRef(0);
+  const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const isDirectoryEntry = useCallback((entry: SSHSftpEntry) => (
     entry.isDirectory || entry.symlinkTargetIsDirectory === true
@@ -175,6 +184,45 @@ export function SSHSftpDialog({
     };
   }, [notice]);
 
+  useEffect(() => {
+    window.localStorage.setItem(SSH_SFTP_PANEL_WIDTH_STORAGE_KEY, String(panelWidth));
+  }, [panelWidth]);
+
+  useEffect(() => {
+    if (!isResizing) {
+      return;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const resizeState = resizeStartRef.current;
+      if (!resizeState) {
+        return;
+      }
+
+      const nextWidth = clampPanelWidth(resizeState.startWidth + (event.clientX - resizeState.startX));
+      setPanelWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      resizeStartRef.current = null;
+      setIsResizing(false);
+      document.body.style.removeProperty('cursor');
+      document.body.style.removeProperty('user-select');
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.removeProperty('cursor');
+      document.body.style.removeProperty('user-select');
+    };
+  }, [isResizing]);
+
   const handleManualNavigate = useCallback(async (targetPath: string) => {
     setFollowTerminalCwd(false);
     await loadDirectory(targetPath);
@@ -209,6 +257,14 @@ export function SSHSftpDialog({
     setFollowTerminalCwd(true);
     await loadDirectory(nextPath);
   }, [currentCwd, loadDirectory]);
+
+  const handleResizeStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    resizeStartRef.current = {
+      startX: event.clientX,
+      startWidth: panelWidth,
+    };
+    setIsResizing(true);
+  }, [panelWidth]);
 
   const handleUploadFiles = useCallback(async () => {
     if (!windowId || !paneId || !listing) {
@@ -537,12 +593,23 @@ export function SSHSftpDialog({
     <>
       <aside
         data-testid="ssh-sftp-panel"
-        className="flex h-full w-[clamp(320px,28vw,420px)] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/95 backdrop-blur"
+        className="relative flex h-full shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/95 backdrop-blur"
+        style={{ width: `${panelWidth}px` }}
       >
-        <div className="border-b border-zinc-800 px-3 py-3">
-          <div className="flex items-start justify-between gap-3">
+        <div
+          data-testid="ssh-sftp-resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={handleResizeStart}
+          className={`absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize ${
+            isResizing ? 'bg-blue-500/20' : 'bg-transparent'
+          }`}
+        />
+
+        <div className="border-b border-zinc-800 px-3 py-2">
+          <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 {t('sshSftpDialog.title')}
               </div>
             </div>
@@ -604,9 +671,10 @@ export function SSHSftpDialog({
                 />
                 <button
                   type="submit"
-                  className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+                  aria-label={t('sshSftpDialog.go')}
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-200 transition-colors hover:bg-zinc-800"
                 >
-                  {t('sshSftpDialog.go')}
+                  <ArrowRight size={15} />
                 </button>
               </form>
             ) : (
@@ -630,48 +698,49 @@ export function SSHSftpDialog({
                 </button>
                 <button
                   type="button"
+                  aria-label={t('sshSftpDialog.go')}
                   onClick={() => setIsEditingPath(true)}
-                  className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+                  className="flex h-9 w-9 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-200 transition-colors hover:bg-zinc-800"
                 >
-                  {t('sshSftpDialog.go')}
+                  <ArrowRight size={15} />
                 </button>
               </>
             )}
           </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <ToolbarButton
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <IconToolbarButton
               label={t('sshSftpDialog.up')}
               icon={<FolderUp size={14} />}
               onClick={() => void handleNavigateUp()}
               disabled={isLoading || !listing}
             />
-            <ToolbarButton
+            <IconToolbarButton
               label={t('sshSftpDialog.refresh')}
               icon={<RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />}
               onClick={() => void loadDirectory(listing?.path || currentCwd || initialPath || undefined)}
               disabled={isLoading}
             />
-            <ToolbarButton
+            <IconToolbarButton
               label={t('sshSftpDialog.syncCwd')}
               icon={<Folder size={14} />}
               onClick={() => void handleSyncCurrentCwd()}
               disabled={!currentCwd?.trim()}
               active={followTerminalCwd}
             />
-            <ToolbarButton
+            <IconToolbarButton
               label={t('sshSftpDialog.uploadFiles')}
               icon={<HardDriveUpload size={14} />}
               onClick={() => void handleUploadFiles()}
               disabled={!listing || isUploadingFiles}
             />
-            <ToolbarButton
+            <IconToolbarButton
               label={t('sshSftpDialog.uploadDirectory')}
               icon={<HardDriveDownload size={14} />}
               onClick={() => void handleUploadDirectory()}
               disabled={!listing || isUploadingDirectory}
             />
-            <ToolbarButton
+            <IconToolbarButton
               label={t('sshSftpDialog.newDirectory')}
               icon={<FolderPlus size={14} />}
               onClick={() => setCreatingDirectory((previous) => !previous)}
@@ -872,7 +941,7 @@ export function SSHSftpDialog({
   );
 }
 
-function ToolbarButton({
+function IconToolbarButton({
   label,
   icon,
   onClick,
@@ -886,19 +955,21 @@ function ToolbarButton({
   active?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-        active
-          ? 'border-blue-500/40 bg-blue-500/10 text-blue-200'
-          : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
-      } disabled:cursor-not-allowed disabled:opacity-50`}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
+    <AppTooltip content={label}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        disabled={disabled}
+        className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+          active
+            ? 'border-blue-500/40 bg-blue-500/10 text-blue-200'
+            : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
+        } disabled:cursor-not-allowed disabled:opacity-50`}
+      >
+        {icon}
+      </button>
+    </AppTooltip>
   );
 }
 
@@ -976,4 +1047,18 @@ function getParentSftpPath(value: string): string {
 
 function shouldFallbackToHomeDirectory(message: string): boolean {
   return message.trim().toLowerCase().includes('no such file');
+}
+
+function clampPanelWidth(width: number): number {
+  const viewportLimit = Math.max(SSH_SFTP_PANEL_MIN_WIDTH, Math.floor(window.innerWidth * 0.45));
+  return Math.min(Math.max(Math.round(width), SSH_SFTP_PANEL_MIN_WIDTH), Math.min(SSH_SFTP_PANEL_MAX_WIDTH, viewportLimit));
+}
+
+function readStoredPanelWidth(): number {
+  const storedValue = Number.parseInt(window.localStorage.getItem(SSH_SFTP_PANEL_WIDTH_STORAGE_KEY) || '', 10);
+  if (Number.isFinite(storedValue)) {
+    return clampPanelWidth(storedValue);
+  }
+
+  return clampPanelWidth(SSH_SFTP_PANEL_DEFAULT_WIDTH);
 }
