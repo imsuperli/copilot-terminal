@@ -47,6 +47,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const [isResizing, setIsResizing] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [showLocalTerminals, setShowLocalTerminals] = useState(true);
+  const [showSshTerminals, setShowSshTerminals] = useState(true);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   const activeWindows = getActiveWindows();
@@ -77,21 +79,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sortedItems = useMemo<SidebarItem[]>(() => {
     const items: SidebarItem[] = [];
 
-    // 添加组
-    for (const group of activeGroups) {
-      const windowIds = getAllWindowIds(group.layout);
-      const groupWindows = windows.filter(w => windowIds.includes(w.id));
-      const statuses = groupWindows.map(w => getAggregatedStatus(w.layout));
-      let groupStatus = WindowStatus.Paused;
-      if (statuses.some(s => s === WindowStatus.WaitingForInput)) groupStatus = WindowStatus.WaitingForInput;
-      else if (statuses.some(s => s === WindowStatus.Running)) groupStatus = WindowStatus.Running;
-      else if (statuses.some(s => s === WindowStatus.Restoring)) groupStatus = WindowStatus.Restoring;
-      items.push({ kind: 'group', id: group.id, status: groupStatus, group });
+    // 添加组（隐藏窗口组时不显示）
+    if (!hideGroupedWindows) {
+      for (const group of activeGroups) {
+        const windowIds = getAllWindowIds(group.layout);
+        const groupWindows = windows.filter(w => windowIds.includes(w.id));
+        const statuses = groupWindows.map(w => getAggregatedStatus(w.layout));
+        let groupStatus = WindowStatus.Paused;
+        if (statuses.some(s => s === WindowStatus.WaitingForInput)) groupStatus = WindowStatus.WaitingForInput;
+        else if (statuses.some(s => s === WindowStatus.Running)) groupStatus = WindowStatus.Running;
+        else if (statuses.some(s => s === WindowStatus.Restoring)) groupStatus = WindowStatus.Restoring;
+        items.push({ kind: 'group', id: group.id, status: groupStatus, group });
+      }
     }
 
-    // 添加独立窗口（根据设置决定是否过滤已分组窗口）
+    // 添加独立窗口
     for (const w of activeWindows) {
-      if (hideGroupedWindows && groupedWindowIds.has(w.id)) continue;
       items.push({ kind: 'window', id: w.id, status: getAggregatedStatus(w.layout), window: w });
     }
 
@@ -105,6 +108,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     return items;
   }, [activeGroups, activeWindows, groupedWindowIds, windows, hideGroupedWindows]);
+
+  // 按窗口类型分类（和主界面保持一致）
+  const { localWindows, sshWindows } = useMemo(() => {
+    const local: SidebarItem[] = [];
+    const ssh: SidebarItem[] = [];
+
+    for (const item of sortedItems) {
+      if (item.kind === 'window') {
+        const windowKind = item.window.kind || 'local';
+        if (windowKind === 'ssh') {
+          ssh.push(item);
+        } else {
+          local.push(item);
+        }
+      } else {
+        // 组：根据组内窗口类型分类
+        const windowIds = getAllWindowIds(item.group.layout);
+        const groupWindows = windows.filter(w => windowIds.includes(w.id));
+        const hasLocal = groupWindows.some(w => w.kind !== 'ssh');
+        const hasSsh = groupWindows.some(w => w.kind === 'ssh');
+
+        if (hasLocal) {
+          local.push(item);
+        }
+        if (hasSsh) {
+          ssh.push(item);
+        }
+      }
+    }
+
+    return { localWindows: local, sshWindows: ssh };
+  }, [sortedItems, windows]);
 
   // 处理宽度调整
   useEffect(() => {
@@ -226,7 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     side="top"
                     sideOffset={5}
                   >
-                    勾选后隐藏已加入窗口组的窗口
+                    隐藏窗口组，包括主界面和终端窗口界面
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
@@ -234,38 +269,177 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* 活跃窗口和组列表（统一排序） */}
+        {/* 活跃窗口和组列表（按类型分类，可折叠） */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          {sortedItems.map((item) => {
-            if (item.kind === 'group') {
-              return (
-                <SidebarGroupItem
-                  key={item.id}
-                  group={item.group}
-                  isActive={item.id === activeGroupId}
-                  isExpanded={sidebarExpanded}
-                  onClick={() => onGroupSelect?.(item.id)}
-                />
-              );
-            } else {
-              return (
-                <SidebarWindowItem
-                  key={item.id}
-                  window={item.window}
-                  isActive={item.id === activeWindowId}
-                  isExpanded={sidebarExpanded}
-                  onClick={() => onWindowSelect(item.id)}
-                  onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
-                  onOpenInIDE={handleOpenInIDE}
-                  onOpenFolder={handleOpenFolder}
-                />
-              );
-            }
-          })}
+          {/* 本地终端分类 */}
+          {localWindows.length > 0 && (
+            <div>
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={() => setShowLocalTerminals(!showLocalTerminals)}
+                      className={`
+                        w-full px-3 py-2 flex items-center gap-2
+                        text-xs font-semibold text-zinc-400 tracking-wide
+                        hover:bg-zinc-700 transition-all duration-200
+                        ${!sidebarExpanded ? 'justify-center' : ''}
+                      `}
+                    >
+                      {sidebarExpanded ? (
+                        <>
+                          <ChevronDown
+                            size={14}
+                            className={`transition-transform duration-200 ${
+                              showLocalTerminals ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                          <span className="transition-opacity duration-200">本地终端</span>
+                          <span className="ml-auto text-zinc-500 transition-opacity duration-200">
+                            ({localWindows.length})
+                          </span>
+                        </>
+                      ) : (
+                        <div className="relative">
+                          <span className="text-sm">💻</span>
+                          {localWindows.length > 0 && (
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-600 text-[8px] rounded-full flex items-center justify-center">
+                              {localWindows.length}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  </Tooltip.Trigger>
+                  {!sidebarExpanded && (
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                        side="right"
+                        sideOffset={5}
+                      >
+                        {`本地终端 (${localWindows.length})`}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  )}
+                </Tooltip.Root>
+              </Tooltip.Provider>
 
-          {/* 归档区域 */}
-          {archivedWindows.length > 0 && (
-            <div className="border-t border-zinc-800 mt-2">
+              {showLocalTerminals && localWindows.map((item) => {
+                if (item.kind === 'group') {
+                  return (
+                    <SidebarGroupItem
+                      key={item.id}
+                      group={item.group}
+                      isActive={item.id === activeGroupId}
+                      isExpanded={sidebarExpanded}
+                      onClick={() => onGroupSelect?.(item.id)}
+                    />
+                  );
+                } else {
+                  return (
+                    <SidebarWindowItem
+                      key={item.id}
+                      window={item.window}
+                      isActive={item.id === activeWindowId}
+                      isExpanded={sidebarExpanded}
+                      onClick={() => onWindowSelect(item.id)}
+                      onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
+                      onOpenInIDE={handleOpenInIDE}
+                      onOpenFolder={handleOpenFolder}
+                    />
+                  );
+                }
+              })}
+            </div>
+          )}
+
+          {/* 远程终端分类 */}
+          {sshWindows.length > 0 && (
+            <div className={localWindows.length > 0 ? 'border-t border-zinc-800' : ''}>
+              <Tooltip.Provider>
+                <Tooltip.Root delayDuration={300}>
+                  <Tooltip.Trigger asChild>
+                    <button
+                      onClick={() => setShowSshTerminals(!showSshTerminals)}
+                      className={`
+                        w-full px-3 py-2 flex items-center gap-2
+                        text-xs font-semibold text-zinc-400 tracking-wide
+                        hover:bg-zinc-700 transition-all duration-200
+                        ${!sidebarExpanded ? 'justify-center' : ''}
+                      `}
+                    >
+                      {sidebarExpanded ? (
+                        <>
+                          <ChevronDown
+                            size={14}
+                            className={`transition-transform duration-200 ${
+                              showSshTerminals ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                          <span className="transition-opacity duration-200">远程终端</span>
+                          <span className="ml-auto text-zinc-500 transition-opacity duration-200">
+                            ({sshWindows.length})
+                          </span>
+                        </>
+                      ) : (
+                        <div className="relative">
+                          <span className="text-sm">🌐</span>
+                          {sshWindows.length > 0 && (
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-600 text-[8px] rounded-full flex items-center justify-center">
+                              {sshWindows.length}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  </Tooltip.Trigger>
+                  {!sidebarExpanded && (
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                        side="right"
+                        sideOffset={5}
+                      >
+                        {`远程终端 (${sshWindows.length})`}
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  )}
+                </Tooltip.Root>
+              </Tooltip.Provider>
+
+              {showSshTerminals && sshWindows.map((item) => {
+                if (item.kind === 'group') {
+                  return (
+                    <SidebarGroupItem
+                      key={item.id}
+                      group={item.group}
+                      isActive={item.id === activeGroupId}
+                      isExpanded={sidebarExpanded}
+                      onClick={() => onGroupSelect?.(item.id)}
+                    />
+                  );
+                } else {
+                  return (
+                    <SidebarWindowItem
+                      key={item.id}
+                      window={item.window}
+                      isActive={item.id === activeWindowId}
+                      isExpanded={sidebarExpanded}
+                      onClick={() => onWindowSelect(item.id)}
+                      onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
+                      onOpenInIDE={handleOpenInIDE}
+                      onOpenFolder={handleOpenFolder}
+                    />
+                  );
+                }
+              })}
+            </div>
+          )}
+
+          {/* 归档终端 */}
+          {(archivedWindows.length > 0 || archivedGroups.length > 0) && (
+            <div className="border-t border-zinc-800">
               {/* 归档标题 */}
               <Tooltip.Provider>
                 <Tooltip.Root delayDuration={300}>
@@ -287,17 +461,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         showArchived ? 'rotate-0' : '-rotate-90'
                       }`}
                     />
-                    <span className="transition-opacity duration-200">Archived</span>
+                    <span className="transition-opacity duration-200">归档终端</span>
                     <span className="ml-auto text-zinc-500 transition-opacity duration-200">
-                      ({archivedWindows.length})
+                      ({archivedWindows.length + archivedGroups.length})
                     </span>
                   </>
                 ) : (
                   <div className="relative">
                     <Archive size={14} />
-                    {archivedWindows.length > 0 && (
+                    {(archivedWindows.length + archivedGroups.length) > 0 && (
                       <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-600 text-[8px] rounded-full flex items-center justify-center">
-                        {archivedWindows.length}
+                        {archivedWindows.length + archivedGroups.length}
                       </span>
                     )}
                   </div>
@@ -311,26 +485,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         side="right"
                         sideOffset={5}
                       >
-                        {`Archived (${archivedWindows.length})`}
+                        {`归档终端 (${archivedWindows.length + archivedGroups.length})`}
                       </Tooltip.Content>
                     </Tooltip.Portal>
                   )}
                 </Tooltip.Root>
               </Tooltip.Provider>
 
-              {/* 归档窗口列表 */}
-              {showArchived && archivedWindows.map((window) => (
-                <SidebarWindowItem
-                  key={window.id}
-                  window={window}
-                  isActive={window.id === activeWindowId}
-                  isExpanded={sidebarExpanded}
-                  onClick={() => onWindowSelect(window.id)}
-                  onContextMenu={(e) => handleWindowContextMenu(window.id, e)}
-                  onOpenInIDE={handleOpenInIDE}
-                  onOpenFolder={handleOpenFolder}
-                />
-              ))}
+              {/* 归档窗口和组列表 */}
+              {showArchived && (
+                <>
+                  {archivedGroups.map((group) => (
+                    <SidebarGroupItem
+                      key={group.id}
+                      group={group}
+                      isActive={group.id === activeGroupId}
+                      isExpanded={sidebarExpanded}
+                      onClick={() => onGroupSelect?.(group.id)}
+                    />
+                  ))}
+                  {archivedWindows.map((window) => (
+                    <SidebarWindowItem
+                      key={window.id}
+                      window={window}
+                      isActive={window.id === activeWindowId}
+                      isExpanded={sidebarExpanded}
+                      onClick={() => onWindowSelect(window.id)}
+                      onContextMenu={(e) => handleWindowContextMenu(window.id, e)}
+                      onOpenInIDE={handleOpenInIDE}
+                      onOpenFolder={handleOpenFolder}
+                    />
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>

@@ -117,14 +117,13 @@ export const CardGrid = React.memo<CardGridProps>(({
     const sortGroupsByCreatedAt = (gs: WindowGroup[]) =>
       [...gs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    // 计算已分组的窗口 ID 集合
-    const groupedWindowIds = hideGroupedWindows
-      ? new Set(groups.flatMap(g => getAllWindowIds(g.layout)))
-      : new Set<string>();
+    const filterVisibleWindows = (ws: Window[]) => {
+      return ws.filter((window) => shouldRenderWindowCard(window));
+    };
 
-    const filterGroupedWindows = (ws: Window[]) => {
-      const visibleWindows = ws.filter((window) => shouldRenderWindowCard(window));
-      return hideGroupedWindows ? visibleWindows.filter(w => !groupedWindowIds.has(w.id)) : visibleWindows;
+    // 隐藏窗口组时，过滤掉所有组（组内窗口作为独立窗口显示）
+    const filterGroups = (gs: WindowGroup[]) => {
+      return hideGroupedWindows ? [] : gs;
     };
 
     // 状态筛选标签
@@ -138,20 +137,59 @@ export const CardGrid = React.memo<CardGridProps>(({
       if (!targetStatus) return [];
 
       // 筛选包含目标状态窗格的未归档窗口
-      const matchedWindows = filterGroupedWindows(
+      const matchedWindows = filterVisibleWindows(
         windows.filter(w => !w.archived && getAllPanes(w.layout).some(p => p.status === targetStatus))
       );
       const windowItems: CardItem[] = sortWindows(matchedWindows, 'createdAt').map(w => ({ type: 'window', data: w }));
 
       // 筛选包含目标状态窗口的未归档组
-      const matchedGroups = groups.filter(g => {
+      const matchedGroups = filterGroups(groups.filter(g => {
         if (g.archived) return false;
         const groupWindowIds = getAllWindowIds(g.layout);
         return windows.some(w => groupWindowIds.includes(w.id) && getAllPanes(w.layout).some(p => p.status === targetStatus));
-      });
+      }));
       const groupItems: CardItem[] = sortGroupsByCreatedAt(matchedGroups).map(g => ({ type: 'group', data: g }));
 
       return [...groupItems, ...windowItems];
+    }
+
+    // 本地终端标签
+    if (currentTab === 'local') {
+      const activeGroups = filterGroups(groups.filter(g => !g.archived));
+      const activeWindows = filterVisibleWindows(windows.filter(w => !w.archived));
+      const localWindows = activeWindows.filter(w => w.kind !== 'ssh');
+
+      // 过滤包含本地窗口的组
+      const localGroups = activeGroups.filter(g => {
+        const windowIds = getAllWindowIds(g.layout);
+        const groupWindows = windows.filter(w => windowIds.includes(w.id));
+        return groupWindows.some(w => w.kind !== 'ssh');
+      });
+
+      return [
+        ...sortGroupsByCreatedAt(localGroups).map(g => ({ type: 'group' as const, data: g })),
+        ...sortWindows(localWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
+      ];
+    }
+
+    // 远程终端标签
+    if (currentTab === 'ssh') {
+      const activeGroups = filterGroups(groups.filter(g => !g.archived));
+      const activeWindows = filterVisibleWindows(windows.filter(w => !w.archived));
+      const sshWindows = activeWindows.filter(w => w.kind === 'ssh');
+
+      // 过滤包含 SSH 窗口的组
+      const sshGroups = activeGroups.filter(g => {
+        const windowIds = getAllWindowIds(g.layout);
+        const groupWindows = windows.filter(w => windowIds.includes(w.id));
+        return groupWindows.some(w => w.kind === 'ssh');
+      });
+
+      return [
+        ...sortGroupsByCreatedAt(sshGroups).map(g => ({ type: 'group' as const, data: g })),
+        ...sortWindows(sshWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
+        ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
+      ];
     }
 
     // 自定义分类标签
@@ -159,8 +197,8 @@ export const CardGrid = React.memo<CardGridProps>(({
       const category = customCategories.find(c => c.id === currentTab);
       if (!category) return [];
 
-      const categoryWindows = filterGroupedWindows(windows.filter(w => category.windowIds.includes(w.id)));
-      const categoryGroups = groups.filter(g => category.groupIds.includes(g.id));
+      const categoryWindows = filterVisibleWindows(windows.filter(w => category.windowIds.includes(w.id)));
+      const categoryGroups = filterGroups(groups.filter(g => category.groupIds.includes(g.id)));
 
       const groupItems: CardItem[] = sortGroupsByCreatedAt(categoryGroups).map(g => ({ type: 'group', data: g }));
       const windowItems: CardItem[] = sortWindows(categoryWindows, 'createdAt').map(w => ({ type: 'window', data: w }));
@@ -169,10 +207,10 @@ export const CardGrid = React.memo<CardGridProps>(({
 
     if (currentTab === 'all') {
       // 全部终端：活跃组 → 活跃窗口 → 归档组 → 归档窗口
-      const activeGroups = groups.filter(g => !g.archived);
-      const archivedGroups = groups.filter(g => g.archived);
-      const activeWindows = filterGroupedWindows(windows.filter(w => !w.archived));
-      const archivedWindows = filterGroupedWindows(windows.filter(w => w.archived));
+      const activeGroups = filterGroups(groups.filter(g => !g.archived));
+      const archivedGroups = filterGroups(groups.filter(g => g.archived));
+      const activeWindows = filterVisibleWindows(windows.filter(w => !w.archived));
+      const archivedWindows = filterVisibleWindows(windows.filter(w => w.archived));
 
       return [
         ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -185,8 +223,8 @@ export const CardGrid = React.memo<CardGridProps>(({
 
     if (currentTab === 'archived') {
       // 归档终端：归档组 → 归档窗口
-      const archivedGroups = groups.filter(g => g.archived);
-      const archivedWindows = filterGroupedWindows(windows.filter(w => w.archived));
+      const archivedGroups = filterGroups(groups.filter(g => g.archived));
+      const archivedWindows = filterVisibleWindows(windows.filter(w => w.archived));
 
       return [
         ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -195,8 +233,8 @@ export const CardGrid = React.memo<CardGridProps>(({
     }
 
     // 活跃终端（默认）：活跃组 → 活跃窗口
-    const activeGroups = groups.filter(g => !g.archived);
-    const activeWindows = filterGroupedWindows(windows.filter(w => !w.archived));
+    const activeGroups = filterGroups(groups.filter(g => !g.archived));
+    const activeWindows = filterVisibleWindows(windows.filter(w => !w.archived));
 
     return [
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -662,11 +700,12 @@ export const CardGrid = React.memo<CardGridProps>(({
                 }
 
                 const profile = item.data;
-                return (
+                const sshWindow = standaloneSSHWindowsByProfile[profile.id] ?? null;
+                const sshCard = (
                   <SSHProfileCard
                     key={`ssh-profile-${profile.id}`}
                     profile={profile}
-                    window={standaloneSSHWindowsByProfile[profile.id] ?? null}
+                    window={sshWindow}
                     credentialState={sshCredentialStates[profile.id]}
                     isConnecting={connectingSSHProfileId === profile.id}
                     onConnect={handleConnectSSHProfile}
@@ -677,6 +716,27 @@ export const CardGrid = React.memo<CardGridProps>(({
                     onDelete={handleDeleteSSHProfile}
                   />
                 );
+
+                // 有关联窗口时支持拖拽组合
+                if (sshWindow) {
+                  return (
+                    <DraggableWindowCard
+                      key={`ssh-profile-${profile.id}`}
+                      windowId={sshWindow.id}
+                      windowName={sshWindow.name}
+                      source="cardGrid"
+                    >
+                      <DropZone
+                        targetWindowId={sshWindow.id}
+                        onDrop={handleWindowCardDrop}
+                      >
+                        {sshCard}
+                      </DropZone>
+                    </DraggableWindowCard>
+                  );
+                }
+
+                return sshCard;
               }
             })}
             {!searchQuery && <NewWindowCard onClick={onCreateWindow || (() => {})} />}
