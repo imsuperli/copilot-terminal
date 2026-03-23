@@ -13,9 +13,12 @@ const mockElectronAPI = {
   createWindow: vi.fn(),
   detectLocalSSHPrivateKeys: vi.fn(),
   createSSHProfile: vi.fn(),
+  updateSSHProfile: vi.fn(),
   getSSHCredentialState: vi.fn(),
   setSSHPassword: vi.fn(),
+  clearSSHPassword: vi.fn(),
   setSSHPrivateKeyPassphrase: vi.fn(),
+  clearSSHPrivateKeyPassphrase: vi.fn(),
   triggerAutoSave: vi.fn(),
 }
 
@@ -104,9 +107,12 @@ describe('CreateWindowDialog', () => {
     mockElectronAPI.createWindow.mockResolvedValue(createWindowResponse())
     mockElectronAPI.detectLocalSSHPrivateKeys.mockResolvedValue({ success: true, data: [] })
     mockElectronAPI.createSSHProfile.mockResolvedValue(createSSHProfileResponse())
+    mockElectronAPI.updateSSHProfile.mockResolvedValue(createSSHProfileResponse())
     mockElectronAPI.getSSHCredentialState.mockResolvedValue({ success: true, data: { hasPassword: true, hasPassphrase: false } })
     mockElectronAPI.setSSHPassword.mockResolvedValue({ success: true })
+    mockElectronAPI.clearSSHPassword.mockResolvedValue({ success: true })
     mockElectronAPI.setSSHPrivateKeyPassphrase.mockResolvedValue({ success: true })
+    mockElectronAPI.clearSSHPrivateKeyPassphrase.mockResolvedValue({ success: true })
   })
 
   it('renders the unified create dialog and shows the global default shell path', async () => {
@@ -329,5 +335,69 @@ describe('CreateWindowDialog', () => {
         user: 'root',
       }))
     })
+  })
+
+  it('updates an existing ssh profile in the same dialog instead of creating a new one', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+    const onSSHProfileSaved = vi.fn()
+    const existingProfile = {
+      id: 'ssh-profile-1',
+      name: 'Prod Ubuntu',
+      host: 'old.example.com',
+      port: 22,
+      user: 'root',
+      auth: 'password',
+      privateKeys: [],
+      keepaliveInterval: 30,
+      keepaliveCountMax: 3,
+      readyTimeout: null,
+      verifyHostKeys: true,
+      x11: false,
+      skipBanner: false,
+      agentForward: false,
+      warnOnClose: true,
+      reuseSession: true,
+      forwardedPorts: [],
+      tags: ['prod'],
+      notes: 'existing notes',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as const
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={onOpenChange}
+        sshEnabled={true}
+        sshProfiles={[existingProfile as any]}
+        editingSSHProfile={existingProfile as any}
+        sshCredentialState={{ hasPassword: true, hasPassphrase: false }}
+        onSSHProfileSaved={onSSHProfileSaved}
+      />,
+    )
+
+    expect(screen.getByText('编辑 SSH 连接')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /本地终端/ })).toBeNull()
+
+    await user.clear(screen.getByLabelText(/主机地址/))
+    await user.type(screen.getByLabelText(/主机地址/), 'new.example.com')
+    await user.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.updateSSHProfile).toHaveBeenCalledWith('ssh-profile-1', expect.objectContaining({
+        name: 'Prod Ubuntu',
+        host: 'new.example.com',
+        tags: ['prod'],
+        notes: 'existing notes',
+      }))
+    })
+
+    expect(mockElectronAPI.createSSHProfile).not.toHaveBeenCalled()
+    expect(onSSHProfileSaved).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'ssh-profile-1', host: 'example.com' }),
+      { hasPassword: true, hasPassphrase: false },
+    )
+    expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 })

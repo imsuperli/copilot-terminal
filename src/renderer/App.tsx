@@ -6,12 +6,12 @@ import { Sidebar } from './components/layout/Sidebar';
 import { EmptyState } from './components/EmptyState';
 import { CardGrid } from './components/CardGrid';
 import { CreateGroupDialog } from './components/CreateGroupDialog';
+import { CreateWindowDialog } from './components/CreateWindowDialog';
 import { TerminalView } from './components/TerminalView';
 import { GroupView } from './components/GroupView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
 import { QuickNavPanel } from './components/QuickNavPanel';
-import { SSHProfileDialog } from './components/SSHProfileDialog';
 import { SSHHostKeyPromptDialog } from './components/SSHHostKeyPromptDialog';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
@@ -730,13 +730,14 @@ function AppContent() {
       )}
 
       {sshEnabled && (
-        <SSHProfileDialog
+        <CreateWindowDialog
           open={isSSHDialogOpen}
           onOpenChange={handleSSHProfileDialogChange}
-          profile={editingSSHProfile}
-          profiles={sshProfiles}
-          credentialState={editingSSHProfile ? sshCredentialStates[editingSSHProfile.id] : null}
-          onSaved={handleSSHProfileSaved}
+          sshEnabled={sshEnabled}
+          sshProfiles={sshProfiles}
+          editingSSHProfile={editingSSHProfile}
+          sshCredentialState={editingSSHProfile ? sshCredentialStates[editingSSHProfile.id] : null}
+          onSSHProfileSaved={handleSSHProfileSaved}
         />
       )}
 

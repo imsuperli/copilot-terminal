@@ -13,6 +13,8 @@ interface CreateWindowDialogProps {
   onOpenChange: (open: boolean) => void
   sshEnabled?: boolean
   sshProfiles?: SSHProfile[]
+  editingSSHProfile?: SSHProfile | null
+  sshCredentialState?: SSHCredentialState | null
   onSSHProfileSaved?: (profile: SSHProfile, credentialState: SSHCredentialState) => void
 }
 
@@ -77,32 +79,52 @@ function trimOptional(value: string): string | undefined {
   return normalized || undefined
 }
 
-function createInitialSSHForm(): SSHCreateFormState {
+function resolveRoutingMode(profile?: SSHProfile | null): SSHRoutingMode {
+  if (profile?.proxyCommand) {
+    return 'proxyCommand'
+  }
+
+  if (profile?.socksProxyHost) {
+    return 'socks'
+  }
+
+  if (profile?.httpProxyHost) {
+    return 'http'
+  }
+
+  if (profile?.jumpHostProfileId) {
+    return 'jumpHost'
+  }
+
+  return 'direct'
+}
+
+function createInitialSSHForm(profile?: SSHProfile | null): SSHCreateFormState {
   return {
-    name: '',
-    host: '',
-    port: '22',
-    user: '',
-    auth: 'password',
-    privateKeysText: '',
-    defaultRemoteCwd: '',
-    remoteCommand: '',
-    keepaliveInterval: '30',
-    keepaliveCountMax: '3',
-    readyTimeout: '',
-    verifyHostKeys: true,
-    agentForward: false,
-    skipBanner: false,
-    warnOnClose: true,
-    reuseSession: true,
-    x11: false,
-    routingMode: 'direct',
-    jumpHostProfileId: '',
-    proxyCommand: '',
-    socksProxyHost: '',
-    socksProxyPort: '1080',
-    httpProxyHost: '',
-    httpProxyPort: '8080',
+    name: profile?.name ?? '',
+    host: profile?.host ?? '',
+    port: String(profile?.port ?? 22),
+    user: profile?.user ?? '',
+    auth: profile?.auth ?? 'password',
+    privateKeysText: profile?.privateKeys.join('\n') ?? '',
+    defaultRemoteCwd: profile?.defaultRemoteCwd ?? '',
+    remoteCommand: profile?.remoteCommand ?? '',
+    keepaliveInterval: String(profile?.keepaliveInterval ?? 30),
+    keepaliveCountMax: String(profile?.keepaliveCountMax ?? 3),
+    readyTimeout: profile?.readyTimeout ? String(profile.readyTimeout) : '',
+    verifyHostKeys: profile?.verifyHostKeys ?? true,
+    agentForward: profile?.agentForward ?? false,
+    skipBanner: profile?.skipBanner ?? false,
+    warnOnClose: profile?.warnOnClose ?? true,
+    reuseSession: profile?.reuseSession ?? true,
+    x11: profile?.x11 ?? false,
+    routingMode: resolveRoutingMode(profile),
+    jumpHostProfileId: profile?.jumpHostProfileId ?? '',
+    proxyCommand: profile?.proxyCommand ?? '',
+    socksProxyHost: profile?.socksProxyHost ?? '',
+    socksProxyPort: profile?.socksProxyPort ? String(profile.socksProxyPort) : '1080',
+    httpProxyHost: profile?.httpProxyHost ?? '',
+    httpProxyPort: profile?.httpProxyPort ? String(profile.httpProxyPort) : '8080',
   }
 }
 
@@ -111,6 +133,8 @@ export function CreateWindowDialog({
   onOpenChange,
   sshEnabled = false,
   sshProfiles = [],
+  editingSSHProfile = null,
+  sshCredentialState = null,
   onSSHProfileSaved,
 }: CreateWindowDialogProps) {
   const { t } = useI18n()
@@ -126,7 +150,7 @@ export function CreateWindowDialog({
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  const [sshForm, setSSHForm] = useState<SSHCreateFormState>(() => createInitialSSHForm())
+  const [sshForm, setSSHForm] = useState<SSHCreateFormState>(() => createInitialSSHForm(editingSSHProfile))
   const [sshPassword, setSSHPassword] = useState('')
   const [sshPassphrases, setSSHPassphrases] = useState<Record<string, string>>({})
   const [sshError, setSSHError] = useState('')
@@ -146,6 +170,8 @@ export function CreateWindowDialog({
     () => parseLineList(sshForm.privateKeysText),
     [sshForm.privateKeysText],
   )
+  const isEditingSSHProfile = Boolean(editingSSHProfile)
+  const currentSSHCredentialState = sshCredentialState ?? DEFAULT_SSH_CREDENTIAL_STATE
   const recommendedShell = availableShells.find((shell) => shell.isDefault)
   const autoShellTarget = globalDefaultShell || recommendedShell?.path || ''
   const matchedShell = availableShells.find((shell) => (
@@ -173,8 +199,8 @@ export function CreateWindowDialog({
     : t('createWindow.shellAutoFallback')
   const placeholderName = t('createWindow.defaultName', { count: windows.length + 1 })
   const availableJumpHosts = useMemo(
-    () => sshProfiles,
-    [sshProfiles],
+    () => sshProfiles.filter((profile) => profile.id !== editingSSHProfile?.id),
+    [editingSSHProfile?.id, sshProfiles],
   )
   const sshAuthNeedsPassword = sshForm.auth === 'password' || sshForm.auth === 'keyboardInteractive'
   const sshSummaryHost = sshForm.host.trim() || 'host'
@@ -205,8 +231,8 @@ export function CreateWindowDialog({
     setIsValidating(false)
   }
 
-  const resetSSHForm = () => {
-    setSSHForm(createInitialSSHForm())
+  const resetSSHForm = (profile?: SSHProfile | null) => {
+    setSSHForm(createInitialSSHForm(profile))
     setSSHPassword('')
     setSSHPassphrases({})
     setSSHError('')
@@ -217,9 +243,9 @@ export function CreateWindowDialog({
   }
 
   const resetDialog = () => {
-    setActiveTab('local')
+    setActiveTab(isEditingSSHProfile ? 'ssh' : 'local')
     resetLocalForm()
-    resetSSHForm()
+    resetSSHForm(editingSSHProfile)
   }
 
   useEffect(() => {
@@ -260,6 +286,21 @@ export function CreateWindowDialog({
       disposed = true
     }
   }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    if (isEditingSSHProfile && sshEnabled) {
+      setActiveTab('ssh')
+      resetSSHForm(editingSSHProfile)
+      resetLocalForm()
+      return
+    }
+
+    resetSSHForm()
+  }, [editingSSHProfile, isEditingSSHProfile, open, sshEnabled])
 
   useEffect(() => {
     if (!open) {
@@ -454,7 +495,9 @@ export function CreateWindowDialog({
       return
     }
 
-    if (sshAuthNeedsPassword && !passwordValue) {
+    const hasPasswordAfterSave = Boolean(passwordValue)
+      || (sshAuthNeedsPassword && isEditingSSHProfile && currentSSHCredentialState.hasPassword)
+    if (sshAuthNeedsPassword && !hasPasswordAfterSave) {
       setSSHError(t('sshProfileDialog.error.passwordRequired'))
       return
     }
@@ -528,28 +571,49 @@ export function CreateWindowDialog({
       httpProxyHost,
       httpProxyPort: httpProxyHost ? httpProxyPort : undefined,
       reuseSession: sshForm.reuseSession,
-      forwardedPorts: [],
+      algorithms: editingSSHProfile?.algorithms,
+      forwardedPorts: editingSSHProfile?.forwardedPorts ?? [],
       remoteCommand: trimOptional(sshForm.remoteCommand),
       defaultRemoteCwd: trimOptional(sshForm.defaultRemoteCwd),
-      tags: [],
-      notes: undefined,
-      icon: undefined,
-      color: undefined,
+      tags: editingSSHProfile?.tags ?? [],
+      notes: editingSSHProfile?.notes,
+      icon: editingSSHProfile?.icon,
+      color: editingSSHProfile?.color,
     }
 
     setIsSavingSSH(true)
 
     try {
-      const response = await window.electronAPI.createSSHProfile(input)
+      const response = editingSSHProfile
+        ? await window.electronAPI.updateSSHProfile(editingSSHProfile.id, input)
+        : await window.electronAPI.createSSHProfile(input)
       if (!response?.success || !response.data) {
         throw new Error(response?.error || t('sshProfileDialog.error.saveFailed'))
       }
 
       const savedProfile = response.data
+      const existingPrivateKeys = editingSSHProfile?.privateKeys ?? []
 
       if (sshAuthNeedsPassword && passwordValue) {
         await window.electronAPI.setSSHPassword(savedProfile.id, passwordValue)
+      } else if (!sshAuthNeedsPassword && currentSSHCredentialState.hasPassword) {
+        await window.electronAPI.clearSSHPassword(savedProfile.id)
       }
+
+      const keysToClear = new Set<string>()
+      if (sshForm.auth !== 'publicKey') {
+        existingPrivateKeys.forEach((keyPath) => keysToClear.add(keyPath))
+      } else {
+        existingPrivateKeys
+          .filter((keyPath) => !currentPrivateKeys.includes(keyPath))
+          .forEach((keyPath) => keysToClear.add(keyPath))
+      }
+
+      await Promise.all(
+        Array.from(keysToClear).map((keyPath) => (
+          window.electronAPI.clearSSHPrivateKeyPassphrase(savedProfile.id, keyPath)
+        )),
+      )
 
       if (sshForm.auth === 'publicKey') {
         await Promise.all(
@@ -690,7 +754,7 @@ export function CreateWindowDialog({
           resetDialog()
         }
       }}
-      title={t('createWindow.unifiedTitle')}
+      title={isEditingSSHProfile ? t('sshProfileDialog.editTitle') : t('createWindow.unifiedTitle')}
       showCloseButton
       closeLabel={t('common.close')}
       contentClassName="!w-[min(1240px,96vw)] !max-w-none flex max-h-[92vh] flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]"
@@ -709,7 +773,7 @@ export function CreateWindowDialog({
               className="inline-flex w-fit flex-wrap gap-1 rounded-[16px]"
               aria-label={t('createWindow.modeTabsAriaLabel')}
             >
-              {renderTabTrigger(
+              {!isEditingSSHProfile && renderTabTrigger(
                 'local',
                 <Terminal size={18} />,
                 t('createWindow.mode.local'),
@@ -1430,7 +1494,11 @@ export function CreateWindowDialog({
           >
             {activeTab === 'local'
               ? (isCreating ? t('common.creating') : t('common.create'))
-              : (isSavingSSH ? t('createWindow.sshSaving') : t('createWindow.sshSave'))}
+              : (
+                isSavingSSH
+                  ? (isEditingSSHProfile ? t('common.saving') : t('createWindow.sshSaving'))
+                  : (isEditingSSHProfile ? t('common.save') : t('createWindow.sshSave'))
+              )}
           </Button>
         </div>
       </form>
