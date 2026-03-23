@@ -62,9 +62,13 @@ export const zhCNMessages = {
   'sidebar.clearActiveWindows': '清空活跃终端',
   'sidebar.clearArchivedWindows': '清空已归档终端',
   'sidebar.clearAllWindows': '清空全部终端',
+  'sidebar.clearLocalWindows': '清空本地终端',
+  'sidebar.clearSSHWindows': '清空远程终端',
   'sidebar.clearArchived': '清空归档',
   'sidebar.confirmClearActiveTitle': '清空所有终端',
   'sidebar.confirmClearArchivedTitle': '清空所有归档终端',
+  'sidebar.confirmClearLocalTitle': '清空所有本地终端',
+  'sidebar.confirmClearSSHTitle': '清空所有远程终端',
   'sidebar.confirmClearActiveDescription': '确定要删除所有 {count} 个窗口吗？此操作不可恢复。',
   'sidebar.confirmClearArchivedDescription': '确定要删除所有 {count} 个归档窗口吗？此操作不可恢复。',
 

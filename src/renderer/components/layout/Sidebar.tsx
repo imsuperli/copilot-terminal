@@ -772,14 +772,26 @@ export function Sidebar({
             ? '确认清空活跃终端'
             : currentTab === 'archived'
             ? '确认清空已归档终端'
-            : '确认清空全部终端'
+            : currentTab === 'all'
+            ? '确认清空全部终端'
+            : currentTab === 'local'
+            ? '确认清空本地终端'
+            : currentTab === 'ssh'
+            ? '确认清空远程终端'
+            : '确认清空终端'
         }
         description={
           currentTab === 'active'
             ? `确定要删除全部 ${activeWindows.length} 个活跃终端吗？此操作不可撤销。`
             : currentTab === 'archived'
             ? `确定要删除全部 ${archivedWindows.length} 个已归档终端吗？此操作不可撤销。`
-            : `确定要删除全部 ${windows.length} 个终端吗？此操作不可撤销。`
+            : currentTab === 'all'
+            ? `确定要删除全部 ${windows.length} 个终端吗？此操作不可撤销。`
+            : currentTab === 'local'
+            ? `确定要删除全部 ${localActiveWindows.length} 个本地终端吗？此操作不可撤销。`
+            : currentTab === 'ssh'
+            ? `确定要删除全部 ${sshActiveWindows.length} 个远程终端吗？此操作不可撤销。`
+            : '确定要删除这些终端吗？此操作不可撤销。'
         }
         confirmText={t('common.delete')}
         cancelText={t('common.cancel')}
