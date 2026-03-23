@@ -39,6 +39,8 @@ export class SSHPtySession implements IPty {
   private readonly stderrDecoder: StringDecoder;
   private pendingExit: ExitEvent | null;
   private closed: boolean;
+  private shellInitializationTimer: ReturnType<typeof setTimeout> | null;
+  private shellInitialized: boolean;
 
   private constructor(options: SSHPtySessionOptions) {
     this.pid = options.pid;
@@ -54,6 +56,8 @@ export class SSHPtySession implements IPty {
     this.stderrDecoder = new StringDecoder('utf8');
     this.pendingExit = null;
     this.closed = false;
+    this.shellInitializationTimer = null;
+    this.shellInitialized = false;
   }
 
   write(data: string): void {
@@ -72,6 +76,7 @@ export class SSHPtySession implements IPty {
     }
 
     this.closed = true;
+    this.clearShellInitializationTimer();
 
     try {
       if (signal && this.channel && typeof this.channel.signal === 'function') {
@@ -226,12 +231,14 @@ export class SSHPtySession implements IPty {
         const decoded = decodeChunk(data, this.stdoutDecoder);
         if (decoded) {
           this.emitData(decoded);
+          this.scheduleInitializeRemoteShell(40);
         }
       });
       stream.stderr?.on('data', (data: Buffer | string) => {
         const decoded = decodeChunk(data, this.stderrDecoder);
         if (decoded) {
           this.emitData(decoded);
+          this.scheduleInitializeRemoteShell(40);
         }
       });
       stream.on('exit', (code?: number, signal?: number | string) => {
@@ -241,6 +248,7 @@ export class SSHPtySession implements IPty {
         });
       });
       stream.on('close', () => {
+        this.clearShellInitializationTimer();
         this.flushDecoder(this.stdoutDecoder);
         this.flushDecoder(this.stderrDecoder);
         this.channel = null;
@@ -248,31 +256,43 @@ export class SSHPtySession implements IPty {
         this.emitExit(this.pendingExit ?? { exitCode: 0 });
       });
 
-      this.initializeRemoteShell();
+      this.scheduleInitializeRemoteShell(150);
     } catch (error) {
       await this.releaseConnectionLease();
       throw error;
     }
   }
 
-  private initializeRemoteShell(): void {
-    if (!this.channel) {
+  private scheduleInitializeRemoteShell(delayMs: number): void {
+    if (!this.channel || this.shellInitialized || !hasShellInitialization(this.ssh)) {
       return;
     }
 
-    const commands: string[] = [];
-    const remoteCwd = this.ssh.remoteCwd;
-    const startupCommand = this.ssh.command;
+    this.clearShellInitializationTimer();
+    this.shellInitializationTimer = setTimeout(() => {
+      this.shellInitializationTimer = null;
+      this.initializeRemoteShell();
+    }, delayMs);
+  }
 
-    if (remoteCwd) {
-      commands.push(`cd ${shellEscape(remoteCwd)}`);
+  private clearShellInitializationTimer(): void {
+    if (!this.shellInitializationTimer) {
+      return;
     }
 
-    if (startupCommand) {
-      commands.push(startupCommand);
+    clearTimeout(this.shellInitializationTimer);
+    this.shellInitializationTimer = null;
+  }
+
+  private initializeRemoteShell(): void {
+    if (!this.channel || this.shellInitialized) {
+      return;
     }
+
+    const commands = buildShellInitializationCommands(this.ssh);
 
     if (commands.length > 0) {
+      this.shellInitialized = true;
       this.channel.write(`${commands.join('\r')}\r`);
     }
   }
@@ -319,6 +339,48 @@ export class SSHPtySession implements IPty {
 
 function decodeChunk(value: Buffer | string, decoder: StringDecoder): string {
   return typeof value === 'string' ? value : decoder.write(value);
+}
+
+function hasShellInitialization(ssh: SSHSessionConfig): boolean {
+  return Boolean(ssh.remoteCwd?.trim() || ssh.command?.trim());
+}
+
+function buildShellInitializationCommands(ssh: SSHSessionConfig): string[] {
+  const commands: string[] = [];
+  const remoteCwd = ssh.remoteCwd?.trim();
+  const startupCommand = ssh.command?.trim();
+
+  if (remoteCwd) {
+    commands.push(`cd -- ${formatRemoteCdTarget(remoteCwd)}`);
+  }
+
+  if (startupCommand) {
+    commands.push(startupCommand);
+  }
+
+  return commands;
+}
+
+function formatRemoteCdTarget(value: string): string {
+  const tildeMatch = /^(~[^/]*)(?:\/(.*))?$/.exec(value);
+  if (!tildeMatch) {
+    return shellEscape(value);
+  }
+
+  const [, homeRef, remainder] = tildeMatch;
+  if (remainder === undefined) {
+    return homeRef;
+  }
+
+  if (remainder.length === 0) {
+    return `${homeRef}/`;
+  }
+
+  return `${homeRef}/${shellDoubleQuote(remainder)}`;
+}
+
+function shellDoubleQuote(value: string): string {
+  return `"${value.replace(/(["\\$`])/g, '\\$1')}"`;
 }
 
 function shellEscape(value: string): string {

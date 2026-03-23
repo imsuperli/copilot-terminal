@@ -116,7 +116,7 @@ describe('CardGrid SSH profile cards', () => {
     expect(screen.getByText(/root@10.0.0.21:22/)).toBeInTheDocument();
     expect(screen.getByText('已保存密码')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '连接' }));
+    await user.click(screen.getByRole('button', { name: '启动' }));
 
     expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
   });
@@ -155,19 +155,16 @@ describe('CardGrid SSH profile cards', () => {
     expect(screen.getByText('2 个转发')).toBeInTheDocument();
   });
 
-  it('disables profile deletion when the profile is referenced by existing windows', () => {
+  it('does not render the in-use badge and keeps profile deletion available', () => {
     const profile = createSSHProfile();
 
     renderCardGrid({
       sshEnabled: true,
       sshProfiles: [profile],
-      sshProfileUsageCounts: {
-        [profile.id]: 2,
-      },
     });
 
-    expect(screen.getByRole('button', { name: '删除 SSH 配置' })).toBeDisabled();
-    expect(screen.getByText('已被 2 个窗口使用')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '删除 SSH 配置' })).toBeEnabled();
+    expect(screen.queryByText(/已被 .* 个窗口使用/)).not.toBeInTheDocument();
   });
 
   it('binds a standalone SSH runtime window back onto the SSH profile card', async () => {
@@ -189,9 +186,10 @@ describe('CardGrid SSH profile cards', () => {
     });
 
     expect(screen.queryByText('Hidden runtime window')).not.toBeInTheDocument();
-    expect(screen.getByText('运行中')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '停止' })).toBeInTheDocument();
+    expect(screen.queryByText('运行中')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '打开' }));
+    await user.click(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' }));
 
     expect(onConnectSSHProfile).not.toHaveBeenCalled();
     expect(onEnterTerminal).toHaveBeenCalledWith(runtimeWindow);

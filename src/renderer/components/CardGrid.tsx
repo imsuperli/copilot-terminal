@@ -38,7 +38,6 @@ interface CardGridProps {
   sshEnabled?: boolean;
   sshProfiles?: SSHProfile[];
   sshCredentialStates?: Record<string, SSHCredentialState>;
-  sshProfileUsageCounts?: Record<string, number>;
   connectingSSHProfileId?: string | null;
   onConnectSSHProfile?: (profile: SSHProfile) => void | Promise<void>;
   onEditSSHProfile?: (profile: SSHProfile) => void;
@@ -64,7 +63,6 @@ export const CardGrid = React.memo<CardGridProps>(({
   sshEnabled = false,
   sshProfiles = [],
   sshCredentialStates = {},
-  sshProfileUsageCounts = {},
   connectingSSHProfileId = null,
   onConnectSSHProfile,
   onEditSSHProfile,
@@ -670,7 +668,6 @@ export const CardGrid = React.memo<CardGridProps>(({
                     profile={profile}
                     window={standaloneSSHWindowsByProfile[profile.id] ?? null}
                     credentialState={sshCredentialStates[profile.id]}
-                    inUseCount={sshProfileUsageCounts[profile.id] ?? 0}
                     isConnecting={connectingSSHProfileId === profile.id}
                     onConnect={handleConnectSSHProfile}
                     onOpenWindow={handleCardClick}

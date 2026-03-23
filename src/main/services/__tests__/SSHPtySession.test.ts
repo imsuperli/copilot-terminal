@@ -22,6 +22,7 @@ function createMockChannel() {
 
 describe('SSHPtySession', () => {
   it('requests X11 forwarding when the SSH session config enables it', async () => {
+    vi.useFakeTimers();
     const channel = createMockChannel();
     const openShell = vi.fn().mockResolvedValue(channel);
     const release = vi.fn().mockResolvedValue(undefined);
@@ -67,10 +68,60 @@ describe('SSHPtySession', () => {
       cols: 120,
       rows: 30,
     }));
-    expect(channel.write).toHaveBeenCalledWith("cd '/srv/app'\r");
+    channel.emit('data', 'Last login\r\n');
+    await vi.advanceTimersByTimeAsync(40);
+    expect(channel.write).toHaveBeenCalledWith("cd -- '/srv/app'\r");
 
     session.kill();
     expect(release).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('preserves tilde expansion when initializing the remote cwd', async () => {
+    vi.useFakeTimers();
+    const channel = createMockChannel();
+    const openShell = vi.fn().mockResolvedValue(channel);
+
+    await SSHPtySession.create({
+      pid: 2203,
+      ssh: {
+        profileId: 'profile-1',
+        host: '10.0.0.21',
+        port: 22,
+        user: 'root',
+        authType: 'password',
+        privateKeys: [],
+        password: 'secret',
+        keepaliveInterval: 30,
+        keepaliveCountMax: 3,
+        readyTimeout: null,
+        verifyHostKeys: true,
+        agentForward: false,
+        reuseSession: true,
+        forwardedPorts: [],
+        remoteCwd: '~/workspace with spaces',
+      },
+      connectionPool: {
+        acquire: vi.fn().mockResolvedValue({
+          connection: {
+            openShell,
+            listPortForwards: vi.fn().mockReturnValue([]),
+            addPortForward: vi.fn(),
+            removePortForward: vi.fn(),
+            listSftpDirectory: vi.fn(),
+            downloadSftpFile: vi.fn(),
+            uploadSftpFiles: vi.fn(),
+          },
+          release: vi.fn().mockResolvedValue(undefined),
+        }),
+      } as any,
+    });
+
+    channel.emit('data', 'Welcome\r\n');
+    await vi.advanceTimersByTimeAsync(40);
+
+    expect(channel.write).toHaveBeenCalledWith('cd -- ~/"workspace with spaces"\r');
+    vi.useRealTimers();
   });
 
   it('decodes split utf8 chunks without garbling the terminal output', async () => {

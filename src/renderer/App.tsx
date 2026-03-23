@@ -570,23 +570,6 @@ function AppContent() {
     () => windows.filter((window) => mountedTerminalWindowIdSet.has(window.id)),
     [windows, mountedTerminalWindowIdSet]
   );
-  const sshProfileUsageCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-
-    windows.forEach((window) => {
-      const profileIds = new Set(
-        getAllPanes(window.layout)
-          .map((pane) => pane.ssh?.profileId)
-          .filter((profileId): profileId is string => Boolean(profileId)),
-      );
-
-      profileIds.forEach((profileId) => {
-        counts[profileId] = (counts[profileId] ?? 0) + 1;
-      });
-    });
-
-    return counts;
-  }, [windows]);
   const hasActiveWindows = useMemo(
     () => windows.some(w => !w.archived) || groups.some(g => !g.archived) || (sshEnabled && sshProfiles.length > 0),
     [groups, sshEnabled, sshProfiles.length, windows]
@@ -648,7 +631,6 @@ function AppContent() {
               sshEnabled={sshEnabled}
               sshProfiles={sshProfiles}
               sshCredentialStates={sshCredentialStates}
-              sshProfileUsageCounts={sshProfileUsageCounts}
               connectingSSHProfileId={connectingSSHProfileId}
               onConnectSSHProfile={handleConnectSSHProfile}
               onEditSSHProfile={handleEditSSHProfile}
