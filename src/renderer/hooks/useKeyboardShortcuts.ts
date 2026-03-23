@@ -31,11 +31,13 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
 
       if (isXtermTextarea) {
         // 在 xterm textarea 中，只处理明确的快捷键，其他一律放行
+        // 注意：Escape 键不在此列表中，因为 vi/vim 等编辑器严重依赖 Escape 键，
+        // 必须让其直接传递给 xterm.js/PTY，不能在应用层拦截。
+        // QuickSwitcher 等面板的 Escape 关闭由面板自己的事件监听器处理。
         const isShortcut =
           (e.ctrlKey && e.key === 'Tab') ||
           (e.ctrlKey && e.key === 'b') ||
-          (e.ctrlKey && e.key >= '1' && e.key <= '9') ||
-          (e.key === 'Escape');
+          (e.ctrlKey && e.key >= '1' && e.key <= '9');
 
         if (!isShortcut) {
           return; // 不是快捷键，直接放行
