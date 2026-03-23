@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SSHSftpDialog } from '../SSHSftpDialog';
@@ -383,7 +383,10 @@ describe('SSHSftpDialog', () => {
       expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledTimes(2);
     });
 
-    await user.click(screen.getAllByRole('button', { name: '删除' })[0]);
+    const logsRow = screen.getByRole('button', { name: 'logs' }).closest('.group');
+    expect(logsRow).not.toBeNull();
+
+    await user.click(within(logsRow as HTMLElement).getByRole('button', { name: '删除' }));
     await user.click(screen.getAllByRole('button', { name: '删除' }).at(-1)!);
 
     await waitFor(() => {
