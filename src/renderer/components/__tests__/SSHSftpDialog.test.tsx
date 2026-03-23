@@ -223,6 +223,9 @@ describe('SSHSftpDialog', () => {
       });
     });
 
+    expect(await screen.findByText('release.tar.gz 下载完成。')).toBeInTheDocument();
+    expect(screen.getByText('/tmp/release.tar.gz')).toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: '上传文件' }));
 
     await waitFor(() => {
@@ -396,6 +399,8 @@ describe('SSHSftpDialog', () => {
         remotePath: '/srv/app/logs',
       });
     });
+
+    expect(await screen.findByText('logs 已删除。')).toBeInTheDocument();
   });
 
   it('keeps help copy collapsed until the help button is clicked', async () => {

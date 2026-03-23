@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  CheckCircle2,
   ChevronRight,
   Download,
   Filter,
@@ -9,6 +10,7 @@ import {
   HardDriveDownload,
   HardDriveUpload,
   HelpCircle,
+  Info,
   RefreshCw,
   Trash2,
   X,
@@ -26,6 +28,13 @@ interface SSHSftpDialogProps {
   initialPath?: string | null;
   currentCwd?: string | null;
 }
+
+type PanelNotice = {
+  id: number;
+  tone: 'progress' | 'success' | 'info';
+  message: string;
+  detail?: string;
+};
 
 export function SSHSftpDialog({
   open,
@@ -51,11 +60,21 @@ export function SSHSftpDialog({
   const [showHelp, setShowHelp] = useState(false);
   const [followTerminalCwd, setFollowTerminalCwd] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState<PanelNotice | null>(null);
   const lastLoadedPathRef = useRef<string | null>(null);
+  const noticeIdRef = useRef(0);
 
   const isDirectoryEntry = useCallback((entry: SSHSftpEntry) => (
     entry.isDirectory || entry.symlinkTargetIsDirectory === true
   ), []);
+
+  const showNotice = useCallback((nextNotice: Omit<PanelNotice, 'id'>) => {
+    noticeIdRef.current += 1;
+    setNotice({
+      id: noticeIdRef.current,
+      ...nextNotice,
+    });
+  }, []);
 
   const loadDirectory = useCallback(async (targetPath?: string) => {
     if (!open || !windowId || !paneId) {
@@ -121,6 +140,7 @@ export function SSHSftpDialog({
     setDeletingEntry(null);
     setShowHelp(false);
     setFollowTerminalCwd(true);
+    setNotice(null);
     lastLoadedPathRef.current = nextPath || null;
     void loadDirectory(nextPath || undefined);
   }, [initialPath, loadDirectory, open, paneId, windowId]);
@@ -137,6 +157,21 @@ export function SSHSftpDialog({
 
     void loadDirectory(nextCwd);
   }, [currentCwd, followTerminalCwd, loadDirectory, open]);
+
+  useEffect(() => {
+    if (!notice || notice.tone === 'progress') {
+      return;
+    }
+
+    const currentNoticeId = notice.id;
+    const timer = window.setTimeout(() => {
+      setNotice((activeNotice) => (activeNotice?.id === currentNoticeId ? null : activeNotice));
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [notice]);
 
   const handleManualNavigate = useCallback(async (targetPath: string) => {
     setFollowTerminalCwd(false);
@@ -179,6 +214,10 @@ export function SSHSftpDialog({
 
     setIsUploadingFiles(true);
     setError('');
+    showNotice({
+      tone: 'progress',
+      message: t('sshSftpDialog.notice.uploadingFiles'),
+    });
 
     try {
       const response = await window.electronAPI.uploadSSHSftpFiles({
@@ -192,13 +231,22 @@ export function SSHSftpDialog({
 
       if ((response.data?.uploadedCount ?? 0) > 0) {
         await loadDirectory(listing.path);
+        showNotice({
+          tone: 'success',
+          message: t('sshSftpDialog.notice.uploadedFiles', {
+            count: String(response.data?.uploadedCount ?? 0),
+          }),
+        });
+      } else {
+        setNotice(null);
       }
     } catch (uploadError) {
       setError((uploadError as Error).message || t('sshSftpDialog.uploadError'));
+      setNotice(null);
     } finally {
       setIsUploadingFiles(false);
     }
-  }, [listing, loadDirectory, paneId, t, windowId]);
+  }, [listing, loadDirectory, paneId, showNotice, t, windowId]);
 
   const handleUploadDirectory = useCallback(async () => {
     if (!windowId || !paneId || !listing) {
@@ -207,6 +255,10 @@ export function SSHSftpDialog({
 
     setIsUploadingDirectory(true);
     setError('');
+    showNotice({
+      tone: 'progress',
+      message: t('sshSftpDialog.notice.uploadingDirectory'),
+    });
 
     try {
       const response = await window.electronAPI.uploadSSHSftpDirectory({
@@ -220,13 +272,22 @@ export function SSHSftpDialog({
 
       if ((response.data?.uploadedCount ?? 0) > 0) {
         await loadDirectory(listing.path);
+        showNotice({
+          tone: 'success',
+          message: t('sshSftpDialog.notice.uploadedDirectory', {
+            count: String(response.data?.uploadedCount ?? 0),
+          }),
+        });
+      } else {
+        setNotice(null);
       }
     } catch (uploadError) {
       setError((uploadError as Error).message || t('sshSftpDialog.uploadDirectoryError'));
+      setNotice(null);
     } finally {
       setIsUploadingDirectory(false);
     }
-  }, [listing, loadDirectory, paneId, t, windowId]);
+  }, [listing, loadDirectory, paneId, showNotice, t, windowId]);
 
   const handleDownloadFile = useCallback(async (entry: SSHSftpEntry) => {
     if (!windowId || !paneId || isDirectoryEntry(entry)) {
@@ -235,6 +296,12 @@ export function SSHSftpDialog({
 
     setDownloadingPath(entry.path);
     setError('');
+    showNotice({
+      tone: 'progress',
+      message: t('sshSftpDialog.notice.downloadingFile', {
+        name: entry.name,
+      }),
+    });
 
     try {
       const response = await window.electronAPI.downloadSSHSftpFile({
@@ -246,12 +313,30 @@ export function SSHSftpDialog({
       if (!response.success) {
         throw new Error(response.error || t('sshSftpDialog.downloadError'));
       }
+
+      if (response.data) {
+        showNotice({
+          tone: 'success',
+          message: t('sshSftpDialog.notice.downloadedFile', {
+            name: entry.name,
+          }),
+          detail: response.data,
+        });
+      } else {
+        showNotice({
+          tone: 'info',
+          message: t('sshSftpDialog.notice.downloadCancelled', {
+            name: entry.name,
+          }),
+        });
+      }
     } catch (downloadError) {
       setError((downloadError as Error).message || t('sshSftpDialog.downloadError'));
+      setNotice(null);
     } finally {
       setDownloadingPath(null);
     }
-  }, [isDirectoryEntry, paneId, t, windowId]);
+  }, [isDirectoryEntry, paneId, showNotice, t, windowId]);
 
   const handleDownloadDirectory = useCallback(async (entry: SSHSftpEntry) => {
     if (!windowId || !paneId || !isDirectoryEntry(entry)) {
@@ -260,6 +345,12 @@ export function SSHSftpDialog({
 
     setDownloadingPath(entry.path);
     setError('');
+    showNotice({
+      tone: 'progress',
+      message: t('sshSftpDialog.notice.downloadingDirectory', {
+        name: entry.name,
+      }),
+    });
 
     try {
       const response = await window.electronAPI.downloadSSHSftpDirectory({
@@ -271,12 +362,30 @@ export function SSHSftpDialog({
       if (!response.success) {
         throw new Error(response.error || t('sshSftpDialog.downloadDirectoryError'));
       }
+
+      if (response.data) {
+        showNotice({
+          tone: 'success',
+          message: t('sshSftpDialog.notice.downloadedDirectory', {
+            name: entry.name,
+          }),
+          detail: response.data,
+        });
+      } else {
+        showNotice({
+          tone: 'info',
+          message: t('sshSftpDialog.notice.downloadCancelled', {
+            name: entry.name,
+          }),
+        });
+      }
     } catch (downloadError) {
       setError((downloadError as Error).message || t('sshSftpDialog.downloadDirectoryError'));
+      setNotice(null);
     } finally {
       setDownloadingPath(null);
     }
-  }, [isDirectoryEntry, paneId, t, windowId]);
+  }, [isDirectoryEntry, paneId, showNotice, t, windowId]);
 
   const handleCreateDirectory = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -292,6 +401,12 @@ export function SSHSftpDialog({
 
     setIsCreatingDirectory(true);
     setError('');
+    showNotice({
+      tone: 'progress',
+      message: t('sshSftpDialog.notice.creatingDirectory', {
+        name: trimmedName,
+      }),
+    });
 
     try {
       const response = await window.electronAPI.createSSHSftpDirectory({
@@ -307,12 +422,19 @@ export function SSHSftpDialog({
       setDirectoryName('');
       setCreatingDirectory(false);
       await loadDirectory(listing.path);
+      showNotice({
+        tone: 'success',
+        message: t('sshSftpDialog.notice.createdDirectory', {
+          name: trimmedName,
+        }),
+      });
     } catch (createError) {
       setError((createError as Error).message || t('sshSftpDialog.createDirectoryError'));
+      setNotice(null);
     } finally {
       setIsCreatingDirectory(false);
     }
-  }, [directoryName, listing, loadDirectory, paneId, t, windowId]);
+  }, [directoryName, listing, loadDirectory, paneId, showNotice, t, windowId]);
 
   const handleDeleteEntry = useCallback(async () => {
     if (!windowId || !paneId || !listing || !deletingEntry) {
@@ -321,6 +443,13 @@ export function SSHSftpDialog({
 
     setIsDeleting(true);
     setError('');
+    const deletingEntryName = deletingEntry.name;
+    showNotice({
+      tone: 'progress',
+      message: t('sshSftpDialog.notice.deletingEntry', {
+        name: deletingEntryName,
+      }),
+    });
 
     try {
       const response = await window.electronAPI.deleteSSHSftpEntry({
@@ -332,14 +461,31 @@ export function SSHSftpDialog({
         throw new Error(response.error || t('sshSftpDialog.deleteError'));
       }
 
+      setListing((currentListing) => {
+        if (!currentListing) {
+          return currentListing;
+        }
+
+        return {
+          ...currentListing,
+          entries: currentListing.entries.filter((entry) => entry.path !== deletingEntry.path),
+        };
+      });
       setDeletingEntry(null);
       await loadDirectory(listing.path);
+      showNotice({
+        tone: 'success',
+        message: t('sshSftpDialog.notice.deletedEntry', {
+          name: deletingEntryName,
+        }),
+      });
     } catch (deleteError) {
       setError((deleteError as Error).message || t('sshSftpDialog.deleteError'));
+      setNotice(null);
     } finally {
       setIsDeleting(false);
     }
-  }, [deletingEntry, listing, loadDirectory, paneId, t, windowId]);
+  }, [deletingEntry, listing, loadDirectory, paneId, showNotice, t, windowId]);
 
   const pathSegments = useMemo(() => {
     const currentPathValue = listing?.path ?? pathInput.trim();
@@ -542,6 +688,51 @@ export function SSHSftpDialog({
         {error && (
           <div className="mx-3 mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}
+          </div>
+        )}
+
+        {notice && (
+          <div className={`mx-3 mt-3 rounded-md border px-3 py-2 text-sm ${
+            notice.tone === 'progress'
+              ? 'border-blue-500/30 bg-blue-500/10 text-blue-100'
+              : notice.tone === 'success'
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+                : 'border-zinc-700 bg-zinc-900 text-zinc-200'
+          }`}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  {notice.tone === 'progress' ? (
+                    <RefreshCw size={14} className="shrink-0 animate-spin" />
+                  ) : notice.tone === 'success' ? (
+                    <CheckCircle2 size={14} className="shrink-0" />
+                  ) : (
+                    <Info size={14} className="shrink-0" />
+                  )}
+                  <span>{notice.message}</span>
+                </div>
+                {notice.detail && (
+                  <div className="mt-1 truncate font-mono text-[11px] text-current/80">
+                    {notice.detail}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                aria-label={t('common.close')}
+                onClick={() => setNotice(null)}
+                className="flex h-6 w-6 items-center justify-center rounded-md text-current/70 transition-colors hover:bg-black/10 hover:text-current"
+              >
+                <X size={13} />
+              </button>
+            </div>
+
+            {notice.tone === 'progress' && (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full w-full animate-pulse rounded-full bg-current/70" />
+              </div>
+            )}
           </div>
         )}
 

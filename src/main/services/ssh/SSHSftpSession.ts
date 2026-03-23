@@ -83,7 +83,8 @@ export class SSHSftpSession {
 
   async deleteEntry(remotePath: string): Promise<void> {
     const wrapper = await this.getWrapper();
-    await this.deleteEntryRecursive(wrapper, remotePath);
+    const resolvedRemotePath = await this.resolveExistingPath(wrapper, remotePath);
+    await this.deleteEntryRecursive(wrapper, resolvedRemotePath);
   }
 
   private async realpath(wrapper: SFTPWrapper, targetPath: string): Promise<string> {

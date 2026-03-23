@@ -91,4 +91,34 @@ describe('SSHSftpSession', () => {
     expect(wrapper.realpath).toHaveBeenCalledWith('/srv/app/logs', expect.any(Function));
     expect(wrapper.readdir).toHaveBeenCalledWith('/srv/app/logs', expect.any(Function));
   });
+
+  it('resolves delete targets before unlinking remote entries', async () => {
+    const wrapper = createSftpWrapper();
+    wrapper.realpath.mockImplementation((targetPath: string, callback: (error: Error | null, absolutePath?: string) => void) => {
+      if (targetPath === '.') {
+        callback(null, '/srv/app');
+        return;
+      }
+
+      callback(null, targetPath);
+    });
+    wrapper.lstat.mockImplementation((_targetPath: string, callback: (error: Error | null, stats?: any) => void) => {
+      callback(null, {
+        isSymbolicLink: () => false,
+        isDirectory: () => false,
+      });
+    });
+    wrapper.unlink.mockImplementation((_targetPath: string, callback: (error: Error | null) => void) => {
+      callback(null);
+    });
+
+    const session = new SSHSftpSession({
+      getWrapper: async () => wrapper as any,
+    });
+
+    await session.deleteEntry('logs');
+
+    expect(wrapper.realpath).toHaveBeenCalledWith('/srv/app/logs', expect.any(Function));
+    expect(wrapper.unlink).toHaveBeenCalledWith('/srv/app/logs', expect.any(Function));
+  });
 });
