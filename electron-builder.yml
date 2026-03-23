@@ -13,6 +13,7 @@ afterPack: ./scripts/after-pack.js
 asarUnpack:
   - dist/statusline/**/*
   - resources/bin/**/*
+  - node_modules/node-pty/**/*
 npmRebuild: true
 win:
   icon: resources/icon.png
