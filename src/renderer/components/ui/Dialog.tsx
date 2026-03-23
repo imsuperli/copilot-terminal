@@ -5,14 +5,15 @@ import { X } from 'lucide-react';
 interface DialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  title: string;
-  description?: string;
+  title: React.ReactNode;
+  description?: React.ReactNode;
   children: React.ReactNode;
   contentClassName?: string;
   headerClassName?: string;
   bodyClassName?: string;
   titleClassName?: string;
   descriptionClassName?: string;
+  headerActions?: React.ReactNode;
   showCloseButton?: boolean;
   closeLabel?: string;
 }
@@ -28,6 +29,7 @@ export function Dialog({
   bodyClassName = '',
   titleClassName = '',
   descriptionClassName = '',
+  headerActions,
   showCloseButton = false,
   closeLabel = 'Close',
 }: DialogProps) {
@@ -52,16 +54,21 @@ export function Dialog({
                 )}
               </div>
 
-              {showCloseButton && (
-                <RadixDialog.Close asChild>
-                  <button
-                    type="button"
-                    aria-label={closeLabel}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-app/70 text-text-secondary transition-colors hover:bg-bg-card-hover hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
-                  >
-                    <X size={16} />
-                  </button>
-                </RadixDialog.Close>
+              {(headerActions || showCloseButton) && (
+                <div className="flex shrink-0 items-center gap-2">
+                  {headerActions}
+                  {showCloseButton && (
+                    <RadixDialog.Close asChild>
+                      <button
+                        type="button"
+                        aria-label={closeLabel}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border-subtle bg-bg-app/70 text-text-secondary transition-colors hover:bg-bg-card-hover hover:text-text-primary focus:outline-none focus:ring-2 focus:ring-status-running"
+                      >
+                        <X size={16} />
+                      </button>
+                    </RadixDialog.Close>
+                  )}
+                </div>
               )}
             </div>
           </div>

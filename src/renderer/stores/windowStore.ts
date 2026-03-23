@@ -100,6 +100,7 @@ interface WindowStore {
 
   // Pane 相关
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
+  updatePaneRuntime: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
   pauseWindowState: (windowId: string) => void;
   splitPaneInWindow: (windowId: string, targetPaneId: string, direction: 'horizontal' | 'vertical', newPane: Pane) => void;
   closePaneInWindow: (windowId: string, paneId: string, options?: { syncProcess?: boolean }) => void;
@@ -349,6 +350,36 @@ export const useWindowStore = create<WindowStore>()(
         const { windows, groups } = get();
         triggerAutoSave(windows, groups);
       }
+    },
+
+    updatePaneRuntime: (windowId, paneId, updates) => {
+      const updateKeys = Object.keys(updates);
+      if (updateKeys.length === 0) {
+        return;
+      }
+
+      set((state) => {
+        const window = state.windows.find(w => w.id === windowId);
+        if (!window) {
+          return;
+        }
+
+        const paneNode = findPaneNode(window.layout, paneId);
+        if (!paneNode) {
+          return;
+        }
+
+        const hasActualChange = updateKeys.some((key) => {
+          const paneKey = key as keyof Pane;
+          return paneNode.pane[paneKey] !== updates[paneKey];
+        });
+
+        if (!hasActualChange) {
+          return;
+        }
+
+        window.layout = updatePaneInLayout(window.layout, paneId, updates);
+      });
     },
 
     pauseWindowState: (windowId) => {

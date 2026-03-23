@@ -7,6 +7,13 @@ import { StatusDot } from './StatusDot';
 import { useI18n } from '../i18n';
 import { subscribeToPanePtyData } from '../api/ptyDataBus';
 import type { PtyDataPayload, PtyHistorySnapshot } from '../../shared/types/electron-api';
+import { useWindowStore } from '../stores/windowStore';
+import {
+  applyTerminalInputToSSHCwdTracker,
+  createSSHCwdTrackerState,
+  extractLatestOsc7RemoteCwd,
+  updateSSHCwdTrackerFromRuntimeCwd,
+} from '../utils/sshCwdTracking';
 import { AppTooltip } from './ui/AppTooltip';
 import '../styles/xterm.css';
 
@@ -171,6 +178,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   onProcessExit,
 }) => {
   const { t } = useI18n();
+  const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -194,6 +202,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const hasCompletedReplayForCurrentSessionRef = useRef(false);
   const replaySessionKeyRef = useRef<string | null>(getReplaySessionKey(windowId, pane.id, pane.pid));
   const replayHistoryRef = useRef<((options?: { resetTerminal?: boolean }) => Promise<void>) | null>(null);
+  const sshPaneRef = useRef(pane.ssh);
+  const sshRuntimeCwdRef = useRef(pane.ssh?.remoteCwd ?? pane.cwd);
+  const sshCwdTrackerRef = useRef(createSSHCwdTrackerState(sshRuntimeCwdRef.current));
   const [isHovered, setIsHovered] = useState(false);
 
   // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
@@ -267,6 +278,41 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       sessionKey && completedReplaySessions.has(sessionKey),
     );
   }, [windowId, pane.id, pane.pid]);
+
+  useEffect(() => {
+    sshPaneRef.current = pane.ssh;
+    sshRuntimeCwdRef.current = pane.ssh?.remoteCwd ?? pane.cwd;
+    sshCwdTrackerRef.current = updateSSHCwdTrackerFromRuntimeCwd(
+      sshCwdTrackerRef.current,
+      sshRuntimeCwdRef.current,
+    );
+  }, [pane.cwd, pane.ssh]);
+
+  const syncRuntimeSshCwd = useCallback((nextCwd: string | null) => {
+    if (!nextCwd) {
+      return;
+    }
+
+    const sshBinding = sshPaneRef.current;
+    if (!sshBinding) {
+      return;
+    }
+
+    sshCwdTrackerRef.current = updateSSHCwdTrackerFromRuntimeCwd(sshCwdTrackerRef.current, nextCwd);
+
+    if (sshRuntimeCwdRef.current === nextCwd) {
+      return;
+    }
+
+    sshRuntimeCwdRef.current = nextCwd;
+    updatePaneRuntime(windowId, pane.id, {
+      cwd: nextCwd,
+      ssh: {
+        ...sshBinding,
+        remoteCwd: nextCwd,
+      },
+    });
+  }, [pane.id, updatePaneRuntime, windowId]);
 
   const forceResizeToContainer = useCallback(() => {
     lastContainerSizeRef.current = { width: 0, height: 0 };
@@ -487,6 +533,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         return;
       }
 
+      if (sshPaneRef.current) {
+        const runtimeCwd = extractLatestOsc7RemoteCwd(payload.data);
+        if (runtimeCwd) {
+          syncRuntimeSshCwd(runtimeCwd);
+        }
+      }
+
       if (payload.seq !== undefined && payload.seq <= lastAppliedSeqRef.current) {
         return;
       }
@@ -681,6 +734,17 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     // 监听用户输入
     const dataDisposable = terminal.onData((data) => {
+      if (sshPaneRef.current) {
+        const { nextState, resolvedCwd } = applyTerminalInputToSSHCwdTracker(
+          sshCwdTrackerRef.current,
+          data,
+        );
+        sshCwdTrackerRef.current = nextState;
+        if (resolvedCwd) {
+          syncRuntimeSshCwd(resolvedCwd);
+        }
+      }
+
       // 新会话的首次回放里，xterm 生成的协议响应仍然要回给 PTY；
       // 只有同一会话后续的补回放才需要屏蔽 synthetic reply。
       if (window.electronAPI && !suppressPtyWriteRef.current) {
@@ -754,7 +818,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       terminal.dispose();
     };
-  }, [windowId, pane.id]); // writeClipboardText 和 readClipboardText 已用 useCallback 包裹且依赖为空，引用稳定，无需作为依赖
+  }, [syncRuntimeSshCwd, windowId, pane.id]); // writeClipboardText 和 readClipboardText 已用 useCallback 包裹且依赖为空，引用稳定，无需作为依赖
 
   useEffect(() => {
     const previousSession = lastSessionRef.current;

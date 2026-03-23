@@ -6,6 +6,7 @@ import {
   FolderUp,
   HardDriveDownload,
   HardDriveUpload,
+  HelpCircle,
   RefreshCw,
   Trash2,
 } from 'lucide-react';
@@ -42,6 +43,7 @@ export function SSHSftpDialog({
   const [isCreatingDirectory, setIsCreatingDirectory] = useState(false);
   const [deletingEntry, setDeletingEntry] = useState<SSHSftpEntry | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [error, setError] = useState('');
   const isDirectoryEntry = useCallback((entry: SSHSftpEntry) => (
     entry.isDirectory || entry.symlinkTargetIsDirectory === true
@@ -104,6 +106,7 @@ export function SSHSftpDialog({
     setDirectoryName('');
     setCreatingDirectory(false);
     setDeletingEntry(null);
+    setShowHelp(false);
     void loadDirectory(initialPath?.trim() || undefined);
   }, [initialPath, loadDirectory, open]);
 
@@ -330,13 +333,29 @@ export function SSHSftpDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={t('sshSftpDialog.title')}
-      description={t('sshSftpDialog.description')}
       contentClassName="max-w-[1100px]"
+      headerActions={(
+        <button
+          type="button"
+          aria-label={t('sshSftpDialog.helpAriaLabel')}
+          onClick={() => setShowHelp((current) => !current)}
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-status-running ${
+            showHelp
+              ? 'border-status-running/60 bg-status-running/10 text-blue-200'
+              : 'border-border-subtle bg-bg-app/70 text-text-secondary hover:bg-bg-card-hover hover:text-text-primary'
+          }`}
+        >
+          <HelpCircle size={16} />
+        </button>
+      )}
     >
       <div className="space-y-4">
-        <div className="rounded-lg border border-border-subtle bg-bg-elevated/40 px-4 py-3 text-xs text-text-secondary">
-          {t('sshSftpDialog.scopeHint')}
-        </div>
+        {showHelp && (
+          <div className="rounded-lg border border-border-subtle bg-bg-elevated/40 px-4 py-3 text-sm leading-6 text-text-secondary">
+            <p>{t('sshSftpDialog.description')}</p>
+            <p className="mt-2">{t('sshSftpDialog.scopeHint')}</p>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {pathSegments.map((segment) => (

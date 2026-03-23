@@ -394,4 +394,26 @@ describe('SSHSftpDialog', () => {
       });
     });
   });
+
+  it('keeps help copy collapsed until the help button is clicked', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/srv/app"
+      />,
+    );
+
+    expect(screen.queryByText('浏览当前 SSH 会话的远程目录，并在本地与远程之间传输文件。')).not.toBeInTheDocument();
+    expect(screen.queryByText('SFTP 面板复用当前 SSH 连接，不会影响本地终端或现有分屏布局。')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '显示 SSH 文件传输说明' }));
+
+    expect(screen.getByText('浏览当前 SSH 会话的远程目录，并在本地与远程之间传输文件。')).toBeInTheDocument();
+    expect(screen.getByText('SFTP 面板复用当前 SSH 连接，不会影响本地终端或现有分屏布局。')).toBeInTheDocument();
+  });
 });
