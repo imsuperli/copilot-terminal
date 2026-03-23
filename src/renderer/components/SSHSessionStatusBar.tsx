@@ -93,9 +93,60 @@ export function SSHSessionStatusBar({
   return (
     <div
       data-testid="ssh-session-status-bar"
-      className="flex h-8 items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/90 px-3 text-[11px] text-zinc-400"
+      className="flex h-8 items-center gap-3 border-t border-zinc-800 bg-zinc-950/90 px-3 text-[11px] text-zinc-400"
     >
-      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+      {onClose && (
+        <AppTooltip content={t('sshSessionStatusBar.hide')}>
+          <button
+            type="button"
+            aria-label={t('sshSessionStatusBar.hide')}
+            onClick={onClose}
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+          >
+            <X size={12} />
+          </button>
+        </AppTooltip>
+      )}
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+        <StatusItem
+          icon={<Activity size={12} />}
+          label={t('sshSessionStatusBar.cpuCores')}
+          value={metrics?.cpuCores ? `${metrics.cpuCores}` : '--'}
+          loading={isLoading && !metrics}
+        />
+        <StatusItem
+          icon={<Activity size={12} />}
+          label={t('sshSessionStatusBar.load')}
+          value={metrics?.loadAverage.length ? metrics.loadAverage.join(' / ') : '--'}
+          loading={isLoading && !metrics}
+          colorLevel={getLoadColorLevel(metrics?.loadAverage)}
+        />
+        <StatusItem
+          icon={<MemoryStick size={12} />}
+          label={t('sshSessionStatusBar.memory')}
+          value={formatUsage(metrics?.memory?.usedPercent)}
+          detail={formatMetricBytes(metrics?.memory?.usedBytes, metrics?.memory?.totalBytes)}
+          loading={isLoading && !metrics}
+          colorLevel={getUsageColorLevel(metrics?.memory?.usedPercent)}
+        />
+        <StatusItem
+          icon={<HardDrive size={12} />}
+          label={t('sshSessionStatusBar.disk')}
+          value={formatUsage(metrics?.disk?.usedPercent)}
+          detail={formatMetricBytes(metrics?.disk?.usedBytes, metrics?.disk?.totalBytes)}
+          loading={isLoading && !metrics}
+          colorLevel={getUsageColorLevel(metrics?.disk?.usedPercent)}
+        />
+        {error && (
+          <AppTooltip content={error}>
+            <span className="inline-flex h-5 items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 text-amber-200">
+              <AlertCircle size={12} />
+              <span>{t('sshSessionStatusBar.unavailable')}</span>
+            </span>
+          </AppTooltip>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
         <StatusItem
           icon={<Server size={12} />}
           label={t('sshSessionStatusBar.host')}
@@ -109,52 +160,11 @@ export function SSHSessionStatusBar({
           mono
         />
       </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        <StatusItem
-          icon={<Activity size={12} />}
-          label={t('sshSessionStatusBar.load')}
-          value={metrics?.loadAverage.length ? metrics.loadAverage.join(' / ') : '--'}
-          loading={isLoading && !metrics}
-        />
-        <StatusItem
-          icon={<MemoryStick size={12} />}
-          label={t('sshSessionStatusBar.memory')}
-          value={formatUsage(metrics?.memory?.usedPercent)}
-          detail={formatMetricBytes(metrics?.memory?.usedBytes, metrics?.memory?.totalBytes)}
-          loading={isLoading && !metrics}
-        />
-        <StatusItem
-          icon={<HardDrive size={12} />}
-          label={t('sshSessionStatusBar.disk')}
-          value={formatUsage(metrics?.disk?.usedPercent)}
-          detail={formatMetricBytes(metrics?.disk?.usedBytes, metrics?.disk?.totalBytes)}
-          loading={isLoading && !metrics}
-        />
-        {error && (
-          <AppTooltip content={error}>
-            <span className="inline-flex h-5 items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 text-amber-200">
-              <AlertCircle size={12} />
-              <span>{t('sshSessionStatusBar.unavailable')}</span>
-            </span>
-          </AppTooltip>
-        )}
-        {onClose && (
-          <AppTooltip content={t('sshSessionStatusBar.hide')}>
-            <button
-              type="button"
-              aria-label={t('sshSessionStatusBar.hide')}
-              onClick={onClose}
-              className="flex h-6 w-6 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-            >
-              <X size={12} />
-            </button>
-          </AppTooltip>
-        )}
-      </div>
     </div>
   );
 }
+
+type ColorLevel = 'green' | 'yellow' | 'red' | 'default';
 
 function StatusItem({
   icon,
@@ -163,6 +173,7 @@ function StatusItem({
   detail,
   loading = false,
   mono = false,
+  colorLevel = 'default',
 }: {
   icon: React.ReactNode;
   label: string;
@@ -170,7 +181,15 @@ function StatusItem({
   detail?: string;
   loading?: boolean;
   mono?: boolean;
+  colorLevel?: ColorLevel;
 }) {
+  const colorClasses = {
+    green: 'text-emerald-400',
+    yellow: 'text-amber-400',
+    red: 'text-red-400',
+    default: 'text-zinc-100',
+  };
+
   return (
     <span
       className={`inline-flex min-w-0 items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/80 px-2 py-1 ${
@@ -179,7 +198,7 @@ function StatusItem({
     >
       <span className="text-zinc-500">{icon}</span>
       <span className="text-zinc-500">{label}</span>
-      <span className={`truncate text-zinc-100 ${mono ? 'font-mono' : ''}`}>
+      <span className={`truncate ${colorClasses[colorLevel]} ${mono ? 'font-mono' : ''}`}>
         {loading ? '...' : value}
       </span>
       {detail && (
@@ -222,4 +241,38 @@ function formatFileSize(size: number): string {
   }
 
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function getUsageColorLevel(usedPercent?: number | null): ColorLevel {
+  if (!Number.isFinite(usedPercent ?? Number.NaN)) {
+    return 'default';
+  }
+
+  const percent = usedPercent ?? 0;
+  if (percent >= 90) {
+    return 'red';
+  }
+  if (percent >= 70) {
+    return 'yellow';
+  }
+  return 'green';
+}
+
+function getLoadColorLevel(loadAverage?: number[] | null): ColorLevel {
+  if (!loadAverage || loadAverage.length === 0) {
+    return 'default';
+  }
+
+  const load1min = loadAverage[0];
+  if (!Number.isFinite(load1min)) {
+    return 'default';
+  }
+
+  if (load1min >= 8) {
+    return 'red';
+  }
+  if (load1min >= 4) {
+    return 'yellow';
+  }
+  return 'green';
 }

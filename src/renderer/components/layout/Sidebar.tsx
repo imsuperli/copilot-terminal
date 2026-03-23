@@ -83,10 +83,16 @@ export function Sidebar({
   const activeGroups = groups.filter(g => !g.archived);
   const archivedGroups = groups.filter(g => g.archived);
 
+  // 按类型分类窗口
+  const localActiveWindows = activeVisibleWindows.filter(w => w.kind !== 'ssh');
+  const sshActiveWindows = activeVisibleWindows.filter(w => w.kind === 'ssh');
+
   // 各标签的计数
   const allCount = activeVisibleWindows.length + archivedVisibleWindows.length + groups.length + (sshEnabled ? sshProfileCount : 0);
   const activeCount = activeVisibleWindows.length + activeGroups.length + (sshEnabled ? sshProfileCount : 0);
   const archivedCount = archivedVisibleWindows.length + archivedGroups.length;
+  const localCount = localActiveWindows.length + activeGroups.length;
+  const sshCount = sshActiveWindows.length + (sshEnabled ? sshProfileCount : 0);
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -231,6 +237,30 @@ export function Sidebar({
     }
   };
 
+  const handleClearLocalWindows = async () => {
+    try {
+      for (const win of localActiveWindows) {
+        await window.electronAPI.closeWindow(win.id);
+        await window.electronAPI.deleteWindow(win.id);
+        removeWindow(win.id);
+      }
+    } catch (error) {
+      console.error('Failed to clear local windows:', error);
+    }
+  };
+
+  const handleClearSSHWindows = async () => {
+    try {
+      for (const win of sshActiveWindows) {
+        await window.electronAPI.closeWindow(win.id);
+        await window.electronAPI.deleteWindow(win.id);
+        removeWindow(win.id);
+      }
+    } catch (error) {
+      console.error('Failed to clear SSH windows:', error);
+    }
+  };
+
   // 根据当前标签获取清空函数和窗口数量
   const getClearHandler = () => {
     if (currentTab === 'active') {
@@ -239,6 +269,10 @@ export function Sidebar({
       return { handler: handleClearArchivedWindows, count: archivedWindows.length };
     } else if (currentTab === 'all') {
       return { handler: handleClearAllWindows, count: windows.length };
+    } else if (currentTab === 'local') {
+      return { handler: handleClearLocalWindows, count: localActiveWindows.length };
+    } else if (currentTab === 'ssh') {
+      return { handler: handleClearSSHWindows, count: sshActiveWindows.length };
     }
     return { handler: null, count: 0 };
   };
@@ -352,6 +386,39 @@ export function Sidebar({
                 <span className="ml-auto text-xs">{activeCount}</span>
               )}
             </button>
+
+            {/* 本地终端 */}
+            <button
+              onClick={() => onTabChange?.('local')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                currentTab === 'local'
+                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
+                  : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
+              }`}
+            >
+              <Terminal className="h-4 w-4" />
+              <span>本地终端</span>
+              {localCount > 0 && (
+                <span className="ml-auto text-xs">{localCount}</span>
+              )}
+            </button>
+
+            {/* 远程终端 */}
+            <button
+              onClick={() => onTabChange?.('ssh')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
+                currentTab === 'ssh'
+                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--primary))] font-medium'
+                  : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
+              }`}
+            >
+              <Terminal className="h-4 w-4" />
+              <span>远程终端</span>
+              {sshCount > 0 && (
+                <span className="ml-auto text-xs">{sshCount}</span>
+              )}
+            </button>
+
             <button
               onClick={() => onTabChange?.('archived')}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${
@@ -624,17 +691,6 @@ export function Sidebar({
             <span>{t('common.newTerminal')}</span>
           </button>
 
-          {sshEnabled && (
-            <button
-              onClick={onImportSSHProfiles}
-              disabled={importingSSHProfiles}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] font-medium hover:bg-[rgb(var(--accent))] transition-colors disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <Download className="h-4 w-4" />
-              <span>{importingSSHProfiles ? t('sidebar.importSSHProfilesLoading') : t('sidebar.importSSHProfiles')}</span>
-            </button>
-          )}
-
           {/* Batch button - always show */}
           <button
             onClick={() => setIsBatchDialogOpen(true)}
@@ -672,6 +728,12 @@ export function Sidebar({
             } else if (currentTab === 'all') {
               buttonText = t('sidebar.clearAllWindows');
               titleText = t('sidebar.confirmClearActiveTitle');
+            } else if (currentTab === 'local') {
+              buttonText = t('sidebar.clearLocalWindows');
+              titleText = t('sidebar.confirmClearLocalTitle');
+            } else if (currentTab === 'ssh') {
+              buttonText = t('sidebar.clearSSHWindows');
+              titleText = t('sidebar.confirmClearSSHTitle');
             }
 
             return (

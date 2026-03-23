@@ -71,6 +71,7 @@ export interface SSHSessionDiskMetrics {
 export interface SSHSessionMetrics {
   hostname: string | null;
   platform: string | null;
+  cpuCores: number | null;
   loadAverage: number[];
   memory: SSHSessionMemoryMetrics | null;
   disk: SSHSessionDiskMetrics | null;

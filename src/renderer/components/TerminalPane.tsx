@@ -454,7 +454,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         brightWhite: '#ffffff',
       },
       fontFamily: TERMINAL_FONT_FAMILY,
-      fontSize: 15,
+      fontSize: 14,
       lineHeight: 1.2,
       macOptionIsMeta: true,
       macOptionClickForcesSelection: true,

@@ -1135,10 +1135,11 @@ function buildSSHMetricsCommand(targetPath: string): string {
   return `sh -lc '
 HOSTNAME_VALUE=$(hostname 2>/dev/null || uname -n 2>/dev/null || printf unknown)
 PLATFORM_VALUE=$(uname -s 2>/dev/null || printf unknown)
+CPU_CORES=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || grep -c "^processor" /proc/cpuinfo 2>/dev/null || printf "")
 LOAD_VALUE=$(cat /proc/loadavg 2>/dev/null | cut -d" " -f1-3 || uptime 2>/dev/null | sed -n "s/.*load averages\\{0,1\\}: //p" | tr -d "," | awk "{print \\$1\\" \\"\\$2\\" \\"\\$3}" || printf "")
 MEM_VALUE=$(awk "/MemTotal/ {total=\\$2} /MemAvailable/ {available=\\$2} END {if (total > 0) printf \\"%s %s\\", total, available}" /proc/meminfo 2>/dev/null || printf "")
 DISK_VALUE=$(df -Pk "$1" 2>/dev/null | tail -1 | awk "{print \\$2\\" \\"\\$3\\" \\"\\$5}")
-printf "__HOST__%s\\n__PLATFORM__%s\\n__LOAD__%s\\n__MEM__%s\\n__DISK__%s\\n" "$HOSTNAME_VALUE" "$PLATFORM_VALUE" "$LOAD_VALUE" "$MEM_VALUE" "$DISK_VALUE"
+printf "__HOST__%s\\n__PLATFORM__%s\\n__CPU_CORES__%s\\n__LOAD__%s\\n__MEM__%s\\n__DISK__%s\\n" "$HOSTNAME_VALUE" "$PLATFORM_VALUE" "$CPU_CORES" "$LOAD_VALUE" "$MEM_VALUE" "$DISK_VALUE"
 ' sh ${shellEscape(targetPath)}`;
 }
 
@@ -1146,11 +1147,14 @@ function parseSSHSessionMetrics(output: string, targetPath: string): SSHSessionM
   const values = new Map<string, string>();
 
   output.split(/\r?\n/).forEach((line) => {
-    const match = /^__(HOST|PLATFORM|LOAD|MEM|DISK)__(.*)$/.exec(line.trim());
+    const match = /^__(HOST|PLATFORM|CPU_CORES|LOAD|MEM|DISK)__(.*)$/.exec(line.trim());
     if (match) {
       values.set(match[1], match[2].trim());
     }
   });
+
+  const cpuCoresValue = values.get('CPU_CORES') ?? '';
+  const cpuCores = cpuCoresValue ? Number.parseInt(cpuCoresValue, 10) : null;
 
   const loadAverage = (values.get('LOAD') ?? '')
     .split(/\s+/)
@@ -1163,6 +1167,7 @@ function parseSSHSessionMetrics(output: string, targetPath: string): SSHSessionM
   return {
     hostname: values.get('HOST') || null,
     platform: values.get('PLATFORM') || null,
+    cpuCores: Number.isFinite(cpuCores) && cpuCores! > 0 ? cpuCores : null,
     loadAverage,
     memory,
     disk,
