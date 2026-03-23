@@ -1,6 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ChevronRight,
   Download,
+  Filter,
   Folder,
   FolderPlus,
   FolderUp,
@@ -9,12 +11,16 @@ import {
   HelpCircle,
   RefreshCw,
   Trash2,
+  X,
 } from 'lucide-react';
-import type { SSHSftpDirectoryListing, SSHSftpEntry } from '../../shared/types/ssh';
+import type {
+  SSHSftpDirectoryListing,
+  SSHSftpEntry,
+  SSHSessionMetrics,
+} from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
-import { Button } from './ui/Button';
 import { ConfirmDialog } from './ConfirmDialog';
-import { Dialog } from './ui/Dialog';
+import { AppTooltip } from './ui/AppTooltip';
 
 interface SSHSftpDialogProps {
   open: boolean;
@@ -22,7 +28,10 @@ interface SSHSftpDialogProps {
   windowId: string | null;
   paneId: string | null;
   initialPath?: string | null;
+  currentCwd?: string | null;
 }
+
+const METRICS_REFRESH_INTERVAL_MS = 15000;
 
 export function SSHSftpDialog({
   open,
@@ -30,10 +39,12 @@ export function SSHSftpDialog({
   windowId,
   paneId,
   initialPath,
+  currentCwd,
 }: SSHSftpDialogProps) {
   const { t } = useI18n();
   const [listing, setListing] = useState<SSHSftpDirectoryListing | null>(null);
   const [pathInput, setPathInput] = useState('');
+  const [filterText, setFilterText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [isUploadingDirectory, setIsUploadingDirectory] = useState(false);
@@ -44,10 +55,42 @@ export function SSHSftpDialog({
   const [deletingEntry, setDeletingEntry] = useState<SSHSftpEntry | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [followTerminalCwd, setFollowTerminalCwd] = useState(true);
+  const [metrics, setMetrics] = useState<SSHSessionMetrics | null>(null);
+  const [isMetricsLoading, setIsMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState('');
   const [error, setError] = useState('');
+  const lastLoadedPathRef = useRef<string | null>(null);
+
   const isDirectoryEntry = useCallback((entry: SSHSftpEntry) => (
     entry.isDirectory || entry.symlinkTargetIsDirectory === true
   ), []);
+
+  const loadMetrics = useCallback(async (targetPath?: string) => {
+    if (!open || !windowId || !paneId) {
+      return;
+    }
+
+    setIsMetricsLoading(true);
+    setMetricsError('');
+
+    try {
+      const response = await window.electronAPI.getSSHSessionMetrics({
+        windowId,
+        paneId,
+        ...(targetPath ? { path: targetPath } : {}),
+      });
+      if (!response.success || !response.data) {
+        throw new Error(response.error || t('sshSftpDialog.metricsLoadError'));
+      }
+
+      setMetrics(response.data);
+    } catch (metricsLoadError) {
+      setMetricsError((metricsLoadError as Error).message || t('sshSftpDialog.metricsLoadError'));
+    } finally {
+      setIsMetricsLoading(false);
+    }
+  }, [open, paneId, t, windowId]);
 
   const loadDirectory = useCallback(async (targetPath?: string) => {
     if (!open || !windowId || !paneId) {
@@ -56,6 +99,7 @@ export function SSHSftpDialog({
 
     setIsLoading(true);
     setError('');
+    lastLoadedPathRef.current = targetPath?.trim() || lastLoadedPathRef.current;
 
     try {
       const response = await window.electronAPI.listSSHSftpDirectory({
@@ -69,6 +113,8 @@ export function SSHSftpDialog({
 
       setListing(response.data);
       setPathInput(response.data.path);
+      lastLoadedPathRef.current = response.data.path;
+      await loadMetrics(response.data.path);
     } catch (loadError) {
       const errorMessage = (loadError as Error).message || t('sshSftpDialog.loadError');
 
@@ -82,6 +128,8 @@ export function SSHSftpDialog({
           if (fallbackResponse.success && fallbackResponse.data) {
             setListing(fallbackResponse.data);
             setPathInput(fallbackResponse.data.path);
+            lastLoadedPathRef.current = fallbackResponse.data.path;
+            await loadMetrics(fallbackResponse.data.path);
             setError('');
             return;
           }
@@ -94,23 +142,62 @@ export function SSHSftpDialog({
     } finally {
       setIsLoading(false);
     }
-  }, [open, paneId, t, windowId]);
+  }, [loadMetrics, open, paneId, t, windowId]);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
+    const nextPath = currentCwd?.trim() || initialPath?.trim() || '';
     setListing(null);
-    setPathInput(initialPath?.trim() || '');
+    setPathInput(nextPath);
+    setFilterText('');
     setDirectoryName('');
     setCreatingDirectory(false);
     setDeletingEntry(null);
     setShowHelp(false);
-    void loadDirectory(initialPath?.trim() || undefined);
-  }, [initialPath, loadDirectory, open]);
+    setFollowTerminalCwd(true);
+    setMetrics(null);
+    setMetricsError('');
+    lastLoadedPathRef.current = nextPath || null;
+    void loadDirectory(nextPath || undefined);
+  }, [initialPath, loadDirectory, open, paneId, windowId]);
 
-  const handleNavigate = useCallback(async (targetPath: string) => {
+  useEffect(() => {
+    if (!open || !windowId || !paneId) {
+      return;
+    }
+
+    const targetPath = listing?.path || currentCwd?.trim() || initialPath?.trim();
+    if (!targetPath) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void loadMetrics(targetPath);
+    }, METRICS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [currentCwd, initialPath, listing?.path, loadMetrics, open, paneId, windowId]);
+
+  useEffect(() => {
+    if (!open || !followTerminalCwd) {
+      return;
+    }
+
+    const nextCwd = currentCwd?.trim();
+    if (!nextCwd || nextCwd === lastLoadedPathRef.current) {
+      return;
+    }
+
+    void loadDirectory(nextCwd);
+  }, [currentCwd, followTerminalCwd, loadDirectory, open]);
+
+  const handleManualNavigate = useCallback(async (targetPath: string) => {
+    setFollowTerminalCwd(false);
     await loadDirectory(targetPath);
   }, [loadDirectory]);
 
@@ -121,18 +208,27 @@ export function SSHSftpDialog({
       return;
     }
 
-    await loadDirectory(nextPath);
-  }, [loadDirectory, pathInput]);
+    await handleManualNavigate(nextPath);
+  }, [handleManualNavigate, pathInput]);
 
   const handleNavigateUp = useCallback(async () => {
-    const currentPath = listing?.path;
-    if (!currentPath) {
+    const currentPathValue = listing?.path;
+    if (!currentPathValue) {
       return;
     }
 
-    const nextPath = getParentSftpPath(currentPath);
+    await handleManualNavigate(getParentSftpPath(currentPathValue));
+  }, [handleManualNavigate, listing?.path]);
+
+  const handleSyncCurrentCwd = useCallback(async () => {
+    const nextPath = currentCwd?.trim();
+    if (!nextPath) {
+      return;
+    }
+
+    setFollowTerminalCwd(true);
     await loadDirectory(nextPath);
-  }, [listing?.path, loadDirectory]);
+  }, [currentCwd, loadDirectory]);
 
   const handleUploadFiles = useCallback(async () => {
     if (!windowId || !paneId || !listing) {
@@ -304,16 +400,16 @@ export function SSHSftpDialog({
   }, [deletingEntry, listing, loadDirectory, paneId, t, windowId]);
 
   const pathSegments = useMemo(() => {
-    const currentPath = listing?.path ?? pathInput.trim();
-    if (!currentPath) {
+    const currentPathValue = listing?.path ?? pathInput.trim();
+    if (!currentPathValue) {
       return [];
     }
 
-    if (currentPath === '/') {
+    if (currentPathValue === '/') {
       return [{ label: '/', path: '/' }];
     }
 
-    const segments = currentPath.split('/').filter(Boolean);
+    const segments = currentPathValue.split('/').filter(Boolean);
     let accumulatedPath = '';
 
     return [
@@ -328,260 +424,415 @@ export function SSHSftpDialog({
     ];
   }, [listing?.path, pathInput]);
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={t('sshSftpDialog.title')}
-      contentClassName="max-w-[1100px]"
-      headerActions={(
-        <button
-          type="button"
-          aria-label={t('sshSftpDialog.helpAriaLabel')}
-          onClick={() => setShowHelp((current) => !current)}
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-status-running ${
-            showHelp
-              ? 'border-status-running/60 bg-status-running/10 text-blue-200'
-              : 'border-border-subtle bg-bg-app/70 text-text-secondary hover:bg-bg-card-hover hover:text-text-primary'
-          }`}
-        >
-          <HelpCircle size={16} />
-        </button>
-      )}
-    >
-      <div className="space-y-4">
-        {showHelp && (
-          <div className="rounded-lg border border-border-subtle bg-bg-elevated/40 px-4 py-3 text-sm leading-6 text-text-secondary">
-            <p>{t('sshSftpDialog.description')}</p>
-            <p className="mt-2">{t('sshSftpDialog.scopeHint')}</p>
-          </div>
-        )}
+  const filteredEntries = useMemo(() => {
+    const entries = listing?.entries ?? [];
+    const query = filterText.trim().toLowerCase();
 
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          {pathSegments.map((segment) => (
-            <button
-              key={segment.path}
-              type="button"
-              onClick={() => void handleNavigate(segment.path)}
-              className="rounded border border-border-subtle px-2 py-1 text-text-secondary hover:bg-bg-card-hover hover:text-text-primary"
-            >
-              {segment.label}
-            </button>
-          ))}
+    if (!query) {
+      return entries;
+    }
+
+    return entries.filter((entry) => (
+      entry.name.toLowerCase().includes(query)
+      || entry.path.toLowerCase().includes(query)
+    ));
+  }, [filterText, listing?.entries]);
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <>
+      <aside
+        data-testid="ssh-sftp-panel"
+        className="flex h-full w-[clamp(320px,28vw,420px)] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/95 backdrop-blur"
+      >
+        <div className="border-b border-zinc-800 px-3 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                {t('sshSftpDialog.title')}
+              </div>
+              <div className="mt-1 truncate text-sm font-medium text-zinc-100">
+                {listing?.path || currentCwd || initialPath || '~'}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <AppTooltip content={t('sshSftpDialog.helpAriaLabel')}>
+                <button
+                  type="button"
+                  aria-label={t('sshSftpDialog.helpAriaLabel')}
+                  onClick={() => setShowHelp((current) => !current)}
+                  className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
+                    showHelp
+                      ? 'border-blue-500/40 bg-blue-500/10 text-blue-200'
+                      : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+                  }`}
+                >
+                  <HelpCircle size={15} />
+                </button>
+              </AppTooltip>
+
+              <AppTooltip content={t('sshSftpDialog.hide')}>
+                <button
+                  type="button"
+                  aria-label={t('sshSftpDialog.hide')}
+                  onClick={() => onOpenChange(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                >
+                  <X size={15} />
+                </button>
+              </AppTooltip>
+            </div>
+          </div>
+
+          {showHelp && (
+            <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-3 text-xs leading-5 text-zinc-400">
+              <p>{t('sshSftpDialog.description')}</p>
+              <p className="mt-2">{t('sshSftpDialog.scopeHint')}</p>
+            </div>
+          )}
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <MetricCard
+              label={t('sshSftpDialog.metrics.host')}
+              value={metrics?.hostname || '--'}
+              loading={isMetricsLoading && !metrics}
+            />
+            <MetricCard
+              label={t('sshSftpDialog.metrics.load')}
+              value={metrics?.loadAverage.length ? metrics.loadAverage.join(' / ') : '--'}
+              loading={isMetricsLoading && !metrics}
+            />
+            <MetricCard
+              label={t('sshSftpDialog.metrics.memory')}
+              value={formatUsage(metrics?.memory?.usedPercent)}
+              secondary={formatMetricBytes(metrics?.memory?.usedBytes, metrics?.memory?.totalBytes)}
+              loading={isMetricsLoading && !metrics}
+            />
+          </div>
+
+          <div className="mt-2 grid grid-cols-1 gap-2">
+            <MetricCard
+              label={t('sshSftpDialog.metrics.disk')}
+              value={formatUsage(metrics?.disk?.usedPercent)}
+              secondary={formatMetricBytes(metrics?.disk?.usedBytes, metrics?.disk?.totalBytes)}
+              loading={isMetricsLoading && !metrics}
+            />
+          </div>
+
+          {metricsError && (
+            <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+              {metricsError}
+            </div>
+          )}
         </div>
 
-        <form className="flex flex-wrap items-center gap-2" onSubmit={handleSubmitPath}>
-          <label className="text-sm text-text-secondary" htmlFor="ssh-sftp-path">
-            {t('sshSftpDialog.path')}
-          </label>
-          <input
-            id="ssh-sftp-path"
-            value={pathInput}
-            onChange={(event) => setPathInput(event.target.value)}
-            className="min-w-[280px] flex-1 rounded-md border border-border-subtle bg-bg-card px-3 py-2 text-sm text-text-primary outline-none focus:border-status-running"
-            placeholder="/srv/app"
-          />
-          <Button type="submit" variant="secondary">
-            {t('sshSftpDialog.go')}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void handleNavigateUp()}
-            disabled={isLoading || !listing}
-            className="inline-flex items-center gap-2"
-          >
-            <FolderUp size={14} />
-            {t('sshSftpDialog.up')}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void loadDirectory(listing?.path || initialPath || undefined)}
-            disabled={isLoading}
-            className="inline-flex items-center gap-2"
-          >
-            <RefreshCw size={14} />
-            {t('sshSftpDialog.refresh')}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void handleUploadFiles()}
-            disabled={!listing || isUploadingFiles}
-            className="inline-flex items-center gap-2"
-          >
-            <HardDriveUpload size={14} />
-            {isUploadingFiles ? t('common.loading') : t('sshSftpDialog.uploadFiles')}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void handleUploadDirectory()}
-            disabled={!listing || isUploadingDirectory}
-            className="inline-flex items-center gap-2"
-          >
-            <HardDriveDownload size={14} />
-            {isUploadingDirectory ? t('common.loading') : t('sshSftpDialog.uploadDirectory')}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setCreatingDirectory((previous) => !previous)}
-            disabled={!listing}
-            className="inline-flex items-center gap-2"
-          >
-            <FolderPlus size={14} />
-            {t('sshSftpDialog.newDirectory')}
-          </Button>
-        </form>
+        <div className="border-b border-zinc-800 px-3 py-3">
+          <div className="mb-2 flex items-center gap-1 overflow-x-auto pb-1">
+            {pathSegments.map((segment, index) => (
+              <React.Fragment key={segment.path}>
+                {index > 0 && <ChevronRight size={12} className="shrink-0 text-zinc-600" />}
+                <button
+                  type="button"
+                  onClick={() => void handleManualNavigate(segment.path)}
+                  className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                >
+                  {segment.label}
+                </button>
+              </React.Fragment>
+            ))}
+          </div>
 
-        {creatingDirectory && (
-          <form className="flex flex-wrap items-center gap-2 rounded-lg border border-border-subtle bg-bg-elevated/40 px-4 py-3" onSubmit={handleCreateDirectory}>
+          <form className="flex items-center gap-2" onSubmit={handleSubmitPath}>
             <input
-              value={directoryName}
-              onChange={(event) => setDirectoryName(event.target.value)}
-              className="min-w-[240px] flex-1 rounded-md border border-border-subtle bg-bg-card px-3 py-2 text-sm text-text-primary outline-none focus:border-status-running"
-              placeholder={t('sshSftpDialog.directoryNamePlaceholder')}
+              value={pathInput}
+              onChange={(event) => setPathInput(event.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-blue-500"
+              placeholder="/srv/app"
             />
-            <Button type="submit" disabled={isCreatingDirectory}>
-              {isCreatingDirectory ? t('common.creating') : t('common.create')}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => {
-              setCreatingDirectory(false);
-              setDirectoryName('');
-            }}>
-              {t('common.cancel')}
-            </Button>
+            <button
+              type="submit"
+              className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+            >
+              {t('sshSftpDialog.go')}
+            </button>
           </form>
-        )}
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <ToolbarButton
+              label={t('sshSftpDialog.up')}
+              icon={<FolderUp size={14} />}
+              onClick={() => void handleNavigateUp()}
+              disabled={isLoading || !listing}
+            />
+            <ToolbarButton
+              label={t('sshSftpDialog.refresh')}
+              icon={<RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />}
+              onClick={() => void loadDirectory(listing?.path || currentCwd || initialPath || undefined)}
+              disabled={isLoading}
+            />
+            <ToolbarButton
+              label={t('sshSftpDialog.syncCwd')}
+              icon={<Folder size={14} />}
+              onClick={() => void handleSyncCurrentCwd()}
+              disabled={!currentCwd?.trim()}
+              active={followTerminalCwd}
+            />
+            <ToolbarButton
+              label={t('sshSftpDialog.uploadFiles')}
+              icon={<HardDriveUpload size={14} />}
+              onClick={() => void handleUploadFiles()}
+              disabled={!listing || isUploadingFiles}
+            />
+            <ToolbarButton
+              label={t('sshSftpDialog.uploadDirectory')}
+              icon={<HardDriveDownload size={14} />}
+              onClick={() => void handleUploadDirectory()}
+              disabled={!listing || isUploadingDirectory}
+            />
+            <ToolbarButton
+              label={t('sshSftpDialog.newDirectory')}
+              icon={<FolderPlus size={14} />}
+              onClick={() => setCreatingDirectory((previous) => !previous)}
+              disabled={!listing}
+              active={creatingDirectory}
+            />
+          </div>
+
+          {creatingDirectory && (
+            <form className="mt-3 flex items-center gap-2" onSubmit={handleCreateDirectory}>
+              <input
+                value={directoryName}
+                onChange={(event) => setDirectoryName(event.target.value)}
+                className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-blue-500"
+                placeholder={t('sshSftpDialog.directoryNamePlaceholder')}
+              />
+              <button
+                type="submit"
+                disabled={isCreatingDirectory}
+                className="rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isCreatingDirectory ? t('common.creating') : t('common.create')}
+              </button>
+            </form>
+          )}
+
+          <div className="mt-3 flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2">
+            <Filter size={14} className="shrink-0 text-zinc-500" />
+            <input
+              value={filterText}
+              onChange={(event) => setFilterText(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+              placeholder={t('sshSftpDialog.filterPlaceholder')}
+            />
+          </div>
+        </div>
 
         {error && (
-          <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="mx-3 mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         )}
 
-        <div className="overflow-hidden rounded-lg border border-border-subtle">
-          <div className="grid grid-cols-[minmax(0,1.5fr)_120px_170px_100px_220px] gap-3 border-b border-border-subtle bg-bg-card-hover px-4 py-3 text-xs font-medium uppercase tracking-wide text-text-secondary">
-            <span>{t('sshSftpDialog.name')}</span>
-            <span>{t('sshSftpDialog.type')}</span>
-            <span>{t('sshSftpDialog.modifiedAt')}</span>
-            <span className="text-right">{t('sshSftpDialog.size')}</span>
-            <span className="text-right">{t('sshSftpDialog.actions')}</span>
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+          {isLoading && !listing && (
+            <PanelEmptyState label={t('common.loading')} />
+          )}
 
-          <div className="max-h-[460px] overflow-auto bg-bg-card">
-            {isLoading && !listing && (
-              <div className="px-4 py-6 text-sm text-text-secondary">
-                {t('common.loading')}
-              </div>
-            )}
+          {!isLoading && listing && filteredEntries.length === 0 && (
+            <PanelEmptyState label={filterText.trim() ? t('sshSftpDialog.noMatch') : t('sshSftpDialog.empty')} />
+          )}
 
-            {!isLoading && listing && listing.entries.length === 0 && (
-              <div className="px-4 py-6 text-sm text-text-secondary">
-                {t('sshSftpDialog.empty')}
-              </div>
-            )}
+          <div className="space-y-1">
+            {filteredEntries.map((entry) => {
+              const isDirectory = isDirectoryEntry(entry);
+              const isDownloading = downloadingPath === entry.path;
 
-            {listing?.entries.map((entry) => (
-              <div
-                key={entry.path}
-                className="grid grid-cols-[minmax(0,1.5fr)_120px_170px_100px_220px] gap-3 border-b border-border-subtle/60 px-4 py-3 text-sm text-text-primary last:border-b-0"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  {isDirectoryEntry(entry) ? (
-                    <Folder size={16} className="shrink-0 text-status-running" />
-                  ) : (
-                    <Download size={16} className="shrink-0 text-text-secondary" />
-                  )}
+              return (
+                <div
+                  key={entry.path}
+                  className="group flex items-center gap-2 rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-zinc-800 hover:bg-zinc-900/80"
+                >
                   <button
                     type="button"
+                    aria-label={entry.name}
                     onClick={() => void (
-                      isDirectoryEntry(entry)
-                        ? handleNavigate(entry.symlinkTargetPath || entry.path)
+                      isDirectory
+                        ? handleManualNavigate(entry.symlinkTargetPath || entry.path)
                         : handleDownloadFile(entry)
                     )}
-                    className="truncate text-left hover:text-status-running"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
                     title={entry.path}
                   >
-                    {entry.name}
+                    {isDirectory ? (
+                      <Folder size={16} className="shrink-0 text-blue-400" />
+                    ) : (
+                      <Download size={16} className="shrink-0 text-zinc-500" />
+                    )}
+
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-zinc-100">
+                        {entry.name}
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500">
+                        <span>
+                          {isDirectory
+                            ? t('common.folder')
+                            : entry.isSymbolicLink
+                              ? t('sshSftpDialog.symlink')
+                              : t('sshSftpDialog.file')}
+                        </span>
+                        <span>{formatModifiedAt(entry.modifiedAt)}</span>
+                        {!isDirectory && <span>{formatFileSize(entry.size)}</span>}
+                      </div>
+                    </div>
                   </button>
-                </div>
-                <span className="text-text-secondary">
-                  {isDirectoryEntry(entry)
-                    ? t('common.folder')
-                    : entry.isSymbolicLink
-                      ? t('sshSftpDialog.symlink')
-                      : t('sshSftpDialog.file')}
-                </span>
-                <span className="text-text-secondary">
-                  {formatModifiedAt(entry.modifiedAt)}
-                </span>
-                <span className="text-right text-text-secondary">
-                  {isDirectoryEntry(entry) ? '-' : formatFileSize(entry.size)}
-                </span>
-                <div className="flex items-center justify-end gap-3 text-xs">
-                  {isDirectoryEntry(entry) ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void handleNavigate(entry.symlinkTargetPath || entry.path)}
-                        className="text-status-running hover:opacity-80"
-                      >
-                        {t('sshSftpDialog.open')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDownloadDirectory(entry)}
-                        disabled={downloadingPath === entry.path}
-                        className="text-status-running hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {downloadingPath === entry.path ? t('common.loading') : t('sshSftpDialog.downloadDirectory')}
-                      </button>
-                    </>
-                  ) : (
+
+                  <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                    {isDirectory ? (
+                      <>
+                        <InlineActionButton
+                          label={t('sshSftpDialog.open')}
+                          onClick={() => void handleManualNavigate(entry.symlinkTargetPath || entry.path)}
+                        />
+                        <InlineActionButton
+                          label={isDownloading ? t('common.loading') : t('sshSftpDialog.downloadDirectory')}
+                          onClick={() => void handleDownloadDirectory(entry)}
+                          disabled={isDownloading}
+                        />
+                      </>
+                    ) : (
+                      <InlineActionButton
+                        label={isDownloading ? t('common.loading') : t('sshSftpDialog.download')}
+                        onClick={() => void handleDownloadFile(entry)}
+                        disabled={isDownloading}
+                      />
+                    )}
+
                     <button
                       type="button"
-                      onClick={() => void handleDownloadFile(entry)}
-                      disabled={downloadingPath === entry.path}
-                      className="text-status-running hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label={t('common.delete')}
+                      onClick={() => setDeletingEntry(entry)}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200"
                     >
-                      {downloadingPath === entry.path ? t('common.loading') : t('sshSftpDialog.download')}
+                      <Trash2 size={13} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setDeletingEntry(entry)}
-                    className="inline-flex items-center gap-1 text-red-300 hover:text-red-200"
-                  >
-                    <Trash2 size={12} />
-                    {t('common.delete')}
-                  </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
+      </aside>
 
-        <ConfirmDialog
-          open={Boolean(deletingEntry)}
-          onOpenChange={(nextOpen) => {
-            if (!nextOpen) {
-              setDeletingEntry(null);
-            }
-          }}
-          title={t('sshSftpDialog.deleteTitle')}
-          description={t('sshSftpDialog.deleteDescription', {
-            path: deletingEntry?.path ?? '',
-          })}
-          confirmText={isDeleting ? t('common.loading') : t('common.delete')}
-          onConfirm={() => {
-            void handleDeleteEntry();
-          }}
-          variant="danger"
-        />
+      <ConfirmDialog
+        open={Boolean(deletingEntry)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setDeletingEntry(null);
+          }
+        }}
+        title={t('sshSftpDialog.deleteTitle')}
+        description={t('sshSftpDialog.deleteDescription', {
+          path: deletingEntry?.path ?? '',
+        })}
+        confirmText={isDeleting ? t('common.loading') : t('common.delete')}
+        onConfirm={() => {
+          void handleDeleteEntry();
+        }}
+        variant="danger"
+      />
+    </>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  secondary,
+  loading,
+}: {
+  label: string;
+  value: string;
+  secondary?: string;
+  loading?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+        {label}
       </div>
-    </Dialog>
+      <div className="mt-1 truncate text-sm font-medium text-zinc-100">
+        {loading ? '...' : value}
+      </div>
+      {secondary && (
+        <div className="mt-1 truncate text-[11px] text-zinc-500">
+          {secondary}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToolbarButton({
+  label,
+  icon,
+  onClick,
+  disabled = false,
+  active = false,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+        active
+          ? 'border-blue-500/40 bg-blue-500/10 text-blue-200'
+          : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
+      } disabled:cursor-not-allowed disabled:opacity-50`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function InlineActionButton({
+  label,
+  onClick,
+  disabled = false,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-md px-2 py-1 text-xs font-medium text-blue-300 transition-colors hover:bg-blue-500/10 hover:text-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {label}
+    </button>
+  );
+}
+
+function PanelEmptyState({ label }: { label: string }) {
+  return (
+    <div className="flex h-full items-center justify-center px-4 py-10 text-center text-sm text-zinc-500">
+      {label}
+    </div>
   );
 }
 
@@ -602,6 +853,14 @@ function formatFileSize(size: number): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
+function formatMetricBytes(usedBytes?: number | null, totalBytes?: number | null): string | undefined {
+  if (!Number.isFinite(usedBytes ?? Number.NaN) || !Number.isFinite(totalBytes ?? Number.NaN)) {
+    return undefined;
+  }
+
+  return `${formatFileSize(usedBytes ?? 0)} / ${formatFileSize(totalBytes ?? 0)}`;
+}
+
 function formatModifiedAt(value: string | null): string {
   if (!value) {
     return '-';
@@ -613,6 +872,14 @@ function formatModifiedAt(value: string | null): string {
   }
 
   return parsed.toLocaleString();
+}
+
+function formatUsage(value?: number | null): string {
+  if (!Number.isFinite(value ?? Number.NaN)) {
+    return '--';
+  }
+
+  return `${Math.round((value ?? 0) * 10) / 10}%`;
 }
 
 function getParentSftpPath(value: string): string {

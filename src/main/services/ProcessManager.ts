@@ -8,7 +8,7 @@ import { IProcessManager, SSHSessionConfig, TerminalConfig, ProcessHandle, Proce
 import { Settings } from '../types/workspace';
 import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
-import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing } from '../../shared/types/ssh';
+import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../shared/types/ssh';
 import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
@@ -420,6 +420,11 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     return pty.listSftpDirectory(path);
   }
 
+  async getSSHSessionMetrics(windowId: string, paneId: string, path?: string): Promise<SSHSessionMetrics> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.getSSHSessionMetrics(path);
+  }
+
   async downloadSSHSftpFile(
     windowId: string,
     paneId: string,
@@ -502,6 +507,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
   private requireSSHSftpSession(windowId: string, paneId: string): {
     listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
+    getSSHSessionMetrics(path?: string): Promise<SSHSessionMetrics>;
     downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
     uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
     uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number>;
@@ -1432,6 +1438,7 @@ function isSSHPortForwardSession(value: unknown): value is {
 
 function isSSHSftpSession(value: unknown): value is {
   listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
+  getSSHSessionMetrics(path?: string): Promise<SSHSessionMetrics>;
   downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
   uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
   uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number>;
@@ -1443,6 +1450,7 @@ function isSSHSftpSession(value: unknown): value is {
     value
     && typeof value === 'object'
     && typeof (value as { listSftpDirectory?: unknown }).listSftpDirectory === 'function'
+    && typeof (value as { getSSHSessionMetrics?: unknown }).getSSHSessionMetrics === 'function'
     && typeof (value as { downloadSftpFile?: unknown }).downloadSftpFile === 'function'
     && typeof (value as { uploadSftpFiles?: unknown }).uploadSftpFiles === 'function'
     && typeof (value as { uploadSftpDirectory?: unknown }).uploadSftpDirectory === 'function'

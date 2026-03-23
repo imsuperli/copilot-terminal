@@ -85,7 +85,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [sshPortForwardTarget, setSSHPortForwardTarget] = useState<{ windowId: string; paneId: string } | null>(null);
-  const [sshSftpTarget, setSSHSftpTarget] = useState<{ windowId: string; paneId: string; initialPath?: string } | null>(null);
+  const [sshSftpOpen, setSSHSftpOpen] = useState(false);
 
   // Store
   const {
@@ -306,12 +306,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-    setSSHSftpTarget({
-      windowId: terminalWindow.id,
-      paneId: activePane.id,
-      initialPath: activePane.ssh?.remoteCwd ?? activePane.cwd,
-    });
+    setSSHSftpOpen((current) => !current);
   }, [activePane, activePaneCapabilities, terminalWindow.id]);
+
+  useEffect(() => {
+    if (sshSftpOpen && !activePaneCapabilities?.canOpenSFTP) {
+      setSSHSftpOpen(false);
+    }
+  }, [activePaneCapabilities?.canOpenSFTP, sshSftpOpen]);
 
   // 处理重启窗口：先停止，再启动
   const handleRestartWindow = useCallback(async () => {
@@ -544,7 +546,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   type="button"
                   aria-label={t('terminalView.openSftp')}
                   onClick={handleOpenSSHSftp}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
+                    sshSftpOpen
+                      ? 'bg-blue-500/20 text-blue-300'
+                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
+                  }`}
                 >
                   <FolderTree size={14} />
                 </button>
@@ -664,23 +670,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           </div>
         </div>
         {/* 缁堢甯冨眬鍖哄煙 */}
-        <div className="flex-1 overflow-hidden">
-          {embedded ? (
-            <SplitLayout
-              windowId={terminalWindow.id}
-              layout={terminalWindow.layout}
-              activePaneId={terminalWindow.activePaneId}
-              isWindowActive={isActive}
-              onPaneActivate={handlePaneActivate}
-              onPaneClose={handlePaneClose}
-              onPaneExit={handlePaneExit}
-            />
-          ) : (
-            <DropZone
-              targetWindowId={terminalWindow.id}
-              onDrop={handleWindowDrop}
-              className="h-full w-full"
-            >
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <SSHSftpDialog
+            open={sshSftpOpen && Boolean(activePaneCapabilities?.canOpenSFTP)}
+            onOpenChange={setSSHSftpOpen}
+            windowId={activePaneCapabilities?.canOpenSFTP ? terminalWindow.id : null}
+            paneId={activePaneCapabilities?.canOpenSFTP ? activePane?.id ?? null : null}
+            initialPath={activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null}
+            currentCwd={activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null}
+          />
+
+          <div className="min-w-0 flex-1 overflow-hidden">
+            {embedded ? (
               <SplitLayout
                 windowId={terminalWindow.id}
                 layout={terminalWindow.layout}
@@ -690,8 +691,24 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 onPaneClose={handlePaneClose}
                 onPaneExit={handlePaneExit}
               />
-            </DropZone>
-          )}
+            ) : (
+              <DropZone
+                targetWindowId={terminalWindow.id}
+                onDrop={handleWindowDrop}
+                className="h-full w-full"
+              >
+                <SplitLayout
+                  windowId={terminalWindow.id}
+                  layout={terminalWindow.layout}
+                  activePaneId={terminalWindow.activePaneId}
+                  isWindowActive={isActive}
+                  onPaneActivate={handlePaneActivate}
+                  onPaneClose={handlePaneClose}
+                  onPaneExit={handlePaneExit}
+                />
+              </DropZone>
+            )}
+          </div>
         </div>
       </div>
 
@@ -723,17 +740,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         }}
         windowId={sshPortForwardTarget?.windowId ?? null}
         paneId={sshPortForwardTarget?.paneId ?? null}
-      />
-      <SSHSftpDialog
-        open={Boolean(sshSftpTarget)}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) {
-            setSSHSftpTarget(null);
-          }
-        }}
-        windowId={sshSftpTarget?.windowId ?? null}
-        paneId={sshSftpTarget?.paneId ?? null}
-        initialPath={sshSftpTarget?.initialPath ?? null}
       />
     </div>
   );

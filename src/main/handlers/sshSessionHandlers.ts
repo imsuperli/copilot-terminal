@@ -9,6 +9,7 @@ import {
   DeleteSSHSftpEntryConfig,
   DownloadSSHSftpDirectoryConfig,
   DownloadSSHSftpFileConfig,
+  GetSSHSessionMetricsConfig,
   ListSSHSftpDirectoryConfig,
   RemoveSSHSessionPortForwardConfig,
   SSHSessionPortForwardTarget,
@@ -227,6 +228,18 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await processManager.listSSHSftpDirectory(config.windowId, config.paneId, config.path));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('get-ssh-session-metrics', async (_event, config: GetSSHSessionMetricsConfig) => {
+    try {
+      if (!processManager) {
+        throw new Error('SSH session services are not initialized');
+      }
+
+      return successResponse(await processManager.getSSHSessionMetrics(config.windowId, config.paneId, config.path));
     } catch (error) {
       return errorResponse(error);
     }

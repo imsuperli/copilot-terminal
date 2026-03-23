@@ -12,6 +12,7 @@ import {
   SSHProfileInput,
   SSHProfilePatch,
   SSHSftpDirectoryListing,
+  SSHSessionMetrics,
 } from './ssh';
 import { Window, WindowStatus } from './window';
 import { WindowGroup } from './window-group';
@@ -119,6 +120,10 @@ export interface CreateSSHSftpDirectoryConfig extends SSHSessionPortForwardTarge
 
 export interface DeleteSSHSftpEntryConfig extends SSHSessionPortForwardTarget {
   remotePath: string;
+}
+
+export interface GetSSHSessionMetricsConfig extends SSHSessionPortForwardTarget {
+  path?: string;
 }
 
 export const SSH_HOST_KEY_PROMPT_CHANNEL = 'ssh-host-key-prompt';
@@ -303,6 +308,7 @@ export interface ElectronAPI {
   addSSHSessionPortForward: (config: AddSSHSessionPortForwardConfig) => Promise<IpcResponse<ActiveSSHPortForward>>;
   removeSSHSessionPortForward: (config: RemoveSSHSessionPortForwardConfig) => Promise<IpcResponse<void>>;
   listSSHSftpDirectory: (config: ListSSHSftpDirectoryConfig) => Promise<IpcResponse<SSHSftpDirectoryListing>>;
+  getSSHSessionMetrics: (config: GetSSHSessionMetricsConfig) => Promise<IpcResponse<SSHSessionMetrics>>;
   downloadSSHSftpFile: (config: DownloadSSHSftpFileConfig) => Promise<IpcResponse<string | null>>;
   uploadSSHSftpFiles: (config: UploadSSHSftpFilesConfig) => Promise<IpcResponse<{ uploadedCount: number }>>;
   uploadSSHSftpDirectory: (config: UploadSSHSftpDirectoryConfig) => Promise<IpcResponse<{ uploadedCount: number }>>;

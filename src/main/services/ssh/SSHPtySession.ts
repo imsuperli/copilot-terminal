@@ -1,7 +1,7 @@
 import type { ClientChannel } from 'ssh2';
 import { StringDecoder } from 'string_decoder';
 import { IPty, SSHSessionConfig } from '../../types/process';
-import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing } from '../../../shared/types/ssh';
+import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
 
 export interface SSHPtySessionOptions {
@@ -150,6 +150,14 @@ export class SSHPtySession implements IPty {
     }
 
     return this.connectionLease.connection.listSftpDirectory(path);
+  }
+
+  async getSSHSessionMetrics(path?: string): Promise<SSHSessionMetrics> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    return this.connectionLease.connection.getSessionMetrics(path);
   }
 
   async downloadSftpFile(remotePath: string, localPath: string): Promise<void> {

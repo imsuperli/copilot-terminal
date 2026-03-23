@@ -416,4 +416,111 @@ describe('SSHSftpDialog', () => {
     expect(screen.getByText('浏览当前 SSH 会话的远程目录，并在本地与远程之间传输文件。')).toBeInTheDocument();
     expect(screen.getByText('SFTP 面板复用当前 SSH 连接，不会影响本地终端或现有分屏布局。')).toBeInTheDocument();
   });
+
+  it('loads server metrics for the active remote path', async () => {
+    vi.mocked(window.electronAPI.listSSHSftpDirectory).mockResolvedValueOnce({
+      success: true,
+      data: {
+        path: '/srv/app',
+        entries: [],
+      },
+    });
+    vi.mocked(window.electronAPI.getSSHSessionMetrics).mockResolvedValueOnce({
+      success: true,
+      data: {
+        hostname: 'prod-host',
+        platform: 'Linux',
+        loadAverage: [0.23, 0.31, 0.44],
+        memory: {
+          totalBytes: 8 * 1024 * 1024 * 1024,
+          usedBytes: 3 * 1024 * 1024 * 1024,
+          usedPercent: 37.5,
+        },
+        disk: {
+          path: '/srv/app',
+          totalBytes: 128 * 1024 * 1024 * 1024,
+          usedBytes: 48 * 1024 * 1024 * 1024,
+          usedPercent: 37.5,
+        },
+        sampledAt: '2026-03-23T09:00:00.000Z',
+      },
+    });
+
+    render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/srv/app"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.getSSHSessionMetrics).toHaveBeenCalledWith({
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app',
+      });
+    });
+
+    expect(await screen.findByText('prod-host')).toBeInTheDocument();
+    expect(screen.getByText('0.23 / 0.31 / 0.44')).toBeInTheDocument();
+  });
+
+  it('follows the current ssh cwd while cwd sync is enabled', async () => {
+    vi.mocked(window.electronAPI.listSSHSftpDirectory)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          path: '/srv/app',
+          entries: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          path: '/srv/app/releases',
+          entries: [],
+        },
+      });
+
+    const { rerender } = render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/srv/app"
+        currentCwd="/srv/app"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenNthCalledWith(1, {
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app',
+      });
+    });
+
+    rerender(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/srv/app"
+        currentCwd="/srv/app/releases"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenNthCalledWith(2, {
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app/releases',
+      });
+    });
+  });
 });

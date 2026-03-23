@@ -4,6 +4,7 @@ import {
   SSHAlgorithmPreferences,
   SSHAuthType,
   SSHSftpDirectoryListing,
+  SSHSessionMetrics,
 } from '../../shared/types/ssh';
 import { PaneBackend } from '../../shared/types/window';
 
@@ -105,6 +106,7 @@ export interface IProcessManager {
   addSSHPortForward(windowId: string, paneId: string, forward: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
   removeSSHPortForward(windowId: string, paneId: string, forwardId: string): Promise<void>;
   listSSHSftpDirectory(windowId: string, paneId: string, path?: string): Promise<SSHSftpDirectoryListing>;
+  getSSHSessionMetrics(windowId: string, paneId: string, path?: string): Promise<SSHSessionMetrics>;
   downloadSSHSftpFile(windowId: string, paneId: string, remotePath: string, localPath: string): Promise<void>;
   uploadSSHSftpFiles(windowId: string, paneId: string, remotePath: string, localPaths: string[]): Promise<number>;
   uploadSSHSftpDirectory(windowId: string, paneId: string, remotePath: string, localDirectoryPath: string): Promise<number>;

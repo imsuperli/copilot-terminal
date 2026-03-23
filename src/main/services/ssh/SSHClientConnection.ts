@@ -9,6 +9,7 @@ import type {
   KnownHostEntry,
   SSHPortForwardSource,
   SSHSftpDirectoryListing,
+  SSHSessionMetrics,
 } from '../../../shared/types/ssh';
 import type { SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
@@ -55,6 +56,7 @@ export interface ISSHConnection {
   addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
   removePortForward(forwardId: string): Promise<void>;
   listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
+  getSessionMetrics(path?: string): Promise<SSHSessionMetrics>;
   downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
   uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
   uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number>;
@@ -241,6 +243,11 @@ export class SSHClientConnection implements ISSHConnection {
   async listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing> {
     const session = await this.getSftpSession();
     return session.listDirectory(path);
+  }
+
+  async getSessionMetrics(path?: string): Promise<SSHSessionMetrics> {
+    const output = await this.execCommand(buildSSHMetricsCommand(path || this.ssh.remoteCwd || '.'));
+    return parseSSHSessionMetrics(output, path || this.ssh.remoteCwd || '.');
   }
 
   async downloadSftpFile(remotePath: string, localPath: string): Promise<void> {
@@ -580,6 +587,44 @@ export class SSHClientConnection implements ISSHConnection {
     });
 
     return this.sftpWrapperPromise;
+  }
+
+  private async execCommand(command: string): Promise<string> {
+    await this.connect();
+
+    return new Promise<string>((resolve, reject) => {
+      this.client.exec(command, (error, channel) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        let stdout = '';
+        let stderr = '';
+        let exitCode: number | null = null;
+
+        channel.on('data', (chunk: Buffer | string) => {
+          stdout += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        });
+        channel.stderr?.on('data', (chunk: Buffer | string) => {
+          stderr += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+        });
+        channel.on('exit', (code?: number) => {
+          exitCode = typeof code === 'number' ? code : 0;
+        });
+        channel.on('close', () => {
+          if (exitCode && exitCode !== 0) {
+            reject(new Error(stderr.trim() || stdout.trim() || `SSH command exited with code ${exitCode}`));
+            return;
+          }
+
+          resolve(stdout);
+        });
+        channel.on('error', (channelError: Error) => {
+          reject(channelError);
+        });
+      });
+    });
   }
 
   private async configureConfiguredPortForwards(): Promise<void> {
@@ -1084,6 +1129,90 @@ function areForwardConfigsEquivalent(
 
 function getRemoteForwardKey(host: string, port: number): string {
   return `${host}:${port}`;
+}
+
+function buildSSHMetricsCommand(targetPath: string): string {
+  return `sh -lc '
+HOSTNAME_VALUE=$(hostname 2>/dev/null || uname -n 2>/dev/null || printf unknown)
+PLATFORM_VALUE=$(uname -s 2>/dev/null || printf unknown)
+LOAD_VALUE=$(cat /proc/loadavg 2>/dev/null | cut -d" " -f1-3 || uptime 2>/dev/null | sed -n "s/.*load averages\\{0,1\\}: //p" | tr -d "," | awk "{print \\$1\\" \\"\\$2\\" \\"\\$3}" || printf "")
+MEM_VALUE=$(awk "/MemTotal/ {total=\\$2} /MemAvailable/ {available=\\$2} END {if (total > 0) printf \\"%s %s\\", total, available}" /proc/meminfo 2>/dev/null || printf "")
+DISK_VALUE=$(df -Pk "$1" 2>/dev/null | tail -1 | awk "{print \\$2\\" \\"\\$3\\" \\"\\$5}")
+printf "__HOST__%s\\n__PLATFORM__%s\\n__LOAD__%s\\n__MEM__%s\\n__DISK__%s\\n" "$HOSTNAME_VALUE" "$PLATFORM_VALUE" "$LOAD_VALUE" "$MEM_VALUE" "$DISK_VALUE"
+' sh ${shellEscape(targetPath)}`;
+}
+
+function parseSSHSessionMetrics(output: string, targetPath: string): SSHSessionMetrics {
+  const values = new Map<string, string>();
+
+  output.split(/\r?\n/).forEach((line) => {
+    const match = /^__(HOST|PLATFORM|LOAD|MEM|DISK)__(.*)$/.exec(line.trim());
+    if (match) {
+      values.set(match[1], match[2].trim());
+    }
+  });
+
+  const loadAverage = (values.get('LOAD') ?? '')
+    .split(/\s+/)
+    .map((value) => Number.parseFloat(value))
+    .filter((value) => Number.isFinite(value));
+
+  const memory = parseMemoryMetrics(values.get('MEM') ?? '');
+  const disk = parseDiskMetrics(values.get('DISK') ?? '', targetPath);
+
+  return {
+    hostname: values.get('HOST') || null,
+    platform: values.get('PLATFORM') || null,
+    loadAverage,
+    memory,
+    disk,
+    sampledAt: new Date().toISOString(),
+  };
+}
+
+function parseMemoryMetrics(value: string): SSHSessionMetrics['memory'] {
+  const [totalKbValue, availableKbValue] = value.split(/\s+/);
+  const totalKb = Number.parseInt(totalKbValue ?? '', 10);
+  const availableKb = Number.parseInt(availableKbValue ?? '', 10);
+
+  if (!Number.isFinite(totalKb) || totalKb <= 0 || !Number.isFinite(availableKb) || availableKb < 0) {
+    return null;
+  }
+
+  const totalBytes = totalKb * 1024;
+  const usedBytes = Math.max(totalKb - availableKb, 0) * 1024;
+
+  return {
+    totalBytes,
+    usedBytes,
+    usedPercent: totalBytes > 0 ? roundMetric((usedBytes / totalBytes) * 100) : null,
+  };
+}
+
+function parseDiskMetrics(value: string, targetPath: string): SSHSessionMetrics['disk'] {
+  const [totalKbValue, usedKbValue, usedPercentValue] = value.split(/\s+/);
+  const totalKb = Number.parseInt(totalKbValue ?? '', 10);
+  const usedKb = Number.parseInt(usedKbValue ?? '', 10);
+  const usedPercent = Number.parseInt((usedPercentValue ?? '').replace('%', ''), 10);
+
+  if (!Number.isFinite(totalKb) || totalKb <= 0 || !Number.isFinite(usedKb) || usedKb < 0) {
+    return null;
+  }
+
+  return {
+    path: targetPath,
+    totalBytes: totalKb * 1024,
+    usedBytes: usedKb * 1024,
+    usedPercent: Number.isFinite(usedPercent) ? usedPercent : null,
+  };
+}
+
+function roundMetric(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function isRemoteForwardWildcard(host: string): boolean {

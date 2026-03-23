@@ -36,6 +36,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('remove-ssh-session-port-forward', config),
   listSSHSftpDirectory: (config: unknown) =>
     ipcRenderer.invoke('list-ssh-sftp-directory', config),
+  getSSHSessionMetrics: (config: unknown) =>
+    ipcRenderer.invoke('get-ssh-session-metrics', config),
   downloadSSHSftpFile: (config: unknown) =>
     ipcRenderer.invoke('download-ssh-sftp-file', config),
   uploadSSHSftpFiles: (config: unknown) =>

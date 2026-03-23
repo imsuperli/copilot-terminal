@@ -55,6 +55,28 @@ export interface SSHSftpDirectoryListing {
   entries: SSHSftpEntry[];
 }
 
+export interface SSHSessionMemoryMetrics {
+  totalBytes: number | null;
+  usedBytes: number | null;
+  usedPercent: number | null;
+}
+
+export interface SSHSessionDiskMetrics {
+  path: string;
+  totalBytes: number | null;
+  usedBytes: number | null;
+  usedPercent: number | null;
+}
+
+export interface SSHSessionMetrics {
+  hostname: string | null;
+  platform: string | null;
+  loadAverage: number[];
+  memory: SSHSessionMemoryMetrics | null;
+  disk: SSHSessionDiskMetrics | null;
+  sampledAt: string;
+}
+
 export interface KnownHostEntry {
   id: string;
   host: string;

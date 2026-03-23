@@ -44,6 +44,17 @@ Object.defineProperty(window, 'electronAPI', {
     addSSHSessionPortForward: vi.fn().mockResolvedValue({ success: true, data: null }),
     removeSSHSessionPortForward: vi.fn().mockResolvedValue({ success: true }),
     listSSHSftpDirectory: vi.fn().mockResolvedValue({ success: true, data: { path: '/', entries: [] } }),
+    getSSHSessionMetrics: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        hostname: 'ssh-host',
+        platform: 'Linux',
+        loadAverage: [0.12, 0.18, 0.25],
+        memory: null,
+        disk: null,
+        sampledAt: '2026-03-23T00:00:00.000Z',
+      },
+    }),
     downloadSSHSftpFile: vi.fn().mockResolvedValue({ success: true, data: null }),
     uploadSSHSftpFiles: vi.fn().mockResolvedValue({ success: true, data: { uploadedCount: 0 } }),
     uploadSSHSftpDirectory: vi.fn().mockResolvedValue({ success: true, data: { uploadedCount: 0 } }),
