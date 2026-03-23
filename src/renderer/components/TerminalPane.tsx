@@ -14,6 +14,7 @@ import {
   extractLatestOsc7RemoteCwd,
   updateSSHCwdTrackerFromRuntimeCwd,
 } from '../utils/sshCwdTracking';
+import { ensureTerminalFontsLoaded, TERMINAL_FONT_FAMILY } from '../utils/terminalFonts';
 import { AppTooltip } from './ui/AppTooltip';
 import '../styles/xterm.css';
 
@@ -452,7 +453,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         brightCyan: '#56b6c2',
         brightWhite: '#ffffff',
       },
-      fontFamily: '"MesloLGS NF", "JetBrainsMono Nerd Font", "Symbols Nerd Font Mono", "CaskaydiaCove Nerd Font", "SF Mono", "Menlo", "Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
+      fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: 15,
       lineHeight: 1.2,
       macOptionIsMeta: true,
@@ -474,6 +475,22 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+
+    void ensureTerminalFontsLoaded().finally(() => {
+      if (terminalRef.current !== terminal || fitAddonRef.current !== fitAddon) {
+        return;
+      }
+
+      // FontFace finishes asynchronously in Electron; re-apply metrics once the bundled
+      // Nerd glyph font is available so Powerline separators do not fall back to tofu.
+      if ('options' in terminal && terminal.options) {
+        terminal.options.fontFamily = TERMINAL_FONT_FAMILY;
+      }
+      fitAddon.fit();
+      if (terminal.rows > 0 && typeof terminal.refresh === 'function') {
+        terminal.refresh(0, terminal.rows - 1);
+      }
+    });
 
     // 批量刷新 PTY 输出：每帧最多写一次，降低高频输出时的重绘抖动
     const flushOutput = () => {
@@ -823,6 +840,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       terminalContainer?.removeEventListener('paste', suppressNativePaste as EventListener, true);
 
       terminal.dispose();
+      terminalRef.current = null;
+      fitAddonRef.current = null;
     };
   }, [syncRuntimeSshCwd, windowId, pane.id]); // writeClipboardText 和 readClipboardText 已用 useCallback 包裹且依赖为空，引用稳定，无需作为依赖
 
