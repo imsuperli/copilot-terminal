@@ -13,11 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import type {
-  SSHSftpDirectoryListing,
-  SSHSftpEntry,
-  SSHSessionMetrics,
-} from '../../shared/types/ssh';
+import type { SSHSftpDirectoryListing, SSHSftpEntry } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { ConfirmDialog } from './ConfirmDialog';
 import { AppTooltip } from './ui/AppTooltip';
@@ -30,8 +26,6 @@ interface SSHSftpDialogProps {
   initialPath?: string | null;
   currentCwd?: string | null;
 }
-
-const METRICS_REFRESH_INTERVAL_MS = 15000;
 
 export function SSHSftpDialog({
   open,
@@ -56,41 +50,12 @@ export function SSHSftpDialog({
   const [isDeleting, setIsDeleting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [followTerminalCwd, setFollowTerminalCwd] = useState(true);
-  const [metrics, setMetrics] = useState<SSHSessionMetrics | null>(null);
-  const [isMetricsLoading, setIsMetricsLoading] = useState(false);
-  const [metricsError, setMetricsError] = useState('');
   const [error, setError] = useState('');
   const lastLoadedPathRef = useRef<string | null>(null);
 
   const isDirectoryEntry = useCallback((entry: SSHSftpEntry) => (
     entry.isDirectory || entry.symlinkTargetIsDirectory === true
   ), []);
-
-  const loadMetrics = useCallback(async (targetPath?: string) => {
-    if (!open || !windowId || !paneId) {
-      return;
-    }
-
-    setIsMetricsLoading(true);
-    setMetricsError('');
-
-    try {
-      const response = await window.electronAPI.getSSHSessionMetrics({
-        windowId,
-        paneId,
-        ...(targetPath ? { path: targetPath } : {}),
-      });
-      if (!response.success || !response.data) {
-        throw new Error(response.error || t('sshSftpDialog.metricsLoadError'));
-      }
-
-      setMetrics(response.data);
-    } catch (metricsLoadError) {
-      setMetricsError((metricsLoadError as Error).message || t('sshSftpDialog.metricsLoadError'));
-    } finally {
-      setIsMetricsLoading(false);
-    }
-  }, [open, paneId, t, windowId]);
 
   const loadDirectory = useCallback(async (targetPath?: string) => {
     if (!open || !windowId || !paneId) {
@@ -114,7 +79,6 @@ export function SSHSftpDialog({
       setListing(response.data);
       setPathInput(response.data.path);
       lastLoadedPathRef.current = response.data.path;
-      await loadMetrics(response.data.path);
     } catch (loadError) {
       const errorMessage = (loadError as Error).message || t('sshSftpDialog.loadError');
 
@@ -129,7 +93,6 @@ export function SSHSftpDialog({
             setListing(fallbackResponse.data);
             setPathInput(fallbackResponse.data.path);
             lastLoadedPathRef.current = fallbackResponse.data.path;
-            await loadMetrics(fallbackResponse.data.path);
             setError('');
             return;
           }
@@ -142,7 +105,7 @@ export function SSHSftpDialog({
     } finally {
       setIsLoading(false);
     }
-  }, [loadMetrics, open, paneId, t, windowId]);
+  }, [open, paneId, t, windowId]);
 
   useEffect(() => {
     if (!open) {
@@ -158,30 +121,9 @@ export function SSHSftpDialog({
     setDeletingEntry(null);
     setShowHelp(false);
     setFollowTerminalCwd(true);
-    setMetrics(null);
-    setMetricsError('');
     lastLoadedPathRef.current = nextPath || null;
     void loadDirectory(nextPath || undefined);
   }, [initialPath, loadDirectory, open, paneId, windowId]);
-
-  useEffect(() => {
-    if (!open || !windowId || !paneId) {
-      return;
-    }
-
-    const targetPath = listing?.path || currentCwd?.trim() || initialPath?.trim();
-    if (!targetPath) {
-      return;
-    }
-
-    const timer = window.setInterval(() => {
-      void loadMetrics(targetPath);
-    }, METRICS_REFRESH_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [currentCwd, initialPath, listing?.path, loadMetrics, open, paneId, windowId]);
 
   useEffect(() => {
     if (!open || !followTerminalCwd) {
@@ -494,40 +436,6 @@ export function SSHSftpDialog({
               <p className="mt-2">{t('sshSftpDialog.scopeHint')}</p>
             </div>
           )}
-
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            <MetricCard
-              label={t('sshSftpDialog.metrics.host')}
-              value={metrics?.hostname || '--'}
-              loading={isMetricsLoading && !metrics}
-            />
-            <MetricCard
-              label={t('sshSftpDialog.metrics.load')}
-              value={metrics?.loadAverage.length ? metrics.loadAverage.join(' / ') : '--'}
-              loading={isMetricsLoading && !metrics}
-            />
-            <MetricCard
-              label={t('sshSftpDialog.metrics.memory')}
-              value={formatUsage(metrics?.memory?.usedPercent)}
-              secondary={formatMetricBytes(metrics?.memory?.usedBytes, metrics?.memory?.totalBytes)}
-              loading={isMetricsLoading && !metrics}
-            />
-          </div>
-
-          <div className="mt-2 grid grid-cols-1 gap-2">
-            <MetricCard
-              label={t('sshSftpDialog.metrics.disk')}
-              value={formatUsage(metrics?.disk?.usedPercent)}
-              secondary={formatMetricBytes(metrics?.disk?.usedBytes, metrics?.disk?.totalBytes)}
-              loading={isMetricsLoading && !metrics}
-            />
-          </div>
-
-          {metricsError && (
-            <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
-              {metricsError}
-            </div>
-          )}
         </div>
 
         <div className="border-b border-zinc-800 px-3 py-3">
@@ -749,34 +657,6 @@ export function SSHSftpDialog({
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  secondary,
-  loading,
-}: {
-  label: string;
-  value: string;
-  secondary?: string;
-  loading?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
-        {label}
-      </div>
-      <div className="mt-1 truncate text-sm font-medium text-zinc-100">
-        {loading ? '...' : value}
-      </div>
-      {secondary && (
-        <div className="mt-1 truncate text-[11px] text-zinc-500">
-          {secondary}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ToolbarButton({
   label,
   icon,
@@ -853,14 +733,6 @@ function formatFileSize(size: number): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function formatMetricBytes(usedBytes?: number | null, totalBytes?: number | null): string | undefined {
-  if (!Number.isFinite(usedBytes ?? Number.NaN) || !Number.isFinite(totalBytes ?? Number.NaN)) {
-    return undefined;
-  }
-
-  return `${formatFileSize(usedBytes ?? 0)} / ${formatFileSize(totalBytes ?? 0)}`;
-}
-
 function formatModifiedAt(value: string | null): string {
   if (!value) {
     return '-';
@@ -872,14 +744,6 @@ function formatModifiedAt(value: string | null): string {
   }
 
   return parsed.toLocaleString();
-}
-
-function formatUsage(value?: number | null): string {
-  if (!Number.isFinite(value ?? Number.NaN)) {
-    return '--';
-  }
-
-  return `${Math.round((value ?? 0) * 10) / 10}%`;
 }
 
 function getParentSftpPath(value: string): string {

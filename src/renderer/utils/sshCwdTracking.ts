@@ -7,6 +7,10 @@ export interface SSHCwdTrackerState {
 
 const OSC_7_BEL_PATTERN = /\u001b]7;([^\u0007\u001b]+)\u0007/g;
 const OSC_7_ST_PATTERN = /\u001b]7;([^\u001b]+)\u001b\\/g;
+const OSC_TITLE_BEL_PATTERN = /\u001b](?:0|2);([^\u0007\u001b]+)\u0007/g;
+const OSC_TITLE_ST_PATTERN = /\u001b](?:0|2);([^\u001b]+)\u001b\\/g;
+const OSC_CWD_BEL_PATTERN = /\u001b]633;.*?(?:Cwd|CurrentDir)=([^\u0007\u001b]+)\u0007/g;
+const OSC_CWD_ST_PATTERN = /\u001b]633;.*?(?:Cwd|CurrentDir)=([^\u001b]+)\u001b\\/g;
 const BRACKETED_PASTE_START = '\u001b[200~';
 const BRACKETED_PASTE_END = '\u001b[201~';
 
@@ -30,6 +34,32 @@ export function extractLatestOsc7RemoteCwd(data: string): string | null {
 
     while (match) {
       const parsed = parseFileUriPath(match[1]);
+      if (parsed) {
+        latestPath = parsed;
+      }
+      match = pattern.exec(data);
+    }
+  }
+
+  for (const pattern of [OSC_CWD_BEL_PATTERN, OSC_CWD_ST_PATTERN]) {
+    pattern.lastIndex = 0;
+    let match = pattern.exec(data);
+
+    while (match) {
+      const parsed = normalizeRemoteCwd(match[1]);
+      if (parsed) {
+        latestPath = parsed;
+      }
+      match = pattern.exec(data);
+    }
+  }
+
+  for (const pattern of [OSC_TITLE_BEL_PATTERN, OSC_TITLE_ST_PATTERN]) {
+    pattern.lastIndex = 0;
+    let match = pattern.exec(data);
+
+    while (match) {
+      const parsed = parseTitlePath(match[1]);
       if (parsed) {
         latestPath = parsed;
       }
@@ -317,6 +347,20 @@ function parseFileUriPath(uri: string): string | null {
   } catch {
     return null;
   }
+}
+
+function parseTitlePath(title: string): string | null {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const match = trimmed.match(/(?:^|:\s?)(~(?:\/[^\r\n]*)?|\/[^\r\n]*)$/);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  return normalizeRemoteCwd(match[1]);
 }
 
 function getTerminalEscapeSequenceLength(value: string): number {

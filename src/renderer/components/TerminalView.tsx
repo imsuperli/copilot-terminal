@@ -19,6 +19,7 @@ import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import { SSHSftpDialog } from './SSHSftpDialog';
+import { SSHSessionStatusBar } from './SSHSessionStatusBar';
 import {
   canPaneOpenInIDE,
   canPaneOpenLocalFolder,
@@ -710,6 +711,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             )}
           </div>
         </div>
+
+        {activePaneCapabilities?.canOpenSFTP && (
+          <SSHSessionStatusBar
+            windowId={terminalWindow.id}
+            paneId={activePane?.id ?? null}
+            currentCwd={activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null}
+          />
+        )}
       </div>
 
       {!embedded && (<>

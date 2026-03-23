@@ -239,6 +239,10 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
         throw new Error('SSH session services are not initialized');
       }
 
+      if (typeof processManager.getSSHSessionMetrics !== 'function') {
+        throw new Error('SSH session metrics are not available in the current runtime');
+      }
+
       return successResponse(await processManager.getSSHSessionMetrics(config.windowId, config.paneId, config.path));
     } catch (error) {
       return errorResponse(error);

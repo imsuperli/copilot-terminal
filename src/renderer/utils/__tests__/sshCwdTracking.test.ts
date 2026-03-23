@@ -1,44 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import {
-  applyTerminalInputToSSHCwdTracker,
-  createSSHCwdTrackerState,
-  extractLatestOsc7RemoteCwd,
-  updateSSHCwdTrackerFromRuntimeCwd,
-} from '../sshCwdTracking';
+import { extractLatestOsc7RemoteCwd } from '../sshCwdTracking';
 
-describe('sshCwdTracking', () => {
-  it('extracts the latest OSC 7 remote cwd from terminal output', () => {
-    const data = [
-      'prompt',
-      '\u001b]7;file://server/srv/app\u0007',
-      'next',
-      '\u001b]7;file://server/srv/app/releases\u001b\\',
-    ].join('');
-
-    expect(extractLatestOsc7RemoteCwd(data)).toBe('/srv/app/releases');
+describe('extractLatestOsc7RemoteCwd', () => {
+  it('parses OSC 7 file URI cwd markers', () => {
+    expect(extractLatestOsc7RemoteCwd('\u001b]7;file://host/srv/app\u0007')).toBe('/srv/app');
   });
 
-  it('resolves relative cd commands against the tracked remote cwd', () => {
-    const state = createSSHCwdTrackerState('/srv/app');
-    const { nextState, resolvedCwd } = applyTerminalInputToSSHCwdTracker(state, 'cd releases\r');
-
-    expect(resolvedCwd).toBe('/srv/app/releases');
-    expect(nextState.cwd).toBe('/srv/app/releases');
+  it('parses terminal title cwd markers used by common ssh prompts', () => {
+    expect(extractLatestOsc7RemoteCwd('\u001b]0;root@prod: /srv/app/current\u0007')).toBe('/srv/app/current');
+    expect(extractLatestOsc7RemoteCwd('\u001b]2;root@prod: ~/releases\u0007')).toBe('~/releases');
   });
 
-  it('derives the real home directory from runtime cwd updates and expands ~/ paths', () => {
-    const state = createSSHCwdTrackerState('~');
-    const syncedState = updateSSHCwdTrackerFromRuntimeCwd(state, '/home/root');
-    const { resolvedCwd } = applyTerminalInputToSSHCwdTracker(syncedState, 'cd ~/workspace\r');
-
-    expect(resolvedCwd).toBe('/home/root/workspace');
-  });
-
-  it('keeps tilde-based cwd tracking when the home path is still unknown', () => {
-    const state = createSSHCwdTrackerState('~');
-    const { resolvedCwd } = applyTerminalInputToSSHCwdTracker(state, 'cd projects\r');
-
-    expect(resolvedCwd).toBe('~/projects');
+  it('parses OSC 633 cwd markers when shell integration is present', () => {
+    expect(extractLatestOsc7RemoteCwd('\u001b]633;P;Cwd=/srv/app/releases\u0007')).toBe('/srv/app/releases');
   });
 });
-

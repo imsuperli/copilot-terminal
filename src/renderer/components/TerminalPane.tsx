@@ -585,6 +585,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         lastAppliedSeqRef.current = historySnapshot.lastSeq;
         // 历史回放只用于恢复屏幕内容，不应重新触发终端握手查询。
         const replayData = stripReplayDeviceAttributeQueries(historySnapshot.chunks.join(''));
+        if (sshPaneRef.current && replayData) {
+          const runtimeCwd = extractLatestOsc7RemoteCwd(replayData);
+          if (runtimeCwd) {
+            syncRuntimeSshCwd(runtimeCwd);
+          }
+        }
         if (replayData) {
           if (shouldSuppressReplayProtocolReplies) {
             suppressPtyWriteRef.current = true;

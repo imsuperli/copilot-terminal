@@ -96,6 +96,12 @@ vi.mock('../SSHSftpDialog', () => ({
   },
 }));
 
+vi.mock('../SSHSessionStatusBar', () => ({
+  SSHSessionStatusBar: (props: { windowId: string | null; paneId: string | null; currentCwd?: string | null }) => (
+    <div data-testid="ssh-session-status-bar">{`${props.windowId}:${props.paneId}:${props.currentCwd ?? ''}`}</div>
+  ),
+}));
+
 vi.mock('../SSHPortForwardDialog', () => ({
   SSHPortForwardDialog: (props: { open: boolean; windowId: string | null; paneId: string | null }) => {
     mockPortForwardDialog(props);
@@ -188,5 +194,18 @@ describe('TerminalView SSH toolbar', () => {
       paneId: 'pane-ssh-1',
       initialPath: '/srv/app',
     }));
+  });
+
+  it('renders the ssh session status bar for the active ssh pane', () => {
+    render(
+      <TerminalView
+        window={createSSHWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    expect(screen.getByTestId('ssh-session-status-bar')).toHaveTextContent('win-ssh-1:pane-ssh-1:/srv/app');
   });
 });
