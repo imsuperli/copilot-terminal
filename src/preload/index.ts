@@ -1,9 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import {
-  SSH_HOST_KEY_PROMPT_CHANNEL,
-  SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL,
-} from '../shared/types/electron-api';
 import type { ElectronAPI, PtyWriteMetadata } from '../shared/types/electron-api';
+
+const SSH_HOST_KEY_PROMPT_CHANNEL = 'ssh-host-key-prompt';
+const SSH_HOST_KEY_PROMPT_RESPONSE_CHANNEL = 'ssh-host-key-prompt-response';
 
 // 暴露受控的 IPC API 到渲染进程
 const electronAPI: ElectronAPI = {
