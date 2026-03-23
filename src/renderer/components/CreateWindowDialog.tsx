@@ -598,9 +598,9 @@ export function CreateWindowDialog({
   ) => (
     <Tabs.Trigger
       value={value}
-      className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-transparent px-3.5 py-2.5 text-sm font-medium text-text-secondary transition-all hover:bg-bg-hover/70 data-[state=active]:border-status-running/30 data-[state=active]:bg-status-running/12 data-[state=active]:text-text-primary"
+      className="inline-flex items-center justify-center gap-2 rounded-[16px] border border-transparent px-3.5 py-2.5 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-all hover:bg-[rgb(var(--secondary))] data-[state=active]:border-[rgb(var(--ring))] data-[state=active]:bg-[rgba(168,170,88,0.12)] data-[state=active]:text-[rgb(var(--foreground))]"
     >
-      <span className="text-status-running">
+      <span className="text-[rgb(var(--ring))]">
         {icon}
       </span>
       <span>{title}</span>
@@ -614,7 +614,7 @@ export function CreateWindowDialog({
     <Tabs.Trigger
       key={value}
       value={value}
-      className="rounded-[16px] border border-transparent px-3.5 py-2 text-sm font-medium text-text-secondary transition-all hover:bg-bg-hover/70 data-[state=active]:border-status-running/35 data-[state=active]:bg-status-running/12 data-[state=active]:text-text-primary"
+      className="rounded-[14px] border border-transparent px-3.5 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-all hover:bg-[rgb(var(--secondary))] data-[state=active]:border-[rgb(var(--ring))] data-[state=active]:bg-[rgba(168,170,88,0.12)] data-[state=active]:text-[rgb(var(--foreground))]"
     >
       {title}
     </Tabs.Trigger>
@@ -624,11 +624,11 @@ export function CreateWindowDialog({
     label: string,
     value: string,
   ) => (
-    <div className="rounded-[18px] border border-border-subtle bg-bg-app/58 px-3.5 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-secondary">
+    <div className="rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3">
+      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
         {label}
       </div>
-      <div className="mt-1 truncate text-sm font-semibold text-text-primary" title={value}>
+      <div className="mt-1 truncate text-sm font-semibold text-[rgb(var(--foreground))]" title={value}>
         {value}
       </div>
     </div>
@@ -642,26 +642,26 @@ export function CreateWindowDialog({
   ) => (
     <label
       htmlFor={id}
-      className="flex items-start gap-3 rounded-[18px] border border-border-subtle bg-bg-app/48 px-3.5 py-3 text-sm text-text-primary"
+      className="flex items-start gap-3 rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3 text-sm text-[rgb(var(--foreground))]"
     >
       <input
         id={id}
         type="checkbox"
         checked={checked}
         onChange={(event) => onCheckedChange(event.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-border-subtle bg-bg-app text-status-running focus:ring-status-running"
+        className="mt-0.5 h-4 w-4 rounded border-[rgb(var(--border))] bg-[rgb(var(--background))] text-[rgb(var(--ring))] [color-scheme:dark] focus:ring-[rgb(var(--ring))]"
       />
       <span className="leading-5">{label}</span>
     </label>
   )
 
-  const sectionShellClassName = 'rounded-[24px] border border-border-subtle bg-[linear-gradient(180deg,rgba(30,30,36,0.96),rgba(19,19,23,0.98))] shadow-[0_18px_44px_rgba(0,0,0,0.18)]'
-  const fieldLabelClassName = 'mb-1.5 block text-[13px] font-medium text-text-primary'
-  const textFieldClassName = 'w-full rounded-[18px] border border-border-subtle bg-bg-app/88 px-3.5 py-2.5 text-sm text-text-primary placeholder-text-disabled shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,background-color,box-shadow] focus:bg-bg-app focus:outline-none focus:ring-2 focus:ring-status-running/80'
-  const selectTriggerClassName = 'flex w-full min-w-0 items-center justify-between gap-2 rounded-[18px] border border-border-subtle bg-bg-app/88 px-3.5 py-2.5 text-left text-sm text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,background-color,box-shadow] focus:bg-bg-app focus:outline-none focus:ring-2 focus:ring-status-running/80'
-  const selectMenuClassName = 'z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[18px] border border-border-subtle bg-bg-card shadow-2xl'
-  const selectItemClassName = 'flex cursor-pointer items-center justify-between gap-2 rounded-[14px] px-3 py-2 text-sm text-text-primary outline-none transition-colors hover:bg-bg-hover'
-  const compactButtonClassName = 'h-11 rounded-[18px] px-4 text-sm'
+  const sectionShellClassName = 'rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-[0_12px_28px_rgba(0,0,0,0.22)]'
+  const fieldLabelClassName = 'mb-1.5 block text-[13px] font-medium text-[rgb(var(--foreground))]'
+  const textFieldClassName = 'w-full rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-2.5 text-sm text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] [color-scheme:dark] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-[border-color,box-shadow] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]'
+  const selectTriggerClassName = 'flex w-full min-w-0 items-center justify-between gap-2 rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-2.5 text-left text-sm text-[rgb(var(--foreground))] [color-scheme:dark] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-[border-color,box-shadow] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]'
+  const selectMenuClassName = 'z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl [color-scheme:dark]'
+  const selectItemClassName = 'flex cursor-pointer items-center justify-between gap-2 rounded-[12px] px-3 py-2 text-sm text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--secondary))]'
+  const compactButtonClassName = 'h-11 rounded-[16px] px-4 text-sm'
   const asideCardClassName = `${sectionShellClassName} p-4`
   const localSummaryName = name.trim() || placeholderName
   const localSummaryDirectory = workingDirectory.trim() || t('createWindow.workingDirectoryPlaceholder')
@@ -678,11 +678,8 @@ export function CreateWindowDialog({
   const localStatusClassName = pathError
     ? 'border-status-error/35 bg-status-error/10 text-status-error'
     : workingDirectory.trim() && !isValidating
-      ? 'border-status-running/35 bg-status-running/12 text-status-running'
-      : 'border-border-subtle bg-bg-app/80 text-text-secondary'
-  const activeModeHint = activeTab === 'ssh' && sshEnabled
-    ? t('createWindow.mode.sshHint')
-    : t('createWindow.mode.localHint')
+      ? 'border-[rgb(var(--ring))] bg-[rgba(168,170,88,0.12)] text-[rgb(var(--ring))]'
+      : 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]'
 
   return (
     <Dialog
@@ -694,14 +691,12 @@ export function CreateWindowDialog({
         }
       }}
       title={t('createWindow.unifiedTitle')}
-      description={t('createWindow.unifiedDescription')}
       showCloseButton
       closeLabel={t('common.close')}
-      contentClassName="!w-[min(1240px,96vw)] !max-w-none flex max-h-[92vh] flex-col overflow-hidden rounded-[30px] border border-border-subtle/90 bg-bg-card/98 backdrop-blur-sm"
-      headerClassName="border-b border-border-subtle/80 px-5 pt-5 pb-4"
-      bodyClassName="min-h-0 flex-1 px-5 pb-5"
+      contentClassName="!w-[min(1240px,96vw)] !max-w-none flex max-h-[92vh] flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]"
+      headerClassName="border-b border-[rgb(var(--border))] px-5 pt-5 pb-4"
+      bodyClassName="min-h-0 flex-1 px-5 pb-5 [color-scheme:dark]"
       titleClassName="text-[22px] tracking-[-0.01em]"
-      descriptionClassName="max-w-3xl text-sm leading-6"
     >
       <form onSubmit={handleSubmit} role="form" className="flex h-full min-h-0 flex-col">
         <Tabs.Root
@@ -709,28 +704,22 @@ export function CreateWindowDialog({
           onValueChange={(value) => setActiveTab(value as CreateWindowTab)}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="rounded-[22px] border border-border-subtle bg-[linear-gradient(180deg,rgba(28,28,34,0.96),rgba(18,18,22,0.98))] p-3 shadow-[0_12px_30px_rgba(0,0,0,0.16)]">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <Tabs.List
-                className="inline-flex w-fit flex-wrap gap-1 rounded-[20px] border border-border-subtle bg-bg-app/75 p-1.5"
-                aria-label={t('createWindow.modeTabsAriaLabel')}
-              >
-                {renderTabTrigger(
-                  'local',
-                  <Terminal size={18} />,
-                  t('createWindow.mode.local'),
-                )}
-                {sshEnabled && renderTabTrigger(
-                  'ssh',
-                  <Server size={18} />,
-                  t('createWindow.mode.ssh'),
-                )}
-              </Tabs.List>
-
-              <p className="max-w-2xl text-sm leading-6 text-text-secondary">
-                {activeModeHint}
-              </p>
-            </div>
+          <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-2.5">
+            <Tabs.List
+              className="inline-flex w-fit flex-wrap gap-1 rounded-[16px]"
+              aria-label={t('createWindow.modeTabsAriaLabel')}
+            >
+              {renderTabTrigger(
+                'local',
+                <Terminal size={18} />,
+                t('createWindow.mode.local'),
+              )}
+              {sshEnabled && renderTabTrigger(
+                'ssh',
+                <Server size={18} />,
+                t('createWindow.mode.ssh'),
+              )}
+            </Tabs.List>
           </div>
 
           <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
@@ -739,17 +728,14 @@ export function CreateWindowDialog({
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
                   <div className="min-w-0 space-y-4">
                     <section className={`${sectionShellClassName} p-4 md:p-5`}>
-                      <div className="mb-4 flex flex-col gap-3 border-b border-border-subtle/80 pb-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="mb-4 flex flex-col gap-3 border-b border-[rgb(var(--border))] pb-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
                             {t('createWindow.mode.local')}
                           </div>
-                          <h3 className="mt-2 text-lg font-semibold text-text-primary">
+                          <h3 className="mt-2 text-lg font-semibold text-[rgb(var(--foreground))]">
                             {t('createWindow.localSectionTitle')}
                           </h3>
-                          <p className="mt-1 max-w-2xl text-sm leading-6 text-text-secondary">
-                            {t('createWindow.localSectionDescription')}
-                          </p>
                         </div>
 
                         <div className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium ${localStatusClassName}`}>
@@ -757,19 +743,48 @@ export function CreateWindowDialog({
                         </div>
                       </div>
 
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                      <div className="grid gap-4">
                         <div>
-                          <label htmlFor="window-name" className={fieldLabelClassName}>
-                            {t('createWindow.nameLabel')}
+                          <label htmlFor="working-directory" className={fieldLabelClassName}>
+                            {t('createWindow.workingDirectoryLabel')} <span className="text-status-error">*</span>
                           </label>
-                          <input
-                            id="window-name"
-                            type="text"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            placeholder={placeholderName}
-                            className={textFieldClassName}
-                          />
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <input
+                              id="working-directory"
+                              ref={workingDirInputRef}
+                              type="text"
+                              value={workingDirectory}
+                              onChange={(e) => setWorkingDirectory(e.target.value)}
+                              placeholder={t('createWindow.workingDirectoryPlaceholder')}
+                              required
+                              aria-describedby={pathError ? 'path-error' : undefined}
+                              className={`flex-1 ${textFieldClassName} ${
+                                pathError
+                                  ? 'border-status-error focus:ring-status-error/80'
+                                  : ''
+                              }`}
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={handleSelectDirectory}
+                              className={`${compactButtonClassName} shrink-0`}
+                            >
+                              {t('common.browse')}
+                            </Button>
+                          </div>
+                          <div className="mt-1 min-h-[20px]">
+                            {pathError && (
+                              <p id="path-error" className="text-sm text-status-error" role="alert">
+                                {pathError}
+                              </p>
+                            )}
+                            {!pathError && isValidating && (
+                              <p className="text-sm text-[rgb(var(--muted-foreground))]" aria-live="polite">
+                                {t('common.validating')}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <div>
@@ -790,7 +805,7 @@ export function CreateWindowDialog({
                                     <Select.Value placeholder={t('createWindow.shellPlaceholder')} />
                                   </span>
                                   <Select.Icon className="shrink-0">
-                                    <ChevronDown size={16} className="text-text-secondary" />
+                                    <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
                                   </Select.Icon>
                                 </Select.Trigger>
 
@@ -841,47 +856,18 @@ export function CreateWindowDialog({
                           </div>
                         </div>
 
-                        <div className="lg:col-span-2">
-                          <label htmlFor="working-directory" className={fieldLabelClassName}>
-                            {t('createWindow.workingDirectoryLabel')} <span className="text-status-error">*</span>
+                        <div>
+                          <label htmlFor="window-name" className={fieldLabelClassName}>
+                            {t('createWindow.nameLabel')}
                           </label>
-                          <div className="flex flex-col gap-2 sm:flex-row">
-                            <input
-                              id="working-directory"
-                              ref={workingDirInputRef}
-                              type="text"
-                              value={workingDirectory}
-                              onChange={(e) => setWorkingDirectory(e.target.value)}
-                              placeholder={t('createWindow.workingDirectoryPlaceholder')}
-                              required
-                              aria-describedby={pathError ? 'path-error' : undefined}
-                              className={`flex-1 ${textFieldClassName} ${
-                                pathError
-                                  ? 'border-status-error focus:ring-status-error/80'
-                                  : ''
-                              }`}
-                            />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              onClick={handleSelectDirectory}
-                              className={`${compactButtonClassName} shrink-0`}
-                            >
-                              {t('common.browse')}
-                            </Button>
-                          </div>
-                          <div className="mt-1 min-h-[20px]">
-                            {pathError && (
-                              <p id="path-error" className="text-sm text-status-error" role="alert">
-                                {pathError}
-                              </p>
-                            )}
-                            {!pathError && isValidating && (
-                              <p className="text-sm text-text-secondary" aria-live="polite">
-                                {t('common.validating')}
-                              </p>
-                            )}
-                          </div>
+                          <input
+                            id="window-name"
+                            type="text"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder={placeholderName}
+                            className={textFieldClassName}
+                          />
                         </div>
                       </div>
                     </section>
@@ -895,12 +881,12 @@ export function CreateWindowDialog({
 
                   <aside className="self-start space-y-4 xl:sticky xl:top-0">
                     <section className={asideCardClassName}>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
                         {t('createWindow.localPreviewTitle')}
                       </div>
 
-                      <div className="mt-3 rounded-[20px] border border-border-subtle bg-bg-app/60 px-4 py-4">
-                        <div className="truncate text-lg font-semibold text-text-primary" title={localSummaryName}>
+                      <div className="mt-3 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-4">
+                        <div className="truncate text-lg font-semibold text-[rgb(var(--foreground))]" title={localSummaryName}>
                           {localSummaryName}
                         </div>
                         <div className={`mt-3 inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium ${localStatusClassName}`}>
@@ -909,20 +895,20 @@ export function CreateWindowDialog({
                       </div>
 
                       <div className="mt-3 space-y-3">
-                        <div className="rounded-[18px] border border-border-subtle bg-bg-app/45 px-3.5 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                        <div className="rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
                             {t('createWindow.workingDirectoryLabel')}
                           </div>
-                          <div className="mt-1 break-all text-sm font-medium text-text-primary">
+                          <div className="mt-1 break-all text-sm font-medium text-[rgb(var(--foreground))]">
                             {localSummaryDirectory}
                           </div>
                         </div>
 
-                        <div className="rounded-[18px] border border-border-subtle bg-bg-app/45 px-3.5 py-3">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                        <div className="rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
                             {t('createWindow.shellLabel')}
                           </div>
-                          <div className="mt-1 break-all text-sm font-medium text-text-primary">
+                          <div className="mt-1 break-all text-sm font-medium text-[rgb(var(--foreground))]">
                             {localSummaryShell}
                           </div>
                         </div>
@@ -930,21 +916,18 @@ export function CreateWindowDialog({
                     </section>
 
                     <section className={asideCardClassName}>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
                         {t('createWindow.localSectionTitle')}
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-text-secondary">
-                        {t('createWindow.mode.localHint')}
-                      </p>
 
                       <div className="mt-4 space-y-2">
-                        <div className="flex items-center justify-between rounded-[16px] border border-border-subtle bg-bg-app/45 px-3.5 py-3 text-sm text-text-primary">
+                        <div className="flex items-center justify-between rounded-[14px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3 text-sm text-[rgb(var(--foreground))]">
                           <span>{t('createWindow.workingDirectoryLabel')}</span>
                           <span className="text-xs font-medium text-status-error">*</span>
                         </div>
-                        <div className="flex items-center justify-between rounded-[16px] border border-border-subtle bg-bg-app/45 px-3.5 py-3 text-sm text-text-primary">
+                        <div className="flex items-center justify-between rounded-[14px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3 text-sm text-[rgb(var(--foreground))]">
                           <span>{t('createWindow.shellLabel')}</span>
-                          <span className="text-xs text-text-secondary">{t('createWindow.shellAutoFallback')}</span>
+                          <span className="text-xs text-[rgb(var(--muted-foreground))]">{t('createWindow.shellAutoFallback')}</span>
                         </div>
                       </div>
                     </section>
@@ -963,18 +946,15 @@ export function CreateWindowDialog({
                   <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
                     <aside className="self-start space-y-4 xl:sticky xl:top-0">
                       <section className={asideCardClassName}>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
                           {t('createWindow.sshPreviewTitle')}
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-text-secondary">
-                          {t('createWindow.sshPreviewDescription')}
-                        </p>
 
-                        <div className="mt-4 rounded-[20px] border border-border-subtle bg-bg-app/62 px-4 py-4">
-                          <div className="truncate text-lg font-semibold text-text-primary" title={sshSummaryName}>
+                        <div className="mt-3 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-4">
+                          <div className="truncate text-lg font-semibold text-[rgb(var(--foreground))]" title={sshSummaryName}>
                             {sshSummaryName}
                           </div>
-                          <div className="mt-1 truncate text-sm text-text-secondary">
+                          <div className="mt-1 truncate text-sm text-[rgb(var(--muted-foreground))]">
                             {sshSummaryUser}@{sshSummaryHost}:{sshForm.port.trim() || '22'}
                           </div>
                         </div>
@@ -987,54 +967,50 @@ export function CreateWindowDialog({
                       </section>
 
                       <section className={asideCardClassName}>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgb(var(--muted-foreground))]">
                           {t('createWindow.sshDefaultsTitle')}
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
                           {sshForm.verifyHostKeys && (
-                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
                               {t('sshProfileDialog.verifyHostKeys')}
                             </span>
                           )}
                           {sshForm.reuseSession && (
-                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
                               {t('sshProfileDialog.reuseSession')}
                             </span>
                           )}
                           {sshForm.warnOnClose && (
-                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
                               {t('sshProfileDialog.warnOnClose')}
                             </span>
                           )}
                           {sshForm.keepaliveInterval.trim() && (
-                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
                               {t('createWindow.sshDefaultsKeepalive', { seconds: sshForm.keepaliveInterval.trim() || '30' })}
                             </span>
                           )}
                           {sshForm.x11 && (
-                            <span className="rounded-full border border-border-subtle bg-bg-app px-3 py-1.5 text-xs text-text-primary">
+                            <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
                               X11
                             </span>
                           )}
                         </div>
-
-                        <p className="mt-4 text-xs leading-5 text-text-secondary">
-                          {t('createWindow.sshAdvancedEditHint')}
-                        </p>
                       </section>
                     </aside>
 
                     <div className="min-w-0 space-y-4">
                       {sshError && (
-                        <div className="rounded-[20px] border border-status-error bg-status-error/10 px-4 py-3" role="alert">
+                        <div className="rounded-[18px] border border-status-error bg-status-error/10 px-4 py-3" role="alert">
                           <p className="text-sm text-status-error">{sshError}</p>
                         </div>
                       )}
 
                       <section className={`${sectionShellClassName} p-4 md:p-5`}>
                         <Tabs.List
-                          className="mb-4 flex flex-wrap gap-2 rounded-[20px] border border-border-subtle bg-bg-app/70 p-1.5"
+                          className="mb-4 flex flex-wrap gap-2 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-1.5"
                           aria-label={t('createWindow.sshSettingsTabsAriaLabel')}
                         >
                           {renderSSHSettingsTrigger('basic', t('createWindow.sshSections.basic'))}
@@ -1142,15 +1118,12 @@ export function CreateWindowDialog({
                           </div>
 
                           {sshForm.auth === 'publicKey' && (
-                            <div className="rounded-[20px] border border-border-subtle bg-bg-app/55 p-4">
+                            <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
-                                  <div className="text-sm font-medium text-text-primary">
+                                  <div className="text-sm font-medium text-[rgb(var(--foreground))]">
                                     {t('sshProfileDialog.privateKeysLabel')}
                                   </div>
-                                  <p className="mt-1 text-sm leading-6 text-text-secondary">
-                                    {t('createWindow.sshPublicKeyHint')}
-                                  </p>
                                 </div>
                                 <Button
                                   type="button"
@@ -1167,12 +1140,12 @@ export function CreateWindowDialog({
                                 onChange={(event) => setSSHField('privateKeysText', event.target.value)}
                                 rows={4}
                                 placeholder={t('sshProfileDialog.privateKeysPlaceholder')}
-                                className={`${textFieldClassName} mt-4 min-h-[108px] resize-y bg-bg-card`}
+                                className={`${textFieldClassName} mt-4 min-h-[108px] resize-y bg-[rgb(var(--card))]`}
                               />
 
                               <div className="mt-2 min-h-[20px]">
                                 {detectKeysMessage && (
-                                  <p className="text-xs text-text-secondary">{detectKeysMessage}</p>
+                                  <p className="text-xs text-[rgb(var(--muted-foreground))]">{detectKeysMessage}</p>
                                 )}
                               </div>
 
@@ -1181,7 +1154,7 @@ export function CreateWindowDialog({
                                   <button
                                     type="button"
                                     onClick={() => setShowSSHPassphrases((previous) => !previous)}
-                                    className="flex items-center gap-2 text-sm font-medium text-text-primary"
+                                    className="flex items-center gap-2 text-sm font-medium text-[rgb(var(--foreground))]"
                                   >
                                     {showSSHPassphrases ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                                     <span>{showSSHPassphrases ? t('createWindow.sshPassphrasesHide') : t('createWindow.sshPassphrasesShow')}</span>
@@ -1191,7 +1164,7 @@ export function CreateWindowDialog({
                                     <div className="mt-3 grid gap-3 xl:grid-cols-2">
                                       {currentPrivateKeys.map((keyPath) => (
                                         <div key={keyPath}>
-                                          <label className="mb-1 block truncate text-xs text-text-secondary" title={keyPath}>
+                                          <label className="mb-1 block truncate text-xs text-[rgb(var(--muted-foreground))]" title={keyPath}>
                                             {keyPath}
                                           </label>
                                           <input
@@ -1202,7 +1175,7 @@ export function CreateWindowDialog({
                                               [keyPath]: event.target.value,
                                             }))}
                                             placeholder={t('sshProfileDialog.passphraseInputPlaceholder')}
-                                            className={`${textFieldClassName} bg-bg-card`}
+                                            className={`${textFieldClassName} bg-[rgb(var(--card))]`}
                                           />
                                         </div>
                                       ))}
@@ -1229,20 +1202,20 @@ export function CreateWindowDialog({
                                 <Tabs.Trigger
                                   key={mode}
                                   value={mode}
-                                  className="rounded-[16px] border border-border-subtle bg-bg-app px-3 py-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-bg-hover data-[state=active]:border-status-running/40 data-[state=active]:bg-status-running/12 data-[state=active]:text-text-primary"
+                                  className="rounded-[14px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-2.5 text-xs font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--background))] data-[state=active]:border-[rgb(var(--ring))] data-[state=active]:bg-[rgba(168,170,88,0.12)] data-[state=active]:text-[rgb(var(--foreground))]"
                                 >
                                   {t(`sshProfileDialog.routing.${mode}` as any)}
                                 </Tabs.Trigger>
                               ))}
                             </Tabs.List>
 
-                            <div className="mt-4 rounded-[20px] border border-border-subtle bg-bg-app/55 p-4">
+                            <div className="mt-4 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
                               <Tabs.Content value="direct" className="data-[state=inactive]:hidden">
-                                <div className="rounded-[18px] border border-border-subtle bg-bg-card px-4 py-4">
-                                  <div className="text-sm font-semibold text-text-primary">
+                                <div className="rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-4">
+                                  <div className="text-sm font-semibold text-[rgb(var(--foreground))]">
                                     {sshSummaryHost}:{sshForm.port.trim() || '22'}
                                   </div>
-                                  <p className="mt-1 text-sm leading-6 text-text-secondary">
+                                  <p className="mt-1 text-sm leading-6 text-[rgb(var(--muted-foreground))]">
                                     {t('createWindow.sshRouteDirectHint')}
                                   </p>
                                 </div>
@@ -1256,7 +1229,7 @@ export function CreateWindowDialog({
                                   id="ssh-jump-host"
                                   value={sshForm.jumpHostProfileId}
                                   onChange={(event) => setSSHField('jumpHostProfileId', event.target.value)}
-                                  className={`${textFieldClassName} bg-bg-card`}
+                                  className={`${textFieldClassName} bg-[rgb(var(--card))]`}
                                 >
                                   <option value="">{t('sshProfileDialog.jumpHostPlaceholder')}</option>
                                   {availableJumpHosts.map((profile) => (
@@ -1277,7 +1250,7 @@ export function CreateWindowDialog({
                                   value={sshForm.proxyCommand}
                                   onChange={(event) => setSSHField('proxyCommand', event.target.value)}
                                   placeholder="ssh -W %h:%p bastion"
-                                  className={`${textFieldClassName} bg-bg-card`}
+                                  className={`${textFieldClassName} bg-[rgb(var(--card))]`}
                                 />
                               </Tabs.Content>
 
@@ -1292,7 +1265,7 @@ export function CreateWindowDialog({
                                     value={sshForm.socksProxyHost}
                                     onChange={(event) => setSSHField('socksProxyHost', event.target.value)}
                                     placeholder="127.0.0.1"
-                                    className={`${textFieldClassName} bg-bg-card`}
+                                    className={`${textFieldClassName} bg-[rgb(var(--card))]`}
                                   />
                                 </div>
                                 <div>
@@ -1306,7 +1279,7 @@ export function CreateWindowDialog({
                                     max={65535}
                                     value={sshForm.socksProxyPort}
                                     onChange={(event) => setSSHField('socksProxyPort', event.target.value)}
-                                    className={`${textFieldClassName} bg-bg-card`}
+                                    className={`${textFieldClassName} bg-[rgb(var(--card))]`}
                                   />
                                 </div>
                               </Tabs.Content>
@@ -1322,7 +1295,7 @@ export function CreateWindowDialog({
                                     value={sshForm.httpProxyHost}
                                     onChange={(event) => setSSHField('httpProxyHost', event.target.value)}
                                     placeholder="proxy.example.com"
-                                    className={`${textFieldClassName} bg-bg-card`}
+                                    className={`${textFieldClassName} bg-[rgb(var(--card))]`}
                                   />
                                 </div>
                                 <div>
@@ -1336,7 +1309,7 @@ export function CreateWindowDialog({
                                     max={65535}
                                     value={sshForm.httpProxyPort}
                                     onChange={(event) => setSSHField('httpProxyPort', event.target.value)}
-                                    className={`${textFieldClassName} bg-bg-card`}
+                                    className={`${textFieldClassName} bg-[rgb(var(--card))]`}
                                   />
                                 </div>
                               </Tabs.Content>
@@ -1434,39 +1407,31 @@ export function CreateWindowDialog({
           </div>
         </Tabs.Root>
 
-        <div className="mt-4 flex flex-col gap-3 border-t border-border-subtle/80 bg-bg-card/95 pt-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-2xl text-sm leading-6 text-text-secondary">
+        <div className="mt-4 flex justify-end gap-3 border-t border-[rgb(var(--border))] pt-4">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              onOpenChange(false)
+              resetDialog()
+            }}
+            className={compactButtonClassName}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={activeTab === 'local'
+              ? (!workingDirectory || !!pathError || isValidating || isCreating)
+              : isSavingSSH}
+            aria-busy={activeTab === 'local' ? isCreating : isSavingSSH}
+            className={compactButtonClassName}
+          >
             {activeTab === 'local'
-              ? t('createWindow.mode.localHint')
-              : t('createWindow.sshPreviewSaveHint')}
-          </p>
-
-          <div className="flex justify-end gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                onOpenChange(false)
-                resetDialog()
-              }}
-              className={compactButtonClassName}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={activeTab === 'local'
-                ? (!workingDirectory || !!pathError || isValidating || isCreating)
-                : isSavingSSH}
-              aria-busy={activeTab === 'local' ? isCreating : isSavingSSH}
-              className={compactButtonClassName}
-            >
-              {activeTab === 'local'
-                ? (isCreating ? t('common.creating') : t('common.create'))
-                : (isSavingSSH ? t('createWindow.sshSaving') : t('createWindow.sshSave'))}
-            </Button>
-          </div>
+              ? (isCreating ? t('common.creating') : t('common.create'))
+              : (isSavingSSH ? t('createWindow.sshSaving') : t('createWindow.sshSave'))}
+          </Button>
         </div>
       </form>
     </Dialog>
