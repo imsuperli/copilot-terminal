@@ -58,6 +58,7 @@ export function SSHSftpDialog({
   const [deletingEntry, setDeletingEntry] = useState<SSHSftpEntry | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isEditingPath, setIsEditingPath] = useState(false);
   const [followTerminalCwd, setFollowTerminalCwd] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState<PanelNotice | null>(null);
@@ -139,6 +140,7 @@ export function SSHSftpDialog({
     setCreatingDirectory(false);
     setDeletingEntry(null);
     setShowHelp(false);
+    setIsEditingPath(false);
     setFollowTerminalCwd(true);
     setNotice(null);
     lastLoadedPathRef.current = nextPath || null;
@@ -186,6 +188,7 @@ export function SSHSftpDialog({
     }
 
     await handleManualNavigate(nextPath);
+    setIsEditingPath(false);
   }, [handleManualNavigate, pathInput]);
 
   const handleNavigateUp = useCallback(async () => {
@@ -542,9 +545,6 @@ export function SSHSftpDialog({
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
                 {t('sshSftpDialog.title')}
               </div>
-              <div className="mt-1 truncate text-sm font-medium text-zinc-100">
-                {listing?.path || currentCwd || initialPath || '~'}
-              </div>
             </div>
 
             <div className="flex items-center gap-1">
@@ -585,35 +585,59 @@ export function SSHSftpDialog({
         </div>
 
         <div className="border-b border-zinc-800 px-3 py-3">
-          <div className="mb-2 flex items-center gap-1 overflow-x-auto pb-1">
-            {pathSegments.map((segment, index) => (
-              <React.Fragment key={segment.path}>
-                {index > 0 && <ChevronRight size={12} className="shrink-0 text-zinc-600" />}
+          <div className="mb-2 flex items-center gap-2">
+            {isEditingPath ? (
+              <form className="flex min-w-0 flex-1 items-center gap-2" onSubmit={handleSubmitPath}>
+                <input
+                  autoFocus
+                  value={pathInput}
+                  onChange={(event) => setPathInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      setPathInput(listing?.path || currentCwd || initialPath || '~');
+                      setIsEditingPath(false);
+                    }
+                  }}
+                  className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-blue-500"
+                  placeholder="/srv/app"
+                  data-testid="ssh-sftp-path-input"
+                />
+                <button
+                  type="submit"
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+                >
+                  {t('sshSftpDialog.go')}
+                </button>
+              </form>
+            ) : (
+              <>
                 <button
                   type="button"
-                  onClick={() => void handleManualNavigate(segment.path)}
-                  className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                  onClick={() => setIsEditingPath(true)}
+                  className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-md border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-left"
+                  data-testid="ssh-sftp-breadcrumbs"
                 >
-                  {segment.label}
+                  {pathSegments.map((segment, index) => (
+                    <React.Fragment key={segment.path}>
+                      {index > 0 && <ChevronRight size={12} className="shrink-0 text-zinc-600" />}
+                      <span
+                        className="shrink-0 rounded-md px-2 py-1 text-xs text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                      >
+                        {segment.label}
+                      </span>
+                    </React.Fragment>
+                  ))}
                 </button>
-              </React.Fragment>
-            ))}
+                <button
+                  type="button"
+                  onClick={() => setIsEditingPath(true)}
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+                >
+                  {t('sshSftpDialog.go')}
+                </button>
+              </>
+            )}
           </div>
-
-          <form className="flex items-center gap-2" onSubmit={handleSubmitPath}>
-            <input
-              value={pathInput}
-              onChange={(event) => setPathInput(event.target.value)}
-              className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-blue-500"
-              placeholder="/srv/app"
-            />
-            <button
-              type="submit"
-              className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
-            >
-              {t('sshSftpDialog.go')}
-            </button>
-          </form>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <ToolbarButton

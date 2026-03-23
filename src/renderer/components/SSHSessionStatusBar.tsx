@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, AlertCircle, FolderKanban, HardDrive, MemoryStick, Server } from 'lucide-react';
+import { Activity, AlertCircle, FolderKanban, HardDrive, MemoryStick, Server, X } from 'lucide-react';
 import type { SSHSessionMetrics } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { AppTooltip } from './ui/AppTooltip';
@@ -10,12 +10,14 @@ interface SSHSessionStatusBarProps {
   windowId: string | null;
   paneId: string | null;
   currentCwd?: string | null;
+  onClose?: () => void;
 }
 
 export function SSHSessionStatusBar({
   windowId,
   paneId,
   currentCwd,
+  onClose,
 }: SSHSessionStatusBarProps) {
   const { t } = useI18n();
   const [metrics, setMetrics] = useState<SSHSessionMetrics | null>(null);
@@ -118,6 +120,18 @@ export function SSHSessionStatusBar({
               <AlertCircle size={12} />
               <span>{t('sshSessionStatusBar.unavailable')}</span>
             </span>
+          </AppTooltip>
+        )}
+        {onClose && (
+          <AppTooltip content={t('sshSessionStatusBar.hide')}>
+            <button
+              type="button"
+              aria-label={t('sshSessionStatusBar.hide')}
+              onClick={onClose}
+              className="flex h-6 w-6 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              <X size={12} />
+            </button>
           </AppTooltip>
         )}
       </div>

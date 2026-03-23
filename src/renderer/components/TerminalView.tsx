@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree } from 'lucide-react';
+import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -87,6 +87,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [sshPortForwardTarget, setSSHPortForwardTarget] = useState<{ windowId: string; paneId: string } | null>(null);
   const [sshSftpOpen, setSSHSftpOpen] = useState(false);
+  const [sshMetricsOpen, setSSHMetricsOpen] = useState(true);
 
   // Store
   const {
@@ -542,20 +543,39 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             )}
 
             {activePaneCapabilities?.canOpenSFTP && (
-              <AppTooltip content={t('terminalView.openSftp')} placement="toolbar-trailing">
-                <button
-                  type="button"
-                  aria-label={t('terminalView.openSftp')}
-                  onClick={handleOpenSSHSftp}
-                  className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
-                    sshSftpOpen
-                      ? 'bg-blue-500/20 text-blue-300'
-                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
-                  }`}
+              <>
+                <AppTooltip content={t('terminalView.openSftp')} placement="toolbar-trailing">
+                  <button
+                    type="button"
+                    aria-label={t('terminalView.openSftp')}
+                    onClick={handleOpenSSHSftp}
+                    className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
+                      sshSftpOpen
+                        ? 'bg-blue-500/20 text-blue-300'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
+                    }`}
+                  >
+                    <FolderTree size={14} />
+                  </button>
+                </AppTooltip>
+                <AppTooltip
+                  content={sshMetricsOpen ? t('terminalView.hideSshMonitor') : t('terminalView.showSshMonitor')}
+                  placement="toolbar-trailing"
                 >
-                  <FolderTree size={14} />
-                </button>
-              </AppTooltip>
+                  <button
+                    type="button"
+                    aria-label={sshMetricsOpen ? t('terminalView.hideSshMonitor') : t('terminalView.showSshMonitor')}
+                    onClick={() => setSSHMetricsOpen((current) => !current)}
+                    className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
+                      sshMetricsOpen
+                        ? 'bg-blue-500/20 text-blue-300'
+                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
+                    }`}
+                  >
+                    <Activity size={14} />
+                  </button>
+                </AppTooltip>
+              </>
             )}
 
             {activePaneCapabilities?.canManagePortForwards && (
@@ -712,11 +732,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           </div>
         </div>
 
-        {activePaneCapabilities?.canOpenSFTP && (
+        {activePaneCapabilities?.canOpenSFTP && sshMetricsOpen && (
           <SSHSessionStatusBar
             windowId={terminalWindow.id}
             paneId={activePane?.id ?? null}
             currentCwd={activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null}
+            onClose={() => setSSHMetricsOpen(false)}
           />
         )}
       </div>

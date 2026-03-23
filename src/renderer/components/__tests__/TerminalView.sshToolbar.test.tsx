@@ -62,6 +62,10 @@ vi.mock('../../i18n', () => ({
           return '打开文件夹';
         case 'terminalView.openSftp':
           return '打开 SSH 文件面板';
+        case 'terminalView.showSshMonitor':
+          return '显示 SSH 监控';
+        case 'terminalView.hideSshMonitor':
+          return '隐藏 SSH 监控';
         case 'terminalView.managePortForwards':
           return '管理 SSH 端口转发';
         case 'terminalView.splitHorizontal':
@@ -97,8 +101,11 @@ vi.mock('../SSHSftpDialog', () => ({
 }));
 
 vi.mock('../SSHSessionStatusBar', () => ({
-  SSHSessionStatusBar: (props: { windowId: string | null; paneId: string | null; currentCwd?: string | null }) => (
-    <div data-testid="ssh-session-status-bar">{`${props.windowId}:${props.paneId}:${props.currentCwd ?? ''}`}</div>
+  SSHSessionStatusBar: (props: { windowId: string | null; paneId: string | null; currentCwd?: string | null; onClose?: () => void }) => (
+    <div data-testid="ssh-session-status-bar">
+      {`${props.windowId}:${props.paneId}:${props.currentCwd ?? ''}`}
+      {props.onClose ? <button type="button" onClick={props.onClose}>关闭监控</button> : null}
+    </div>
   ),
 }));
 
@@ -170,6 +177,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByRole('button', { name: '打开文件夹' })).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: '打开 SSH 文件面板' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '隐藏 SSH 监控' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '管理 SSH 端口转发' })).toBeInTheDocument();
   });
 
@@ -207,5 +215,26 @@ describe('TerminalView SSH toolbar', () => {
     );
 
     expect(screen.getByTestId('ssh-session-status-bar')).toHaveTextContent('win-ssh-1:pane-ssh-1:/srv/app');
+  });
+
+  it('toggles the ssh session status bar from the toolbar', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TerminalView
+        window={createSSHWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    expect(screen.getByTestId('ssh-session-status-bar')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '隐藏 SSH 监控' }));
+    expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '显示 SSH 监控' }));
+    expect(screen.getByTestId('ssh-session-status-bar')).toBeInTheDocument();
   });
 });

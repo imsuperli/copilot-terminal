@@ -72,6 +72,59 @@ describe('SSHSftpDialog', () => {
     });
   });
 
+  it('switches breadcrumbs into a path input and navigates on submit', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.listSSHSftpDirectory)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          path: '/srv/app',
+          entries: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          path: '/srv/app/releases',
+          entries: [],
+        },
+      });
+
+    render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/srv/app"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenNthCalledWith(1, {
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app',
+      });
+    });
+
+    await user.click(screen.getByTestId('ssh-sftp-breadcrumbs'));
+    const pathInput = screen.getByTestId('ssh-sftp-path-input');
+    await user.clear(pathInput);
+    await user.type(pathInput, '/srv/app/releases');
+    await user.click(screen.getByRole('button', { name: '进入' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenNthCalledWith(2, {
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app/releases',
+      });
+    });
+
+    expect(screen.getByTestId('ssh-sftp-breadcrumbs')).toBeInTheDocument();
+  });
+
   it('treats symlinked directories as navigable folders', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.listSSHSftpDirectory)
@@ -294,7 +347,9 @@ describe('SSHSftpDialog', () => {
       });
     });
 
-    expect(await screen.findByDisplayValue('/home/root')).toBeInTheDocument();
+    const breadcrumbs = await screen.findByTestId('ssh-sftp-breadcrumbs');
+    expect(breadcrumbs).toHaveTextContent('home');
+    expect(breadcrumbs).toHaveTextContent('root');
   });
 
   it('creates and deletes remote directories', async () => {

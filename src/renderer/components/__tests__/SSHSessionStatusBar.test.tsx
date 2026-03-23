@@ -67,4 +67,31 @@ describe('SSHSessionStatusBar', () => {
 
     expect(await screen.findByText('监控不可用')).toBeInTheDocument();
   });
+
+  it('renders a close button when a close handler is provided', async () => {
+    vi.mocked(window.electronAPI.getSSHSessionMetrics).mockResolvedValueOnce({
+      success: true,
+      data: {
+        hostname: 'prod-host',
+        platform: 'Linux',
+        loadAverage: [],
+        memory: null,
+        disk: null,
+        sampledAt: '2026-03-23T09:00:00.000Z',
+      },
+    });
+
+    const onClose = vi.fn();
+
+    render(
+      <SSHSessionStatusBar
+        windowId="win-1"
+        paneId="pane-1"
+        currentCwd="/srv/app"
+        onClose={onClose}
+      />,
+    );
+
+    expect(await screen.findByRole('button', { name: '隐藏 SSH 监控' })).toBeInTheDocument();
+  });
 });
