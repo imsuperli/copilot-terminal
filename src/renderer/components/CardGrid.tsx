@@ -21,6 +21,7 @@ import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
+import { buildStandaloneSSHWindowMap, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
 
@@ -100,6 +101,18 @@ export const CardGrid = React.memo<CardGridProps>(({
     () => [...sshProfiles].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [sshProfiles],
   );
+  const standaloneSSHWindowsByProfile = useMemo(
+    () => buildStandaloneSSHWindowMap(windows, sshProfiles.map((profile) => profile.id)),
+    [sshProfiles, windows],
+  );
+  const shouldRenderWindowCard = useCallback((window: Window) => {
+    const profileId = getStandaloneSSHProfileId(window);
+    if (!profileId) {
+      return true;
+    }
+
+    return !sshEnabled || !sshProfiles.some((profile) => profile.id === profileId);
+  }, [sshEnabled, sshProfiles]);
 
   // 根据 currentTab 过滤和排序卡片项
   const cardItems = useMemo<CardItem[]>(() => {
@@ -111,8 +124,10 @@ export const CardGrid = React.memo<CardGridProps>(({
       ? new Set(groups.flatMap(g => getAllWindowIds(g.layout)))
       : new Set<string>();
 
-    const filterGroupedWindows = (ws: Window[]) =>
-      hideGroupedWindows ? ws.filter(w => !groupedWindowIds.has(w.id)) : ws;
+    const filterGroupedWindows = (ws: Window[]) => {
+      const visibleWindows = ws.filter((window) => shouldRenderWindowCard(window));
+      return hideGroupedWindows ? visibleWindows.filter(w => !groupedWindowIds.has(w.id)) : visibleWindows;
+    };
 
     // 状态筛选标签
     if (currentTab?.startsWith('status:')) {
@@ -190,7 +205,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
       ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
     ];
-  }, [currentTab, windows, groups, customCategories, hideGroupedWindows, sshEnabled, sortedSSHProfiles]);
+  }, [currentTab, windows, groups, customCategories, hideGroupedWindows, sshEnabled, shouldRenderWindowCard, sortedSSHProfiles]);
 
   // 全局搜索：始终搜索所有终端和组，不受 currentTab 限制
   const allCardItems = useMemo<CardItem[]>(() => {
@@ -200,8 +215,8 @@ export const CardGrid = React.memo<CardGridProps>(({
     // 全部终端：活跃组 → 活跃窗口 → 归档组 → 归档窗口
     const activeGroups = groups.filter(g => !g.archived);
     const archivedGroups = groups.filter(g => g.archived);
-    const activeWindows = windows.filter(w => !w.archived);
-    const archivedWindows = windows.filter(w => w.archived);
+    const activeWindows = windows.filter(w => !w.archived && shouldRenderWindowCard(w));
+    const archivedWindows = windows.filter(w => w.archived && shouldRenderWindowCard(w));
 
     return [
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -210,7 +225,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(archivedWindows, 'lastActiveAt').map(w => ({ type: 'window' as const, data: w })),
     ];
-  }, [groups, sshEnabled, sortedSSHProfiles, windows]);
+  }, [groups, shouldRenderWindowCard, sshEnabled, sortedSSHProfiles, windows]);
 
   // 根据搜索关键词过滤卡片项（窗口和组）
   const filteredCardItems = useMemo(() => {
@@ -653,10 +668,14 @@ export const CardGrid = React.memo<CardGridProps>(({
                   <SSHProfileCard
                     key={`ssh-profile-${profile.id}`}
                     profile={profile}
+                    window={standaloneSSHWindowsByProfile[profile.id] ?? null}
                     credentialState={sshCredentialStates[profile.id]}
                     inUseCount={sshProfileUsageCounts[profile.id] ?? 0}
                     isConnecting={connectingSSHProfileId === profile.id}
                     onConnect={handleConnectSSHProfile}
+                    onOpenWindow={handleCardClick}
+                    onPauseWindow={handlePauseWindow}
+                    onStartWindow={handleStartWindow}
                     onEdit={handleEditSSHProfile}
                     onDelete={handleDeleteSSHProfile}
                   />

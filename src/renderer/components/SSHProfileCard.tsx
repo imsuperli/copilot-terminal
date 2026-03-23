@@ -1,15 +1,22 @@
 import React, { useCallback, useMemo } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { Edit2, KeyRound, Link2, LockKeyhole, Play, Server, ShieldCheck, Trash2 } from 'lucide-react';
+import { Edit2, KeyRound, Link2, LockKeyhole, Play, Server, ShieldCheck, Square, Trash2 } from 'lucide-react';
 import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
+import { Window, WindowStatus } from '../types/window';
+import { getAggregatedStatus } from '../utils/layoutHelpers';
+import { getStatusLabelKey } from '../utils/statusHelpers';
 import { useI18n, type TranslationKey } from '../i18n';
 
 interface SSHProfileCardProps {
   profile: SSHProfile;
+  window?: Window | null;
   credentialState?: SSHCredentialState | null;
   inUseCount?: number;
   isConnecting?: boolean;
   onConnect?: (profile: SSHProfile) => void;
+  onOpenWindow?: (window: Window) => void;
+  onPauseWindow?: (window: Window) => void;
+  onStartWindow?: (window: Window) => void;
   onEdit?: (profile: SSHProfile) => void;
   onDelete?: (profile: SSHProfile) => void;
 }
@@ -29,14 +36,31 @@ function getAuthLabel(auth: SSHProfile['auth']): TranslationKey {
 
 export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   profile,
+  window,
   credentialState,
   inUseCount = 0,
   isConnecting = false,
   onConnect,
+  onOpenWindow,
+  onPauseWindow,
+  onStartWindow,
   onEdit,
   onDelete,
 }) => {
   const { t } = useI18n();
+  const runtimeStatus = useMemo(
+    () => (window ? getAggregatedStatus(window.layout) : null),
+    [window],
+  );
+  const isWindowRunning = runtimeStatus === WindowStatus.Running || runtimeStatus === WindowStatus.WaitingForInput;
+  const isWindowPaused = runtimeStatus === WindowStatus.Paused;
+  const statusLabel = useMemo(() => {
+    if (!runtimeStatus) {
+      return null;
+    }
+
+    return t(getStatusLabelKey(runtimeStatus));
+  }, [runtimeStatus, t]);
 
   const targetLabel = useMemo(
     () => `${profile.user}@${profile.host}:${profile.port}`,
@@ -82,9 +106,13 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   const handleKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onConnect?.(profile);
+      if (window) {
+        onOpenWindow?.(window);
+      } else {
+        onConnect?.(profile);
+      }
     }
-  }, [onConnect, profile]);
+  }, [onConnect, onOpenWindow, profile, window]);
 
   const handleButtonClick = useCallback((event: React.MouseEvent, action: () => void) => {
     event.stopPropagation();
@@ -92,11 +120,34 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
     (event.currentTarget as HTMLElement).blur();
   }, []);
 
+  const handleCardClick = useCallback(() => {
+    if (window) {
+      onOpenWindow?.(window);
+      return;
+    }
+
+    onConnect?.(profile);
+  }, [onConnect, onOpenWindow, profile, window]);
+
+  const handlePrimaryAction = useCallback(() => {
+    if (window) {
+      if (isWindowPaused) {
+        onStartWindow?.(window);
+        return;
+      }
+
+      onOpenWindow?.(window);
+      return;
+    }
+
+    onConnect?.(profile);
+  }, [isWindowPaused, onConnect, onOpenWindow, onStartWindow, profile, window]);
+
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onConnect?.(profile)}
+      onClick={handleCardClick}
       onKeyDown={handleKeyDown}
       aria-label={`${profile.name} ${targetLabel}`}
       className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border border-[rgb(var(--border))] relative"
@@ -158,6 +209,25 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
           )}
 
           <div className="flex flex-wrap gap-2">
+            {window && statusLabel && (
+              <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+                isWindowRunning
+                  ? 'text-emerald-200 bg-emerald-500/10 border border-emerald-500/20'
+                  : isWindowPaused
+                    ? 'text-amber-200 bg-amber-500/10 border border-amber-500/20'
+                    : 'text-zinc-300 bg-zinc-800'
+              }`}>
+                <span className={`h-2 w-2 rounded-full ${
+                  isWindowRunning
+                    ? 'bg-emerald-400'
+                    : isWindowPaused
+                      ? 'bg-amber-400'
+                      : 'bg-zinc-400'
+                }`} />
+                {statusLabel}
+              </span>
+            )}
+
             <span className="inline-flex items-center gap-1 text-xs text-zinc-300 bg-zinc-800 px-2 py-1 rounded-full">
               <ShieldCheck size={12} className={profile.verifyHostKeys ? 'text-emerald-400' : 'text-amber-400'} />
               {profile.verifyHostKeys ? t('sshProfileCard.hostKeyVerifyOn') : t('sshProfileCard.hostKeyVerifyOff')}
@@ -207,16 +277,54 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
 
       <div className="flex items-center justify-between gap-2 px-4 py-2 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
         <button
-          onClick={(event) => handleButtonClick(event, () => onConnect?.(profile))}
+          onClick={(event) => handleButtonClick(event, handlePrimaryAction)}
           disabled={isConnecting}
           className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
-          aria-label={t('common.connect')}
+          aria-label={window ? t('common.open') : t('common.connect')}
         >
           <Play size={14} fill="currentColor" />
-          <span>{isConnecting ? t('sshProfileCard.connecting') : t('common.connect')}</span>
+          <span>
+            {isConnecting
+              ? t('sshProfileCard.connecting')
+              : window
+                ? (isWindowPaused ? t('terminalView.start') : t('common.open'))
+                : t('common.connect')}
+          </span>
         </button>
 
         <div className="flex items-center gap-1.5">
+          {window && (
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={(event) => handleButtonClick(event, () => {
+                      if (isWindowPaused) {
+                        onStartWindow?.(window);
+                        return;
+                      }
+
+                      onPauseWindow?.(window);
+                    })}
+                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                    aria-label={isWindowPaused ? t('terminalView.start') : t('terminalView.stop')}
+                  >
+                    {isWindowPaused ? <Play size={16} /> : <Square size={16} />}
+                  </button>
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                    side="top"
+                    sideOffset={5}
+                  >
+                    {isWindowPaused ? t('terminalView.start') : t('terminalView.stop')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            </Tooltip.Provider>
+          )}
+
           <Tooltip.Provider>
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>

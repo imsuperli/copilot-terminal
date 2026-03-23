@@ -574,11 +574,14 @@ function AppContent() {
     const counts: Record<string, number> = {};
 
     windows.forEach((window) => {
-      getAllPanes(window.layout).forEach((pane) => {
-        const profileId = pane.ssh?.profileId;
-        if (profileId) {
-          counts[profileId] = (counts[profileId] ?? 0) + 1;
-        }
+      const profileIds = new Set(
+        getAllPanes(window.layout)
+          .map((pane) => pane.ssh?.profileId)
+          .filter((profileId): profileId is string => Boolean(profileId)),
+      );
+
+      profileIds.forEach((profileId) => {
+        counts[profileId] = (counts[profileId] ?? 0) + 1;
       });
     });
 

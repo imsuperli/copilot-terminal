@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CardGrid } from '../CardGrid';
 import { useWindowStore } from '../../stores/windowStore';
 import { SSHProfile } from '../../../shared/types/ssh';
+import { Window, WindowStatus } from '../../types/window';
 
 function createSSHProfile(overrides: Partial<SSHProfile> = {}): SSHProfile {
   return {
@@ -32,6 +33,39 @@ function createSSHProfile(overrides: Partial<SSHProfile> = {}): SSHProfile {
     tags: ['prod'],
     createdAt: '2026-03-22T10:00:00.000Z',
     updatedAt: '2026-03-22T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function createStandaloneSSHWindow(profile: SSHProfile, overrides: Partial<Window> = {}): Window {
+  return {
+    id: 'ssh-window-1',
+    name: 'Hidden runtime window',
+    kind: 'ssh',
+    activePaneId: 'ssh-pane-1',
+    createdAt: '2026-03-22T10:05:00.000Z',
+    lastActiveAt: '2026-03-22T10:05:00.000Z',
+    layout: {
+      type: 'pane',
+      id: 'layout-ssh-pane-1',
+      pane: {
+        id: 'ssh-pane-1',
+        cwd: '/srv/app',
+        command: '/bin/zsh',
+        status: WindowStatus.Running,
+        pid: 1234,
+        backend: 'ssh',
+        ssh: {
+          profileId: profile.id,
+          host: profile.host,
+          port: profile.port,
+          user: profile.user,
+          authType: profile.auth,
+          remoteCwd: '/srv/app',
+          reuseSession: true,
+        },
+      },
+    },
     ...overrides,
   };
 }
@@ -134,5 +168,32 @@ describe('CardGrid SSH profile cards', () => {
 
     expect(screen.getByRole('button', { name: '删除 SSH 配置' })).toBeDisabled();
     expect(screen.getByText('已被 2 个窗口使用')).toBeInTheDocument();
+  });
+
+  it('binds a standalone SSH runtime window back onto the SSH profile card', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const onConnectSSHProfile = vi.fn();
+    const onEnterTerminal = vi.fn();
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+      onConnectSSHProfile,
+      onEnterTerminal,
+    });
+
+    expect(screen.queryByText('Hidden runtime window')).not.toBeInTheDocument();
+    expect(screen.getByText('运行中')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '打开' }));
+
+    expect(onConnectSSHProfile).not.toHaveBeenCalled();
+    expect(onEnterTerminal).toHaveBeenCalledWith(runtimeWindow);
   });
 });

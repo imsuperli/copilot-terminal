@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2, Download } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
@@ -13,6 +13,7 @@ import { CustomCategory } from '../../../shared/types/custom-category';
 import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
+import { buildStandaloneSSHWindowMap } from '../../utils/sshWindowBindings';
 
 interface SidebarProps {
   appName?: string;
@@ -64,15 +65,28 @@ export function Sidebar({
   const hideGroupedWindows = useWindowStore((state) => state.hideGroupedWindows);
   const setHideGroupedWindows = useWindowStore((state) => state.setHideGroupedWindows);
 
+  const standaloneSSHWindowIds = useMemo(() => {
+    if (!sshEnabled || sshProfiles.length === 0) {
+      return new Set<string>();
+    }
+
+    return new Set(
+      Object.values(buildStandaloneSSHWindowMap(windows, sshProfiles.map((profile) => profile.id)))
+        .map((window) => window.id),
+    );
+  }, [sshEnabled, sshProfiles, windows]);
+
   const activeWindows = windows.filter(w => !w.archived);
   const archivedWindows = windows.filter(w => w.archived);
+  const activeVisibleWindows = windows.filter(w => !w.archived && !standaloneSSHWindowIds.has(w.id));
+  const archivedVisibleWindows = windows.filter(w => w.archived && !standaloneSSHWindowIds.has(w.id));
   const activeGroups = groups.filter(g => !g.archived);
   const archivedGroups = groups.filter(g => g.archived);
 
   // 各标签的计数
-  const allCount = windows.length + groups.length + (sshEnabled ? sshProfileCount : 0);
-  const activeCount = activeWindows.length + activeGroups.length + (sshEnabled ? sshProfileCount : 0);
-  const archivedCount = archivedWindows.length + archivedGroups.length;
+  const allCount = activeVisibleWindows.length + archivedVisibleWindows.length + groups.length + (sshEnabled ? sshProfileCount : 0);
+  const activeCount = activeVisibleWindows.length + activeGroups.length + (sshEnabled ? sshProfileCount : 0);
+  const archivedCount = archivedVisibleWindows.length + archivedGroups.length;
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
