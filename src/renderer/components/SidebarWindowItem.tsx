@@ -1,10 +1,12 @@
 import React, { useMemo, useCallback, useRef } from 'react';
-import { Activity, Keyboard, Pause, XCircle } from 'lucide-react';
 import { useDrag } from 'react-dnd';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { DragItemTypes, WindowCardDragItem } from './dnd/types';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
+import { StatusDot } from './StatusDot';
+import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 
 interface SidebarWindowItemProps {
   window: Window;
@@ -14,49 +16,6 @@ interface SidebarWindowItemProps {
   onContextMenu: (e: React.MouseEvent) => void;
   /** 如果窗口属于某个组，传入组 ID 以支持拖拽移出组 */
   groupId?: string;
-}
-
-/**
- * 获取状态图标
- */
-function getStatusIcon(status: WindowStatus) {
-  switch (status) {
-    case WindowStatus.Running:
-      return Activity; // 运行中：心电图图标
-    case WindowStatus.WaitingForInput:
-      return Keyboard; // 等待输入：键盘图标
-    case WindowStatus.Paused:
-      return Pause; // 暂停：暂停图标
-    case WindowStatus.Error:
-      return XCircle; // 已退出：错误图标
-    default:
-      return Pause;
-  }
-}
-
-/**
- * 获取状态图标颜色
- */
-function getStatusIconColor(status: WindowStatus): string {
-  switch (status) {
-    case WindowStatus.Running:
-      return 'text-green-500'; // 运行中：绿色
-    case WindowStatus.WaitingForInput:
-      return 'text-blue-500'; // 等待输入：蓝色
-    case WindowStatus.Paused:
-      return 'text-gray-500'; // 暂停：灰色
-    case WindowStatus.Error:
-      return 'text-red-500'; // 已退出：红色
-    default:
-      return 'text-gray-500';
-  }
-}
-
-/**
- * 获取状态图标动画类
- */
-function getStatusAnimation(status: WindowStatus): string {
-  return status === WindowStatus.Running ? 'animate-pulse' : '';
 }
 
 /**
@@ -117,10 +76,9 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
     () => getAggregatedStatus(terminalWindow.layout),
     [terminalWindow.layout]
   );
-  const StatusIcon = getStatusIcon(aggregatedStatus);
-  const iconColor = getStatusIconColor(aggregatedStatus);
-  const statusAnimation = getStatusAnimation(aggregatedStatus);
   const bgColor = getWindowBackgroundColor(aggregatedStatus, isActive);
+  const windowKind = useMemo(() => getWindowKind(terminalWindow), [terminalWindow]);
+  const logoVariant = windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local';
 
   // 从第一个窗格获取工作目录
   const workingDirectory = useMemo(() => {
@@ -152,7 +110,12 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
                 `}
                 aria-label={terminalWindow.name}
               >
-                <StatusIcon className={`h-4 w-4 ${iconColor} ${statusAnimation}`} />
+                <div className="relative">
+                  <TerminalTypeLogo variant={logoVariant} size="xs" />
+                  <span className="absolute -bottom-1 -right-1 rounded-full bg-zinc-950/85 p-[1px] ring-1 ring-zinc-800">
+                    <StatusDot status={aggregatedStatus} size="sm" />
+                  </span>
+                </div>
               </button>
             </Tooltip.Trigger>
             <Tooltip.Portal>
@@ -187,8 +150,12 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
         `}
         aria-label={terminalWindow.name}
       >
-        {/* 状态图标 */}
-        <StatusIcon className={`h-4 w-4 mt-0.5 flex-shrink-0 ${iconColor} ${statusAnimation}`} />
+        <div className="relative mt-0.5 flex-shrink-0">
+          <TerminalTypeLogo variant={logoVariant} size="sm" />
+          <span className="absolute -bottom-1 -right-1 rounded-full bg-zinc-950/85 p-[1px] ring-1 ring-zinc-800">
+            <StatusDot status={aggregatedStatus} size="sm" />
+          </span>
+        </div>
 
         {/* 窗口信息 */}
         <div className="flex-1 min-w-0">

@@ -1,12 +1,13 @@
 import React, { useCallback, useMemo } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { Copy, Edit2, KeyRound, Link2, LockKeyhole, Play, Server, ShieldCheck, Square, Trash2 } from 'lucide-react';
+import { Copy, Edit2, KeyRound, Link2, LockKeyhole, Play, ShieldCheck, Square, Trash2 } from 'lucide-react';
 import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { getStatusColorValue, getStatusLabelKey } from '../utils/statusHelpers';
 import { useI18n } from '../i18n';
 import { StatusDot } from './StatusDot';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 
 interface SSHProfileCardProps {
   profile: SSHProfile;
@@ -148,7 +149,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <Server size={16} className="text-blue-400 flex-shrink-0" />
+              <TerminalTypeLogo variant="ssh" size="sm" data-testid="ssh-profile-card-logo" />
               <h3 className="text-base font-semibold text-[rgb(var(--foreground))] truncate">
                 {profile.name}
               </h3>

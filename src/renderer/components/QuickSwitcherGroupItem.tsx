@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Layers, Archive } from 'lucide-react';
+import { Archive } from 'lucide-react';
 import { WindowGroup } from '../../shared/types/window-group';
 import { highlightMatches } from '../utils/fuzzySearch';
 import { useWindowStore } from '../stores/windowStore';
@@ -8,6 +8,7 @@ import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { WindowStatus } from '../types/window';
 import { StatusDot } from './StatusDot';
 import { formatRelativeTime, useI18n } from '../i18n';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 
 interface QuickSwitcherGroupItemProps {
   group: WindowGroup;
@@ -96,9 +97,14 @@ export const QuickSwitcherGroupItem: React.FC<QuickSwitcherGroupItemProps> = ({
         {/* 左列：组信息 */}
         <div className="flex-1 min-w-0 space-y-1">
           {/* 组名称 */}
-          <div className="flex items-center gap-2">
-            <Layers size={16} className="text-purple-400 flex-shrink-0" />
-            <span className="text-base font-semibold text-zinc-100">
+          <div className="flex items-center gap-2 min-w-0">
+            <TerminalTypeLogo
+              variant="group"
+              size="sm"
+              badgeContent={windowCount > 9 ? '9+' : windowCount}
+              data-testid="quick-switcher-logo-group"
+            />
+            <div className="min-w-0 truncate text-base font-semibold text-zinc-100">
               {nameHighlights.map((part, index) => (
                 <span
                   key={index}
@@ -107,7 +113,7 @@ export const QuickSwitcherGroupItem: React.FC<QuickSwitcherGroupItemProps> = ({
                   {part.text}
                 </span>
               ))}
-            </span>
+            </div>
             {group.archived && (
               <Archive size={14} className="text-orange-400 flex-shrink-0" />
             )}

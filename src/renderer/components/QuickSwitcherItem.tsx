@@ -5,9 +5,10 @@ import { highlightMatches } from '../utils/fuzzySearch';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
 import { IDEIcon } from './icons/IDEIcons';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { formatRelativeTime, useI18n, TranslationParams, TranslationKey } from '../i18n';
-import { canPaneOpenInIDE, canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities';
+import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 
 interface QuickSwitcherItemProps {
   window: Window;
@@ -144,6 +145,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
   const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
   const paneCount = panes.length;
+  const windowKind = useMemo(() => getWindowKind(terminalWindow), [terminalWindow]);
   const activePane = useMemo(
     () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
     [panes, terminalWindow.activePaneId]
@@ -244,8 +246,13 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
         {/* 左列：窗口信息 */}
         <div className="flex-1 min-w-0 space-y-1">
           {/* 窗口名称 */}
-          <div className="flex items-center gap-2">
-            <span className="text-base font-semibold text-zinc-100">
+          <div className="flex items-center gap-2 min-w-0">
+            <TerminalTypeLogo
+              variant={windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local'}
+              size="sm"
+              data-testid={`quick-switcher-logo-${windowKind}`}
+            />
+            <div className="min-w-0 truncate text-base font-semibold text-zinc-100">
               {nameHighlights.map((part, index) => (
                 <span
                   key={index}
@@ -254,7 +261,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
                   {part.text}
                 </span>
               ))}
-            </span>
+            </div>
             {/* 文件夹图标 */}
             {workingDirectory && activePane && canPaneOpenLocalFolder(activePane) && (
               <button

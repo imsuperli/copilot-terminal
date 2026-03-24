@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as Select from '@radix-ui/react-select'
 import * as Tabs from '@radix-ui/react-tabs'
-import { Check, ChevronDown, ChevronRight, Server, Terminal } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { useWindowStore } from '../stores/windowStore'
 import { useI18n } from '../i18n'
 import { SSHAuthType, SSHCredentialState, SSHProfile, SSHProfileInput } from '../../shared/types/ssh'
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo'
 
 interface CreateWindowDialogProps {
   open: boolean
@@ -785,12 +786,12 @@ export function CreateWindowDialog({
           >
             {!isEditingSSHProfile && renderTabTrigger(
               'local',
-              <Terminal size={18} />,
+              <TerminalTypeLogo variant="local" size="xs" />,
               t('createWindow.mode.local'),
             )}
             {sshEnabled && renderTabTrigger(
               'ssh',
-              <Server size={18} />,
+              <TerminalTypeLogo variant="ssh" size="xs" />,
               t('createWindow.mode.ssh'),
             )}
           </Tabs.List>
@@ -802,9 +803,7 @@ export function CreateWindowDialog({
                     <section className={sectionShellClassName}>
                       <div className="mb-5 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[rgb(var(--secondary))]">
-                            <Terminal size={18} className="text-[rgb(var(--ring))]" />
-                          </div>
+                          <TerminalTypeLogo variant="local" size="lg" />
                           <div>
                             <h3 className="text-[15px] font-semibold text-[rgb(var(--foreground))]">
                               {t('createWindow.localSectionTitle')}
@@ -971,9 +970,7 @@ export function CreateWindowDialog({
 
                       <section className={sectionShellClassName}>
                         <div className="mb-5 flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[rgb(var(--secondary))]">
-                            <Server size={18} className="text-[rgb(var(--ring))]" />
-                          </div>
+                          <TerminalTypeLogo variant="ssh" size="lg" />
                           <div className="text-[15px] font-semibold text-[rgb(var(--foreground))]">
                             {sshSummaryName || t('createWindow.mode.ssh')}
                           </div>

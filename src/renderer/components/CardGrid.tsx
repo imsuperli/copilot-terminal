@@ -22,7 +22,7 @@ import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { buildStandaloneSSHWindowMap, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
-import { canPaneOpenInIDE, canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities';
+import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
 
 // 统一的卡片项类型
@@ -162,13 +162,13 @@ export const CardGrid = React.memo<CardGridProps>(({
     if (currentTab === 'local') {
       const activeGroups = groups.filter(g => !g.archived);
       const activeWindows = filterVisibleStandaloneWindows(windows.filter(w => !w.archived));
-      const localWindows = activeWindows.filter(w => w.kind !== 'ssh');
+      const localWindows = activeWindows.filter(w => getWindowKind(w) !== 'ssh');
 
       // 过滤包含本地窗口的组
       const localGroups = activeGroups.filter(g => {
         const windowIds = getAllWindowIds(g.layout);
         const groupWindows = windows.filter(w => windowIds.includes(w.id));
-        return groupWindows.some(w => w.kind !== 'ssh');
+        return groupWindows.some(w => getWindowKind(w) !== 'ssh');
       });
 
       return [
@@ -181,13 +181,13 @@ export const CardGrid = React.memo<CardGridProps>(({
     if (currentTab === 'ssh') {
       const activeGroups = groups.filter(g => !g.archived);
       const activeWindows = filterVisibleStandaloneWindows(windows.filter(w => !w.archived));
-      const sshWindows = activeWindows.filter(w => w.kind === 'ssh');
+      const sshWindows = activeWindows.filter(w => getWindowKind(w) === 'ssh');
 
       // 过滤包含 SSH 窗口的组
       const sshGroups = activeGroups.filter(g => {
         const windowIds = getAllWindowIds(g.layout);
         const groupWindows = windows.filter(w => windowIds.includes(w.id));
-        return groupWindows.some(w => w.kind === 'ssh');
+        return groupWindows.some(w => getWindowKind(w) === 'ssh');
       });
 
       return [

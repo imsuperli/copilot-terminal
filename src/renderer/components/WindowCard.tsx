@@ -7,11 +7,12 @@ import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils
 import { getAllPanes, getAggregatedStatus, getPaneCount } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
 import { IDEIcon } from './icons/IDEIcons';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
 import { formatRelativeTime, useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
-import { canPaneOpenInIDE, canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities';
+import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 
 interface WindowCardProps {
   window: Window;
@@ -97,6 +98,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
   const aggregatedStatus = useMemo(() => getAggregatedStatus(window.layout), [window.layout]);
   const paneCount = useMemo(() => getPaneCount(window.layout), [window.layout]);
   const panes = useMemo(() => getAllPanes(window.layout), [window.layout]);
+  const windowKind = useMemo(() => getWindowKind(window), [window]);
   const activePane = useMemo(
     () => panes.find((pane) => pane.id === window.activePaneId) ?? panes[0],
     [panes, window.activePaneId]
@@ -237,6 +239,11 @@ export const WindowCard = React.memo<WindowCardProps>(({
         {/* 第一行：窗口名称 + 窗格数量 + 状态 */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
+            <TerminalTypeLogo
+              variant={windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local'}
+              size="sm"
+              data-testid={`window-card-logo-${windowKind}`}
+            />
             <h3 className="text-base font-semibold text-[rgb(var(--foreground))] truncate">
               {window.name}
             </h3>

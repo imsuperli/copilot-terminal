@@ -15,6 +15,8 @@ import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
 import { buildStandaloneSSHWindowMap } from '../../utils/sshWindowBindings';
 import { getAllWindowIds } from '../../utils/groupLayoutHelpers';
+import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
+import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
 
 interface SidebarProps {
   appName?: string;
@@ -87,18 +89,18 @@ export function Sidebar({
   const activeGroups = groups.filter(g => !g.archived);
   const archivedGroups = groups.filter(g => g.archived);
 
-  const localActiveWindows = activeWindows.filter(w => w.kind !== 'ssh');
+  const localActiveWindows = activeWindows.filter(w => getWindowKind(w) !== 'ssh');
   const sshActiveWindows = sshEnabled
-    ? activeVisibleWindows.filter(w => w.kind === 'ssh')
+    ? activeVisibleWindows.filter(w => getWindowKind(w) === 'ssh')
     : [];
-  const localVisibleWindows = activeVisibleWindows.filter(w => w.kind !== 'ssh');
+  const localVisibleWindows = activeVisibleWindows.filter(w => getWindowKind(w) !== 'ssh');
   const localGroupCount = activeGroups.filter((group) => {
     const windowIds = getAllWindowIds(group.layout);
-    return windows.some((window) => windowIds.includes(window.id) && window.kind !== 'ssh');
+    return windows.some((window) => windowIds.includes(window.id) && getWindowKind(window) !== 'ssh');
   }).length;
   const sshGroupCount = activeGroups.filter((group) => {
     const windowIds = getAllWindowIds(group.layout);
-    return windows.some((window) => windowIds.includes(window.id) && window.kind === 'ssh');
+    return windows.some((window) => windowIds.includes(window.id) && getWindowKind(window) === 'ssh');
   }).length;
 
   // 各标签的计数
@@ -378,7 +380,7 @@ export function Sidebar({
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
-              <Terminal className="h-4 w-4" />
+              <TerminalTypeLogo variant="local" size="xs" />
               <span>{t('sidebar.tab.local')}</span>
               {localCount > 0 && (
                 <span className="ml-auto text-xs">{localCount}</span>
@@ -394,7 +396,7 @@ export function Sidebar({
                   : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'
               }`}
             >
-              <Terminal className="h-4 w-4" />
+              <TerminalTypeLogo variant="ssh" size="xs" />
               <span>{t('sidebar.tab.ssh')}</span>
               {sshCount > 0 && (
                 <span className="ml-auto text-xs">{sshCount}</span>

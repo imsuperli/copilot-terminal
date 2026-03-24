@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { FolderOpen, Trash2, Play, Square, Archive, ArchiveRestore, Edit2, Layers } from 'lucide-react';
+import { FolderOpen, Trash2, Play, Square, Archive, ArchiveRestore, Edit2 } from 'lucide-react';
 import { GroupStatusIcons } from './GroupStatusIcons';
 import { WindowGroup } from '../../shared/types/window-group';
 import { WindowStatus } from '../../shared/types/window';
@@ -10,6 +10,7 @@ import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils/statusHelpers';
 import { formatRelativeTime, useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 
 interface GroupCardProps {
   group: WindowGroup;
@@ -154,13 +155,12 @@ export const GroupCard = React.memo<GroupCardProps>(({
         {/* 第一行：组名称 + 窗口数量徽章 + 状态图标（靠右） */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* 组图标 + 数字徽章 */}
-            <div className="relative flex-shrink-0">
-              <Layers size={20} className="text-purple-400" />
-              <span className="absolute -top-1 -right-1 bg-[rgb(var(--primary))] text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-semibold">
-                {windowCount}
-              </span>
-            </div>
+            <TerminalTypeLogo
+              variant="group"
+              size="md"
+              badgeContent={windowCount > 99 ? '99+' : windowCount}
+              data-testid="group-card-logo"
+            />
             <h3 className="text-base font-semibold text-[rgb(var(--foreground))] truncate">
               {group.name}
             </h3>

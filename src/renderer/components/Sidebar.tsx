@@ -8,6 +8,8 @@ import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { getWindowCount, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
+import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 
 interface SidebarProps {
   activeWindowId: string | null;
@@ -126,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     for (const item of sortedItems) {
       if (item.kind === 'window') {
-        const windowKind = item.window.kind || 'local';
+        const windowKind = getWindowKind(item.window);
         if (windowKind === 'ssh') {
           ssh.push(item);
         } else {
@@ -136,8 +138,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         // 组：根据组内窗口类型分类
         const windowIds = getAllWindowIds(item.group.layout);
         const groupWindows = windows.filter(w => windowIds.includes(w.id));
-        const hasLocal = groupWindows.some(w => w.kind !== 'ssh');
-        const hasSsh = groupWindows.some(w => w.kind === 'ssh');
+        const hasLocal = groupWindows.some(w => getWindowKind(w) !== 'ssh');
+        const hasSsh = groupWindows.some(w => getWindowKind(w) === 'ssh');
 
         if (hasLocal) {
           local.push(item);
@@ -278,20 +280,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               showLocalTerminals ? 'rotate-0' : '-rotate-90'
                             }`}
                           />
+                          <TerminalTypeLogo variant="local" size="xs" />
                           <span className="transition-opacity duration-200">{t('sidebar.tab.local')}</span>
                           <span className="ml-auto text-zinc-500 transition-opacity duration-200">
                             ({localWindows.length})
                           </span>
                         </>
                       ) : (
-                        <div className="relative">
-                          <span className="text-sm">💻</span>
-                          {localWindows.length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-600 text-[8px] rounded-full flex items-center justify-center">
-                              {localWindows.length}
-                            </span>
-                          )}
-                        </div>
+                        <TerminalTypeLogo
+                          variant="local"
+                          size="xs"
+                          badgeContent={localWindows.length > 99 ? '99+' : localWindows.length}
+                        />
                       )}
                     </button>
                   </Tooltip.Trigger>
@@ -359,20 +359,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               showSshTerminals ? 'rotate-0' : '-rotate-90'
                             }`}
                           />
+                          <TerminalTypeLogo variant="ssh" size="xs" />
                           <span className="transition-opacity duration-200">{t('sidebar.tab.ssh')}</span>
                           <span className="ml-auto text-zinc-500 transition-opacity duration-200">
                             ({sshWindows.length})
                           </span>
                         </>
                       ) : (
-                        <div className="relative">
-                          <span className="text-sm">🌐</span>
-                          {sshWindows.length > 0 && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-600 text-[8px] rounded-full flex items-center justify-center">
-                              {sshWindows.length}
-                            </span>
-                          )}
-                        </div>
+                        <TerminalTypeLogo
+                          variant="ssh"
+                          size="xs"
+                          badgeContent={sshWindows.length > 99 ? '99+' : sshWindows.length}
+                        />
                       )}
                     </button>
                   </Tooltip.Trigger>
