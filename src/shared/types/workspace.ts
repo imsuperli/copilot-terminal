@@ -62,7 +62,7 @@ export interface Settings {
   tmux?: TmuxSettings;
   features?: FeatureSettings;
   customCategories?: CustomCategory[];
-  defaultSidebarTab?: 'all' | 'active' | 'archived' | string; // string 为自定义分类 ID
+  defaultSidebarTab?: 'all' | 'active' | 'local' | 'ssh' | 'archived' | string; // string 也可能是自定义分类或状态筛选 ID
 }
 
 export interface Workspace {

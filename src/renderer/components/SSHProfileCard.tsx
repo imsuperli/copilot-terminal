@@ -4,7 +4,7 @@ import { Edit2, KeyRound, Link2, LockKeyhole, Play, Server, ShieldCheck, Square,
 import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
-import { getStatusLabelKey } from '../utils/statusHelpers';
+import { getStatusColorValue, getStatusLabelKey } from '../utils/statusHelpers';
 import { useI18n } from '../i18n';
 import { StatusDot } from './StatusDot';
 
@@ -39,6 +39,9 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
     [window],
   );
   const isWindowRunning = runtimeStatus === WindowStatus.Running || runtimeStatus === WindowStatus.WaitingForInput;
+  const topBorderColor = runtimeStatus
+    ? getStatusColorValue(runtimeStatus)
+    : 'rgb(59 130 246)';
   const statusTooltip = useMemo(() => {
     if (!runtimeStatus) {
       return null;
@@ -131,7 +134,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
       onKeyDown={handleKeyDown}
       aria-label={`${profile.name} ${targetLabel}`}
       className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border border-[rgb(var(--border))] relative"
-      style={{ borderTop: '2px solid rgb(59 130 246)' }}
+      style={{ borderTop: `2px solid ${topBorderColor}` }}
     >
       {isConnecting && (
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-10 flex items-center justify-center text-sm font-medium text-white">

@@ -61,7 +61,114 @@ function isRuntimeOnlyPaneUpdate(updateKeys: string[]): boolean {
   return updateKeys.length > 0 && updateKeys.every((key) => runtimeOnlyPaneFields.has(key as keyof Pane));
 }
 
-type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
+export type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
+export type TerminalSidebarFilter = 'all' | 'workspace' | 'local' | 'ssh' | 'archived';
+
+export const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'copilot-terminal:terminal-sidebar-preferences';
+
+const DEFAULT_TERMINAL_SIDEBAR_SECTIONS: Record<TerminalSidebarSection, boolean> = {
+  archived: false,
+  local: true,
+  ssh: true,
+};
+
+const DEFAULT_TERMINAL_SIDEBAR_FILTER: TerminalSidebarFilter = 'all';
+
+function getRendererLocalStorage(): Storage | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch (error) {
+    console.error('[windowStore] Failed to access localStorage:', error);
+    return null;
+  }
+}
+
+function normalizeTerminalSidebarFilter(value: unknown): TerminalSidebarFilter {
+  switch (value) {
+    case 'all':
+    case 'workspace':
+    case 'local':
+    case 'ssh':
+    case 'archived':
+      return value;
+    default:
+      return DEFAULT_TERMINAL_SIDEBAR_FILTER;
+  }
+}
+
+function loadTerminalSidebarPreferences(): {
+  filter: TerminalSidebarFilter;
+  sections: Record<TerminalSidebarSection, boolean>;
+} {
+  const storage = getRendererLocalStorage();
+  if (!storage) {
+    return {
+      filter: DEFAULT_TERMINAL_SIDEBAR_FILTER,
+      sections: { ...DEFAULT_TERMINAL_SIDEBAR_SECTIONS },
+    };
+  }
+
+  try {
+    const rawValue = storage.getItem(TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY);
+    if (!rawValue) {
+      return {
+        filter: DEFAULT_TERMINAL_SIDEBAR_FILTER,
+        sections: { ...DEFAULT_TERMINAL_SIDEBAR_SECTIONS },
+      };
+    }
+
+    const parsed = JSON.parse(rawValue) as {
+      filter?: unknown;
+      sections?: Partial<Record<TerminalSidebarSection, unknown>>;
+    };
+
+    return {
+      filter: normalizeTerminalSidebarFilter(parsed.filter),
+      sections: {
+        archived: typeof parsed.sections?.archived === 'boolean'
+          ? parsed.sections.archived
+          : DEFAULT_TERMINAL_SIDEBAR_SECTIONS.archived,
+        local: typeof parsed.sections?.local === 'boolean'
+          ? parsed.sections.local
+          : DEFAULT_TERMINAL_SIDEBAR_SECTIONS.local,
+        ssh: typeof parsed.sections?.ssh === 'boolean'
+          ? parsed.sections.ssh
+          : DEFAULT_TERMINAL_SIDEBAR_SECTIONS.ssh,
+      },
+    };
+  } catch (error) {
+    console.error('[windowStore] Failed to parse terminal sidebar preferences:', error);
+    return {
+      filter: DEFAULT_TERMINAL_SIDEBAR_FILTER,
+      sections: { ...DEFAULT_TERMINAL_SIDEBAR_SECTIONS },
+    };
+  }
+}
+
+function persistTerminalSidebarPreferences(
+  sections: Record<TerminalSidebarSection, boolean>,
+  filter: TerminalSidebarFilter,
+): void {
+  const storage = getRendererLocalStorage();
+  if (!storage) {
+    return;
+  }
+
+  try {
+    storage.setItem(
+      TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY,
+      JSON.stringify({ filter, sections }),
+    );
+  } catch (error) {
+    console.error('[windowStore] Failed to persist terminal sidebar preferences:', error);
+  }
+}
+
+const initialTerminalSidebarPreferences = loadTerminalSidebarPreferences();
 
 /**
  * 窗口状态管理 Store 接口
@@ -73,8 +180,8 @@ interface WindowStore {
   mruList: string[]; // 最近使用列表（窗口 ID）
   sidebarExpanded: boolean; // 侧边栏是否展开
   sidebarWidth: number; // 侧边栏宽度
-  hideGroupedWindows: boolean; // 是否隐藏已加入组的窗口
   terminalSidebarSections: Record<TerminalSidebarSection, boolean>; // 终端视图侧边栏各分类的折叠状态
+  terminalSidebarFilter: TerminalSidebarFilter; // 终端视图侧边栏筛选状态
 
   // 组相关状态
   groups: WindowGroup[]; // 窗口组列表
@@ -117,8 +224,8 @@ interface WindowStore {
   // 侧边栏相关
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
-  setHideGroupedWindows: (hide: boolean) => void;
   setTerminalSidebarSectionExpanded: (section: TerminalSidebarSection, expanded: boolean) => void;
+  setTerminalSidebarFilter: (filter: TerminalSidebarFilter) => void;
 
   // 辅助方法
   getWindowById: (id: string) => Window | undefined;
@@ -185,12 +292,8 @@ export const useWindowStore = create<WindowStore>()(
     mruList: [],
     sidebarExpanded: false, // 默认折叠
     sidebarWidth: 200, // 默认宽度
-    hideGroupedWindows: false, // 默认显示所有窗口
-    terminalSidebarSections: {
-      archived: false,
-      local: true,
-      ssh: true,
-    },
+    terminalSidebarSections: { ...initialTerminalSidebarPreferences.sections },
+    terminalSidebarFilter: initialTerminalSidebarPreferences.filter,
 
     // 组相关初始状态
     groups: [],
@@ -647,17 +750,24 @@ export const useWindowStore = create<WindowStore>()(
       });
     },
 
-    // 设置是否隐藏已分组的窗口
-    setHideGroupedWindows: (hide) => {
-      set((state) => {
-        state.hideGroupedWindows = hide;
-      });
-    },
-
     setTerminalSidebarSectionExpanded: (section, expanded) => {
       set((state) => {
         state.terminalSidebarSections[section] = expanded;
       });
+      persistTerminalSidebarPreferences(
+        get().terminalSidebarSections,
+        get().terminalSidebarFilter,
+      );
+    },
+
+    setTerminalSidebarFilter: (filter) => {
+      set((state) => {
+        state.terminalSidebarFilter = filter;
+      });
+      persistTerminalSidebarPreferences(
+        get().terminalSidebarSections,
+        get().terminalSidebarFilter,
+      );
     },
 
     // 根据 ID 查找窗口

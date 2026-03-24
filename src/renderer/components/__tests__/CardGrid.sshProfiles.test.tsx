@@ -8,6 +8,7 @@ import { CardGrid } from '../CardGrid';
 import { useWindowStore } from '../../stores/windowStore';
 import { SSHProfile } from '../../../shared/types/ssh';
 import { Window, WindowStatus } from '../../types/window';
+import { getStatusColorValue } from '../../utils/statusHelpers';
 
 function createSSHProfile(overrides: Partial<SSHProfile> = {}): SSHProfile {
   return {
@@ -89,8 +90,8 @@ describe('CardGrid SSH profile cards', () => {
       groupMruList: [],
       sidebarExpanded: false,
       sidebarWidth: 200,
-      hideGroupedWindows: false,
       customCategories: [],
+      terminalSidebarFilter: 'all',
     });
     vi.clearAllMocks();
   });
@@ -194,5 +195,45 @@ describe('CardGrid SSH profile cards', () => {
 
     expect(onConnectSSHProfile).not.toHaveBeenCalled();
     expect(onEnterTerminal).toHaveBeenCalledWith(runtimeWindow);
+  });
+
+  it('uses the paused status color for bound SSH cards', () => {
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile, {
+      layout: {
+        type: 'pane',
+        id: 'layout-ssh-pane-1',
+        pane: {
+          id: 'ssh-pane-1',
+          cwd: '/srv/app',
+          command: '/bin/zsh',
+          status: WindowStatus.Paused,
+          pid: null,
+          backend: 'ssh',
+          ssh: {
+            profileId: profile.id,
+            host: profile.host,
+            port: profile.port,
+            user: profile.user,
+            authType: profile.auth,
+            remoteCwd: '/srv/app',
+            reuseSession: true,
+          },
+        },
+      },
+    });
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+    });
+
+    expect(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' })).toHaveStyle({
+      borderTop: `2px solid ${getStatusColorValue(WindowStatus.Paused)}`,
+    });
   });
 });

@@ -14,6 +14,7 @@ import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
 import { buildStandaloneSSHWindowMap } from '../../utils/sshWindowBindings';
+import { getAllWindowIds } from '../../utils/groupLayoutHelpers';
 
 interface SidebarProps {
   appName?: string;
@@ -58,8 +59,10 @@ export function Sidebar({
   const addCustomCategory = useWindowStore((state) => state.addCustomCategory);
   const updateCustomCategory = useWindowStore((state) => state.updateCustomCategory);
   const removeCustomCategory = useWindowStore((state) => state.removeCustomCategory);
-  const hideGroupedWindows = useWindowStore((state) => state.hideGroupedWindows);
-  const setHideGroupedWindows = useWindowStore((state) => state.setHideGroupedWindows);
+
+  const groupedWindowIds = useMemo(() => (
+    new Set(groups.flatMap((group) => getAllWindowIds(group.layout)))
+  ), [groups]);
 
   const standaloneSSHWindowIds = useMemo(() => {
     if (!sshEnabled || sshProfiles.length === 0) {
@@ -67,28 +70,43 @@ export function Sidebar({
     }
 
     return new Set(
-      Object.values(buildStandaloneSSHWindowMap(windows, sshProfiles.map((profile) => profile.id)))
+      Object.values(
+        buildStandaloneSSHWindowMap(
+          windows.filter((window) => !groupedWindowIds.has(window.id)),
+          sshProfiles.map((profile) => profile.id),
+        ),
+      )
         .map((window) => window.id),
     );
-  }, [sshEnabled, sshProfiles, windows]);
+  }, [groupedWindowIds, sshEnabled, sshProfiles, windows]);
 
   const activeWindows = windows.filter(w => !w.archived);
   const archivedWindows = windows.filter(w => w.archived);
-  const activeVisibleWindows = windows.filter(w => !w.archived && !standaloneSSHWindowIds.has(w.id));
-  const archivedVisibleWindows = windows.filter(w => w.archived && !standaloneSSHWindowIds.has(w.id));
+  const activeVisibleWindows = windows.filter(w => !w.archived && !groupedWindowIds.has(w.id) && !standaloneSSHWindowIds.has(w.id));
+  const archivedVisibleWindows = windows.filter(w => w.archived && !groupedWindowIds.has(w.id) && !standaloneSSHWindowIds.has(w.id));
   const activeGroups = groups.filter(g => !g.archived);
   const archivedGroups = groups.filter(g => g.archived);
 
-  // 按类型分类窗口（包含所有窗口，不过滤 standaloneSSHWindowIds）
   const localActiveWindows = activeWindows.filter(w => w.kind !== 'ssh');
-  const sshActiveWindows = activeWindows.filter(w => w.kind === 'ssh');
+  const sshActiveWindows = sshEnabled
+    ? activeVisibleWindows.filter(w => w.kind === 'ssh')
+    : [];
+  const localVisibleWindows = activeVisibleWindows.filter(w => w.kind !== 'ssh');
+  const localGroupCount = activeGroups.filter((group) => {
+    const windowIds = getAllWindowIds(group.layout);
+    return windows.some((window) => windowIds.includes(window.id) && window.kind !== 'ssh');
+  }).length;
+  const sshGroupCount = activeGroups.filter((group) => {
+    const windowIds = getAllWindowIds(group.layout);
+    return windows.some((window) => windowIds.includes(window.id) && window.kind === 'ssh');
+  }).length;
 
   // 各标签的计数
   const allCount = activeVisibleWindows.length + archivedVisibleWindows.length + groups.length + (sshEnabled ? sshProfileCount : 0);
   const activeCount = activeVisibleWindows.length + activeGroups.length + (sshEnabled ? sshProfileCount : 0);
   const archivedCount = archivedVisibleWindows.length + archivedGroups.length;
-  const localCount = localActiveWindows.length + activeGroups.length;
-  const sshCount = sshActiveWindows.length + (sshEnabled ? sshProfileCount : 0);
+  const localCount = localVisibleWindows.length + localGroupCount;
+  const sshCount = sshActiveWindows.length + sshGroupCount + (sshEnabled ? sshProfileCount : 0);
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -333,38 +351,6 @@ export function Sidebar({
         <div className="flex-1 px-4 py-4 overflow-y-auto border-b border-[rgb(var(--border))]">
           <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] tracking-wide mb-3 flex items-center justify-between" style={{ letterSpacing: '0.05em' }}>
             <span>{t('sidebar.section.windowManagement')}</span>
-            <Tooltip.Provider>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <div
-                    className="flex items-center gap-1 cursor-pointer normal-case tracking-normal font-normal"
-                    onClick={() => setHideGroupedWindows(!hideGroupedWindows)}
-                  >
-              <span className="text-[10px] text-[rgb(var(--muted-foreground))]">{t('sidebar.hideGroupedWindows')}</span>
-              <span
-                role="checkbox"
-                aria-checked={hideGroupedWindows}
-                className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${
-                  hideGroupedWindows
-                    ? 'bg-blue-500 border-blue-500'
-                    : 'border-zinc-500 bg-transparent hover:border-zinc-400'
-                }`}
-              >
-                {hideGroupedWindows && (
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path d="M2 5L4.5 7.5L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </span>
-                  </div>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
-                    {t('sidebar.hideGroupedWindowsTooltip')}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
           </h3>
           {/* Tab buttons */}
           <div className="flex flex-col gap-2">
@@ -393,7 +379,7 @@ export function Sidebar({
               }`}
             >
               <Terminal className="h-4 w-4" />
-              <span>本地终端</span>
+              <span>{t('sidebar.tab.local')}</span>
               {localCount > 0 && (
                 <span className="ml-auto text-xs">{localCount}</span>
               )}
@@ -409,7 +395,7 @@ export function Sidebar({
               }`}
             >
               <Terminal className="h-4 w-4" />
-              <span>远程终端</span>
+              <span>{t('sidebar.tab.ssh')}</span>
               {sshCount > 0 && (
                 <span className="ml-auto text-xs">{sshCount}</span>
               )}
@@ -765,7 +751,7 @@ export function Sidebar({
         onOpenChange={setIsConfirmDialogOpen}
         title={
           currentTab === 'active'
-            ? '确认清空活跃终端'
+            ? '确认清空工作区'
             : currentTab === 'archived'
             ? '确认清空已归档终端'
             : currentTab === 'all'
@@ -778,7 +764,7 @@ export function Sidebar({
         }
         description={
           currentTab === 'active'
-            ? `确定要删除全部 ${activeWindows.length} 个活跃终端吗？此操作不可撤销。`
+            ? `确定要删除工作区中的全部 ${activeWindows.length} 个终端吗？此操作不可撤销。`
             : currentTab === 'archived'
             ? `确定要删除全部 ${archivedWindows.length} 个已归档终端吗？此操作不可撤销。`
             : currentTab === 'all'
