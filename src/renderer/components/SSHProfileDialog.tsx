@@ -427,13 +427,6 @@ export function SSHProfileDialog({
       return;
     }
 
-    const hasPasswordAfterSave = Boolean(passwordValue)
-      || (authNeedsPassword && !clearStoredPassword && currentCredentialState.hasPassword);
-    if (authNeedsPassword && !hasPasswordAfterSave) {
-      setSaveError(t('sshProfileDialog.error.passwordRequired'));
-      return;
-    }
-
     const jumpHostProfileId = form.routingMode === 'jumpHost'
       ? form.jumpHostProfileId.trim()
       : undefined;

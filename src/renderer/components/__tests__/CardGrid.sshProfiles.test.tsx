@@ -99,6 +99,7 @@ describe('CardGrid SSH profile cards', () => {
   it('renders SSH profile cards and forwards connect actions', async () => {
     const user = userEvent.setup();
     const onConnectSSHProfile = vi.fn();
+    const onDuplicateSSHProfile = vi.fn();
     const profile = createSSHProfile();
 
     renderCardGrid({
@@ -111,6 +112,7 @@ describe('CardGrid SSH profile cards', () => {
         },
       },
       onConnectSSHProfile,
+      onDuplicateSSHProfile,
     });
 
     expect(screen.getByText('Prod Bastion')).toBeInTheDocument();
@@ -121,6 +123,10 @@ describe('CardGrid SSH profile cards', () => {
     await user.click(screen.getByRole('button', { name: '启动' }));
 
     expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
+
+    await user.click(screen.getByRole('button', { name: '复制 SSH 配置' }));
+
+    expect(onDuplicateSSHProfile).toHaveBeenCalledWith(profile);
   });
 
   it('surfaces ssh routing metadata on profile cards', () => {

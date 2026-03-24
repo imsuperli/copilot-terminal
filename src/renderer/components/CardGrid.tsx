@@ -41,6 +41,7 @@ interface CardGridProps {
   connectingSSHProfileId?: string | null;
   onConnectSSHProfile?: (profile: SSHProfile) => void | Promise<void>;
   onEditSSHProfile?: (profile: SSHProfile) => void;
+  onDuplicateSSHProfile?: (profile: SSHProfile) => void;
   onDeleteSSHProfile?: (profile: SSHProfile) => void | Promise<void>;
   searchQuery?: string;
   currentTab?: 'all' | 'active' | 'archived' | string;
@@ -66,6 +67,7 @@ export const CardGrid = React.memo<CardGridProps>(({
   connectingSSHProfileId = null,
   onConnectSSHProfile,
   onEditSSHProfile,
+  onDuplicateSSHProfile,
   onDeleteSSHProfile,
   searchQuery = '',
   currentTab = 'active',
@@ -325,6 +327,10 @@ export const CardGrid = React.memo<CardGridProps>(({
   const handleDeleteSSHProfile = useCallback(async (profile: SSHProfile) => {
     await onDeleteSSHProfile?.(profile);
   }, [onDeleteSSHProfile]);
+
+  const handleDuplicateSSHProfile = useCallback((profile: SSHProfile) => {
+    onDuplicateSSHProfile?.(profile);
+  }, [onDuplicateSSHProfile]);
 
   const handleCardClick = useCallback(
     async (win: Window) => {
@@ -716,6 +722,7 @@ export const CardGrid = React.memo<CardGridProps>(({
                     onPauseWindow={handlePauseWindow}
                     onStartWindow={handleStartWindow}
                     onEdit={handleEditSSHProfile}
+                    onDuplicate={handleDuplicateSSHProfile}
                     onDelete={handleDeleteSSHProfile}
                   />
                 );

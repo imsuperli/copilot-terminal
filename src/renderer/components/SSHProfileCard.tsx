@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { Edit2, KeyRound, Link2, LockKeyhole, Play, Server, ShieldCheck, Square, Trash2 } from 'lucide-react';
+import { Copy, Edit2, KeyRound, Link2, LockKeyhole, Play, Server, ShieldCheck, Square, Trash2 } from 'lucide-react';
 import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
@@ -18,6 +18,7 @@ interface SSHProfileCardProps {
   onPauseWindow?: (window: Window) => void;
   onStartWindow?: (window: Window) => void;
   onEdit?: (profile: SSHProfile) => void;
+  onDuplicate?: (profile: SSHProfile) => void;
   onDelete?: (profile: SSHProfile) => void;
 }
 
@@ -31,6 +32,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   onPauseWindow,
   onStartWindow,
   onEdit,
+  onDuplicate,
   onDelete,
 }) => {
   const { t } = useI18n();
@@ -260,6 +262,29 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
         </button>
 
         <div className="flex items-center gap-1.5">
+          <Tooltip.Provider>
+            <Tooltip.Root delayDuration={300}>
+              <Tooltip.Trigger asChild>
+                <button
+                  onClick={(event) => handleButtonClick(event, () => onDuplicate?.(profile))}
+                  className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                  aria-label={t('sshProfileCard.duplicate')}
+                >
+                  <Copy size={16} />
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                  side="top"
+                  sideOffset={5}
+                >
+                  {t('sshProfileCard.duplicate')}
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
+
           <Tooltip.Provider>
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>

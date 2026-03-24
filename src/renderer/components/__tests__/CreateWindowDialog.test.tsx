@@ -130,7 +130,7 @@ describe('CreateWindowDialog', () => {
     })
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog.className).toContain('!w-[min(1240px,96vw)]')
+    expect(dialog.className).toContain('!w-[min(760px,94vw)]')
     expect(dialog.className).toContain('!max-w-none')
 
     const user = userEvent.setup()
@@ -335,6 +335,103 @@ describe('CreateWindowDialog', () => {
         user: 'root',
       }))
     })
+  })
+
+  it('allows saving a password-based ssh profile without opening the auth tab', async () => {
+    const user = userEvent.setup()
+
+    mockElectronAPI.getSSHCredentialState.mockResolvedValueOnce({
+      success: true,
+      data: { hasPassword: false, hasPassphrase: false },
+    })
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={() => {}}
+        sshEnabled={true}
+        sshProfiles={[]}
+      />,
+    )
+
+    await user.click(screen.getByRole('tab', { name: /SSH 连接/ }))
+    await user.type(screen.getByLabelText(/连接名称/), 'Prod Ubuntu')
+    await user.type(screen.getByLabelText(/主机地址/), 'example.com')
+    await user.clear(screen.getByLabelText(/^用户名/))
+    await user.type(screen.getByLabelText(/^用户名/), 'root')
+
+    await user.click(screen.getByRole('button', { name: /保存 SSH 连接/ }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.createSSHProfile).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Prod Ubuntu',
+        host: 'example.com',
+        user: 'root',
+        auth: 'password',
+      }))
+    })
+
+    expect(mockElectronAPI.setSSHPassword).not.toHaveBeenCalled()
+  })
+
+  it('prefills duplicated ssh profiles with a copy-prefixed name', async () => {
+    const user = userEvent.setup()
+    const sourceProfile = {
+      id: 'ssh-profile-source',
+      name: 'Prod Ubuntu',
+      host: 'old.example.com',
+      port: 22,
+      user: 'root',
+      auth: 'password',
+      privateKeys: [],
+      keepaliveInterval: 30,
+      keepaliveCountMax: 3,
+      readyTimeout: null,
+      verifyHostKeys: true,
+      x11: false,
+      skipBanner: false,
+      agentForward: false,
+      warnOnClose: true,
+      reuseSession: true,
+      forwardedPorts: [],
+      tags: ['prod'],
+      notes: 'existing notes',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as const
+
+    mockElectronAPI.getSSHCredentialState.mockResolvedValueOnce({
+      success: true,
+      data: { hasPassword: false, hasPassphrase: false },
+    })
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={() => {}}
+        sshEnabled={true}
+        sshProfiles={[sourceProfile as any]}
+        initialSSHProfile={sourceProfile as any}
+      />,
+    )
+
+    expect(screen.getByLabelText(/连接名称/)).toHaveValue('copy-Prod Ubuntu')
+    expect(screen.getByLabelText(/主机地址/)).toHaveValue('old.example.com')
+    expect(screen.getByLabelText(/^用户名/)).toHaveValue('root')
+
+    await user.click(screen.getByRole('button', { name: /保存 SSH 连接/ }))
+
+    await waitFor(() => {
+      expect(mockElectronAPI.createSSHProfile).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'copy-Prod Ubuntu',
+        host: 'old.example.com',
+        user: 'root',
+        tags: ['prod'],
+        notes: 'existing notes',
+      }))
+    })
+
+    expect(mockElectronAPI.updateSSHProfile).not.toHaveBeenCalled()
   })
 
   it('updates an existing ssh profile in the same dialog instead of creating a new one', async () => {

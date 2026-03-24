@@ -58,8 +58,8 @@ vi.mock('../components/CreateGroupDialog', () => ({
   CreateGroupDialog: () => null,
 }));
 
-vi.mock('../components/SSHProfileDialog', () => ({
-  SSHProfileDialog: () => null,
+vi.mock('../components/CreateWindowDialog', () => ({
+  CreateWindowDialog: () => null,
 }));
 
 vi.mock('../hooks/useViewSwitcher', () => ({
@@ -95,6 +95,39 @@ function createSSHWindow(profileId: string): Window {
         command: '',
         status: WindowStatus.Running,
         pid: 2001,
+        backend: 'ssh',
+        ssh: {
+          profileId,
+          host: '10.0.0.21',
+          port: 22,
+          user: 'root',
+          authType: 'password',
+          reuseSession: true,
+        },
+      },
+    },
+  };
+}
+
+function createNewSSHWindow(profileId: string): Window {
+  const paneId = 'pane-ssh-new';
+
+  return {
+    id: 'win-ssh-new',
+    name: 'Prod SSH',
+    activePaneId: paneId,
+    createdAt: '2026-03-23T08:20:00.000Z',
+    lastActiveAt: '2026-03-23T08:20:00.000Z',
+    kind: 'ssh',
+    layout: {
+      type: 'pane',
+      id: paneId,
+      pane: {
+        id: paneId,
+        cwd: '~',
+        command: '',
+        status: WindowStatus.WaitingForInput,
+        pid: 3001,
         backend: 'ssh',
         ssh: {
           profileId,
@@ -190,5 +223,56 @@ describe('App SSH profile reuse', () => {
 
     expect(switchToWindow).toHaveBeenCalledWith('win-ssh-existing');
     expect(window.electronAPI.createSSHWindow).not.toHaveBeenCalled();
+  });
+
+  it('prompts for a password when starting a password-based ssh profile without a stored secret', async () => {
+    const user = userEvent.setup();
+    const switchToWindow = vi.fn();
+
+    useWindowStore.setState({
+      windows: [],
+    });
+
+    mockUseWindowSwitcher.mockReturnValue({
+      switchToWindow,
+    });
+
+    vi.mocked(window.electronAPI.getSSHCredentialState).mockResolvedValue({
+      success: true,
+      data: {
+        hasPassword: false,
+        hasPassphrase: false,
+      },
+    });
+    vi.mocked(window.electronAPI.setSSHPassword).mockResolvedValue({
+      success: true,
+    });
+    vi.mocked(window.electronAPI.createSSHWindow).mockResolvedValue({
+      success: true,
+      data: createNewSSHWindow('profile-1'),
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '连接 SSH' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '连接 SSH' }));
+
+    expect(await screen.findByText('输入 SSH 密码')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('密码 / 交互认证密钥'), 'secret');
+    await user.click(screen.getByRole('button', { name: '连接' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.setSSHPassword).toHaveBeenCalledWith('profile-1', 'secret');
+      expect(window.electronAPI.createSSHWindow).toHaveBeenCalledWith({
+        profileId: 'profile-1',
+        name: 'Prod SSH',
+      });
+    });
+
+    expect(switchToWindow).toHaveBeenCalledWith('win-ssh-new');
   });
 });

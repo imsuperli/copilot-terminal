@@ -2,6 +2,7 @@ import { StartSSHPaneResult, StartWindowResult } from '../../shared/types/electr
 import { getPaneBackend, getPaneCapabilities } from '../../shared/utils/terminalCapabilities';
 import { Pane, Window, WindowStatus } from '../types/window';
 import { getAllPanes } from './layoutHelpers';
+import { ensureSSHPasswordSaved } from './sshPasswordPrompt';
 
 type PaneStartResult = StartWindowResult | StartSSHPaneResult;
 
@@ -31,6 +32,17 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
   if (getPaneBackend(pane) === 'ssh') {
     if (!pane.ssh) {
       throw new Error(`SSH pane metadata is missing for ${targetWindow.id}/${pane.id}`);
+    }
+
+    const shouldContinue = await ensureSSHPasswordSaved({
+      profileId: pane.ssh.profileId,
+      profileName: targetWindow.name,
+      host: pane.ssh.host,
+      user: pane.ssh.user,
+      authType: pane.ssh.authType,
+    });
+    if (!shouldContinue) {
+      throw new Error('SSH password entry was cancelled');
     }
 
     const response = await window.electronAPI.startSSHPane({

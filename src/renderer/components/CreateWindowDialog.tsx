@@ -14,6 +14,7 @@ interface CreateWindowDialogProps {
   sshEnabled?: boolean
   sshProfiles?: SSHProfile[]
   editingSSHProfile?: SSHProfile | null
+  initialSSHProfile?: SSHProfile | null
   sshCredentialState?: SSHCredentialState | null
   onSSHProfileSaved?: (profile: SSHProfile, credentialState: SSHCredentialState) => void
 }
@@ -99,9 +100,13 @@ function resolveRoutingMode(profile?: SSHProfile | null): SSHRoutingMode {
   return 'direct'
 }
 
-function createInitialSSHForm(profile?: SSHProfile | null): SSHCreateFormState {
+function createInitialSSHForm(profile?: SSHProfile | null, duplicate = false): SSHCreateFormState {
+  const defaultName = duplicate && profile?.name
+    ? `copy-${profile.name}`
+    : profile?.name ?? ''
+
   return {
-    name: profile?.name ?? '',
+    name: defaultName,
     host: profile?.host ?? '',
     port: String(profile?.port ?? 22),
     user: profile?.user ?? '',
@@ -134,11 +139,14 @@ export function CreateWindowDialog({
   sshEnabled = false,
   sshProfiles = [],
   editingSSHProfile = null,
+  initialSSHProfile = null,
   sshCredentialState = null,
   onSSHProfileSaved,
 }: CreateWindowDialogProps) {
   const { t } = useI18n()
-  const [activeTab, setActiveTab] = useState<CreateWindowTab>('local')
+  const [activeTab, setActiveTab] = useState<CreateWindowTab>(
+    (editingSSHProfile || initialSSHProfile) && sshEnabled ? 'ssh' : 'local',
+  )
 
   const [name, setName] = useState('')
   const [workingDirectory, setWorkingDirectory] = useState('')
@@ -150,7 +158,12 @@ export function CreateWindowDialog({
   const [isCreating, setIsCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  const [sshForm, setSSHForm] = useState<SSHCreateFormState>(() => createInitialSSHForm(editingSSHProfile))
+  const [sshForm, setSSHForm] = useState<SSHCreateFormState>(() => (
+    createInitialSSHForm(
+      editingSSHProfile ?? initialSSHProfile,
+      Boolean(initialSSHProfile) && !Boolean(editingSSHProfile),
+    )
+  ))
   const [sshPassword, setSSHPassword] = useState('')
   const [sshPassphrases, setSSHPassphrases] = useState<Record<string, string>>({})
   const [sshError, setSSHError] = useState('')
@@ -171,7 +184,11 @@ export function CreateWindowDialog({
     [sshForm.privateKeysText],
   )
   const isEditingSSHProfile = Boolean(editingSSHProfile)
-  const currentSSHCredentialState = sshCredentialState ?? DEFAULT_SSH_CREDENTIAL_STATE
+  const isDuplicatingSSHProfile = !isEditingSSHProfile && Boolean(initialSSHProfile)
+  const sshTemplateProfile = editingSSHProfile ?? initialSSHProfile
+  const currentSSHCredentialState = isEditingSSHProfile
+    ? (sshCredentialState ?? DEFAULT_SSH_CREDENTIAL_STATE)
+    : DEFAULT_SSH_CREDENTIAL_STATE
   const recommendedShell = availableShells.find((shell) => shell.isDefault)
   const autoShellTarget = globalDefaultShell || recommendedShell?.path || ''
   const matchedShell = availableShells.find((shell) => (
@@ -231,8 +248,8 @@ export function CreateWindowDialog({
     setIsValidating(false)
   }
 
-  const resetSSHForm = (profile?: SSHProfile | null) => {
-    setSSHForm(createInitialSSHForm(profile))
+  const resetSSHForm = (profile?: SSHProfile | null, duplicate = false) => {
+    setSSHForm(createInitialSSHForm(profile, duplicate))
     setSSHPassword('')
     setSSHPassphrases({})
     setSSHError('')
@@ -243,9 +260,9 @@ export function CreateWindowDialog({
   }
 
   const resetDialog = () => {
-    setActiveTab(isEditingSSHProfile ? 'ssh' : 'local')
+    setActiveTab((isEditingSSHProfile || isDuplicatingSSHProfile) && sshEnabled ? 'ssh' : 'local')
     resetLocalForm()
-    resetSSHForm(editingSSHProfile)
+    resetSSHForm(editingSSHProfile ?? initialSSHProfile, isDuplicatingSSHProfile)
   }
 
   useEffect(() => {
@@ -292,15 +309,15 @@ export function CreateWindowDialog({
       return
     }
 
-    if (isEditingSSHProfile && sshEnabled) {
+    if ((isEditingSSHProfile || isDuplicatingSSHProfile) && sshEnabled) {
       setActiveTab('ssh')
-      resetSSHForm(editingSSHProfile)
+      resetSSHForm(editingSSHProfile ?? initialSSHProfile, isDuplicatingSSHProfile)
       resetLocalForm()
       return
     }
 
     resetSSHForm()
-  }, [editingSSHProfile, isEditingSSHProfile, open, sshEnabled])
+  }, [editingSSHProfile, initialSSHProfile, isDuplicatingSSHProfile, isEditingSSHProfile, open, sshEnabled])
 
   useEffect(() => {
     if (!open) {
@@ -495,13 +512,6 @@ export function CreateWindowDialog({
       return
     }
 
-    const hasPasswordAfterSave = Boolean(passwordValue)
-      || (sshAuthNeedsPassword && isEditingSSHProfile && currentSSHCredentialState.hasPassword)
-    if (sshAuthNeedsPassword && !hasPasswordAfterSave) {
-      setSSHError(t('sshProfileDialog.error.passwordRequired'))
-      return
-    }
-
     const jumpHostProfileId = sshForm.routingMode === 'jumpHost'
       ? sshForm.jumpHostProfileId.trim()
       : undefined
@@ -571,14 +581,14 @@ export function CreateWindowDialog({
       httpProxyHost,
       httpProxyPort: httpProxyHost ? httpProxyPort : undefined,
       reuseSession: sshForm.reuseSession,
-      algorithms: editingSSHProfile?.algorithms,
-      forwardedPorts: editingSSHProfile?.forwardedPorts ?? [],
+      algorithms: sshTemplateProfile?.algorithms,
+      forwardedPorts: sshTemplateProfile?.forwardedPorts ?? [],
       remoteCommand: trimOptional(sshForm.remoteCommand),
       defaultRemoteCwd: trimOptional(sshForm.defaultRemoteCwd),
-      tags: editingSSHProfile?.tags ?? [],
-      notes: editingSSHProfile?.notes,
-      icon: editingSSHProfile?.icon,
-      color: editingSSHProfile?.color,
+      tags: sshTemplateProfile?.tags ?? [],
+      notes: sshTemplateProfile?.notes,
+      icon: sshTemplateProfile?.icon,
+      color: sshTemplateProfile?.color,
     }
 
     setIsSavingSSH(true)
@@ -1063,7 +1073,7 @@ export function CreateWindowDialog({
                             {sshAuthNeedsPassword && (
                               <div>
                                 <label htmlFor="ssh-password" className={fieldLabelClassName}>
-                                  {t('sshProfileDialog.passwordLabel')} <span className="text-status-error">*</span>
+                                  {t('sshProfileDialog.passwordLabel')}
                                 </label>
                                 <input
                                   id="ssh-password"

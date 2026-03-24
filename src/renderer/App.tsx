@@ -13,6 +13,7 @@ import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
 import { QuickNavPanel } from './components/QuickNavPanel';
 import { SSHHostKeyPromptDialog } from './components/SSHHostKeyPromptDialog';
+import { SSHPasswordPromptDialog } from './components/SSHPasswordPromptDialog';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
@@ -35,6 +36,13 @@ import type {
 import './api/ptyDataBus';
 import { getAllPanes } from './utils/layoutHelpers';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from './utils/settingsEvents';
+import {
+  authNeedsPassword,
+  ensureSSHPasswordSaved,
+  SSH_PASSWORD_SAVED_EVENT,
+  setSSHPasswordPromptHandler,
+  type SSHPasswordPromptRequest,
+} from './utils/sshPasswordPrompt';
 
 function findReusableSSHWindow(windows: Window[], profileId: string): Window | null {
   const matchedWindows = windows.filter((window) => {
@@ -73,6 +81,7 @@ function AppContent() {
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
   const [isSSHDialogOpen, setIsSSHDialogOpen] = useState(false);
   const [editingSSHProfile, setEditingSSHProfile] = useState<SSHProfile | null>(null);
+  const [duplicatingSSHProfile, setDuplicatingSSHProfile] = useState<SSHProfile | null>(null);
   const [sshProfiles, setSSHProfiles] = useState<SSHProfile[]>([]);
   const [sshCredentialStates, setSSHCredentialStates] = useState<Record<string, SSHCredentialState>>({});
   const [connectingSSHProfileId, setConnectingSSHProfileId] = useState<string | null>(null);
@@ -81,10 +90,12 @@ function AppContent() {
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
   const [sshHostKeyPromptQueue, setSSHHostKeyPromptQueue] = useState<SSHHostKeyPromptPayload[]>([]);
+  const [sshPasswordPromptRequest, setSSHPasswordPromptRequest] = useState<SSHPasswordPromptRequest | null>(null);
   const [appVersion, setAppVersion] = useState<{ name: string; version: string }>({
     name: 'Copilot-Terminal',
     version: '1.0.0',
   });
+  const sshPasswordPromptResolverRef = useRef<((password: string | null) => void) | null>(null);
 
   // 获取应用版本信息
   useEffect(() => {
@@ -174,6 +185,28 @@ function AppContent() {
   useEffect(() => {
     void loadSSHProfiles();
   }, [loadSSHProfiles]);
+
+  useEffect(() => {
+    const handleSSHPasswordSaved = (event: Event) => {
+      const profileId = (event as CustomEvent<{ profileId?: string } | undefined>).detail?.profileId;
+      if (!profileId) {
+        return;
+      }
+
+      setSSHCredentialStates((previousStates) => ({
+        ...previousStates,
+        [profileId]: {
+          ...(previousStates[profileId] ?? { hasPassword: false, hasPassphrase: false }),
+          hasPassword: true,
+        },
+      }));
+    };
+
+    window.addEventListener(SSH_PASSWORD_SAVED_EVENT, handleSSHPasswordSaved);
+    return () => {
+      window.removeEventListener(SSH_PASSWORD_SAVED_EVENT, handleSSHPasswordSaved);
+    };
+  }, []);
 
   // 工作区恢复
   useWorkspaceRestore();
@@ -390,7 +423,14 @@ function AppContent() {
   }, []);
 
   const handleEditSSHProfile = useCallback((profile: SSHProfile) => {
+    setDuplicatingSSHProfile(null);
     setEditingSSHProfile(profile);
+    setIsSSHDialogOpen(true);
+  }, []);
+
+  const handleDuplicateSSHProfile = useCallback((profile: SSHProfile) => {
+    setEditingSSHProfile(null);
+    setDuplicatingSSHProfile(profile);
     setIsSSHDialogOpen(true);
   }, []);
 
@@ -398,6 +438,7 @@ function AppContent() {
     setIsSSHDialogOpen(open);
     if (!open) {
       setEditingSSHProfile(null);
+      setDuplicatingSSHProfile(null);
     }
   }, []);
 
@@ -448,8 +489,29 @@ function AppContent() {
       return;
     }
 
-    setConnectingSSHProfileId(profile.id);
     try {
+      const shouldContinue = await ensureSSHPasswordSaved({
+        profileId: profile.id,
+        profileName: profile.name,
+        host: profile.host,
+        user: profile.user,
+        authType: profile.auth,
+      });
+      if (!shouldContinue) {
+        return;
+      }
+
+      if (authNeedsPassword(profile.auth)) {
+        setSSHCredentialStates((previousStates) => ({
+          ...previousStates,
+          [profile.id]: {
+            ...(previousStates[profile.id] ?? { hasPassword: false, hasPassphrase: false }),
+            hasPassword: true,
+          },
+        }));
+      }
+
+      setConnectingSSHProfileId(profile.id);
       const response = await window.electronAPI.createSSHWindow({
         profileId: profile.id,
         name: profile.name,
@@ -568,6 +630,38 @@ function AppContent() {
     });
   }, []);
 
+  const openSSHPasswordPrompt = useCallback((request: SSHPasswordPromptRequest) => {
+    if (sshPasswordPromptResolverRef.current) {
+      sshPasswordPromptResolverRef.current(null);
+    }
+
+    setSSHPasswordPromptRequest(request);
+
+    return new Promise<string | null>((resolve) => {
+      sshPasswordPromptResolverRef.current = resolve;
+    });
+  }, []);
+
+  useEffect(() => {
+    setSSHPasswordPromptHandler(openSSHPasswordPrompt);
+
+    return () => {
+      setSSHPasswordPromptHandler(null);
+
+      if (sshPasswordPromptResolverRef.current) {
+        sshPasswordPromptResolverRef.current(null);
+        sshPasswordPromptResolverRef.current = null;
+      }
+    };
+  }, [openSSHPasswordPrompt]);
+
+  const closeSSHPasswordPrompt = useCallback((password: string | null) => {
+    const resolve = sshPasswordPromptResolverRef.current;
+    sshPasswordPromptResolverRef.current = null;
+    setSSHPasswordPromptRequest(null);
+    resolve?.(password);
+  }, []);
+
   return (
     <>
       {/* 统一视图 - 淡入淡出 */}
@@ -611,6 +705,7 @@ function AppContent() {
               connectingSSHProfileId={connectingSSHProfileId}
               onConnectSSHProfile={handleConnectSSHProfile}
               onEditSSHProfile={handleEditSSHProfile}
+              onDuplicateSSHProfile={handleDuplicateSSHProfile}
               onDeleteSSHProfile={handleDeleteSSHProfile}
               searchQuery={searchQuery}
               currentTab={currentTab}
@@ -698,6 +793,7 @@ function AppContent() {
           sshEnabled={sshEnabled}
           sshProfiles={sshProfiles}
           editingSSHProfile={editingSSHProfile}
+          initialSSHProfile={duplicatingSSHProfile}
           sshCredentialState={editingSSHProfile ? sshCredentialStates[editingSSHProfile.id] : null}
           onSSHProfileSaved={handleSSHProfileSaved}
         />
@@ -706,6 +802,12 @@ function AppContent() {
       <SSHHostKeyPromptDialog
         request={activeSSHHostKeyPrompt}
         onDecision={handleSSHHostKeyPromptDecision}
+      />
+
+      <SSHPasswordPromptDialog
+        request={sshPasswordPromptRequest}
+        onSubmit={(password) => closeSSHPasswordPrompt(password)}
+        onCancel={() => closeSSHPasswordPrompt(null)}
       />
     </>
   );

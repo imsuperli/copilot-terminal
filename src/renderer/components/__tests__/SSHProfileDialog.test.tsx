@@ -84,6 +84,47 @@ describe('SSHProfileDialog', () => {
     });
   });
 
+  it('allows saving a password-based SSH profile without storing a password upfront', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.createSSHProfile).mockResolvedValueOnce({
+      success: true,
+      data: createSavedProfile(),
+    });
+    vi.mocked(window.electronAPI.getSSHCredentialState).mockResolvedValueOnce({
+      success: true,
+      data: {
+        hasPassword: false,
+        hasPassphrase: false,
+      },
+    });
+
+    render(
+      <SSHProfileDialog
+        open={true}
+        onOpenChange={() => undefined}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('连接名称'), 'Prod Bastion');
+    await user.type(screen.getByLabelText('主机地址'), '10.0.0.21');
+    await user.clear(screen.getByLabelText('用户名'));
+    await user.type(screen.getByLabelText('用户名'), 'root');
+    await user.click(screen.getByRole('button', { name: '创建' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.createSSHProfile).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Prod Bastion',
+        host: '10.0.0.21',
+        user: 'root',
+        auth: 'password',
+      }));
+    });
+
+    expect(window.electronAPI.setSSHPassword).not.toHaveBeenCalled();
+  });
+
   it('detects local private keys and appends them to the public key list', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.detectLocalSSHPrivateKeys).mockResolvedValueOnce({
