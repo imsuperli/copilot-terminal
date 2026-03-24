@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron';
 import { ProcessManager } from './ProcessManager';
 import { Workspace } from '../types/workspace';
 import { Window } from '../../shared/types/window';
+import { createPtyDataForwarder } from '../utils/ptyDataForwarder';
 
 /**
  * 工作区恢复结果
@@ -33,10 +34,12 @@ export interface IWorkspaceRestorer {
 export class WorkspaceRestorerImpl implements IWorkspaceRestorer {
   private processManager: ProcessManager;
   private mainWindow: BrowserWindow;
+  private readonly forwardPtyData: ReturnType<typeof createPtyDataForwarder>;
 
   constructor(processManager: ProcessManager, mainWindow: BrowserWindow) {
     this.processManager = processManager;
     this.mainWindow = mainWindow;
+    this.forwardPtyData = createPtyDataForwarder(() => this.mainWindow);
   }
 
   /**
@@ -94,9 +97,7 @@ export class WorkspaceRestorerImpl implements IWorkspaceRestorer {
 
       // 订阅 PTY 数据，推送到渲染进程
       this.processManager.subscribePtyData(handle.pid, (data: string) => {
-        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('pty-data', { windowId: window.id, data });
-        }
+        this.forwardPtyData({ windowId: window.id, data });
       });
 
       return {

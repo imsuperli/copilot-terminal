@@ -169,10 +169,14 @@ const electronAPI: ElectronAPI = {
   },
 
   // PTY I/O
-  ptyWrite: (windowId: string, paneId: string | undefined, data: string, metadata?: PtyWriteMetadata) =>
-    ipcRenderer.invoke('pty-write', { windowId, paneId, data, metadata }),
-  ptyResize: (windowId: string, paneId: string | undefined, cols: number, rows: number) =>
-    ipcRenderer.invoke('pty-resize', { windowId, paneId, cols, rows }),
+  ptyWrite: (windowId: string, paneId: string | undefined, data: string, metadata?: PtyWriteMetadata) => {
+    ipcRenderer.send('pty-write-fire-and-forget', { windowId, paneId, data, metadata });
+    return Promise.resolve({ success: true });
+  },
+  ptyResize: (windowId: string, paneId: string | undefined, cols: number, rows: number) => {
+    ipcRenderer.send('pty-resize-fire-and-forget', { windowId, paneId, cols, rows });
+    return Promise.resolve({ success: true });
+  },
   getPtyHistory: (paneId: string) =>
     ipcRenderer.invoke('get-pty-history', { paneId }),
   onPtyData: (callback) => {

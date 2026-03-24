@@ -2,6 +2,7 @@ import { ipcMain, dialog } from 'electron';
 import { randomUUID } from 'crypto';
 import { HandlerContext } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
+import { createPtyDataForwarder } from '../utils/ptyDataForwarder';
 import { resolveShellProgram } from '../utils/shell';
 import { scanSubfolders } from '../utils/folderScanner';
 import { readProjectConfig } from '../utils/project-config';
@@ -22,6 +23,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
     gitBranchWatcher,
     getCurrentWorkspace,
   } = ctx;
+  const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
   // 创建窗口
   ipcMain.handle('create-window', async (_event, config: { name?: string; workingDirectory: string; command?: string }) => {
@@ -115,19 +117,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
 
       // 订阅 PTY 数据，推送到渲染进程
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string, seq?: number) => {
-        // 使用 setImmediate 让 IPC 发送完全异步化，避免阻塞 PTY 数据流
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          setImmediate(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('pty-data', {
-                windowId,
-                paneId,
-                data,
-                seq,
-              });
-            }
-          });
-        }
+        forwardPtyData({ windowId, paneId, data, seq });
       });
 
       // 使用 PtySubscriptionManager 管理订阅
@@ -197,19 +187,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
 
       // 订阅 PTY 数据，推送到渲染进程
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string, seq?: number) => {
-        // 使用 setImmediate 让 IPC 发送完全异步化，避免阻塞 PTY 数据流
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          setImmediate(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('pty-data', {
-                windowId,
-                paneId,
-                data,
-                seq,
-              });
-            }
-          });
-        }
+        forwardPtyData({ windowId, paneId, data, seq });
       });
 
       // 使用 PtySubscriptionManager 管理订阅

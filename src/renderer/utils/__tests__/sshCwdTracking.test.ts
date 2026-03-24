@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { extractLatestOsc7RemoteCwd } from '../sshCwdTracking';
+import {
+  applyTerminalInputToSSHCwdTracker,
+  createSSHCwdTrackerState,
+  extractLatestOsc7RemoteCwd,
+} from '../sshCwdTracking';
 
 describe('extractLatestOsc7RemoteCwd', () => {
   it('parses OSC 7 file URI cwd markers', () => {
@@ -13,5 +17,21 @@ describe('extractLatestOsc7RemoteCwd', () => {
 
   it('parses OSC 633 cwd markers when shell integration is present', () => {
     expect(extractLatestOsc7RemoteCwd('\u001b]633;P;Cwd=/srv/app/releases\u0007')).toBe('/srv/app/releases');
+  });
+
+  it('returns null immediately for plain output with no OSC markers', () => {
+    expect(extractLatestOsc7RemoteCwd('plain stdout without cwd markers')).toBeNull();
+  });
+});
+
+describe('applyTerminalInputToSSHCwdTracker', () => {
+  it('appends simple printable input without changing cwd resolution behavior', () => {
+    const state = createSSHCwdTrackerState('/srv/app');
+
+    const result = applyTerminalInputToSSHCwdTracker(state, 'cd releases');
+
+    expect(result.resolvedCwd).toBeNull();
+    expect(result.nextState.commandBuffer).toBe('cd releases');
+    expect(result.nextState.cwd).toBe('/srv/app');
   });
 });

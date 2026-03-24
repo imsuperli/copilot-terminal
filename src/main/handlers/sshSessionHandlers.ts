@@ -23,6 +23,7 @@ import { getPaneCapabilities } from '../../shared/utils/terminalCapabilities';
 import { HandlerContext } from './HandlerContext';
 import { errorResponse, successResponse } from './HandlerResponse';
 import type { SSHSessionConfig, TerminalConfig } from '../types/process';
+import { createPtyDataForwarder } from '../utils/ptyDataForwarder';
 
 export function registerSSHSessionHandlers(ctx: HandlerContext) {
   const {
@@ -581,20 +582,15 @@ function subscribePaneOutput(params: {
     paneId,
     pid,
   } = params;
+  const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
   const unsubscribe = processManager.subscribePtyData(pid, (data: string, seq?: number) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      setImmediate(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('pty-data', {
-            windowId,
-            paneId,
-            data,
-            seq,
-          });
-        }
-      });
-    }
+    forwardPtyData({
+      windowId,
+      paneId,
+      data,
+      seq,
+    });
   });
 
   ptySubscriptionManager?.add(paneId, unsubscribe);

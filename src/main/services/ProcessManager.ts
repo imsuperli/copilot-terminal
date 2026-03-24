@@ -272,7 +272,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.statusDetector.trackPid(pid, { virtual: backend === 'ssh' });
 
     // 绔嬪嵆寮€濮嬬紦瀛?PTY 杈撳嚭锛堝湪浠讳綍璁㈤槄涔嬪墠锛?
-    const bufferDisposable = ptyProcess.onData((data: string) => {
+    const onDataDisposable = ptyProcess.onData((data: string) => {
       const seq = this.appendPaneHistory(config.paneId, data);
       const buffer = this.ptyOutputBuffers.get(pid);
       if (buffer) {
@@ -290,19 +290,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
           subscriber(chunk);
         }
       }
+      this.statusDetector.onPtyData(pid, data);
     });
 
     // Register PTY listeners for status detection and save disposables
     const disposables: Array<{ dispose: () => void }> = [];
 
-    // 淇濆瓨缂撳啿鍖虹洃鍚櫒
-    if (bufferDisposable && typeof bufferDisposable.dispose === 'function') {
-      disposables.push(bufferDisposable);
-    }
-
-    const onDataDisposable = ptyProcess.onData((data: string) => {
-      this.statusDetector.onPtyData(pid, data);
-    });
+    // 淇濆瓨 PTY 数据监听器
     if (onDataDisposable && typeof onDataDisposable.dispose === 'function') {
       disposables.push(onDataDisposable);
     }
@@ -567,7 +561,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const pty = this.ptys.get(pid);
     if (pty) {
       // Windows 剪贴板换行符为 \r\n，直接写入 PTY 会导致双重换行，统一转为 \r
-      pty.write(data.replace(/\r\n/g, '\r'));
+      pty.write(data.includes('\r\n') ? data.replace(/\r\n/g, '\r') : data);
     }
   }
 

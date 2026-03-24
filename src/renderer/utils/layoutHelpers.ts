@@ -317,11 +317,22 @@ export function updatePaneInLayout(
   }
 
   // SplitNode: 递归更新子节点
+  let didChange = false;
+  const nextChildren = layout.children.map((child) => {
+    const nextChild = updatePaneInLayout(child, paneId, updates);
+    if (nextChild !== child) {
+      didChange = true;
+    }
+    return nextChild;
+  });
+
+  if (!didChange) {
+    return layout;
+  }
+
   return {
     ...layout,
-    children: layout.children.map(child =>
-      updatePaneInLayout(child, paneId, updates)
-    ),
+    children: nextChildren,
   };
 }
 

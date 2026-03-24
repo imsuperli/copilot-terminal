@@ -19,6 +19,7 @@ import { SSHVaultService } from './services/ssh/SSHVaultService';
 import { SSHKnownHostsStore } from './services/ssh/SSHKnownHostsStore';
 import { ElectronSSHHostKeyPromptService } from './services/ssh/SSHHostKeyPromptService';
 import { LayoutNode, Pane } from '../shared/types/window';
+import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -36,6 +37,7 @@ let sshVaultService: SSHVaultService | null = null;
 let sshKnownHostsStore: SSHKnownHostsStore | null = null;
 let sshHostKeyPromptService: ElectronSSHHostKeyPromptService | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
+const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
 // 退出标志，防止重复执行退出逻辑
 let isQuitting = false;
@@ -281,14 +283,7 @@ app.whenReady().then(async () => {
       statusPoller?.removePane(paneId);
     },
     onPaneData: ({ windowId, paneId, data, seq }) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('pty-data', {
-          windowId,
-          paneId,
-          data,
-          seq,
-        });
-      }
+      forwardPtyData({ windowId, paneId, data, seq });
     },
     debug: process.env.AUSOME_TMUX_DEBUG === '1',
   });

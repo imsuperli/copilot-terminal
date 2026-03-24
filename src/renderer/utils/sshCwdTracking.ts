@@ -13,6 +13,7 @@ const OSC_CWD_BEL_PATTERN = /\u001b]633;.*?(?:Cwd|CurrentDir)=([^\u0007\u001b]+)
 const OSC_CWD_ST_PATTERN = /\u001b]633;.*?(?:Cwd|CurrentDir)=([^\u001b]+)\u001b\\/g;
 const BRACKETED_PASTE_START = '\u001b[200~';
 const BRACKETED_PASTE_END = '\u001b[201~';
+const OSC_PREFIX = '\u001b]';
 
 export function createSSHCwdTrackerState(initialCwd?: string | null): SSHCwdTrackerState {
   const normalizedCwd = normalizeRemoteCwd(initialCwd);
@@ -26,6 +27,10 @@ export function createSSHCwdTrackerState(initialCwd?: string | null): SSHCwdTrac
 }
 
 export function extractLatestOsc7RemoteCwd(data: string): string | null {
+  if (!data || !mayContainRemoteCwdMarker(data)) {
+    return null;
+  }
+
   let latestPath: string | null = null;
 
   for (const pattern of [OSC_7_BEL_PATTERN, OSC_7_ST_PATTERN]) {
@@ -99,6 +104,16 @@ export function applyTerminalInputToSSHCwdTracker(
 ): { nextState: SSHCwdTrackerState; resolvedCwd: string | null } {
   if (!data) {
     return { nextState: state, resolvedCwd: null };
+  }
+
+  if (isSimpleCommandBufferAppend(data)) {
+    return {
+      nextState: {
+        ...state,
+        commandBuffer: `${state.commandBuffer}${data}`,
+      },
+      resolvedCwd: null,
+    };
   }
 
   let nextState = state;
@@ -177,6 +192,35 @@ export function applyTerminalInputToSSHCwdTracker(
     nextState,
     resolvedCwd: latestResolvedCwd,
   };
+}
+
+function mayContainRemoteCwdMarker(data: string): boolean {
+  return data.includes(OSC_PREFIX)
+    && (
+      data.includes(']7;')
+      || data.includes(']633;')
+      || data.includes(']0;')
+      || data.includes(']2;')
+    );
+}
+
+function isSimpleCommandBufferAppend(data: string): boolean {
+  if (!data || data.includes(BRACKETED_PASTE_START) || data.includes(BRACKETED_PASTE_END)) {
+    return false;
+  }
+
+  for (let index = 0; index < data.length; index += 1) {
+    const char = data[index];
+    if (char === '\u001b' || char === '\u007f' || char === '\b') {
+      return false;
+    }
+
+    if (char < ' ' && char !== '\t') {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function resolveCwdFromCommand(state: SSHCwdTrackerState): string | null {

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
 import { TerminalConfig } from '../types/process';
 import { successResponse, errorResponse } from './HandlerResponse';
+import { createPtyDataForwarder } from '../utils/ptyDataForwarder';
 
 /**
  * 注册窗格管理相关的 IPC handlers
@@ -13,6 +14,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
     statusPoller,
     ptySubscriptionManager,
   } = ctx;
+  const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
   // 拆分窗格（创建新的 PTY 进程）
   ipcMain.handle('split-pane', async (_event, config: TerminalConfig) => {
@@ -24,19 +26,16 @@ export function registerPaneHandlers(ctx: HandlerContext) {
 
       // 订阅 PTY 数据
       const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string, seq?: number) => {
-        // 使用 setImmediate 让 IPC 发送完全异步化，避免阻塞 PTY 数据流
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          setImmediate(() => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('pty-data', {
-                windowId: config.windowId,
-                paneId: config.paneId,
-                data,
-                seq,
-              });
-            }
-          });
+        if (!config.windowId) {
+          return;
         }
+
+        forwardPtyData({
+          windowId: config.windowId,
+          paneId: config.paneId,
+          data,
+          seq,
+        });
       });
 
       // 使用 PtySubscriptionManager 管理订阅
