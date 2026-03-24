@@ -1,11 +1,9 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
-import { Activity, Keyboard, Pause, XCircle, Folder } from 'lucide-react';
+import React, { useMemo, useCallback, useRef } from 'react';
+import { Activity, Keyboard, Pause, XCircle } from 'lucide-react';
 import { useDrag } from 'react-dnd';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { Window, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
-import { IDEIcon } from './icons/IDEIcons';
-import { useIDESettings } from '../hooks/useIDESettings';
 import { DragItemTypes, WindowCardDragItem } from './dnd/types';
 
 interface SidebarWindowItemProps {
@@ -14,8 +12,6 @@ interface SidebarWindowItemProps {
   isExpanded: boolean;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  onOpenInIDE?: (ide: string, path: string) => void;
-  onOpenFolder?: (path: string) => void;
   /** 如果窗口属于某个组，传入组 ID 以支持拖拽移出组 */
   groupId?: string;
 }
@@ -96,12 +92,8 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
   isExpanded,
   onClick,
   onContextMenu,
-  onOpenInIDE,
-  onOpenFolder,
   groupId,
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const { enabledIDEs } = useIDESettings();
   const dragRef = useRef<HTMLDivElement>(null);
 
   const [{ isDragging }, drag] = useDrag<WindowCardDragItem, unknown, { isDragging: boolean }>({
@@ -142,20 +134,6 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
     e.preventDefault();
     onClick();
   }, [onClick]);
-
-  // 处理 IDE 按钮点击
-  const handleIDEClick = useCallback((e: React.MouseEvent, ide: string) => {
-    e.stopPropagation();
-    e.preventDefault();
-    onOpenInIDE?.(ide, workingDirectory);
-  }, [onOpenInIDE, workingDirectory]);
-
-  // 处理文件夹按钮点击
-  const handleFolderClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    onOpenFolder?.(workingDirectory);
-  }, [onOpenFolder, workingDirectory]);
 
   // 折叠状态：只显示图标
   if (!isExpanded) {
@@ -198,8 +176,6 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
       ref={dragRef}
       className="relative group"
       style={{ opacity: isDragging ? 0.4 : 1 }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       <button
         onClick={handleWindowClick}
@@ -227,56 +203,6 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
           </div>
         </div>
       </button>
-
-      {/* 悬停时显示的操作按钮 */}
-      {isHovered && isExpanded && (
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-zinc-800 rounded px-1 py-0.5 shadow-lg border border-zinc-700">
-          {enabledIDEs.map((ide) => (
-            <Tooltip.Provider key={ide.id}>
-              <Tooltip.Root delayDuration={300}>
-                <Tooltip.Trigger asChild>
-                  <button
-                    onClick={(e) => handleIDEClick(e, ide.id)}
-                    className="p-1 hover:bg-zinc-700 rounded transition-colors"
-                  >
-                    <IDEIcon icon={ide.icon || ''} size={12} />
-                  </button>
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                    side="top"
-                    sideOffset={5}
-                  >
-                    {`在 ${ide.name} 中打开`}
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            </Tooltip.Provider>
-          ))}
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={handleFolderClick}
-                  className="p-1 hover:bg-zinc-700 rounded transition-colors"
-                >
-                  <Folder size={12} />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                  side="top"
-                  sideOffset={5}
-                >
-                  打开文件夹
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        </div>
-      )}
     </div>
   );
 };

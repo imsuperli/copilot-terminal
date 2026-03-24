@@ -168,25 +168,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onWindowContextMenu?.(windowId, e);
   };
 
-  const handleOpenInIDE = useCallback(async (ide: string, path: string) => {
-    try {
-      const response = await window.electronAPI.openInIDE(ide, path);
-      if (!response.success) {
-        console.error(`Failed to open in ${ide}:`, response.error);
-      }
-    } catch (error) {
-      console.error(`Failed to open in ${ide}:`, error);
-    }
-  }, []);
-
-  const handleOpenFolder = useCallback(async (path: string) => {
-    try {
-      await window.electronAPI.openFolder(path);
-    } catch (error) {
-      console.error('Failed to open folder:', error);
-    }
-  }, []);
-
   return (
     <div
       ref={sidebarRef}
@@ -345,8 +326,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       isExpanded={sidebarExpanded}
                       onClick={() => onWindowSelect(item.id)}
                       onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
-                      onOpenInIDE={handleOpenInIDE}
-                      onOpenFolder={handleOpenFolder}
                     />
                   );
                 }
@@ -428,8 +407,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       isExpanded={sidebarExpanded}
                       onClick={() => onWindowSelect(item.id)}
                       onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
-                      onOpenInIDE={handleOpenInIDE}
-                      onOpenFolder={handleOpenFolder}
                     />
                   );
                 }
@@ -512,8 +489,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       isExpanded={sidebarExpanded}
                       onClick={() => onWindowSelect(window.id)}
                       onContextMenu={(e) => handleWindowContextMenu(window.id, e)}
-                      onOpenInIDE={handleOpenInIDE}
-                      onOpenFolder={handleOpenFolder}
                     />
                   ))}
                 </>
