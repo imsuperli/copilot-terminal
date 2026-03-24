@@ -621,6 +621,11 @@ export const useWindowStore = create<WindowStore>()(
 
     // 切换侧边栏展开/折叠
     toggleSidebar: () => {
+      // 添加调试日志，帮助追踪意外的 toggle 调用
+      if (process.env.NODE_ENV === 'development') {
+        console.trace('[windowStore] toggleSidebar called');
+      }
+
       set((state) => {
         state.sidebarExpanded = !state.sidebarExpanded;
       });

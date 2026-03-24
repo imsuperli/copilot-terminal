@@ -201,7 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
                 <button
-                  onClick={toggleSidebar}
+                  onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
                   className="w-8 h-8 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-all duration-200"
                   aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
                 >
@@ -595,13 +595,20 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   const windowCount = getWindowCount(group.layout);
   const bgColor = isActive ? 'bg-blue-600/50' : 'bg-zinc-800 hover:bg-zinc-700';
 
+  // 处理点击事件，阻止事件冒泡
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onClick();
+  }, [onClick]);
+
   if (!isExpanded) {
     return (
       <Tooltip.Provider>
         <Tooltip.Root delayDuration={300}>
           <Tooltip.Trigger asChild>
             <button
-              onClick={onClick}
+              onClick={handleClick}
               className={`w-full h-10 flex items-center justify-center transition-colors ${bgColor}`}
               aria-label={group.name}
             >
@@ -624,7 +631,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
 
   return (
     <button
-      onClick={onClick}
+      onClick={handleClick}
       className={`w-full px-3 py-2 flex items-start gap-2 transition-colors text-left rounded ${bgColor}`}
       aria-label={group.name}
     >

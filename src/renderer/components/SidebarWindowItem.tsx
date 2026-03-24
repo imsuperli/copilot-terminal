@@ -136,15 +136,24 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
     return panes.length > 0 ? panes[0].cwd : '';
   }, [terminalWindow.layout]);
 
+  // 处理窗口项点击
+  const handleWindowClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onClick();
+  }, [onClick]);
+
   // 处理 IDE 按钮点击
   const handleIDEClick = useCallback((e: React.MouseEvent, ide: string) => {
     e.stopPropagation();
+    e.preventDefault();
     onOpenInIDE?.(ide, workingDirectory);
   }, [onOpenInIDE, workingDirectory]);
 
   // 处理文件夹按钮点击
   const handleFolderClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     onOpenFolder?.(workingDirectory);
   }, [onOpenFolder, workingDirectory]);
 
@@ -156,7 +165,7 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
           <Tooltip.Root delayDuration={300}>
             <Tooltip.Trigger asChild>
               <button
-                onClick={onClick}
+                onClick={handleWindowClick}
                 onContextMenu={onContextMenu}
                 className={`
                   w-full h-10 flex items-center justify-center
@@ -193,7 +202,7 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
       onMouseLeave={() => setIsHovered(false)}
     >
       <button
-        onClick={onClick}
+        onClick={handleWindowClick}
         onContextMenu={onContextMenu}
         className={`
           w-full px-3 py-2 flex items-start gap-2
