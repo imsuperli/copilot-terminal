@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Crosshair,
   Download,
+  File,
   Filter,
   Folder,
   FolderPlus,
@@ -833,7 +834,7 @@ export function SSHSftpDialog({
               return (
                 <div
                   key={entry.path}
-                  className={`group flex items-center gap-1.5 rounded border px-1.5 py-0.5 transition-colors ${
+                  className={`group flex items-center gap-1.5 rounded border px-1.5 py-px transition-colors ${
                     isSelected
                       ? 'border-blue-500/40 bg-blue-500/10'
                       : 'border-transparent hover:border-zinc-800 hover:bg-zinc-900/80'
@@ -857,7 +858,7 @@ export function SSHSftpDialog({
                     {isDirectory ? (
                       <Folder size={14} className="shrink-0 text-blue-400" />
                     ) : (
-                      <span className="w-3.5 shrink-0" />
+                      <File size={14} className="shrink-0 text-zinc-500" />
                     )}
                     <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-100">
                       {entry.name}

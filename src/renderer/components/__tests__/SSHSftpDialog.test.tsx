@@ -295,6 +295,7 @@ describe('SSHSftpDialog', () => {
     const entryButton = screen.getByRole('button', { name: 'release.tar.gz' });
 
     expect(within(entryButton).getByText('release.tar.gz')).toBeInTheDocument();
+    expect(entryButton.querySelector('.lucide-file')).not.toBeNull();
     expect(within(entryButton).queryByText(new Date('2026-03-22T10:05:00.000Z').toLocaleString())).not.toBeInTheDocument();
     expect(within(entryButton).queryByText('4.0 KB')).not.toBeInTheDocument();
     expect(within(entryButton).queryByText('文件')).not.toBeInTheDocument();
