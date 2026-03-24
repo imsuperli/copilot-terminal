@@ -61,6 +61,8 @@ function isRuntimeOnlyPaneUpdate(updateKeys: string[]): boolean {
   return updateKeys.length > 0 && updateKeys.every((key) => runtimeOnlyPaneFields.has(key as keyof Pane));
 }
 
+type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
+
 /**
  * 窗口状态管理 Store 接口
  */
@@ -72,6 +74,7 @@ interface WindowStore {
   sidebarExpanded: boolean; // 侧边栏是否展开
   sidebarWidth: number; // 侧边栏宽度
   hideGroupedWindows: boolean; // 是否隐藏已加入组的窗口
+  terminalSidebarSections: Record<TerminalSidebarSection, boolean>; // 终端视图侧边栏各分类的折叠状态
 
   // 组相关状态
   groups: WindowGroup[]; // 窗口组列表
@@ -115,6 +118,7 @@ interface WindowStore {
   toggleSidebar: () => void;
   setSidebarWidth: (width: number) => void;
   setHideGroupedWindows: (hide: boolean) => void;
+  setTerminalSidebarSectionExpanded: (section: TerminalSidebarSection, expanded: boolean) => void;
 
   // 辅助方法
   getWindowById: (id: string) => Window | undefined;
@@ -182,6 +186,11 @@ export const useWindowStore = create<WindowStore>()(
     sidebarExpanded: false, // 默认折叠
     sidebarWidth: 200, // 默认宽度
     hideGroupedWindows: false, // 默认显示所有窗口
+    terminalSidebarSections: {
+      archived: false,
+      local: true,
+      ssh: true,
+    },
 
     // 组相关初始状态
     groups: [],
@@ -642,6 +651,12 @@ export const useWindowStore = create<WindowStore>()(
     setHideGroupedWindows: (hide) => {
       set((state) => {
         state.hideGroupedWindows = hide;
+      });
+    },
+
+    setTerminalSidebarSectionExpanded: (section, expanded) => {
+      set((state) => {
+        state.terminalSidebarSections[section] = expanded;
       });
     },
 

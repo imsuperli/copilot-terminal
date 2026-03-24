@@ -43,13 +43,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     windows,
     hideGroupedWindows,
     setHideGroupedWindows,
+    terminalSidebarSections,
+    setTerminalSidebarSectionExpanded,
   } = useWindowStore();
 
   const [isResizing, setIsResizing] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
-  const [showLocalTerminals, setShowLocalTerminals] = useState(true);
-  const [showSshTerminals, setShowSshTerminals] = useState(true);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const showArchived = terminalSidebarSections.archived;
+  const showLocalTerminals = terminalSidebarSections.local;
+  const showSshTerminals = terminalSidebarSections.ssh;
 
   const activeWindows = getActiveWindows();
   const archivedWindows = getArchivedWindows();
@@ -259,7 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>
                     <button
-                      onClick={() => setShowLocalTerminals(!showLocalTerminals)}
+                      onClick={() => setTerminalSidebarSectionExpanded('local', !showLocalTerminals)}
                       className={`
                         w-full px-3 py-2 flex items-center gap-2
                         text-xs font-semibold text-zinc-400 tracking-wide
@@ -340,7 +342,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>
                     <button
-                      onClick={() => setShowSshTerminals(!showSshTerminals)}
+                      onClick={() => setTerminalSidebarSectionExpanded('ssh', !showSshTerminals)}
                       className={`
                         w-full px-3 py-2 flex items-center gap-2
                         text-xs font-semibold text-zinc-400 tracking-wide
@@ -422,7 +424,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>
                     <button
-                      onClick={() => setShowArchived(!showArchived)}
+                      onClick={() => setTerminalSidebarSectionExpanded('archived', !showArchived)}
                       className={`
                         w-full px-3 py-2 flex items-center gap-2
                         text-xs font-semibold text-zinc-400 tracking-wide
@@ -620,4 +622,3 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
     </button>
   );
 };
-
