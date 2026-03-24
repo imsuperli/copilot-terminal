@@ -1,4 +1,8 @@
 #!/bin/sh
 # tmux - Unix wrapper for tmux-shim.js
 # This file must be on PATH so that "tmux" resolves to this shim.
-exec node "$(dirname "$0")/tmux-shim.js" "$@"
+#
+# AUSOME_NODE_PATH is injected by ProcessManager with the absolute path to node.
+# This avoids "node: not found" when Electron's PATH doesn't include node.
+NODE_BIN="${AUSOME_NODE_PATH:-node}"
+exec "$NODE_BIN" "$(dirname "$0")/tmux-shim.js" "$@"
