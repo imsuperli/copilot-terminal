@@ -90,19 +90,9 @@ export function registerPtyHandlers(ctx: HandlerContext) {
 
   // PTY 数据写入（用户输入 → PTY 进程）
   ipcMain.handle('pty-write', async (_event, payload) => handlePtyWrite(payload));
-  if (typeof ipcMain.on === 'function') {
-    ipcMain.on('pty-write-fire-and-forget', (_event, payload) => {
-      void handlePtyWrite(payload);
-    });
-  }
 
   // PTY resize
   ipcMain.handle('pty-resize', async (_event, payload) => handlePtyResize(payload));
-  if (typeof ipcMain.on === 'function') {
-    ipcMain.on('pty-resize-fire-and-forget', (_event, payload) => {
-      void handlePtyResize(payload);
-    });
-  }
 
   ipcMain.handle('get-pty-history', async (_event, { paneId }: { paneId: string }) => {
     try {
