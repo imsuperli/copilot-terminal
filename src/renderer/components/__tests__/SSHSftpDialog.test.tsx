@@ -256,6 +256,50 @@ describe('SSHSftpDialog', () => {
     });
   });
 
+  it('shows only entry names in the file list', async () => {
+    vi.mocked(window.electronAPI.listSSHSftpDirectory).mockResolvedValueOnce({
+      success: true,
+      data: {
+        path: '/srv/app',
+        entries: [
+          {
+            name: 'release.tar.gz',
+            path: '/srv/app/release.tar.gz',
+            isDirectory: false,
+            isSymbolicLink: false,
+            size: 4096,
+            modifiedAt: '2026-03-22T10:05:00.000Z',
+          },
+        ],
+      },
+    });
+
+    render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/srv/app"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledWith({
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app',
+      });
+    });
+
+    const entryButton = screen.getByRole('button', { name: 'release.tar.gz' });
+
+    expect(within(entryButton).getByText('release.tar.gz')).toBeInTheDocument();
+    expect(within(entryButton).queryByText(new Date('2026-03-22T10:05:00.000Z').toLocaleString())).not.toBeInTheDocument();
+    expect(within(entryButton).queryByText('4.0 KB')).not.toBeInTheDocument();
+    expect(within(entryButton).queryByText('文件')).not.toBeInTheDocument();
+  });
+
   it('downloads files and uploads into the current directory', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.listSSHSftpDirectory)
@@ -534,8 +578,14 @@ describe('SSHSftpDialog', () => {
     expect(await screen.findByText('logs 已删除。')).toBeInTheDocument();
   });
 
-  it('keeps help copy collapsed until the help button is clicked', async () => {
-    const user = userEvent.setup();
+  it('does not render inline help affordances in the docked panel', async () => {
+    vi.mocked(window.electronAPI.listSSHSftpDirectory).mockResolvedValueOnce({
+      success: true,
+      data: {
+        path: '/srv/app',
+        entries: [],
+      },
+    });
 
     render(
       <SSHSftpDialog
@@ -547,13 +597,17 @@ describe('SSHSftpDialog', () => {
       />,
     );
 
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledWith({
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app',
+      });
+    });
+
     expect(screen.queryByText('浏览当前 SSH 会话的远程目录，并在本地与远程之间传输文件。')).not.toBeInTheDocument();
     expect(screen.queryByText('SFTP 面板复用当前 SSH 连接，不会影响本地终端或现有分屏布局。')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '显示 SSH 文件传输说明' }));
-
-    expect(screen.getByText('浏览当前 SSH 会话的远程目录，并在本地与远程之间传输文件。')).toBeInTheDocument();
-    expect(screen.getByText('SFTP 面板复用当前 SSH 连接，不会影响本地终端或现有分屏布局。')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '显示 SSH 文件传输说明' })).not.toBeInTheDocument();
   });
 
   it('keeps server metrics out of the docked file panel', async () => {

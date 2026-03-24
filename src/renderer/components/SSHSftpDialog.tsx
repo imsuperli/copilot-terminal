@@ -859,23 +859,9 @@ export function SSHSftpDialog({
                     ) : (
                       <span className="w-3.5 shrink-0" />
                     )}
-
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-medium text-zinc-100">
-                        {entry.name}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] leading-tight text-zinc-500">
-                        <span>
-                          {isDirectory
-                            ? t('common.folder')
-                            : entry.isSymbolicLink
-                              ? t('sshSftpDialog.symlink')
-                              : t('sshSftpDialog.file')}
-                        </span>
-                        <span>{formatModifiedAt(entry.modifiedAt)}</span>
-                        {!isDirectory && <span>{formatFileSize(entry.size)}</span>}
-                      </div>
-                    </div>
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-100">
+                      {entry.name}
+                    </span>
                   </button>
 
                   <div className={`flex shrink-0 items-center gap-1 transition-opacity ${
@@ -1082,36 +1068,6 @@ function PanelEmptyState({ label }: { label: string }) {
       {label}
     </div>
   );
-}
-
-function formatFileSize(size: number): string {
-  if (!Number.isFinite(size) || size < 1024) {
-    return `${size || 0} B`;
-  }
-
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let value = size / 1024;
-  let unitIndex = 0;
-
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
-  }
-
-  return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
-}
-
-function formatModifiedAt(value: string | null): string {
-  if (!value) {
-    return '-';
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toLocaleString();
 }
 
 function getParentSftpPath(value: string): string {
