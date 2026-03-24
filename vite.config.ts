@@ -26,6 +26,8 @@ export default defineConfig({
   build: {
     outDir: path.join(__dirname, 'dist/renderer'),
     emptyOutDir: true,
+    // 禁用代码压缩以避免 xterm.js 出现运行时错误
+    minify: false,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'src/renderer/index.html'),
