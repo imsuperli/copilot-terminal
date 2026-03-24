@@ -834,7 +834,7 @@ export function SSHSftpDialog({
               return (
                 <div
                   key={entry.path}
-                  className={`group flex items-center gap-1.5 rounded border px-1.5 py-px transition-colors ${
+                  className={`group relative flex items-center gap-1.5 rounded border px-1.5 py-px transition-colors ${
                     isSelected
                       ? 'border-blue-500/40 bg-blue-500/10'
                       : 'border-transparent hover:border-zinc-800 hover:bg-zinc-900/80'
@@ -852,7 +852,9 @@ export function SSHSftpDialog({
 
                       setSelectedEntryPath(entry.path);
                     }}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    className={`flex min-w-0 flex-1 items-center gap-2 text-left ${
+                      isDirectory ? 'pr-16' : 'pr-12'
+                    }`}
                     title={entry.path}
                   >
                     {isDirectory ? (
@@ -865,7 +867,7 @@ export function SSHSftpDialog({
                     </span>
                   </button>
 
-                  <div className={`flex shrink-0 items-center gap-1 transition-opacity ${
+                  <div className={`absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5 transition-opacity ${
                     isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
                   }`}>
                     {isDirectory ? (
@@ -895,9 +897,9 @@ export function SSHSftpDialog({
                       type="button"
                       aria-label={t('common.delete')}
                       onClick={() => setDeletingEntry(entry)}
-                      className="flex h-7 w-7 items-center justify-center rounded-md text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200"
+                      className="flex h-5 w-5 items-center justify-center rounded text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
@@ -1055,7 +1057,7 @@ function InlineActionButton({
         aria-label={label}
         onClick={onClick}
         disabled={disabled}
-        className="flex h-7 w-7 items-center justify-center rounded-md text-blue-300 transition-colors hover:bg-blue-500/10 hover:text-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex h-5 w-5 items-center justify-center rounded text-blue-300 transition-colors hover:bg-blue-500/10 hover:text-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {icon}
       </button>
