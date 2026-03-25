@@ -1215,6 +1215,40 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     return this.getTmuxPaneId(windowId, workspacePaneId);
   }
 
+  private resolvePaneTarget(
+    tmuxPaneId: TmuxPaneId,
+    request?: TmuxCommandRequest,
+  ): { windowId: string; paneId?: string } | null {
+    const resolved = this.resolvePaneId(tmuxPaneId);
+    if (resolved) {
+      return resolved;
+    }
+
+    const requestTmuxPaneId = this.getRequestTmuxPaneId(request);
+    const windowId = request?.windowId ?? request?.debugContext?.windowId;
+    const workspacePaneId = request?.debugContext?.paneId;
+    if (!windowId || requestTmuxPaneId !== tmuxPaneId) {
+      return null;
+    }
+
+    if (workspacePaneId && this.findPane(windowId, workspacePaneId)) {
+      this.registerPane(tmuxPaneId, windowId, workspacePaneId);
+      this.debugLog(request, 'recovered pane target mapping from request context', {
+        tmuxPaneId,
+        windowId,
+        paneId: workspacePaneId,
+      });
+      return { windowId, paneId: workspacePaneId };
+    }
+
+    this.debugLog(request, 'recovered pane target window from request context', {
+      tmuxPaneId,
+      windowId,
+      paneId: workspacePaneId,
+    });
+    return { windowId, paneId: workspacePaneId };
+  }
+
   private formatField(field: string, context: {
     tmuxPaneId?: TmuxPaneId;
     windowId?: string;
@@ -1305,7 +1339,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         const targetInfo = TmuxCommandParser.parseTarget(options.target);
         if (targetInfo.type === 'pane' && targetInfo.paneId) {
           tmuxPaneId = targetInfo.paneId;
-          const resolved = this.resolvePaneId(tmuxPaneId);
+          const resolved = this.resolvePaneTarget(tmuxPaneId, request);
           if (resolved) {
             windowId = resolved.windowId;
             paneId = resolved.paneId;
@@ -1319,7 +1353,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
           this.ensureWorkspaceWindowMapped(windowId, namespace);
         }
         if (tmuxPaneId) {
-          const resolved = this.resolvePaneId(tmuxPaneId);
+          const resolved = this.resolvePaneTarget(tmuxPaneId, request);
           if (resolved) {
             paneId = resolved.paneId;
           }
@@ -1390,7 +1424,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
           }
         } else if (targetInfo.type === 'pane' && targetInfo.paneId) {
           // 濠?pane 闂傚倸鍊风粈渚€宕ョ€ｎ喖纾块柟鎯版鎼村﹪鏌ら懝鎵牚濞?window
-          const resolved = this.resolvePaneId(targetInfo.paneId);
+          const resolved = this.resolvePaneTarget(targetInfo.paneId, request);
           if (resolved) {
             windowId = resolved.windowId;
           }
@@ -1466,7 +1500,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       if (options.target) {
         const targetInfo = TmuxCommandParser.parseTarget(options.target);
         if (targetInfo.type === 'pane' && targetInfo.paneId) {
-          const resolved = this.resolvePaneId(targetInfo.paneId);
+          const resolved = this.resolvePaneTarget(targetInfo.paneId, request);
           if (resolved) {
             windowId = resolved.windowId;
             targetPaneId = resolved.paneId;
@@ -1482,7 +1516,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         windowId = request.windowId;
         const requestTmuxPaneId = this.getRequestTmuxPaneId(request);
         if (requestTmuxPaneId) {
-          const resolved = this.resolvePaneId(requestTmuxPaneId);
+          const resolved = this.resolvePaneTarget(requestTmuxPaneId, request);
           if (resolved) {
             targetPaneId = resolved.paneId;
           }
@@ -1693,7 +1727,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
             windowId = this.resolveWindowTarget(options.target, namespace) ?? undefined;
           }
         } else if (targetInfo.type === 'pane' && targetInfo.paneId) {
-          const resolved = this.resolvePaneId(targetInfo.paneId);
+          const resolved = this.resolvePaneTarget(targetInfo.paneId, request);
           if (resolved) {
             windowId = resolved.windowId;
           }
@@ -1881,14 +1915,16 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         };
       }
 
-      const resolved = this.resolvePaneId(targetInfo.paneId);
-      if (!resolved) {
+      const resolved = this.resolvePaneTarget(targetInfo.paneId, request);
+      if (!resolved?.paneId) {
         return {
           exitCode: 1,
           stdout: '',
           stderr: 'tmux: can\'t find pane\n',
         };
       }
+
+      const resolvedPaneId = resolved.paneId;
 
       // 闂傚倷娴囧畷鍨叏瀹曞洦顐介柕鍫濇处椤洟鏌￠崶銉ョ仾闁稿鏅涢埞鎴︽偐鐎圭姴顥濆┑鈽嗗亝閿曘垽寮婚埄鍐ㄧ窞閹兼惌鍨堕悰婊勭箾鐎涙鐜荤紓宥勭窔楠?
 
@@ -1909,7 +1945,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
         // 闂?layout 闂傚倸鍊风粈渚€骞栭銈囩煋闁汇垻顭堥崹鍌炴煙閹澘袚闁搞倕鐗撻弻鐔告綇閸撗呮殸闂佽棄鍟伴崰鏍蓟閺囩喎绶炴繛鎴炴皑閺嗙姴顪冮妶鍐ㄥ姕缂佽鍟撮妴鍐Ψ閳哄倸鈧兘鏌℃径瀣仴濠殿喗鎮傚鍝勑ч崶褍顬嬮梺鍝ュУ閻楁洟顢?pane 濠电姷鏁告慨浼村垂瑜版帗鍋夐柕蹇嬪€曠粈鍐┿亜韫囨挻鍣芥俊?
 
-        this.resizePaneInLayout(window.layout, resolved.paneId, widthRatio, heightRatio);
+        this.resizePaneInLayout(window.layout, resolvedPaneId, widthRatio, heightRatio);
       });
 
       this.emitWindowSynced(resolved.windowId);
@@ -2009,8 +2045,8 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         };
       }
 
-      const resolved = this.resolvePaneId(targetInfo.paneId);
-      if (!resolved) {
+      const resolved = this.resolvePaneTarget(targetInfo.paneId, request);
+      if (!resolved?.paneId) {
         this.debugLog(request, 'send-keys failed to resolve pane', {
           target: options.target,
           tmuxPaneId: targetInfo.paneId,
@@ -2098,8 +2134,8 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         };
       }
 
-      const resolved = this.resolvePaneId(targetInfo.paneId);
-      if (!resolved) {
+      const resolved = this.resolvePaneTarget(targetInfo.paneId, request);
+      if (!resolved?.paneId) {
         return {
           exitCode: 1,
           stdout: '',
@@ -2115,6 +2151,8 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         await this.config.processManager.killProcess(pid);
       }
 
+      const resolvedPaneId = resolved.paneId;
+
       // 濠?layout 闂傚倸鍊风粈渚€骞栭銈囩煋闁汇垻顭堥崹鍌炴煙閹澘袚闁搞倕鐗撻弻鐔衡偓鐢殿焾鍟搁梺娲诲幗閹告悂鍩為幋锔藉亹鐎规洖娴傞弳锟犳⒑?pane
 
       let windowRemoved = false;
@@ -2124,7 +2162,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
           return;
         }
 
-        const nextLayout = this.removePaneFromLayout(window.layout, resolved.paneId);
+        const nextLayout = this.removePaneFromLayout(window.layout, resolvedPaneId);
         if (!nextLayout) {
           state.windows = state.windows.filter((item: Window) => item.id !== resolved.windowId);
           windowRemoved = true;
@@ -2132,7 +2170,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         }
 
         window.layout = nextLayout;
-        if (window.activePaneId === resolved.paneId) {
+        if (window.activePaneId === resolvedPaneId) {
           const remainingPanes = this.getAllPanesFromLayout(nextLayout);
           window.activePaneId = remainingPanes[0]?.id || '';
         }
@@ -2242,8 +2280,8 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       }
 
       const tmuxPaneId = targetInfo.paneId;
-      const resolved = this.resolvePaneId(tmuxPaneId);
-      if (!resolved) {
+      const resolved = this.resolvePaneTarget(tmuxPaneId, request);
+      if (!resolved?.paneId) {
         return {
           exitCode: 1,
           stdout: '',
@@ -2439,7 +2477,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         const targetInfo = TmuxCommandParser.parseTarget(options.target);
         if (targetInfo.type === 'pane' && targetInfo.paneId) {
           tmuxPaneId = targetInfo.paneId;
-          const resolved = this.resolvePaneId(tmuxPaneId);
+          const resolved = this.resolvePaneTarget(tmuxPaneId, request);
           if (resolved) {
             windowId = resolved.windowId;
           }
@@ -2476,7 +2514,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         }
 
         if (metadata.title) {
-          const resolved = this.resolvePaneId(tmuxPaneId);
+          const resolved = this.resolvePaneTarget(tmuxPaneId, request);
           if (resolved) {
             this.emit('pane-title-changed', {
               tmuxPaneId,
@@ -2488,7 +2526,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         }
 
         if (windowId) {
-          const resolved = this.resolvePaneId(tmuxPaneId);
+          const resolved = this.resolvePaneTarget(tmuxPaneId, request);
           this.emit('pane-style-changed', {
             tmuxPaneId,
             windowId,

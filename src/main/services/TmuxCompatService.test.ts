@@ -120,6 +120,28 @@ describe('TmuxCompatService', () => {
       expect(response.stdout).toBe('default:0\n');
     });
 
+    it('当前 pane 映射丢失时应从请求上下文恢复 window target', async () => {
+      const { service } = createService();
+      service.unregisterPane('%1');
+
+      const response = await service.executeCommand({
+        argv: ['display-message', '-t', '%1', '-p', '#{session_name}:#{window_index}'],
+        windowId: 'win-1',
+        paneId: '%1',
+        debugContext: {
+          windowId: 'win-1',
+          paneId: 'pane-1',
+        },
+      });
+
+      expect(response.exitCode).toBe(0);
+      expect(response.stdout).toBe('default:0\n');
+      expect(service.resolvePaneId('%1')).toEqual({
+        windowId: 'win-1',
+        paneId: 'pane-1',
+      });
+    });
+
     it('找不到 pane 时应返回错误', async () => {
       const { service } = createService();
 
@@ -170,6 +192,25 @@ describe('TmuxCompatService', () => {
 
       expect(response.exitCode).toBe(0);
       expect(response.stdout).toMatch(/^%\d+\n$/);
+      expect(processManager.spawnTerminal).toHaveBeenCalled();
+    });
+
+    it('当前 pane 映射丢失时应从请求上下文恢复并继续 split-window', async () => {
+      const { service, processManager } = createService();
+      service.unregisterPane('%1');
+
+      const response = await service.executeCommand({
+        argv: ['split-window', '-t', '%1', '-h', '-P', '-F', '#{pane_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+        debugContext: {
+          windowId: 'win-1',
+          paneId: 'pane-1',
+        },
+      });
+
+      expect(response.exitCode).toBe(0);
+      expect(response.stdout).toBe('%2\n');
       expect(processManager.spawnTerminal).toHaveBeenCalled();
     });
 
