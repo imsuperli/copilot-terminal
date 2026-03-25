@@ -25,6 +25,22 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
 
       if (!enabled) return;
 
+      // 如果事件来自 xterm.js 的 textarea，只处理明确的快捷键
+      const target = e.target as HTMLElement;
+      const isXtermTextarea = target?.classList?.contains('xterm-helper-textarea');
+
+      if (isXtermTextarea) {
+        // 在 xterm textarea 中，只处理明确的快捷键，其他一律放行
+        const isShortcut =
+          (e.ctrlKey && e.key === 'Tab') ||
+          (e.ctrlKey && e.key === 'b') ||
+          (e.ctrlKey && e.key >= '1' && e.key <= '9');
+
+        if (!isShortcut) {
+          return; // 不是快捷键，直接放行
+        }
+      }
+
       // Ctrl+Tab: 打开快速切换面板
       if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
@@ -46,8 +62,17 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
         return;
       }
 
-      // 注意：Escape 键的处理已移除，由各个组件（QuickSwitcher 等）自己的事件监听器处理
-      // 这样可以避免在 xterm textarea 中拦截 Escape 键，确保 vi/vim 等编辑器能正常接收 Escape
+      // Escape: 关闭打开的面板（QuickSwitcher）
+      if (e.key === 'Escape') {
+        // 调用回调，如果返回 true 表示已处理，阻止事件传播
+        if (opts.onEscape) {
+          const handled = opts.onEscape();
+          if (handled) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      }
     };
 
     // 改为冒泡阶段监听，避免干扰 xterm.js 的输入处理

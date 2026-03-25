@@ -3,14 +3,20 @@ import { platform, tmpdir } from 'os';
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';
-import { IProcessManager, TerminalConfig, ProcessHandle, ProcessInfo, ProcessStatus } from '../types/process';
+import { randomUUID } from 'crypto';
+import { IProcessManager, SSHSessionConfig, TerminalConfig, ProcessHandle, ProcessInfo, ProcessStatus } from '../types/process';
 import { Settings } from '../types/workspace';
 import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
+import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../shared/types/ssh';
 import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
 import { resolveShellProgram } from '../utils/shell';
+import { ISSHConnectionPool, SSHConnectionPool } from './ssh/SSHConnectionPool';
+import { ISSHKnownHostsStore } from './ssh/SSHKnownHostsStore';
+import { SSHPtySession } from './ssh/SSHPtySession';
+import { ISSHHostKeyPromptService } from './ssh/SSHHostKeyPromptService';
 
 /**
  * Simple which() - find an executable in the given PATH string.
@@ -72,6 +78,11 @@ type PaneHistoryEntry = {
   data: string;
 };
 
+type PtyOutputChunk = {
+  data: string;
+  seq?: number;
+};
+
 type PaneHistoryBuffer = {
   entries: PaneHistoryEntry[];
   totalLength: number;
@@ -100,9 +111,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private ptys: Map<number, any>;
   private ptyDisposables: Map<number, Array<{ dispose: () => void }>>;
   private processCleanupTimers: Map<number, NodeJS.Timeout>;
-  private ptyOutputBuffers: Map<number, string[]>; // 缂撳瓨 PTY 鍒濆杈撳嚭
+  private ptyOutputBuffers: Map<number, PtyOutputChunk[]>; // 缂撳瓨 PTY 鍒濆杈撳嚭
+  private ptyDataSubscribers: Map<number, Set<(chunk: PtyOutputChunk) => void>>;
   private paneHistoryBuffers: Map<string, PaneHistoryBuffer>;
   private paneIndex: Map<string, number>; // "windowId:paneId" 鈫?pid 绱㈠紩锛岀敤浜?O(1) 鏌ユ壘
+  private sessionIndex: Map<string, string>; // "windowId:paneId" -> sessionId
+  private pidToSessionId: Map<number, string>;
+  private sessionIdToPid: Map<string, number>;
   private nextPid: number;
   private statusDetector: IStatusDetector;
   private cachedSpawnEnv: NodeJS.ProcessEnv | null;
@@ -112,24 +127,42 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private readonly PANE_HISTORY_CHAR_LIMIT = 2_000_000;
   private readonly getSettings: (() => Settings | null | undefined) | null;
   private tmuxCompatService: ITmuxCompatService | null;
+  private sshKnownHostsStore: ISSHKnownHostsStore | null;
+  private sshHostKeyPromptService: ISSHHostKeyPromptService | null;
+  private readonly sshConnectionPool: ISSHConnectionPool;
   private conPtyWarmupPromise: Promise<void> | null;
   private conPtyWarmupCompleted: boolean;
 
-  constructor(getSettings?: () => Settings | null | undefined, tmuxCompatService?: ITmuxCompatService) {
+  constructor(
+    getSettings?: () => Settings | null | undefined,
+    tmuxCompatService?: ITmuxCompatService,
+    sshKnownHostsStore?: ISSHKnownHostsStore,
+    sshHostKeyPromptService?: ISSHHostKeyPromptService,
+  ) {
     super();
     this.processes = new Map();
     this.ptys = new Map();
     this.ptyDisposables = new Map();
     this.processCleanupTimers = new Map();
     this.ptyOutputBuffers = new Map();
+    this.ptyDataSubscribers = new Map();
     this.paneHistoryBuffers = new Map();
     this.paneIndex = new Map();
+    this.sessionIndex = new Map();
+    this.pidToSessionId = new Map();
+    this.sessionIdToPid = new Map();
     this.nextPid = 1000;  // Start from 1000 for mock PIDs
     this.statusDetector = new StatusDetectorImpl();
     this.cachedSpawnEnv = null;
     this.cachedSpawnEnvAt = 0;
     this.getSettings = getSettings ?? null;
     this.tmuxCompatService = tmuxCompatService ?? null;
+    this.sshKnownHostsStore = sshKnownHostsStore ?? null;
+    this.sshHostKeyPromptService = sshHostKeyPromptService ?? null;
+    this.sshConnectionPool = new SSHConnectionPool({
+      knownHostsStore: this.sshKnownHostsStore,
+      hostKeyPromptService: this.sshHostKeyPromptService,
+    });
     this.conPtyWarmupPromise = null;
     this.conPtyWarmupCompleted = false;
     // ??????? StatusDetector ??????? StatusPoller ??????
@@ -140,6 +173,16 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    */
   setTmuxCompatService(service: ITmuxCompatService): void {
     this.tmuxCompatService = service;
+  }
+
+  setSSHKnownHostsStore(store: ISSHKnownHostsStore): void {
+    this.sshKnownHostsStore = store;
+    this.sshConnectionPool.setKnownHostsStore(store);
+  }
+
+  setSSHHostKeyPromptService(service: ISSHHostKeyPromptService): void {
+    this.sshHostKeyPromptService = service;
+    this.sshConnectionPool.setHostKeyPromptService(service);
   }
 
   async warmupConPtyDll(): Promise<void> {
@@ -172,8 +215,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const warmupStartAt = Date.now();
     console.log('[ProcessManager] Starting ConPTY DLL warmup...');
 
+    let dummyPty: any = null;
     try {
-      const dummyPty = pty.spawn('cmd.exe', ['/c', 'exit'], {
+      dummyPty = pty.spawn('cmd.exe', ['/c', 'exit'], {
         name: 'xterm-256color',
         cols: 80,
         rows: 30,
@@ -185,26 +229,24 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
-          try {
-            dummyPty.kill();
-          } catch {}
+          try { dummyPty.kill(); } catch {}
           resolve();
-        }, 1000);
+        }, 2000);
 
-        const disposable = dummyPty.onExit?.(() => {
+        dummyPty.onExit?.(() => {
           clearTimeout(timeout);
           resolve();
         });
 
-        if (!disposable) {
-          clearTimeout(timeout);
-          setTimeout(resolve, 100);
-        }
+        dummyPty.onData?.(() => {
+          // Ignore data, just need to listen so the PTY doesn't block
+        });
       });
 
       console.log(`[ProcessManager] ConPTY DLL warmup completed in ${Date.now() - warmupStartAt}ms`);
     } catch (error) {
       console.error('[ProcessManager] ConPTY DLL warmup failed:', error);
+      try { dummyPty?.kill(); } catch {}
     }
   }
 
@@ -213,37 +255,55 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    */
 
   async spawnTerminal(config: TerminalConfig): Promise<ProcessHandle> {
-    // Validate working directory
-    if (!existsSync(config.workingDirectory)) {
+    const backend = config.backend ?? 'local';
+
+    // Validate working directory for local sessions only.
+    if (backend === 'local' && !existsSync(config.workingDirectory)) {
       throw new Error(`Working directory does not exist: ${config.workingDirectory}`);
     }
-
-    // Resolve the executable and args that will actually be passed to node-pty.
-    const launchCommand = this.resolveLaunchCommand(config);
-
-    await this.ensureTmuxRpcServer(config);
-
 
     // 鍒涘缓 PTY 杩涚▼锛堢湡瀹炴垨 mock锛?
     let ptyProcess: any;
     let pid: number;
+    const sessionId = randomUUID();
+    let command = config.command;
 
-    if (pty) {
-      // 浣跨敤鐪熷疄鐨?node-pty
-      ptyProcess = this.createRealPty(config, launchCommand.file, launchCommand.args);
-      pid = ptyProcess.pid;
+    if (backend === 'local') {
+      // Resolve the executable and args that will actually be passed to node-pty.
+      const launchCommand = this.resolveLaunchCommand(config);
+      command = launchCommand.command;
+
+      await this.ensureTmuxRpcServer(config);
+
+      if (pty) {
+        // 浣跨敤鐪熷疄鐨?node-pty
+        ptyProcess = this.createRealPty(config, launchCommand.file, launchCommand.args);
+        pid = ptyProcess.pid;
+      } else {
+        // 浣跨敤 mock PTY
+        pid = this.nextPid++;
+        ptyProcess = this.createMockPty(pid, config);
+      }
     } else {
-      // 浣跨敤 mock PTY
+      const sshConfig = this.requireSSHConfig(config.ssh);
+      command = sshConfig.command ?? command ?? '';
       pid = this.nextPid++;
-      ptyProcess = this.createMockPty(pid, config);
+      ptyProcess = await SSHPtySession.create({
+        pid,
+        ssh: sshConfig,
+        connectionPool: this.sshConnectionPool,
+      });
     }
 
     // Store process info
     const processInfo: ProcessInfo = {
+      sessionId,
+      backend,
       pid,
       status: ProcessStatus.Alive,
       workingDirectory: config.workingDirectory,
-      command: launchCommand.command,
+      command,
+      profileId: config.ssh?.profileId,
       windowId: config.windowId,
       paneId: config.paneId,
     };
@@ -253,39 +313,43 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     // 缁存姢 paneIndex 绱㈠紩锛岀敤浜?O(1) 鏌ユ壘
     const paneKey = this.getPaneKey(config.windowId, config.paneId);
     this.paneIndex.set(paneKey, pid);
+    this.sessionIndex.set(paneKey, sessionId);
+    this.pidToSessionId.set(pid, sessionId);
+    this.sessionIdToPid.set(sessionId, pid);
 
     // 鍒濆鍖栬緭鍑虹紦鍐插尯锛岀敤浜庣紦瀛樻棭鏈熻緭鍑猴紙閬垮厤绔炴€佹潯浠跺鑷存暟鎹涪澶憋級
     this.ptyOutputBuffers.set(pid, []);
     this.resetPaneHistory(config.paneId);
 
     // Start tracking this PID before registering listeners (avoids race condition)
-    this.statusDetector.trackPid(pid);
+    this.statusDetector.trackPid(pid, { virtual: backend === 'ssh' });
 
     // 绔嬪嵆寮€濮嬬紦瀛?PTY 杈撳嚭锛堝湪浠讳綍璁㈤槄涔嬪墠锛?
-    const bufferDisposable = ptyProcess.onData((data: string) => {
+    const onDataDisposable = ptyProcess.onData((data: string) => {
+      const seq = this.appendPaneHistory(config.paneId, data);
       const buffer = this.ptyOutputBuffers.get(pid);
       if (buffer) {
-        buffer.push(data);
+        buffer.push({ data, seq });
         // 闄愬埗缂撳啿鍖哄ぇ灏忥紝閬垮厤鍐呭瓨娉勬紡锛堝鍔犲埌 500 鏉℃秷鎭紝瑕嗙洊鏇村鍚姩杈撳嚭锛?
         if (buffer.length > 500) {
           buffer.shift();
         }
       }
 
-      this.appendPaneHistory(config.paneId, data);
+      const subscribers = this.ptyDataSubscribers.get(pid);
+      if (subscribers && subscribers.size > 0) {
+        const chunk = { data, seq };
+        for (const subscriber of subscribers) {
+          subscriber(chunk);
+        }
+      }
+      this.statusDetector.onPtyData(pid, data);
     });
 
     // Register PTY listeners for status detection and save disposables
     const disposables: Array<{ dispose: () => void }> = [];
 
-    // 淇濆瓨缂撳啿鍖虹洃鍚櫒
-    if (bufferDisposable && typeof bufferDisposable.dispose === 'function') {
-      disposables.push(bufferDisposable);
-    }
-
-    const onDataDisposable = ptyProcess.onData((data: string) => {
-      this.statusDetector.onPtyData(pid, data);
-    });
+    // 淇濆瓨 PTY 数据监听器
     if (onDataDisposable && typeof onDataDisposable.dispose === 'function') {
       disposables.push(onDataDisposable);
     }
@@ -306,6 +370,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     return {
       pid,
+      sessionId,
       pty: ptyProcess,
     };
   }
@@ -371,11 +436,141 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     return this.paneIndex.get(paneKey) ?? null;
   }
 
+  getSessionIdByPane(windowId: string, paneId?: string): string | null {
+    const paneKey = this.getPaneKey(windowId, paneId);
+    return this.sessionIndex.get(paneKey) ?? null;
+  }
+
+  listSSHPortForwards(windowId: string, paneId: string): ActiveSSHPortForward[] {
+    const pty = this.requireSSHPortForwardSession(windowId, paneId);
+    return pty.listPortForwards();
+  }
+
+  async addSSHPortForward(
+    windowId: string,
+    paneId: string,
+    forward: ForwardedPortConfig,
+  ): Promise<ActiveSSHPortForward> {
+    const pty = this.requireSSHPortForwardSession(windowId, paneId);
+    return pty.addPortForward(forward);
+  }
+
+  async removeSSHPortForward(windowId: string, paneId: string, forwardId: string): Promise<void> {
+    const pty = this.requireSSHPortForwardSession(windowId, paneId);
+    await pty.removePortForward(forwardId);
+  }
+
+  async listSSHSftpDirectory(windowId: string, paneId: string, path?: string): Promise<SSHSftpDirectoryListing> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.listSftpDirectory(path);
+  }
+
+  async getSSHSessionMetrics(windowId: string, paneId: string, path?: string): Promise<SSHSessionMetrics> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.getSSHSessionMetrics(path);
+  }
+
+  async downloadSSHSftpFile(
+    windowId: string,
+    paneId: string,
+    remotePath: string,
+    localPath: string,
+  ): Promise<void> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    await pty.downloadSftpFile(remotePath, localPath);
+  }
+
+  async uploadSSHSftpFiles(
+    windowId: string,
+    paneId: string,
+    remotePath: string,
+    localPaths: string[],
+  ): Promise<number> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.uploadSftpFiles(remotePath, localPaths);
+  }
+
+  async uploadSSHSftpDirectory(
+    windowId: string,
+    paneId: string,
+    remotePath: string,
+    localDirectoryPath: string,
+  ): Promise<number> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.uploadSftpDirectory(remotePath, localDirectoryPath);
+  }
+
+  async downloadSSHSftpDirectory(
+    windowId: string,
+    paneId: string,
+    remotePath: string,
+    localPath: string,
+  ): Promise<void> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    await pty.downloadSftpDirectory(remotePath, localPath);
+  }
+
+  async createSSHSftpDirectory(
+    windowId: string,
+    paneId: string,
+    parentPath: string,
+    name: string,
+  ): Promise<string> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    return pty.createSftpDirectory(parentPath, name);
+  }
+
+  async deleteSSHSftpEntry(windowId: string, paneId: string, remotePath: string): Promise<void> {
+    const pty = this.requireSSHSftpSession(windowId, paneId);
+    await pty.deleteSftpEntry(remotePath);
+  }
+
   /**
    * 鐢熸垚 paneIndex 鐨?key
    */
   private getPaneKey(windowId: string | undefined, paneId: string | undefined): string {
     return `${windowId ?? ''}:${paneId ?? ''}`;
+  }
+
+  private requireSSHPortForwardSession(windowId: string, paneId: string): {
+    listPortForwards(): ActiveSSHPortForward[];
+    addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
+    removePortForward(forwardId: string): Promise<void>;
+  } {
+    const pid = this.getPidByPane(windowId, paneId);
+    if (pid === null) {
+      throw new Error(`Pane not found: ${windowId}/${paneId}`);
+    }
+
+    const pty = this.ptys.get(pid);
+    if (!pty || !isSSHPortForwardSession(pty)) {
+      throw new Error(`SSH session not found for pane: ${windowId}/${paneId}`);
+    }
+
+    return pty;
+  }
+
+  private requireSSHSftpSession(windowId: string, paneId: string): {
+    listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
+    getSSHSessionMetrics(path?: string): Promise<SSHSessionMetrics>;
+    downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
+    uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
+    uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number>;
+    downloadSftpDirectory(remotePath: string, localPath: string): Promise<void>;
+    createSftpDirectory(parentPath: string, name: string): Promise<string>;
+    deleteSftpEntry(remotePath: string): Promise<void>;
+  } {
+    const pid = this.getPidByPane(windowId, paneId);
+    if (pid === null) {
+      throw new Error(`Pane not found: ${windowId}/${paneId}`);
+    }
+
+    const pty = this.ptys.get(pid);
+    if (!pty || !isSSHSftpSession(pty)) {
+      throw new Error(`SSH SFTP session not found for pane: ${windowId}/${paneId}`);
+    }
+
+    return pty;
   }
 
   /**
@@ -450,14 +645,12 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    *
    * 娉ㄦ剰锛氶娆¤闃呮椂浼氬厛鍙戦€佺紦瀛樼殑鍒濆杈撳嚭锛岄伩鍏嶇珵鎬佹潯浠跺鑷存暟鎹涪澶?
    */
-  subscribePtyData(pid: number, callback: (data: string) => void): () => void {
-    const pty = this.ptys.get(pid);
-    if (!pty) return () => {};
+  subscribePtyData(pid: number, callback: (data: string, seq?: number) => void): () => void {
+    if (!this.ptys.has(pid)) return () => {};
 
-    // 鍖呰鍥炶皟锛屾坊鍔犻敊璇鐞嗭紝闃叉鍥炶皟寮傚父涓柇 PTY 鏁版嵁娴?
-    const safeCallback = (data: string) => {
+    const safeCallback = (chunk: PtyOutputChunk) => {
       try {
-        callback(data);
+        callback(chunk.data, chunk.seq);
       } catch (error) {
         console.error(`[ProcessManager] PTY data callback error for pid ${pid}:`, error);
         // 涓嶈璁╅敊璇腑鏂?PTY 鏁版嵁娴?
@@ -469,21 +662,28 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     if (buffer && buffer.length > 0) {
       // 浣跨敤 setImmediate 寮傛鍙戦€侊紝閬垮厤闃诲
       setImmediate(() => {
-        for (const data of buffer) {
-          safeCallback(data);
+        for (const chunk of buffer) {
+          safeCallback(chunk);
         }
       });
       // 娓呯┖缂撳啿鍖猴紝閬垮厤閲嶅鍙戦€?
       this.ptyOutputBuffers.delete(pid);
     }
 
-    // node-pty 鐨?onData 杩斿洖涓€涓?disposable 瀵硅薄
-    const disposable = pty.onData(safeCallback);
+    const subscribers = this.ptyDataSubscribers.get(pid) ?? new Set<(chunk: PtyOutputChunk) => void>();
+    subscribers.add(safeCallback);
+    this.ptyDataSubscribers.set(pid, subscribers);
 
     // 杩斿洖娓呯悊鍑芥暟
     return () => {
-      if (disposable && typeof disposable.dispose === 'function') {
-        disposable.dispose();
+      const currentSubscribers = this.ptyDataSubscribers.get(pid);
+      if (!currentSubscribers) {
+        return;
+      }
+
+      currentSubscribers.delete(safeCallback);
+      if (currentSubscribers.size === 0) {
+        this.ptyDataSubscribers.delete(pid);
       }
     };
   }
@@ -550,12 +750,20 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // 绗竴姝ワ細灏濊瘯浼橀泤缁堟锛圫IGTERM锛?
     for (const [pid, pty] of this.ptys.entries()) {
-      pidsToKill.push(pid);
+      const processInfo = this.processes.get(pid);
+      if (processInfo?.backend !== 'ssh') {
+        pidsToKill.push(pid);
+      }
       if (pty && typeof pty.kill === 'function') {
         try {
-          // 鍏堜娇鐢?SIGTERM 浼橀泤缁堟
-          pty.kill('SIGTERM');
-          console.log(`[ProcessManager] Sent SIGTERM to PTY process ${pid}`);
+          if (processInfo?.backend === 'ssh') {
+            pty.kill('SIGTERM');
+            console.log(`[ProcessManager] Closed SSH session for PID ${pid}`);
+          } else {
+            // 鍏堜娇鐢?SIGTERM 浼橀泤缁堟
+            pty.kill('SIGTERM');
+            console.log(`[ProcessManager] Sent SIGTERM to PTY process ${pid}`);
+          }
         } catch (error) {
           // 蹇界暐閿欒锛屽洜涓鸿繘绋嬪彲鑳藉凡缁忛€€鍑?
           if (process.env.NODE_ENV === 'development') {
@@ -592,8 +800,20 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.ptys.clear();
     this.paneHistoryBuffers.clear();
     this.paneIndex.clear();
+    this.sessionIndex.clear();
+    this.pidToSessionId.clear();
+    this.sessionIdToPid.clear();
+    await this.sshConnectionPool.destroy();
 
     console.log('[ProcessManager] Destroy completed');
+  }
+
+  private requireSSHConfig(config?: SSHSessionConfig): SSHSessionConfig {
+    if (!config) {
+      throw new Error('SSH terminal config is missing SSH session details');
+    }
+
+    return config;
   }
 
   /**
@@ -893,6 +1113,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     const explicitExecutable = this.findExplicitExecutable(tokens);
     if (explicitExecutable) {
+      // macOS: 标准 shell 以 login shell 启动，确保环境变量完整继承
+      this.ensureLoginShell(explicitExecutable);
       return {
         command,
         file: explicitExecutable.file,
@@ -900,11 +1122,30 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       };
     }
 
-    return {
+    const result = {
       command,
       file: tokens[0],
       args: tokens.slice(1),
     };
+    this.ensureLoginShell(result);
+    return result;
+  }
+
+  /**
+   * Unix (macOS/Linux): 为标准 shell 添加 -l (login) 参数
+   * 确保从桌面环境（Finder/GNOME/KDE）启动时 nvm/pyenv/rbenv 等工具的 PATH 可用
+   */
+  private ensureLoginShell(launch: { file: string; args: string[] }): void {
+    if (platform() === 'win32') return;
+
+    const shellName = path.basename(launch.file);
+    const isStandardShell = ['zsh', 'bash', 'sh', 'fish'].includes(shellName);
+    if (!isStandardShell) return;
+
+    // 如果已经有 -l 或 --login 参数，不重复添加
+    if (launch.args.some(a => a === '-l' || a === '--login')) return;
+
+    launch.args.unshift('-l');
   }
 
   private findExplicitExecutable(tokens: string[]): { file: string; args: string[] } | null {
@@ -1050,6 +1291,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     return {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
       TMUX: tmuxValue,
+      AUSOME_TMUX_EXPECTED_TMUX: tmuxValue,
       TMUX_PANE: tmuxPaneId,
       AUSOME_TERMINAL_WINDOW_ID: config.windowId,
       AUSOME_TERMINAL_PANE_ID: config.paneId,
@@ -1087,11 +1329,16 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     if (!pid) {
       return;
     }
+    const sessionId = this.sessionIndex.get(oldKey) ?? null;
 
     const newKey = this.getPaneKey(newWindowId, newPaneId);
     if (oldKey !== newKey) {
       this.paneIndex.delete(oldKey);
       this.paneIndex.set(newKey, pid);
+      if (sessionId) {
+        this.sessionIndex.delete(oldKey);
+        this.sessionIndex.set(newKey, sessionId);
+      }
     }
 
     if (paneId !== newPaneId) {
@@ -1137,6 +1384,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     const paneKey = this.getPaneKey(processInfo.windowId, processInfo.paneId);
     this.paneIndex.delete(paneKey);
+    this.sessionIndex.delete(paneKey);
+    this.pidToSessionId.delete(pid);
+    this.sessionIdToPid.delete(processInfo.sessionId);
 
     processInfo.status = ProcessStatus.Exited;
     processInfo.exitCode = exitCode;
@@ -1159,9 +1409,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     });
   }
 
-  private appendPaneHistory(paneId: string | undefined, data: string): void {
+  private appendPaneHistory(paneId: string | undefined, data: string): number | undefined {
     if (!paneId || !data) {
-      return;
+      return undefined;
     }
 
     const history = this.paneHistoryBuffers.get(paneId) ?? {
@@ -1188,6 +1438,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     }
 
     this.paneHistoryBuffers.set(paneId, history);
+    return seq;
   }
 
   private scheduleProcessCleanup(pid: number): void {
@@ -1198,6 +1449,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const cleanupTimer = setTimeout(() => {
       this.processCleanupTimers.delete(pid);
       this.processes.delete(pid);
+      this.ptyDataSubscribers.delete(pid);
       this.statusDetector.untrackPid(pid);
     }, 1000);
     cleanupTimer.unref();
@@ -1209,4 +1461,42 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     const message = error instanceof Error ? error.message : String(error);
     return /Cannot resize a pty that has already exited/i.test(message);
   }
+}
+
+function isSSHPortForwardSession(value: unknown): value is {
+  listPortForwards(): ActiveSSHPortForward[];
+  addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
+  removePortForward(forwardId: string): Promise<void>;
+} {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { listPortForwards?: unknown }).listPortForwards === 'function'
+    && typeof (value as { addPortForward?: unknown }).addPortForward === 'function'
+    && typeof (value as { removePortForward?: unknown }).removePortForward === 'function',
+  );
+}
+
+function isSSHSftpSession(value: unknown): value is {
+  listSftpDirectory(path?: string): Promise<SSHSftpDirectoryListing>;
+  getSSHSessionMetrics(path?: string): Promise<SSHSessionMetrics>;
+  downloadSftpFile(remotePath: string, localPath: string): Promise<void>;
+  uploadSftpFiles(remotePath: string, localPaths: string[]): Promise<number>;
+  uploadSftpDirectory(remotePath: string, localDirectoryPath: string): Promise<number>;
+  downloadSftpDirectory(remotePath: string, localPath: string): Promise<void>;
+  createSftpDirectory(parentPath: string, name: string): Promise<string>;
+  deleteSftpEntry(remotePath: string): Promise<void>;
+} {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { listSftpDirectory?: unknown }).listSftpDirectory === 'function'
+    && typeof (value as { getSSHSessionMetrics?: unknown }).getSSHSessionMetrics === 'function'
+    && typeof (value as { downloadSftpFile?: unknown }).downloadSftpFile === 'function'
+    && typeof (value as { uploadSftpFiles?: unknown }).uploadSftpFiles === 'function'
+    && typeof (value as { uploadSftpDirectory?: unknown }).uploadSftpDirectory === 'function'
+    && typeof (value as { downloadSftpDirectory?: unknown }).downloadSftpDirectory === 'function'
+    && typeof (value as { createSftpDirectory?: unknown }).createSftpDirectory === 'function'
+    && typeof (value as { deleteSftpEntry?: unknown }).deleteSftpEntry === 'function'
+  );
 }
