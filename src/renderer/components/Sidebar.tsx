@@ -3,12 +3,13 @@ import { Menu, Archive, ChevronDown, Settings } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
-import { GroupStatusIcon } from './GroupStatusIcon';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { getWindowCount, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
+import { StatusDot } from './StatusDot';
+import { getGroupStatus } from '../../shared/utils/status-utils';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 
 interface SidebarProps {
@@ -569,9 +570,9 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
 }) => {
   const { windows } = useWindowStore();
   const windowCount = getWindowCount(group.layout);
+  const aggregatedStatus = getGroupStatus(group, windows);
   const bgColor = isActive ? 'bg-blue-600/50' : 'bg-zinc-800 hover:bg-zinc-700';
 
-  // 处理点击事件，阻止事件冒泡
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -588,7 +589,12 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
               className={`w-full h-10 flex items-center justify-center transition-colors ${bgColor}`}
               aria-label={group.name}
             >
-              <GroupStatusIcon group={group} windows={windows} />
+              <div className="relative">
+                <TerminalTypeLogo variant="group" size="xs" />
+                <span className="absolute -bottom-1 -right-1">
+                  <StatusDot status={aggregatedStatus} size="sm" />
+                </span>
+              </div>
             </button>
           </Tooltip.Trigger>
           <Tooltip.Portal>
@@ -611,8 +617,11 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
       className={`w-full px-3 py-2 flex items-start gap-2 transition-colors text-left rounded ${bgColor}`}
       aria-label={group.name}
     >
-      <div className="mt-0.5">
-        <GroupStatusIcon group={group} windows={windows} />
+      <div className="relative mt-0.5 flex-shrink-0">
+        <TerminalTypeLogo variant="group" size="sm" />
+        <span className="absolute -bottom-1 -right-1">
+          <StatusDot status={aggregatedStatus} size="sm" />
+        </span>
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-zinc-100 truncate">{group.name}</div>
