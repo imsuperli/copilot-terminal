@@ -71,3 +71,17 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--muted-foreground) / 0.5);
 }
+
+.terminal-sidebar-scroll-region-expanded {
+  scrollbar-gutter: stable;
+}
+
+.terminal-sidebar-scroll-region-collapsed {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.terminal-sidebar-scroll-region-collapsed::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

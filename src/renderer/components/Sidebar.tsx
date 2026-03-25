@@ -257,7 +257,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* 活跃窗口和组列表（按类型分类，可折叠） */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div
+          data-testid="terminal-sidebar-scroll-region"
+          className={`flex-1 overflow-y-auto overflow-x-hidden ${
+            sidebarExpanded
+              ? 'terminal-sidebar-scroll-region terminal-sidebar-scroll-region-expanded'
+              : 'terminal-sidebar-scroll-region terminal-sidebar-scroll-region-collapsed'
+          }`}
+        >
           {/* 本地终端分类 */}
           {shouldShowLocalSection && (
             <div>
@@ -432,29 +439,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         ${!sidebarExpanded ? 'justify-center' : ''}
                       `}
                     >
-                {sidebarExpanded ? (
-                  <>
-                    <ChevronDown
-                      size={14}
-                      className={`transition-transform duration-200 ${
-                        showArchived ? 'rotate-0' : '-rotate-90'
-                      }`}
-                    />
-                    <span className="transition-opacity duration-200">{t('sidebar.tab.archived')}</span>
-                    <span className="ml-auto text-zinc-500 transition-opacity duration-200">
-                      ({archivedCount})
-                    </span>
-                  </>
-                ) : (
-                  <div className="relative">
-                    <Archive size={14} />
-                    {archivedCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-600 text-[8px] rounded-full flex items-center justify-center">
-                        {archivedCount}
-                      </span>
-                    )}
-                  </div>
-                )}
+                      {sidebarExpanded ? (
+                        <>
+                          <ChevronDown
+                            size={14}
+                            className={`transition-transform duration-200 ${
+                              showArchived ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                          <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-800 text-zinc-400">
+                            <Archive size={14} />
+                          </span>
+                          <span className="transition-opacity duration-200">{t('sidebar.tab.archived')}</span>
+                          <span className="ml-auto text-zinc-500 transition-opacity duration-200">
+                            ({archivedCount})
+                          </span>
+                        </>
+                      ) : (
+                        <div className="relative">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-800 text-zinc-400">
+                            <Archive size={14} />
+                          </span>
+                          {archivedCount > 0 && (
+                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-600 text-[8px] rounded-full flex items-center justify-center">
+                              {archivedCount}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </button>
                   </Tooltip.Trigger>
                   {!sidebarExpanded && (

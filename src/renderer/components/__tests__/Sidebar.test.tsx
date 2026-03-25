@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Sidebar } from '../Sidebar';
 import { useWindowStore } from '../../stores/windowStore';
@@ -121,5 +121,39 @@ describe('Terminal Sidebar', () => {
     expect(JSON.parse(window.localStorage.getItem(TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY) || '{}')).toMatchObject({
       filter: 'archived',
     });
+  });
+
+  it('uses a stable scroll region when expanded and hides scrollbar occupancy when collapsed', () => {
+    const onWindowSelect = vi.fn();
+    const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: true,
+    });
+
+    const { rerender } = render(
+      <Sidebar activeWindowId={localWindow.id} onWindowSelect={onWindowSelect} />,
+    );
+
+    expect(screen.getByTestId('terminal-sidebar-scroll-region')).toHaveClass(
+      'terminal-sidebar-scroll-region-expanded',
+    );
+
+    act(() => {
+      useWindowStore.setState({
+        sidebarExpanded: false,
+      });
+    });
+
+    rerender(
+      <Sidebar activeWindowId={localWindow.id} onWindowSelect={onWindowSelect} />,
+    );
+
+    expect(screen.getByTestId('terminal-sidebar-scroll-region')).toHaveClass(
+      'terminal-sidebar-scroll-region-collapsed',
+    );
   });
 });
