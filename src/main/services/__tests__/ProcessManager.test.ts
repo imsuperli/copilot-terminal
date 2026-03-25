@@ -554,6 +554,7 @@ describe('ProcessManager', () => {
 
       expect(tmuxEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe('1');
       expect(tmuxEnv.AUSOME_TMUX_RPC).toBe(tmuxCompatService.getRpcSocketPath('win-sync'));
+      expect(tmuxEnv.AUSOME_NODE_PATH).toBe(process.execPath);
 
       tmuxCompatService.destroy();
     });

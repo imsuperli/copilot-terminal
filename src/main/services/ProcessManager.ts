@@ -12,66 +12,12 @@ import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSH
 import { getLatestEnvironmentVariables } from '../utils/environment';
 import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
+import { resolveNodePath } from '../utils/node-path';
 import { resolveShellProgram } from '../utils/shell';
 import { ISSHConnectionPool, SSHConnectionPool } from './ssh/SSHConnectionPool';
 import { ISSHKnownHostsStore } from './ssh/SSHKnownHostsStore';
 import { SSHPtySession } from './ssh/SSHPtySession';
 import { ISSHHostKeyPromptService } from './ssh/SSHHostKeyPromptService';
-
-/**
- * Simple which() - find an executable in the given PATH string.
- * Returns the absolute path if found, or null.
- */
-function which(cmd: string, pathEnv: string): string | null {
-  const dirs = pathEnv.split(path.delimiter);
-  for (const dir of dirs) {
-    const fullPath = path.join(dir, cmd);
-    if (existsSync(fullPath)) {
-      return fullPath;
-    }
-  }
-  return null;
-}
-
-/**
- * Resolve the absolute path to the node binary.
- * Electron's process.execPath points to the Electron binary, not node.
- * On macOS launched from Finder/DMG, PATH may not include /opt/homebrew/bin etc.
- * We use a multi-strategy approach:
- * 1. Check well-known locations
- * 2. Ask login shell for the full PATH and search there
- */
-function resolveNodePath(currentPath: string): string {
-  // Strategy 1: Check current PATH
-  const fromPath = which('node', currentPath);
-  if (fromPath) return fromPath;
-
-  // Strategy 2: Well-known locations on macOS
-  if (platform() === 'darwin') {
-    const candidates = [
-      '/opt/homebrew/bin/node',        // Homebrew on Apple Silicon
-      '/usr/local/bin/node',           // Homebrew on Intel / manual install
-    ];
-    for (const candidate of candidates) {
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-
-  // Strategy 3: Ask login shell for PATH (handles nvm, fnm, etc.)
-  try {
-    const shell = process.env.SHELL || '/bin/sh';
-    const shellPath = execSync(`${shell} -l -c 'echo $PATH'`, {
-      encoding: 'utf8',
-      timeout: 3000,
-    }).trim();
-    const fromShell = which('node', shellPath);
-    if (fromShell) return fromShell;
-  } catch {
-    // Ignore - fallback below
-  }
-
-  return 'node'; // Last resort - hope it's in PATH at runtime
-}
 
 type PaneHistoryEntry = {
   seq: number;
@@ -1283,9 +1229,16 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     // Resolve absolute path to node so the tmux shim script can find it
     // even when Electron's PATH doesn't include the node binary directory.
     // In Electron, process.execPath points to the Electron binary, not node.
+    const preferredShell = resolveShellProgram({
+      settings: this.getSettings?.() ?? null,
+    });
     const isElectron = process.versions && process.versions.electron;
     const nodePath = isElectron
-      ? resolveNodePath(currentPath)
+      ? resolveNodePath({
+          currentPath,
+          env: baseEnv,
+          preferredShell,
+        })
       : process.execPath;
 
     return {
