@@ -1,10 +1,35 @@
 import { app, ipcMain } from 'electron';
 import { readFileSync, existsSync, statSync } from 'fs';
+import { execSync } from 'child_process';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { scanInstalledIDEsAsync, scanSpecificIDE, getSupportedIDENames, isImageFile } from '../utils/ideScanner';
 import { IDEConfig } from '../types/workspace';
 import { scanAvailableShellPrograms } from '../utils/shell';
+
+/**
+ * 从 macOS .app bundle 的 Info.plist 中提取 .icns 图标路径
+ */
+function resolveIcnsFromAppBundle(appPath: string): string | null {
+  try {
+    const plistPath = join(appPath, 'Contents', 'Info.plist');
+    if (!existsSync(plistPath)) return null;
+    // 用 macOS 自带的 defaults 命令读取 CFBundleIconFile
+    const iconFile = execSync(
+      `defaults read "${plistPath}" CFBundleIconFile`,
+      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] },
+    ).trim();
+    if (!iconFile) return null;
+    // CFBundleIconFile 可能带或不带 .icns 后缀
+    const iconName = iconFile.endsWith('.icns') ? iconFile : `${iconFile}.icns`;
+    const icnsPath = join(appPath, 'Contents', 'Resources', iconName);
+    return existsSync(icnsPath) ? icnsPath : null;
+  } catch {
+    return null;
+  }
+}
 
 export function registerSettingsHandlers(ctx: HandlerContext) {
   const { workspaceManager, getCurrentWorkspace, setCurrentWorkspace } = ctx;
@@ -199,8 +224,34 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
         throw new Error(`Refusing to resolve IDE icon from directory path: ${iconPath}`);
       }
 
+      // macOS .app bundle：从 Info.plist 提取 .icns 文件，用 sips 转 PNG
+      if (isMacAppBundle) {
+        const icnsPath = resolveIcnsFromAppBundle(iconPath);
+        if (icnsPath) {
+          const hash = icnsPath.replace(/[^a-zA-Z0-9]/g, '_');
+          const pngPath = join(tmpdir(), `ide-icon-${hash}.png`);
+          if (!existsSync(pngPath)) {
+            execSync(`sips -s format png "${icnsPath}" --out "${pngPath}" --resampleWidth 256`, { stdio: 'ignore' });
+          }
+          const pngData = readFileSync(pngPath);
+          return successResponse(`data:image/png;base64,${pngData.toString('base64')}`);
+        }
+      }
+
       if (isImageFile(iconPath)) {
         const ext = iconPath.split('.').pop()?.toLowerCase();
+
+        // macOS .icns 格式：用 sips 转换为 PNG
+        if (ext === 'icns') {
+          const hash = iconPath.replace(/[^a-zA-Z0-9]/g, '_');
+          const pngPath = join(tmpdir(), `ide-icon-${hash}.png`);
+          if (!existsSync(pngPath)) {
+            execSync(`sips -s format png "${iconPath}" --out "${pngPath}" --resampleWidth 256`, { stdio: 'ignore' });
+          }
+          const pngData = readFileSync(pngPath);
+          return successResponse(`data:image/png;base64,${pngData.toString('base64')}`);
+        }
+
         const iconData = readFileSync(iconPath);
         const base64Data = iconData.toString('base64');
 
