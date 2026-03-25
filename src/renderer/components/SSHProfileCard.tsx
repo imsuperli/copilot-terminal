@@ -149,7 +149,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <TerminalTypeLogo variant="ssh" size="sm" data-testid="ssh-profile-card-logo" />
+              <TerminalTypeLogo variant="ssh" size="md" data-testid="ssh-profile-card-logo" />
               <h3 className="text-base font-semibold text-[rgb(var(--foreground))] truncate">
                 {profile.name}
               </h3>

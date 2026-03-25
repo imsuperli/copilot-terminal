@@ -241,7 +241,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <TerminalTypeLogo
               variant={windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local'}
-              size="sm"
+              size="md"
               data-testid={`window-card-logo-${windowKind}`}
             />
             <h3 className="text-base font-semibold text-[rgb(var(--foreground))] truncate">

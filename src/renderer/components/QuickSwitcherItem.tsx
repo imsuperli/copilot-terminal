@@ -249,7 +249,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
           <div className="flex items-center gap-2 min-w-0">
             <TerminalTypeLogo
               variant={windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local'}
-              size="sm"
+              size="md"
               data-testid={`quick-switcher-logo-${windowKind}`}
             />
             <div className="min-w-0 truncate text-base font-semibold text-zinc-100">
