@@ -39,12 +39,15 @@ function LocalGlyph() {
   );
 }
 
-/** 锁形图标，代表 SSH 加密连接 */
+/** 客户端→虚线→服务器，代表 SSH 远程连接 */
 function SSHGlyph() {
   return (
     <>
-      <rect x="7" y="12" width="10" height="7.5" rx="1.8" strokeWidth="1.6" />
-      <path d="M10 12V9.5a2 2 0 014 0V12" strokeWidth="1.6" />
+      <circle cx="5.5" cy="12" r="2.2" strokeWidth="1.6" />
+      <line x1="7.7" y1="12" x2="13.8" y2="12" strokeWidth="1.4" strokeDasharray="2 1.5" />
+      <rect x="13.8" y="8.5" width="5.8" height="7" rx="1.5" strokeWidth="1.6" />
+      <line x1="15.4" y1="11" x2="18.2" y2="11" strokeWidth="1.1" />
+      <line x1="15.4" y1="12.8" x2="18.2" y2="12.8" strokeWidth="1.1" />
     </>
   );
 }

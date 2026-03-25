@@ -112,7 +112,7 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
               >
                 <div className="relative">
                   <TerminalTypeLogo variant={logoVariant} size="xs" />
-                  <span className="absolute -bottom-1 -right-1 rounded-full bg-zinc-950/85 p-[1px] ring-1 ring-zinc-800">
+                  <span className="absolute -bottom-1 -right-1">
                     <StatusDot status={aggregatedStatus} size="sm" />
                   </span>
                 </div>
@@ -152,7 +152,7 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
       >
         <div className="relative mt-0.5 flex-shrink-0">
           <TerminalTypeLogo variant={logoVariant} size="sm" />
-          <span className="absolute -bottom-1 -right-1 rounded-full bg-zinc-950/85 p-[1px] ring-1 ring-zinc-800">
+          <span className="absolute -bottom-1 -right-1">
             <StatusDot status={aggregatedStatus} size="sm" />
           </span>
         </div>
