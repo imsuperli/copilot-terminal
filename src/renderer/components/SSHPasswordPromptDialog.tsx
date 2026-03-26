@@ -33,6 +33,8 @@ export function SSHPasswordPromptDialog({
     return () => clearTimeout(timer);
   }, [request]);
 
+  const isRetry = Boolean(request?.retryMessage);
+
   return (
     <Dialog
       open={Boolean(request)}
@@ -41,8 +43,10 @@ export function SSHPasswordPromptDialog({
           onCancel();
         }
       }}
-      title={t('sshPasswordPrompt.title')}
-      description={request ? t('sshPasswordPrompt.description', { name: request.profileName }) : undefined}
+      title={isRetry ? t('sshPasswordPrompt.retryTitle') : t('sshPasswordPrompt.title')}
+      description={request
+        ? t(isRetry ? 'sshPasswordPrompt.retryDescription' : 'sshPasswordPrompt.description', { name: request.profileName })
+        : undefined}
       contentClassName="max-w-md"
       showCloseButton
       closeLabel={t('common.close')}
@@ -61,6 +65,20 @@ export function SSHPasswordPromptDialog({
             onSubmit(value);
           }}
         >
+          {request.retryMessage && (
+            <div
+              className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-3 text-sm text-red-100"
+              role="alert"
+            >
+              <div className="font-medium">
+                {t('sshPasswordPrompt.retryHint')}
+              </div>
+              <div className="mt-1 text-red-100/90">
+                {request.retryMessage}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-lg border border-border-subtle bg-bg-app px-3 py-3 text-sm">
             <div className="text-text-secondary">
               {t('sshProfileCard.target')}

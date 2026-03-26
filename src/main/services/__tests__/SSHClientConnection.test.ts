@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SSH_AUTH_FAILED_ERROR_CODE } from '../../../shared/types/electron-api';
 import type { SSHSessionConfig } from '../../types/process';
 import { SSHClientConnection } from '../ssh/SSHClientConnection';
 
@@ -138,6 +139,21 @@ describe('SSHClientConnection', () => {
     });
     expect(fakeClient.end).toHaveBeenCalledTimes(1);
     expect(fakeClient.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes ssh2 authentication failures into a coded SSH auth error', async () => {
+    const fakeClient = new FakeSSHClient();
+    const connection = new SSHClientConnection(createSSHConfig());
+    (connection as any).client = fakeClient;
+
+    const connectPromise = connection.connect();
+    await flushPromises();
+    fakeClient.emit('error', new Error('All configured authentication methods failed'));
+
+    await expect(connectPromise).rejects.toMatchObject({
+      message: 'SSH authentication failed. The password or interactive secret was rejected by the server.',
+      ipcErrorCode: SSH_AUTH_FAILED_ERROR_CODE,
+    });
   });
 });
 

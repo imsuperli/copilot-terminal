@@ -1,8 +1,9 @@
 import { StartSSHPaneResult, StartWindowResult } from '../../shared/types/electron-api';
 import { getPaneBackend, getPaneCapabilities } from '../../shared/utils/terminalCapabilities';
 import { Pane, Window, WindowStatus } from '../types/window';
+import { dispatchAppError } from './appNotice';
 import { getAllPanes } from './layoutHelpers';
-import { ensureSSHPasswordSaved } from './sshPasswordPrompt';
+import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './sshConnectionRetry';
 
 type PaneStartResult = StartWindowResult | StartSSHPaneResult;
 
@@ -66,26 +67,25 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
     if (!pane.ssh) {
       throw new Error(`SSH pane metadata is missing for ${targetWindow.id}/${pane.id}`);
     }
+    const ssh = pane.ssh;
 
-    const shouldContinue = await ensureSSHPasswordSaved({
-      profileId: pane.ssh.profileId,
-      profileName: targetWindow.name,
-      host: pane.ssh.host,
-      user: pane.ssh.user,
-      authType: pane.ssh.authType,
-    });
-    if (!shouldContinue) {
-      throw new Error('SSH password entry was cancelled');
-    }
-
-    const response = await window.electronAPI.startSSHPane({
-      windowId: targetWindow.id,
-      paneId: pane.id,
-      profileId: pane.ssh.profileId,
-      remoteCwd: pane.ssh.remoteCwd ?? pane.cwd,
-      command: pane.command,
-      initialCols,
-      initialRows,
+    const response = await runSSHActionWithPasswordRetry({
+      request: {
+        profileId: ssh.profileId,
+        profileName: targetWindow.name,
+        host: ssh.host,
+        user: ssh.user,
+        authType: ssh.authType,
+      },
+      action: () => window.electronAPI.startSSHPane({
+        windowId: targetWindow.id,
+        paneId: pane.id,
+        profileId: ssh.profileId,
+        remoteCwd: ssh.remoteCwd ?? pane.cwd,
+        command: pane.command,
+        initialCols,
+        initialRows,
+      }),
     });
 
     if (!response?.success || !response.data) {
@@ -132,6 +132,9 @@ export async function startWindowPanes(
         });
       } catch (error) {
         console.error(`Failed to start pane ${pane.id}:`, error);
+        if (!isSSHPasswordPromptCancelled(error)) {
+          dispatchAppError(error instanceof Error ? error.message : `Failed to start pane ${pane.id}`);
+        }
         updatePane(targetWindow.id, pane.id, { status: WindowStatus.Paused });
       }
     }),
@@ -152,15 +155,32 @@ export async function startSplitPaneFromSource(options: {
   const { cols: initialCols, rows: initialRows } = estimateInitialTerminalSize();
 
   if (getPaneBackend(sourcePane) === 'ssh') {
-    const response = await window.electronAPI.cloneSSHPane({
-      sourceWindowId,
-      sourcePaneId: sourcePane.id,
-      targetWindowId,
-      targetPaneId,
+    if (!sourcePane.ssh) {
+      throw new Error(`SSH pane metadata is missing for ${sourceWindowId}/${sourcePane.id}`);
+    }
+
+    const response = await runSSHActionWithPasswordRetry({
+      request: {
+        profileId: sourcePane.ssh.profileId,
+        profileName: `${sourcePane.ssh.user}@${sourcePane.ssh.host}`,
+        host: sourcePane.ssh.host,
+        user: sourcePane.ssh.user,
+        authType: sourcePane.ssh.authType,
+      },
+      action: () => window.electronAPI.cloneSSHPane({
+        sourceWindowId,
+        sourcePaneId: sourcePane.id,
+        targetWindowId,
+        targetPaneId,
+      }),
     });
 
     if (!response?.success || !response.data) {
-      throw new Error(response?.error || '拆分 SSH 窗格失败');
+      const error = new Error(response?.error || '拆分 SSH 窗格失败');
+      if (!isSSHPasswordPromptCancelled(error)) {
+        dispatchAppError(error.message);
+      }
+      throw error;
     }
 
     return {

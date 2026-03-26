@@ -31,7 +31,10 @@ export interface IpcResponse<T = void> {
   success: boolean;
   data?: T;
   error?: string;
+  errorCode?: string;
 }
+
+export const SSH_AUTH_FAILED_ERROR_CODE = 'SSH_AUTH_FAILED';
 
 export interface CreateWindowConfig {
   name?: string;

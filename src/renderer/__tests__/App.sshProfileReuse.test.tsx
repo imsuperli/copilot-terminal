@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { SSH_AUTH_FAILED_ERROR_CODE } from '../../shared/types/electron-api';
 import { useWindowStore } from '../stores/windowStore';
 import { Window, WindowStatus } from '../types/window';
 
@@ -271,6 +272,71 @@ describe('App SSH profile reuse', () => {
         profileId: 'profile-1',
         name: 'Prod SSH',
       });
+    });
+
+    expect(switchToWindow).toHaveBeenCalledWith('win-ssh-new');
+  });
+
+  it('re-prompts for the password when the server rejects the previous SSH secret', async () => {
+    const user = userEvent.setup();
+    const switchToWindow = vi.fn();
+
+    useWindowStore.setState({
+      windows: [],
+    });
+
+    mockUseWindowSwitcher.mockReturnValue({
+      switchToWindow,
+    });
+
+    vi.mocked(window.electronAPI.getSSHCredentialState).mockResolvedValue({
+      success: true,
+      data: {
+        hasPassword: false,
+        hasPassphrase: false,
+      },
+    });
+    vi.mocked(window.electronAPI.setSSHPassword).mockResolvedValue({
+      success: true,
+    });
+    vi.mocked(window.electronAPI.clearSSHPassword).mockResolvedValue({
+      success: true,
+    });
+    vi.mocked(window.electronAPI.createSSHWindow)
+      .mockResolvedValueOnce({
+        success: false,
+        error: 'SSH authentication failed. The password or interactive secret was rejected by the server.',
+        errorCode: SSH_AUTH_FAILED_ERROR_CODE,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: createNewSSHWindow('profile-1'),
+      });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '连接 SSH' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '连接 SSH' }));
+
+    expect(await screen.findByText('输入 SSH 密码')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('密码 / 交互认证密钥'), 'wrong-secret');
+    await user.click(screen.getByRole('button', { name: '连接' }));
+
+    expect(await screen.findByText('SSH 认证失败')).toBeInTheDocument();
+    expect(screen.getByText('服务器拒绝了上一次认证请求。')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('密码 / 交互认证密钥'), 'correct-secret');
+    await user.click(screen.getByRole('button', { name: '连接' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.setSSHPassword).toHaveBeenNthCalledWith(1, 'profile-1', 'wrong-secret');
+      expect(window.electronAPI.clearSSHPassword).toHaveBeenCalledWith('profile-1');
+      expect(window.electronAPI.setSSHPassword).toHaveBeenNthCalledWith(2, 'profile-1', 'correct-secret');
+      expect(window.electronAPI.createSSHWindow).toHaveBeenCalledTimes(2);
     });
 
     expect(switchToWindow).toHaveBeenCalledWith('win-ssh-new');

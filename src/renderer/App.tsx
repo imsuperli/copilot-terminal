@@ -38,11 +38,13 @@ import { getAllPanes } from './utils/layoutHelpers';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from './utils/settingsEvents';
 import {
   authNeedsPassword,
-  ensureSSHPasswordSaved,
+  SSH_PASSWORD_CLEARED_EVENT,
   SSH_PASSWORD_SAVED_EVENT,
   setSSHPasswordPromptHandler,
   type SSHPasswordPromptRequest,
 } from './utils/sshPasswordPrompt';
+import { APP_ERROR_EVENT, type AppErrorEventDetail } from './utils/appNotice';
+import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './utils/sshConnectionRetry';
 
 function findReusableSSHWindow(windows: Window[], profileId: string): Window | null {
   const matchedWindows = windows.filter((window) => {
@@ -91,11 +93,13 @@ function AppContent() {
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
   const [sshHostKeyPromptQueue, setSSHHostKeyPromptQueue] = useState<SSHHostKeyPromptPayload[]>([]);
   const [sshPasswordPromptRequest, setSSHPasswordPromptRequest] = useState<SSHPasswordPromptRequest | null>(null);
+  const [appError, setAppError] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<{ name: string; version: string }>({
     name: 'Copilot-Terminal',
     version: '1.0.0',
   });
   const sshPasswordPromptResolverRef = useRef<((password: string | null) => void) | null>(null);
+  const appErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 获取应用版本信息
   useEffect(() => {
@@ -207,6 +211,68 @@ function AppContent() {
       window.removeEventListener(SSH_PASSWORD_SAVED_EVENT, handleSSHPasswordSaved);
     };
   }, []);
+
+  useEffect(() => {
+    const handleSSHPasswordCleared = (event: Event) => {
+      const profileId = (event as CustomEvent<{ profileId?: string } | undefined>).detail?.profileId;
+      if (!profileId) {
+        return;
+      }
+
+      setSSHCredentialStates((previousStates) => ({
+        ...previousStates,
+        [profileId]: {
+          ...(previousStates[profileId] ?? { hasPassword: false, hasPassphrase: false }),
+          hasPassword: false,
+        },
+      }));
+    };
+
+    window.addEventListener(SSH_PASSWORD_CLEARED_EVENT, handleSSHPasswordCleared);
+    return () => {
+      window.removeEventListener(SSH_PASSWORD_CLEARED_EVENT, handleSSHPasswordCleared);
+    };
+  }, []);
+
+  const showAppError = useCallback((message: string) => {
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) {
+      return;
+    }
+
+    setAppError(trimmedMessage);
+
+    if (appErrorTimerRef.current) {
+      clearTimeout(appErrorTimerRef.current);
+    }
+
+    appErrorTimerRef.current = setTimeout(() => {
+      setAppError(null);
+      appErrorTimerRef.current = null;
+    }, 6000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (appErrorTimerRef.current) {
+        clearTimeout(appErrorTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleAppError = (event: Event) => {
+      const message = (event as CustomEvent<AppErrorEventDetail | undefined>).detail?.message;
+      if (message) {
+        showAppError(message);
+      }
+    };
+
+    window.addEventListener(APP_ERROR_EVENT, handleAppError);
+    return () => {
+      window.removeEventListener(APP_ERROR_EVENT, handleAppError);
+    };
+  }, [showAppError]);
 
   // 工作区恢复
   useWorkspaceRestore();
@@ -490,15 +556,23 @@ function AppContent() {
     }
 
     try {
-      const shouldContinue = await ensureSSHPasswordSaved({
-        profileId: profile.id,
-        profileName: profile.name,
-        host: profile.host,
-        user: profile.user,
-        authType: profile.auth,
+      setConnectingSSHProfileId(profile.id);
+      const response = await runSSHActionWithPasswordRetry({
+        request: {
+          profileId: profile.id,
+          profileName: profile.name,
+          host: profile.host,
+          user: profile.user,
+          authType: profile.auth,
+        },
+        action: () => window.electronAPI.createSSHWindow({
+          profileId: profile.id,
+          name: profile.name,
+        }),
       });
-      if (!shouldContinue) {
-        return;
+
+      if (!response?.success || !response.data) {
+        throw new Error(response?.error || `Failed to connect SSH profile ${profile.id}`);
       }
 
       if (authNeedsPassword(profile.auth)) {
@@ -511,24 +585,17 @@ function AppContent() {
         }));
       }
 
-      setConnectingSSHProfileId(profile.id);
-      const response = await window.electronAPI.createSSHWindow({
-        profileId: profile.id,
-        name: profile.name,
-      });
-
-      if (!response?.success || !response.data) {
-        throw new Error(response?.error || `Failed to connect SSH profile ${profile.id}`);
-      }
-
       addWindow(response.data);
       switchToWindow(response.data.id);
     } catch (error) {
       console.error('Failed to create SSH window:', error);
+      if (!isSSHPasswordPromptCancelled(error)) {
+        showAppError(error instanceof Error ? error.message : `Failed to connect SSH profile ${profile.id}`);
+      }
     } finally {
       setConnectingSSHProfileId(null);
     }
-  }, [addWindow, connectingSSHProfileId, switchToWindow, windows]);
+  }, [addWindow, connectingSSHProfileId, showAppError, switchToWindow, windows]);
 
   const handleCreateGroup = useCallback(() => {
     setShowCreateGroupDialog(true);
@@ -746,6 +813,7 @@ function AppContent() {
       })}
 
       {error && <ViewSwitchError message={error} />}
+      {!error && appError && <ViewSwitchError message={appError} />}
 
       {/* 组视图：当 activeGroupId 有效时显示 */}
       {activeGroup && (

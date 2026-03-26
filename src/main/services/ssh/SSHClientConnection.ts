@@ -7,10 +7,12 @@ import type {
   ActiveSSHPortForward,
   ForwardedPortConfig,
   KnownHostEntry,
+  SSHAuthType,
   SSHPortForwardSource,
   SSHSftpDirectoryListing,
   SSHSessionMetrics,
 } from '../../../shared/types/ssh';
+import { SSH_AUTH_FAILED_ERROR_CODE } from '../../../shared/types/electron-api';
 import type { SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
 import type {
@@ -80,6 +82,15 @@ interface ConnectTimeoutController {
   pause(): void;
   resume(): void;
   dispose(): void;
+}
+
+class SSHAuthenticationError extends Error {
+  readonly ipcErrorCode = SSH_AUTH_FAILED_ERROR_CODE;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'SSHAuthenticationError';
+  }
 }
 
 export class SSHClientConnection implements ISSHConnection {
@@ -393,7 +404,7 @@ export class SSHClientConnection implements ISSHConnection {
 
       this.client.on('error', (error) => {
         if (!settled) {
-          rejectOnce(this.hostKeyVerificationError ?? error);
+          rejectOnce(normalizeSSHConnectError(this.hostKeyVerificationError ?? error, this.ssh));
         }
       });
 
@@ -402,7 +413,10 @@ export class SSHClientConnection implements ISSHConnection {
         this.closed = true;
 
         if (!settled) {
-          rejectOnce(this.hostKeyVerificationError ?? new Error(`SSH connection closed before ready for ${this.ssh.host}:${this.ssh.port}`));
+          rejectOnce(normalizeSSHConnectError(
+            this.hostKeyVerificationError ?? new Error(`SSH connection closed before ready for ${this.ssh.host}:${this.ssh.port}`),
+            this.ssh,
+          ));
         }
       });
 
@@ -1226,4 +1240,39 @@ function isRemoteForwardWildcard(host: string): boolean {
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeSSHConnectError(error: Error, ssh: SSHSessionConfig): Error {
+  if (error instanceof SSHAuthenticationError) {
+    return error;
+  }
+
+  if (!isSSHAuthenticationFailureMessage(error.message)) {
+    return error;
+  }
+
+  return new SSHAuthenticationError(getSSHAuthenticationFailureMessage(ssh.authType));
+}
+
+function isSSHAuthenticationFailureMessage(message: string): boolean {
+  const normalizedMessage = message.trim().toLowerCase();
+
+  return normalizedMessage.includes('all configured authentication methods failed')
+    || normalizedMessage.includes('authentication failed')
+    || normalizedMessage.includes('permission denied')
+    || normalizedMessage.includes('userauth failure');
+}
+
+function getSSHAuthenticationFailureMessage(authType: SSHAuthType): string {
+  switch (authType) {
+    case 'password':
+    case 'keyboardInteractive':
+      return 'SSH authentication failed. The password or interactive secret was rejected by the server.';
+    case 'publicKey':
+      return 'SSH authentication failed. The private key or passphrase was rejected by the server.';
+    case 'agent':
+      return 'SSH authentication failed. The SSH agent identity was rejected by the server.';
+    default:
+      return 'SSH authentication failed.';
+  }
 }

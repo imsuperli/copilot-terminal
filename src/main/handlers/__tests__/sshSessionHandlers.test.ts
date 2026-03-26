@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { registerSSHSessionHandlers } from '../sshSessionHandlers';
 import type { HandlerContext } from '../HandlerContext';
+import { SSH_AUTH_FAILED_ERROR_CODE } from '../../../shared/types/electron-api';
 import { WindowStatus } from '../../../shared/types/window';
 
 const { mockIpcHandle, mockShowOpenDialog, mockShowSaveDialog } = vi.hoisted(() => ({
@@ -237,6 +238,52 @@ describe('registerSSHSessionHandlers', () => {
         sessionId: 'ssh-session-2',
         status: WindowStatus.WaitingForInput,
       },
+    });
+  });
+
+  it('returns a coded error response when SSH authentication fails during window creation', async () => {
+    const processManager = {
+      spawnTerminal: vi.fn().mockRejectedValue(Object.assign(
+        new Error('SSH authentication failed. The password or interactive secret was rejected by the server.'),
+        { ipcErrorCode: SSH_AUTH_FAILED_ERROR_CODE },
+      )),
+    };
+    const sshProfileStore = {
+      get: vi.fn().mockResolvedValue(createProfile()),
+    };
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: { addPane: vi.fn() } as any,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: { add: vi.fn() } as any,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: {
+        get: vi.fn().mockResolvedValue({
+          profileId: 'profile-1',
+          password: 'secret',
+          updatedAt: '2026-03-22T10:00:00.000Z',
+        }),
+      } as any,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('create-ssh-window');
+    const response = await handler({}, {
+      profileId: 'profile-1',
+    });
+
+    expect(response).toMatchObject({
+      success: false,
+      errorCode: SSH_AUTH_FAILED_ERROR_CODE,
+      error: 'SSH authentication failed. The password or interactive secret was rejected by the server.',
     });
   });
 
