@@ -212,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Tooltip.Trigger asChild>
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
-                  className="w-8 h-8 flex items-center justify-center rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 transition-all duration-200"
+                  className="w-8 h-8 flex items-center justify-center rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 hover:border-zinc-600 transition-all duration-200"
                   aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
                 >
                   <Menu size={16} className="transition-transform duration-200" />
@@ -583,7 +583,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   const { windows } = useWindowStore();
   const windowCount = getWindowCount(group.layout);
   const aggregatedStatus = getGroupStatus(group, windows);
-  const bgColor = isActive ? 'bg-blue-600/50' : 'bg-zinc-800 hover:bg-zinc-700';
+  const bgColor = 'bg-zinc-800 hover:bg-zinc-700';
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -598,7 +598,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
           <Tooltip.Trigger asChild>
             <button
               onClick={handleClick}
-              className={`w-full h-10 flex items-center justify-center transition-colors ${bgColor}`}
+              className={`w-full h-10 flex items-center justify-center transition-colors border-l-2 ${bgColor} ${isActive ? 'border-l-yellow-500' : 'border-l-transparent'}`}
               aria-label={group.name}
             >
               <div className="relative">
@@ -626,7 +626,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   return (
     <button
       onClick={handleClick}
-      className={`w-full px-3 py-2 flex items-start gap-2 transition-colors text-left rounded ${bgColor}`}
+      className={`w-full px-3 py-2 flex items-start gap-2 transition-colors text-left rounded border-l-2 ${bgColor} ${isActive ? 'border-l-yellow-500' : 'border-l-transparent'}`}
       aria-label={group.name}
     >
       <div className="relative mt-0.5 flex-shrink-0">

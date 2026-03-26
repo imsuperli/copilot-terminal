@@ -22,11 +22,6 @@ interface SidebarWindowItemProps {
  * 获取窗口背景颜色（根据状态）
  */
 function getWindowBackgroundColor(status: WindowStatus, isActive: boolean): string {
-  if (isActive) {
-    // 激活状态：使用蓝色背景，与状态图标有更好的对比度
-    return 'bg-blue-600/50';
-  }
-
   // 非激活状态：根据窗口状态显示不同的基础背景色和悬停色
   switch (status) {
     case WindowStatus.Running:
@@ -105,8 +100,9 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
                 onContextMenu={onContextMenu}
                 className={`
                   w-full h-10 flex items-center justify-center
-                  transition-colors
+                  transition-colors border-l-2
                   ${bgColor}
+                  ${isActive ? 'border-l-yellow-500' : 'border-l-transparent'}
                 `}
                 aria-label={terminalWindow.name}
               >
@@ -145,8 +141,9 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
         onContextMenu={onContextMenu}
         className={`
           w-full px-3 py-2 flex items-start gap-2
-          transition-colors text-left rounded
+          transition-colors text-left rounded border-l-2
           ${bgColor}
+          ${isActive ? 'border-l-yellow-500' : 'border-l-transparent'}
         `}
         aria-label={terminalWindow.name}
       >
