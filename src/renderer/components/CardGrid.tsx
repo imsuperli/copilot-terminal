@@ -11,10 +11,12 @@ import { EditGroupPanel } from './EditGroupPanel';
 import { CreateGroupDialog } from './CreateGroupDialog';
 import { NewWindowCard } from './NewWindowCard';
 import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
+import { DeleteWindowDialog } from './DeleteWindowDialog';
 import { SSHProfileCard } from './SSHProfileCard';
 import { DraggableWindowCard, DraggableGroupCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
+import { useDeleteWindowDialog } from '../hooks/useDeleteWindowDialog';
 import { Window, WindowStatus } from '../types/window';
 import { WindowGroup } from '../../shared/types/window-group';
 import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
@@ -74,7 +76,6 @@ export const CardGrid = React.memo<CardGridProps>(({
 }) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
-  const removeWindow = useWindowStore((state) => state.removeWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
   const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
@@ -92,6 +93,7 @@ export const CardGrid = React.memo<CardGridProps>(({
   const customCategories = useWindowStore((state) => state.customCategories);
 
   const { runWithWindowDirectory, dialogState } = useWindowDirectoryGuard();
+  const { requestDeleteWindow, dialogState: deleteDialogState } = useDeleteWindowDialog();
   const [editingWindow, setEditingWindow] = useState<Window | null>(null);
   const [editingGroup, setEditingGroup] = useState<WindowGroup | null>(null);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
@@ -380,13 +382,13 @@ export const CardGrid = React.memo<CardGridProps>(({
   }, [unarchiveWindow]);
 
   const handleDeleteWindow = useCallback(async (windowId: string) => {
-    try {
-      await window.electronAPI.deleteWindow(windowId);
-      removeWindow(windowId);
-    } catch (error) {
-      console.error('Failed to delete window:', error);
+    const targetWindow = windows.find((window) => window.id === windowId);
+    if (!targetWindow) {
+      return;
     }
-  }, [removeWindow]);
+
+    requestDeleteWindow(targetWindow);
+  }, [requestDeleteWindow, windows]);
 
   const openFolder = useCallback(async (win: Window) => {
     const panes = getAllPanes(win.layout);
@@ -769,6 +771,8 @@ export const CardGrid = React.memo<CardGridProps>(({
       </ScrollArea.Root>
 
       <MissingWorkingDirectoryDialog {...dialogState} />
+
+      <DeleteWindowDialog {...deleteDialogState} />
 
       {editingWindow && (
         <EditWindowPanel

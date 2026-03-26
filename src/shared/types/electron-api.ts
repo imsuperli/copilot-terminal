@@ -357,6 +357,7 @@ export interface ElectronAPI {
   clearSSHPassword: (profileId: string) => Promise<IpcResponse<void>>;
   setSSHPrivateKeyPassphrase: (profileId: string, keyPath: string, passphrase: string) => Promise<IpcResponse<void>>;
   clearSSHPrivateKeyPassphrase: (profileId: string, keyPath: string) => Promise<IpcResponse<void>>;
+  clearSSHProfileCredentials: (profileId: string) => Promise<IpcResponse<void>>;
   listKnownHosts: () => Promise<IpcResponse<KnownHostEntry[]>>;
   removeKnownHost: (entryId: string) => Promise<IpcResponse<void>>;
   onSSHHostKeyPrompt: (callback: ElectronEventHandler<SSHHostKeyPromptPayload>) => void;

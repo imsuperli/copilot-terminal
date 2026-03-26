@@ -90,6 +90,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('set-ssh-private-key-passphrase', profileId, keyPath, passphrase),
   clearSSHPrivateKeyPassphrase: (profileId: string, keyPath: string) =>
     ipcRenderer.invoke('clear-ssh-private-key-passphrase', profileId, keyPath),
+  clearSSHProfileCredentials: (profileId: string) =>
+    ipcRenderer.invoke('clear-ssh-profile-credentials', profileId),
   listKnownHosts: () => ipcRenderer.invoke('list-known-hosts'),
   removeKnownHost: (entryId: string) => ipcRenderer.invoke('remove-known-host', entryId),
   onSSHHostKeyPrompt: (callback) => {

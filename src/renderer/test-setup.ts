@@ -137,6 +137,7 @@ Object.defineProperty(window, 'electronAPI', {
     clearSSHPassword: vi.fn().mockResolvedValue({ success: true }),
     setSSHPrivateKeyPassphrase: vi.fn().mockResolvedValue({ success: true }),
     clearSSHPrivateKeyPassphrase: vi.fn().mockResolvedValue({ success: true }),
+    clearSSHProfileCredentials: vi.fn().mockResolvedValue({ success: true }),
     listKnownHosts: vi.fn().mockResolvedValue({ success: true, data: [] }),
     removeKnownHost: vi.fn().mockResolvedValue({ success: true }),
     onSSHHostKeyPrompt: vi.fn(),

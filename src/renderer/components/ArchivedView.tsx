@@ -6,7 +6,9 @@ import { getAllPanes } from '../utils/layoutHelpers';
 import { WindowCard } from './WindowCard';
 import { EditWindowPanel } from './EditWindowPanel';
 import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
+import { DeleteWindowDialog } from './DeleteWindowDialog';
 import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
+import { useDeleteWindowDialog } from '../hooks/useDeleteWindowDialog';
 import { Window, WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
@@ -24,12 +26,12 @@ interface ArchivedViewProps {
 export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, searchQuery = '' }) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
-  const removeWindow = useWindowStore((state) => state.removeWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
   const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
   const unarchiveWindow = useWindowStore((state) => state.unarchiveWindow);
   const { runWithWindowDirectory, dialogState } = useWindowDirectoryGuard();
+  const { requestDeleteWindow, dialogState: deleteDialogState } = useDeleteWindowDialog();
   const [editingWindow, setEditingWindow] = useState<Window | null>(null);
 
   // 只显示已归档的窗口
@@ -90,13 +92,13 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
   }, [unarchiveWindow]);
 
   const handleDeleteWindow = useCallback(async (windowId: string) => {
-    try {
-      await window.electronAPI.deleteWindow(windowId);
-      removeWindow(windowId);
-    } catch (error) {
-      console.error('Failed to delete window:', error);
+    const targetWindow = windows.find((window) => window.id === windowId);
+    if (!targetWindow) {
+      return;
     }
-  }, [removeWindow]);
+
+    requestDeleteWindow(targetWindow);
+  }, [requestDeleteWindow, windows]);
 
   const openFolder = useCallback(async (win: Window) => {
     const workingDirectory = getCurrentWindowWorkingDirectory(win);
@@ -226,6 +228,8 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
       </ScrollArea.Root>
 
       <MissingWorkingDirectoryDialog {...dialogState} />
+
+      <DeleteWindowDialog {...deleteDialogState} />
 
       {editingWindow && (
         <EditWindowPanel

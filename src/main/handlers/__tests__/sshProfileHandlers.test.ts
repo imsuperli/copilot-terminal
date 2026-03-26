@@ -170,7 +170,7 @@ describe('registerSSHProfileHandlers', () => {
       clearPassword: vi.fn().mockResolvedValue(undefined),
       setPrivateKeyPassphrase: vi.fn().mockResolvedValue(undefined),
       clearPrivateKeyPassphrase: vi.fn().mockResolvedValue(undefined),
-      remove: vi.fn(),
+      remove: vi.fn().mockResolvedValue(undefined),
     };
     const sshKnownHostsStore = {
       list: vi.fn().mockResolvedValue([{ id: 'host-1' }]),
@@ -197,6 +197,7 @@ describe('registerSSHProfileHandlers', () => {
     const credentialStateHandler = getRegisteredHandler('get-ssh-credential-state');
     const setPasswordHandler = getRegisteredHandler('set-ssh-password');
     const setPassphraseHandler = getRegisteredHandler('set-ssh-private-key-passphrase');
+    const clearCredentialsHandler = getRegisteredHandler('clear-ssh-profile-credentials');
     const detectPrivateKeysHandler = getRegisteredHandler('detect-local-ssh-private-keys');
     const listKnownHostsHandler = getRegisteredHandler('list-known-hosts');
     const removeKnownHostHandler = getRegisteredHandler('remove-known-host');
@@ -208,6 +209,7 @@ describe('registerSSHProfileHandlers', () => {
 
     await setPasswordHandler({}, 'profile-1', 'secret');
     await setPassphraseHandler({}, 'profile-1', '/keys/id_ed25519', 'key-secret');
+    await clearCredentialsHandler({}, 'profile-1');
 
     expect(await listKnownHostsHandler({})).toEqual({
       success: true,
@@ -222,6 +224,7 @@ describe('registerSSHProfileHandlers', () => {
 
     expect(sshVaultService.setPassword).toHaveBeenCalledWith('profile-1', 'secret');
     expect(sshVaultService.setPrivateKeyPassphrase).toHaveBeenCalledWith('profile-1', '/keys/id_ed25519', 'key-secret');
+    expect(sshVaultService.remove).toHaveBeenCalledWith('profile-1');
     expect(sshKnownHostsStore.remove).toHaveBeenCalledWith('host-1');
   });
 

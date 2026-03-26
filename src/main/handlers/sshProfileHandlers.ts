@@ -197,6 +197,19 @@ export function registerSSHProfileHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('clear-ssh-profile-credentials', async (_event, profileId: string) => {
+    try {
+      if (!sshVaultService) {
+        throw new Error('SSH vault service not initialized');
+      }
+
+      await sshVaultService.remove(profileId);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('list-known-hosts', async () => {
     try {
       if (!sshKnownHostsStore) {
