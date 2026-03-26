@@ -155,21 +155,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return { localWindows: local, sshWindows: ssh };
   }, [sortedItems, windows]);
 
-  const shouldShowLocalSection = (
-    terminalSidebarFilter === 'all'
-    || terminalSidebarFilter === 'workspace'
-    || terminalSidebarFilter === 'local'
-  ) && localWindows.length > 0;
-  const shouldShowSshSection = (
-    terminalSidebarFilter === 'all'
-    || terminalSidebarFilter === 'workspace'
-    || terminalSidebarFilter === 'ssh'
-  ) && sshWindows.length > 0;
+  const shouldShowLocalSection = terminalSidebarFilter === 'local' && localWindows.length > 0;
+  const shouldShowSshSection = terminalSidebarFilter === 'ssh' && sshWindows.length > 0;
   const archivedCount = visibleArchivedWindows.length + archivedGroups.length;
-  const shouldShowArchivedSection = (
-    terminalSidebarFilter === 'all'
-    || terminalSidebarFilter === 'archived'
-  ) && archivedCount > 0;
+  const shouldShowArchivedSection = false;
 
   // 处理宽度调整
   useEffect(() => {
@@ -244,11 +233,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onChange={(event) => setTerminalSidebarFilter(event.target.value as typeof terminalSidebarFilter)}
             className="w-full h-8 px-2 text-xs text-zinc-100 bg-zinc-800 border border-zinc-700 rounded focus:outline-none focus:border-blue-500"
           >
-            <option value="all">{t('sidebar.tab.all')}</option>
-            <option value="workspace">{t('sidebar.tab.active')}</option>
             <option value="local">{t('sidebar.tab.local')}</option>
             <option value="ssh">{t('sidebar.tab.ssh')}</option>
-            <option value="archived">{t('sidebar.tab.archived')}</option>
           </select>
         </div>
         )}

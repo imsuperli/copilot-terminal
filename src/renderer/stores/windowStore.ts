@@ -62,7 +62,7 @@ function isRuntimeOnlyPaneUpdate(updateKeys: string[]): boolean {
 }
 
 export type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
-export type TerminalSidebarFilter = 'all' | 'workspace' | 'local' | 'ssh' | 'archived';
+export type TerminalSidebarFilter = 'local' | 'ssh';
 
 export const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'copilot-terminal:terminal-sidebar-preferences';
 
@@ -72,7 +72,7 @@ const DEFAULT_TERMINAL_SIDEBAR_SECTIONS: Record<TerminalSidebarSection, boolean>
   ssh: true,
 };
 
-const DEFAULT_TERMINAL_SIDEBAR_FILTER: TerminalSidebarFilter = 'all';
+const DEFAULT_TERMINAL_SIDEBAR_FILTER: TerminalSidebarFilter = 'local';
 
 function getRendererLocalStorage(): Storage | null {
   if (typeof window === 'undefined') {
@@ -89,11 +89,8 @@ function getRendererLocalStorage(): Storage | null {
 
 function normalizeTerminalSidebarFilter(value: unknown): TerminalSidebarFilter {
   switch (value) {
-    case 'all':
-    case 'workspace':
     case 'local':
     case 'ssh':
-    case 'archived':
       return value;
     default:
       return DEFAULT_TERMINAL_SIDEBAR_FILTER;
