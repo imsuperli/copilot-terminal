@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process';
+import { basename } from 'path';
 import { platform } from 'os';
 
 const WINDOWS_REQUIRED_RUNTIME_ENV_KEYS = [
@@ -18,6 +19,22 @@ const WINDOWS_REQUIRED_RUNTIME_ENV_KEYS = [
   'SESSIONNAME',
 ] as const;
 
+const UNIX_RUNTIME_ENV_KEYS_TO_DROP = [
+  'OLDPWD',
+  'PWD',
+  'SHLVL',
+  '_',
+] as const;
+
+const UNIX_SHELL_FALLBACKS: Record<'darwin' | 'linux', string[]> = {
+  darwin: ['/bin/zsh', '/bin/bash', '/bin/sh', '/opt/homebrew/bin/fish', '/usr/local/bin/fish', '/usr/bin/fish'],
+  linux: ['/bin/bash', '/usr/bin/zsh', '/bin/sh', '/usr/bin/fish', '/usr/local/bin/fish'],
+};
+
+interface GetLatestEnvironmentVariablesOptions {
+  preferredShellProgram?: string | null;
+}
+
 /**
  * 获取最新的系统环境变量
  *
@@ -26,14 +43,13 @@ const WINDOWS_REQUIRED_RUNTIME_ENV_KEYS = [
  *
  * @returns 合并后的环境变量对象
  */
-export function getLatestEnvironmentVariables(): NodeJS.ProcessEnv {
-  if (platform() === 'win32') {
+export function getLatestEnvironmentVariables(options: GetLatestEnvironmentVariablesOptions = {}): NodeJS.ProcessEnv {
+  const currentPlatform = platform();
+  if (currentPlatform === 'win32') {
     return getWindowsEnvironmentVariables();
   }
 
-  // macOS 和 Linux 直接使用 process.env
-  // 这些平台的环境变量通常在登录时设置，不会像 Windows 那样动态更新
-  return process.env;
+  return getUnixEnvironmentVariables(currentPlatform, options.preferredShellProgram);
 }
 
 /**
@@ -92,6 +108,129 @@ function getWindowsEnvironmentVariables(): NodeJS.ProcessEnv {
     // 出错时回退到 process.env
     return process.env;
   }
+}
+
+function getUnixEnvironmentVariables(
+  currentPlatform: string,
+  preferredShellProgram?: string | null,
+): NodeJS.ProcessEnv {
+  const shellCandidates = getUnixShellCandidates(currentPlatform, preferredShellProgram);
+  for (const shellPath of shellCandidates) {
+    try {
+      const shellEnv = readUnixShellEnvironment(shellPath);
+      if (Object.keys(shellEnv).length === 0) {
+        continue;
+      }
+
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        ...shellEnv,
+      };
+
+      for (const key of UNIX_RUNTIME_ENV_KEYS_TO_DROP) {
+        delete env[key];
+      }
+
+      return env;
+    } catch (error) {
+      console.error(`[Environment] Failed to read login shell environment from ${shellPath}:`, error);
+    }
+  }
+
+  return process.env;
+}
+
+function getUnixShellCandidates(
+  currentPlatform: string,
+  preferredShellProgram?: string | null,
+): string[] {
+  const baseCandidates = currentPlatform === 'darwin'
+    ? UNIX_SHELL_FALLBACKS.darwin
+    : currentPlatform === 'linux'
+      ? UNIX_SHELL_FALLBACKS.linux
+      : ['/bin/sh'];
+
+  return Array.from(new Set([
+    preferredShellProgram?.trim(),
+    process.env.SHELL?.trim(),
+    ...baseCandidates,
+  ].filter((candidate): candidate is string => Boolean(candidate))));
+}
+
+function readUnixShellEnvironment(shellPath: string): NodeJS.ProcessEnv {
+  for (const args of getUnixShellProbeArgs(shellPath)) {
+    try {
+      const output = execFileSync(
+        shellPath,
+        args,
+        {
+          env: process.env,
+          timeout: 5000,
+          stdio: ['ignore', 'pipe', 'ignore'],
+        },
+      );
+
+      const parsed = parseNullDelimitedEnvironment(output);
+      if (Object.keys(parsed).length > 0) {
+        return parsed;
+      }
+    } catch {
+      // Ignore probe failures and continue to the next shell invocation mode.
+    }
+  }
+
+  throw new Error('Unable to probe shell environment');
+}
+
+function getUnixShellProbeArgs(shellPath: string): string[][] {
+  const shellName = basename(shellPath).toLowerCase();
+  const probeCommand = 'env -0';
+
+  if (shellName === 'fish') {
+    return [
+      ['-i', '-l', '-c', probeCommand],
+      ['-l', '-c', probeCommand],
+      ['-c', probeCommand],
+    ];
+  }
+
+  if (shellName === 'zsh' || shellName === 'bash') {
+    return [
+      ['-i', '-l', '-c', probeCommand],
+      ['-l', '-c', probeCommand],
+      ['-c', probeCommand],
+    ];
+  }
+
+  return [
+    ['-l', '-c', probeCommand],
+    ['-c', probeCommand],
+  ];
+}
+
+function parseNullDelimitedEnvironment(output: Buffer | string): NodeJS.ProcessEnv {
+  const text = Buffer.isBuffer(output) ? output.toString('utf8') : output;
+  const env: NodeJS.ProcessEnv = {};
+
+  for (const entry of text.split('\0')) {
+    if (!entry) {
+      continue;
+    }
+
+    const separatorIndex = entry.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = entry.slice(0, separatorIndex).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      continue;
+    }
+
+    env[key] = entry.slice(separatorIndex + 1);
+  }
+
+  return env;
 }
 
 interface RegistryValueRecord {

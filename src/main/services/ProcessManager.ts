@@ -68,6 +68,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private statusDetector: IStatusDetector;
   private cachedSpawnEnv: NodeJS.ProcessEnv | null;
   private cachedSpawnEnvAt: number;
+  private cachedSpawnEnvShellKey: string | null;
   private readonly SPAWN_ENV_CACHE_TTL_MS = 30000;
   private readonly PANE_HISTORY_CHUNK_LIMIT = 2000;
   private readonly PANE_HISTORY_CHAR_LIMIT = 2_000_000;
@@ -101,6 +102,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     this.statusDetector = new StatusDetectorImpl();
     this.cachedSpawnEnv = null;
     this.cachedSpawnEnvAt = 0;
+    this.cachedSpawnEnvShellKey = null;
     this.getSettings = getSettings ?? null;
     this.tmuxCompatService = tmuxCompatService ?? null;
     this.sshKnownHostsStore = sshKnownHostsStore ?? null;
@@ -910,17 +912,22 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    * 鑾峰彇鐢ㄤ簬鍒涘缓 PTY 鐨勭幆澧冨彉閲忥紙甯︾煭鏈熺紦瀛橈級
    * 璇存槑锛歐indows 涓嬭鍙栨敞鍐岃〃鏄悓姝ュ懡浠わ紝缂撳瓨鍙樉钁楅檷浣庡崱椤挎鐜囥€?
    */
-  private getSpawnEnvironment(): NodeJS.ProcessEnv {
+  private getSpawnEnvironment(preferredShellProgram?: string): NodeJS.ProcessEnv {
+    const shellKey = preferredShellProgram?.trim() || '';
     const now = Date.now();
     if (
       this.cachedSpawnEnv &&
+      this.cachedSpawnEnvShellKey === shellKey &&
       now - this.cachedSpawnEnvAt < this.SPAWN_ENV_CACHE_TTL_MS
     ) {
       return this.cachedSpawnEnv;
     }
 
-    this.cachedSpawnEnv = getLatestEnvironmentVariables();
+    this.cachedSpawnEnv = getLatestEnvironmentVariables({
+      preferredShellProgram,
+    });
     this.cachedSpawnEnvAt = now;
+    this.cachedSpawnEnvShellKey = shellKey;
     return this.cachedSpawnEnv;
   }
 
@@ -972,7 +979,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    */
   private createRealPty(config: TerminalConfig, executable: string, args: string[]): any {
     // 鑾峰彇鏈€鏂扮殑绯荤粺鐜鍙橀噺锛圵indows 浠庢敞鍐岃〃璇诲彇锛宮acOS/Linux 浣跨敤 process.env锛?
-    const latestEnv = this.getSpawnEnvironment();
+    const latestEnv = this.getSpawnEnvironment(executable);
 
     // 娓呯悊鐜鍙橀噺锛岀Щ闄ゅ彲鑳藉鑷村啿绐佺殑鍙橀噺
     const cleanEnv = { ...latestEnv };

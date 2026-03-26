@@ -1,13 +1,21 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const execFileSyncMock = vi.fn();
+const { execFileSyncMock } = vi.hoisted(() => ({
+  execFileSyncMock: vi.fn(),
+}));
 
 vi.mock('os', () => ({
   platform: () => 'win32',
+  default: {
+    platform: () => 'win32',
+  },
 }));
 
 vi.mock('child_process', () => ({
   execFileSync: execFileSyncMock,
+  default: {
+    execFileSync: execFileSyncMock,
+  },
 }));
 
 import { getLatestEnvironmentVariables } from '../environment';
