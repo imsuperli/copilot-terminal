@@ -45,6 +45,8 @@ export interface StartWindowConfig {
   name: string;
   workingDirectory: string;
   command?: string;
+  initialCols?: number;
+  initialRows?: number;
 }
 
 export interface SplitPaneConfig {
@@ -54,6 +56,8 @@ export interface SplitPaneConfig {
   name?: string;
   windowId?: string;
   paneId?: string;
+  initialCols?: number;
+  initialRows?: number;
 }
 
 export interface CreateSSHWindowConfig {
@@ -69,6 +73,8 @@ export interface StartSSHPaneConfig {
   profileId: string;
   remoteCwd?: string;
   command?: string;
+  initialCols?: number;
+  initialRows?: number;
 }
 
 export interface CloneSSHPaneConfig {

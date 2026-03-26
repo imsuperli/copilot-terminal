@@ -8,6 +8,8 @@ export interface SSHPtySessionOptions {
   pid: number;
   ssh: SSHSessionConfig;
   connectionPool: ISSHConnectionPool;
+  initialCols?: number;
+  initialRows?: number;
 }
 
 type ExitEvent = {

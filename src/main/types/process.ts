@@ -37,6 +37,8 @@ export interface TerminalConfig {
   paneId?: string;  // 关联的窗格 ID（用于拆分功能）
   backend?: PaneBackend;
   ssh?: SSHSessionConfig;
+  initialCols?: number;  // 终端初始列数（来自渲染进程的实际尺寸）
+  initialRows?: number;  // 终端初始行数（来自渲染进程的实际尺寸）
 }
 
 export interface SSHSessionConfig {

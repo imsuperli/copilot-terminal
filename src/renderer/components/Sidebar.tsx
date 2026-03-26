@@ -431,26 +431,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {/* 归档窗口和组列表 */}
               <>
                 {archivedGroups.map((group) => (
-                    <SidebarGroupItem
-                      key={group.id}
-                      group={group}
-                      isActive={group.id === activeGroupId}
-                      isExpanded={sidebarExpanded}
-                      onClick={() => onGroupSelect?.(group.id)}
-                    />
-                  ))}
-                  {visibleArchivedWindows.map((window) => (
-                    <SidebarWindowItem
-                      key={window.id}
-                      window={window}
-                      isActive={window.id === activeWindowId}
-                      isExpanded={sidebarExpanded}
-                      onClick={() => onWindowSelect(window.id)}
-                      onContextMenu={(e) => handleWindowContextMenu(window.id, e)}
-                    />
-                  ))}
-                </>
-              )}
+                  <SidebarGroupItem
+                    key={group.id}
+                    group={group}
+                    isActive={group.id === activeGroupId}
+                    isExpanded={sidebarExpanded}
+                    onClick={() => onGroupSelect?.(group.id)}
+                  />
+                ))}
+                {visibleArchivedWindows.map((window) => (
+                  <SidebarWindowItem
+                    key={window.id}
+                    window={window}
+                    isActive={window.id === activeWindowId}
+                    isExpanded={sidebarExpanded}
+                    onClick={() => onWindowSelect(window.id)}
+                    onContextMenu={(e) => handleWindowContextMenu(window.id, e)}
+                  />
+                ))}
+              </>
             </div>
           )}
         </div>
