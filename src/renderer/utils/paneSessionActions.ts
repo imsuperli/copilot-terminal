@@ -37,8 +37,6 @@ function estimateInitialTerminalSize(): { cols: number; rows: number } {
   return { cols, rows };
 }
 
-type PaneStartResult = StartWindowResult | StartSSHPaneResult;
-
 function getSplitSuccessStatus(pane: Pane): WindowStatus {
   return getPaneBackend(pane) === 'ssh'
     ? WindowStatus.WaitingForInput
