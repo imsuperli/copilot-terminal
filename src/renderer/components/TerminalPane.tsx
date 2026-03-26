@@ -15,6 +15,7 @@ import {
   updateSSHCwdTrackerFromRuntimeCwd,
 } from '../utils/sshCwdTracking';
 import { ensureTerminalFontsLoaded, TERMINAL_FONT_FAMILY } from '../utils/terminalFonts';
+import { onTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { AppTooltip } from './ui/AppTooltip';
 import '../styles/xterm.css';
 
@@ -423,6 +424,44 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     }
   }, [isActive, isWindowActive, pane.id]);
 
+  // 监听字体设置更新
+  useEffect(() => {
+    const unsubscribe = onTerminalSettingsUpdated((settings) => {
+      if (!terminalRef.current) return;
+
+      const terminal = terminalRef.current;
+      const fitAddon = fitAddonRef.current;
+
+      // 更新字体
+      if (settings.fontFamily !== undefined) {
+        const fontFamily = settings.fontFamily || TERMINAL_FONT_FAMILY;
+        if ('options' in terminal && terminal.options) {
+          terminal.options.fontFamily = fontFamily;
+        }
+      }
+
+      // 更新字号
+      if (settings.fontSize !== undefined) {
+        const fontSize = settings.fontSize || 14;
+        if ('options' in terminal && terminal.options) {
+          terminal.options.fontSize = fontSize;
+        }
+      }
+
+      // 重新调整大小以应用新的字体设置
+      if (fitAddon) {
+        requestAnimationFrame(() => {
+          fitAddon.fit();
+          if (terminal.rows > 0 && typeof terminal.refresh === 'function') {
+            terminal.refresh(0, terminal.rows - 1);
+          }
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
   // 初始化 xterm.js
   useEffect(() => {
     if (!terminalContainerRef.current) return;
@@ -467,6 +506,24 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       scrollOnUserInput: true,
       smoothScrollDuration: 0, // 禁用平滑滚动，减少晃动
     });
+
+    // 异步加载并应用字体设置
+    void (async () => {
+      try {
+        const response = await window.electronAPI?.getSettings?.();
+        if (response?.success && response.data?.terminal) {
+          const { fontFamily, fontSize } = response.data.terminal;
+          if (fontFamily && 'options' in terminal && terminal.options) {
+            terminal.options.fontFamily = fontFamily;
+          }
+          if (fontSize && 'options' in terminal && terminal.options) {
+            terminal.options.fontSize = fontSize;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load font settings:', error);
+      }
+    })();
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);

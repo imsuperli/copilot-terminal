@@ -37,6 +37,8 @@ export interface StatusLineConfig {
 export interface TerminalSettings {
   useBundledConptyDll: boolean;
   defaultShellProgram: string;
+  fontFamily?: string;
+  fontSize?: number;
 }
 
 export interface TmuxSettings {

@@ -7,6 +7,7 @@ import { X, Plus, Trash2, Search, Check, ChevronDown, Globe, Folder, Edit2, Fold
 import { IDEIcon } from './icons/IDEIcons';
 import { notifyIDESettingsUpdated } from '../hooks/useIDESettings';
 import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
+import { notifyTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { QuickNavItem } from '../../shared/types/quick-nav';
 import { FeatureSettings, IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
 import { KnownHostEntry } from '../../shared/types/ssh';
@@ -66,6 +67,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const [terminalSettings, setTerminalSettings] = useState({
     useBundledConptyDll: true,
     defaultShellProgram: '',
+    fontFamily: '',
+    fontSize: 14,
   });
   const [featureSettings, setFeatureSettings] = useState<FeatureSettings>(DEFAULT_FEATURE_SETTINGS);
   const [knownHosts, setKnownHosts] = useState<KnownHostEntry[]>([]);
@@ -113,6 +116,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         setTerminalSettings({
           useBundledConptyDll: settings.terminal?.useBundledConptyDll ?? true,
           defaultShellProgram: settings.terminal?.defaultShellProgram ?? '',
+          fontFamily: settings.terminal?.fontFamily ?? '',
+          fontSize: settings.terminal?.fontSize ?? 14,
         });
         setFeatureSettings({
           ...DEFAULT_FEATURE_SETTINGS,
@@ -467,6 +472,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
     try {
       await window.electronAPI.updateSettings({ terminal: newConfig });
+
+      // 如果更新了字体或字号，通知所有终端实例
+      if ('fontFamily' in updates || 'fontSize' in updates) {
+        notifyTerminalSettingsUpdated({
+          fontFamily: newConfig.fontFamily,
+          fontSize: newConfig.fontSize,
+        });
+      }
     } catch (error) {
       console.error('Failed to update terminal settings:', error);
     }
@@ -810,6 +823,116 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           </button>
                         </div>
                         <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.general.defaultShellHint')}</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
+                        <Monitor size={22} />
+                      </div>
+                      <div className="flex-1">
+                        <div className="mb-5">
+                          <h3 className="text-base font-semibold text-white">{t('settings.general.terminalFontTitle')}</h3>
+                          <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.terminalFontDescription')}</p>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div>
+                            <label htmlFor="terminal-font-family" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
+                              {t('settings.general.fontFamilyLabel')}
+                            </label>
+                            <Select.Root
+                              value={terminalSettings.fontFamily || 'default'}
+                              onValueChange={(value) => handleTerminalSettingsChange({
+                                fontFamily: value === 'default' ? '' : value,
+                              })}
+                            >
+                              <Select.Trigger
+                                id="terminal-font-family"
+                                className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                              >
+                                <Select.Value />
+                                <Select.Icon>
+                                  <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                                </Select.Icon>
+                              </Select.Trigger>
+
+                              <Select.Portal>
+                                <Select.Content
+                                  position="popper"
+                                  side="bottom"
+                                  align="start"
+                                  sideOffset={6}
+                                  className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                                >
+                                  <Select.Viewport className="p-1">
+                                    <Select.Item value="default" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                      <Select.ItemText>默认</Select.ItemText>
+                                    </Select.Item>
+                                    <Select.Item value="JetBrains Mono" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                      <Select.ItemText>JetBrains Mono</Select.ItemText>
+                                    </Select.Item>
+                                    <Select.Item value="Fira Code" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                      <Select.ItemText>Fira Code</Select.ItemText>
+                                    </Select.Item>
+                                    <Select.Item value="Cascadia Code" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                      <Select.ItemText>Cascadia Code</Select.ItemText>
+                                    </Select.Item>
+                                    <Select.Item value="Consolas" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                      <Select.ItemText>Consolas</Select.ItemText>
+                                    </Select.Item>
+                                  </Select.Viewport>
+                                </Select.Content>
+                              </Select.Portal>
+                            </Select.Root>
+                          </div>
+
+                          <div>
+                            <label htmlFor="terminal-font-size" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
+                              {t('settings.general.fontSizeLabel')}
+                            </label>
+                            <Select.Root
+                              value={String(terminalSettings.fontSize)}
+                              onValueChange={(value) => handleTerminalSettingsChange({
+                                fontSize: Number(value),
+                              })}
+                            >
+                              <Select.Trigger
+                                id="terminal-font-size"
+                                className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                              >
+                                <Select.Value />
+                                <Select.Icon>
+                                  <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                                </Select.Icon>
+                              </Select.Trigger>
+
+                              <Select.Portal>
+                                <Select.Content
+                                  position="popper"
+                                  side="bottom"
+                                  align="start"
+                                  sideOffset={6}
+                                  className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                                >
+                                  <Select.Viewport className="p-1">
+                                    {[12, 13, 14, 15, 16, 18, 20].map((size) => (
+                                      <Select.Item
+                                        key={size}
+                                        value={String(size)}
+                                        className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                      >
+                                        <Select.ItemText>{size}</Select.ItemText>
+                                      </Select.Item>
+                                    ))}
+                                  </Select.Viewport>
+                                </Select.Content>
+                              </Select.Portal>
+                            </Select.Root>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </section>
