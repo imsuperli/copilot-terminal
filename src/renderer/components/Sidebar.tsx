@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Menu, Archive, ChevronDown, Settings } from 'lucide-react';
+import { Menu, Archive, Settings } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
-import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
+import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { getWindowCount, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
@@ -44,17 +44,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     getActiveGroups,
     getArchivedGroups,
     windows,
-    terminalSidebarSections,
-    setTerminalSidebarSectionExpanded,
     terminalSidebarFilter,
     setTerminalSidebarFilter,
   } = useWindowStore();
 
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const showArchived = terminalSidebarSections.archived;
-  const showLocalTerminals = terminalSidebarSections.local;
-  const showSshTerminals = terminalSidebarSections.ssh;
 
   const activeWindows = getActiveWindows();
   const archivedWindows = getArchivedWindows();
@@ -155,8 +150,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return { localWindows: local, sshWindows: ssh };
   }, [sortedItems, windows]);
 
-  const shouldShowLocalSection = terminalSidebarFilter === 'local' && localWindows.length > 0;
-  const shouldShowSshSection = terminalSidebarFilter === 'ssh' && sshWindows.length > 0;
+  const visibleItems = useMemo(() => {
+    if (terminalSidebarFilter === 'local') {
+      return localWindows;
+    }
+
+    if (terminalSidebarFilter === 'ssh') {
+      return sshWindows;
+    }
+
+    return sortedItems;
+  }, [localWindows, sortedItems, sshWindows, terminalSidebarFilter]);
+
   const archivedCount = visibleArchivedWindows.length + archivedGroups.length;
   const shouldShowArchivedSection = false;
 
@@ -185,6 +190,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleWindowContextMenu = (windowId: string, e: React.MouseEvent) => {
     e.preventDefault();
     onWindowContextMenu?.(windowId, e);
+  };
+
+  const renderSidebarItem = (item: SidebarItem) => {
+    if (item.kind === 'group') {
+      return (
+        <SidebarGroupItem
+          key={item.id}
+          group={item.group}
+          isActive={item.id === activeGroupId}
+          isExpanded={sidebarExpanded}
+          onClick={() => onGroupSelect?.(item.id)}
+        />
+      );
+    }
+
+    return (
+      <SidebarWindowItem
+        key={item.id}
+        window={item.window}
+        isActive={item.id === activeWindowId}
+        isExpanded={sidebarExpanded}
+        onClick={() => onWindowSelect(item.id)}
+        onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
+      />
+    );
   };
 
   return (
@@ -233,6 +263,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onChange={(event) => setTerminalSidebarFilter(event.target.value as typeof terminalSidebarFilter)}
             className="w-full h-8 px-2 text-xs text-zinc-100 bg-zinc-800 border border-zinc-700 rounded focus:outline-none focus:border-blue-500"
           >
+            <option value="all">{t('sidebar.tab.all')}</option>
             <option value="local">{t('sidebar.tab.local')}</option>
             <option value="ssh">{t('sidebar.tab.ssh')}</option>
           </select>
@@ -248,63 +279,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               : 'terminal-sidebar-scroll-region terminal-sidebar-scroll-region-collapsed'
           }`}
         >
-          {/* 本地终端分类 */}
-          {shouldShowLocalSection && (
+          {visibleItems.length > 0 && (
             <div>
-              {localWindows.map((item) => {
-                if (item.kind === 'group') {
-                  return (
-                    <SidebarGroupItem
-                      key={item.id}
-                      group={item.group}
-                      isActive={item.id === activeGroupId}
-                      isExpanded={sidebarExpanded}
-                      onClick={() => onGroupSelect?.(item.id)}
-                    />
-                  );
-                } else {
-                  return (
-                    <SidebarWindowItem
-                      key={item.id}
-                      window={item.window}
-                      isActive={item.id === activeWindowId}
-                      isExpanded={sidebarExpanded}
-                      onClick={() => onWindowSelect(item.id)}
-                      onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
-                    />
-                  );
-                }
-              })}
-            </div>
-          )}
-
-          {/* 远程终端分类 */}
-          {shouldShowSshSection && (
-            <div className={shouldShowLocalSection ? 'border-t border-zinc-800' : ''}>
-              {sshWindows.map((item) => {
-                if (item.kind === 'group') {
-                  return (
-                    <SidebarGroupItem
-                      key={item.id}
-                      group={item.group}
-                      isActive={item.id === activeGroupId}
-                      isExpanded={sidebarExpanded}
-                      onClick={() => onGroupSelect?.(item.id)}
-                    />
-                  );
-                } else {
-                  return (
-                    <SidebarWindowItem
-                      key={item.id}
-                      window={item.window}
-                      isActive={item.id === activeWindowId}
-                      isExpanded={sidebarExpanded}
-                      onClick={() => onWindowSelect(item.id)}
-                      onContextMenu={(e) => handleWindowContextMenu(item.id, e)}
-                    />
-                  );
-                }
-              })}
+              {visibleItems.map(renderSidebarItem)}
             </div>
           )}
 
