@@ -206,8 +206,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       {/* 侧边栏内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 标题 */}
-        <div className="px-3 py-2 border-b border-zinc-800 flex-shrink-0 space-y-2">
+        {/* 顶部：切换按钮 */}
+        <div className={`h-10 flex items-center border-b border-zinc-800 flex-shrink-0 ${sidebarExpanded ? 'justify-start pl-1' : 'justify-center'}`}>
+          <Tooltip.Provider>
+            <Tooltip.Root delayDuration={300}>
+              <Tooltip.Trigger asChild>
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
+                  className="w-8 h-8 flex items-center justify-center rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 hover:border-zinc-600 transition-all duration-200"
+                  aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
+                >
+                  <Menu size={16} className="transition-transform duration-200" />
+                </button>
+              </Tooltip.Trigger>
+              <Tooltip.Portal>
+                <Tooltip.Content
+                  className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                  side="right"
+                  sideOffset={5}
+                >
+                  {sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
+                </Tooltip.Content>
+              </Tooltip.Portal>
+            </Tooltip.Root>
+          </Tooltip.Provider>
+        </div>
+
+        {/* 标题（仅展开时显示） */}
+        {sidebarExpanded && (
+          <div className="px-3 py-2 border-b border-zinc-800 flex-shrink-0 space-y-2">
           <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 tracking-wide">
             <span>Windows</span>
           </div>
@@ -224,6 +251,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <option value="archived">{t('sidebar.tab.archived')}</option>
           </select>
         </div>
+        )}
 
         {/* 活跃窗口和组列表（按类型分类，可折叠） */}
         <div
@@ -237,42 +265,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* 本地终端分类 */}
           {shouldShowLocalSection && (
             <div>
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={() => setTerminalSidebarSectionExpanded('local', !showLocalTerminals)}
-                      className={`
-                        w-full px-3 py-2 flex items-center gap-2
-                        text-xs font-semibold text-zinc-400 tracking-wide
-                        hover:bg-zinc-700 transition-all duration-200
-                        ${!sidebarExpanded ? 'justify-center' : ''}
-                      `}
-                    >
-                      {sidebarExpanded ? (
-                        <>
-                          <ChevronDown
-                            size={14}
-                            className={`transition-transform duration-200 ${
-                              showLocalTerminals ? 'rotate-0' : '-rotate-90'
-                            }`}
-                          />
-                          <TerminalTypeLogo variant="local" size="xs" />
-                          <span className="transition-opacity duration-200">{t('sidebar.tab.local')}</span>
-                          <span className="ml-auto text-zinc-500 transition-opacity duration-200">
-                            ({localWindows.length})
-                          </span>
-                        </>
-                      ) : (
+              {/* 本地终端标题 */}
+              {sidebarExpanded ? (
+                <div className="px-3 py-2 flex items-center gap-2 text-xs font-semibold text-zinc-400 tracking-wide">
+                  <TerminalTypeLogo variant="local" size="xs" />
+                  <span>{t('sidebar.tab.local')}</span>
+                  <span className="ml-auto text-zinc-500">({localWindows.length})</span>
+                </div>
+              ) : (
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <div className="w-full px-3 py-2 flex items-center justify-center">
                         <TerminalTypeLogo
                           variant="local"
                           size="xs"
                           badgeContent={localWindows.length > 99 ? '99+' : localWindows.length}
                         />
-                      )}
-                    </button>
-                  </Tooltip.Trigger>
-                  {!sidebarExpanded && (
+                      </div>
+                    </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content
                         className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
@@ -282,11 +293,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {`${t('sidebar.tab.local')} (${localWindows.length})`}
                       </Tooltip.Content>
                     </Tooltip.Portal>
-                  )}
-                </Tooltip.Root>
-              </Tooltip.Provider>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+              )}
 
-              {showLocalTerminals && localWindows.map((item) => {
+              {localWindows.map((item) => {
                 if (item.kind === 'group') {
                   return (
                     <SidebarGroupItem
@@ -316,42 +327,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* 远程终端分类 */}
           {shouldShowSshSection && (
             <div className={shouldShowLocalSection ? 'border-t border-zinc-800' : ''}>
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={() => setTerminalSidebarSectionExpanded('ssh', !showSshTerminals)}
-                      className={`
-                        w-full px-3 py-2 flex items-center gap-2
-                        text-xs font-semibold text-zinc-400 tracking-wide
-                        hover:bg-zinc-700 transition-all duration-200
-                        ${!sidebarExpanded ? 'justify-center' : ''}
-                      `}
-                    >
-                      {sidebarExpanded ? (
-                        <>
-                          <ChevronDown
-                            size={14}
-                            className={`transition-transform duration-200 ${
-                              showSshTerminals ? 'rotate-0' : '-rotate-90'
-                            }`}
-                          />
-                          <TerminalTypeLogo variant="ssh" size="xs" />
-                          <span className="transition-opacity duration-200">{t('sidebar.tab.ssh')}</span>
-                          <span className="ml-auto text-zinc-500 transition-opacity duration-200">
-                            ({sshWindows.length})
-                          </span>
-                        </>
-                      ) : (
+              {/* SSH终端标题 */}
+              {sidebarExpanded ? (
+                <div className="px-3 py-2 flex items-center gap-2 text-xs font-semibold text-zinc-400 tracking-wide">
+                  <TerminalTypeLogo variant="ssh" size="xs" />
+                  <span>{t('sidebar.tab.ssh')}</span>
+                  <span className="ml-auto text-zinc-500">({sshWindows.length})</span>
+                </div>
+              ) : (
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <div className="w-full px-3 py-2 flex items-center justify-center">
                         <TerminalTypeLogo
                           variant="ssh"
                           size="xs"
                           badgeContent={sshWindows.length > 99 ? '99+' : sshWindows.length}
                         />
-                      )}
-                    </button>
-                  </Tooltip.Trigger>
-                  {!sidebarExpanded && (
+                      </div>
+                    </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content
                         className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
@@ -361,11 +355,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {`${t('sidebar.tab.ssh')} (${sshWindows.length})`}
                       </Tooltip.Content>
                     </Tooltip.Portal>
-                  )}
-                </Tooltip.Root>
-              </Tooltip.Provider>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+              )}
 
-              {showSshTerminals && sshWindows.map((item) => {
+              {sshWindows.map((item) => {
                 if (item.kind === 'group') {
                   return (
                     <SidebarGroupItem
@@ -396,35 +390,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {shouldShowArchivedSection && (
             <div className="border-t border-zinc-800">
               {/* 归档标题 */}
-              <Tooltip.Provider>
-                <Tooltip.Root delayDuration={300}>
-                  <Tooltip.Trigger asChild>
-                    <button
-                      onClick={() => setTerminalSidebarSectionExpanded('archived', !showArchived)}
-                      className={`
-                        w-full px-3 py-2 flex items-center gap-2
-                        text-xs font-semibold text-zinc-400 tracking-wide
-                        hover:bg-zinc-700 transition-all duration-200
-                        ${!sidebarExpanded ? 'justify-center' : ''}
-                      `}
-                    >
-                      {sidebarExpanded ? (
-                        <>
-                          <ChevronDown
-                            size={14}
-                            className={`transition-transform duration-200 ${
-                              showArchived ? 'rotate-0' : '-rotate-90'
-                            }`}
-                          />
-                          <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-800 text-zinc-400">
-                            <Archive size={14} />
-                          </span>
-                          <span className="transition-opacity duration-200">{t('sidebar.tab.archived')}</span>
-                          <span className="ml-auto text-zinc-500 transition-opacity duration-200">
-                            ({archivedCount})
-                          </span>
-                        </>
-                      ) : (
+              {sidebarExpanded ? (
+                <div className="px-3 py-2 flex items-center gap-2 text-xs font-semibold text-zinc-400 tracking-wide">
+                  <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-800 text-zinc-400">
+                    <Archive size={14} />
+                  </span>
+                  <span>{t('sidebar.tab.archived')}</span>
+                  <span className="ml-auto text-zinc-500">({archivedCount})</span>
+                </div>
+              ) : (
+                <Tooltip.Provider>
+                  <Tooltip.Root delayDuration={300}>
+                    <Tooltip.Trigger asChild>
+                      <div className="w-full px-3 py-2 flex items-center justify-center">
                         <div className="relative">
                           <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-800 text-zinc-400">
                             <Archive size={14} />
@@ -435,10 +413,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             </span>
                           )}
                         </div>
-                      )}
-                    </button>
-                  </Tooltip.Trigger>
-                  {!sidebarExpanded && (
+                      </div>
+                    </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content
                         className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
@@ -448,14 +424,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {`${t('sidebar.tab.archived')} (${archivedCount})`}
                       </Tooltip.Content>
                     </Tooltip.Portal>
-                  )}
-                </Tooltip.Root>
-              </Tooltip.Provider>
+                  </Tooltip.Root>
+                </Tooltip.Provider>
+              )}
 
               {/* 归档窗口和组列表 */}
-              {showArchived && (
-                <>
-                  {archivedGroups.map((group) => (
+              <>
+                {archivedGroups.map((group) => (
                     <SidebarGroupItem
                       key={group.id}
                       group={group}
