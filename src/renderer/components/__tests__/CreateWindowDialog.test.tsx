@@ -374,6 +374,42 @@ describe('CreateWindowDialog', () => {
     expect(mockElectronAPI.setSSHPassword).not.toHaveBeenCalled()
   })
 
+  it('removes the misleading ssh user placeholder and highlights the missing required field', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <CreateWindowDialog
+        open={true}
+        onOpenChange={() => {}}
+        sshEnabled={true}
+        sshProfiles={[]}
+      />,
+    )
+
+    await user.click(screen.getByRole('tab', { name: /SSH 连接/ }))
+    const hostInput = screen.getByLabelText(/主机地址/)
+    const userInput = screen.getByLabelText(/^用户名/)
+
+    expect(userInput).not.toHaveAttribute('placeholder')
+
+    await user.type(hostInput, 'example.com')
+    await user.click(screen.getByRole('tab', { name: '认证' }))
+    await user.click(screen.getByRole('button', { name: /保存 SSH 连接/ }))
+
+    await waitFor(() => {
+      const activeHostInput = screen.getByLabelText(/主机地址/)
+      const activeUserInput = screen.getByLabelText(/^用户名/)
+
+      expect(screen.getByRole('tab', { name: '基础' })).toHaveAttribute('data-state', 'active')
+      expect(mockElectronAPI.createSSHProfile).not.toHaveBeenCalled()
+      expect(screen.getByText('请完整填写主机地址和用户名。')).toBeInTheDocument()
+      expect(activeHostInput).not.toHaveAttribute('aria-invalid', 'true')
+      expect(activeUserInput).toHaveAttribute('aria-invalid', 'true')
+      expect(activeHostInput.className).not.toContain('border-status-error')
+      expect(activeUserInput.className).toContain('border-status-error')
+    })
+  })
+
   it('prefills duplicated ssh profiles with a copy-prefixed name', async () => {
     const user = userEvent.setup()
     const sourceProfile = {

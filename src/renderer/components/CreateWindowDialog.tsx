@@ -168,6 +168,7 @@ export function CreateWindowDialog({
   const [sshPassword, setSSHPassword] = useState('')
   const [sshPassphrases, setSSHPassphrases] = useState<Record<string, string>>({})
   const [sshError, setSSHError] = useState('')
+  const [showSSHRequiredErrors, setShowSSHRequiredErrors] = useState(false)
   const [isSavingSSH, setIsSavingSSH] = useState(false)
   const [activeSSHSettingsTab, setActiveSSHSettingsTab] = useState<SSHSettingsTab>('basic')
   const [showSSHPassphrases, setShowSSHPassphrases] = useState(false)
@@ -183,6 +184,13 @@ export function CreateWindowDialog({
   const currentPrivateKeys = useMemo(
     () => parseLineList(sshForm.privateKeysText),
     [sshForm.privateKeysText],
+  )
+  const sshRequiredFieldErrors = useMemo(
+    () => ({
+      host: showSSHRequiredErrors && !sshForm.host.trim(),
+      user: showSSHRequiredErrors && !sshForm.user.trim(),
+    }),
+    [showSSHRequiredErrors, sshForm.host, sshForm.user],
   )
   const isEditingSSHProfile = Boolean(editingSSHProfile)
   const isDuplicatingSSHProfile = !isEditingSSHProfile && Boolean(initialSSHProfile)
@@ -254,6 +262,7 @@ export function CreateWindowDialog({
     setSSHPassword('')
     setSSHPassphrases({})
     setSSHError('')
+    setShowSSHRequiredErrors(false)
     setActiveSSHSettingsTab('basic')
     setShowSSHPassphrases(false)
     setDetectKeysMessage('')
@@ -482,8 +491,10 @@ export function CreateWindowDialog({
     const httpProxyPort = Number(sshForm.httpProxyPort)
 
     setSSHError('')
+    setShowSSHRequiredErrors(true)
 
     if (!host || !user) {
+      setActiveSSHSettingsTab('basic')
       setSSHError(t('sshProfileDialog.error.required'))
       return
     }
@@ -734,6 +745,7 @@ export function CreateWindowDialog({
   const sectionShellClassName = 'rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6'
   const fieldLabelClassName = 'mb-2 block text-[13px] font-medium text-[rgb(var(--muted-foreground))]'
   const textFieldClassName = 'w-full rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-4 py-2.5 text-sm text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] [color-scheme:dark] transition-[border-color,box-shadow] focus:outline-none focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20'
+  const errorFieldClassName = 'border-status-error focus:border-status-error focus:ring-status-error/80'
   const selectTriggerClassName = 'flex w-full min-w-0 items-center justify-between gap-2 rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-4 py-2.5 text-left text-sm text-[rgb(var(--foreground))] [color-scheme:dark] transition-[border-color,box-shadow] focus:outline-none focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20'
   const selectMenuClassName = 'z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl [color-scheme:dark]'
   const selectItemClassName = 'flex cursor-pointer items-center justify-between gap-2 rounded-[8px] px-3 py-2 text-sm text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--secondary))]'
@@ -963,7 +975,11 @@ export function CreateWindowDialog({
                 >
                   <div className="space-y-5">
                       {sshError && (
-                        <div className="rounded-[12px] border border-status-error bg-status-error/10 px-4 py-3" role="alert">
+                        <div
+                          id="ssh-form-error"
+                          className="rounded-[12px] border border-status-error bg-status-error/10 px-4 py-3"
+                          role="alert"
+                        >
                           <p className="text-sm text-status-error">{sshError}</p>
                         </div>
                       )}
@@ -1013,7 +1029,9 @@ export function CreateWindowDialog({
                                 value={sshForm.host}
                                 onChange={(event) => setSSHField('host', event.target.value)}
                                 placeholder="example.com"
-                                className={textFieldClassName}
+                                aria-invalid={sshRequiredFieldErrors.host}
+                                aria-describedby={sshRequiredFieldErrors.host ? 'ssh-form-error' : undefined}
+                                className={`${textFieldClassName} ${sshRequiredFieldErrors.host ? errorFieldClassName : ''}`}
                               />
                             </div>
 
@@ -1042,8 +1060,9 @@ export function CreateWindowDialog({
                               type="text"
                               value={sshForm.user}
                               onChange={(event) => setSSHField('user', event.target.value)}
-                              placeholder="root"
-                              className={textFieldClassName}
+                              aria-invalid={sshRequiredFieldErrors.user}
+                              aria-describedby={sshRequiredFieldErrors.user ? 'ssh-form-error' : undefined}
+                              className={`${textFieldClassName} ${sshRequiredFieldErrors.user ? errorFieldClassName : ''}`}
                             />
                           </div>
                         </Tabs.Content>
