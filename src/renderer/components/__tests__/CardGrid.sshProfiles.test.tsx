@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -201,6 +201,47 @@ describe('CardGrid SSH profile cards', () => {
 
     expect(onConnectSSHProfile).not.toHaveBeenCalled();
     expect(onEnterTerminal).toHaveBeenCalledWith(runtimeWindow);
+  });
+
+  it('archives a bound SSH runtime window from the profile card and shows it in archived view', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const closeWindowMock = vi.mocked(window.electronAPI.closeWindow);
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+    });
+
+    const { rerender } = render(
+      <DndProvider backend={HTML5Backend}>
+        <CardGrid
+          sshEnabled
+          sshProfiles={[profile]}
+          currentTab="active"
+        />
+      </DndProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: '归档窗口' }));
+
+    await waitFor(() => {
+      expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
+      expect(useWindowStore.getState().windows[0]?.archived).toBe(true);
+    });
+
+    rerender(
+      <DndProvider backend={HTML5Backend}>
+        <CardGrid
+          sshEnabled
+          sshProfiles={[profile]}
+          currentTab="archived"
+        />
+      </DndProvider>,
+    );
+
+    expect(await screen.findByText('Hidden runtime window')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '取消归档' })).toBeInTheDocument();
   });
 
   it('uses the paused status color for bound SSH cards', () => {

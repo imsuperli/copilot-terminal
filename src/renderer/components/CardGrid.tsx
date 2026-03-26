@@ -114,6 +114,10 @@ export const CardGrid = React.memo<CardGridProps>(({
     [groupedWindowIds, sshProfiles, windows],
   );
   const shouldRenderWindowCard = useCallback((window: Window) => {
+    if (window.archived) {
+      return true;
+    }
+
     const profileId = getStandaloneSSHProfileId(window);
     if (!profileId) {
       return true;
@@ -723,6 +727,8 @@ export const CardGrid = React.memo<CardGridProps>(({
                     onOpenWindow={handleCardClick}
                     onPauseWindow={handlePauseWindow}
                     onStartWindow={handleStartWindow}
+                    onArchiveWindow={handleArchiveWindow}
+                    onUnarchiveWindow={handleUnarchiveWindow}
                     onEdit={handleEditSSHProfile}
                     onDuplicate={handleDuplicateSSHProfile}
                     onDelete={handleDeleteSSHProfile}
