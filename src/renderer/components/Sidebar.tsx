@@ -251,38 +251,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* 本地终端分类 */}
           {shouldShowLocalSection && (
             <div>
-              {/* 本地终端标题 */}
-              {sidebarExpanded ? (
-                <div className="px-3 py-2 flex items-center gap-2 text-xs font-semibold text-zinc-400 tracking-wide">
-                  <TerminalTypeLogo variant="local" size="xs" />
-                  <span>{t('sidebar.tab.local')}</span>
-                  <span className="ml-auto text-zinc-500">({localWindows.length})</span>
-                </div>
-              ) : (
-                <Tooltip.Provider>
-                  <Tooltip.Root delayDuration={300}>
-                    <Tooltip.Trigger asChild>
-                      <div className="w-full px-3 py-2 flex items-center justify-center">
-                        <TerminalTypeLogo
-                          variant="local"
-                          size="xs"
-                          badgeContent={localWindows.length > 99 ? '99+' : localWindows.length}
-                        />
-                      </div>
-                    </Tooltip.Trigger>
-                    <Tooltip.Portal>
-                      <Tooltip.Content
-                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                        side="right"
-                        sideOffset={5}
-                      >
-                        {`${t('sidebar.tab.local')} (${localWindows.length})`}
-                      </Tooltip.Content>
-                    </Tooltip.Portal>
-                  </Tooltip.Root>
-                </Tooltip.Provider>
-              )}
-
               {localWindows.map((item) => {
                 if (item.kind === 'group') {
                   return (
@@ -313,38 +281,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* 远程终端分类 */}
           {shouldShowSshSection && (
             <div className={shouldShowLocalSection ? 'border-t border-zinc-800' : ''}>
-              {/* SSH终端标题 */}
-              {sidebarExpanded ? (
-                <div className="px-3 py-2 flex items-center gap-2 text-xs font-semibold text-zinc-400 tracking-wide">
-                  <TerminalTypeLogo variant="ssh" size="xs" />
-                  <span>{t('sidebar.tab.ssh')}</span>
-                  <span className="ml-auto text-zinc-500">({sshWindows.length})</span>
-                </div>
-              ) : (
-                <Tooltip.Provider>
-                  <Tooltip.Root delayDuration={300}>
-                    <Tooltip.Trigger asChild>
-                      <div className="w-full px-3 py-2 flex items-center justify-center">
-                        <TerminalTypeLogo
-                          variant="ssh"
-                          size="xs"
-                          badgeContent={sshWindows.length > 99 ? '99+' : sshWindows.length}
-                        />
-                      </div>
-                    </Tooltip.Trigger>
-                    <Tooltip.Portal>
-                      <Tooltip.Content
-                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                        side="right"
-                        sideOffset={5}
-                      >
-                        {`${t('sidebar.tab.ssh')} (${sshWindows.length})`}
-                      </Tooltip.Content>
-                    </Tooltip.Portal>
-                  </Tooltip.Root>
-                </Tooltip.Provider>
-              )}
-
               {sshWindows.map((item) => {
                 if (item.kind === 'group') {
                   return (
