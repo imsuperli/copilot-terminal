@@ -46,6 +46,8 @@ import {
 import { APP_ERROR_EVENT, type AppErrorEventDetail } from './utils/appNotice';
 import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './utils/sshConnectionRetry';
 
+const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
+
 function findReusableSSHWindow(windows: Window[], profileId: string): Window | null {
   const matchedWindows = windows.filter((window) => {
     if (window.archived) {
@@ -304,8 +306,8 @@ function AppContent() {
         const now = Date.now();
         const timeSinceLastUp = now - lastShiftUpTime.current;
 
-        // 两次完整 Shift（松开间隔 < 300ms）才触发
-        if (timeSinceLastUp < 300 && timeSinceLastUp > 0) {
+        // 两次完整 Shift（松开间隔必须小于阈值）才触发
+        if (timeSinceLastUp < QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS && timeSinceLastUp > 0) {
           setIsQuickNavOpen(prev => !prev);
           lastShiftUpTime.current = 0; // 重置，避免连续触发
         } else {

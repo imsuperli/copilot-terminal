@@ -80,7 +80,7 @@ interface QuickNavItem {
 
 ### 快捷键
 - 双击 `Shift` 键：全局快捷键，在 `App.tsx` 中监听
-- 实现原理：检测两次 Shift 按键的时间间隔，小于 300ms 则触发
+- 实现原理：检测两次完整 Shift 的松开时间间隔，小于 150ms 则触发
 
 ## 未来改进
 
