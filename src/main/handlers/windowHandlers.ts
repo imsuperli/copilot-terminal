@@ -28,10 +28,6 @@ export function registerWindowHandlers(ctx: HandlerContext) {
   // 创建窗口
   ipcMain.handle('create-window', async (_event, config: { name?: string; workingDirectory: string; command?: string }) => {
     try {
-      if (!processManager) {
-        throw new Error('进程管理器未初始化，请重启应用');
-      }
-
       // 验证工作目录存在且可访问（使用安全验证）
       const pathValidation = PathValidator.validate(config.workingDirectory);
       if (!pathValidation.valid) {
@@ -53,19 +49,6 @@ export function registerWindowHandlers(ctx: HandlerContext) {
         settings: getCurrentWorkspace()?.settings,
       });
 
-      // 创建终端进程（使用安全路径）
-      const handle = await processManager.spawnTerminal({
-        workingDirectory: safePath,
-        command: command,
-        windowId: windowId,
-        paneId: paneId,
-      });
-
-      // 验证进程启动成功
-      if (!handle.pid || handle.pid <= 0) {
-        throw new Error('终端进程启动失败');
-      }
-
       // 从工作目录路径中提取最后一个文件夹名作为默认窗口名
       const pathParts = safePath.replace(/[\\\/]+$/, '').split(/[\\\/]/);
       const folderName = pathParts[pathParts.length - 1] || 'Terminal';
@@ -79,17 +62,15 @@ export function registerWindowHandlers(ctx: HandlerContext) {
         id: paneId,
         cwd: safePath,
         command: command,
-        status: WindowStatus.Running as WindowStatus,
-        pid: handle.pid,
-        sessionId: handle.sessionId,
+        status: WindowStatus.Paused as WindowStatus,
+        pid: null,
         backend: 'local' as const,
         capabilities: getPaneCapabilities({
           id: paneId,
           cwd: safePath,
           command: command,
-          status: WindowStatus.Running as WindowStatus,
-          pid: handle.pid,
-          sessionId: handle.sessionId,
+          status: WindowStatus.Paused as WindowStatus,
+          pid: null,
           backend: 'local' as const,
         }),
       };
@@ -111,33 +92,6 @@ export function registerWindowHandlers(ctx: HandlerContext) {
         lastActiveAt: new Date().toISOString(),
         projectConfig: projectConfig || undefined,
       };
-
-      // 将新窗格添加到 StatusPoller
-      statusPoller?.addWindow(windowId, handle.pid, paneId);
-
-      // 订阅 PTY 数据，推送到渲染进程
-      const unsubscribe = processManager.subscribePtyData(handle.pid, (data: string, seq?: number) => {
-        forwardPtyData({ windowId, paneId, data, seq });
-      });
-
-      // 使用 PtySubscriptionManager 管理订阅
-      if (ptySubscriptionManager) {
-        ptySubscriptionManager.add(paneId, unsubscribe);
-      }
-
-      // 启动项目配置文件监听
-      projectConfigWatcher.startWatching(windowId, safePath, (updatedConfig) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('project-config-updated', {
-            windowId,
-            projectConfig: updatedConfig
-          });
-        }
-      }).catch(error => {
-        console.error('[WindowHandlers] Failed to start project config watching:', error);
-      });
-
-      // 注意：不再自动启动 git 监听，只在窗口激活时才监听
 
       return successResponse(window);
     } catch (error) {
