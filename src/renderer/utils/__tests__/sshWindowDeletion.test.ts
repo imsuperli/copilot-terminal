@@ -63,6 +63,21 @@ describe('getSSHCredentialCleanupAvailability', () => {
     });
   });
 
+  it('ignores archived sibling windows when deciding whether credentials can be cleared', () => {
+    const targetWindow = createWindow('target', createPane('pane-target', 'profile-1'));
+    const archivedSiblingWindow = {
+      ...createWindow('archived-sibling', createPane('pane-sibling', 'profile-1')),
+      archived: true,
+    };
+
+    expect(getSSHCredentialCleanupAvailability(targetWindow, [targetWindow, archivedSiblingWindow])).toEqual({
+      profileId: 'profile-1',
+      eligible: true,
+      canClearCredentials: true,
+      blockingWindowCount: 0,
+    });
+  });
+
   it('does not offer credential cleanup for mixed or local windows', () => {
     const mixedWindow: Window = {
       id: 'mixed',

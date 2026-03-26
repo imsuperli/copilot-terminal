@@ -529,21 +529,19 @@ function AppContent() {
       return;
     }
 
-    try {
-      const response = await window.electronAPI.deleteSSHProfile(profile.id);
-      if (!response?.success) {
-        throw new Error(response?.error || `Failed to delete SSH profile ${profile.id}`);
-      }
-
-      setSSHProfiles((previousProfiles) => previousProfiles.filter((item) => item.id !== profile.id));
-      setSSHCredentialStates((previousStates) => {
-        const nextStates = { ...previousStates };
-        delete nextStates[profile.id];
-        return nextStates;
-      });
-    } catch (error) {
-      console.error('Failed to delete SSH profile:', error);
+    const response = await window.electronAPI.deleteSSHProfile(profile.id);
+    if (!response?.success) {
+      const deleteError = new Error(response?.error || `Failed to delete SSH profile ${profile.id}`);
+      console.error('Failed to delete SSH profile:', deleteError);
+      throw deleteError;
     }
+
+    setSSHProfiles((previousProfiles) => previousProfiles.filter((item) => item.id !== profile.id));
+    setSSHCredentialStates((previousStates) => {
+      const nextStates = { ...previousStates };
+      delete nextStates[profile.id];
+      return nextStates;
+    });
   }, []);
 
   const handleConnectSSHProfile = useCallback(async (profile: SSHProfile) => {

@@ -13,6 +13,7 @@ import { NewWindowCard } from './NewWindowCard';
 import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
 import { DeleteWindowDialog } from './DeleteWindowDialog';
 import { SSHProfileCard } from './SSHProfileCard';
+import { DeleteSSHCardDialog } from './DeleteSSHCardDialog';
 import { DraggableWindowCard, DraggableGroupCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
@@ -24,6 +25,7 @@ import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { buildStandaloneSSHWindowMap, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
+import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
 
@@ -81,6 +83,7 @@ export const CardGrid = React.memo<CardGridProps>(({
   const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
   const archiveWindow = useWindowStore((state) => state.archiveWindow);
   const unarchiveWindow = useWindowStore((state) => state.unarchiveWindow);
+  const removeWindow = useWindowStore((state) => state.removeWindow);
 
   // 组相关的 store 方法
   const groups = useWindowStore((state) => state.groups);
@@ -97,6 +100,9 @@ export const CardGrid = React.memo<CardGridProps>(({
   const [editingWindow, setEditingWindow] = useState<Window | null>(null);
   const [editingGroup, setEditingGroup] = useState<WindowGroup | null>(null);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
+  const [sshDeleteTarget, setSSHDeleteTarget] = useState<SSHProfile | null>(null);
+  const [sshDeleteError, setSSHDeleteError] = useState('');
+  const [isDeletingSSHCard, setIsDeletingSSHCard] = useState(false);
 
   const sortedSSHProfiles = useMemo(
     () => [...sshProfiles].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
@@ -331,8 +337,68 @@ export const CardGrid = React.memo<CardGridProps>(({
   }, [onEditSSHProfile]);
 
   const handleDeleteSSHProfile = useCallback(async (profile: SSHProfile) => {
-    await onDeleteSSHProfile?.(profile);
-  }, [onDeleteSSHProfile]);
+    setSSHDeleteTarget(profile);
+    setSSHDeleteError('');
+    setIsDeletingSSHCard(false);
+  }, []);
+
+  const resetSSHDeleteDialog = useCallback(() => {
+    setSSHDeleteTarget(null);
+    setSSHDeleteError('');
+    setIsDeletingSSHCard(false);
+  }, []);
+
+  const handleSSHDeleteOpenChange = useCallback((open: boolean) => {
+    if (!open && !isDeletingSSHCard) {
+      resetSSHDeleteDialog();
+    }
+  }, [isDeletingSSHCard, resetSSHDeleteDialog]);
+
+  const sshDeleteAssociatedWindows = useMemo(
+    () => (sshDeleteTarget ? getSSHProfileReferencingWindows(windows, sshDeleteTarget.id) : []),
+    [sshDeleteTarget, windows],
+  );
+
+  const sshDeleteBlockingWindowCount = useMemo(() => {
+    if (!sshDeleteTarget) {
+      return 0;
+    }
+
+    const boundWindowId = standaloneSSHWindowsByProfile[sshDeleteTarget.id]?.id;
+    return getSSHProfileReferencingWindows(windows, sshDeleteTarget.id, {
+      excludeWindowIds: boundWindowId ? [boundWindowId] : [],
+    }).length;
+  }, [sshDeleteTarget, standaloneSSHWindowsByProfile, windows]);
+
+  const confirmDeleteSSHCard = useCallback(async () => {
+    if (!sshDeleteTarget) {
+      return;
+    }
+
+    setIsDeletingSSHCard(true);
+    setSSHDeleteError('');
+
+    const associatedWindows = getSSHProfileReferencingWindows(windows, sshDeleteTarget.id);
+
+    try {
+      for (const windowToDelete of associatedWindows) {
+        const response = await window.electronAPI.deleteWindow(windowToDelete.id);
+        if (response && !response.success) {
+          throw new Error(response.error || t('sshDelete.deleteFailed'));
+        }
+      }
+
+      associatedWindows.forEach((windowToDelete) => {
+        removeWindow(windowToDelete.id);
+      });
+
+      await onDeleteSSHProfile?.(sshDeleteTarget);
+      resetSSHDeleteDialog();
+    } catch (error) {
+      setSSHDeleteError((error as Error).message || t('sshDelete.deleteFailed'));
+      setIsDeletingSSHCard(false);
+    }
+  }, [onDeleteSSHProfile, removeWindow, resetSSHDeleteDialog, sshDeleteTarget, t, windows]);
 
   const handleDuplicateSSHProfile = useCallback((profile: SSHProfile) => {
     onDuplicateSSHProfile?.(profile);
@@ -779,6 +845,17 @@ export const CardGrid = React.memo<CardGridProps>(({
       <MissingWorkingDirectoryDialog {...dialogState} />
 
       <DeleteWindowDialog {...deleteDialogState} />
+
+      <DeleteSSHCardDialog
+        open={Boolean(sshDeleteTarget)}
+        profileName={sshDeleteTarget?.name ?? ''}
+        associatedWindowCount={sshDeleteAssociatedWindows.length}
+        blockingWindowCount={sshDeleteBlockingWindowCount}
+        error={sshDeleteError}
+        isProcessing={isDeletingSSHCard}
+        onOpenChange={handleSSHDeleteOpenChange}
+        onConfirm={confirmDeleteSSHCard}
+      />
 
       {editingWindow && (
         <EditWindowPanel

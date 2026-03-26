@@ -9,6 +9,34 @@ export interface SSHCredentialCleanupAvailability {
   blockingWindowCount: number;
 }
 
+export function windowReferencesSSHProfile(window: Window, profileId: string): boolean {
+  return getAllPanes(window.layout).some((pane) => pane.ssh?.profileId === profileId);
+}
+
+export function getSSHProfileReferencingWindows(
+  windows: Window[],
+  profileId: string,
+  options?: {
+    excludeWindowIds?: Iterable<string>;
+    includeArchived?: boolean;
+  },
+): Window[] {
+  const excludedWindowIds = options?.excludeWindowIds ? new Set(options.excludeWindowIds) : null;
+  const includeArchived = options?.includeArchived ?? true;
+
+  return windows.filter((window) => {
+    if (!includeArchived && window.archived) {
+      return false;
+    }
+
+    if (excludedWindowIds?.has(window.id)) {
+      return false;
+    }
+
+    return windowReferencesSSHProfile(window, profileId);
+  });
+}
+
 export function getSSHCredentialCleanupAvailability(
   targetWindow: Window,
   windows: Window[],
@@ -23,10 +51,10 @@ export function getSSHCredentialCleanupAvailability(
     };
   }
 
-  const blockingWindowCount = windows.filter((window) => (
-    window.id !== targetWindow.id
-      && getAllPanes(window.layout).some((pane) => pane.ssh?.profileId === profileId)
-  )).length;
+  const blockingWindowCount = getSSHProfileReferencingWindows(windows, profileId, {
+    excludeWindowIds: [targetWindow.id],
+    includeArchived: false,
+  }).length;
 
   return {
     profileId,

@@ -366,21 +366,21 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
           <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
                 <Tooltip.Trigger asChild>
-                  <button
-                    onClick={(event) => handleButtonClick(event, () => onDelete?.(profile))}
-                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
-                    aria-label={t('sshProfileCard.delete')}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </Tooltip.Trigger>
+                <button
+                  onClick={(event) => handleButtonClick(event, () => onDelete?.(profile))}
+                  className="flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
+                  aria-label={t('sshProfileCard.deleteCard')}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
                     className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
                     side="top"
                     sideOffset={5}
                   >
-                  {t('sshProfileCard.delete')}
+                  {t('sshProfileCard.deleteCard')}
                 </Tooltip.Content>
               </Tooltip.Portal>
             </Tooltip.Root>

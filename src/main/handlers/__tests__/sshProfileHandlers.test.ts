@@ -163,6 +163,62 @@ describe('registerSSHProfileHandlers', () => {
     expect(response).toEqual({ success: true, data: undefined });
   });
 
+  it('rejects deleting an SSH profile that is still used by an active SSH process', async () => {
+    const sshProfileStore = {
+      list: vi.fn(),
+      get: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      upsert: vi.fn(),
+      remove: vi.fn(),
+    };
+    const sshVaultService = {
+      remove: vi.fn(),
+    };
+    const processManager = {
+      listProcesses: vi.fn().mockReturnValue([
+        {
+          sessionId: 'ssh-session-1',
+          backend: 'ssh',
+          pid: 4321,
+          status: 'alive',
+          profileId: 'profile-1',
+          windowId: 'win-1',
+          paneId: 'pane-1',
+          workingDirectory: '/srv/app',
+          command: '/bin/zsh',
+        },
+      ]),
+    };
+
+    registerSSHProfileHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: sshVaultService as any,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const deleteHandler = getRegisteredHandler('delete-ssh-profile');
+    const response = await deleteHandler({}, 'profile-1');
+
+    expect(sshProfileStore.remove).not.toHaveBeenCalled();
+    expect(sshVaultService.remove).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      success: false,
+      error: 'SSH profile is still used by active windows: profile-1',
+    });
+  });
+
   it('routes vault and known-host requests to the correct services', async () => {
     const sshVaultService = {
       getCredentialState: vi.fn().mockResolvedValue({ hasPassword: true, hasPassphrase: false }),

@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -171,7 +171,7 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    expect(screen.getByRole('button', { name: '删除 SSH 配置' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '删除 SSH 卡片' })).toBeEnabled();
     expect(screen.queryByText(/已被 .* 个窗口使用/)).not.toBeInTheDocument();
   });
 
@@ -242,6 +242,85 @@ describe('CardGrid SSH profile cards', () => {
 
     expect(await screen.findByText('Hidden runtime window')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '取消归档' })).toBeInTheDocument();
+  });
+
+  it('deletes a bound SSH card by removing both the runtime window and the SSH profile', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const deleteWindowMock = vi.mocked(window.electronAPI.deleteWindow);
+    const onDeleteSSHProfile = vi.fn().mockResolvedValue(undefined);
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+      onDeleteSSHProfile,
+    });
+
+    await user.click(screen.getByRole('button', { name: '删除 SSH 卡片' }));
+
+    expect(screen.getByText('确定要删除 SSH 卡片 “Prod Bastion” 吗？此操作会同时删除关联的 1 个终端窗口、SSH 配置和已保存的凭据。')).toBeInTheDocument();
+
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: '删除 SSH 卡片' }));
+
+    await waitFor(() => {
+      expect(deleteWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
+      expect(onDeleteSSHProfile).toHaveBeenCalledWith(profile);
+      expect(useWindowStore.getState().windows).toHaveLength(0);
+    });
+  });
+
+  it('blocks deleting an SSH card when another window still references the same SSH profile', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const siblingWindow = createStandaloneSSHWindow(profile, {
+      id: 'ssh-window-2',
+      name: 'Sibling runtime window',
+      activePaneId: 'ssh-pane-2',
+      lastActiveAt: '2026-03-22T10:04:00.000Z',
+      layout: {
+        type: 'pane',
+        id: 'layout-ssh-pane-2',
+        pane: {
+          id: 'ssh-pane-2',
+          cwd: '/srv/app-2',
+          command: '/bin/zsh',
+          status: WindowStatus.Paused,
+          pid: null,
+          backend: 'ssh',
+          ssh: {
+            profileId: profile.id,
+            host: profile.host,
+            port: profile.port,
+            user: profile.user,
+            authType: profile.auth,
+            remoteCwd: '/srv/app-2',
+            reuseSession: true,
+          },
+        },
+      },
+    });
+
+    useWindowStore.setState({
+      windows: [runtimeWindow, siblingWindow],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+    });
+
+    await user.click(screen.getByRole('button', { name: '删除 SSH 卡片' }));
+
+    expect(screen.getByText('当前还有 1 个其他窗口在使用这条 SSH 配置，暂时不能删除该卡片。请先处理这些窗口。')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: '删除 SSH 卡片' })).toBeDisabled();
   });
 
   it('uses the paused status color for bound SSH cards', () => {

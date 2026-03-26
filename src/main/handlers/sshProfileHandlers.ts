@@ -4,6 +4,7 @@ import { errorResponse, successResponse } from './HandlerResponse';
 import { SSHImportResult, SSHProfile, SSHProfileInput, SSHProfilePatch } from '../../shared/types/ssh';
 import { getSSHAlgorithmCatalog } from '../services/ssh/SSHAlgorithmCatalog';
 import { OpenSSHProfileImporter } from '../services/ssh/OpenSSHProfileImporter';
+import { ProcessStatus } from '../types/process';
 
 export function registerSSHProfileHandlers(ctx: HandlerContext) {
   const {
@@ -78,6 +79,16 @@ export function registerSSHProfileHandlers(ctx: HandlerContext) {
     try {
       if (!sshProfileStore) {
         throw new Error('SSH profile store not initialized');
+      }
+
+      const activeSSHProcesses = ctx.processManager?.listProcesses().filter((process) => (
+        process.backend === 'ssh'
+          && process.profileId === profileId
+          && process.status === ProcessStatus.Alive
+      )) ?? [];
+
+      if (activeSSHProcesses.length > 0) {
+        throw new Error(`SSH profile is still used by active windows: ${profileId}`);
       }
 
       await sshProfileStore.remove(profileId);
