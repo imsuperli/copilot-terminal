@@ -238,6 +238,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         pid,
         ssh: sshConfig,
         connectionPool: this.sshConnectionPool,
+        initialCols: config.initialCols,
+        initialRows: config.initialRows,
       });
     }
 
@@ -1006,11 +1008,11 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       cleanEnv.LANG = 'en_US.UTF-8';
     }
 
-    // 鍒涘缓鐪熷疄鐨?PTY 杩涚▼
+    // 创建真实的 PTY 进程
     const ptySpawnOptions: Record<string, unknown> = {
       name: 'xterm-256color',
-      cols: 80,
-      rows: 30,
+      cols: config.initialCols ?? 80,
+      rows: config.initialRows ?? 30,
       cwd: config.workingDirectory,
       env: cleanEnv,
     };

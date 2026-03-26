@@ -6,6 +6,39 @@ import { ensureSSHPasswordSaved } from './sshPasswordPrompt';
 
 type PaneStartResult = StartWindowResult | StartSSHPaneResult;
 
+// 终端字体配置（与 TerminalPane.tsx 保持一致）
+const TERMINAL_FONT_SIZE = 14;
+const TERMINAL_LINE_HEIGHT = 1.2;
+// 等宽字体字符宽约为字体大小的 0.6 倍
+const CHAR_WIDTH_RATIO = 0.6;
+
+/**
+ * 估算当前终端容器的初始 cols/rows
+ * 在 TerminalPane 挂载之前调用，使用 window 可视区域来近似
+ */
+function estimateInitialTerminalSize(): { cols: number; rows: number } {
+  if (typeof window === 'undefined') {
+    return { cols: 120, rows: 30 };
+  }
+
+  const availWidth = window.innerWidth;
+  const availHeight = window.innerHeight;
+
+  // 粗略估算：扣除侧边栏（约 32px）和内边距（约 8px）
+  const terminalWidth = Math.max(availWidth - 40, 100);
+  const terminalHeight = Math.max(availHeight - 40, 100);
+
+  const charWidth = TERMINAL_FONT_SIZE * CHAR_WIDTH_RATIO;
+  const charHeight = TERMINAL_FONT_SIZE * TERMINAL_LINE_HEIGHT;
+
+  const cols = Math.max(Math.floor(terminalWidth / charWidth), 40);
+  const rows = Math.max(Math.floor(terminalHeight / charHeight), 10);
+
+  return { cols, rows };
+}
+
+type PaneStartResult = StartWindowResult | StartSSHPaneResult;
+
 function getSplitSuccessStatus(pane: Pane): WindowStatus {
   return getPaneBackend(pane) === 'ssh'
     ? WindowStatus.WaitingForInput
@@ -29,6 +62,8 @@ export function createPaneDraftFromSource(sourcePane: Pane, paneId: string): Pan
 }
 
 export async function startPaneForWindow(targetWindow: Window, pane: Pane): Promise<PaneStartResult> {
+  const { cols: initialCols, rows: initialRows } = estimateInitialTerminalSize();
+
   if (getPaneBackend(pane) === 'ssh') {
     if (!pane.ssh) {
       throw new Error(`SSH pane metadata is missing for ${targetWindow.id}/${pane.id}`);
@@ -51,6 +86,8 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
       profileId: pane.ssh.profileId,
       remoteCwd: pane.ssh.remoteCwd ?? pane.cwd,
       command: pane.command,
+      initialCols,
+      initialRows,
     });
 
     if (!response?.success || !response.data) {
@@ -66,6 +103,8 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
     name: targetWindow.name,
     workingDirectory: pane.cwd,
     command: pane.command,
+    initialCols,
+    initialRows,
   });
 
   if (!response?.success || !response.data) {
@@ -112,6 +151,7 @@ export async function startSplitPaneFromSource(options: {
   status: WindowStatus;
 }> {
   const { sourceWindowId, sourcePane, targetWindowId, targetPaneId } = options;
+  const { cols: initialCols, rows: initialRows } = estimateInitialTerminalSize();
 
   if (getPaneBackend(sourcePane) === 'ssh') {
     const response = await window.electronAPI.cloneSSHPane({
@@ -137,6 +177,8 @@ export async function startSplitPaneFromSource(options: {
     command: sourcePane.command,
     windowId: targetWindowId,
     paneId: targetPaneId,
+    initialCols,
+    initialRows,
   });
 
   if (!response?.success || !response.data) {

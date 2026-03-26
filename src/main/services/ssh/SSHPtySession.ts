@@ -46,8 +46,8 @@ export class SSHPtySession implements IPty {
 
   private constructor(options: SSHPtySessionOptions) {
     this.pid = options.pid;
-    this.cols = 120;
-    this.rows = 30;
+    this.cols = Math.max(options.initialCols ?? 120, 1);
+    this.rows = Math.max(options.initialRows ?? 30, 1);
     this.process = `ssh:${options.ssh.user}@${options.ssh.host}`;
     this.handleFlowControl = false;
     this.ssh = options.ssh;

@@ -146,7 +146,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
   });
 
   // 启动暂停的窗口（恢复 PTY 进程）
-  ipcMain.handle('start-window', async (_event, { windowId, paneId, name, workingDirectory, command }: { windowId: string; paneId?: string; name: string; workingDirectory: string; command?: string }) => {
+  ipcMain.handle('start-window', async (_event, { windowId, paneId, name, workingDirectory, command, initialCols, initialRows }: { windowId: string; paneId?: string; name: string; workingDirectory: string; command?: string; initialCols?: number; initialRows?: number }) => {
     try {
       if (!processManager) {
         throw new Error('进程管理器未初始化，请重启应用');
@@ -175,6 +175,8 @@ export function registerWindowHandlers(ctx: HandlerContext) {
         command: shellCommand,
         windowId: windowId,
         paneId: paneId,
+        initialCols,
+        initialRows,
       });
 
       // 验证进程启动成功

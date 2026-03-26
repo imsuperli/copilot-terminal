@@ -113,6 +113,8 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
         paneId: config.paneId,
         remoteCwd: config.remoteCwd,
         command: config.command,
+        initialCols: config.initialCols,
+        initialRows: config.initialRows,
       }, {
         sshProfileStore,
         sshVaultService,
@@ -432,6 +434,8 @@ async function buildSSHSpawnConfig(
     paneId: string;
     remoteCwd?: string;
     command?: string;
+    initialCols?: number;
+    initialRows?: number;
   },
   context: {
     sshProfileStore: NonNullable<HandlerContext['sshProfileStore']>;
@@ -447,6 +451,8 @@ async function buildSSHSpawnConfig(
     command: remoteCommand,
     windowId: options.windowId,
     paneId: options.paneId,
+    initialCols: options.initialCols,
+    initialRows: options.initialRows,
     ssh: await buildSSHSessionConfig(profile, vaultEntry, {
       remoteCwd,
       command: options.command,
