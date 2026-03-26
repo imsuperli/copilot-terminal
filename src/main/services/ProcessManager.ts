@@ -1082,7 +1082,8 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    * 确保从桌面环境（Finder/GNOME/KDE）启动时 nvm/pyenv/rbenv 等工具的 PATH 可用
    */
   private ensureLoginShell(launch: { file: string; args: string[] }): void {
-    if (platform() === 'win32') return;
+    const currentPlatform = process.platform;
+    if (currentPlatform === 'win32') return;
 
     const shellName = path.basename(launch.file);
     const isStandardShell = ['zsh', 'bash', 'sh', 'fish'].includes(shellName);
@@ -1090,6 +1091,18 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // 如果已经有 -l 或 --login 参数，不重复添加
     if (launch.args.some(a => a === '-l' || a === '--login')) return;
+
+    // macOS login shell 会经过 /etc/zprofile(path_helper)，它可能重建 PATH，
+    // 导致前置注入的 tmux shim 目录被冲掉，Claude 最终调用到真实 tmux。
+    // 在启用 tmux PATH 注入时，优先保留父进程 PATH，避免 Agent Teams 失效。
+    const settings = this.getSettings?.();
+    if (
+      currentPlatform === 'darwin'
+      && (settings?.tmux?.enabled ?? false)
+      && (settings?.tmux?.autoInjectPath ?? true)
+    ) {
+      return;
+    }
 
     launch.args.unshift('-l');
   }

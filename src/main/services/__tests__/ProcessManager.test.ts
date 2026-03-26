@@ -197,6 +197,56 @@ describe('ProcessManager', () => {
       }
     });
 
+    it('skips forcing a macOS login shell when tmux shim PATH injection is enabled', () => {
+      const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-shell-'));
+      const shellPath = path.join(tempDir, 'zsh');
+      writeFileSync(shellPath, '');
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+
+      try {
+        const tmuxEnabledProcessManager = new ProcessManager(
+          () => ({ tmux: { enabled: true, autoInjectPath: true } } as any),
+        );
+
+        const launch = (tmuxEnabledProcessManager as any).resolveLaunchCommand({
+          workingDirectory: testWorkingDir,
+          command: shellPath,
+        });
+
+        expect(launch.file).toBe(shellPath);
+        expect(launch.args).toEqual([]);
+      } finally {
+        Object.defineProperty(process, 'platform', { value: originalPlatform });
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('still forces a macOS login shell when tmux shim PATH injection is disabled', () => {
+      const tempDir = mkdtempSync(path.join(tmpdir(), 'copilot-terminal-shell-'));
+      const shellPath = path.join(tempDir, 'zsh');
+      writeFileSync(shellPath, '');
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+
+      try {
+        const tmuxDisabledProcessManager = new ProcessManager(
+          () => ({ tmux: { enabled: true, autoInjectPath: false } } as any),
+        );
+
+        const launch = (tmuxDisabledProcessManager as any).resolveLaunchCommand({
+          workingDirectory: testWorkingDir,
+          command: shellPath,
+        });
+
+        expect(launch.file).toBe(shellPath);
+        expect(launch.args).toEqual(['-l']);
+      } finally {
+        Object.defineProperty(process, 'platform', { value: originalPlatform });
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
     it('emits process-created event', async () => {
       const config = {
         workingDirectory: testWorkingDir,

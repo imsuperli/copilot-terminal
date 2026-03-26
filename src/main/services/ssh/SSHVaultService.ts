@@ -15,6 +15,8 @@ interface PersistedSSHVaultEntry {
   profileId: string;
   secret: string;
   updatedAt: string;
+  hasPassword?: boolean;
+  hasPassphrase?: boolean;
 }
 
 interface PersistedSSHVaultFile {
@@ -100,11 +102,17 @@ export class SSHVaultService implements ISSHVaultService {
   private readonly filePath: string;
   private readonly secureStorage: ISSHSecureStorage;
   private readonly now: () => string;
+  private cache: {
+    signature: string | null;
+    storageMode: SSHVaultStorageMode;
+    entries: SSHVaultEntry[];
+  } | null;
 
   constructor(options: SSHVaultServiceOptions = {}) {
     this.filePath = resolveSSHDataFilePath(DEFAULT_VAULT_FILE_NAME, options.filePath);
     this.secureStorage = options.secureStorage ?? createDefaultSSHSecureStorage();
     this.now = options.now ?? (() => new Date().toISOString());
+    this.cache = null;
   }
 
   async get(profileId: string): Promise<SSHVaultEntry | null> {
@@ -189,11 +197,33 @@ export class SSHVaultService implements ISSHVaultService {
   }
 
   async getCredentialState(profileId: string): Promise<SSHCredentialState> {
-    const entry = await this.get(profileId);
-    return {
-      hasPassword: Boolean(entry?.password),
-      hasPassphrase: Boolean(entry?.privateKeyPassphrases && Object.keys(entry.privateKeyPassphrases).length > 0),
-    };
+    const normalizedProfileId = requireNonEmptyString(profileId, 'SSH vault profileId');
+    const persisted = await readJsonFileOrDefault<PersistedSSHVaultFile>(this.filePath, {
+      version: 1,
+      storageMode: this.secureStorage.mode,
+      entries: [],
+    });
+
+    if (!Array.isArray(persisted.entries)) {
+      throw new Error('SSH vault store is corrupted: entries must be an array');
+    }
+
+    const persistedEntry = persisted.entries.find((entry) => normalizeOptionalString(entry.profileId) === normalizedProfileId);
+    if (!persistedEntry) {
+      return {
+        hasPassword: false,
+        hasPassphrase: false,
+      };
+    }
+
+    if (typeof persistedEntry.hasPassword === 'boolean' || typeof persistedEntry.hasPassphrase === 'boolean') {
+      return {
+        hasPassword: Boolean(persistedEntry.hasPassword),
+        hasPassphrase: Boolean(persistedEntry.hasPassphrase),
+      };
+    }
+
+    return getCredentialStateFromEntry(await this.get(normalizedProfileId));
   }
 
   async setPassword(profileId: string, password: string): Promise<void> {
@@ -255,6 +285,14 @@ export class SSHVaultService implements ISSHVaultService {
   }
 
   private async readData(): Promise<{ storageMode: SSHVaultStorageMode; entries: SSHVaultEntry[] }> {
+    const signature = await this.getFileSignature();
+    if (this.cache && this.cache.signature === signature) {
+      return {
+        storageMode: this.cache.storageMode,
+        entries: this.cache.entries.map(cloneVaultEntry),
+      };
+    }
+
     const data = await readJsonFileOrDefault<PersistedSSHVaultFile>(this.filePath, {
       version: 1,
       storageMode: this.secureStorage.mode,
@@ -266,15 +304,27 @@ export class SSHVaultService implements ISSHVaultService {
     }
 
     const storageMode = data.storageMode ?? this.secureStorage.mode;
+    const entries = data.entries.map((entry) => this.deserializeEntry(entry, storageMode));
+    this.cache = {
+      signature,
+      storageMode,
+      entries: entries.map(cloneVaultEntry),
+    };
+
     return {
       storageMode,
-      entries: data.entries.map((entry) => this.deserializeEntry(entry, storageMode)),
+      entries,
     };
   }
 
   private async writeData(entries: SSHVaultEntry[]): Promise<void> {
     if (entries.length === 0) {
       await fs.remove(this.filePath);
+      this.cache = {
+        signature: null,
+        storageMode: this.secureStorage.mode,
+        entries: [],
+      };
       return;
     }
 
@@ -284,6 +334,7 @@ export class SSHVaultService implements ISSHVaultService {
       entries: entries.map((entry) => ({
         profileId: entry.profileId,
         updatedAt: entry.updatedAt,
+        ...getCredentialStateFromEntry(entry),
         secret: this.secureStorage.encryptString(JSON.stringify({
           password: entry.password,
           privateKeyPassphrases: entry.privateKeyPassphrases,
@@ -292,6 +343,11 @@ export class SSHVaultService implements ISSHVaultService {
     };
 
     await writeJsonFileAtomic(this.filePath, payload, { privateFile: true });
+    this.cache = {
+      signature: await this.getFileSignature(),
+      storageMode: this.secureStorage.mode,
+      entries: entries.map(cloneVaultEntry),
+    };
   }
 
   private deserializeEntry(entry: PersistedSSHVaultEntry, storageMode: SSHVaultStorageMode): SSHVaultEntry {
@@ -318,6 +374,19 @@ export class SSHVaultService implements ISSHVaultService {
 
     return new ElectronSafeSSHSecureStorage().decryptString(secret);
   }
+
+  private async getFileSignature(): Promise<string | null> {
+    try {
+      const stat = await fs.stat(this.filePath);
+      return `${stat.size}:${stat.mtimeMs}`;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null;
+      }
+
+      throw error;
+    }
+  }
 }
 
 function normalizeVaultEntry(entry: SSHVaultEntry): SSHVaultEntry {
@@ -339,6 +408,20 @@ function normalizeVaultEntry(entry: SSHVaultEntry): SSHVaultEntry {
 function hasSecrets(entry: SSHVaultEntry): boolean {
   return Boolean(entry.password)
     || Boolean(entry.privateKeyPassphrases && Object.keys(entry.privateKeyPassphrases).length > 0);
+}
+
+function cloneVaultEntry(entry: SSHVaultEntry): SSHVaultEntry {
+  return {
+    ...entry,
+    ...(entry.privateKeyPassphrases ? { privateKeyPassphrases: { ...entry.privateKeyPassphrases } } : {}),
+  };
+}
+
+function getCredentialStateFromEntry(entry: Pick<SSHVaultEntry, 'password' | 'privateKeyPassphrases'> | null | undefined): SSHCredentialState {
+  return {
+    hasPassword: Boolean(entry?.password),
+    hasPassphrase: Boolean(entry?.privateKeyPassphrases && Object.keys(entry.privateKeyPassphrases).length > 0),
+  };
 }
 
 function requireNonEmptyString(value: unknown, fieldName: string): string {
