@@ -114,7 +114,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return kindDiff;
     });
 
-    return items;
+    // 过滤掉暂停状态的窗口和组
+    return items.filter(item => item.status !== WindowStatus.Paused);
   }, [activeGroupedWindowIds, activeGroups, activeWindows, windows]);
 
   const visibleArchivedWindows = useMemo(
@@ -205,56 +206,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       {/* 侧边栏内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* 顶部：切换按钮 */}
-        <div className={`h-10 flex items-center border-b border-zinc-800 flex-shrink-0 ${sidebarExpanded ? 'justify-start pl-1' : 'justify-center'}`}>
-          <Tooltip.Provider>
-            <Tooltip.Root delayDuration={300}>
-              <Tooltip.Trigger asChild>
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
-                  className="w-8 h-8 flex items-center justify-center rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 hover:border-zinc-600 transition-all duration-200"
-                  aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
-                >
-                  <Menu size={16} className="transition-transform duration-200" />
-                </button>
-              </Tooltip.Trigger>
-              <Tooltip.Portal>
-                <Tooltip.Content
-                  className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                  side="right"
-                  sideOffset={5}
-                >
-                  {sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
-                </Tooltip.Content>
-              </Tooltip.Portal>
-            </Tooltip.Root>
-          </Tooltip.Provider>
-        </div>
-
-        {/* 标题（仅展开时显示） - 淡入淡出 */}
-        {sidebarExpanded && (
-          <div
-            className={`px-3 py-2 border-b border-zinc-800 flex-shrink-0 transition-opacity duration-200 space-y-2 ${
-              sidebarExpanded ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 tracking-wide">
-              <span>Windows</span>
-            </div>
-            <select
-              aria-label={t('sidebar.terminalFilterLabel')}
-              value={terminalSidebarFilter}
-              onChange={(event) => setTerminalSidebarFilter(event.target.value as typeof terminalSidebarFilter)}
-              className="w-full h-8 px-2 text-xs text-zinc-100 bg-zinc-800 border border-zinc-700 rounded focus:outline-none focus:border-blue-500"
-            >
-              <option value="all">{t('sidebar.tab.all')}</option>
-              <option value="workspace">{t('sidebar.tab.active')}</option>
-              <option value="local">{t('sidebar.tab.local')}</option>
-              <option value="ssh">{t('sidebar.tab.ssh')}</option>
-              <option value="archived">{t('sidebar.tab.archived')}</option>
-            </select>
+        {/* 标题 */}
+        <div className="px-3 py-2 border-b border-zinc-800 flex-shrink-0 space-y-2">
+          <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 tracking-wide">
+            <span>Windows</span>
           </div>
-        )}
+          <select
+            aria-label={t('sidebar.terminalFilterLabel')}
+            value={terminalSidebarFilter}
+            onChange={(event) => setTerminalSidebarFilter(event.target.value as typeof terminalSidebarFilter)}
+            className="w-full h-8 px-2 text-xs text-zinc-100 bg-zinc-800 border border-zinc-700 rounded focus:outline-none focus:border-blue-500"
+          >
+            <option value="all">{t('sidebar.tab.all')}</option>
+            <option value="workspace">{t('sidebar.tab.active')}</option>
+            <option value="local">{t('sidebar.tab.local')}</option>
+            <option value="ssh">{t('sidebar.tab.ssh')}</option>
+            <option value="archived">{t('sidebar.tab.archived')}</option>
+          </select>
+        </div>
 
         {/* 活跃窗口和组列表（按类型分类，可折叠） */}
         <div
