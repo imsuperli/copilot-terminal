@@ -8,5 +8,7 @@
     <true/>
     <key>com.apple.security.inherit</key>
     <true/>
+    <key>com.apple.security.device.pty</key>
+    <true/>
 </dict>
 </plist>
