@@ -17,6 +17,7 @@ export const AboutPanel: React.FC<AboutPanelProps> = ({
   version,
 }) => {
   const { t } = useI18n();
+  const appLogoSrc = new URL('resources/icon.png', window.location.href).toString();
 
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
@@ -45,7 +46,7 @@ export const AboutPanel: React.FC<AboutPanelProps> = ({
 
             <div className="flex flex-col items-center text-center">
               <img
-                src="/resources/icon.png"
+                src={appLogoSrc}
                 alt={t('about.logoAlt', { appName })}
                 className="w-20 h-20 rounded-2xl shadow-lg mb-4"
               />
@@ -70,4 +71,3 @@ export const AboutPanel: React.FC<AboutPanelProps> = ({
     </Dialog.Root>
   );
 };
-
