@@ -62,7 +62,7 @@ function isRuntimeOnlyPaneUpdate(updateKeys: string[]): boolean {
 }
 
 export type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
-export type TerminalSidebarFilter = 'all' | 'local' | 'ssh';
+export type TerminalSidebarFilter = 'all' | 'local' | 'ssh' | 'archived';
 
 export const TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY = 'copilot-terminal:terminal-sidebar-preferences';
 
@@ -92,6 +92,7 @@ function normalizeTerminalSidebarFilter(value: unknown): TerminalSidebarFilter {
     case 'all':
     case 'local':
     case 'ssh':
+    case 'archived':
       return value;
     default:
       return DEFAULT_TERMINAL_SIDEBAR_FILTER;

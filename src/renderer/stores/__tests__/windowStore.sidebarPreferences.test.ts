@@ -10,7 +10,7 @@ describe('windowStore terminal sidebar preferences', () => {
 
   it('loads persisted terminal sidebar preferences from localStorage', async () => {
     window.localStorage.setItem(TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY, JSON.stringify({
-      filter: 'all',
+      filter: 'archived',
       sections: {
         archived: true,
         local: false,
@@ -20,7 +20,7 @@ describe('windowStore terminal sidebar preferences', () => {
 
     const { useWindowStore } = await import('../windowStore');
 
-    expect(useWindowStore.getState().terminalSidebarFilter).toBe('all');
+    expect(useWindowStore.getState().terminalSidebarFilter).toBe('archived');
     expect(useWindowStore.getState().terminalSidebarSections).toEqual({
       archived: true,
       local: false,
@@ -31,12 +31,12 @@ describe('windowStore terminal sidebar preferences', () => {
   it('persists terminal sidebar preferences when they change', async () => {
     const { useWindowStore } = await import('../windowStore');
 
-    useWindowStore.getState().setTerminalSidebarFilter('all');
+    useWindowStore.getState().setTerminalSidebarFilter('archived');
     useWindowStore.getState().setTerminalSidebarSectionExpanded('ssh', false);
     useWindowStore.getState().setTerminalSidebarSectionExpanded('local', false);
 
     expect(JSON.parse(window.localStorage.getItem(TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY) || '{}')).toEqual({
-      filter: 'all',
+      filter: 'archived',
       sections: {
         archived: false,
         local: false,

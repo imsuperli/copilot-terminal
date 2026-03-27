@@ -13,12 +13,33 @@ vi.mock('../SidebarWindowItem', () => ({
   SidebarWindowItem: ({ window }: { window: { name: string } }) => <div>{window.name}</div>,
 }));
 
-function createRunningWindow(name: string, cwd: string, command: string): Window {
+function createWindowWithStatus(name: string, cwd: string, command: string, status: WindowStatus): Window {
   const window = createSinglePaneWindow(name, cwd, command);
   if (window.layout.type === 'pane') {
-    window.layout.pane.status = WindowStatus.Running;
+    window.layout.pane.status = status;
   }
   return window;
+}
+
+function createRunningWindow(name: string, cwd: string, command: string): Window {
+  return createWindowWithStatus(name, cwd, command, WindowStatus.Running);
+}
+
+function updateSinglePaneWindowStatus(window: Window, status: WindowStatus): Window {
+  if (window.layout.type !== 'pane') {
+    return window;
+  }
+
+  return {
+    ...window,
+    layout: {
+      ...window.layout,
+      pane: {
+        ...window.layout.pane,
+        status,
+      },
+    },
+  };
 }
 
 describe('Terminal Sidebar', () => {
@@ -75,6 +96,45 @@ describe('Terminal Sidebar', () => {
     });
   });
 
+  it('shows only archived running terminals in archived filter, and all filter also includes them', async () => {
+    const user = userEvent.setup();
+    const onWindowSelect = vi.fn();
+
+    const activeWindow = createRunningWindow('Active Terminal', '/workspace/active', 'bash');
+    const archivedRunningWindow = {
+      ...createWindowWithStatus('Archived Running Terminal', '/workspace/archived-running', 'bash', WindowStatus.WaitingForInput),
+      archived: true,
+    };
+    const archivedPausedWindow = {
+      ...createWindowWithStatus('Archived Paused Terminal', '/workspace/archived-paused', 'bash', WindowStatus.Paused),
+      archived: true,
+    };
+
+    useWindowStore.setState({
+      windows: [activeWindow, archivedRunningWindow, archivedPausedWindow],
+      activeWindowId: activeWindow.id,
+      mruList: [activeWindow.id, archivedRunningWindow.id, archivedPausedWindow.id],
+      terminalSidebarFilter: 'archived',
+    });
+
+    render(
+      <Sidebar activeWindowId={activeWindow.id} onWindowSelect={onWindowSelect} />,
+    );
+
+    expect(screen.getByText('Archived Running Terminal')).toBeInTheDocument();
+    expect(screen.queryByText('Archived Paused Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByText('Active Terminal')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '终端筛选' }), 'all');
+
+    expect(screen.getByText('Active Terminal')).toBeInTheDocument();
+    expect(screen.getByText('Archived Running Terminal')).toBeInTheDocument();
+    expect(screen.queryByText('Archived Paused Terminal')).not.toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(TERMINAL_SIDEBAR_PREFERENCES_STORAGE_KEY) || '{}')).toMatchObject({
+      filter: 'all',
+    });
+  });
+
   it('renders mixed groups only once when all filter is selected', () => {
     const onWindowSelect = vi.fn();
 
@@ -100,6 +160,47 @@ describe('Terminal Sidebar', () => {
     );
 
     expect(screen.getAllByText('Mixed Group')).toHaveLength(1);
+  });
+
+  it('keeps terminal order stable when statuses change', () => {
+    const onWindowSelect = vi.fn();
+
+    const alphaWindow = createRunningWindow('Alpha Terminal', '/workspace/alpha', 'bash');
+    const betaWindow = createWindowWithStatus('Beta Terminal', '/workspace/beta', 'bash', WindowStatus.WaitingForInput);
+
+    useWindowStore.setState({
+      windows: [alphaWindow, betaWindow],
+      activeWindowId: alphaWindow.id,
+      mruList: [alphaWindow.id, betaWindow.id],
+      terminalSidebarFilter: 'all',
+    });
+
+    const { rerender } = render(
+      <Sidebar activeWindowId={alphaWindow.id} onWindowSelect={onWindowSelect} />,
+    );
+
+    expect(screen.getAllByText(/Terminal$/).map((node) => node.textContent)).toEqual([
+      'Alpha Terminal',
+      'Beta Terminal',
+    ]);
+
+    act(() => {
+      useWindowStore.setState({
+        windows: [
+          alphaWindow,
+          updateSinglePaneWindowStatus(betaWindow, WindowStatus.Running),
+        ],
+      });
+    });
+
+    rerender(
+      <Sidebar activeWindowId={alphaWindow.id} onWindowSelect={onWindowSelect} />,
+    );
+
+    expect(screen.getAllByText(/Terminal$/).map((node) => node.textContent)).toEqual([
+      'Alpha Terminal',
+      'Beta Terminal',
+    ]);
   });
 
   it('uses a stable scroll region when expanded and hides scrollbar occupancy when collapsed', () => {

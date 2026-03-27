@@ -1,16 +1,17 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Menu, Archive, Settings } from 'lucide-react';
+import { Menu, Settings } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { getWindowCount, getAllWindowIds } from '../utils/groupLayoutHelpers';
-import { WindowStatus } from '../types/window';
+import { WindowStatus, type Window } from '../types/window';
 import { useI18n } from '../i18n';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { StatusDot } from './StatusDot';
 import { getGroupStatus } from '../../shared/utils/status-utils';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
+import type { WindowGroup } from '../../shared/types/window-group';
 
 interface SidebarProps {
   activeWindowId: string | null;
@@ -19,6 +20,18 @@ interface SidebarProps {
   onGroupSelect?: (groupId: string) => void;
   onWindowContextMenu?: (windowId: string, e: React.MouseEvent) => void;
   onSettingsClick?: () => void;
+}
+
+type SidebarItem =
+  | { kind: 'group'; id: string; status: WindowStatus; group: WindowGroup; archived: boolean }
+  | { kind: 'window'; id: string; status: WindowStatus; window: Window; archived: boolean };
+
+function isSidebarVisibleStatus(status: WindowStatus): boolean {
+  return (
+    status === WindowStatus.Running ||
+    status === WindowStatus.WaitingForInput ||
+    status === WindowStatus.Restoring
+  );
 }
 
 /**
@@ -65,65 +78,68 @@ export const Sidebar: React.FC<SidebarProps> = ({
     [archivedGroups],
   );
 
-  // 状态排序优先级：WaitingForInput > Running > 其他
-  const getStatusSortPriority = (status: WindowStatus): number => {
-    switch (status) {
-      case WindowStatus.WaitingForInput: return 3;
-      case WindowStatus.Running: return 2;
-      case WindowStatus.Paused: return 1;
-      default: return 0;
-    }
-  };
-
-  // 将组和独立窗口统一排序
-  type SidebarItem =
-    | { kind: 'group'; id: string; status: WindowStatus; group: typeof activeGroups[0] }
-    | { kind: 'window'; id: string; status: WindowStatus; window: typeof activeWindows[0] };
-
-  const sortedItems = useMemo<SidebarItem[]>(() => {
+  const activeItems = useMemo<SidebarItem[]>(() => {
     const items: SidebarItem[] = [];
 
     for (const group of activeGroups) {
-      const windowIds = getAllWindowIds(group.layout);
-      const groupWindows = windows.filter(w => windowIds.includes(w.id));
-      const statuses = groupWindows.map(w => getAggregatedStatus(w.layout));
-      let groupStatus = WindowStatus.Paused;
-      if (statuses.some(s => s === WindowStatus.WaitingForInput)) groupStatus = WindowStatus.WaitingForInput;
-      else if (statuses.some(s => s === WindowStatus.Running)) groupStatus = WindowStatus.Running;
-      else if (statuses.some(s => s === WindowStatus.Restoring)) groupStatus = WindowStatus.Restoring;
-      items.push({ kind: 'group', id: group.id, status: groupStatus, group });
+      const status = getGroupStatus(group, windows);
+      if (!isSidebarVisibleStatus(status)) {
+        continue;
+      }
+
+      items.push({ kind: 'group', id: group.id, status, group, archived: false });
     }
 
     for (const w of activeWindows) {
       if (activeGroupedWindowIds.has(w.id)) {
         continue;
       }
-      items.push({ kind: 'window', id: w.id, status: getAggregatedStatus(w.layout), window: w });
+
+      const status = getAggregatedStatus(w.layout);
+      if (!isSidebarVisibleStatus(status)) {
+        continue;
+      }
+
+      items.push({ kind: 'window', id: w.id, status, window: w, archived: false });
     }
 
-    // 排序：第一优先级状态，第二优先级组>窗口
-    items.sort((a, b) => {
-      const statusDiff = getStatusSortPriority(b.status) - getStatusSortPriority(a.status);
-      if (statusDiff !== 0) return statusDiff;
-      const kindDiff = (b.kind === 'group' ? 1 : 0) - (a.kind === 'group' ? 1 : 0);
-      return kindDiff;
-    });
-
-    // 过滤掉暂停状态的窗口和组
-    return items.filter(item => item.status !== WindowStatus.Paused);
+    return items;
   }, [activeGroupedWindowIds, activeGroups, activeWindows, windows]);
 
-  const visibleArchivedWindows = useMemo(
-    () => archivedWindows.filter((window) => !archivedGroupedWindowIds.has(window.id)),
-    [archivedGroupedWindowIds, archivedWindows],
-  );
+  const archivedItems = useMemo<SidebarItem[]>(() => {
+    const items: SidebarItem[] = [];
+
+    for (const group of archivedGroups) {
+      const status = getGroupStatus(group, windows);
+      if (!isSidebarVisibleStatus(status)) {
+        continue;
+      }
+
+      items.push({ kind: 'group', id: group.id, status, group, archived: true });
+    }
+
+    for (const w of archivedWindows) {
+      if (archivedGroupedWindowIds.has(w.id)) {
+        continue;
+      }
+
+      const status = getAggregatedStatus(w.layout);
+      if (!isSidebarVisibleStatus(status)) {
+        continue;
+      }
+
+      items.push({ kind: 'window', id: w.id, status, window: w, archived: true });
+    }
+
+    return items;
+  }, [archivedGroupedWindowIds, archivedGroups, archivedWindows, windows]);
 
   // 按窗口类型分类（和主界面保持一致）
   const { localWindows, sshWindows } = useMemo(() => {
     const local: SidebarItem[] = [];
     const ssh: SidebarItem[] = [];
 
-    for (const item of sortedItems) {
+    for (const item of activeItems) {
       if (item.kind === 'window') {
         const windowKind = getWindowKind(item.window);
         if (windowKind === 'ssh') {
@@ -148,7 +164,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     return { localWindows: local, sshWindows: ssh };
-  }, [sortedItems, windows]);
+  }, [activeItems, windows]);
+
+  const allItems = useMemo(
+    () => [...activeItems, ...archivedItems],
+    [activeItems, archivedItems],
+  );
 
   const visibleItems = useMemo(() => {
     if (terminalSidebarFilter === 'local') {
@@ -159,11 +180,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       return sshWindows;
     }
 
-    return sortedItems;
-  }, [localWindows, sortedItems, sshWindows, terminalSidebarFilter]);
+    if (terminalSidebarFilter === 'archived') {
+      return archivedItems;
+    }
 
-  const archivedCount = visibleArchivedWindows.length + archivedGroups.length;
-  const shouldShowArchivedSection = false;
+    return allItems;
+  }, [allItems, archivedItems, localWindows, sshWindows, terminalSidebarFilter]);
 
   // 处理宽度调整
   useEffect(() => {
@@ -266,6 +288,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <option value="all">{t('sidebar.tab.all')}</option>
             <option value="local">{t('sidebar.tab.local')}</option>
             <option value="ssh">{t('sidebar.tab.ssh')}</option>
+            <option value="archived">{t('sidebar.tab.archived')}</option>
           </select>
         </div>
         )}
@@ -282,73 +305,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {visibleItems.length > 0 && (
             <div>
               {visibleItems.map(renderSidebarItem)}
-            </div>
-          )}
-
-          {/* 归档终端 */}
-          {shouldShowArchivedSection && (
-            <div className="border-t border-zinc-800">
-              {/* 归档标题 */}
-              {sidebarExpanded ? (
-                <div className="px-3 py-2 flex items-center gap-2 text-xs font-semibold text-zinc-400 tracking-wide">
-                  <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-800 text-zinc-400">
-                    <Archive size={14} />
-                  </span>
-                  <span>{t('sidebar.tab.archived')}</span>
-                  <span className="ml-auto text-zinc-500">({archivedCount})</span>
-                </div>
-              ) : (
-                <Tooltip.Provider>
-                  <Tooltip.Root delayDuration={300}>
-                    <Tooltip.Trigger asChild>
-                      <div className="w-full px-3 py-2 flex items-center justify-center">
-                        <div className="relative">
-                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-800 text-zinc-400">
-                            <Archive size={14} />
-                          </span>
-                          {archivedCount > 0 && (
-                            <span className="absolute -top-1 -right-1 w-3 h-3 bg-zinc-600 text-[8px] rounded-full flex items-center justify-center">
-                              {archivedCount}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </Tooltip.Trigger>
-                    <Tooltip.Portal>
-                      <Tooltip.Content
-                        className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
-                        side="right"
-                        sideOffset={5}
-                      >
-                        {`${t('sidebar.tab.archived')} (${archivedCount})`}
-                      </Tooltip.Content>
-                    </Tooltip.Portal>
-                  </Tooltip.Root>
-                </Tooltip.Provider>
-              )}
-
-              {/* 归档窗口和组列表 */}
-              <>
-                {archivedGroups.map((group) => (
-                  <SidebarGroupItem
-                    key={group.id}
-                    group={group}
-                    isActive={group.id === activeGroupId}
-                    isExpanded={sidebarExpanded}
-                    onClick={() => onGroupSelect?.(group.id)}
-                  />
-                ))}
-                {visibleArchivedWindows.map((window) => (
-                  <SidebarWindowItem
-                    key={window.id}
-                    window={window}
-                    isActive={window.id === activeWindowId}
-                    isExpanded={sidebarExpanded}
-                    onClick={() => onWindowSelect(window.id)}
-                    onContextMenu={(e) => handleWindowContextMenu(window.id, e)}
-                  />
-                ))}
-              </>
             </div>
           )}
         </div>
