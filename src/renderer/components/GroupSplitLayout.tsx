@@ -207,7 +207,7 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
             <div
               className={`
                 ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'}
-                bg-transparent hover:bg-blue-500 transition-colors flex-shrink-0
+                bg-zinc-600 hover:bg-blue-500 transition-colors flex-shrink-0
                 ${isResizing && resizingIndex === index ? 'bg-blue-500' : ''}
               `}
               onMouseDown={handleMouseDown(index)}
