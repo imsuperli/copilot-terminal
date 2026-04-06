@@ -27,7 +27,7 @@ vi.mock('@xterm/xterm', () => ({
   })),
 }));
 
-vi.mock('@xterm/addon-fit', () => ({
+vi.mock('../../utils/xtermAddonFit', () => ({
   FitAddon: vi.fn().mockImplementation(() => {
     const instance = {
       fit: vi.fn(),
@@ -152,13 +152,13 @@ describe('TerminalPane resize on resume', () => {
       />
     );
 
-    expect(screen.getByTitle('窗格状态')).toBeInTheDocument();
-    expect(screen.queryByTitle('关闭窗格')).not.toBeInTheDocument();
+    expect(container.querySelector('svg.lucide-activity')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '关闭窗格' })).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(container.firstElementChild as HTMLElement);
 
-    expect(screen.queryByTitle('窗格状态')).not.toBeInTheDocument();
-    const closeButton = screen.getByTitle('关闭窗格');
+    expect(container.querySelector('svg.lucide-activity')).not.toBeInTheDocument();
+    const closeButton = screen.getByRole('button', { name: '关闭窗格' });
     expect(closeButton).toBeInTheDocument();
     expect(closeButton).not.toHaveClass('absolute');
 

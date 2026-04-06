@@ -31,7 +31,7 @@ vi.mock('@xterm/xterm', () => {
   return { Terminal };
 });
 
-vi.mock('@xterm/addon-fit', () => {
+vi.mock('../../utils/xtermAddonFit', () => {
   const FitAddon = vi.fn().mockImplementation(() => ({
     fit: vi.fn(),
   }));

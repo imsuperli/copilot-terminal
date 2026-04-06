@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetTerminalPaneReplaySessionCacheForTests, TerminalPane } from '../TerminalPane';
 import { WindowStatus } from '../../types/window';
@@ -55,7 +55,7 @@ vi.mock('@xterm/xterm', () => ({
   }),
 }));
 
-vi.mock('@xterm/addon-fit', () => ({
+vi.mock('../../utils/xtermAddonFit', () => ({
   FitAddon: vi.fn().mockImplementation(() => ({
     fit: vi.fn(),
   })),
@@ -80,11 +80,16 @@ describe('TerminalPane history replay', () => {
     terminalInstances.length = 0;
     ptyCallbacks.length = 0;
     terminalDataCallbacks.length = 0;
+    vi.mocked(window.electronAPI.getPtyHistory).mockReset();
+    vi.mocked(window.electronAPI.ptyWrite).mockReset();
+    vi.mocked(window.electronAPI.ptyResize).mockReset();
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
     });
     vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    vi.mocked(window.electronAPI.ptyWrite).mockResolvedValue(undefined);
+    vi.mocked(window.electronAPI.ptyResize).mockResolvedValue(undefined);
     vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
       success: true,
       data: { chunks: ['history-1', 'history-2'], lastSeq: 2 },
@@ -92,6 +97,7 @@ describe('TerminalPane history replay', () => {
   });
 
   afterEach(() => {
+    cleanup();
     if (originalRequestAnimationFrame) {
       vi.stubGlobal('requestAnimationFrame', originalRequestAnimationFrame);
     }
@@ -210,6 +216,9 @@ describe('TerminalPane history replay', () => {
   });
 
   it('does not replay history again when a placeholder pane receives its first pid', async () => {
+    const windowId = 'win-placeholder';
+    const paneId = 'pane-placeholder';
+
     vi.mocked(window.electronAPI.getPtyHistory)
       .mockResolvedValueOnce({
         success: true,
@@ -222,9 +231,9 @@ describe('TerminalPane history replay', () => {
 
     const { rerender } = render(
       <TerminalPane
-        windowId="win-1"
+        windowId={windowId}
         pane={{
-          id: 'pane-1',
+          id: paneId,
           cwd: 'D:\\tmp',
           command: 'pwsh.exe',
           status: WindowStatus.Restoring,
@@ -237,14 +246,16 @@ describe('TerminalPane history replay', () => {
     );
 
     await waitFor(() => {
-      expect(window.electronAPI.getPtyHistory).toHaveBeenCalledTimes(1);
+      expect(
+        vi.mocked(window.electronAPI.getPtyHistory).mock.calls.filter(([id]) => id === paneId),
+      ).toHaveLength(1);
     });
 
     rerender(
       <TerminalPane
-        windowId="win-1"
+        windowId={windowId}
         pane={{
-          id: 'pane-1',
+          id: paneId,
           cwd: 'D:\\tmp',
           command: 'pwsh.exe',
           status: WindowStatus.Running,
@@ -257,19 +268,24 @@ describe('TerminalPane history replay', () => {
     );
 
     await waitFor(() => {
-      expect(window.electronAPI.getPtyHistory).toHaveBeenCalledTimes(1);
+      expect(
+        vi.mocked(window.electronAPI.getPtyHistory).mock.calls.filter(([id]) => id === paneId),
+      ).toHaveLength(1);
     });
 
     expect(terminalInstances[0]?.reset).not.toHaveBeenCalled();
     expect(window.electronAPI.ptyWrite).not.toHaveBeenCalledWith(
-      'win-1',
-      'pane-1',
+      windowId,
+      paneId,
       '\u001b[?1;2c',
       { source: 'xterm.onData' },
     );
   });
 
   it('resets and replays a fresh session when a paused pane starts again with a new pid', async () => {
+    const windowId = 'win-fresh';
+    const paneId = 'pane-fresh';
+
     vi.mocked(window.electronAPI.getPtyHistory)
       .mockResolvedValueOnce({
         success: true,
@@ -282,9 +298,9 @@ describe('TerminalPane history replay', () => {
 
     const { rerender } = render(
       <TerminalPane
-        windowId="win-1"
+        windowId={windowId}
         pane={{
-          id: 'pane-1',
+          id: paneId,
           cwd: 'D:\\tmp',
           command: 'pwsh.exe',
           status: WindowStatus.Running,
@@ -297,14 +313,19 @@ describe('TerminalPane history replay', () => {
     );
 
     await waitFor(() => {
-      expect(window.electronAPI.getPtyHistory).toHaveBeenCalledTimes(1);
+      expect(
+        vi.mocked(window.electronAPI.getPtyHistory).mock.calls.filter(([id]) => id === paneId),
+      ).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(terminalInstances[0]?.write).toHaveBeenCalledWith('old-output', expect.any(Function));
     });
 
     rerender(
       <TerminalPane
-        windowId="win-1"
+        windowId={windowId}
         pane={{
-          id: 'pane-1',
+          id: paneId,
           cwd: 'D:\\tmp',
           command: 'pwsh.exe',
           status: WindowStatus.Paused,
@@ -322,9 +343,9 @@ describe('TerminalPane history replay', () => {
 
     rerender(
       <TerminalPane
-        windowId="win-1"
+        windowId={windowId}
         pane={{
-          id: 'pane-1',
+          id: paneId,
           cwd: 'D:\\tmp',
           command: 'pwsh.exe',
           status: WindowStatus.Running,
@@ -337,14 +358,21 @@ describe('TerminalPane history replay', () => {
     );
 
     await waitFor(() => {
-      expect(window.electronAPI.getPtyHistory).toHaveBeenCalledTimes(2);
+      expect(
+        vi.mocked(window.electronAPI.getPtyHistory).mock.calls.filter(([id]) => id === paneId),
+      ).toHaveLength(2);
     });
 
     expect(terminalInstances[0]?.reset).toHaveBeenCalledTimes(2);
-    expect(terminalInstances[0]?.write).toHaveBeenCalledWith('new-output', expect.any(Function));
+    await waitFor(() => {
+      expect(terminalInstances[0]?.write).toHaveBeenLastCalledWith('new-output', expect.any(Function));
+    });
   });
 
   it('suppresses replay-generated DA replies after the same pane session remounts', async () => {
+    const windowId = 'win-remount';
+    const paneId = 'pane-remount';
+
     vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
       success: true,
       data: { chunks: ['\u001b[c'], lastSeq: 1 },
@@ -352,9 +380,9 @@ describe('TerminalPane history replay', () => {
 
     const { unmount } = render(
       <TerminalPane
-        windowId="win-1"
+        windowId={windowId}
         pane={{
-          id: 'pane-1',
+          id: paneId,
           cwd: 'D:\\tmp',
           command: 'pwsh.exe',
           status: WindowStatus.Running,
@@ -370,21 +398,23 @@ describe('TerminalPane history replay', () => {
       expect(terminalInstances[0]?.write).toHaveBeenCalled();
     });
 
-    expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith(
-      'win-1',
-      'pane-1',
-      '\u001b[?1;2c',
-      { source: 'xterm.onData' },
-    );
+    await waitFor(() => {
+      expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith(
+        windowId,
+        paneId,
+        '\u001b[?1;2c',
+        { source: 'xterm.onData' },
+      );
+    });
 
     vi.mocked(window.electronAPI.ptyWrite).mockClear();
     unmount();
 
     render(
       <TerminalPane
-        windowId="win-1"
+        windowId={windowId}
         pane={{
-          id: 'pane-1',
+          id: paneId,
           cwd: 'D:\\tmp',
           command: 'pwsh.exe',
           status: WindowStatus.Running,
@@ -397,12 +427,14 @@ describe('TerminalPane history replay', () => {
     );
 
     await waitFor(() => {
-      expect(window.electronAPI.getPtyHistory).toHaveBeenCalledTimes(2);
+      expect(
+        vi.mocked(window.electronAPI.getPtyHistory).mock.calls.filter(([id]) => id === paneId),
+      ).toHaveLength(2);
     });
 
     expect(window.electronAPI.ptyWrite).not.toHaveBeenCalledWith(
-      'win-1',
-      'pane-1',
+      windowId,
+      paneId,
       '\u001b[?1;2c',
       { source: 'xterm.onData' },
     );

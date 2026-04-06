@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
+import { FitAddon } from '../utils/xtermAddonFit';
 import { X } from 'lucide-react';
 import { Pane, WindowStatus } from '../types/window';
 import { StatusDot } from './StatusDot';
@@ -16,6 +16,7 @@ import {
 } from '../utils/sshCwdTracking';
 import { ensureTerminalFontsLoaded, TERMINAL_FONT_FAMILY } from '../utils/terminalFonts';
 import { onTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
+import { installTerminalImeFix, type ImeCompositionState } from '../utils/terminalImeFix';
 import { AppTooltip } from './ui/AppTooltip';
 import '../styles/xterm.css';
 
@@ -207,6 +208,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const sshPaneRef = useRef(pane.ssh);
   const sshRuntimeCwdRef = useRef(pane.ssh?.remoteCwd ?? pane.cwd);
   const sshCwdTrackerRef = useRef(createSSHCwdTrackerState(sshRuntimeCwdRef.current));
+  const imeCompositionStateRef = useRef<ImeCompositionState>({ isComposing: false });
   const [isHovered, setIsHovered] = useState(false);
 
   // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
@@ -424,6 +426,21 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     }
   }, [isActive, isWindowActive, pane.id]);
 
+  useEffect(() => {
+    if (!isWindowActive) {
+      return;
+    }
+
+    forceResizeToContainer();
+    const delayedResizeTimer = window.setTimeout(() => {
+      forceResizeToContainer();
+    }, 180);
+
+    return () => {
+      window.clearTimeout(delayedResizeTimer);
+    };
+  }, [forceResizeToContainer, isWindowActive]);
+
   // 监听字体设置更新
   useEffect(() => {
     const unsubscribe = onTerminalSettingsUpdated((settings) => {
@@ -529,6 +546,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     terminal.loadAddon(fitAddon);
     terminal.open(terminalContainerRef.current);
     const pasteCaptureBlockMs = 300;
+    const disposeImeFix = installTerminalImeFix(terminal, imeCompositionStateRef.current);
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -555,6 +573,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       const pending = outputBufferRef.current;
       if (!pending || !terminalRef.current) {
+        return;
+      }
+
+      if (imeCompositionStateRef.current.isComposing) {
+        outputFlushFrameRef.current = requestAnimationFrame(flushOutput);
         return;
       }
 
@@ -632,6 +655,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     const replayHistory = async ({ resetTerminal = false }: { resetTerminal?: boolean } = {}) => {
       const token = ++historyReplayTokenRef.current;
+      const isReplayStillCurrent = () => (
+        token === historyReplayTokenRef.current
+        && terminalRef.current === terminal
+      );
       isHistoryLoadedRef.current = false;
       bufferedLiveDataRef.current = [];
       lastAppliedSeqRef.current = 0;
@@ -651,21 +678,22 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       try {
         const response = await window.electronAPI?.getPtyHistory?.(pane.id);
-        if (token !== historyReplayTokenRef.current) {
+        if (!isReplayStillCurrent()) {
           return;
         }
 
         const historySnapshot = extractPtyHistorySnapshot(response);
         lastAppliedSeqRef.current = historySnapshot.lastSeq;
-        // 历史回放只用于恢复屏幕内容，不应重新触发终端握手查询。
-        const replayData = stripReplayDeviceAttributeQueries(historySnapshot.chunks.join(''));
+        const replayData = shouldSuppressReplayProtocolReplies
+          ? stripReplayDeviceAttributeQueries(historySnapshot.chunks.join(''))
+          : historySnapshot.chunks.join('');
         if (sshPaneRef.current && replayData) {
           const runtimeCwd = extractLatestOsc7RemoteCwd(replayData);
           if (runtimeCwd) {
             syncRuntimeSshCwd(runtimeCwd);
           }
         }
-        if (replayData) {
+        if (replayData && isReplayStillCurrent()) {
           if (shouldSuppressReplayProtocolReplies) {
             suppressPtyWriteRef.current = true;
             shouldResumePtyWrites = true;
@@ -679,7 +707,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           suppressPtyWriteRef.current = false;
         }
 
-        if (token !== historyReplayTokenRef.current) {
+        if (!isReplayStillCurrent()) {
           return;
         }
 
@@ -752,7 +780,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     };
 
     const terminalContainer = terminalContainerRef.current;
-    const helperTextarea = terminalContainer?.querySelector('textarea');
+    const helperTextarea = terminal.textarea ?? terminalContainer?.querySelector('textarea');
     helperTextarea?.addEventListener('paste', suppressNativePaste, true);
     terminalContainer?.addEventListener('paste', suppressNativePaste as EventListener, true);
 
@@ -878,6 +906,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       lastAppliedSeqRef.current = 0;
       suppressPtyWriteRef.current = false;
       hasCompletedReplayForCurrentSessionRef.current = false;
+      disposeImeFix();
       dataDisposable.dispose();
       binaryDisposable?.dispose();
       selectionDisposable.dispose();
@@ -970,7 +999,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   return (
     <div
-      className={`relative flex flex-col h-full bg-[#0f0f0f] ${
+      className={`relative flex h-full min-h-0 min-w-0 flex-col bg-[#0f0f0f] ${
         isActive ? `ring-1 ${ringColor}` : ''
       }`}
       style={{
@@ -1044,7 +1073,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       {/* 终端容器 */}
       <div
         ref={terminalContainerRef}
-        className="flex-1 overflow-hidden px-1"
+        className="min-h-0 min-w-0 flex-1 overflow-hidden px-1"
         onContextMenu={handleContextMenu}
       />
     </div>

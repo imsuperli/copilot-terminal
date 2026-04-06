@@ -441,7 +441,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   );
 
   return (
-    <div className={`flex ${embedded ? 'h-full w-full' : 'h-screen w-screen'} bg-zinc-900 overflow-hidden`}>
+    <div className={`flex ${embedded ? 'h-full w-full' : 'h-screen w-screen'} min-w-0 bg-zinc-900 overflow-hidden`}>
       {/* 渚ц竟鏍?*/}
       {!embedded && (
         <Sidebar
@@ -453,10 +453,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       )}
 
       {/* 主内容区 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 - 在嵌入模式下也显示 */}
         <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {/* 返回按钮 - 仅在非嵌入模式显示 */}
             {!embedded && (
             <AppTooltip content={t('terminalView.return')} placement="toolbar-leading">
@@ -470,8 +470,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             )}
 
             {/* 绐楀彛鍚嶇О鍜?git 鍒嗘敮 */}
-            <div className="flex items-center gap-2">
-              <span className="text-zinc-100 font-medium text-sm">{terminalWindow.name}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-zinc-100 font-medium text-sm">{terminalWindow.name}</span>
               {terminalWindow.gitBranch && (
                 <span className="text-xs text-zinc-400 flex items-center gap-1">
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">

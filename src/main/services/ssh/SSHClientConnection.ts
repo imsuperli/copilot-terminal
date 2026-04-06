@@ -29,6 +29,7 @@ import {
 import { resolveSSHAlgorithmPreferences } from './SSHAlgorithmCatalog';
 import { SSHSftpSession } from './SSHSftpSession';
 import { connectToX11Display, describeX11DisplaySpec } from './X11Socket';
+import { applyTerminalEnvironmentDefaults } from '../../utils/environment';
 
 export interface SSHShellOpenOptions {
   cols: number;
@@ -1039,12 +1040,12 @@ function formatForwardedPort(forward: ForwardedPortConfig): string {
 
 function buildRemoteShellEnv(): Record<string, string> {
   const utf8Locale = resolvePreferredUtf8Locale();
-  const env: Record<string, string> = {
+  const env = applyTerminalEnvironmentDefaults({
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Copilot-Terminal',
     LANG: process.env.LANG || utf8Locale,
     LC_CTYPE: process.env.LC_CTYPE || process.env.LANG || utf8Locale,
-  };
+  }) as Record<string, string>;
 
   if (process.env.TERM_PROGRAM_VERSION) {
     env.TERM_PROGRAM_VERSION = process.env.TERM_PROGRAM_VERSION;

@@ -50,7 +50,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
     };
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full min-h-0 min-w-0">
       <SplitContainer
         windowId={windowId}
         splitNode={rootSplitNode}
@@ -167,16 +167,18 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`flex ${isHorizontal ? 'flex-row' : 'flex-col'} w-full h-full`}
+      className={`flex ${isHorizontal ? 'flex-row' : 'flex-col'} w-full h-full min-h-0 min-w-0 overflow-hidden`}
     >
       {splitNode.children.map((child, index) => (
         <React.Fragment key={child.type === 'pane' ? child.id : `split-${index}`}>
           {/* 子节点 */}
           <div
             style={{
-              [isHorizontal ? 'width' : 'height']: `${(sizes[index] ?? (1 / splitNode.children.length)) * 100}%`,
+              flexBasis: 0,
+              flexGrow: sizes[index] ?? (1 / splitNode.children.length),
+              flexShrink: 1,
             }}
-            className="relative h-full"
+            className="relative h-full min-h-0 min-w-0 overflow-hidden"
           >
             <LayoutNodeRenderer
               windowId={windowId}

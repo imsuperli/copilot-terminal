@@ -35,6 +35,9 @@ interface GetLatestEnvironmentVariablesOptions {
   preferredShellProgram?: string | null;
 }
 
+const DEFAULT_GIT_PAGER = 'less -FRX';
+const DEFAULT_LESS_FLAGS = 'FRX';
+
 /**
  * 获取最新的系统环境变量
  *
@@ -46,10 +49,65 @@ interface GetLatestEnvironmentVariablesOptions {
 export function getLatestEnvironmentVariables(options: GetLatestEnvironmentVariablesOptions = {}): NodeJS.ProcessEnv {
   const currentPlatform = platform();
   if (currentPlatform === 'win32') {
-    return getWindowsEnvironmentVariables();
+    return applyTerminalEnvironmentDefaults(getWindowsEnvironmentVariables());
   }
 
-  return getUnixEnvironmentVariables(currentPlatform, options.preferredShellProgram);
+  return applyTerminalEnvironmentDefaults(getUnixEnvironmentVariables(currentPlatform, options.preferredShellProgram));
+}
+
+export function applyTerminalEnvironmentDefaults(input: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...input };
+  const shouldNormalizeLess = env.GIT_PAGER
+    ? isLessLikePager(env.GIT_PAGER)
+    : shouldPreferLessForGit(env.PAGER);
+
+  if (!env.GIT_PAGER && shouldPreferLessForGit(env.PAGER)) {
+    env.GIT_PAGER = DEFAULT_GIT_PAGER;
+  }
+
+  if (shouldNormalizeLess && !env.LESS) {
+    env.LESS = DEFAULT_LESS_FLAGS;
+  } else if (env.LESS && shouldNormalizeLess) {
+    env.LESS = appendLessFlags(env.LESS, DEFAULT_LESS_FLAGS);
+  }
+
+  return env;
+}
+
+function shouldPreferLessForGit(pager?: string | null): boolean {
+  const normalizedPager = pager?.trim();
+  if (!normalizedPager) {
+    return true;
+  }
+
+  return isLessLikePager(normalizedPager);
+}
+
+function isLessLikePager(pager?: string | null): boolean {
+  const normalizedPager = pager?.trim().toLowerCase();
+  if (!normalizedPager) {
+    return false;
+  }
+
+  return normalizedPager === 'less'
+    || normalizedPager.startsWith('less ')
+    || normalizedPager.endsWith('/less')
+    || normalizedPager.endsWith('\\less.exe');
+}
+
+function appendLessFlags(value: string, flags: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return flags;
+  }
+
+  const existingFlags = new Set(trimmed.replace(/^[+-]/, '').replace(/[^A-Za-z]/g, '').split(''));
+  const missingFlags = flags.split('').filter((flag) => !existingFlags.has(flag));
+  if (missingFlags.length === 0) {
+    return trimmed;
+  }
+
+  return `${trimmed}${missingFlags.join('')}`;
 }
 
 /**

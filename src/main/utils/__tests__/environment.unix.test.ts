@@ -94,7 +94,11 @@ describe('getLatestEnvironmentVariables on Unix', () => {
       preferredShellProgram: '/custom/zsh',
     });
 
-    expect(env).toBe(process.env);
+    expect(env).toMatchObject(process.env);
+    expect(env).toEqual(expect.objectContaining({
+      GIT_PAGER: 'less -FRX',
+      LESS: 'FRX',
+    }));
   });
 });
 
