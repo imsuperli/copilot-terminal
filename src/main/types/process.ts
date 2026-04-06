@@ -71,6 +71,11 @@ export interface SSHSessionConfig {
   command?: string;
 }
 
+export interface ZmodemDialogHandlers {
+  selectSendFiles?: () => Promise<string[] | null>;
+  chooseSavePath?: (suggestedName: string) => Promise<string | null>;
+}
+
 // 进程句柄
 export interface ProcessHandle {
   pid: number;

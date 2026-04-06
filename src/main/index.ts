@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron';
 import path from 'path';
 import { ProcessManager } from './services/ProcessManager';
 import { StatusPoller } from './services/StatusPoller';
@@ -262,6 +262,38 @@ app.whenReady().then(async () => {
   processManager = new ProcessManager(() => currentWorkspace?.settings ?? null);
   processManager.setSSHKnownHostsStore(sshKnownHostsStore);
   processManager.setSSHHostKeyPromptService(sshHostKeyPromptService);
+  processManager.setZmodemDialogHandlers({
+    selectSendFiles: async () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return null;
+      }
+
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openFile', 'multiSelections'],
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return null;
+      }
+
+      return result.filePaths;
+    },
+    chooseSavePath: async (suggestedName: string) => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return null;
+      }
+
+      const result = await dialog.showSaveDialog(mainWindow, {
+        defaultPath: suggestedName,
+      });
+
+      if (result.canceled || !result.filePath) {
+        return null;
+      }
+
+      return result.filePath;
+    },
+  });
 
   processManager.warmupConPtyDll().catch((error) => {
     console.error('[Main] ConPTY DLL warmup failed:', error);

@@ -1,8 +1,9 @@
 import type { ClientChannel } from 'ssh2';
 import { StringDecoder } from 'string_decoder';
-import { IPty, SSHSessionConfig } from '../../types/process';
+import { IPty, SSHSessionConfig, ZmodemDialogHandlers } from '../../types/process';
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
+import { SSHZmodemController } from './SSHZmodemController';
 
 export interface SSHPtySessionOptions {
   pid: number;
@@ -10,6 +11,7 @@ export interface SSHPtySessionOptions {
   connectionPool: ISSHConnectionPool;
   initialCols?: number;
   initialRows?: number;
+  zmodemDialogs?: ZmodemDialogHandlers;
 }
 
 type ExitEvent = {
@@ -37,8 +39,8 @@ export class SSHPtySession implements IPty {
   private readonly dataListeners = new Set<(data: string) => void>();
   private readonly exitListeners = new Set<(event: ExitEvent) => void>();
   private readonly pendingData: string[] = [];
-  private readonly stdoutDecoder: StringDecoder;
   private readonly stderrDecoder: StringDecoder;
+  private readonly stdoutZmodemController: SSHZmodemController;
   private pendingExit: ExitEvent | null;
   private closed: boolean;
   private shellInitializationTimer: ReturnType<typeof setTimeout> | null;
@@ -54,8 +56,15 @@ export class SSHPtySession implements IPty {
     this.connectionPool = options.connectionPool;
     this.channel = null;
     this.connectionLease = null;
-    this.stdoutDecoder = new StringDecoder('utf8');
     this.stderrDecoder = new StringDecoder('utf8');
+    this.stdoutZmodemController = new SSHZmodemController({
+      emitTerminalData: (data) => this.emitData(data),
+      writeToChannel: (data) => {
+        this.channel?.write(data);
+      },
+      selectSendFiles: options.zmodemDialogs?.selectSendFiles,
+      chooseSavePath: options.zmodemDialogs?.chooseSavePath,
+    });
     this.pendingExit = null;
     this.closed = false;
     this.shellInitializationTimer = null;
@@ -79,6 +88,7 @@ export class SSHPtySession implements IPty {
 
     this.closed = true;
     this.clearShellInitializationTimer();
+    this.stdoutZmodemController.destroy();
 
     try {
       if (signal && this.channel && typeof this.channel.signal === 'function') {
@@ -230,11 +240,8 @@ export class SSHPtySession implements IPty {
       this.channel = stream;
 
       stream.on('data', (data: Buffer | string) => {
-        const decoded = decodeChunk(data, this.stdoutDecoder);
-        if (decoded) {
-          this.emitData(decoded);
-          this.scheduleInitializeRemoteShell(40);
-        }
+        this.stdoutZmodemController.consume(data);
+        this.scheduleInitializeRemoteShell(40);
       });
       stream.stderr?.on('data', (data: Buffer | string) => {
         const decoded = decodeChunk(data, this.stderrDecoder);
@@ -251,7 +258,7 @@ export class SSHPtySession implements IPty {
       });
       stream.on('close', () => {
         this.clearShellInitializationTimer();
-        this.flushDecoder(this.stdoutDecoder);
+        this.stdoutZmodemController.flush();
         this.flushDecoder(this.stderrDecoder);
         this.channel = null;
         void this.releaseConnectionLease();

@@ -4,7 +4,15 @@ import { existsSync } from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { IProcessManager, SSHSessionConfig, TerminalConfig, ProcessHandle, ProcessInfo, ProcessStatus } from '../types/process';
+import {
+  IProcessManager,
+  SSHSessionConfig,
+  TerminalConfig,
+  ProcessHandle,
+  ProcessInfo,
+  ProcessStatus,
+  ZmodemDialogHandlers,
+} from '../types/process';
 import { Settings } from '../types/workspace';
 import { StatusDetectorImpl, IStatusDetector } from './StatusDetector';
 import { WindowStatus } from '../../shared/types/window';
@@ -77,6 +85,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   private sshKnownHostsStore: ISSHKnownHostsStore | null;
   private sshHostKeyPromptService: ISSHHostKeyPromptService | null;
   private readonly sshConnectionPool: ISSHConnectionPool;
+  private zmodemDialogHandlers: ZmodemDialogHandlers | null;
   private conPtyWarmupPromise: Promise<void> | null;
   private conPtyWarmupCompleted: boolean;
 
@@ -111,6 +120,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       knownHostsStore: this.sshKnownHostsStore,
       hostKeyPromptService: this.sshHostKeyPromptService,
     });
+    this.zmodemDialogHandlers = null;
     this.conPtyWarmupPromise = null;
     this.conPtyWarmupCompleted = false;
     // ??????? StatusDetector ??????? StatusPoller ??????
@@ -131,6 +141,10 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   setSSHHostKeyPromptService(service: ISSHHostKeyPromptService): void {
     this.sshHostKeyPromptService = service;
     this.sshConnectionPool.setHostKeyPromptService(service);
+  }
+
+  setZmodemDialogHandlers(handlers: ZmodemDialogHandlers): void {
+    this.zmodemDialogHandlers = handlers;
   }
 
   async warmupConPtyDll(): Promise<void> {
@@ -242,6 +256,7 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
         connectionPool: this.sshConnectionPool,
         initialCols: config.initialCols,
         initialRows: config.initialRows,
+        zmodemDialogs: this.zmodemDialogHandlers ?? undefined,
       });
     }
 
