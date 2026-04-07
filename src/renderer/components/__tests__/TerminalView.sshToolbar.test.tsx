@@ -177,7 +177,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByRole('button', { name: '打开文件夹' })).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: '打开 SSH 文件面板' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '隐藏 SSH 监控' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '显示 SSH 监控' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '管理 SSH 端口转发' })).toBeInTheDocument();
   });
 
@@ -204,7 +204,7 @@ describe('TerminalView SSH toolbar', () => {
     }));
   });
 
-  it('renders the ssh session status bar for the active ssh pane', () => {
+  it('keeps the ssh session status bar hidden by default', () => {
     render(
       <TerminalView
         window={createSSHWindow()}
@@ -214,7 +214,7 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    expect(screen.getByTestId('ssh-session-status-bar')).toHaveTextContent('win-ssh-1:pane-ssh-1:/srv/app');
+    expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
   });
 
   it('toggles the ssh session status bar from the toolbar', async () => {
@@ -229,12 +229,12 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    expect(screen.getByTestId('ssh-session-status-bar')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '隐藏 SSH 监控' }));
     expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '显示 SSH 监控' }));
     expect(screen.getByTestId('ssh-session-status-bar')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '隐藏 SSH 监控' }));
+    expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
   });
 });

@@ -94,7 +94,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [sshPortForwardTarget, setSSHPortForwardTarget] = useState<{ windowId: string; paneId: string } | null>(null);
   const [sshSftpOpen, setSSHSftpOpen] = useState(false);
-  const [sshMetricsOpen, setSSHMetricsOpen] = useState(true);
+  const [sshMetricsOpen, setSSHMetricsOpen] = useState(false);
 
   // Store
   const {

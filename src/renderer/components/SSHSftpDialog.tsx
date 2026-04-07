@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Crosshair,
   Download,
+  Edit2,
   File,
   Filter,
   Folder,
@@ -240,6 +241,11 @@ export function SSHSftpDialog({
     await handleManualNavigate(nextPath);
     setIsEditingPath(false);
   }, [handleManualNavigate, pathInput]);
+
+  const handleStartPathEditing = useCallback(() => {
+    setPathInput(listing?.path || currentCwd || initialPath || '~');
+    setIsEditingPath(true);
+  }, [currentCwd, initialPath, listing?.path]);
 
   const handlePathEditorBlur = useCallback((event: React.FocusEvent<HTMLFormElement>) => {
     const nextFocusedElement = event.relatedTarget as Node | null;
@@ -656,30 +662,43 @@ export function SSHSftpDialog({
               </form>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => setIsEditingPath(true)}
+                <div
+                  onDoubleClick={handleStartPathEditing}
                   className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto rounded border border-zinc-800 bg-zinc-900/70 px-1 py-0.5 text-left"
                   data-testid="ssh-sftp-breadcrumbs"
                 >
                   {pathSegments.map((segment, index) => (
                     <React.Fragment key={segment.path}>
                       {index > 0 && <ChevronRight size={10} className="shrink-0 text-zinc-600" />}
-                      <span
-                        className="shrink-0 rounded px-1 py-0 text-[11px] leading-tight text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (segment.path === listing?.path) {
+                            return;
+                          }
+                          void handleManualNavigate(segment.path);
+                        }}
+                        onDoubleClick={(event) => event.stopPropagation()}
+                        disabled={segment.path === listing?.path}
+                        className={`shrink-0 rounded px-1 py-0 text-[11px] leading-tight transition-colors ${
+                          segment.path === listing?.path
+                            ? 'text-zinc-200'
+                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+                        }`}
+                        title={segment.path}
                       >
                         {segment.label}
-                      </span>
+                      </button>
                     </React.Fragment>
                   ))}
-                </button>
+                </div>
                 <button
                   type="button"
-                  aria-label={t('sshSftpDialog.go')}
-                  onClick={() => setIsEditingPath(true)}
+                  aria-label={t('sshSftpDialog.editPath')}
+                  onClick={handleStartPathEditing}
                   className="flex h-6 w-6 items-center justify-center rounded border border-zinc-800 bg-zinc-900 text-zinc-200 transition-colors hover:bg-zinc-800"
                 >
-                  <ArrowRight size={13} />
+                  <Edit2 size={12} />
                 </button>
                 <AppTooltip content={t('sshSftpDialog.hide')}>
                   <button
@@ -771,52 +790,60 @@ export function SSHSftpDialog({
           </div>
         )}
 
-        {notice && (
-          <div className={`mx-3 mt-3 rounded-md border px-3 py-2 text-sm ${
-            notice.tone === 'progress'
-              ? 'border-blue-500/30 bg-blue-500/10 text-blue-100'
-              : notice.tone === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
-                : 'border-zinc-700 bg-zinc-900 text-zinc-200'
-          }`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  {notice.tone === 'progress' ? (
-                    <RefreshCw size={14} className="shrink-0 animate-spin" />
-                  ) : notice.tone === 'success' ? (
-                    <CheckCircle2 size={14} className="shrink-0" />
-                  ) : (
-                    <Info size={14} className="shrink-0" />
-                  )}
-                  <span className="truncate">{notice.message}</span>
-                </div>
-                {notice.detail && (
-                  <div className="mt-1 truncate font-mono text-[11px] text-current/80">
-                    {notice.detail}
+        <div className="relative min-h-0 flex-1">
+          {notice && (
+            <div
+              data-testid="ssh-sftp-notice-stack"
+              className="pointer-events-none absolute inset-x-3 top-3 z-20"
+            >
+              <div className="pointer-events-auto">
+                <div className={`rounded-md border px-3 py-2 text-sm shadow-xl backdrop-blur-sm ${
+                  notice.tone === 'progress'
+                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-100'
+                    : notice.tone === 'success'
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+                      : 'border-zinc-700 bg-zinc-900/95 text-zinc-200'
+                }`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        {notice.tone === 'progress' ? (
+                          <RefreshCw size={14} className="shrink-0 animate-spin" />
+                        ) : notice.tone === 'success' ? (
+                          <CheckCircle2 size={14} className="shrink-0" />
+                        ) : (
+                          <Info size={14} className="shrink-0" />
+                        )}
+                        <span className="truncate">{notice.message}</span>
+                      </div>
+                      {notice.detail && (
+                        <div className="mt-1 truncate font-mono text-[11px] text-current/80">
+                          {notice.detail}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      aria-label={t('common.close')}
+                      onClick={() => setNotice(null)}
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-current/70 transition-colors hover:bg-black/10 hover:text-current"
+                    >
+                      <X size={13} />
+                    </button>
                   </div>
-                )}
-              </div>
 
-              <button
-                type="button"
-                aria-label={t('common.close')}
-                onClick={() => setNotice(null)}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-current/70 transition-colors hover:bg-black/10 hover:text-current"
-              >
-                <X size={13} />
-              </button>
+                  {notice.tone === 'progress' && (
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full w-full animate-pulse rounded-full bg-current/70" />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
+          )}
 
-            {notice.tone === 'progress' && (
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full w-full animate-pulse rounded-full bg-current/70" />
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-1 py-1">
+          <div className="min-h-0 h-full overflow-y-auto px-1 py-1">
           {isLoading && !listing && (
             <PanelEmptyState label={t('common.loading')} />
           )}
@@ -906,6 +933,7 @@ export function SSHSftpDialog({
               );
             })}
           </div>
+        </div>
         </div>
       </aside>
 

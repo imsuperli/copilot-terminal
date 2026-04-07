@@ -109,7 +109,7 @@ describe('SSHSftpDialog', () => {
       });
     });
 
-    await user.click(screen.getByTestId('ssh-sftp-breadcrumbs'));
+    await user.dblClick(screen.getByTestId('ssh-sftp-breadcrumbs'));
     const pathInput = screen.getByTestId('ssh-sftp-path-input');
     await user.clear(pathInput);
     await user.type(pathInput, '/srv/app/releases');
@@ -157,7 +157,7 @@ describe('SSHSftpDialog', () => {
       });
     });
 
-    await user.click(screen.getByTestId('ssh-sftp-breadcrumbs'));
+    await user.click(screen.getByRole('button', { name: '编辑远程路径' }));
     const pathInput = screen.getByTestId('ssh-sftp-path-input');
     await user.clear(pathInput);
     await user.type(pathInput, '/tmp/should-not-apply');
@@ -165,6 +165,53 @@ describe('SSHSftpDialog', () => {
 
     expect(screen.getByTestId('ssh-sftp-breadcrumbs')).toBeInTheDocument();
     expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledTimes(1);
+  });
+
+  it('navigates to the clicked breadcrumb segment', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.listSSHSftpDirectory)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          path: '/srv/app/releases',
+          entries: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          path: '/srv',
+          entries: [],
+        },
+      });
+
+    render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/srv/app/releases"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenNthCalledWith(1, {
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv/app/releases',
+      });
+    });
+
+    await user.click(screen.getByRole('button', { name: 'srv' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenNthCalledWith(2, {
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '/srv',
+      });
+    });
   });
 
   it('uses a narrower default width and supports drag resizing', async () => {
@@ -399,6 +446,7 @@ describe('SSHSftpDialog', () => {
 
     expect(await screen.findByText('release.tar.gz 下载完成。')).toBeInTheDocument();
     expect(screen.getByText('/tmp/release.tar.gz')).toBeInTheDocument();
+    expect(screen.getByTestId('ssh-sftp-notice-stack')).toHaveClass('absolute');
 
     await user.click(screen.getByRole('button', { name: '上传文件' }));
 
