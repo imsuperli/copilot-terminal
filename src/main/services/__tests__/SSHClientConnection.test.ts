@@ -65,8 +65,6 @@ describe('SSHClientConnection', () => {
           TERM_PROGRAM: 'Copilot-Terminal',
           LANG: 'zh_CN.UTF-8',
           LC_CTYPE: expect.any(String),
-          GIT_PAGER: 'less -FRX',
-          LESS: 'FRX',
         }),
         x11: expect.objectContaining({
           protocol: 'MIT-MAGIC-COOKIE-1',
@@ -74,6 +72,10 @@ describe('SSHClientConnection', () => {
       }),
       expect.any(Function),
     );
+
+    const shellOptions = shell.mock.calls[0]?.[1];
+    expect(shellOptions?.env).not.toHaveProperty('GIT_PAGER');
+    expect(shellOptions?.env).not.toHaveProperty('LESS');
   });
 
   it('pauses the handshake timeout while waiting for host-key confirmation', async () => {
