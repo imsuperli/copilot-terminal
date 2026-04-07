@@ -76,6 +76,9 @@ describe('SSHClientConnection', () => {
     const shellOptions = shell.mock.calls[0]?.[1];
     expect(shellOptions?.env).not.toHaveProperty('GIT_PAGER');
     expect(shellOptions?.env).not.toHaveProperty('LESS');
+    expect(shellOptions?.env).not.toHaveProperty('GIT_CONFIG_COUNT');
+    expect(shellOptions?.env).not.toHaveProperty('GIT_CONFIG_KEY_0');
+    expect(shellOptions?.env).not.toHaveProperty('GIT_CONFIG_VALUE_0');
   });
 
   it('pauses the handshake timeout while waiting for host-key confirmation', async () => {

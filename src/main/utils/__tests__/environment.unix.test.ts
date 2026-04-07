@@ -95,10 +95,8 @@ describe('getLatestEnvironmentVariables on Unix', () => {
     });
 
     expect(env).toMatchObject(process.env);
-    expect(env).toEqual(expect.objectContaining({
-      GIT_PAGER: 'less -FRX',
-      LESS: 'FRX',
-    }));
+    expect(env.GIT_PAGER).toBeUndefined();
+    expect(env.LESS).toBeUndefined();
   });
 });
 

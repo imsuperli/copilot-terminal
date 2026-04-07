@@ -35,7 +35,6 @@ interface GetLatestEnvironmentVariablesOptions {
   preferredShellProgram?: string | null;
 }
 
-const DEFAULT_GIT_PAGER = 'less -FRX';
 const DEFAULT_LESS_FLAGS = 'FRX';
 
 /**
@@ -59,11 +58,7 @@ export function applyTerminalEnvironmentDefaults(input: NodeJS.ProcessEnv): Node
   const env: NodeJS.ProcessEnv = { ...input };
   const shouldNormalizeLess = env.GIT_PAGER
     ? isLessLikePager(env.GIT_PAGER)
-    : shouldPreferLessForGit(env.PAGER);
-
-  if (!env.GIT_PAGER && shouldPreferLessForGit(env.PAGER)) {
-    env.GIT_PAGER = DEFAULT_GIT_PAGER;
-  }
+    : isLessLikePager(env.PAGER);
 
   if (shouldNormalizeLess && !env.LESS) {
     env.LESS = DEFAULT_LESS_FLAGS;
@@ -72,15 +67,6 @@ export function applyTerminalEnvironmentDefaults(input: NodeJS.ProcessEnv): Node
   }
 
   return env;
-}
-
-function shouldPreferLessForGit(pager?: string | null): boolean {
-  const normalizedPager = pager?.trim();
-  if (!normalizedPager) {
-    return true;
-  }
-
-  return isLessLikePager(normalizedPager);
 }
 
 function isLessLikePager(pager?: string | null): boolean {
