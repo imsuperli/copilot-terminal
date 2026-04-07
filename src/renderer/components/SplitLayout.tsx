@@ -98,6 +98,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   onPaneExit,
   onSplitResize,
 }) => {
+  const { t } = useI18n();
   const [sizes, setSizes] = useState<number[]>(splitNode.sizes);
   const [isResizing, setIsResizing] = useState(false);
   const [resizingIndex, setResizingIndex] = useState<number>(-1);
@@ -163,6 +164,8 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   }, [isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
+  const dividerActiveClassName = 'bg-sky-400 shadow-[0_0_0_1px_rgba(56,189,248,0.28)]';
+  const dividerIdleClassName = 'bg-zinc-500/90 shadow-[0_0_0_1px_rgba(24,24,27,0.65)] group-hover:bg-sky-400 group-hover:shadow-[0_0_0_1px_rgba(56,189,248,0.28)]';
 
   return (
     <div
@@ -197,13 +200,30 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
           {/* 分隔条 */}
           {index < splitNode.children.length - 1 && (
             <div
+              role="separator"
+              aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
+              aria-label={isHorizontal ? t('splitLayout.resizeVertical') : t('splitLayout.resizeHorizontal')}
               className={`
-                ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'}
-                bg-transparent hover:bg-blue-500 transition-colors flex-shrink-0
-                ${isResizing && resizingIndex === index ? 'bg-blue-500' : ''}
+                ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
+                group relative flex-shrink-0 select-none
+                bg-zinc-950/70 hover:bg-sky-500/10 transition-colors
               `}
               onMouseDown={handleMouseDown(index)}
-            />
+            >
+              <div
+                className={`
+                  absolute rounded-full transition-all duration-150
+                  ${isHorizontal
+                    ? 'inset-y-0 left-1/2 w-[2px] -translate-x-1/2'
+                    : 'inset-x-0 top-1/2 h-[2px] -translate-y-1/2'
+                  }
+                  ${isResizing && resizingIndex === index
+                    ? `${dividerActiveClassName} ${isHorizontal ? 'w-[3px]' : 'h-[3px]'}`
+                    : dividerIdleClassName
+                  }
+                `}
+              />
+            </div>
           )}
         </React.Fragment>
       ))}

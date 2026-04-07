@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { SplitLayout } from '../SplitLayout';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 import { useWindowStore } from '../../stores/windowStore';
@@ -284,5 +284,33 @@ describe('SplitLayout', () => {
       type: 'split',
       sizes: [0.3, 0.7],
     });
+  });
+
+  it('renders a visible separator for split panes', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('pane-a'), createPaneNode('pane-b')],
+    };
+
+    render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="pane-a"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    const separator = screen.getByRole('separator', { name: '调整垂直分割线' });
+    expect(separator.className).toContain('w-2');
+    expect(separator.className).toContain('bg-zinc-950/70');
+
+    const dividerIndicator = separator.firstElementChild;
+    expect(dividerIndicator).not.toBeNull();
+    expect(dividerIndicator?.className).toContain('bg-zinc-500/90');
   });
 });
