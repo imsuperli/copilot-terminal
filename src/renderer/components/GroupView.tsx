@@ -1,5 +1,5 @@
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, FolderOpen, Play, Square, Archive } from 'lucide-react';
+﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import { Home, FolderOpen, Play, Square, Archive } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { GroupSplitLayout } from './GroupSplitLayout';
@@ -72,6 +72,15 @@ export const GroupView: React.FC<GroupViewProps> = ({
       autoStartWindows();
     }
   }, [group.id, isActive]); // 保持原来的依赖项，避免无限循环
+
+  // 更新原生标题栏 - 显示组名称
+  useEffect(() => {
+    if (!isActive) return;
+
+    window.electronAPI?.setWindowTitle(group.name).catch((error: any) => {
+      // 忽略错误
+    });
+  }, [isActive, group.name]);
 
   // 计算组的聚合状态
   const groupAggregatedStatus = useMemo(() => {
@@ -311,7 +320,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
               onClick={onReturn}
               className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
             >
-              <ArrowLeft size={14} />
+              <Home size={14} />
             </button>
           </AppTooltip>
 

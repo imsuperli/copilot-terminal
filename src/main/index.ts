@@ -65,7 +65,7 @@ function createWindow() {
     minWidth: 480,
     minHeight: 360,
     backgroundColor: '#0a0a0a',
-    title: 'Copilot-Terminal',
+    title: '',
     icon: path.join(__dirname, '../../resources/icon.png'),
     show: false, // 创建时不显示，等待渲染进程通知
     frame: true,

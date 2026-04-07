@@ -27,4 +27,10 @@ export function registerMiscHandlers(ctx: HandlerContext) {
   ipcMain.handle('clipboard-read-text', () => {
     return successResponse(clipboard.readText());
   });
+
+  // 设置窗口标题
+  ipcMain.handle('set-window-title', (_event, title: string) => {
+    ctx.mainWindow?.setTitle(title ?? '');
+    return successResponse();
+  });
 }

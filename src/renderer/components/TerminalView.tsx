@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { ArrowLeft, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity } from 'lucide-react';
+import { Home, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -145,6 +145,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       }
     };
   }, [isActive, terminalWindow.activePaneId, terminalWindow.id, panes, setActivePane]);
+
+  // 更新原生标题栏 - 显示窗口名称和分支
+  useEffect(() => {
+    if (!isActive || embedded) return;
+
+    let title = terminalWindow.name;
+    if (terminalWindow.gitBranch) {
+      title += ` · ${terminalWindow.gitBranch}`;
+    }
+
+    window.electronAPI?.setWindowTitle(title).catch((error: any) => {
+      // 忽略错误
+    });
+  }, [isActive, embedded, terminalWindow.name, terminalWindow.gitBranch]);
 
   // 蹇嵎閿鐞?
   useKeyboardShortcuts({
@@ -474,23 +488,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 onClick={onReturn}
                 className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
               >
-                <ArrowLeft size={14} />
+                <Home size={14} />
               </button>
             </AppTooltip>
             )}
-
-            {/* 绐楀彛鍚嶇О鍜?git 鍒嗘敮 */}
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-zinc-100 font-medium text-sm">{terminalWindow.name}</span>
-              {terminalWindow.gitBranch && (
-                <span className="text-xs text-zinc-400 flex items-center gap-1">
-                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M11.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122V6A2.5 2.5 0 0110 8.5H6a1 1 0 00-1 1v1.128a2.251 2.251 0 11-1.5 0V5.372a2.25 2.25 0 111.5 0v1.836A2.492 2.492 0 016 7h4a1 1 0 001-1v-.628A2.25 2.25 0 019.5 3.25zM4.25 12a.75.75 0 100 1.5.75.75 0 000-1.5zM3.5 3.25a.75.75 0 111.5 0 .75.75 0 01-1.5 0z"/>
-                  </svg>
-                  {terminalWindow.gitBranch}
-                </span>
-              )}
-            </div>
           </div>
 
           {/* 鍙充晶鎸夐挳缁?*/}

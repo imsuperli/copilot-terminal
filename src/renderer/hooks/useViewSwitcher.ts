@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { useWindowStore } from '../stores/windowStore';
 import { useI18n } from '../i18n';
 import { getAllPanes } from '../utils/layoutHelpers';
@@ -63,6 +63,8 @@ export const useViewSwitcher = (): UseViewSwitcherReturn => {
     try {
       setError(null);
       await window.electronAPI.switchToUnifiedView();
+      // 清空原生标题栏
+      window.electronAPI?.setWindowTitle('').catch(() => {});
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : t('viewSwitch.toUnifiedFailed');
       setError(errorMessage);
