@@ -13,6 +13,7 @@ import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
+import type { SSHProfile } from '../../shared/types/ssh';
 
 export interface GroupViewProps {
   group: WindowGroup;
@@ -20,6 +21,7 @@ export interface GroupViewProps {
   onWindowSwitch: (windowId: string) => void;
   onGroupSwitch?: (groupId: string) => void;
   isActive: boolean;
+  sshProfiles?: SSHProfile[];
 }
 
 /**
@@ -32,6 +34,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
   onWindowSwitch,
   onGroupSwitch,
   isActive,
+  sshProfiles = [],
 }) => {
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -396,6 +399,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
           isOpen={quickSwitcherOpen}
           currentWindowId={group.activeWindowId}
           currentGroupId={group.id}
+          sshProfiles={sshProfiles}
           onSelect={handleQuickSwitcherSelect}
           onSelectGroup={handleQuickSwitcherSelectGroup}
           onClose={() => setQuickSwitcherOpen(false)}

@@ -807,6 +807,7 @@ function AppContent() {
               onWindowSwitch={handleWindowSwitch}
               onGroupSwitch={handleGroupSwitch}
               isActive={isVisible}
+              sshProfiles={sshProfiles}
             />
           </div>
         );
@@ -833,6 +834,7 @@ function AppContent() {
             onWindowSwitch={handleWindowSwitch}
             onGroupSwitch={handleGroupSwitch}
             isActive={true}
+            sshProfiles={sshProfiles}
           />
         </div>
       )}

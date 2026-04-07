@@ -20,6 +20,7 @@ import { AppTooltip } from './ui/AppTooltip';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import { SSHSftpDialog } from './SSHSftpDialog';
 import { SSHSessionStatusBar } from './SSHSessionStatusBar';
+import type { SSHProfile } from '../../shared/types/ssh';
 import {
   canPaneOpenInIDE,
   canPaneOpenLocalFolder,
@@ -47,6 +48,7 @@ export interface TerminalViewProps {
   onStopAndRemoveFromGroup?: (windowId: string) => void;
   /** 切换到指定组的回调 */
   onGroupSwitch?: (groupId: string) => void;
+  sshProfiles?: SSHProfile[];
 }
 
 /**
@@ -63,6 +65,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   onRemoveFromGroup,
   onStopAndRemoveFromGroup,
   onGroupSwitch,
+  sshProfiles = [],
 }) => {
   const { t } = useI18n();
   const { enabledIDEs } = useIDESettings();
@@ -749,6 +752,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         <QuickSwitcher
           isOpen={quickSwitcherOpen}
           currentWindowId={terminalWindow.id}
+          sshProfiles={sshProfiles}
           onSelect={handleQuickSwitcherSelect}
           onSelectGroup={handleQuickSwitcherSelectGroup}
           onClose={() => setQuickSwitcherOpen(false)}

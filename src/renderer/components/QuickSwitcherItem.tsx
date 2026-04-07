@@ -12,6 +12,8 @@ import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../s
 
 interface QuickSwitcherItemProps {
   window: Window;
+  displayName?: string;
+  secondaryText?: string;
   isSelected: boolean;
   query: string;
 }
@@ -135,6 +137,8 @@ function getContextInfo(
  */
 export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   window: terminalWindow,
+  displayName,
+  secondaryText,
   isSelected,
   query,
 }) => {
@@ -150,9 +154,11 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
     () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
     [panes, terminalWindow.activePaneId]
   );
+  const resolvedDisplayName = displayName ?? terminalWindow.name;
 
   // 获取第一个窗格的工作目录作为显示
   const workingDirectory = useMemo(() => panes[0]?.cwd || '', [panes]);
+  const resolvedSecondaryText = secondaryText ?? workingDirectory;
   const lastOutput = useMemo(() => panes[0]?.lastOutput, [panes]);
 
   const StatusIcon = getStatusIcon(aggregatedStatus);
@@ -190,8 +196,8 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   }, [language, terminalWindow.createdAt]);
 
   // 高亮匹配
-  const nameHighlights = highlightMatches(terminalWindow.name, query);
-  const cwdHighlights = highlightMatches(workingDirectory, query);
+  const nameHighlights = highlightMatches(resolvedDisplayName, query);
+  const secondaryHighlights = highlightMatches(resolvedSecondaryText, query);
   const folderHighlights = highlightMatches(folderName, query);
 
   // 打开文件夹
@@ -276,7 +282,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
 
           {/* 完整路径 */}
           <div className="text-sm text-zinc-400 truncate">
-            {cwdHighlights.map((part, index) => (
+            {secondaryHighlights.map((part, index) => (
               <span
                 key={index}
                 className={part.highlight ? 'bg-yellow-500 text-black' : ''}

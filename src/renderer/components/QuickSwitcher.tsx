@@ -7,7 +7,10 @@ import { fuzzyMatch } from '../utils/fuzzySearch';
 import { Window, WindowStatus } from '../types/window';
 import { WindowGroup } from '../../shared/types/window-group';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
+import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
 import { useI18n } from '../i18n';
+import type { SSHProfile } from '../../shared/types/ssh';
 
 interface QuickSwitcherProps {
   isOpen: boolean;
@@ -16,11 +19,12 @@ interface QuickSwitcherProps {
   onSelectGroup?: (groupId: string) => void;
   currentWindowId: string | null;
   currentGroupId?: string | null;
+  sshProfiles?: SSHProfile[];
 }
 
 // 统一的列表项类型
 type SwitcherItem =
-  | { type: 'window'; data: Window }
+  | { type: 'window'; data: Window; displayName: string; secondaryText: string }
   | { type: 'group'; data: WindowGroup };
 
 /**
@@ -34,6 +38,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
   onSelectGroup,
   currentWindowId,
   currentGroupId,
+  sshProfiles = [],
 }) => {
   const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
@@ -44,6 +49,44 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
   const listRef = useRef<HTMLDivElement>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
+  const sshProfilesById = useMemo(
+    () => new Map(sshProfiles.map((profile) => [profile.id, profile])),
+    [sshProfiles],
+  );
+
+  const getWindowDisplayInfo = (window: Window) => {
+    const profileId = getStandaloneSSHProfileId(window);
+    const profile = profileId ? sshProfilesById.get(profileId) : undefined;
+    const workingDirectory = getCurrentWindowWorkingDirectory(window);
+
+    if (!profile) {
+      return {
+        displayName: window.name,
+        secondaryText: workingDirectory,
+        searchTerms: [window.name, workingDirectory],
+      };
+    }
+
+    const targetLabel = `${profile.user}@${profile.host}:${profile.port}`;
+    const remoteCwd = workingDirectory || profile.defaultRemoteCwd || '';
+    const secondaryText = remoteCwd ? `${targetLabel} | ${remoteCwd}` : targetLabel;
+
+    return {
+      displayName: profile.name,
+      secondaryText,
+      searchTerms: [
+        profile.name,
+        window.name,
+        targetLabel,
+        workingDirectory,
+        profile.defaultRemoteCwd || '',
+        profile.host,
+        profile.user,
+        profile.notes || '',
+        ...profile.tags,
+      ],
+    };
+  };
 
   // 获取窗口的排序优先级
   const getWindowPriority = (window: Window): number => {
@@ -79,14 +122,18 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
     // 过滤窗口
     const filteredWindows: SwitcherItem[] = windows
       .filter((window) => {
-        const matchName = fuzzyMatch(query, window.name);
-        // 获取第一个窗格的工作目录进行匹配
-        const panes = window.layout.type === 'pane' ? [window.layout.pane] : [];
-        const cwd = panes[0]?.cwd || '';
-        const matchCwd = fuzzyMatch(query, cwd);
-        return matchName || matchCwd;
+        const displayInfo = getWindowDisplayInfo(window);
+        return displayInfo.searchTerms.some((value) => fuzzyMatch(query, value));
       })
-      .map((window) => ({ type: 'window' as const, data: window }));
+      .map((window) => {
+        const displayInfo = getWindowDisplayInfo(window);
+        return {
+          type: 'window' as const,
+          data: window,
+          displayName: displayInfo.displayName,
+          secondaryText: displayInfo.secondaryText,
+        };
+      });
 
     // 过滤窗口组
     const filteredGroups: SwitcherItem[] = groups
@@ -134,7 +181,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
 
       return 0;
     });
-  }, [windows, groups, query, currentWindowId, currentGroupId]);
+  }, [windows, groups, query, currentWindowId, currentGroupId, sshProfilesById]);
 
   // 重置状态和处理动画
   useEffect(() => {
@@ -302,6 +349,8 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
                   {item.type === 'window' ? (
                     <QuickSwitcherItem
                       window={item.data}
+                      displayName={item.displayName}
+                      secondaryText={item.secondaryText}
                       isSelected={index === selectedIndex}
                       query={query}
                     />
