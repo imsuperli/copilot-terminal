@@ -1,5 +1,5 @@
 /* xterm.js styles */
-@import '@xterm/xterm/css/xterm.css';
+@import '../../../node_modules/@xterm/xterm/css/xterm.css';
 
 /* Remove xterm.js default padding so the terminal fills the container */
 .xterm {

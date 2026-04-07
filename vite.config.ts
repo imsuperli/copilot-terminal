@@ -11,13 +11,6 @@ const pkg = JSON.parse(
 export default defineConfig({
   plugins: [react()],
 
-  resolve: {
-    alias: {
-      '@xterm/addon-fit': path.resolve(__dirname, 'node_modules/@xterm/addon-fit/lib/addon-fit.mjs'),
-      '@xterm/xterm': path.resolve(__dirname, 'node_modules/@xterm/xterm/lib/xterm.mjs'),
-    },
-  },
-
   root: path.join(__dirname, 'src/renderer'),
 
   // 静态资源目录
