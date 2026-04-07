@@ -781,6 +781,8 @@ export function CreateWindowDialog({
       title={isEditingSSHProfile ? t('sshProfileDialog.editTitle') : t('createWindow.unifiedTitle')}
       showCloseButton
       closeLabel={t('common.close')}
+      overlayStyle={{ zIndex: 10000 }}
+      contentStyle={{ zIndex: 10010 }}
       contentClassName="!w-[min(760px,94vw)] !max-w-none flex max-h-[88vh] flex-col overflow-hidden rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]"
       headerClassName="px-6 pt-5 pb-0"
       bodyClassName="min-h-0 flex-1 px-6 pb-5 [color-scheme:dark]"

@@ -807,7 +807,9 @@ function AppContent() {
               onWindowSwitch={handleWindowSwitch}
               onGroupSwitch={handleGroupSwitch}
               isActive={isVisible}
+              sshEnabled={sshEnabled}
               sshProfiles={sshProfiles}
+              onSSHProfileSaved={handleSSHProfileSaved}
             />
           </div>
         );

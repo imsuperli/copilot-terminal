@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Menu, Settings } from 'lucide-react';
+import { Menu, Plus, Settings } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
+import { CreateWindowDialog } from './CreateWindowDialog';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { getWindowCount, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import { WindowStatus, type Window } from '../types/window';
@@ -12,6 +13,7 @@ import { StatusDot } from './StatusDot';
 import { getGroupStatus } from '../../shared/utils/status-utils';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import type { WindowGroup } from '../../shared/types/window-group';
+import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 
 interface SidebarProps {
   activeWindowId: string | null;
@@ -20,6 +22,9 @@ interface SidebarProps {
   onGroupSelect?: (groupId: string) => void;
   onWindowContextMenu?: (windowId: string, e: React.MouseEvent) => void;
   onSettingsClick?: () => void;
+  sshEnabled?: boolean;
+  sshProfiles?: SSHProfile[];
+  onSSHProfileSaved?: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
 }
 
 type SidebarItem =
@@ -45,6 +50,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onGroupSelect,
   onWindowContextMenu,
   onSettingsClick,
+  sshEnabled = false,
+  sshProfiles = [],
+  onSSHProfileSaved,
 }) => {
   const { t } = useI18n();
   const {
@@ -62,6 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   } = useWindowStore();
 
   const [isResizing, setIsResizing] = useState(false);
+  const [isCreateWindowDialogOpen, setIsCreateWindowDialogOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
   const activeWindows = getActiveWindows();
@@ -214,6 +223,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onWindowContextMenu?.(windowId, e);
   };
 
+  const handleOpenCreateWindowDialog = useCallback(() => {
+    setIsCreateWindowDialogOpen(true);
+  }, []);
+
   const renderSidebarItem = (item: SidebarItem) => {
     if (item.kind === 'group') {
       return (
@@ -309,8 +322,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* 底部设置按钮 */}
+        {/* 底部操作区 */}
         <div className="border-t border-zinc-800 flex-shrink-0">
+          <Tooltip.Provider>
+            <Tooltip.Root delayDuration={300}>
+              <Tooltip.Trigger asChild>
+                <button
+                  onClick={handleOpenCreateWindowDialog}
+                  className={`
+                    w-full h-10 flex items-center gap-2
+                    text-zinc-100 bg-zinc-800 hover:bg-zinc-700
+                    transition-all duration-200 border-b border-zinc-800
+                    ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
+                  `}
+                  aria-label={t('common.newTerminal')}
+                >
+                  <Plus size={16} />
+                  {sidebarExpanded && (
+                    <span className="text-sm font-medium transition-opacity duration-200">
+                      {t('common.newTerminal')}
+                    </span>
+                  )}
+                </button>
+              </Tooltip.Trigger>
+              {!sidebarExpanded && (
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                    side="right"
+                    sideOffset={5}
+                  >
+                    {t('common.newTerminal')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              )}
+            </Tooltip.Root>
+          </Tooltip.Provider>
+
           <Tooltip.Provider>
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
@@ -356,6 +404,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           aria-label="调整侧边栏宽度"
         />
       )}
+
+      <CreateWindowDialog
+        open={isCreateWindowDialogOpen}
+        onOpenChange={setIsCreateWindowDialogOpen}
+        sshEnabled={sshEnabled}
+        sshProfiles={sshProfiles}
+        onSSHProfileSaved={onSSHProfileSaved}
+      />
     </div>
   );
 };

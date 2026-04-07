@@ -16,6 +16,8 @@ interface DialogProps {
   headerActions?: React.ReactNode;
   showCloseButton?: boolean;
   closeLabel?: string;
+  overlayStyle?: React.CSSProperties;
+  contentStyle?: React.CSSProperties;
 }
 
 export function Dialog({
@@ -32,14 +34,17 @@ export function Dialog({
   headerActions,
   showCloseButton = false,
   closeLabel = 'Close',
+  overlayStyle,
+  contentStyle,
 }: DialogProps) {
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="fixed inset-0 z-[1200] bg-black/50" />
+        <RadixDialog.Overlay className="fixed inset-0 z-[1200] bg-black/50" style={overlayStyle} />
         <RadixDialog.Content
           aria-describedby={description ? undefined : undefined}
           className={`fixed top-1/2 left-1/2 z-[1210] w-[92vw] max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-card bg-bg-card ${contentClassName}`}
+          style={contentStyle}
         >
           <div className={`px-card-padding pt-card-padding ${description ? 'pb-4' : 'pb-3'} ${headerClassName}`}>
             <div className="flex items-start justify-between gap-4">

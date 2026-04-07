@@ -13,6 +13,16 @@ vi.mock('../SidebarWindowItem', () => ({
   SidebarWindowItem: ({ window }: { window: { name: string } }) => <div>{window.name}</div>,
 }));
 
+vi.mock('../CreateWindowDialog', () => ({
+  CreateWindowDialog: ({
+    open,
+    sshEnabled,
+  }: {
+    open: boolean;
+    sshEnabled?: boolean;
+  }) => (open ? <div data-testid="create-window-dialog">{sshEnabled ? 'ssh-enabled' : 'local-only'}</div> : null),
+}));
+
 function createWindowWithStatus(name: string, cwd: string, command: string, status: WindowStatus): Window {
   const window = createSinglePaneWindow(name, cwd, command);
   if (window.layout.type === 'pane') {
@@ -235,5 +245,52 @@ describe('Terminal Sidebar', () => {
     expect(screen.getByTestId('terminal-sidebar-scroll-region')).toHaveClass(
       'terminal-sidebar-scroll-region-collapsed',
     );
+  });
+
+  it('opens the create window dialog from the expanded action button', async () => {
+    const user = userEvent.setup();
+    const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: true,
+    });
+
+    render(
+      <Sidebar
+        activeWindowId={localWindow.id}
+        onWindowSelect={vi.fn()}
+        sshEnabled
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '新建终端' }));
+
+    expect(screen.getByTestId('create-window-dialog')).toHaveTextContent('ssh-enabled');
+  });
+
+  it('keeps the create window action available when the sidebar is collapsed', async () => {
+    const user = userEvent.setup();
+    const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: false,
+    });
+
+    render(
+      <Sidebar
+        activeWindowId={localWindow.id}
+        onWindowSelect={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '新建终端' }));
+
+    expect(screen.getByTestId('create-window-dialog')).toHaveTextContent('local-only');
   });
 });
