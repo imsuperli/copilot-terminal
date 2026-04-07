@@ -3,7 +3,7 @@ import { StringDecoder } from 'string_decoder';
 import { IPty, SSHSessionConfig, ZmodemDialogHandlers } from '../../types/process';
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
-import { SSHZmodemController } from './SSHZmodemController';
+import { SSHZmodemController, type ZmodemSentry, type ZmodemSentryOptions } from './SSHZmodemController';
 
 export interface SSHPtySessionOptions {
   pid: number;
@@ -12,6 +12,7 @@ export interface SSHPtySessionOptions {
   initialCols?: number;
   initialRows?: number;
   zmodemDialogs?: ZmodemDialogHandlers;
+  createZmodemSentry?: (options: ZmodemSentryOptions) => ZmodemSentry;
 }
 
 type ExitEvent = {
@@ -39,10 +40,13 @@ export class SSHPtySession implements IPty {
   private readonly dataListeners = new Set<(data: string) => void>();
   private readonly exitListeners = new Set<(event: ExitEvent) => void>();
   private readonly pendingData: string[] = [];
-  private readonly stderrDecoder: StringDecoder;
-  private readonly stdoutZmodemController: SSHZmodemController;
+  private stderrDecoder: StringDecoder;
+  private stdoutZmodemController: SSHZmodemController;
+  private readonly createZmodemController: () => SSHZmodemController;
+  private pendingChannelExit: ExitEvent | null;
   private pendingExit: ExitEvent | null;
   private closed: boolean;
+  private recoveringShellAfterZmodemClose: boolean;
   private shellInitializationTimer: ReturnType<typeof setTimeout> | null;
   private shellInitialized: boolean;
 
@@ -57,16 +61,20 @@ export class SSHPtySession implements IPty {
     this.channel = null;
     this.connectionLease = null;
     this.stderrDecoder = new StringDecoder('utf8');
-    this.stdoutZmodemController = new SSHZmodemController({
+    this.createZmodemController = () => new SSHZmodemController({
       emitTerminalData: (data) => this.emitData(data),
       writeToChannel: (data) => {
         this.channel?.write(data);
       },
       selectSendFiles: options.zmodemDialogs?.selectSendFiles,
       chooseSavePath: options.zmodemDialogs?.chooseSavePath,
+      createSentry: options.createZmodemSentry,
     });
+    this.stdoutZmodemController = this.createZmodemController();
+    this.pendingChannelExit = null;
     this.pendingExit = null;
     this.closed = false;
+    this.recoveringShellAfterZmodemClose = false;
     this.shellInitializationTimer = null;
     this.shellInitialized = false;
   }
@@ -231,44 +239,98 @@ export class SSHPtySession implements IPty {
     });
 
     try {
-      const stream = await this.connectionLease.connection.openShell({
-        cols: this.cols,
-        rows: this.rows,
-        x11: this.ssh.x11,
-      });
-
-      this.channel = stream;
-
-      stream.on('data', (data: Buffer | string) => {
-        this.stdoutZmodemController.consume(data);
-        this.scheduleInitializeRemoteShell(40);
-      });
-      stream.stderr?.on('data', (data: Buffer | string) => {
-        const decoded = decodeChunk(data, this.stderrDecoder);
-        if (decoded) {
-          this.emitData(decoded);
-          this.scheduleInitializeRemoteShell(40);
-        }
-      });
-      stream.on('exit', (code?: number, signal?: number | string) => {
-        this.emitExit({
-          exitCode: typeof code === 'number' ? code : 0,
-          signal: typeof signal === 'number' ? signal : undefined,
-        });
-      });
-      stream.on('close', () => {
-        this.clearShellInitializationTimer();
-        this.stdoutZmodemController.flush();
-        this.flushDecoder(this.stderrDecoder);
-        this.channel = null;
-        void this.releaseConnectionLease();
-        this.emitExit(this.pendingExit ?? { exitCode: 0 });
-      });
-
-      this.scheduleInitializeRemoteShell(150);
+      await this.openShellChannel();
     } catch (error) {
       await this.releaseConnectionLease();
       throw error;
+    }
+  }
+
+  private async openShellChannel(): Promise<void> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    const stream = await this.connectionLease.connection.openShell({
+      cols: this.cols,
+      rows: this.rows,
+      x11: this.ssh.x11,
+    });
+
+    this.attachChannel(stream);
+    this.scheduleInitializeRemoteShell(150);
+  }
+
+  private attachChannel(stream: ClientChannel): void {
+    this.channel = stream;
+    this.recoveringShellAfterZmodemClose = false;
+
+    stream.on('data', (data: Buffer | string) => {
+      if (this.channel !== stream) {
+        return;
+      }
+
+      this.stdoutZmodemController.consume(data);
+      this.scheduleInitializeRemoteShell(40);
+    });
+    stream.stderr?.on('data', (data: Buffer | string) => {
+      if (this.channel !== stream) {
+        return;
+      }
+
+      const decoded = decodeChunk(data, this.stderrDecoder);
+      if (decoded) {
+        this.emitData(decoded);
+        this.scheduleInitializeRemoteShell(40);
+      }
+    });
+    stream.on('exit', (code?: number, signal?: number | string) => {
+      if (this.channel !== stream) {
+        return;
+      }
+
+      this.pendingChannelExit = {
+        exitCode: typeof code === 'number' ? code : 0,
+        signal: typeof signal === 'number' ? signal : undefined,
+      };
+    });
+    stream.on('close', () => {
+      if (this.channel !== stream) {
+        return;
+      }
+
+      this.clearShellInitializationTimer();
+      this.stdoutZmodemController.flush();
+      this.flushDecoder(this.stderrDecoder);
+      this.stderrDecoder = new StringDecoder('utf8');
+
+      const closeExit = this.pendingChannelExit ?? { exitCode: 0 };
+      const shouldRecoverShell = !this.closed
+        && !this.recoveringShellAfterZmodemClose
+        && this.stdoutZmodemController.shouldRecoverShellAfterUnexpectedClose();
+
+      this.channel = null;
+      this.pendingChannelExit = null;
+
+      if (shouldRecoverShell) {
+        this.recoveringShellAfterZmodemClose = true;
+        this.stdoutZmodemController = this.createZmodemController();
+        void this.recoverShellAfterUnexpectedZmodemClose(closeExit);
+        return;
+      }
+
+      void this.releaseConnectionLease();
+      this.emitExit(closeExit);
+    });
+  }
+
+  private async recoverShellAfterUnexpectedZmodemClose(closeExit: ExitEvent): Promise<void> {
+    try {
+      await this.openShellChannel();
+    } catch {
+      this.recoveringShellAfterZmodemClose = false;
+      void this.releaseConnectionLease();
+      this.emitExit(closeExit);
     }
   }
 

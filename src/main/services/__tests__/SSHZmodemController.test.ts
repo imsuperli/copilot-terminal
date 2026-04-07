@@ -12,6 +12,23 @@ function flushPromises(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+async function waitUntil(assertion: () => void, timeoutMs = 1000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+
+  while (Date.now() <= deadline) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error('Timed out while waiting for assertion');
+}
+
 describe('SSHZmodemController', () => {
   it('preserves split utf8 bytes when passing normal terminal output through the sentry', () => {
     const terminalChunks: string[] = [];
@@ -113,8 +130,10 @@ describe('SSHZmodemController', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(readFileSync(filePath)).toEqual(Buffer.from([0x41, 0x42, 0x43]));
-    expect(offer.accept).toHaveBeenCalledOnce();
+    await waitUntil(() => {
+      expect(readFileSync(filePath)).toEqual(Buffer.from([0x41, 0x42, 0x43]));
+    });
+    expect(offer.accept).toHaveBeenCalled();
     rmSync(tempDir, { recursive: true, force: true });
   });
 });

@@ -6,18 +6,18 @@ import type { ZmodemDialogHandlers } from '../../types/process';
 
 type ZmodemOctets = ArrayLike<number>;
 
-type ZmodemSentryOptions = {
+export type ZmodemSentryOptions = {
   to_terminal: (octets: ZmodemOctets) => void;
   sender: (octets: ZmodemOctets) => void;
   on_detect: (detection: ZmodemDetection) => void;
   on_retract: () => void;
 };
 
-type ZmodemSentry = {
+export type ZmodemSentry = {
   consume: (input: Uint8Array) => void;
 };
 
-type ZmodemDetection = {
+export type ZmodemDetection = {
   confirm: () => ZmodemSession;
   deny: () => void;
   is_valid: () => boolean;
@@ -76,17 +76,24 @@ export interface SSHZmodemControllerOptions extends ZmodemDialogHandlers {
   writeToChannel: (data: Buffer) => void;
   createSentry?: (options: ZmodemSentryOptions) => ZmodemSentry;
   logger?: Pick<Console, 'error'>;
+  now?: () => number;
+  receiveCloseRecoveryWindowMs?: number;
 }
 
 export class SSHZmodemController {
   private readonly decoder = new StringDecoder('utf8');
   private readonly sentry: ZmodemSentry;
   private readonly logger: Pick<Console, 'error'>;
+  private readonly now: () => number;
+  private readonly receiveCloseRecoveryWindowMs: number;
   private activeSession: ZmodemSession | null = null;
+  private lastSuccessfulReceiveAt: number | null = null;
   private destroyed = false;
 
   constructor(private readonly options: SSHZmodemControllerOptions) {
     this.logger = options.logger ?? console;
+    this.now = options.now ?? (() => Date.now());
+    this.receiveCloseRecoveryWindowMs = Math.max(options.receiveCloseRecoveryWindowMs ?? 1000, 0);
 
     const createSentry = options.createSentry ?? ((sentryOptions: ZmodemSentryOptions) => new Zmodem.Sentry(sentryOptions));
     this.sentry = createSentry({
@@ -143,6 +150,15 @@ export class SSHZmodemController {
 
     this.destroyed = true;
     this.activeSession = null;
+    this.lastSuccessfulReceiveAt = null;
+  }
+
+  shouldRecoverShellAfterUnexpectedClose(): boolean {
+    if (this.destroyed || this.lastSuccessfulReceiveAt === null) {
+      return false;
+    }
+
+    return (this.now() - this.lastSuccessfulReceiveAt) <= this.receiveCloseRecoveryWindowMs;
   }
 
   private emitTerminalBytes(octets: ZmodemOctets): void {
@@ -214,6 +230,7 @@ export class SSHZmodemController {
 
     try {
       await receiveZmodemOfferToPath(offer, filePath);
+      this.lastSuccessfulReceiveAt = this.now();
     } catch (error) {
       this.handleTransferError(session, error);
     }
