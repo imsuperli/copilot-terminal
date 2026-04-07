@@ -73,15 +73,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
     }
   }, [group.id, isActive]); // 保持原来的依赖项，避免无限循环
 
-  // 更新原生标题栏 - 显示组名称
-  useEffect(() => {
-    if (!isActive) return;
-
-    window.electronAPI?.setWindowTitle(group.name).catch((error: any) => {
-      // 忽略错误
-    });
-  }, [isActive, group.name]);
-
   // 计算组的聚合状态
   const groupAggregatedStatus = useMemo(() => {
     const statuses = groupWindows.map(w => getAggregatedStatus(w.layout));
@@ -313,7 +304,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 */}
-        <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-3 gap-2 flex-shrink-0">
+        <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-3 gap-2 flex-shrink-0 relative">
           {/* 返回按钮 */}
           <AppTooltip content="返回" placement="toolbar-leading">
             <button
@@ -324,11 +315,9 @@ export const GroupView: React.FC<GroupViewProps> = ({
             </button>
           </AppTooltip>
 
-          {/* 组状态指示器 */}
-          <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-
-          {/* 组名称 */}
-          <div className="flex items-center gap-1.5">
+          {/* 居中组名称 */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-none">
+            <div className={`w-2 h-2 rounded-full ${statusColor}`} />
             <FolderOpen size={14} className="text-zinc-400" />
             <span className="text-sm font-medium text-zinc-100 truncate max-w-[200px]">
               {group.name}

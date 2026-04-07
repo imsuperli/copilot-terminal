@@ -443,7 +443,4 @@ export interface ElectronAPI {
   addWindowToGroup: (groupId: string, windowId: string, direction: 'horizontal' | 'vertical', targetWindowId: string | null) => Promise<IpcResponse<void>>;
   removeWindowFromGroup: (groupId: string, windowId: string) => Promise<IpcResponse<{ dissolved: boolean }>>;
   updateGroupSplitSizes: (groupId: string, splitPath: number[], sizes: number[]) => Promise<IpcResponse<void>>;
-
-  // Window title
-  setWindowTitle: (title: string) => Promise<IpcResponse<void>>;
 }

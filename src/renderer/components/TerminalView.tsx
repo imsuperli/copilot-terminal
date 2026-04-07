@@ -146,20 +146,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     };
   }, [isActive, terminalWindow.activePaneId, terminalWindow.id, panes, setActivePane]);
 
-  // 更新原生标题栏 - 显示窗口名称和分支
-  useEffect(() => {
-    if (!isActive || embedded) return;
-
-    let title = terminalWindow.name;
-    if (terminalWindow.gitBranch) {
-      title += ` · ${terminalWindow.gitBranch}`;
-    }
-
-    window.electronAPI?.setWindowTitle(title).catch((error: any) => {
-      // 忽略错误
-    });
-  }, [isActive, embedded, terminalWindow.name, terminalWindow.gitBranch]);
-
   // 蹇嵎閿鐞?
   useKeyboardShortcuts({
     onCtrlTab: () => {
@@ -479,8 +465,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* 主内容区 */}
       <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 - 在嵌入模式下也显示 */}
-        <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0 relative">
+          <div className="flex min-w-0 items-center gap-2">
             {/* 返回按钮 - 仅在非嵌入模式显示 */}
             {!embedded && (
             <AppTooltip content={t('terminalView.return')} placement="toolbar-leading">
@@ -491,6 +477,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <Home size={14} />
               </button>
             </AppTooltip>
+            )}
+          </div>
+
+          {/* 居中窗口名称和 git 分支 */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+            <span className="truncate text-zinc-100 font-medium text-sm max-w-[300px]">{terminalWindow.name}</span>
+            {terminalWindow.gitBranch && (
+              <span className="text-xs text-zinc-400 flex items-center gap-1">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M11.75 2.5a.75.75 0 100 1.5.75.75 0 000-1.5zm-2.25.75a2.25 2.25 0 113 2.122V6A2.5 2.5 0 0110 8.5H6a1 1 0 00-1 1v1.128a2.251 2.251 0 11-1.5 0V5.372a2.25 2.25 0 111.5 0v1.836A2.492 2.492 0 016 7h4a1 1 0 001-1v-.628A2.25 2.25 0 019.5 3.25zM4.25 12a.75.75 0 100 1.5.75.75 0 000-1.5zM3.5 3.25a.75.75 0 111.5 0 .75.75 0 01-1.5 0z"/>
+                </svg>
+                {terminalWindow.gitBranch}
+              </span>
             )}
           </div>
 

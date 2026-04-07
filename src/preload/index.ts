@@ -276,10 +276,6 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('remove-window-from-group', groupId, windowId),
   updateGroupSplitSizes: (groupId: string, splitPath: number[], sizes: number[]) =>
     ipcRenderer.invoke('update-group-split-sizes', groupId, splitPath, sizes),
-
-  // Window title
-  setWindowTitle: (title: string) =>
-    ipcRenderer.invoke('set-window-title', title),
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
