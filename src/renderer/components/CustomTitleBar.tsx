@@ -3,9 +3,15 @@ import { Minus, Square, X, Maximize2 } from 'lucide-react';
 
 interface CustomTitleBarProps {
   title?: string;
+  showAppInfo?: boolean;
+  appName?: string;
 }
 
-export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = '' }) => {
+export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
+  title = '',
+  showAppInfo = false,
+  appName = 'Copilot Terminal'
+}) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const isMac = window.electronAPI?.platform === 'darwin';
 
@@ -72,9 +78,16 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = '' }) =>
           />
         </div>
 
-        {/* 居中：标题 */}
-        <div className="absolute left-1/2 -translate-x-1/2 text-sm text-zinc-300 font-medium truncate max-w-[400px] pointer-events-none">
-          {title}
+        {/* 居中：标题或应用信息 */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+          {showAppInfo ? (
+            <>
+              <img src="/resources/icon.png" alt="Logo" className="w-5 h-5" />
+              <span className="text-sm text-zinc-300 font-medium">{appName}</span>
+            </>
+          ) : (
+            <span className="text-sm text-zinc-300 font-medium truncate max-w-[400px]">{title}</span>
+          )}
         </div>
 
         {/* 右侧：占位 */}
@@ -93,9 +106,16 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = '' }) =>
       {/* 左侧：占位 */}
       <div className="w-16" />
 
-      {/* 居中：标题 */}
-      <div className="absolute left-1/2 -translate-x-1/2 text-sm text-zinc-300 font-medium truncate max-w-[400px] pointer-events-none">
-        {title}
+      {/* 居中：标题或应用信息 */}
+      <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+        {showAppInfo ? (
+          <>
+            <img src="/resources/icon.png" alt="Logo" className="w-4 h-4" />
+            <span className="text-sm text-zinc-300 font-medium">{appName}</span>
+          </>
+        ) : (
+          <span className="text-sm text-zinc-300 font-medium truncate max-w-[400px]">{title}</span>
+        )}
       </div>
 
       {/* 右侧：Windows 窗口控制按钮 */}

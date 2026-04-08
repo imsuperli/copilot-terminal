@@ -744,6 +744,7 @@ function AppContent() {
     if (activeWindowId) {
       const window = windows.find(w => w.id === activeWindowId);
       if (window) {
+        console.log('[TitleBar] Window data:', { name: window.name, gitBranch: window.gitBranch });
         let title = window.name;
         if (window.gitBranch) {
           title += ` · ${window.gitBranch}`;
@@ -758,7 +759,11 @@ function AppContent() {
   return (
     <div className="flex flex-col h-screen">
       {/* 自定义标题栏 */}
-      <CustomTitleBar title={titleBarTitle} />
+      <CustomTitleBar
+        title={titleBarTitle}
+        showAppInfo={currentView === 'unified'}
+        appName={appVersion.name}
+      />
 
       {/* 内容区域 */}
       <div className="flex-1 overflow-hidden">
