@@ -27,4 +27,28 @@ export function registerMiscHandlers(ctx: HandlerContext) {
   ipcMain.handle('clipboard-read-text', () => {
     return successResponse(clipboard.readText());
   });
+
+  // 窗口控制
+  ipcMain.handle('window-minimize', () => {
+    ctx.mainWindow?.minimize();
+    return successResponse();
+  });
+
+  ipcMain.handle('window-maximize', () => {
+    if (ctx.mainWindow?.isMaximized()) {
+      ctx.mainWindow.unmaximize();
+    } else {
+      ctx.mainWindow?.maximize();
+    }
+    return successResponse();
+  });
+
+  ipcMain.handle('window-close', () => {
+    ctx.mainWindow?.close();
+    return successResponse();
+  });
+
+  ipcMain.handle('window-is-maximized', () => {
+    return successResponse(ctx.mainWindow?.isMaximized() ?? false);
+  });
 }

@@ -276,6 +276,21 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('remove-window-from-group', groupId, windowId),
   updateGroupSplitSizes: (groupId: string, splitPath: number[], sizes: number[]) =>
     ipcRenderer.invoke('update-group-split-sizes', groupId, splitPath, sizes),
+
+  // Window controls
+  windowMinimize: () =>
+    ipcRenderer.invoke('window-minimize'),
+  windowMaximize: () =>
+    ipcRenderer.invoke('window-maximize'),
+  windowClose: () =>
+    ipcRenderer.invoke('window-close'),
+  windowIsMaximized: () =>
+    ipcRenderer.invoke('window-is-maximized'),
+  onWindowMaximized: (callback: (isMaximized: boolean) => void) => {
+    const listener = (_event: unknown, isMaximized: boolean) => callback(isMaximized);
+    ipcRenderer.on('window-maximized', listener);
+    return () => ipcRenderer.removeListener('window-maximized', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);

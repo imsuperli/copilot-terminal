@@ -68,7 +68,8 @@ function createWindow() {
     title: '',
     icon: path.join(__dirname, '../../resources/icon.png'),
     show: false, // 创建时不显示，等待渲染进程通知
-    frame: true,
+    frame: false, // 使用自定义标题栏
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -162,6 +163,15 @@ function createWindow() {
       mainWindow.show();
     }
   }, 5000);
+
+  // 监听窗口最大化/取消最大化事件，通知渲染进程
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window-maximized', true);
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window-maximized', false);
+  });
 
   // 开发环境加载 dev server，优先读取环境变量，避免 localhost 在不同系统下解析差异
   if (process.env.NODE_ENV === 'development') {

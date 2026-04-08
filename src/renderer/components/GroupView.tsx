@@ -304,7 +304,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 */}
-        <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-3 gap-2 flex-shrink-0 relative">
+        <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-3 gap-2 flex-shrink-0">
           {/* 返回按钮 */}
           <AppTooltip content="返回" placement="toolbar-leading">
             <button
@@ -314,18 +314,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
               <Home size={14} />
             </button>
           </AppTooltip>
-
-          {/* 居中组名称 */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 pointer-events-none">
-            <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-            <FolderOpen size={14} className="text-zinc-400" />
-            <span className="text-sm font-medium text-zinc-100 truncate max-w-[200px]">
-              {group.name}
-            </span>
-            <span className="text-xs text-zinc-500">
-              ({windowCount} 个窗口)
-            </span>
-          </div>
 
           <div className="flex-1" />
 

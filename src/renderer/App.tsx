@@ -14,6 +14,7 @@ import { CleanupOverlay } from './components/CleanupOverlay';
 import { QuickNavPanel } from './components/QuickNavPanel';
 import { SSHHostKeyPromptDialog } from './components/SSHHostKeyPromptDialog';
 import { SSHPasswordPromptDialog } from './components/SSHPasswordPromptDialog';
+import { CustomTitleBar } from './components/CustomTitleBar';
 import { useWindowStore } from './stores/windowStore';
 import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
@@ -729,16 +730,46 @@ function AppContent() {
     resolve?.(password);
   }, []);
 
+  // 计算标题栏标题
+  const titleBarTitle = useMemo(() => {
+    if (currentView === 'unified') {
+      return '';
+    }
+
+    if (activeGroupId) {
+      const group = groups.find(g => g.id === activeGroupId);
+      return group?.name || '';
+    }
+
+    if (activeWindowId) {
+      const window = windows.find(w => w.id === activeWindowId);
+      if (window) {
+        let title = window.name;
+        if (window.gitBranch) {
+          title += ` · ${window.gitBranch}`;
+        }
+        return title;
+      }
+    }
+
+    return '';
+  }, [currentView, activeGroupId, activeWindowId, groups, windows]);
+
   return (
-    <>
-      {/* 统一视图 - 淡入淡出 */}
-      <div
-        className="transition-opacity duration-300"
-        style={{
-          display: currentView === 'unified' ? 'block' : 'none',
-          opacity: currentView === 'unified' ? 1 : 0,
-        }}
-      >
+    <div className="flex flex-col h-screen">
+      {/* 自定义标题栏 */}
+      <CustomTitleBar title={titleBarTitle} />
+
+      {/* 内容区域 */}
+      <div className="flex-1 overflow-hidden">
+        {/* 统一视图 - 淡入淡出 */}
+        <div
+          className="transition-opacity duration-300 h-full"
+          style={{
+            display: currentView === 'unified' ? 'block' : 'none',
+            opacity: currentView === 'unified' ? 1 : 0,
+          }}
+        >
         <MainLayout
           sidebar={
             <Sidebar
@@ -784,6 +815,8 @@ function AppContent() {
       {/* 终端视图：窗口一旦打开过就保持挂载，仅切换显示状态，避免返回或窗口切换时销毁 xterm 实例 */}
       {mountedTerminalWindows.map((terminalWindow) => {
         const isVisible = currentView === 'terminal' && activeWindowId === terminalWindow.id;
+        const isMac = window.electronAPI?.platform === 'darwin';
+        const titleBarHeight = isMac ? 36 : 32; // h-9 = 36px, h-8 = 32px
 
         return (
           <div
@@ -793,7 +826,7 @@ function AppContent() {
               display: isVisible ? 'block' : 'none',
               opacity: isVisible ? 1 : 0,
               position: 'fixed',
-              top: 0,
+              top: titleBarHeight,
               left: 0,
               right: 0,
               bottom: 0,
@@ -823,7 +856,7 @@ function AppContent() {
         <div
           style={{
             position: 'fixed',
-            top: 0,
+            top: window.electronAPI?.platform === 'darwin' ? 36 : 32,
             left: 0,
             right: 0,
             bottom: 0,
@@ -881,7 +914,8 @@ function AppContent() {
         onSubmit={(password) => closeSSHPasswordPrompt(password)}
         onCancel={() => closeSSHPasswordPrompt(null)}
       />
-    </>
+      </div>
+    </div>
   );
 }
 
