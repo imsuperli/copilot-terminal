@@ -69,7 +69,6 @@ function createWindow() {
     icon: path.join(__dirname, '../../resources/icon.png'),
     show: false, // 创建时不显示，等待渲染进程通知
     frame: false, // 使用自定义标题栏
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,

@@ -39,11 +39,18 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = '' }) =>
     window.electronAPI?.windowClose();
   };
 
+  const handleDoubleClick = () => {
+    // 双击标题栏切换最大化状态（Windows/Linux 标准行为）
+    if (!isMac) {
+      handleMaximize();
+    }
+  };
+
   // macOS 样式：左侧三个圆点按钮
   if (isMac) {
     return (
       <div
-        className="h-9 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-3 select-none"
+        className="h-9 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-3 select-none relative"
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         {/* 左侧：macOS 窗口控制按钮 */}
@@ -66,7 +73,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = '' }) =>
         </div>
 
         {/* 居中：标题 */}
-        <div className="absolute left-1/2 -translate-x-1/2 text-sm text-zinc-300 font-medium truncate max-w-[400px]">
+        <div className="absolute left-1/2 -translate-x-1/2 text-sm text-zinc-300 font-medium truncate max-w-[400px] pointer-events-none">
           {title}
         </div>
 
@@ -79,14 +86,15 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = '' }) =>
   // Windows/Linux 样式：右侧图标按钮
   return (
     <div
-      className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between select-none"
+      className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between select-none relative"
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      onDoubleClick={handleDoubleClick}
     >
       {/* 左侧：占位 */}
       <div className="w-16" />
 
       {/* 居中：标题 */}
-      <div className="absolute left-1/2 -translate-x-1/2 text-sm text-zinc-300 font-medium truncate max-w-[400px]">
+      <div className="absolute left-1/2 -translate-x-1/2 text-sm text-zinc-300 font-medium truncate max-w-[400px] pointer-events-none">
         {title}
       </div>
 
@@ -112,10 +120,10 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({ title = '' }) =>
         </button>
         <button
           onClick={handleClose}
-          className="h-full px-4 hover:bg-red-600 transition-colors flex items-center justify-center"
+          className="h-full px-4 hover:bg-red-600 transition-colors flex items-center justify-center group"
           aria-label="Close"
         >
-          <X size={14} className="text-zinc-400 hover:text-white" />
+          <X size={14} className="text-zinc-400 group-hover:text-white" />
         </button>
       </div>
     </div>

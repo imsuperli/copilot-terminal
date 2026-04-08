@@ -448,7 +448,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   );
 
   return (
-    <div className={`flex ${embedded ? 'h-full w-full' : 'h-screen w-screen'} min-w-0 bg-zinc-900 overflow-hidden`}>
+    <div className="flex h-full w-full min-w-0 bg-zinc-900 overflow-hidden">
       {/* 渚ц竟鏍?*/}
       {!embedded && (
         <Sidebar

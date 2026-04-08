@@ -281,7 +281,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
       : 'bg-zinc-500';
 
   return (
-    <div className="flex h-screen bg-zinc-900">
+    <div className="flex h-full bg-zinc-900">
       {/* 侧边栏 */}
       <Sidebar
         activeWindowId={group.activeWindowId}
