@@ -1,6 +1,52 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 
+function createStorageMock(): Storage {
+  const storage = new Map<string, string>();
+
+  return {
+    get length() {
+      return storage.size;
+    },
+    clear() {
+      storage.clear();
+    },
+    getItem(key: string) {
+      return storage.has(key) ? storage.get(key)! : null;
+    },
+    key(index: number) {
+      return Array.from(storage.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      storage.delete(key);
+    },
+    setItem(key: string, value: string) {
+      storage.set(String(key), String(value));
+    },
+  };
+}
+
+function ensureStorageMock(name: 'localStorage' | 'sessionStorage') {
+  const existingStorage = window[name];
+  const hasStorageApi =
+    existingStorage != null &&
+    typeof existingStorage.clear === 'function' &&
+    typeof existingStorage.getItem === 'function' &&
+    typeof existingStorage.removeItem === 'function' &&
+    typeof existingStorage.setItem === 'function';
+
+  if (!hasStorageApi) {
+    Object.defineProperty(window, name, {
+      value: createStorageMock(),
+      configurable: true,
+      writable: true,
+    });
+  }
+}
+
+ensureStorageMock('localStorage');
+ensureStorageMock('sessionStorage');
+
 // Radix UI ScrollArea uses ResizeObserver which is not available in jsdom
 global.ResizeObserver = class ResizeObserver {
   observe() {}

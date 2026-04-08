@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Menu, Plus, Settings } from 'lucide-react';
+import { Plus, Settings } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
@@ -14,6 +14,7 @@ import { getGroupStatus } from '../../shared/utils/status-utils';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import type { WindowGroup } from '../../shared/types/window-group';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
+import { SidebarToggleIcon } from './icons/SidebarToggleIcon';
 
 interface SidebarProps {
   activeWindowId: string | null;
@@ -270,7 +271,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className="w-8 h-8 flex items-center justify-center rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 hover:border-zinc-600 transition-all duration-200"
                   aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
                 >
-                  <Menu size={16} className="transition-transform duration-200" />
+                  <SidebarToggleIcon
+                    size={16}
+                    expanded={sidebarExpanded}
+                    className="transition-all duration-200"
+                  />
                 </button>
               </Tooltip.Trigger>
               <Tooltip.Portal>
