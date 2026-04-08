@@ -404,7 +404,12 @@ function parseTitlePath(title: string): string | null {
     return null;
   }
 
-  return normalizeRemoteCwd(match[1]);
+  const normalized = normalizeRemoteCwd(match[1]);
+  if (!normalized || !normalized.startsWith('/')) {
+    return null;
+  }
+
+  return normalized;
 }
 
 function getTerminalEscapeSequenceLength(value: string): number {

@@ -92,6 +92,37 @@ describe('SSHSftpSession', () => {
     expect(wrapper.readdir).toHaveBeenCalledWith('/srv/app/logs', expect.any(Function));
   });
 
+  it('falls back to the SFTP current directory when the requested path no longer exists', async () => {
+    const wrapper = createSftpWrapper();
+    wrapper.realpath.mockImplementation((targetPath: string, callback: (error: Error | null, absolutePath?: string) => void) => {
+      if (targetPath === '.') {
+        callback(null, '/srv/app');
+        return;
+      }
+
+      callback(Object.assign(new Error('No such file'), { code: 2 }));
+    });
+    wrapper.readdir.mockImplementation((targetPath: string, callback: (error: Error | null, list?: any[]) => void) => {
+      if (targetPath !== '/srv/app') {
+        callback(Object.assign(new Error('No such file'), { code: 2 }));
+        return;
+      }
+
+      callback(null, []);
+    });
+
+    const session = new SSHSftpSession({
+      getWrapper: async () => wrapper as any,
+    });
+
+    await expect(session.listDirectory('~/de/de/win/de/co/de/co')).resolves.toEqual({
+      path: '/srv/app',
+      entries: [],
+    });
+
+    expect(wrapper.readdir).toHaveBeenCalledWith('/srv/app', expect.any(Function));
+  });
+
   it('resolves delete targets before unlinking remote entries', async () => {
     const wrapper = createSftpWrapper();
     wrapper.realpath.mockImplementation((targetPath: string, callback: (error: Error | null, absolutePath?: string) => void) => {

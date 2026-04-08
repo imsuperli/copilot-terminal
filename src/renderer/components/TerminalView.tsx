@@ -83,6 +83,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => activePane ? getPaneCapabilities(activePane) : null,
     [activePane]
   );
+  const activeSshRuntimeCwd = activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null;
   const visibleIDEs = useMemo(
     () => activePaneCapabilities?.canOpenInIDE ? enabledIDEs : [],
     [activePaneCapabilities?.canOpenInIDE, enabledIDEs]
@@ -682,8 +683,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             onOpenChange={setSSHSftpOpen}
             windowId={activePaneCapabilities?.canOpenSFTP ? terminalWindow.id : null}
             paneId={activePaneCapabilities?.canOpenSFTP ? activePane?.id ?? null : null}
-            initialPath={activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null}
-            currentCwd={activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null}
+            initialPath={activeSshRuntimeCwd}
+            currentCwd={activeSshRuntimeCwd}
           />
 
           <div className="min-w-0 flex-1 overflow-hidden">
@@ -722,7 +723,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             windowId={terminalWindow.id}
             paneId={activePane?.id ?? null}
             paneStatus={activePane?.status ?? null}
-            currentCwd={activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null}
+            currentCwd={activeSshRuntimeCwd}
             onClose={() => setSSHMetricsOpen(false)}
           />
         )}

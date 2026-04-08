@@ -19,8 +19,20 @@ export class SSHSftpSession {
 
   async listDirectory(targetPath?: string): Promise<SSHSftpDirectoryListing> {
     const wrapper = await this.getWrapper();
-    const resolvedPath = await this.resolveExistingPath(wrapper, targetPath ?? '.');
-    const entries = await this.readdir(wrapper, resolvedPath);
+    const normalizedTarget = normalizeTargetPath(targetPath ?? '.');
+    let resolvedPath = await this.resolveDirectoryListingPath(wrapper, normalizedTarget);
+    let entries: FileEntryWithStats[];
+
+    try {
+      entries = await this.readdir(wrapper, resolvedPath);
+    } catch (error) {
+      if (!normalizedTarget || normalizedTarget === '.' || !isMissingSftpPathError(error)) {
+        throw error;
+      }
+
+      resolvedPath = await this.getCurrentDirectory(wrapper);
+      entries = await this.readdir(wrapper, resolvedPath);
+    }
     const mappedEntries = await Promise.all(entries.map((entry) => this.mapEntry(wrapper, resolvedPath, entry)));
 
     return {
@@ -123,6 +135,20 @@ export class SSHSftpSession {
 
     const currentDirectory = await this.getCurrentDirectory(wrapper);
     return this.realpath(wrapper, posixPath.normalize(posixPath.join(currentDirectory, normalizedTarget)));
+  }
+
+  private async resolveDirectoryListingPath(wrapper: SFTPWrapper, targetPath?: string): Promise<string> {
+    const normalizedTarget = normalizeTargetPath(targetPath ?? '.');
+
+    try {
+      return await this.resolveExistingPath(wrapper, normalizedTarget);
+    } catch (error) {
+      if (!normalizedTarget || normalizedTarget === '.' || !isMissingSftpPathError(error)) {
+        throw error;
+      }
+
+      return this.getCurrentDirectory(wrapper);
+    }
   }
 
   private async getCurrentDirectory(wrapper: SFTPWrapper): Promise<string> {
@@ -386,4 +412,18 @@ function compareSftpEntries(left: SSHSftpEntry, right: SSHSftpEntry): number {
   }
 
   return left.name.localeCompare(right.name);
+}
+
+function isMissingSftpPathError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = 'code' in error ? (error as { code?: unknown }).code : undefined;
+  if (code === 2) {
+    return true;
+  }
+
+  const message = 'message' in error ? (error as { message?: unknown }).message : undefined;
+  return typeof message === 'string' && message.toLowerCase().includes('no such file');
 }

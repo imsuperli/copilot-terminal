@@ -94,7 +94,9 @@ describe('SSHPtySession', () => {
     }));
     channel.emit('data', 'Last login\r\n');
     await vi.advanceTimersByTimeAsync(40);
-    expect(channel.write).toHaveBeenCalledWith("cd -- '/srv/app'\r");
+    expect(channel.write).toHaveBeenCalledWith(
+      "cd -- '/srv/app'\rprintf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
+    );
 
     session.kill();
     expect(release).toHaveBeenCalled();
@@ -144,7 +146,9 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Welcome\r\n');
     await vi.advanceTimersByTimeAsync(40);
 
-    expect(channel.write).toHaveBeenCalledWith('cd -- ~/"workspace with spaces"\r');
+    expect(channel.write).toHaveBeenCalledWith(
+      "cd -- ~/\"workspace with spaces\"\rprintf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
+    );
     vi.useRealTimers();
   });
 
@@ -191,7 +195,59 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Welcome\r\n');
     await vi.advanceTimersByTimeAsync(40);
 
-    expect(channel.write).not.toHaveBeenCalled();
+    expect(channel.write).toHaveBeenCalledWith(
+      "printf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
+    );
+    vi.useRealTimers();
+  });
+
+  it('restores runtime cwd values in best-effort mode without surfacing shell errors', async () => {
+    vi.useFakeTimers();
+    const channel = createMockChannel();
+    const openShell = vi.fn().mockResolvedValue(channel);
+
+    await SSHPtySession.create({
+      pid: 2207,
+      ssh: {
+        profileId: 'profile-1',
+        host: '10.0.0.21',
+        port: 22,
+        user: 'root',
+        authType: 'password',
+        privateKeys: [],
+        password: 'secret',
+        keepaliveInterval: 30,
+        keepaliveCountMax: 3,
+        readyTimeout: null,
+        verifyHostKeys: true,
+        agentForward: false,
+        reuseSession: true,
+        forwardedPorts: [],
+        remoteCwd: '~/de/de/win/de/co/de/co',
+        remoteCwdMode: 'restored',
+      },
+      connectionPool: {
+        acquire: vi.fn().mockResolvedValue({
+          connection: {
+            openShell,
+            listPortForwards: vi.fn().mockReturnValue([]),
+            addPortForward: vi.fn(),
+            removePortForward: vi.fn(),
+            listSftpDirectory: vi.fn(),
+            downloadSftpFile: vi.fn(),
+            uploadSftpFiles: vi.fn(),
+          },
+          release: vi.fn().mockResolvedValue(undefined),
+        }),
+      } as any,
+    });
+
+    channel.emit('data', 'Welcome\r\n');
+    await vi.advanceTimersByTimeAsync(40);
+
+    expect(channel.write).toHaveBeenCalledWith(
+      "cd -- ~/\"de/de/win/de/co/de/co\" >/dev/null 2>&1 || :\rprintf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
+    );
     vi.useRealTimers();
   });
 

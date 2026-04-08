@@ -241,6 +241,53 @@ describe('registerSSHSessionHandlers', () => {
     });
   });
 
+  it('marks restored pane cwd values as best-effort runtime state instead of profile cwd', async () => {
+    const processManager = {
+      spawnTerminal: vi.fn().mockResolvedValue({ pid: 2207, sessionId: 'ssh-session-7' }),
+      subscribePtyData: vi.fn().mockReturnValue(vi.fn()),
+      getLatestPaneOutputSeq: vi.fn().mockReturnValue(0),
+    };
+    const sshProfileStore = {
+      get: vi.fn().mockResolvedValue({
+        ...createProfile(),
+        defaultRemoteCwd: '/srv/app',
+      }),
+    };
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: { addPane: vi.fn() } as any,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: { add: vi.fn() } as any,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: { get: vi.fn().mockResolvedValue(null) } as any,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('start-ssh-pane');
+    await handler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      profileId: 'profile-1',
+      remoteCwd: '~/de/de/win/de/co/de/co',
+    });
+
+    expect(processManager.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      workingDirectory: '~/de/de/win/de/co/de/co',
+      ssh: expect.objectContaining({
+        remoteCwd: '~/de/de/win/de/co/de/co',
+        remoteCwdMode: 'restored',
+      }),
+    }));
+  });
+
   it('returns a coded error response when SSH authentication fails during window creation', async () => {
     const processManager = {
       spawnTerminal: vi.fn().mockRejectedValue(Object.assign(

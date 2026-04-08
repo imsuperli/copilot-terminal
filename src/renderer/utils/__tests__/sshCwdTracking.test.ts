@@ -12,7 +12,11 @@ describe('extractLatestOsc7RemoteCwd', () => {
 
   it('parses terminal title cwd markers used by common ssh prompts', () => {
     expect(extractLatestOsc7RemoteCwd('\u001b]0;root@prod: /srv/app/current\u0007')).toBe('/srv/app/current');
-    expect(extractLatestOsc7RemoteCwd('\u001b]2;root@prod: ~/releases\u0007')).toBe('~/releases');
+    expect(extractLatestOsc7RemoteCwd('\u001b]2;root@prod: ~/releases\u0007')).toBeNull();
+  });
+
+  it('ignores home-relative terminal title paths because they are display strings, not authoritative cwd markers', () => {
+    expect(extractLatestOsc7RemoteCwd('\u001b]0;u0_a123@phone: ~/de/de/win/de/co/de/co\u0007')).toBeNull();
   });
 
   it('parses OSC 633 cwd markers when shell integration is present', () => {
