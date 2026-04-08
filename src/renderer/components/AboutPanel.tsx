@@ -2,6 +2,7 @@ import React from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { useI18n } from '../i18n';
+import { resolveRendererAssetUrl } from '../utils/assetUrl';
 
 interface AboutPanelProps {
   open: boolean;
@@ -17,7 +18,7 @@ export const AboutPanel: React.FC<AboutPanelProps> = ({
   version,
 }) => {
   const { t } = useI18n();
-  const appLogoSrc = new URL('resources/icon.png', window.location.href).toString();
+  const appLogoSrc = resolveRendererAssetUrl('resources/icon.png');
 
   return (
     <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>

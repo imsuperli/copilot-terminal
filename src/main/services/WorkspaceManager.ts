@@ -7,6 +7,7 @@ import { LayoutNode, PaneNode, SplitNode, Window, WindowStatus } from '../../sha
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { AppLanguage, DEFAULT_LANGUAGE, normalizeLanguage } from '../../shared/i18n';
 import { readProjectConfig } from '../utils/project-config';
+import { PathValidator } from '../utils/pathValidator';
 import { normalizeShellProgram } from '../utils/shell';
 import { getSupportedIDEIds } from '../utils/ideScanner';
 
@@ -155,7 +156,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
           const validatedWorkspace = this.validateGroupIntegrity(workspace);
 
           const hydratedWorkspace = this.hydrateWorkspace(validatedWorkspace);
-          if (JSON.stringify(hydratedWorkspace.settings) !== JSON.stringify(workspace.settings)) {
+          if (JSON.stringify(hydratedWorkspace) !== JSON.stringify(validatedWorkspace)) {
             await this.saveWorkspace(hydratedWorkspace);
           }
 
@@ -743,7 +744,44 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
   private hydrateWorkspace(workspace: Workspace): Workspace {
     return {
       ...workspace,
+      windows: workspace.windows.map((window) => ({
+        ...window,
+        layout: this.hydrateLayout(window.layout),
+      })),
       settings: this.normalizeSettings(workspace.settings),
+    };
+  }
+
+  private hydrateLayout(layout: LayoutNode): LayoutNode {
+    if (layout.type === 'pane') {
+      if (layout.pane.backend === 'ssh') {
+        return layout;
+      }
+
+      const normalizedCwd = PathValidator.expandHomePath(layout.pane.cwd);
+      if (normalizedCwd === layout.pane.cwd) {
+        return layout;
+      }
+
+      return {
+        ...layout,
+        pane: {
+          ...layout.pane,
+          cwd: normalizedCwd,
+        },
+      };
+    }
+
+    const hydratedChildren = layout.children.map((child) => this.hydrateLayout(child));
+    const didChange = hydratedChildren.some((child, index) => child !== layout.children[index]);
+
+    if (!didChange) {
+      return layout;
+    }
+
+    return {
+      ...layout,
+      children: hydratedChildren,
     };
   }
 

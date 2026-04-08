@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Minus, Square, X, Maximize2, Home } from 'lucide-react';
+import { resolveRendererAssetUrl } from '../utils/assetUrl';
 
 interface CustomTitleBarProps {
   title?: string;
@@ -18,6 +19,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const isMac = window.electronAPI?.platform === 'darwin';
+  const appLogoSrc = resolveRendererAssetUrl('resources/icon.png');
 
   useEffect(() => {
     window.electronAPI?.windowIsMaximized().then((result) => {
@@ -53,7 +55,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
             <button onClick={handleMaximize} className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors" aria-label="Maximize" />
           </div>
           <div className="flex items-center gap-2 ml-1">
-            <img src="/resources/icon.png" alt="Logo" className="w-5 h-5" />
+            <img src={appLogoSrc} alt="Logo" className="w-5 h-5" />
             {showAppName && <span className="text-sm text-zinc-300 font-medium">{appName}</span>}
           </div>
         </div>
@@ -90,7 +92,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
     >
       {/* 左侧：logo + 应用名 */}
       <div className="flex items-center gap-2 pl-3">
-        <img src="/resources/icon.png" alt="Logo" className="w-5 h-5" />
+        <img src={appLogoSrc} alt="Logo" className="w-5 h-5" />
         {showAppName && <span className="text-sm text-zinc-300 font-medium">{appName}</span>}
       </div>
 

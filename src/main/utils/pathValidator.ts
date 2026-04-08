@@ -1,4 +1,5 @@
 import path from 'path';
+import { homedir } from 'os';
 import { existsSync, accessSync, constants, realpathSync, statSync } from 'fs';
 
 /**
@@ -6,6 +7,24 @@ import { existsSync, accessSync, constants, realpathSync, statSync } from 'fs';
  * 提供安全的路径验证功能，防止路径遍历攻击和访问敏感系统目录
  */
 export class PathValidator {
+  /**
+   * 将用户输入中的 ~ 展开为当前用户主目录。
+   * 仅处理当前用户的 home path，不解析 ~otherUser 形式。
+   */
+  static expandHomePath(pathToExpand: string): string {
+    const trimmedPath = pathToExpand.trim();
+
+    if (trimmedPath === '~') {
+      return homedir();
+    }
+
+    if (trimmedPath.startsWith('~/') || trimmedPath.startsWith('~\\')) {
+      return path.join(homedir(), trimmedPath.slice(2));
+    }
+
+    return trimmedPath;
+  }
+
   /**
    * 敏感路径黑名单（Windows）
    */
@@ -43,11 +62,8 @@ export class PathValidator {
         return { valid: false, reason: 'Empty path' };
       }
 
-      // 2. 规范化路径（解析 . 和 ..）
-      const normalizedPath = path.normalize(pathToValidate);
-
-      // 3. 解析为绝对路径
-      const resolvedPath = path.resolve(normalizedPath);
+      // 2. 展开 home 路径并解析为绝对路径
+      const resolvedPath = this.resolvePathInput(pathToValidate);
 
       // 4. 检查路径格式
       if (!this.isValidPathFormat(resolvedPath)) {
@@ -108,8 +124,7 @@ export class PathValidator {
         return { valid: false, reason: 'Empty path' };
       }
 
-      const normalizedPath = path.normalize(pathToValidate);
-      const resolvedPath = path.resolve(normalizedPath);
+      const resolvedPath = this.resolvePathInput(pathToValidate);
 
       if (!this.isValidPathFormat(resolvedPath)) {
         return { valid: false, reason: 'Invalid path format' };
@@ -221,8 +236,7 @@ export class PathValidator {
     }
 
     try {
-      const normalizedPath = path.normalize(pathToNormalize);
-      const resolvedPath = path.resolve(normalizedPath);
+      const resolvedPath = this.resolvePathInput(pathToNormalize);
       const realPath = realpathSync(resolvedPath);
       return realPath;
     } catch {
@@ -240,11 +254,14 @@ export class PathValidator {
     }
 
     try {
-      const normalizedPath = path.normalize(pathToNormalize);
-      return path.resolve(normalizedPath);
+      return this.resolvePathInput(pathToNormalize);
     } catch {
       return null;
     }
+  }
+
+  private static resolvePathInput(pathInput: string): string {
+    return path.resolve(path.normalize(this.expandHomePath(pathInput)));
   }
 
   private static findNearestExistingParent(pathStr: string): string | null {
