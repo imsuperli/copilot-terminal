@@ -95,7 +95,7 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Last login\r\n');
     await vi.advanceTimersByTimeAsync(40);
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- '/srv/app'\rprintf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
+      "cd -- '/srv/app'\r",
     );
 
     session.kill();
@@ -147,7 +147,7 @@ describe('SSHPtySession', () => {
     await vi.advanceTimersByTimeAsync(40);
 
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- ~/\"workspace with spaces\"\rprintf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
+      "cd -- ~/\"workspace with spaces\"\r",
     );
     vi.useRealTimers();
   });
@@ -195,13 +195,11 @@ describe('SSHPtySession', () => {
     channel.emit('data', 'Welcome\r\n');
     await vi.advanceTimersByTimeAsync(40);
 
-    expect(channel.write).toHaveBeenCalledWith(
-      "printf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
-    );
+    expect(channel.write).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
-  it('restores runtime cwd values in best-effort mode without surfacing shell errors', async () => {
+  it('always applies configured remote cwd directly when initializing the shell', async () => {
     vi.useFakeTimers();
     const channel = createMockChannel();
     const openShell = vi.fn().mockResolvedValue(channel);
@@ -224,7 +222,6 @@ describe('SSHPtySession', () => {
         reuseSession: true,
         forwardedPorts: [],
         remoteCwd: '~/de/de/win/de/co/de/co',
-        remoteCwdMode: 'restored',
       },
       connectionPool: {
         acquire: vi.fn().mockResolvedValue({
@@ -246,7 +243,7 @@ describe('SSHPtySession', () => {
     await vi.advanceTimersByTimeAsync(40);
 
     expect(channel.write).toHaveBeenCalledWith(
-      "cd -- ~/\"de/de/win/de/co/de/co\" >/dev/null 2>&1 || :\rprintf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
+      "cd -- ~/\"de/de/win/de/co/de/co\"\r",
     );
     vi.useRealTimers();
   });

@@ -68,7 +68,6 @@ export interface SSHSessionConfig {
   x11?: boolean;
   skipBanner?: boolean;
   remoteCwd?: string;
-  remoteCwdMode?: 'explicit' | 'restored';
   command?: string;
 }
 

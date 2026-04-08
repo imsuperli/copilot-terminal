@@ -81,7 +81,7 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
         windowId: targetWindow.id,
         paneId: pane.id,
         profileId: ssh.profileId,
-        remoteCwd: ssh.remoteCwd ?? pane.cwd,
+        remoteCwd: ssh.remoteCwd,
         command: pane.command,
         initialCols,
         initialRows,

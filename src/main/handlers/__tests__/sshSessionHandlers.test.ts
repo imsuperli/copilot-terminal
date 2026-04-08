@@ -241,7 +241,7 @@ describe('registerSSHSessionHandlers', () => {
     });
   });
 
-  it('marks restored pane cwd values as best-effort runtime state instead of profile cwd', async () => {
+  it('always treats SSH pane remote cwd as fixed configured state', async () => {
     const processManager = {
       spawnTerminal: vi.fn().mockResolvedValue({ pid: 2207, sessionId: 'ssh-session-7' }),
       subscribePtyData: vi.fn().mockReturnValue(vi.fn()),
@@ -283,7 +283,6 @@ describe('registerSSHSessionHandlers', () => {
       workingDirectory: '~/de/de/win/de/co/de/co',
       ssh: expect.objectContaining({
         remoteCwd: '~/de/de/win/de/co/de/co',
-        remoteCwdMode: 'restored',
       }),
     }));
   });

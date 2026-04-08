@@ -56,7 +56,6 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
         windowId,
         paneId,
         remoteCwd: pane.ssh?.remoteCwd,
-        remoteCwdMode: 'explicit',
         command: config.command,
       }, {
         sshProfileStore,
@@ -113,7 +112,6 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
         windowId: config.windowId,
         paneId: config.paneId,
         remoteCwd: config.remoteCwd,
-        remoteCwdMode: 'restored',
         command: config.command,
         initialCols: config.initialCols,
         initialRows: config.initialRows,
@@ -164,7 +162,6 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
         windowId: config.targetWindowId,
         paneId: config.targetPaneId,
         remoteCwd: resolvePaneRemoteCwd(sourcePane),
-        remoteCwdMode: 'restored',
         command: sourcePane.command,
       }, {
         sshProfileStore,
@@ -436,7 +433,6 @@ async function buildSSHSpawnConfig(
     windowId: string;
     paneId: string;
     remoteCwd?: string;
-    remoteCwdMode?: 'explicit' | 'restored';
     command?: string;
     initialCols?: number;
     initialRows?: number;
@@ -446,11 +442,7 @@ async function buildSSHSpawnConfig(
     sshVaultService: HandlerContext['sshVaultService'];
   },
 ): Promise<TerminalConfig> {
-  const { remoteCwd, remoteCwdMode } = resolveSSHRemoteCwdOption(
-    options.remoteCwd,
-    profile.defaultRemoteCwd,
-    options.remoteCwdMode,
-  );
+  const remoteCwd = resolveSSHRemoteCwd(options.remoteCwd, profile.defaultRemoteCwd);
   const remoteCommand = options.command || profile.remoteCommand || undefined;
 
   return {
@@ -463,7 +455,6 @@ async function buildSSHSpawnConfig(
     initialRows: options.initialRows,
     ssh: await buildSSHSessionConfig(profile, vaultEntry, {
       remoteCwd,
-      remoteCwdMode,
       command: options.command,
     }, {
       sshProfileStore: context.sshProfileStore,
@@ -478,7 +469,6 @@ async function buildSSHSessionConfig(
   vaultEntry: SSHVaultEntry | null,
   options: {
     remoteCwd?: string;
-    remoteCwdMode?: 'explicit' | 'restored';
     command?: string;
   },
   context: {
@@ -488,11 +478,7 @@ async function buildSSHSessionConfig(
   },
 ): Promise<SSHSessionConfig> {
   const nextContext = context;
-  const { remoteCwd, remoteCwdMode } = resolveSSHRemoteCwdOption(
-    options.remoteCwd,
-    profile.defaultRemoteCwd,
-    options.remoteCwdMode,
-  );
+  const remoteCwd = resolveSSHRemoteCwd(options.remoteCwd, profile.defaultRemoteCwd);
 
   if (nextContext.visitedProfileIds.has(profile.id)) {
     throw new Error(`SSH jump host chain contains a loop at profile ${profile.id}`);
@@ -540,7 +526,6 @@ async function buildSSHSessionConfig(
       x11: profile.x11,
       skipBanner: profile.skipBanner,
       ...(remoteCwd ? { remoteCwd } : {}),
-      ...(remoteCwd ? { remoteCwdMode } : {}),
       ...(options.command || profile.remoteCommand ? { command: options.command || profile.remoteCommand } : {}),
     };
   } finally {
@@ -643,31 +628,7 @@ function findPaneInLayout(layout: Window['layout'], paneId: string): Pane | null
 }
 
 function resolvePaneRemoteCwd(pane: Pane): string | undefined {
-  return resolveSSHRemoteCwd(pane.ssh?.remoteCwd, pane.cwd);
-}
-
-function resolveSSHRemoteCwdOption(
-  runtimeRemoteCwd: string | undefined,
-  profileDefaultRemoteCwd: string | undefined,
-  runtimeMode: 'explicit' | 'restored' | undefined,
-): { remoteCwd?: string; remoteCwdMode: 'explicit' | 'restored' } {
-  const normalizedRuntimeRemoteCwd = normalizeSSHRemoteCwd(runtimeRemoteCwd);
-  if (normalizedRuntimeRemoteCwd) {
-    return {
-      remoteCwd: normalizedRuntimeRemoteCwd,
-      remoteCwdMode: runtimeMode === 'restored' ? 'restored' : 'explicit',
-    };
-  }
-
-  const normalizedProfileRemoteCwd = normalizeSSHRemoteCwd(profileDefaultRemoteCwd);
-  if (normalizedProfileRemoteCwd) {
-    return {
-      remoteCwd: normalizedProfileRemoteCwd,
-      remoteCwdMode: 'explicit',
-    };
-  }
-
-  return { remoteCwdMode: 'explicit' };
+  return resolveSSHRemoteCwd(pane.ssh?.remoteCwd);
 }
 
 function resolveSSHRemoteCwd(...values: Array<string | undefined>): string | undefined {

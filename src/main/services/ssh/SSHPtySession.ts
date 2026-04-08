@@ -422,10 +422,8 @@ function buildShellInitializationCommands(ssh: SSHSessionConfig): string[] {
   const startupCommand = ssh.command?.trim();
 
   if (remoteCwd) {
-    commands.push(buildRemoteCdCommand(remoteCwd, ssh.remoteCwdMode));
+    commands.push(buildRemoteCdCommand(remoteCwd));
   }
-
-  commands.push(buildEmitRemoteCwdMarkerCommand());
 
   if (startupCommand) {
     commands.push(startupCommand);
@@ -452,17 +450,8 @@ function normalizeRemoteCwdForShellInitialization(value: string | undefined): st
   return normalized;
 }
 
-function buildRemoteCdCommand(value: string, mode: SSHSessionConfig['remoteCwdMode']): string {
-  const target = formatRemoteCdTarget(value);
-  if (mode === 'restored') {
-    return `cd -- ${target} >/dev/null 2>&1 || :`;
-  }
-
-  return `cd -- ${target}`;
-}
-
-function buildEmitRemoteCwdMarkerCommand(): string {
-  return `printf '\\033]633;P;Cwd=%s\\a' "$(pwd -P 2>/dev/null || pwd)"`;
+function buildRemoteCdCommand(value: string): string {
+  return `cd -- ${formatRemoteCdTarget(value)}`;
 }
 
 function formatRemoteCdTarget(value: string): string {
