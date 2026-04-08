@@ -36,6 +36,11 @@ export interface SSHShellOpenOptions {
   x11?: boolean;
 }
 
+export interface SSHInteractiveShellInfo {
+  termux: boolean;
+  shellName: string | null;
+}
+
 export interface SSHForwardOutOptions {
   targetHost: string;
   targetPort: number;
@@ -53,6 +58,7 @@ export interface ISSHConnection {
   connect(serviceListener?: (data: string) => void): Promise<void>;
   attachServiceListener(listener: (data: string) => void): () => void;
   openShell(options: SSHShellOpenOptions): Promise<ClientChannel>;
+  getInteractiveShellInfo?(): Promise<SSHInteractiveShellInfo>;
   openForwardOut(options: SSHForwardOutOptions): Promise<ClientChannel>;
   listPortForwards(): ActiveSSHPortForward[];
   addPortForward(config: ForwardedPortConfig): Promise<ActiveSSHPortForward>;
@@ -108,6 +114,7 @@ export class SSHClientConnection implements ISSHConnection {
   private portForwardMutationQueue: Promise<void>;
   private sftpWrapperPromise: Promise<SFTPWrapper> | null;
   private sftpSession: SSHSftpSession | null;
+  private interactiveShellInfoPromise: Promise<SSHInteractiveShellInfo> | null;
   private ready: boolean;
   private closed: boolean;
   private hostKeyVerificationError: Error | null;
@@ -125,6 +132,7 @@ export class SSHClientConnection implements ISSHConnection {
     this.portForwardMutationQueue = Promise.resolve();
     this.sftpWrapperPromise = null;
     this.sftpSession = null;
+    this.interactiveShellInfoPromise = null;
     this.ready = false;
     this.closed = false;
     this.hostKeyVerificationError = null;
@@ -193,6 +201,21 @@ export class SSHClientConnection implements ISSHConnection {
         },
       );
     });
+  }
+
+  async getInteractiveShellInfo(): Promise<SSHInteractiveShellInfo> {
+    await this.connect();
+
+    if (!this.interactiveShellInfoPromise) {
+      this.interactiveShellInfoPromise = this.execCommand(buildInteractiveShellInfoProbeCommand())
+        .then(parseInteractiveShellInfo)
+        .catch(() => ({
+          termux: false,
+          shellName: null,
+        }));
+    }
+
+    return this.interactiveShellInfoPromise;
   }
 
   async openForwardOut(options: SSHForwardOutOptions): Promise<ClientChannel> {
@@ -1051,6 +1074,49 @@ function buildRemoteShellEnv(): Record<string, string> {
   }
 
   return env;
+}
+
+function buildInteractiveShellInfoProbeCommand(): string {
+  const probeScript = [
+    'printf "__COPILOT_TERMINAL_SHELL__%s\\n" "${SHELL##*/}"',
+    'if [ -n "${TERMUX_VERSION-}" ] || [ "${PREFIX-}" = "/data/data/com.termux/files/usr" ] || [ "${PREFIX-}" = "/data/user/0/com.termux/files/usr" ]; then',
+    '  printf "__COPILOT_TERMINAL_TERMUX__1\\n"',
+    'fi',
+  ].join('\n');
+
+  return `sh -lc ${shellSingleQuote(probeScript)}`;
+}
+
+function parseInteractiveShellInfo(output: string): SSHInteractiveShellInfo {
+  let termux = false;
+  let shellName: string | null = null;
+
+  for (const rawLine of output.split(/\r?\n/)) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      continue;
+    }
+
+    if (line === '__COPILOT_TERMINAL_TERMUX__1') {
+      termux = true;
+      continue;
+    }
+
+    if (line.startsWith('__COPILOT_TERMINAL_SHELL__')) {
+      const parsedShellName = line.slice('__COPILOT_TERMINAL_SHELL__'.length).trim().toLowerCase();
+      shellName = parsedShellName || null;
+    }
+  }
+
+  return {
+    termux,
+    shellName,
+  };
+}
+
+function shellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function resolvePreferredUtf8Locale(): string {

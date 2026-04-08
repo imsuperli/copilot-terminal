@@ -251,6 +251,58 @@ describe('SSHPtySession', () => {
     vi.useRealTimers();
   });
 
+  it('installs a prompt cwd marker for Termux bash sessions even without a configured remote cwd', async () => {
+    vi.useFakeTimers();
+    const channel = createMockChannel();
+    const openShell = vi.fn().mockResolvedValue(channel);
+
+    await SSHPtySession.create({
+      pid: 2210,
+      ssh: {
+        profileId: 'profile-1',
+        host: '10.0.0.21',
+        port: 22,
+        user: 'u0_a123',
+        authType: 'password',
+        privateKeys: [],
+        password: 'secret',
+        keepaliveInterval: 30,
+        keepaliveCountMax: 3,
+        readyTimeout: null,
+        verifyHostKeys: true,
+        agentForward: false,
+        reuseSession: true,
+        forwardedPorts: [],
+      },
+      connectionPool: {
+        acquire: vi.fn().mockResolvedValue({
+          connection: {
+            openShell,
+            getInteractiveShellInfo: vi.fn().mockResolvedValue({
+              termux: true,
+              shellName: 'bash',
+            }),
+            listPortForwards: vi.fn().mockReturnValue([]),
+            addPortForward: vi.fn(),
+            removePortForward: vi.fn(),
+            listSftpDirectory: vi.fn(),
+            downloadSftpFile: vi.fn(),
+            uploadSftpFiles: vi.fn(),
+          },
+          release: vi.fn().mockResolvedValue(undefined),
+        }),
+      } as any,
+    });
+
+    channel.emit('data', 'Welcome\r\n');
+    await vi.advanceTimersByTimeAsync(40);
+
+    expect(channel.write).toHaveBeenCalledWith(
+      "__copilot_terminal_emit_cwd() { printf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"; } case \";${PROMPT_COMMAND-};\" in   *\";__copilot_terminal_emit_cwd;\"*|*\"__copilot_terminal_emit_cwd\") ;;   *) PROMPT_COMMAND=\"__copilot_terminal_emit_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}\" ;; esac\rprintf '\\033]633;P;Cwd=%s\\a' \"$(pwd -P 2>/dev/null || pwd)\"\r",
+    );
+    vi.useRealTimers();
+  });
+
   it('decodes split utf8 chunks without garbling the terminal output', async () => {
     const channel = createMockChannel();
     const openShell = vi.fn().mockResolvedValue(channel);
