@@ -119,6 +119,14 @@ export const CardGrid = React.memo<CardGridProps>(({
     ),
     [groupedWindowIds, sshProfiles, windows],
   );
+  const activeCustomCategory = useMemo(
+    () => customCategories.find((category) => category.id === currentTab) ?? null,
+    [currentTab, customCategories],
+  );
+  const sshProfilesById = useMemo(
+    () => new Map(sshProfiles.map((profile) => [profile.id, profile])),
+    [sshProfiles],
+  );
   const shouldRenderWindowCard = useCallback((window: Window) => {
     if (window.archived) {
       return true;
@@ -210,15 +218,34 @@ export const CardGrid = React.memo<CardGridProps>(({
     }
 
     // 自定义分类标签
-    if (currentTab !== 'all' && currentTab !== 'active' && currentTab !== 'archived') {
-      const category = customCategories.find(c => c.id === currentTab);
-      if (!category) return [];
+    if (activeCustomCategory) {
+      const seenSSHProfileIds = new Set<string>();
+      const categoryGroups = groups.filter((group) => activeCustomCategory.groupIds.includes(group.id));
+      const categoryWindows = sortWindows(
+        windows.filter((window) => activeCustomCategory.windowIds.includes(window.id)),
+        'createdAt',
+      );
 
-      const categoryWindows = windows.filter(w => category.windowIds.includes(w.id) && shouldRenderWindowCard(w));
-      const categoryGroups = groups.filter(g => category.groupIds.includes(g.id));
+      const groupItems: CardItem[] = sortGroupsByCreatedAt(categoryGroups).map((group) => ({ type: 'group', data: group }));
+      const windowItems: CardItem[] = categoryWindows.flatMap((window) => {
+        if (shouldRenderWindowCard(window)) {
+          return [{ type: 'window', data: window } satisfies CardItem];
+        }
 
-      const groupItems: CardItem[] = sortGroupsByCreatedAt(categoryGroups).map(g => ({ type: 'group', data: g }));
-      const windowItems: CardItem[] = sortWindows(categoryWindows, 'createdAt').map(w => ({ type: 'window', data: w }));
+        const profileId = getStandaloneSSHProfileId(window);
+        if (!profileId || seenSSHProfileIds.has(profileId)) {
+          return [];
+        }
+
+        const profile = sshProfilesById.get(profileId);
+        if (!profile) {
+          return [{ type: 'window', data: window } satisfies CardItem];
+        }
+
+        seenSSHProfileIds.add(profileId);
+        return [{ type: 'sshProfile', data: profile } satisfies CardItem];
+      });
+
       return [...groupItems, ...windowItems];
     }
 
@@ -258,7 +285,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
       ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
     ];
-  }, [currentTab, customCategories, groupedWindowIds, groups, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, windows]);
+  }, [activeCustomCategory, currentTab, groupedWindowIds, groups, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById, windows]);
 
   // 全局搜索：始终搜索所有终端和组，不受 currentTab 限制
   const allCardItems = useMemo<CardItem[]>(() => {
@@ -693,7 +720,7 @@ export const CardGrid = React.memo<CardGridProps>(({
   );
 
   // 是否为自定义分类标签
-  const isCustomCategory = currentTab !== 'all' && currentTab !== 'active' && currentTab !== 'archived';
+  const isCustomCategory = activeCustomCategory !== null;
 
   // 自定义分类空状态
   if (isCustomCategory && cardItems.length === 0) {

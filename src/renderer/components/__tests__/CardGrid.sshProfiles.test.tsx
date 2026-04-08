@@ -203,6 +203,45 @@ describe('CardGrid SSH profile cards', () => {
     expect(onEnterTerminal).toHaveBeenCalledWith(runtimeWindow);
   });
 
+  it('renders bound SSH profile cards inside a custom category tab', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const onEnterTerminal = vi.fn();
+    const categoryId = 'category-ssh';
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+      customCategories: [
+        {
+          id: categoryId,
+          name: 'SSH 分类',
+          icon: '📁',
+          windowIds: [runtimeWindow.id],
+          groupIds: [],
+          order: 0,
+          createdAt: '2026-03-22T10:00:00.000Z',
+          updatedAt: '2026-03-22T10:00:00.000Z',
+        },
+      ],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+      currentTab: categoryId,
+      onEnterTerminal,
+    });
+
+    expect(screen.getByText('Prod Bastion')).toBeInTheDocument();
+    expect(screen.queryByText('Hidden runtime window')).not.toBeInTheDocument();
+    expect(screen.queryByText('此分类暂无终端')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' }));
+
+    expect(onEnterTerminal).toHaveBeenCalledWith(runtimeWindow);
+  });
+
   it('archives a bound SSH runtime window from the profile card and shows it in archived view', async () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();
