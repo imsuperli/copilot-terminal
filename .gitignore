@@ -9,6 +9,7 @@ Thumbs.db
 .env.local
 .env.*.local
 .claude/
+.omc/
 _bmad/
 _bmad-output/
 .sisyphus/
