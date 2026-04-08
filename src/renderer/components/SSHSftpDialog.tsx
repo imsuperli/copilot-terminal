@@ -43,6 +43,10 @@ const SSH_SFTP_PANEL_WIDTH_STORAGE_KEY = 'ssh-sftp-panel-width';
 const SSH_SFTP_PANEL_DEFAULT_WIDTH = 288;
 const SSH_SFTP_PANEL_MIN_WIDTH = 240;
 const SSH_SFTP_PANEL_MAX_WIDTH = 520;
+const TERMUX_HOME_PREFIXES = [
+  '/data/data/com.termux/files/home',
+  '/data/user/0/com.termux/files/home',
+];
 
 export function SSHSftpDialog({
   open,
@@ -93,15 +97,17 @@ export function SSHSftpDialog({
       return;
     }
 
+    const requestedPath = normalizeSftpTargetPath(targetPath);
+
     setIsLoading(true);
     setError('');
-    lastLoadedPathRef.current = targetPath?.trim() || lastLoadedPathRef.current;
+    lastLoadedPathRef.current = requestedPath || lastLoadedPathRef.current;
 
     try {
       const response = await window.electronAPI.listSSHSftpDirectory({
         windowId,
         paneId,
-        ...(targetPath ? { path: targetPath } : {}),
+        ...(requestedPath ? { path: requestedPath } : {}),
       });
       if (!response.success || !response.data) {
         throw new Error(response.error || t('sshSftpDialog.loadError'));
@@ -1112,6 +1118,26 @@ function getParentSftpPath(value: string): string {
   }
 
   return `/${segments.slice(0, -1).join('/')}`;
+}
+
+function normalizeSftpTargetPath(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const normalized = trimmed.replace(/\\/g, '/');
+  for (const prefix of TERMUX_HOME_PREFIXES) {
+    if (normalized === prefix) {
+      return '~';
+    }
+
+    if (normalized.startsWith(`${prefix}/`)) {
+      return `~/${normalized.slice(prefix.length + 1)}`;
+    }
+  }
+
+  return normalized;
 }
 
 function shouldFallbackToHomeDirectory(message: string): boolean {

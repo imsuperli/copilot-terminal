@@ -745,4 +745,34 @@ describe('SSHSftpDialog', () => {
       });
     });
   });
+
+  it('maps Termux home paths to ~ before requesting the SFTP listing', async () => {
+    vi.mocked(window.electronAPI.listSSHSftpDirectory)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          path: '/projects/demo',
+          entries: [],
+        },
+      });
+
+    render(
+      <SSHSftpDialog
+        open={true}
+        onOpenChange={() => undefined}
+        windowId="win-1"
+        paneId="pane-1"
+        initialPath="/data/data/com.termux/files/home/projects/demo"
+        currentCwd="/data/data/com.termux/files/home/projects/demo"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledWith({
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        path: '~/projects/demo',
+      });
+    });
+  });
 });

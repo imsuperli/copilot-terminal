@@ -18,7 +18,13 @@ const makeWindow = (overrides: Partial<Window> & { id: string }): Window => ({
 
 describe('CardGrid', () => {
   beforeEach(() => {
-    useWindowStore.setState({ windows: [], activeWindowId: null });
+    useWindowStore.setState({
+      windows: [],
+      groups: [],
+      customCategories: [],
+      activeWindowId: null,
+      activeGroupId: null,
+    });
   });
 
   // AC1, AC2: CSS Grid layout and gap
@@ -150,5 +156,21 @@ describe('CardGrid', () => {
     expect(screen.getByText('已完成')).toBeInTheDocument();
     expect(screen.getByText('出错')).toBeInTheDocument();
     expect(screen.getByText('恢复中')).toBeInTheDocument();
+  });
+
+  it('shows custom category empty state instead of active windows when the category has not synced yet', () => {
+    useWindowStore.getState().addWindow(makeWindow({ id: '1', name: 'Window 1' }));
+
+    render(<CardGrid currentTab="category-persisted" />);
+
+    expect(screen.getByText('此分类暂无终端')).toBeInTheDocument();
+    expect(screen.queryByText('Window 1')).not.toBeInTheDocument();
+  });
+
+  it('does not treat built-in status tabs as custom categories when empty', () => {
+    const { container } = render(<CardGrid currentTab="status:running" />);
+
+    expect(screen.queryByText('此分类暂无终端')).not.toBeInTheDocument();
+    expect(container.firstChild).toBeNull();
   });
 });

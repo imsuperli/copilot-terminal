@@ -35,6 +35,16 @@ type CardItem =
   | { type: 'group'; data: WindowGroup }
   | { type: 'sshProfile'; data: SSHProfile };
 
+const BUILTIN_TABS = new Set(['all', 'active', 'archived', 'local', 'ssh']);
+
+function isBuiltinTab(tab: string | undefined): boolean {
+  if (!tab) {
+    return false;
+  }
+
+  return BUILTIN_TABS.has(tab) || tab.startsWith('status:');
+}
+
 interface CardGridProps {
   onEnterTerminal?: (window: Window) => void;
   onEnterGroup?: (group: WindowGroup) => void; // TODO: 等待任务 #5 完成后实现组视图
@@ -122,6 +132,10 @@ export const CardGrid = React.memo<CardGridProps>(({
   const activeCustomCategory = useMemo(
     () => customCategories.find((category) => category.id === currentTab) ?? null,
     [currentTab, customCategories],
+  );
+  const isCustomCategoryTab = useMemo(
+    () => !isBuiltinTab(currentTab),
+    [currentTab],
   );
   const sshProfilesById = useMemo(
     () => new Map(sshProfiles.map((profile) => [profile.id, profile])),
@@ -249,6 +263,10 @@ export const CardGrid = React.memo<CardGridProps>(({
       return [...groupItems, ...windowItems];
     }
 
+    if (isCustomCategoryTab) {
+      return [];
+    }
+
     if (currentTab === 'all') {
       // 全部终端：活跃组 → 活跃窗口 → 归档组 → 归档窗口
       const activeGroups = groups.filter(g => !g.archived);
@@ -285,7 +303,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
       ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
     ];
-  }, [activeCustomCategory, currentTab, groupedWindowIds, groups, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById, windows]);
+  }, [activeCustomCategory, currentTab, groupedWindowIds, groups, isCustomCategoryTab, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById, windows]);
 
   // 全局搜索：始终搜索所有终端和组，不受 currentTab 限制
   const allCardItems = useMemo<CardItem[]>(() => {
@@ -720,7 +738,7 @@ export const CardGrid = React.memo<CardGridProps>(({
   );
 
   // 是否为自定义分类标签
-  const isCustomCategory = activeCustomCategory !== null;
+  const isCustomCategory = isCustomCategoryTab;
 
   // 自定义分类空状态
   if (isCustomCategory && cardItems.length === 0) {
