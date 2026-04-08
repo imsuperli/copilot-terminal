@@ -4,7 +4,6 @@ import { IPty, SSHSessionConfig, ZmodemDialogHandlers } from '../../types/proces
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
 import { SSHZmodemController, type ZmodemSentry, type ZmodemSentryOptions } from './SSHZmodemController';
-import type { SSHInteractiveShellInfo } from './SSHClientConnection';
 
 export interface SSHPtySessionOptions {
   pid: number;
@@ -50,7 +49,6 @@ export class SSHPtySession implements IPty {
   private recoveringShellAfterZmodemClose: boolean;
   private shellInitializationTimer: ReturnType<typeof setTimeout> | null;
   private shellInitialized: boolean;
-  private interactiveShellInfo: SSHInteractiveShellInfo;
 
   private constructor(options: SSHPtySessionOptions) {
     this.pid = options.pid;
@@ -79,10 +77,6 @@ export class SSHPtySession implements IPty {
     this.recoveringShellAfterZmodemClose = false;
     this.shellInitializationTimer = null;
     this.shellInitialized = false;
-    this.interactiveShellInfo = {
-      termux: false,
-      shellName: null,
-    };
   }
 
   write(data: string): void {
@@ -245,9 +239,6 @@ export class SSHPtySession implements IPty {
     });
 
     try {
-      if (typeof this.connectionLease.connection.getInteractiveShellInfo === 'function') {
-        this.interactiveShellInfo = await this.connectionLease.connection.getInteractiveShellInfo();
-      }
       await this.openShellChannel();
     } catch (error) {
       await this.releaseConnectionLease();
@@ -344,7 +335,7 @@ export class SSHPtySession implements IPty {
   }
 
   private scheduleInitializeRemoteShell(delayMs: number): void {
-    if (!this.channel || this.shellInitialized || !hasShellInitialization(this.ssh, this.interactiveShellInfo)) {
+    if (!this.channel || this.shellInitialized || !hasShellInitialization(this.ssh)) {
       return;
     }
 
@@ -369,7 +360,7 @@ export class SSHPtySession implements IPty {
       return;
     }
 
-    const commands = buildShellInitializationCommands(this.ssh, this.interactiveShellInfo);
+    const commands = buildShellInitializationCommands(this.ssh);
 
     if (commands.length > 0) {
       this.shellInitialized = true;
@@ -421,21 +412,17 @@ function decodeChunk(value: Buffer | string, decoder: StringDecoder): string {
   return typeof value === 'string' ? value : decoder.write(value);
 }
 
-function hasShellInitialization(ssh: SSHSessionConfig, shellInfo: SSHInteractiveShellInfo): boolean {
-  return Boolean(ssh.remoteCwd?.trim() || ssh.command?.trim() || shouldInstallTermuxPromptCwdHook(shellInfo));
+function hasShellInitialization(ssh: SSHSessionConfig): boolean {
+  return Boolean(ssh.remoteCwd?.trim() || ssh.command?.trim());
 }
 
-function buildShellInitializationCommands(ssh: SSHSessionConfig, shellInfo: SSHInteractiveShellInfo): string[] {
+function buildShellInitializationCommands(ssh: SSHSessionConfig): string[] {
   const commands: string[] = [];
   const remoteCwd = normalizeRemoteCwdForShellInitialization(ssh.remoteCwd);
   const startupCommand = ssh.command?.trim();
 
   if (remoteCwd) {
     commands.push(buildRemoteCdCommand(remoteCwd, ssh.remoteCwdMode));
-  }
-
-  if (shouldInstallTermuxPromptCwdHook(shellInfo)) {
-    commands.push(buildInstallTermuxPromptCwdHookCommand());
   }
 
   commands.push(buildEmitRemoteCwdMarkerCommand());
@@ -476,20 +463,6 @@ function buildRemoteCdCommand(value: string, mode: SSHSessionConfig['remoteCwdMo
 
 function buildEmitRemoteCwdMarkerCommand(): string {
   return `printf '\\033]633;P;Cwd=%s\\a' "$(pwd -P 2>/dev/null || pwd)"`;
-}
-
-function shouldInstallTermuxPromptCwdHook(shellInfo: SSHInteractiveShellInfo): boolean {
-  return shellInfo.termux && shellInfo.shellName === 'bash';
-}
-
-function buildInstallTermuxPromptCwdHookCommand(): string {
-  return [
-    '__copilot_terminal_emit_cwd() { printf \'\\033]633;P;Cwd=%s\\a\' "$(pwd -P 2>/dev/null || pwd)"; }',
-    'case ";${PROMPT_COMMAND-};" in',
-    '  *";__copilot_terminal_emit_cwd;"*|*"__copilot_terminal_emit_cwd") ;;',
-    '  *) PROMPT_COMMAND="__copilot_terminal_emit_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;',
-    'esac',
-  ].join(' ');
 }
 
 function formatRemoteCdTarget(value: string): string {
