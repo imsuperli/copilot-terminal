@@ -21,7 +21,9 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
 
   useEffect(() => {
     window.electronAPI?.windowIsMaximized().then((result) => {
-      if (result.success) setIsMaximized(result.data);
+      if (result.success && typeof result.data === 'boolean') {
+        setIsMaximized(result.data);
+      }
     });
 
     const unsubscribe = window.electronAPI?.onWindowMaximized((maximized) => {

@@ -241,7 +241,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       );
 
       const groupItems: CardItem[] = sortGroupsByCreatedAt(categoryGroups).map((group) => ({ type: 'group', data: group }));
-      const windowItems: CardItem[] = categoryWindows.flatMap((window) => {
+      const windowItems: CardItem[] = categoryWindows.flatMap<CardItem>((window) => {
         if (shouldRenderWindowCard(window)) {
           return [{ type: 'window', data: window } satisfies CardItem];
         }
