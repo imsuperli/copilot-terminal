@@ -51,17 +51,17 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
             <button onClick={handleMaximize} className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors" aria-label="Maximize" />
           </div>
           <div className="flex items-center gap-2 ml-1">
-            <img src="/resources/icon.png" alt="Logo" className="w-4 h-4" />
+            <img src="/resources/icon.png" alt="Logo" className="w-5 h-5" />
             {showAppName && <span className="text-sm text-zinc-300 font-medium">{appName}</span>}
           </div>
         </div>
 
         {/* 居中：Home + 窗口/组标题 */}
         {title && (
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {onReturn && (
-              <button onClick={onReturn} className="flex items-center justify-center w-5 h-5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors">
-                <Home size={13} />
+              <button onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0">
+                <Home size={15} />
               </button>
             )}
             <span className="text-sm text-zinc-300 font-medium truncate max-w-[300px]">{title}</span>
@@ -88,16 +88,16 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
     >
       {/* 左侧：logo + 应用名 */}
       <div className="flex items-center gap-2 pl-3">
-        <img src="/resources/icon.png" alt="Logo" className="w-4 h-4" />
+        <img src="/resources/icon.png" alt="Logo" className="w-5 h-5" />
         {showAppName && <span className="text-sm text-zinc-300 font-medium">{appName}</span>}
       </div>
 
       {/* 居中：Home + 窗口/组标题 */}
       {title && (
-        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           {onReturn && (
-            <button onClick={onReturn} className="flex items-center justify-center w-5 h-5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors">
-              <Home size={13} />
+            <button onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0">
+              <Home size={15} />
             </button>
           )}
           <span className="text-sm text-zinc-300 font-medium truncate max-w-[300px]">{title}</span>
