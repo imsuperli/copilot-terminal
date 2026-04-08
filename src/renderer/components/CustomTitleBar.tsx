@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Minus, Square, X, Maximize2 } from 'lucide-react';
+import { Minus, Square, X, Maximize2, GitBranch } from 'lucide-react';
 
 interface CustomTitleBarProps {
   title?: string;
+  gitBranch?: string;
   showAppName?: boolean;
   appName?: string;
 }
 
 export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
   title = '',
+  gitBranch,
   showAppName = false,
   appName = 'Copilot Terminal',
 }) => {
@@ -54,8 +56,14 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
 
         {/* 居中：窗口/组标题 */}
         {title && (
-          <div className="absolute left-1/2 -translate-x-1/2 text-sm text-zinc-300 font-medium truncate max-w-[400px] pointer-events-none">
-            {title}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+            <span className="text-sm text-zinc-300 font-medium truncate max-w-[300px]">{title}</span>
+            {gitBranch && (
+              <span className="text-xs text-zinc-500 flex items-center gap-1">
+                <GitBranch size={12} />
+                {gitBranch}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -77,8 +85,14 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
 
       {/* 居中：窗口/组标题 */}
       {title && (
-        <div className="absolute left-1/2 -translate-x-1/2 text-sm text-zinc-300 font-medium truncate max-w-[400px] pointer-events-none">
-          {title}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 pointer-events-none">
+          <span className="text-sm text-zinc-300 font-medium truncate max-w-[300px]">{title}</span>
+          {gitBranch && (
+            <span className="text-xs text-zinc-500 flex items-center gap-1">
+              <GitBranch size={12} />
+              {gitBranch}
+            </span>
+          )}
         </div>
       )}
 

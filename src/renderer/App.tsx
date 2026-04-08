@@ -732,34 +732,33 @@ function AppContent() {
 
   // 计算标题栏标题
   const titleBarTitle = useMemo(() => {
-    if (currentView === 'unified') {
-      return '';
-    }
-
+    if (currentView === 'unified') return '';
     if (activeGroupId) {
       const group = groups.find(g => g.id === activeGroupId);
       return group?.name || '';
     }
-
     if (activeWindowId) {
-      const window = windows.find(w => w.id === activeWindowId);
-      if (window) {
-        let title = window.name;
-        if (window.gitBranch) {
-          title += ` · ${window.gitBranch}`;
-        }
-        return title;
-      }
+      const win = windows.find(w => w.id === activeWindowId);
+      return win?.name || '';
     }
-
     return '';
   }, [currentView, activeGroupId, activeWindowId, groups, windows]);
+
+  const titleBarGitBranch = useMemo(() => {
+    if (currentView === 'unified' || activeGroupId) return undefined;
+    if (activeWindowId) {
+      const win = windows.find(w => w.id === activeWindowId);
+      return win?.gitBranch || undefined;
+    }
+    return undefined;
+  }, [currentView, activeGroupId, activeWindowId, windows]);
 
   return (
     <div className="flex flex-col h-screen">
       {/* 自定义标题栏 */}
       <CustomTitleBar
         title={titleBarTitle}
+        gitBranch={titleBarGitBranch}
         showAppName={currentView === 'unified'}
         appName={appVersion.name}
       />
