@@ -761,6 +761,7 @@ function AppContent() {
         gitBranch={titleBarGitBranch}
         showAppName={currentView === 'unified'}
         appName={appVersion.name}
+        onReturn={currentView !== 'unified' ? (activeGroupId ? handleReturnFromGroup : switchToUnifiedView) : undefined}
       />
 
       {/* 内容区域 */}

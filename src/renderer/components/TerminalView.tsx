@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Home, SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -466,19 +466,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 - 在嵌入模式下也显示 */}
         <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0">
-          <div className="flex min-w-0 items-center gap-2">
-            {/* 返回按钮 - 仅在非嵌入模式显示 */}
-            {!embedded && (
-            <AppTooltip content={t('terminalView.return')} placement="toolbar-leading">
-              <button
-                onClick={onReturn}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              >
-                <Home size={14} />
-              </button>
-            </AppTooltip>
-            )}
-          </div>
+          <div className="flex min-w-0 items-center gap-2" />
 
           {/* 鍙充晶鎸夐挳缁?*/}
           <div className="flex items-center gap-2">

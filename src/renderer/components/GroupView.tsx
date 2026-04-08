@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
-import { Home, FolderOpen, Play, Square, Archive } from 'lucide-react';
+import { FolderOpen, Play, Square, Archive } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { GroupSplitLayout } from './GroupSplitLayout';
@@ -305,16 +305,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 */}
         <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-3 gap-2 flex-shrink-0">
-          {/* 返回按钮 */}
-          <AppTooltip content="返回" placement="toolbar-leading">
-            <button
-              onClick={onReturn}
-              className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
-            >
-              <Home size={14} />
-            </button>
-          </AppTooltip>
-
           <div className="flex-1" />
 
           {/* 批量操作按钮 */}
