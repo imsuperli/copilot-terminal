@@ -52,6 +52,11 @@ vi.mock('../../hooks/useIDESettings', () => ({
   }),
 }));
 
+vi.mock('../../utils/sshConnectionRetry', () => ({
+  isSSHPasswordPromptCancelled: () => false,
+  runSSHActionWithPasswordRetry: async ({ action }: { action: () => Promise<unknown> }) => action(),
+}));
+
 vi.mock('../../i18n', () => ({
   useI18n: () => ({
     t: (key: string, vars?: Record<string, string>) => {
@@ -68,6 +73,8 @@ vi.mock('../../i18n', () => ({
           return '隐藏 SSH 监控';
         case 'terminalView.managePortForwards':
           return '管理 SSH 端口转发';
+        case 'terminalView.cloneSshTerminal':
+          return '克隆 SSH 终端';
         case 'terminalView.splitHorizontal':
           return '水平分屏';
         case 'terminalView.splitVertical':
@@ -179,6 +186,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.getByRole('button', { name: '打开 SSH 文件面板' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '显示 SSH 监控' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '管理 SSH 端口转发' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '克隆 SSH 终端' })).toBeInTheDocument();
   });
 
   it('opens the ssh sftp dialog from the toolbar', async () => {
@@ -236,5 +244,40 @@ describe('TerminalView SSH toolbar', () => {
 
     await user.click(screen.getByRole('button', { name: '隐藏 SSH 监控' }));
     expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
+  });
+
+  it('clones the active ssh pane into a new standalone window', async () => {
+    const user = userEvent.setup();
+    const onWindowSwitch = vi.fn();
+
+    vi.mocked(window.electronAPI.cloneSSHPane).mockResolvedValueOnce({
+      success: true,
+      data: {
+        pid: 3002,
+        sessionId: 'ssh-session-2',
+      },
+    });
+
+    render(
+      <TerminalView
+        window={createSSHWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '克隆 SSH 终端' }));
+
+    expect(window.electronAPI.cloneSSHPane).toHaveBeenCalledWith(expect.objectContaining({
+      sourceWindowId: 'win-ssh-1',
+      sourcePaneId: 'pane-ssh-1',
+      targetWindowId: expect.any(String),
+      targetPaneId: expect.any(String),
+    }));
+
+    expect(onWindowSwitch).toHaveBeenCalledWith(expect.any(String));
+    expect(onWindowSwitch.mock.calls[0]?.[0]).not.toBe('win-ssh-1');
+    expect(useWindowStore.getState().windows).toHaveLength(2);
   });
 });

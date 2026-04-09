@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Copy } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -25,6 +25,7 @@ import {
   canPaneOpenInIDE,
   canPaneOpenLocalFolder,
   canPaneWatchGitBranch,
+  getPaneBackend,
   getPaneCapabilities,
 } from '../../shared/utils/terminalCapabilities';
 import {
@@ -32,6 +33,7 @@ import {
   startSplitPaneFromSource,
   startWindowPanes,
 } from '../utils/paneSessionActions';
+import { createWindowDraftFromSourcePane, startClonedWindowFromSourcePane } from '../utils/windowSessionActions';
 
 export interface TerminalViewProps {
   window: Window;
@@ -83,6 +85,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => activePane ? getPaneCapabilities(activePane) : null,
     [activePane]
   );
+  const isActiveSshPane = useMemo(
+    () => activePane ? getPaneBackend(activePane) === 'ssh' : false,
+    [activePane]
+  );
   const activeSshRuntimeCwd = activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null;
   const visibleIDEs = useMemo(
     () => activePaneCapabilities?.canOpenInIDE ? enabledIDEs : [],
@@ -101,6 +107,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const {
     toggleSidebar,
     getActiveWindows,
+    addWindow,
+    removeWindow,
     splitPaneInWindow,
     closePaneInWindow,
     setActivePane,
@@ -310,6 +318,44 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       paneId: activePane.id,
     });
   }, [activePane, activePaneCapabilities, terminalWindow.id]);
+
+  const handleCloneSession = useCallback(async () => {
+    if (!activePane || !activePaneCapabilities?.canCloneSession || !isActiveSshPane || embedded) {
+      return;
+    }
+
+    const clonedWindow = createWindowDraftFromSourcePane(terminalWindow, activePane);
+    addWindow(clonedWindow);
+
+    try {
+      const result = await startClonedWindowFromSourcePane({
+        sourceWindow: terminalWindow,
+        sourcePane: activePane,
+        targetWindow: clonedWindow,
+      });
+
+      updatePane(clonedWindow.id, clonedWindow.activePaneId, {
+        pid: result.pid,
+        sessionId: result.sessionId,
+        status: result.status,
+      });
+
+      onWindowSwitch(clonedWindow.id);
+    } catch (error) {
+      console.error('Failed to clone session into a new window:', error);
+      removeWindow(clonedWindow.id);
+    }
+  }, [
+    activePane,
+    activePaneCapabilities?.canCloneSession,
+    addWindow,
+    embedded,
+    isActiveSshPane,
+    onWindowSwitch,
+    removeWindow,
+    terminalWindow,
+    updatePane,
+  ]);
 
   const handleOpenSSHSftp = useCallback(() => {
     if (!activePane || !activePaneCapabilities?.canOpenSFTP) {
@@ -573,6 +619,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
                   <Waypoints size={14} />
+                </button>
+              </AppTooltip>
+            )}
+
+            {!embedded && isActiveSshPane && activePaneCapabilities?.canCloneSession && (
+              <AppTooltip content={t('terminalView.cloneSshTerminal')} placement="toolbar-trailing">
+                <button
+                  type="button"
+                  aria-label={t('terminalView.cloneSshTerminal')}
+                  onClick={handleCloneSession}
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                >
+                  <Copy size={14} />
                 </button>
               </AppTooltip>
             )}

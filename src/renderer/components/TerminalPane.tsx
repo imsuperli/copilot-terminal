@@ -11,6 +11,8 @@ import { ensureTerminalFontsLoaded, TERMINAL_FONT_FAMILY } from '../utils/termin
 import { onTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { installTerminalImeFix, type ImeCompositionState } from '../utils/terminalImeFix';
 import { AppTooltip } from './ui/AppTooltip';
+import { useWindowStore } from '../stores/windowStore';
+import { extractLatestOsc7RemoteCwd } from '../utils/sshCwdTracking';
 import '../styles/xterm.css';
 
 const completedReplaySessions = new Set<string>();
@@ -199,6 +201,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const replayHistoryRef = useRef<((options?: { resetTerminal?: boolean }) => Promise<void>) | null>(null);
   const imeCompositionStateRef = useRef<ImeCompositionState>({ isComposing: false });
   const [isHovered, setIsHovered] = useState(false);
+  const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
 
   // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
   const customBorderStyle = getCustomBorderStyle(pane.borderColor);
@@ -210,6 +213,34 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   // 是否显示 pane header（当有 title 或 agentName 时显示）
   const showPaneHeader = !!(pane.title || pane.agentName);
   const showCloseButton = Boolean(onClose && isHovered);
+
+  useEffect(() => {
+    const sshBinding = pane.ssh;
+    if (!sshBinding) {
+      return undefined;
+    }
+
+    const unsubscribe = subscribeToPanePtyData(windowId, pane.id, (payload) => {
+      const nextRemoteCwd = extractLatestOsc7RemoteCwd(payload.data);
+      if (!nextRemoteCwd) {
+        return;
+      }
+
+      if (nextRemoteCwd === pane.cwd && nextRemoteCwd === sshBinding.remoteCwd) {
+        return;
+      }
+
+      updatePaneRuntime(windowId, pane.id, {
+        cwd: nextRemoteCwd,
+        ssh: {
+          ...sshBinding,
+          remoteCwd: nextRemoteCwd,
+        },
+      });
+    });
+
+    return unsubscribe;
+  }, [pane.cwd, pane.id, pane.ssh, updatePaneRuntime, windowId]);
 
   // 写入系统剪贴板（优先走 Electron IPC，失败时回退到浏览器 API）
   const writeClipboardText = useCallback(async (text: string) => {

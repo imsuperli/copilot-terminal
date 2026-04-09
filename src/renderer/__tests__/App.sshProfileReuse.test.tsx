@@ -63,6 +63,10 @@ vi.mock('../components/CreateWindowDialog', () => ({
   CreateWindowDialog: () => null,
 }));
 
+vi.mock('../components/CustomTitleBar', () => ({
+  CustomTitleBar: () => null,
+}));
+
 vi.mock('../hooks/useViewSwitcher', () => ({
   useViewSwitcher: mockUseViewSwitcher,
 }));
