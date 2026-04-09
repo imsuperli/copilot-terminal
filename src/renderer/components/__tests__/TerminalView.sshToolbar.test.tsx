@@ -274,10 +274,33 @@ describe('TerminalView SSH toolbar', () => {
       sourcePaneId: 'pane-ssh-1',
       targetWindowId: expect.any(String),
       targetPaneId: expect.any(String),
+      remoteCwd: '/srv/app',
     }));
 
     expect(onWindowSwitch).toHaveBeenCalledWith(expect.any(String));
     expect(onWindowSwitch.mock.calls[0]?.[0]).not.toBe('win-ssh-1');
     expect(useWindowStore.getState().windows).toHaveLength(2);
+  });
+
+  it('does not leave a placeholder window behind when cloning fails', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.cloneSSHPane).mockResolvedValueOnce({
+      success: false,
+      error: 'clone failed',
+    });
+
+    render(
+      <TerminalView
+        window={createSSHWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '克隆 SSH 终端' }));
+
+    expect(useWindowStore.getState().windows).toHaveLength(1);
   });
 });

@@ -146,32 +146,35 @@ export async function startSplitPaneFromSource(options: {
   sourcePane: Pane;
   targetWindowId: string;
   targetPaneId: string;
+  remoteCwdOverride?: string;
 }): Promise<{
   pid: number | null;
   sessionId: string;
   status: WindowStatus;
 }> {
-  const { sourceWindowId, sourcePane, targetWindowId, targetPaneId } = options;
+  const { sourceWindowId, sourcePane, targetWindowId, targetPaneId, remoteCwdOverride } = options;
   const { cols: initialCols, rows: initialRows } = estimateInitialTerminalSize();
 
   if (getPaneBackend(sourcePane) === 'ssh') {
-    if (!sourcePane.ssh) {
+    const sshBinding = sourcePane.ssh;
+    if (!sshBinding) {
       throw new Error(`SSH pane metadata is missing for ${sourceWindowId}/${sourcePane.id}`);
     }
 
     const response = await runSSHActionWithPasswordRetry({
       request: {
-        profileId: sourcePane.ssh.profileId,
-        profileName: `${sourcePane.ssh.user}@${sourcePane.ssh.host}`,
-        host: sourcePane.ssh.host,
-        user: sourcePane.ssh.user,
-        authType: sourcePane.ssh.authType,
+        profileId: sshBinding.profileId,
+        profileName: `${sshBinding.user}@${sshBinding.host}`,
+        host: sshBinding.host,
+        user: sshBinding.user,
+        authType: sshBinding.authType,
       },
       action: () => window.electronAPI.cloneSSHPane({
         sourceWindowId,
         sourcePaneId: sourcePane.id,
         targetWindowId,
         targetPaneId,
+        remoteCwd: remoteCwdOverride ?? sshBinding.remoteCwd ?? sourcePane.cwd,
       }),
     });
 

@@ -85,6 +85,7 @@ export interface CloneSSHPaneConfig {
   sourcePaneId: string;
   targetWindowId: string;
   targetPaneId: string;
+  remoteCwd?: string;
 }
 
 export interface SSHSessionPortForwardTarget {

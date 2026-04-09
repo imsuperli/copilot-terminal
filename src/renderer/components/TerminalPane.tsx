@@ -216,7 +216,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   useEffect(() => {
     const sshBinding = pane.ssh;
-    if (!sshBinding) {
+    if (!sshBinding || !isWindowActive || !isActive) {
       return undefined;
     }
 
@@ -240,7 +240,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     });
 
     return unsubscribe;
-  }, [pane.cwd, pane.id, pane.ssh, updatePaneRuntime, windowId]);
+  }, [isActive, isWindowActive, pane.cwd, pane.id, pane.ssh, updatePaneRuntime, windowId]);
 
   // 写入系统剪贴板（优先走 Electron IPC，失败时回退到浏览器 API）
   const writeClipboardText = useCallback(async (text: string) => {

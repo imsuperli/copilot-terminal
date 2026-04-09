@@ -558,13 +558,14 @@ describe('registerSSHSessionHandlers', () => {
       sourcePaneId: 'pane-source',
       targetWindowId: 'win-target',
       targetPaneId: 'pane-target',
+      remoteCwd: '/srv/app/releases',
     });
 
     expect(processManager.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
       backend: 'ssh',
       windowId: 'win-target',
       paneId: 'pane-target',
-      workingDirectory: '/srv/app',
+      workingDirectory: '/srv/app/releases',
     }));
     expect(response).toEqual({
       success: true,

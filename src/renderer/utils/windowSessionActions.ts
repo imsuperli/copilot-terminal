@@ -54,8 +54,31 @@ export async function startClonedWindowFromSourcePane(options: {
       sourcePane,
       targetWindowId: targetWindow.id,
       targetPaneId: targetWindow.layout.pane.id,
+      remoteCwdOverride: sourcePane.ssh?.remoteCwd ?? sourcePane.cwd,
     });
   }
 
   return startPaneForWindow(targetWindow, targetWindow.layout.pane);
+}
+
+export function applyWindowStartResult(
+  targetWindow: Window,
+  result: ClonedWindowStartResult,
+): Window {
+  if (targetWindow.layout.type !== 'pane') {
+    throw new Error(`Expected single-pane target window for start result: ${targetWindow.id}`);
+  }
+
+  return {
+    ...targetWindow,
+    layout: {
+      ...targetWindow.layout,
+      pane: {
+        ...targetWindow.layout.pane,
+        pid: result.pid,
+        sessionId: result.sessionId,
+        status: result.status,
+      },
+    },
+  };
 }

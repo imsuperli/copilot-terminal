@@ -33,7 +33,11 @@ import {
   startSplitPaneFromSource,
   startWindowPanes,
 } from '../utils/paneSessionActions';
-import { createWindowDraftFromSourcePane, startClonedWindowFromSourcePane } from '../utils/windowSessionActions';
+import {
+  applyWindowStartResult,
+  createWindowDraftFromSourcePane,
+  startClonedWindowFromSourcePane,
+} from '../utils/windowSessionActions';
 
 export interface TerminalViewProps {
   window: Window;
@@ -108,7 +112,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     toggleSidebar,
     getActiveWindows,
     addWindow,
-    removeWindow,
     splitPaneInWindow,
     closePaneInWindow,
     setActivePane,
@@ -324,26 +327,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-    const clonedWindow = createWindowDraftFromSourcePane(terminalWindow, activePane);
-    addWindow(clonedWindow);
+    const clonedWindowDraft = createWindowDraftFromSourcePane(terminalWindow, activePane);
 
     try {
       const result = await startClonedWindowFromSourcePane({
         sourceWindow: terminalWindow,
         sourcePane: activePane,
-        targetWindow: clonedWindow,
+        targetWindow: clonedWindowDraft,
       });
 
-      updatePane(clonedWindow.id, clonedWindow.activePaneId, {
-        pid: result.pid,
-        sessionId: result.sessionId,
-        status: result.status,
-      });
+      const startedWindow = applyWindowStartResult(clonedWindowDraft, result);
+      addWindow(startedWindow);
 
-      onWindowSwitch(clonedWindow.id);
+      onWindowSwitch(startedWindow.id);
     } catch (error) {
       console.error('Failed to clone session into a new window:', error);
-      removeWindow(clonedWindow.id);
     }
   }, [
     activePane,
@@ -352,9 +350,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     embedded,
     isActiveSshPane,
     onWindowSwitch,
-    removeWindow,
     terminalWindow,
-    updatePane,
   ]);
 
   const handleOpenSSHSftp = useCallback(() => {

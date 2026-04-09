@@ -161,7 +161,7 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
       const handle = await processManager.spawnTerminal(await buildSSHSpawnConfig(profile, vaultEntry, {
         windowId: config.targetWindowId,
         paneId: config.targetPaneId,
-        remoteCwd: resolvePaneRemoteCwd(sourcePane),
+        remoteCwd: resolveSSHRemoteCwd(config.remoteCwd, resolvePaneRemoteCwd(sourcePane)),
         command: sourcePane.command,
       }, {
         sshProfileStore,
