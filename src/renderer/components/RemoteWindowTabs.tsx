@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import { X } from 'lucide-react';
 import { Window } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
@@ -7,7 +8,6 @@ import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
 interface RemoteWindowTabsProps {
   windows: Window[];
   activeWindowId: string;
-  tabsLabel: string;
   cloneLabel: string;
   closeLabel: string;
   onWindowSelect: (windowId: string) => void;
@@ -25,7 +25,6 @@ interface RemoteWindowTabItem {
 export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   windows,
   activeWindowId,
-  tabsLabel,
   cloneLabel,
   closeLabel,
   onWindowSelect,
@@ -57,43 +56,72 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   }
 
   return (
-    <div className="flex min-w-0 self-stretch items-stretch gap-3">
-      <span className="hidden shrink-0 self-center text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 xl:block">
-        {tabsLabel}
-      </span>
-      <div className="flex min-w-0 self-stretch items-stretch overflow-x-auto border-x border-zinc-800">
+    <div className="flex min-w-0 self-stretch items-stretch">
+      <div className="flex min-w-0 self-stretch items-stretch overflow-x-auto">
         {remoteWindows.map((window, index) => (
           <ContextMenu.Root key={window.id}>
             <ContextMenu.Trigger asChild>
-              <button
-                type="button"
-                aria-label={window.name}
-                onClick={() => onWindowSelect(window.id)}
-                className={`group flex h-full min-w-[140px] max-w-[220px] items-center px-4 text-left transition-colors ${
+              <div
+                className={`group relative flex h-full min-w-[156px] max-w-[240px] items-stretch transition-all duration-150 ${
                   window.isActive
-                    ? 'bg-zinc-800/85 text-zinc-50'
-                    : 'text-zinc-300 hover:bg-zinc-800/55'
-                } ${index < remoteWindows.length - 1 ? 'border-r border-zinc-800' : ''}`}
+                    ? 'z-[1] text-zinc-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),inset_0_-12px_18px_rgba(0,0,0,0.24)]'
+                    : 'text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:text-zinc-100 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-10px_16px_rgba(0,0,0,0.16)]'
+                } ${index > 0 ? '-ml-px' : ''} border-x border-zinc-700/80`}
               >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-medium">
-                    {window.primaryText}
+                <div
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute inset-x-3 top-0 h-px transition-opacity ${
+                    window.isActive ? 'bg-white/20 opacity-100' : 'bg-white/8 opacity-70'
+                  }`}
+                />
+                <div
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute inset-0 transition-opacity ${
+                    window.isActive
+                      ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0)_28%,rgba(0,0,0,0.18)_100%)] opacity-100'
+                      : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0)_26%,rgba(0,0,0,0.12)_100%)] opacity-100'
+                  }`}
+                />
+                <button
+                  type="button"
+                  aria-label={window.name}
+                  onClick={() => onWindowSelect(window.id)}
+                  className="relative z-[1] flex h-full w-full min-w-0 items-center pl-5 pr-11 text-left focus:outline-none"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className={`truncate text-xs font-medium tracking-[0.01em] ${
+                      window.isActive ? 'drop-shadow-[0_1px_0_rgba(0,0,0,0.45)]' : ''
+                    }`}>
+                      {window.primaryText}
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`${closeLabel} ${window.primaryText}`}
+                  tabIndex={-1}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onWindowClose(window.id);
+                  }}
+                  className="absolute right-1.5 top-1.5 z-[2] flex h-5 w-5 items-center justify-center rounded-sm text-zinc-500 opacity-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:bg-black/30 hover:text-zinc-100"
+                >
+                  <X size={12} strokeWidth={2.2} />
+                </button>
+              </div>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
               <ContextMenu.Content
                 className="z-[12040] min-w-[180px] rounded-lg border border-zinc-700 bg-zinc-900 p-1 shadow-lg"
               >
                 <ContextMenu.Item
-                  className="flex items-center rounded-md px-3 py-2 text-sm text-zinc-100 outline-none transition-colors hover:bg-zinc-800 focus:bg-zinc-800"
+                  className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-zinc-100 outline-none transition-colors hover:bg-zinc-800 focus:bg-zinc-800"
                   onSelect={() => onWindowClone(window.id)}
                 >
                   {cloneLabel}
                 </ContextMenu.Item>
                 <ContextMenu.Item
-                  className="flex items-center rounded-md px-3 py-2 text-sm text-red-300 outline-none transition-colors hover:bg-red-500/10 focus:bg-red-500/10"
+                  className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-red-300 outline-none transition-colors hover:bg-red-500/10 focus:bg-red-500/10"
                   onSelect={() => onWindowClose(window.id)}
                 >
                   {closeLabel}

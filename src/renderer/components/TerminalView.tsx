@@ -666,7 +666,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               <RemoteWindowTabs
                 windows={windows}
                 activeWindowId={terminalWindow.id}
-                tabsLabel={t('terminalView.remoteTabs')}
                 cloneLabel={t('terminalView.cloneSshTerminal')}
                 closeLabel={t('common.close')}
                 onWindowSelect={onWindowSwitch}
