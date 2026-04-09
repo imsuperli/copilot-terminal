@@ -18,6 +18,7 @@ vi.mock('@xterm/xterm', () => ({
     blur: vi.fn(),
     dispose: vi.fn(),
     write: vi.fn(),
+    paste: vi.fn(),
     getSelection: vi.fn().mockReturnValue(''),
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),

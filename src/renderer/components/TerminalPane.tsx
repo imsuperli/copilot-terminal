@@ -184,6 +184,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const resizeFrameRef = useRef<number | null>(null);
   const lastContainerSizeRef = useRef({ width: 0, height: 0 });
   const isActiveRef = useRef(isActive); // 使用 ref 跟踪 isActive 状态
+  const onActivateRef = useRef(onActivate);
   const suppressNativePasteUntilRef = useRef(0); // 短时间屏蔽原生 paste，避免与手动 Ctrl+V 粘贴重复
   const lastCtrlEnterTimeRef = useRef(0); // 记录上次 Ctrl+Enter 的时间戳
   const lastStatusRef = useRef<WindowStatus>(pane.status); // 跟踪上一次的状态
@@ -294,6 +295,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   useEffect(() => {
     isActiveRef.current = isActive;
   }, [isActive]);
+
+  useEffect(() => {
+    onActivateRef.current = onActivate;
+  }, [onActivate]);
 
   useEffect(() => {
     const sessionKey = getReplaySessionKey(windowId, pane.id, pane.pid);
@@ -756,6 +761,34 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     helperTextarea?.addEventListener('paste', suppressNativePaste, true);
     terminalContainer?.addEventListener('paste', suppressNativePaste as EventListener, true);
 
+    // 在捕获阶段接管右键粘贴，阻止 xterm 先污染 helper textarea。
+    const handleNativeContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+
+      if (!isActiveRef.current) {
+        onActivateRef.current();
+      }
+
+      void (async () => {
+        const text = await readClipboardText();
+        if (!text) {
+          return;
+        }
+
+        const currentTerminal = terminalRef.current;
+        if (!currentTerminal || currentTerminal !== terminal) {
+          return;
+        }
+
+        currentTerminal.focus();
+        currentTerminal.paste(text);
+      })();
+    };
+
+    terminalContainer?.addEventListener('contextmenu', handleNativeContextMenu, true);
+
     // 告诉 xterm.js 忽略应用级快捷键
     const isMac = window.electronAPI?.platform === 'darwin';
     terminal.attachCustomKeyEventHandler((e: KeyboardEvent) => {
@@ -885,6 +918,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       suppressNativePasteUntilRef.current = 0;
       helperTextarea?.removeEventListener('paste', suppressNativePaste, true);
       terminalContainer?.removeEventListener('paste', suppressNativePaste as EventListener, true);
+      terminalContainer?.removeEventListener('contextmenu', handleNativeContextMenu, true);
 
       terminal.dispose();
       terminalRef.current = null;
@@ -937,26 +971,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       onActivate();
     }
   }, [isActive, onActivate]);
-
-  // 右键粘贴：读取剪贴板并写入当前窗格 PTY
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-
-    if (!isActive) {
-      onActivate();
-    }
-
-    void (async () => {
-      const text = await readClipboardText();
-      if (!text || !window.electronAPI) return;
-      // 如果终端开启了 bracketed paste mode，用转义序列包裹粘贴内容
-      const terminal = terminalRef.current;
-      const wrapped = terminal?.modes.bracketedPasteMode
-        ? `\x1b[200~${text}\x1b[201~`
-        : text;
-      window.electronAPI.ptyWrite(windowId, pane.id, wrapped, { source: 'context-menu-paste' });
-    })();
-  }, [isActive, onActivate, readClipboardText, windowId, pane.id]);
 
   return (
     <div
@@ -1035,7 +1049,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       <div
         ref={terminalContainerRef}
         className="min-h-0 min-w-0 flex-1 overflow-hidden px-1"
-        onContextMenu={handleContextMenu}
       />
     </div>
   );

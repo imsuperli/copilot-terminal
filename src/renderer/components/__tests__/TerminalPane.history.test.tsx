@@ -13,6 +13,7 @@ const { terminalInstances, ptyCallbacks, terminalDataCallbacks } = vi.hoisted(()
     blur: ReturnType<typeof vi.fn>;
     dispose: ReturnType<typeof vi.fn>;
     write: ReturnType<typeof vi.fn>;
+    paste: ReturnType<typeof vi.fn>;
     reset: ReturnType<typeof vi.fn>;
     getSelection: ReturnType<typeof vi.fn>;
     onData: ReturnType<typeof vi.fn>;
@@ -38,6 +39,9 @@ vi.mock('@xterm/xterm', () => ({
           terminalDataCallbacks.forEach((terminalDataCallback) => terminalDataCallback('\u001b[?1;2c'));
         }
         callback?.();
+      }),
+      paste: vi.fn((data: string) => {
+        terminalDataCallbacks.forEach((terminalDataCallback) => terminalDataCallback(data));
       }),
       reset: vi.fn(),
       getSelection: vi.fn().mockReturnValue(''),
@@ -213,6 +217,51 @@ describe('TerminalPane history replay', () => {
       '\u001b[?1;2c',
       { source: 'xterm.onData' },
     );
+  });
+
+  it('routes right-click paste through xterm instead of direct pty writes', async () => {
+    vi.mocked(window.electronAPI.readClipboardText).mockResolvedValue({
+      success: true,
+      data: 'pasted text',
+    });
+
+    const { container } = render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    const terminalContainer = container.querySelector('.overflow-hidden');
+    expect(terminalContainer).toBeTruthy();
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    terminalContainer?.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+
+    await waitFor(() => {
+      expect(terminalInstances[0]?.paste).toHaveBeenCalledWith('pasted text');
+    });
+
+    expect(window.electronAPI.ptyWrite).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      'pasted text',
+      { source: 'xterm.onData' },
+    );
+    expect(
+      vi.mocked(window.electronAPI.ptyWrite).mock.calls.some(([, , , metadata]) => metadata?.source === 'context-menu-paste'),
+    ).toBe(false);
   });
 
   it('does not replay history again when a placeholder pane receives its first pid', async () => {
