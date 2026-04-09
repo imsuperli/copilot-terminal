@@ -660,7 +660,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* 主内容区 */}
       <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 - 在嵌入模式下也显示 */}
-        <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-2 pr-4 flex-shrink-0 gap-3">
+        <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-stretch justify-between pl-2 pr-4 flex-shrink-0 gap-3">
           <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-hidden">
             {!embedded && isActiveSshPane && (
               <RemoteWindowTabs
@@ -680,7 +680,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           </div>
 
           {/* 鍙充晶鎸夐挳缁?*/}
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center self-stretch gap-2">
             {/* 椤圭洰閾炬帴 */}
             {terminalWindow.projectConfig && terminalWindow.projectConfig.links.length > 0 && (
               <>
