@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
-import { X } from 'lucide-react';
 import { Window } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
@@ -56,13 +55,13 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   }
 
   return (
-    <div className="flex min-w-0 self-stretch items-stretch">
-      <div className="flex min-w-0 self-stretch items-stretch overflow-x-auto">
+    <div className="flex h-full min-w-0 self-stretch items-stretch">
+      <div className="flex h-full min-w-0 self-stretch items-stretch overflow-x-auto">
         {remoteWindows.map((window, index) => (
           <ContextMenu.Root key={window.id}>
             <ContextMenu.Trigger asChild>
               <div
-                className={`group relative flex h-full min-w-[156px] max-w-[240px] items-stretch transition-all duration-150 ${
+                className={`group relative flex h-full min-w-[118px] max-w-[176px] items-stretch transition-all duration-150 ${
                   window.isActive
                     ? 'z-[1] text-zinc-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.14),inset_0_-12px_18px_rgba(0,0,0,0.24)]'
                     : 'text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:text-zinc-100 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-10px_16px_rgba(0,0,0,0.16)]'
@@ -86,7 +85,7 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
                   type="button"
                   aria-label={window.name}
                   onClick={() => onWindowSelect(window.id)}
-                  className="relative z-[1] flex h-full w-full min-w-0 items-center pl-5 pr-11 text-left focus:outline-none"
+                  className="relative z-[1] flex h-full w-full min-w-0 items-center pl-3 pr-8 text-left focus:outline-none"
                 >
                   <div className="min-w-0 flex-1">
                     <div className={`truncate text-xs font-medium tracking-[0.01em] ${
@@ -104,9 +103,9 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
                     event.stopPropagation();
                     onWindowClose(window.id);
                   }}
-                  className="absolute right-1.5 top-1.5 z-[2] flex h-5 w-5 items-center justify-center rounded-sm text-zinc-500 opacity-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:bg-black/30 hover:text-zinc-100"
+                  className="absolute right-1 top-1 z-[2] flex h-4 w-4 items-center justify-center rounded-sm text-[13px] font-medium leading-none text-zinc-500 opacity-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:bg-black/30 hover:text-zinc-100"
                 >
-                  <X size={12} strokeWidth={2.2} />
+                  <span aria-hidden="true">&times;</span>
                 </button>
               </div>
             </ContextMenu.Trigger>
