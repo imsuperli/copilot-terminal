@@ -633,12 +633,17 @@ export const useWindowStore = create<WindowStore>()(
 
     // 归档窗口
     archiveWindow: (id) => {
+      let didArchive = false;
       set((state) => {
         const window = state.windows.find(w => w.id === id);
-        if (window) {
-          window.archived = true;
-          window.lastActiveAt = new Date().toISOString();
+        if (!window || window.ephemeral) {
+          return;
         }
+
+        didArchive = true;
+        window.archived = true;
+        window.lastActiveAt = new Date().toISOString();
+
         // 如果归档的是当前活跃窗口，清除活跃状态
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
@@ -666,9 +671,10 @@ export const useWindowStore = create<WindowStore>()(
           }
         }
       });
-      // 触发自动保存
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+      if (didArchive) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     // 取消归档窗口

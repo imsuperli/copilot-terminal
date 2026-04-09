@@ -7,13 +7,14 @@ import { QuickSwitcher } from './QuickSwitcher';
 import { SettingsPanel } from './SettingsPanel';
 import { Sidebar } from './Sidebar';
 import { WindowGroup } from '../../shared/types/window-group';
-import { WindowStatus } from '../types/window';
+import { Window, WindowStatus } from '../types/window';
 import { getAllWindowIds, getWindowCount } from '../utils/groupLayoutHelpers';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import type { SSHProfile } from '../../shared/types/ssh';
+import { getOwnedEphemeralSSHWindowIds, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 
 export interface GroupViewProps {
   group: WindowGroup;
@@ -105,6 +106,23 @@ export const GroupView: React.FC<GroupViewProps> = ({
     },
     [group.id, setActiveWindowInGroup]
   );
+
+  const destroyWindowIds = useCallback(async (windowIds: string[]) => {
+    const { removeWindow } = useWindowStore.getState();
+
+    for (const windowId of windowIds) {
+      await window.electronAPI.closeWindow(windowId);
+      await window.electronAPI.deleteWindow(windowId);
+      removeWindow(windowId);
+    }
+  }, []);
+
+  const destroyOwnedEphemeralWindows = useCallback(async (windowId: string) => {
+    const ownedWindowIds = getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, windowId);
+    if (ownedWindowIds.length > 0) {
+      await destroyWindowIds(ownedWindowIds);
+    }
+  }, [destroyWindowIds]);
 
   // 处理快速切换器选择
   const handleQuickSwitcherSelect = useCallback(
@@ -217,11 +235,17 @@ export const GroupView: React.FC<GroupViewProps> = ({
   const handleStopAndRemoveFromGroup = useCallback(async (windowId: string) => {
     // 获取移除前的窗口列表
     const windowIdsBeforeRemove = getAllWindowIds(group.layout);
+    const targetWindow = windows.find((window) => window.id === windowId) ?? null;
 
     try {
-      await window.electronAPI.closeWindow(windowId);
-      const { pauseWindowState } = useWindowStore.getState();
-      pauseWindowState(windowId);
+      if (targetWindow && isEphemeralSSHCloneWindow(targetWindow)) {
+        await destroyWindowIds([windowId]);
+      } else {
+        await destroyOwnedEphemeralWindows(windowId);
+        await window.electronAPI.closeWindow(windowId);
+        const { pauseWindowState } = useWindowStore.getState();
+        pauseWindowState(windowId);
+      }
     } catch (error) {
       console.error('Failed to stop window:', error);
     }
@@ -245,7 +269,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
         }
       }
     }, 0);
-  }, [group.id, group.layout, removeWindowFromGroupLayout, onWindowSwitch, onReturn]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, group.id, group.layout, onReturn, onWindowSwitch, removeWindowFromGroupLayout, windows]);
 
   // 批量启动组内所有窗口
   const handleStartAll = useCallback(async () => {
@@ -264,14 +288,19 @@ export const GroupView: React.FC<GroupViewProps> = ({
       const status = getAggregatedStatus(win.layout);
       if (status === WindowStatus.Running || status === WindowStatus.WaitingForInput) {
         try {
-          await window.electronAPI.closeWindow(win.id);
-          pauseWindowState(win.id);
+          if (isEphemeralSSHCloneWindow(win as Window)) {
+            await destroyWindowIds([win.id]);
+          } else {
+            await destroyOwnedEphemeralWindows(win.id);
+            await window.electronAPI.closeWindow(win.id);
+            pauseWindowState(win.id);
+          }
         } catch (error) {
           console.error(`Failed to pause window ${win.id}:`, error);
         }
       }
     }
-  }, [groupWindows]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, groupWindows]);
 
   // 状态颜色
   const statusColor = groupAggregatedStatus === WindowStatus.Running

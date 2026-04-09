@@ -151,6 +151,13 @@ export function getOwnedEphemeralSSHWindows(
   ));
 }
 
+export function getOwnedEphemeralSSHWindowIds(
+  windows: Window[],
+  ownerWindowId: string,
+): string[] {
+  return getOwnedEphemeralSSHWindows(windows, ownerWindowId).map((window) => window.id);
+}
+
 export function getSSHSessionFamilyWindows(
   windows: Window[],
   targetWindowId: string,

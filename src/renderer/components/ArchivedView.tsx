@@ -13,7 +13,7 @@ import { Window, WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { startWindowPanes } from '../utils/paneSessionActions';
-import { getPersistableWindows } from '../utils/sshWindowBindings';
+import { getOwnedEphemeralSSHWindowIds, getPersistableWindows, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 
 interface ArchivedViewProps {
   onEnterTerminal?: (window: Window) => void;
@@ -78,8 +78,30 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
     await runWithWindowDirectory(win, startWindow);
   }, [runWithWindowDirectory, startWindow]);
 
+  const destroyWindowIds = useCallback(async (windowIds: string[]) => {
+    for (const windowId of windowIds) {
+      await window.electronAPI.closeWindow(windowId);
+      await window.electronAPI.deleteWindow(windowId);
+      useWindowStore.getState().removeWindow(windowId);
+    }
+  }, []);
+
+  const destroyOwnedEphemeralWindows = useCallback(async (windowId: string) => {
+    const ownedWindowIds = getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, windowId);
+    if (ownedWindowIds.length > 0) {
+      await destroyWindowIds(ownedWindowIds);
+    }
+  }, [destroyWindowIds]);
+
   const handlePauseWindow = useCallback(async (win: Window) => {
     try {
+      if (isEphemeralSSHCloneWindow(win)) {
+        await destroyWindowIds([win.id]);
+        return;
+      }
+
+      await destroyOwnedEphemeralWindows(win.id);
+
       // 关闭窗口（终止所有 PTY 进程）
       await window.electronAPI.closeWindow(win.id);
 
@@ -87,7 +109,7 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
     } catch (error) {
       console.error('Failed to pause window:', error);
     }
-  }, [pauseWindowState]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, pauseWindowState]);
 
   const handleUnarchiveWindow = useCallback((win: Window) => {
     unarchiveWindow(win.id);

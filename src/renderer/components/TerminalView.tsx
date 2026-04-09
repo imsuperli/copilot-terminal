@@ -40,7 +40,7 @@ import {
   startClonedWindowFromSourcePane,
 } from '../utils/windowSessionActions';
 import {
-  getOwnedEphemeralSSHWindows,
+  getOwnedEphemeralSSHWindowIds,
   getPersistableWindows,
   getSSHSessionFamilyWindows,
   getSSHSessionOwnerWindowId,
@@ -135,6 +135,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [activePaneCapabilities?.canOpenInIDE, enabledIDEs]
   );
   const isWindowRunning = aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput;
+  const isEphemeralRemoteTab = useMemo(
+    () => isEphemeralSSHCloneWindow(terminalWindow),
+    [terminalWindow],
+  );
   const sidebarActiveWindowId = useMemo(
     () => getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id,
     [terminalWindow],
@@ -183,11 +187,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     },
     [removeWindow],
   );
-
-  const getOwnedEphemeralWindowIds = useCallback((windowId: string) => {
-    const allWindows = useWindowStore.getState().windows;
-    return getOwnedEphemeralSSHWindows(allWindows, windowId).map((window) => window.id);
-  }, []);
 
   // 纭繚绐楀彛婵€娲绘椂锛屾縺娲荤涓€涓獥鏍?
   useEffect(() => {
@@ -257,6 +256,26 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [terminalWindow.id, panes.length, closePaneInWindow]
   );
 
+  const destroyCurrentEphemeralRemoteWindow = useCallback(async () => {
+    const allWindows = useWindowStore.getState().windows;
+    const closingWindowIdSet = new Set([terminalWindow.id]);
+    const scopedWindows = getStandaloneSSHWindowsForTarget(allWindows, terminalWindow.id);
+    const adjacentWindowId = getAdjacentSSHWindowId(scopedWindows, terminalWindow.id, closingWindowIdSet);
+    const fallbackWindowId = getPersistableWindows(allWindows)
+      .find((window) => !window.archived && !closingWindowIdSet.has(window.id))?.id ?? null;
+    const nextWindowId = adjacentWindowId ?? fallbackWindowId;
+
+    if (nextWindowId) {
+      onWindowSwitch(nextWindowId);
+    }
+
+    await destroyRemoteWindows([terminalWindow.id]);
+
+    if (!nextWindowId) {
+      onReturn();
+    }
+  }, [destroyRemoteWindows, onReturn, onWindowSwitch, terminalWindow.id]);
+
   // 处理窗格进程退出
   const handlePaneExit = useCallback(
     (paneId: string) => {
@@ -268,11 +287,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         if (embedded && onStopAndRemoveFromGroup) {
           // 窗口组内：复用"停止并移除"逻辑
           onStopAndRemoveFromGroup(terminalWindow.id);
+        } else if (isEphemeralRemoteTab) {
+          void destroyCurrentEphemeralRemoteWindow().catch((error) => {
+            console.error('Failed to destroy ephemeral remote window after pane exit:', error);
+          });
         } else {
           // 单窗口：停止进程 + 暂停窗口 + 返回主界面
-          const ownedEphemeralWindowIds = isEphemeralSSHCloneWindow(terminalWindow)
-            ? []
-            : getOwnedEphemeralWindowIds(terminalWindow.id);
+          const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
+            useWindowStore.getState().windows,
+            terminalWindow.id,
+          );
 
           const closeCurrentWindow = async () => {
             if (ownedEphemeralWindowIds.length > 0) {
@@ -298,7 +322,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         closePaneInWindow(terminalWindow.id, paneId);
       }
     },
-    [terminalWindow, embedded, onStopAndRemoveFromGroup, pauseWindowState, closePaneInWindow, destroyRemoteWindows, getOwnedEphemeralWindowIds]
+    [
+      terminalWindow,
+      embedded,
+      onStopAndRemoveFromGroup,
+      isEphemeralRemoteTab,
+      destroyCurrentEphemeralRemoteWindow,
+      pauseWindowState,
+      closePaneInWindow,
+      destroyRemoteWindows,
+    ]
   );
 
   // 澶勭悊鎷嗗垎绐楁牸
@@ -374,9 +407,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // 澶勭悊鏆傚仠绐楀彛
   const handlePauseWindow = useCallback(async () => {
     try {
-      const ownedEphemeralWindowIds = isEphemeralSSHCloneWindow(terminalWindow)
-        ? []
-        : getOwnedEphemeralWindowIds(terminalWindow.id);
+      if (isEphemeralRemoteTab) {
+        await destroyCurrentEphemeralRemoteWindow();
+        return;
+      }
+
+      const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
+        useWindowStore.getState().windows,
+        terminalWindow.id,
+      );
 
       if (ownedEphemeralWindowIds.length > 0) {
         await destroyRemoteWindows(ownedEphemeralWindowIds);
@@ -389,7 +428,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error('Failed to pause window:', error);
     }
-  }, [destroyRemoteWindows, getOwnedEphemeralWindowIds, pauseWindowState, terminalWindow]);
+  }, [destroyCurrentEphemeralRemoteWindow, destroyRemoteWindows, isEphemeralRemoteTab, pauseWindowState, terminalWindow]);
 
   // 处理启动窗口
   const handleStartWindow = useCallback(async () => {
@@ -511,19 +550,25 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // 处理重启窗口：先停止，再启动
   const handleRestartWindow = useCallback(async () => {
+    if (isEphemeralRemoteTab) {
+      return;
+    }
+
     await handlePauseWindow();
     await handleStartWindow();
-  }, [handlePauseWindow, handleStartWindow]);
+  }, [handlePauseWindow, handleStartWindow, isEphemeralRemoteTab]);
 
   // 澶勭悊褰掓。绐楀彛
   const handleArchiveWindow = useCallback(async () => {
-    if (isEphemeralSSHCloneWindow(terminalWindow)) {
-      await handleCloseRemoteWindow(terminalWindow.id);
+    if (isEphemeralRemoteTab) {
       return;
     }
 
     try {
-      const ownedEphemeralWindowIds = getOwnedEphemeralWindowIds(terminalWindow.id);
+      const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
+        useWindowStore.getState().windows,
+        terminalWindow.id,
+      );
       if (ownedEphemeralWindowIds.length > 0) {
         await destroyRemoteWindows(ownedEphemeralWindowIds);
       }
@@ -565,7 +610,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error('Failed to archive window:', error);
     }
-  }, [archiveWindow, destroyRemoteWindows, getOwnedEphemeralWindowIds, handleCloseRemoteWindow, onReturn, onWindowSwitch, terminalWindow]);
+  }, [archiveWindow, destroyRemoteWindows, isEphemeralRemoteTab, onReturn, onWindowSwitch, terminalWindow]);
 
   // 澶勭悊蹇€熷垏鎹?
   const handleQuickSwitcherSelect = useCallback(
@@ -713,16 +758,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             ))}
 
             {/* 褰掓。鎸夐挳 */}
-            <AppTooltip content={t('terminalView.archive')} placement="toolbar-trailing">
-              <button
-                type="button"
-                aria-label={t('terminalView.archive')}
-                onClick={handleArchiveWindow}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-              >
-                <Archive size={14} />
-              </button>
-            </AppTooltip>
+            {!isEphemeralRemoteTab && (
+              <AppTooltip content={t('terminalView.archive')} placement="toolbar-trailing">
+                <button
+                  type="button"
+                  aria-label={t('terminalView.archive')}
+                  onClick={handleArchiveWindow}
+                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                >
+                  <Archive size={14} />
+                </button>
+              </AppTooltip>
+            )}
 
             {/* 鎵撳紑鏂囦欢澶规寜閽?*/}
             {activePaneCapabilities?.canOpenLocalFolder && (
@@ -859,6 +906,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               <AppTooltip content={t('terminalView.stop')} placement="toolbar-trailing">
                 <button
                   type="button"
+                  aria-label={t('terminalView.stop')}
                   onClick={handlePauseWindow}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
                 >
@@ -868,13 +916,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             )}
 
             {/* 重启/启动按钮 - 非嵌入模式下始终显示 */}
-            {!embedded && (
+            {!embedded && !isEphemeralRemoteTab && (
               <AppTooltip
                 content={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
                 placement="toolbar-trailing"
               >
                 <button
                   type="button"
+                  aria-label={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
                   onClick={isWindowRunning ? handleRestartWindow : handleStartWindow}
                   className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
                     isWindowRunning ? 'text-yellow-500' : 'text-green-500'

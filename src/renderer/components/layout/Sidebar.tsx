@@ -13,7 +13,7 @@ import { CustomCategory } from '../../../shared/types/custom-category';
 import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
-import { buildStandaloneSSHWindowMap, getPersistableWindows } from '../../utils/sshWindowBindings';
+import { buildStandaloneSSHWindowMap, getOwnedEphemeralSSHWindowIds, getPersistableWindows } from '../../utils/sshWindowBindings';
 import { getAllWindowIds } from '../../utils/groupLayoutHelpers';
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
@@ -220,7 +220,20 @@ export function Sidebar({
 
   const handleClearActiveWindows = async () => {
     try {
+      const windowIdsToClear = new Set<string>();
       for (const win of activeWindows) {
+        windowIdsToClear.add(win.id);
+        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
+          windowIdsToClear.add(windowId);
+        });
+      }
+
+      for (const windowId of windowIdsToClear) {
+        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
+        if (!win) {
+          continue;
+        }
+
         await window.electronAPI.closeWindow(win.id);
         await window.electronAPI.deleteWindow(win.id);
         removeWindow(win.id);
@@ -232,7 +245,20 @@ export function Sidebar({
 
   const handleClearArchivedWindows = async () => {
     try {
+      const windowIdsToClear = new Set<string>();
       for (const win of archivedWindows) {
+        windowIdsToClear.add(win.id);
+        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
+          windowIdsToClear.add(windowId);
+        });
+      }
+
+      for (const windowId of windowIdsToClear) {
+        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
+        if (!win) {
+          continue;
+        }
+
         await window.electronAPI.closeWindow(win.id);
         await window.electronAPI.deleteWindow(win.id);
         removeWindow(win.id);
@@ -244,7 +270,20 @@ export function Sidebar({
 
   const handleClearAllWindows = async () => {
     try {
+      const windowIdsToClear = new Set<string>();
       for (const win of windows) {
+        windowIdsToClear.add(win.id);
+        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
+          windowIdsToClear.add(windowId);
+        });
+      }
+
+      for (const windowId of windowIdsToClear) {
+        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
+        if (!win) {
+          continue;
+        }
+
         await window.electronAPI.closeWindow(win.id);
         await window.electronAPI.deleteWindow(win.id);
         removeWindow(win.id);
@@ -256,7 +295,20 @@ export function Sidebar({
 
   const handleClearLocalWindows = async () => {
     try {
+      const windowIdsToClear = new Set<string>();
       for (const win of localActiveWindows) {
+        windowIdsToClear.add(win.id);
+        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
+          windowIdsToClear.add(windowId);
+        });
+      }
+
+      for (const windowId of windowIdsToClear) {
+        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
+        if (!win) {
+          continue;
+        }
+
         await window.electronAPI.closeWindow(win.id);
         await window.electronAPI.deleteWindow(win.id);
         removeWindow(win.id);
@@ -268,7 +320,20 @@ export function Sidebar({
 
   const handleClearSSHWindows = async () => {
     try {
+      const windowIdsToClear = new Set<string>();
       for (const win of sshActiveWindows) {
+        windowIdsToClear.add(win.id);
+        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
+          windowIdsToClear.add(windowId);
+        });
+      }
+
+      for (const windowId of windowIdsToClear) {
+        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
+        if (!win) {
+          continue;
+        }
+
         await window.electronAPI.closeWindow(win.id);
         await window.electronAPI.deleteWindow(win.id);
         removeWindow(win.id);

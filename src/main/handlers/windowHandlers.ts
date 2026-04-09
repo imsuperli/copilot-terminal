@@ -266,6 +266,9 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       // 从 StatusPoller 移除窗口
       statusPoller?.removeWindow(windowId);
 
+      // 删除窗口时停止 git 分支监听
+      gitBranchWatcher?.unwatch(windowId);
+
       // 删除窗口时停止项目配置监听
       projectConfigWatcher.stopWatching(windowId);
 

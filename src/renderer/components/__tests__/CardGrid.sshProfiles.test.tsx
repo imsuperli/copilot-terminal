@@ -71,6 +71,39 @@ function createStandaloneSSHWindow(profile: SSHProfile, overrides: Partial<Windo
   };
 }
 
+function createEphemeralSSHCloneWindow(profile: SSHProfile, overrides: Partial<Window> = {}): Window {
+  return createStandaloneSSHWindow(profile, {
+    id: 'ssh-window-clone-1',
+    name: 'Ephemeral SSH clone',
+    ephemeral: true,
+    sshTabOwnerWindowId: 'ssh-window-1',
+    activePaneId: 'ssh-pane-clone-1',
+    lastActiveAt: '2026-03-22T10:06:00.000Z',
+    layout: {
+      type: 'pane',
+      id: 'layout-ssh-pane-clone-1',
+      pane: {
+        id: 'ssh-pane-clone-1',
+        cwd: '/srv/app/clone',
+        command: '/bin/zsh',
+        status: WindowStatus.Running,
+        pid: 2234,
+        backend: 'ssh',
+        ssh: {
+          profileId: profile.id,
+          host: profile.host,
+          port: profile.port,
+          user: profile.user,
+          authType: profile.auth,
+          remoteCwd: '/srv/app/clone',
+          reuseSession: true,
+        },
+      },
+    },
+    ...overrides,
+  });
+}
+
 function renderCardGrid(props: ComponentProps<typeof CardGrid>) {
   return render(
     <DndProvider backend={HTML5Backend}>
@@ -286,10 +319,12 @@ describe('CardGrid SSH profile cards', () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();
     const runtimeWindow = createStandaloneSSHWindow(profile);
+    const ephemeralClone = createEphemeralSSHCloneWindow(profile);
     const closeWindowMock = vi.mocked(window.electronAPI.closeWindow);
+    const deleteWindowMock = vi.mocked(window.electronAPI.deleteWindow);
 
     useWindowStore.setState({
-      windows: [runtimeWindow],
+      windows: [runtimeWindow, ephemeralClone],
     });
 
     const { rerender } = render(
@@ -305,8 +340,11 @@ describe('CardGrid SSH profile cards', () => {
     await user.click(screen.getByRole('button', { name: '归档窗口' }));
 
     await waitFor(() => {
+      expect(closeWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
+      expect(deleteWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
       expect(useWindowStore.getState().windows[0]?.archived).toBe(true);
+      expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(false);
     });
 
     rerender(
@@ -321,6 +359,37 @@ describe('CardGrid SSH profile cards', () => {
 
     expect(await screen.findByText('Hidden runtime window')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '取消归档' })).toBeInTheDocument();
+  });
+
+  it('stops a bound SSH runtime window by destroying its ephemeral clones and pausing the root window', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const ephemeralClone = createEphemeralSSHCloneWindow(profile);
+    const closeWindowMock = vi.mocked(window.electronAPI.closeWindow);
+    const deleteWindowMock = vi.mocked(window.electronAPI.deleteWindow);
+
+    useWindowStore.setState({
+      windows: [runtimeWindow, ephemeralClone],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+    });
+
+    await user.click(screen.getByRole('button', { name: '停止' }));
+
+    await waitFor(() => {
+      expect(closeWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
+      expect(deleteWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
+      expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
+      expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(false);
+      expect(useWindowStore.getState().windows.some((window) => window.id === runtimeWindow.id)).toBe(true);
+    });
+
+    const remainingWindow = useWindowStore.getState().windows.find((window) => window.id === runtimeWindow.id);
+    expect(remainingWindow?.ephemeral).not.toBe(true);
   });
 
   it('deletes a bound SSH card by removing both the runtime window and the SSH profile', async () => {

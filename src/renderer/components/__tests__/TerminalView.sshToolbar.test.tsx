@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalView } from '../TerminalView';
@@ -28,7 +28,15 @@ vi.mock('../ProjectLinks', () => ({
 }));
 
 vi.mock('../SplitLayout', () => ({
-  SplitLayout: () => <div data-testid="split-layout" />,
+  SplitLayout: (props: { activePaneId?: string; onPaneExit?: (paneId: string) => void }) => (
+    <div data-testid="split-layout">
+      {props.onPaneExit && props.activePaneId ? (
+        <button type="button" aria-label="模拟窗格退出" onClick={() => props.onPaneExit?.(props.activePaneId!)}>
+          模拟窗格退出
+        </button>
+      ) : null}
+    </div>
+  ),
 }));
 
 vi.mock('../dnd', () => ({
@@ -424,6 +432,110 @@ describe('TerminalView SSH toolbar', () => {
     expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
+  });
+
+  it('destroys an ephemeral ssh clone tab when stopped and hides archive and restart actions', async () => {
+    const user = userEvent.setup();
+    const onWindowSwitch = vi.fn();
+    const ownerWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      remoteCwd: '/srv/app',
+    });
+    const ephemeralWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+      ephemeral: true,
+      sshTabOwnerWindowId: 'win-ssh-1',
+    });
+
+    useWindowStore.setState({
+      windows: [ownerWindow, ephemeralWindow],
+      activeWindowId: ephemeralWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
+
+    render(
+      <TerminalView
+        window={ephemeralWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: '归档' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重启' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '停止' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
+    });
+
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
+  });
+
+  it('destroys an ephemeral ssh clone tab when its only pane exits', async () => {
+    const user = userEvent.setup();
+    const onWindowSwitch = vi.fn();
+    const onReturn = vi.fn();
+    const ownerWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      remoteCwd: '/srv/app',
+    });
+    const ephemeralWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+      ephemeral: true,
+      sshTabOwnerWindowId: 'win-ssh-1',
+    });
+
+    useWindowStore.setState({
+      windows: [ownerWindow, ephemeralWindow],
+      activeWindowId: ephemeralWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
+
+    render(
+      <TerminalView
+        window={ephemeralWindow}
+        onReturn={onReturn}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '模拟窗格退出' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
+    });
+
+    expect(window.electronAPI.switchToUnifiedView).not.toHaveBeenCalled();
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(onReturn).not.toHaveBeenCalled();
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 

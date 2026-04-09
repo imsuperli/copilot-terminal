@@ -24,7 +24,13 @@ import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
-import { buildStandaloneSSHWindowMap, getPersistableWindows, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
+import {
+  buildStandaloneSSHWindowMap,
+  getOwnedEphemeralSSHWindowIds,
+  getPersistableWindows,
+  getStandaloneSSHProfileId,
+  isEphemeralSSHCloneWindow,
+} from '../utils/sshWindowBindings';
 import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
@@ -467,8 +473,30 @@ export const CardGrid = React.memo<CardGridProps>(({
     await runWithWindowDirectory(win, startWindow);
   }, [runWithWindowDirectory, startWindow]);
 
+  const destroyWindowIds = useCallback(async (windowIds: string[]) => {
+    for (const windowId of windowIds) {
+      await window.electronAPI.closeWindow(windowId);
+      await window.electronAPI.deleteWindow(windowId);
+      removeWindow(windowId);
+    }
+  }, [removeWindow]);
+
+  const destroyOwnedEphemeralWindows = useCallback(async (windowId: string) => {
+    const ownedWindowIds = getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, windowId);
+    if (ownedWindowIds.length > 0) {
+      await destroyWindowIds(ownedWindowIds);
+    }
+  }, [destroyWindowIds]);
+
   const handlePauseWindow = useCallback(async (win: Window) => {
     try {
+      if (isEphemeralSSHCloneWindow(win)) {
+        await destroyWindowIds([win.id]);
+        return;
+      }
+
+      await destroyOwnedEphemeralWindows(win.id);
+
       // 关闭窗口（终止所有 PTY 进程）
       await window.electronAPI.closeWindow(win.id);
 
@@ -476,10 +504,16 @@ export const CardGrid = React.memo<CardGridProps>(({
     } catch (error) {
       console.error('Failed to pause window:', error);
     }
-  }, [pauseWindowState]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, pauseWindowState]);
 
   const handleArchiveWindow = useCallback(async (win: Window) => {
     try {
+      if (isEphemeralSSHCloneWindow(win)) {
+        return;
+      }
+
+      await destroyOwnedEphemeralWindows(win.id);
+
       // 先关闭窗口（如果有运行中的进程）
       await window.electronAPI.closeWindow(win.id);
       // 归档窗口
@@ -487,7 +521,7 @@ export const CardGrid = React.memo<CardGridProps>(({
     } catch (error) {
       console.error('Failed to archive window:', error);
     }
-  }, [archiveWindow]);
+  }, [archiveWindow, destroyOwnedEphemeralWindows]);
 
   const handleUnarchiveWindow = useCallback(async (win: Window) => {
     try {
@@ -633,6 +667,12 @@ export const CardGrid = React.memo<CardGridProps>(({
       await Promise.all(
         windowsToPause.map(async (win) => {
           try {
+            if (isEphemeralSSHCloneWindow(win)) {
+              await destroyWindowIds([win.id]);
+              return;
+            }
+
+            await destroyOwnedEphemeralWindows(win.id);
             await window.electronAPI.closeWindow(win.id);
             pauseWindowState(win.id);
           } catch (error) {
@@ -643,7 +683,7 @@ export const CardGrid = React.memo<CardGridProps>(({
     } catch (error) {
       console.error('Failed to pause all windows in group:', error);
     }
-  }, [windows, pauseWindowState]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, windows, pauseWindowState]);
 
   const handleArchiveGroup = useCallback(async (group: WindowGroup) => {
     try {
