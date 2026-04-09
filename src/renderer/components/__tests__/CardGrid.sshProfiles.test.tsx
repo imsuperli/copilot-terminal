@@ -199,14 +199,15 @@ describe('CardGrid SSH profile cards', () => {
 
     await user.click(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' }));
 
-    expect(onConnectSSHProfile).not.toHaveBeenCalled();
-    expect(onEnterTerminal).toHaveBeenCalledWith(runtimeWindow);
+    expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
+    expect(onEnterTerminal).not.toHaveBeenCalled();
   });
 
   it('renders bound SSH profile cards inside a custom category tab', async () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();
     const runtimeWindow = createStandaloneSSHWindow(profile);
+    const onConnectSSHProfile = vi.fn();
     const onEnterTerminal = vi.fn();
     const categoryId = 'category-ssh';
 
@@ -230,6 +231,7 @@ describe('CardGrid SSH profile cards', () => {
       sshEnabled: true,
       sshProfiles: [profile],
       currentTab: categoryId,
+      onConnectSSHProfile,
       onEnterTerminal,
     });
 
@@ -239,7 +241,45 @@ describe('CardGrid SSH profile cards', () => {
 
     await user.click(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' }));
 
-    expect(onEnterTerminal).toHaveBeenCalledWith(runtimeWindow);
+    expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
+    expect(onEnterTerminal).not.toHaveBeenCalled();
+  });
+
+  it('routes the start action of a paused bound SSH card through the SSH profile connect handler', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile, {
+      layout: {
+        type: 'pane',
+        id: 'layout-ssh-pane-1',
+        pane: {
+          id: 'ssh-pane-1',
+          cwd: '/data/data/com.termux/files/home',
+          command: '',
+          status: WindowStatus.Paused,
+          pid: null,
+          backend: 'ssh',
+          ssh: {
+            profileId: profile.id,
+          },
+        },
+      },
+    });
+    const onConnectSSHProfile = vi.fn();
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+      onConnectSSHProfile,
+    });
+
+    await user.click(screen.getByRole('button', { name: '启动' }));
+
+    expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
   });
 
   it('archives a bound SSH runtime window from the profile card and shows it in archived view', async () => {

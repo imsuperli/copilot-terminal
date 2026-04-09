@@ -94,7 +94,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => activePane ? getPaneBackend(activePane) === 'ssh' : false,
     [activePane]
   );
-  const activeSshRuntimeCwd = activePane?.ssh?.remoteCwd ?? activePane?.cwd ?? null;
+  const activeSshRuntimeCwd = activePane?.cwd ?? activePane?.ssh?.remoteCwd ?? null;
   const visibleIDEs = useMemo(
     () => activePaneCapabilities?.canOpenInIDE ? enabledIDEs : [],
     [activePaneCapabilities?.canOpenInIDE, enabledIDEs]

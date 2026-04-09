@@ -81,7 +81,7 @@ vi.mock('../hooks/useWorkspaceRestore', () => ({
 
 import App from '../App';
 
-function createSSHWindow(profileId: string): Window {
+function createSSHWindow(profileId: string, overrides: Partial<Window> = {}): Window {
   const paneId = 'pane-ssh-existing';
 
   return {
@@ -111,6 +111,7 @@ function createSSHWindow(profileId: string): Window {
         },
       },
     },
+    ...overrides,
   };
 }
 
@@ -202,6 +203,8 @@ describe('App SSH profile reuse', () => {
           agentForward: false,
           warnOnClose: true,
           reuseSession: true,
+          defaultRemoteCwd: '~/workspace/current',
+          remoteCommand: 'zsh',
           forwardedPorts: [],
           tags: [],
           createdAt: '2026-03-23T08:00:00.000Z',
@@ -226,6 +229,56 @@ describe('App SSH profile reuse', () => {
 
     await user.click(screen.getByRole('button', { name: '连接 SSH' }));
 
+    expect(switchToWindow).toHaveBeenCalledWith('win-ssh-existing');
+    expect(window.electronAPI.createSSHWindow).not.toHaveBeenCalled();
+  });
+
+  it('resyncs a paused reusable ssh window to the latest profile defaults before opening it', async () => {
+    const user = userEvent.setup();
+    const switchToWindow = vi.fn();
+
+    useWindowStore.setState({
+      windows: [
+        createSSHWindow('profile-1', {
+          name: 'Legacy SSH Name',
+          layout: {
+            type: 'pane',
+            id: 'pane-ssh-existing',
+            pane: {
+              id: 'pane-ssh-existing',
+              cwd: '/data/data/com.termux/files/home',
+              command: '',
+              status: WindowStatus.Paused,
+              pid: null,
+              backend: 'ssh',
+              ssh: {
+                profileId: 'profile-1',
+              },
+            },
+          },
+        }),
+      ],
+    });
+
+    mockUseWindowSwitcher.mockReturnValue({
+      switchToWindow,
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '连接 SSH' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('button', { name: '连接 SSH' }));
+
+    const reusableWindow = useWindowStore.getState().windows[0];
+    expect(reusableWindow.name).toBe('Prod SSH');
+    if (reusableWindow.layout.type !== 'pane') {
+      throw new Error('expected pane layout');
+    }
+    expect(reusableWindow.layout.pane.cwd).toBe('~/workspace/current');
+    expect(reusableWindow.layout.pane.command).toBe('zsh');
     expect(switchToWindow).toHaveBeenCalledWith('win-ssh-existing');
     expect(window.electronAPI.createSSHWindow).not.toHaveBeenCalled();
   });

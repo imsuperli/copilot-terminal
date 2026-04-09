@@ -54,7 +54,7 @@ export async function startClonedWindowFromSourcePane(options: {
       sourcePane,
       targetWindowId: targetWindow.id,
       targetPaneId: targetWindow.layout.pane.id,
-      remoteCwdOverride: sourcePane.ssh?.remoteCwd ?? sourcePane.cwd,
+      remoteCwdOverride: sourcePane.cwd,
     });
   }
 

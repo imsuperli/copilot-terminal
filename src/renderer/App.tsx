@@ -69,6 +69,15 @@ function findReusableSSHWindow(windows: Window[], profileId: string): Window | n
   return matchedWindows[0] ?? null;
 }
 
+function resolveSSHProfileEntryCwd(profile: SSHProfile): string {
+  const normalized = profile.defaultRemoteCwd?.trim();
+  return normalized || '~';
+}
+
+function resolveSSHProfileEntryCommand(profile: SSHProfile): string {
+  return profile.remoteCommand || '';
+}
+
 function AppContent() {
   const windows = useWindowStore((state) => state.windows);
   const addWindow = useWindowStore((state) => state.addWindow);
@@ -583,6 +592,35 @@ function AppContent() {
       ? findReusableSSHWindow(windows, profile.id)
       : null;
     if (reusableWindow) {
+      const reusablePanes = getAllPanes(reusableWindow.layout).filter((pane) => pane.ssh?.profileId === profile.id);
+      const shouldSyncReusableWindow = reusablePanes.length > 0
+        && reusablePanes.every((pane) => pane.status === WindowStatus.Paused);
+
+      if (shouldSyncReusableWindow) {
+        const nextRemoteCwd = resolveSSHProfileEntryCwd(profile);
+        const nextCommand = resolveSSHProfileEntryCommand(profile);
+
+        if (reusableWindow.name !== profile.name) {
+          updateWindow(reusableWindow.id, { name: profile.name });
+        }
+
+        for (const pane of reusablePanes) {
+          const updates: Partial<Pane> = {};
+
+          if (pane.cwd !== nextRemoteCwd) {
+            updates.cwd = nextRemoteCwd;
+          }
+
+          if ((pane.command || '') !== nextCommand) {
+            updates.command = nextCommand;
+          }
+
+          if (Object.keys(updates).length > 0) {
+            updatePane(reusableWindow.id, pane.id, updates);
+          }
+        }
+      }
+
       switchToWindow(reusableWindow.id);
       return;
     }
@@ -627,7 +665,7 @@ function AppContent() {
     } finally {
       setConnectingSSHProfileId(null);
     }
-  }, [addWindow, connectingSSHProfileId, showAppError, switchToWindow, windows]);
+  }, [addWindow, connectingSSHProfileId, showAppError, switchToWindow, updatePane, updateWindow, windows]);
 
   const handleCreateGroup = useCallback(() => {
     setShowCreateGroupDialog(true);

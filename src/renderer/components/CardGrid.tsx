@@ -835,9 +835,9 @@ export const CardGrid = React.memo<CardGridProps>(({
                     credentialState={sshCredentialStates[profile.id]}
                     isConnecting={connectingSSHProfileId === profile.id}
                     onConnect={handleConnectSSHProfile}
-                    onOpenWindow={handleCardClick}
+                    onOpenWindow={() => handleConnectSSHProfile(profile)}
                     onPauseWindow={handlePauseWindow}
-                    onStartWindow={handleStartWindow}
+                    onStartWindow={() => handleConnectSSHProfile(profile)}
                     onArchiveWindow={handleArchiveWindow}
                     onUnarchiveWindow={handleUnarchiveWindow}
                     onEdit={handleEditSSHProfile}

@@ -12,7 +12,12 @@ import { onTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { installTerminalImeFix, type ImeCompositionState } from '../utils/terminalImeFix';
 import { AppTooltip } from './ui/AppTooltip';
 import { useWindowStore } from '../stores/windowStore';
-import { extractLatestOsc7RemoteCwd } from '../utils/sshCwdTracking';
+import {
+  applyTerminalInputToSSHCwdTracker,
+  createSSHCwdTrackerState,
+  extractLatestOsc7RemoteCwd,
+  updateSSHCwdTrackerFromRuntimeCwd,
+} from '../utils/sshCwdTracking';
 import '../styles/xterm.css';
 
 const completedReplaySessions = new Set<string>();
@@ -201,8 +206,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const replaySessionKeyRef = useRef<string | null>(getReplaySessionKey(windowId, pane.id, pane.pid));
   const replayHistoryRef = useRef<((options?: { resetTerminal?: boolean }) => Promise<void>) | null>(null);
   const imeCompositionStateRef = useRef<ImeCompositionState>({ isComposing: false });
+  const sshCwdTrackerRef = useRef(createSSHCwdTrackerState(pane.cwd));
   const [isHovered, setIsHovered] = useState(false);
-  const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
+  const updatePane = useWindowStore((state) => state.updatePane);
 
   // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
   const customBorderStyle = getCustomBorderStyle(pane.borderColor);
@@ -216,6 +222,14 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const showCloseButton = Boolean(onClose && isHovered);
 
   useEffect(() => {
+    sshCwdTrackerRef.current = createSSHCwdTrackerState(pane.cwd);
+  }, [pane.id, pane.ssh?.profileId]);
+
+  useEffect(() => {
+    sshCwdTrackerRef.current = updateSSHCwdTrackerFromRuntimeCwd(sshCwdTrackerRef.current, pane.cwd);
+  }, [pane.cwd]);
+
+  useEffect(() => {
     const sshBinding = pane.ssh;
     if (!sshBinding || !isWindowActive || !isActive) {
       return undefined;
@@ -227,15 +241,17 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         return;
       }
 
-      if (nextRemoteCwd === pane.cwd && nextRemoteCwd === sshBinding.remoteCwd) {
+      sshCwdTrackerRef.current = updateSSHCwdTrackerFromRuntimeCwd(sshCwdTrackerRef.current, nextRemoteCwd);
+
+      if (nextRemoteCwd === pane.cwd) {
         return;
       }
 
-      updatePaneRuntime(windowId, pane.id, { cwd: nextRemoteCwd });
+      updatePane(windowId, pane.id, { cwd: nextRemoteCwd });
     });
 
     return unsubscribe;
-  }, [isActive, isWindowActive, pane.cwd, pane.id, pane.ssh, updatePaneRuntime, windowId]);
+  }, [isActive, isWindowActive, pane.cwd, pane.id, pane.ssh, updatePane, windowId]);
 
   // 写入系统剪贴板（优先走 Electron IPC，失败时回退到浏览器 API）
   const writeClipboardText = useCallback(async (text: string) => {
@@ -841,6 +857,15 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     // 监听用户输入
     const dataDisposable = terminal.onData((data) => {
+      if (pane.ssh) {
+        const { nextState, resolvedCwd } = applyTerminalInputToSSHCwdTracker(sshCwdTrackerRef.current, data);
+        sshCwdTrackerRef.current = nextState;
+
+        if (resolvedCwd && resolvedCwd !== pane.cwd) {
+          updatePane(windowId, pane.id, { cwd: resolvedCwd });
+        }
+      }
+
       // 新会话的首次回放里，xterm 生成的协议响应仍然要回给 PTY；
       // 只有同一会话后续的补回放才需要屏蔽 synthetic reply。
       if (window.electronAPI && !suppressPtyWriteRef.current) {
