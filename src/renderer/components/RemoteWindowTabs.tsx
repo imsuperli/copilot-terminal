@@ -1,80 +1,53 @@
 import React, { useMemo } from 'react';
-import { Plus } from 'lucide-react';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import { Window } from '../types/window';
-import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
-import { getStandaloneSSHTargetKey } from '../utils/sshWindowBindings';
-import { getWindowKind } from '../../shared/utils/terminalCapabilities';
-import { StatusDot } from './StatusDot';
+import { getAllPanes } from '../utils/layoutHelpers';
+import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
 
 interface RemoteWindowTabsProps {
   windows: Window[];
   activeWindowId: string;
-  createLabel: string;
   tabsLabel: string;
+  cloneLabel: string;
+  closeLabel: string;
   onWindowSelect: (windowId: string) => void;
-  onCreate: () => void;
+  onWindowClone: (windowId: string) => void;
+  onWindowClose: (windowId: string) => void;
 }
 
 interface RemoteWindowTabItem {
   id: string;
   name: string;
-  secondaryText: string;
+  primaryText: string;
   isActive: boolean;
-  status: ReturnType<typeof getAggregatedStatus>;
 }
 
 export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   windows,
   activeWindowId,
-  createLabel,
   tabsLabel,
+  cloneLabel,
+  closeLabel,
   onWindowSelect,
-  onCreate,
+  onWindowClone,
+  onWindowClose,
 }) => {
   const remoteWindows = useMemo<RemoteWindowTabItem[]>(() => {
-    const activeWindow = windows.find((window) => window.id === activeWindowId);
-    const activeTargetKey = activeWindow ? getStandaloneSSHTargetKey(activeWindow) : null;
-    const candidates = windows
-      .filter((window) => {
-        if (window.archived || getWindowKind(window) !== 'ssh') {
-          return false;
-        }
-
-        if (window.id === activeWindowId) {
-          return true;
-        }
-
-        if (!activeTargetKey) {
-          return false;
-        }
-
-        return getStandaloneSSHTargetKey(window) === activeTargetKey;
-      })
-      .sort((left, right) => {
-        if (left.id === activeWindowId) {
-          return -1;
-        }
-
-        if (right.id === activeWindowId) {
-          return 1;
-        }
-
-        return new Date(right.lastActiveAt).getTime() - new Date(left.lastActiveAt).getTime();
-      });
+    const candidates = getStandaloneSSHWindowsForTarget(windows, activeWindowId);
 
     return candidates.map((window) => {
       const panes = getAllPanes(window.layout);
       const activePane = panes.find((pane) => pane.id === window.activePaneId) ?? panes[0];
-      const secondaryText = activePane?.ssh?.remoteCwd
+      const resolvedText = activePane?.ssh?.remoteCwd
         ?? activePane?.cwd
         ?? (activePane?.ssh ? `${activePane.ssh.user}@${activePane.ssh.host}` : '');
+      const primaryText = resolvedText || window.name;
 
       return {
         id: window.id,
         name: window.name,
-        secondaryText,
+        primaryText,
         isActive: window.id === activeWindowId,
-        status: getAggregatedStatus(window.layout),
       };
     });
   }, [activeWindowId, windows]);
@@ -90,36 +63,45 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
       </span>
       <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 pt-1">
         {remoteWindows.map((window) => (
-          <button
-            key={window.id}
-            type="button"
-            aria-label={window.name}
-            onClick={() => onWindowSelect(window.id)}
-            className={`group flex h-8 min-w-[140px] max-w-[220px] items-center gap-2 rounded-lg border px-3 text-left transition-colors ${
-              window.isActive
-                ? 'border-amber-400/70 bg-amber-500/12 text-zinc-50'
-                : 'border-zinc-700 bg-zinc-800/90 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800'
-            }`}
-          >
-            <StatusDot status={window.status} size="sm" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-medium">{window.name}</div>
-              <div className="truncate text-[10px] text-zinc-500 group-hover:text-zinc-400">
-                {window.secondaryText}
-              </div>
-            </div>
-          </button>
+          <ContextMenu.Root key={window.id}>
+            <ContextMenu.Trigger asChild>
+              <button
+                type="button"
+                aria-label={window.name}
+                onClick={() => onWindowSelect(window.id)}
+                className={`group flex h-8 min-w-[140px] max-w-[220px] items-center rounded-lg border px-3 text-left transition-colors ${
+                  window.isActive
+                    ? 'border-amber-400/70 bg-amber-500/12 text-zinc-50'
+                    : 'border-zinc-700 bg-zinc-800/90 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800'
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium">
+                    {window.primaryText}
+                  </div>
+                </div>
+              </button>
+            </ContextMenu.Trigger>
+            <ContextMenu.Portal>
+              <ContextMenu.Content
+                className="z-[12040] min-w-[180px] rounded-lg border border-zinc-700 bg-zinc-900 p-1 shadow-lg"
+              >
+                <ContextMenu.Item
+                  className="flex items-center rounded-md px-3 py-2 text-sm text-zinc-100 outline-none transition-colors hover:bg-zinc-800 focus:bg-zinc-800"
+                  onSelect={() => onWindowClone(window.id)}
+                >
+                  {cloneLabel}
+                </ContextMenu.Item>
+                <ContextMenu.Item
+                  className="flex items-center rounded-md px-3 py-2 text-sm text-red-300 outline-none transition-colors hover:bg-red-500/10 focus:bg-red-500/10"
+                  onSelect={() => onWindowClose(window.id)}
+                >
+                  {closeLabel}
+                </ContextMenu.Item>
+              </ContextMenu.Content>
+            </ContextMenu.Portal>
+          </ContextMenu.Root>
         ))}
-
-        <button
-          type="button"
-          aria-label={createLabel}
-          onClick={onCreate}
-          className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-emerald-500/60 bg-emerald-500/10 px-3 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20"
-        >
-          <Plus size={14} />
-          <span>{createLabel}</span>
-        </button>
       </div>
     </div>
   );

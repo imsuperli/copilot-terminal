@@ -1,4 +1,5 @@
 import { Pane, Window } from '../types/window';
+import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { getAllPanes } from './layoutHelpers';
 
 function getPaneSSHTargetKey(pane: Pane): string | null {
@@ -68,6 +69,30 @@ export function getStandaloneSSHTargetKey(window: Window): string | null {
   }
 
   return targetKey;
+}
+
+export function getStandaloneSSHWindowsForTarget(
+  windows: Window[],
+  targetWindowId: string,
+): Window[] {
+  const targetWindow = windows.find((window) => window.id === targetWindowId);
+  const targetKey = targetWindow ? getStandaloneSSHTargetKey(targetWindow) : null;
+
+  return windows.filter((window) => {
+    if (window.archived || getWindowKind(window) !== 'ssh') {
+      return false;
+    }
+
+    if (window.id === targetWindowId) {
+      return true;
+    }
+
+    if (!targetKey) {
+      return false;
+    }
+
+    return getStandaloneSSHTargetKey(window) === targetKey;
+  });
 }
 
 export function buildStandaloneSSHWindowMap(

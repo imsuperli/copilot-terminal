@@ -81,6 +81,8 @@ vi.mock('../../i18n', () => ({
           return '垂直分屏';
         case 'terminalView.archive':
           return '归档';
+        case 'common.close':
+          return '关闭';
         case 'terminalView.stop':
           return '停止';
         case 'terminalView.restart':
@@ -135,10 +137,12 @@ function createSSHWindow(options: {
   host?: string;
   port?: number;
   user?: string;
+  cwd?: string;
   remoteCwd?: string;
   lastActiveAt?: string;
 } = {}): Window {
   const paneId = options.paneId ?? 'pane-ssh-1';
+  const runtimeCwd = options.cwd ?? options.remoteCwd ?? '/srv/app';
 
   return {
     id: options.id ?? 'win-ssh-1',
@@ -152,7 +156,7 @@ function createSSHWindow(options: {
       id: paneId,
       pane: {
         id: paneId,
-        cwd: '~',
+        cwd: runtimeCwd,
         command: '',
         status: WindowStatus.Running,
         pid: 2001,
@@ -163,7 +167,7 @@ function createSSHWindow(options: {
           port: options.port ?? 22,
           user: options.user ?? 'root',
           authType: 'password',
-          remoteCwd: options.remoteCwd ?? '/srv/app',
+          remoteCwd: options.remoteCwd ?? runtimeCwd,
           reuseSession: true,
         },
       },
@@ -200,25 +204,28 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.getByRole('button', { name: '打开 SSH 文件面板' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '显示 SSH 监控' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '管理 SSH 端口转发' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '新建远程终端' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新建远程终端' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
+    expect(screen.getByText('/srv/app')).toBeInTheDocument();
+    expect(screen.queryByText('Prod SSH')).not.toBeInTheDocument();
   });
 
-  it('only shows remote tabs for the same ssh target as the active window', () => {
-    const activeWindow = createSSHWindow({
+  it('only shows remote tabs for the same ssh target and keeps their original order', () => {
+    const firstWindow = createSSHWindow({
       id: 'win-ssh-1',
       paneId: 'pane-ssh-1',
       name: 'Prod SSH A',
       host: '10.0.0.21',
-      lastActiveAt: '2026-04-09T00:00:03.000Z',
+      remoteCwd: '/srv/app',
+      lastActiveAt: '2026-04-09T00:00:01.000Z',
     });
-    const sameTargetWindow = createSSHWindow({
+    const activeWindow = createSSHWindow({
       id: 'win-ssh-2',
       paneId: 'pane-ssh-2',
       name: 'Prod SSH B',
       host: '10.0.0.21',
       remoteCwd: '/srv/worker',
-      lastActiveAt: '2026-04-09T00:00:02.000Z',
+      lastActiveAt: '2026-04-09T00:00:03.000Z',
     });
     const differentTargetWindow = createSSHWindow({
       id: 'win-ssh-3',
@@ -231,7 +238,7 @@ describe('TerminalView SSH toolbar', () => {
     });
 
     useWindowStore.setState({
-      windows: [activeWindow, sameTargetWindow, differentTargetWindow],
+      windows: [firstWindow, activeWindow, differentTargetWindow],
       activeWindowId: activeWindow.id,
       mruList: [],
       sidebarExpanded: false,
@@ -247,8 +254,12 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Prod SSH A' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Prod SSH B' })).toBeInTheDocument();
+    const remoteTabOrder = screen
+      .getAllByRole('button')
+      .map((button) => button.getAttribute('aria-label'))
+      .filter((label): label is string => label === 'Prod SSH A' || label === 'Prod SSH B');
+
+    expect(remoteTabOrder).toEqual(['Prod SSH A', 'Prod SSH B']);
     expect(screen.queryByRole('button', { name: 'Stage SSH' })).not.toBeInTheDocument();
   });
 
@@ -309,9 +320,29 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
   });
 
-  it('clones the active ssh pane into a new standalone window', async () => {
+  it('clones a remote tab from its context menu', async () => {
     const user = userEvent.setup();
     const onWindowSwitch = vi.fn();
+    const activeWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      remoteCwd: '/srv/app',
+    });
+    const sourceWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+    });
+
+    useWindowStore.setState({
+      windows: [activeWindow, sourceWindow],
+      activeWindowId: activeWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
 
     vi.mocked(window.electronAPI.cloneSSHPane).mockResolvedValueOnce({
       success: true,
@@ -323,30 +354,88 @@ describe('TerminalView SSH toolbar', () => {
 
     render(
       <TerminalView
-        window={createSSHWindow()}
+        window={activeWindow}
         onReturn={vi.fn()}
         onWindowSwitch={onWindowSwitch}
         isActive
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '新建远程终端' }));
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH B' }) });
+    await user.click(screen.getByText('克隆 SSH 终端'));
 
     expect(window.electronAPI.cloneSSHPane).toHaveBeenCalledWith(expect.objectContaining({
-      sourceWindowId: 'win-ssh-1',
-      sourcePaneId: 'pane-ssh-1',
+      sourceWindowId: 'win-ssh-2',
+      sourcePaneId: 'pane-ssh-2',
       targetWindowId: expect.any(String),
       targetPaneId: expect.any(String),
-      remoteCwd: '/srv/app',
+      remoteCwd: '/srv/worker',
     }));
 
     expect(onWindowSwitch).toHaveBeenCalledWith(expect.any(String));
-    expect(onWindowSwitch.mock.calls[0]?.[0]).not.toBe('win-ssh-1');
-    expect(useWindowStore.getState().windows).toHaveLength(2);
+    expect(useWindowStore.getState().windows).toHaveLength(3);
+  });
+
+  it('closes the active remote tab from its context menu and switches to the adjacent tab', async () => {
+    const user = userEvent.setup();
+    const onWindowSwitch = vi.fn();
+    const activeWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      remoteCwd: '/srv/app',
+    });
+    const adjacentWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+    });
+
+    useWindowStore.setState({
+      windows: [activeWindow, adjacentWindow],
+      activeWindowId: activeWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
+
+    render(
+      <TerminalView
+        window={activeWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+      />,
+    );
+
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH A' }) });
+    await user.click(screen.getByText('关闭'));
+
+    expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-1');
+    expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-1');
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-2');
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-2']);
   });
 
   it('does not leave a placeholder window behind when cloning fails', async () => {
     const user = userEvent.setup();
+    const activeWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+    });
+
+    useWindowStore.setState({
+      windows: [activeWindow],
+      activeWindowId: activeWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
 
     vi.mocked(window.electronAPI.cloneSSHPane).mockResolvedValueOnce({
       success: false,
@@ -355,14 +444,15 @@ describe('TerminalView SSH toolbar', () => {
 
     render(
       <TerminalView
-        window={createSSHWindow()}
+        window={activeWindow}
         onReturn={vi.fn()}
         onWindowSwitch={vi.fn()}
         isActive
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '新建远程终端' }));
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH A' }) });
+    await user.click(screen.getByText('克隆 SSH 终端'));
 
     expect(useWindowStore.getState().windows).toHaveLength(1);
   });

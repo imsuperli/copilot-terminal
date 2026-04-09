@@ -39,6 +39,7 @@ import {
   createWindowDraftFromSourcePane,
   startClonedWindowFromSourcePane,
 } from '../utils/windowSessionActions';
+import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
 
 export interface TerminalViewProps {
   window: Window;
@@ -113,6 +114,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     toggleSidebar,
     getActiveWindows,
     addWindow,
+    removeWindow,
     splitPaneInWindow,
     closePaneInWindow,
     setActivePane,
@@ -323,17 +325,33 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     });
   }, [activePane, activePaneCapabilities, terminalWindow.id]);
 
-  const handleCloneSession = useCallback(async () => {
-    if (!activePane || !activePaneCapabilities?.canCloneSession || !isActiveSshPane || embedded) {
+  const handleCloneRemoteWindow = useCallback(async (windowId: string) => {
+    if (embedded) {
       return;
     }
 
-    const clonedWindowDraft = createWindowDraftFromSourcePane(terminalWindow, activePane);
+    const sourceWindow = useWindowStore.getState().getWindowById(windowId);
+    if (!sourceWindow) {
+      return;
+    }
+
+    const sourcePanes = getAllPanes(sourceWindow.layout);
+    const sourcePane = sourcePanes.find((pane) => pane.id === sourceWindow.activePaneId) ?? sourcePanes[0];
+    if (!sourcePane) {
+      return;
+    }
+
+    const sourcePaneCapabilities = getPaneCapabilities(sourcePane);
+    if (getPaneBackend(sourcePane) !== 'ssh' || !sourcePaneCapabilities.canCloneSession) {
+      return;
+    }
+
+    const clonedWindowDraft = createWindowDraftFromSourcePane(sourceWindow, sourcePane);
 
     try {
       const result = await startClonedWindowFromSourcePane({
-        sourceWindow: terminalWindow,
-        sourcePane: activePane,
+        sourceWindow,
+        sourcePane,
         targetWindow: clonedWindowDraft,
       });
 
@@ -344,15 +362,53 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error('Failed to clone session into a new window:', error);
     }
-  }, [
-    activePane,
-    activePaneCapabilities?.canCloneSession,
-    addWindow,
-    embedded,
-    isActiveSshPane,
-    onWindowSwitch,
-    terminalWindow,
-  ]);
+  }, [addWindow, embedded, onWindowSwitch]);
+
+  const handleCloseRemoteWindow = useCallback(async (windowId: string) => {
+    if (embedded) {
+      return;
+    }
+
+    const allWindows = useWindowStore.getState().windows;
+    const targetWindow = allWindows.find((window) => window.id === windowId);
+    if (!targetWindow) {
+      return;
+    }
+
+    const scopedWindows = getStandaloneSSHWindowsForTarget(allWindows, terminalWindow.id);
+    const targetIndex = scopedWindows.findIndex((window) => window.id === windowId);
+    const adjacentWindowId = targetIndex >= 0
+      ? scopedWindows[targetIndex + 1]?.id ?? scopedWindows[targetIndex - 1]?.id ?? null
+      : null;
+    const fallbackWindowId = allWindows.find((window) => !window.archived && window.id !== windowId)?.id ?? null;
+    const nextWindowId = windowId === terminalWindow.id
+      ? adjacentWindowId ?? fallbackWindowId
+      : null;
+
+    try {
+      if (nextWindowId) {
+        onWindowSwitch(nextWindowId);
+      }
+
+      const closeResponse = await window.electronAPI.closeWindow(windowId);
+      if (closeResponse && !closeResponse.success) {
+        throw new Error(closeResponse.error || `Failed to close remote window ${windowId}`);
+      }
+
+      const deleteResponse = await window.electronAPI.deleteWindow(windowId);
+      if (deleteResponse && !deleteResponse.success) {
+        throw new Error(deleteResponse.error || `Failed to delete remote window ${windowId}`);
+      }
+
+      removeWindow(windowId);
+
+      if (!nextWindowId && windowId === terminalWindow.id) {
+        onReturn();
+      }
+    } catch (error) {
+      console.error('Failed to close remote window:', error);
+    }
+  }, [embedded, onReturn, onWindowSwitch, removeWindow, terminalWindow.id]);
 
   const handleOpenSSHSftp = useCallback(() => {
     if (!activePane || !activePaneCapabilities?.canOpenSFTP) {
@@ -516,10 +572,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 windows={windows}
                 activeWindowId={terminalWindow.id}
                 tabsLabel={t('terminalView.remoteTabs')}
-                createLabel={t('terminalView.newRemoteTab')}
+                cloneLabel={t('terminalView.cloneSshTerminal')}
+                closeLabel={t('common.close')}
                 onWindowSelect={onWindowSwitch}
-                onCreate={() => {
-                  void handleCloneSession();
+                onWindowClone={(windowId) => {
+                  void handleCloneRemoteWindow(windowId);
+                }}
+                onWindowClose={(windowId) => {
+                  void handleCloseRemoteWindow(windowId);
                 }}
               />
             )}
