@@ -3,6 +3,7 @@ import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { Window } from '../types/window';
 import { getSSHCredentialCleanupAvailability } from '../utils/sshWindowDeletion';
+import { getSSHSessionFamilyWindows, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 
 interface DeleteWindowDialogState {
   open: boolean;
@@ -70,9 +71,18 @@ export function useDeleteWindowDialog(): {
     setError('');
 
     try {
-      const deleteResponse = await window.electronAPI.deleteWindow(targetWindow.id);
-      if (deleteResponse && !deleteResponse.success) {
-        throw new Error(deleteResponse.error || t('windowDelete.deleteFailed'));
+      const sshFamilyWindowIds = getSSHSessionFamilyWindows(windows, targetWindow.id, {
+        includeArchived: true,
+      }).map((window) => window.id);
+      const windowIdsToDelete = isEphemeralSSHCloneWindow(targetWindow)
+        ? [targetWindow.id]
+        : (sshFamilyWindowIds.length > 0 ? sshFamilyWindowIds : [targetWindow.id]);
+
+      for (const windowId of windowIdsToDelete) {
+        const deleteResponse = await window.electronAPI.deleteWindow(windowId);
+        if (deleteResponse && !deleteResponse.success) {
+          throw new Error(deleteResponse.error || t('windowDelete.deleteFailed'));
+        }
       }
 
       if (clearCredentials && cleanupAvailability?.profileId && cleanupAvailability.canClearCredentials) {
@@ -82,13 +92,15 @@ export function useDeleteWindowDialog(): {
         }
       }
 
-      removeWindow(targetWindow.id);
+      windowIdsToDelete.forEach((windowId) => {
+        removeWindow(windowId);
+      });
       resetDialog();
     } catch (deleteError) {
       setError((deleteError as Error).message || t('windowDelete.deleteFailed'));
       setIsProcessing(false);
     }
-  }, [cleanupAvailability, clearCredentials, removeWindow, resetDialog, t, targetWindow]);
+  }, [cleanupAvailability, clearCredentials, removeWindow, resetDialog, t, targetWindow, windows]);
 
   return {
     requestDeleteWindow,

@@ -6,6 +6,7 @@ import { Button } from './ui/Button';
 import { useWindowStore } from '../stores/windowStore';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { useI18n } from '../i18n';
+import { getPersistableWindows } from '../utils/sshWindowBindings';
 
 interface CreateGroupDialogProps {
   open: boolean;
@@ -34,6 +35,7 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
   const [selectedWindowIds, setSelectedWindowIds] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const persistableWindows = useMemo(() => getPersistableWindows(windows), [windows]);
 
   const groupNameInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,8 +50,8 @@ export function CreateGroupDialog({ open, onOpenChange }: CreateGroupDialogProps
 
   // 获取所有未归档的窗口（允许窗口同时属于多个组）
   const availableWindows = useMemo(() => {
-    return windows.filter(w => !w.archived);
-  }, [windows]);
+    return persistableWindows.filter(w => !w.archived);
+  }, [persistableWindows]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

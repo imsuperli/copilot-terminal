@@ -39,7 +39,41 @@ import {
   createWindowDraftFromSourcePane,
   startClonedWindowFromSourcePane,
 } from '../utils/windowSessionActions';
-import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
+import {
+  getOwnedEphemeralSSHWindows,
+  getPersistableWindows,
+  getSSHSessionFamilyWindows,
+  getSSHSessionOwnerWindowId,
+  getStandaloneSSHWindowsForTarget,
+  isEphemeralSSHCloneWindow,
+} from '../utils/sshWindowBindings';
+
+function getAdjacentSSHWindowId(
+  windows: Window[],
+  currentWindowId: string,
+  excludedWindowIds: Set<string>,
+): string | null {
+  const currentIndex = windows.findIndex((window) => window.id === currentWindowId);
+  if (currentIndex < 0) {
+    return null;
+  }
+
+  for (let index = currentIndex + 1; index < windows.length; index += 1) {
+    const candidate = windows[index];
+    if (!excludedWindowIds.has(candidate.id)) {
+      return candidate.id;
+    }
+  }
+
+  for (let index = currentIndex - 1; index >= 0; index -= 1) {
+    const candidate = windows[index];
+    if (!excludedWindowIds.has(candidate.id)) {
+      return candidate.id;
+    }
+  }
+
+  return null;
+}
 
 export interface TerminalViewProps {
   window: Window;
@@ -101,6 +135,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [activePaneCapabilities?.canOpenInIDE, enabledIDEs]
   );
   const isWindowRunning = aggregatedStatus === WindowStatus.Running || aggregatedStatus === WindowStatus.WaitingForInput;
+  const sidebarActiveWindowId = useMemo(
+    () => getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id,
+    [terminalWindow],
+  );
 
   // 鍒囨崲闈㈡澘鐘舵€?
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
@@ -111,8 +149,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // Store
   const {
-    toggleSidebar,
-    getActiveWindows,
     addWindow,
     removeWindow,
     splitPaneInWindow,
@@ -127,8 +163,31 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     addWindowToGroupLayout,
     removeWindowFromGroupLayout,
   } = useWindowStore();
-  const activeWindows = getActiveWindows();
   const windows = useWindowStore((state) => state.windows);
+
+  const destroyRemoteWindows = useCallback(
+    async (windowIds: string[]) => {
+      for (const windowId of windowIds) {
+        const closeResponse = await window.electronAPI.closeWindow(windowId);
+        if (closeResponse && !closeResponse.success) {
+          throw new Error(closeResponse.error || `Failed to close remote window ${windowId}`);
+        }
+
+        const deleteResponse = await window.electronAPI.deleteWindow(windowId);
+        if (deleteResponse && !deleteResponse.success) {
+          throw new Error(deleteResponse.error || `Failed to delete remote window ${windowId}`);
+        }
+
+        removeWindow(windowId);
+      }
+    },
+    [removeWindow],
+  );
+
+  const getOwnedEphemeralWindowIds = useCallback((windowId: string) => {
+    const allWindows = useWindowStore.getState().windows;
+    return getOwnedEphemeralSSHWindows(allWindows, windowId).map((window) => window.id);
+  }, []);
 
   // 纭繚绐楀彛婵€娲绘椂锛屾縺娲荤涓€涓獥鏍?
   useEffect(() => {
@@ -211,10 +270,25 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           onStopAndRemoveFromGroup(terminalWindow.id);
         } else {
           // 单窗口：停止进程 + 暂停窗口 + 返回主界面
-          if (window.electronAPI) {
-            window.electronAPI.closeWindow(terminalWindow.id).catch(console.error);
-          }
-          pauseWindowState(terminalWindow.id);
+          const ownedEphemeralWindowIds = isEphemeralSSHCloneWindow(terminalWindow)
+            ? []
+            : getOwnedEphemeralWindowIds(terminalWindow.id);
+
+          const closeCurrentWindow = async () => {
+            if (ownedEphemeralWindowIds.length > 0) {
+              await destroyRemoteWindows(ownedEphemeralWindowIds);
+            }
+
+            if (window.electronAPI) {
+              await window.electronAPI.closeWindow(terminalWindow.id);
+            }
+            pauseWindowState(terminalWindow.id);
+          };
+
+          void closeCurrentWindow().catch((error) => {
+            console.error('Failed to close window after pane exit:', error);
+          });
+
           if (window.electronAPI) {
             window.electronAPI.switchToUnifiedView().catch(console.error);
           }
@@ -224,7 +298,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         closePaneInWindow(terminalWindow.id, paneId);
       }
     },
-    [terminalWindow, embedded, onStopAndRemoveFromGroup, pauseWindowState, closePaneInWindow]
+    [terminalWindow, embedded, onStopAndRemoveFromGroup, pauseWindowState, closePaneInWindow, destroyRemoteWindows, getOwnedEphemeralWindowIds]
   );
 
   // 澶勭悊鎷嗗垎绐楁牸
@@ -300,6 +374,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // 澶勭悊鏆傚仠绐楀彛
   const handlePauseWindow = useCallback(async () => {
     try {
+      const ownedEphemeralWindowIds = isEphemeralSSHCloneWindow(terminalWindow)
+        ? []
+        : getOwnedEphemeralWindowIds(terminalWindow.id);
+
+      if (ownedEphemeralWindowIds.length > 0) {
+        await destroyRemoteWindows(ownedEphemeralWindowIds);
+      }
+
       // 鍏抽棴绐楀彛锛堢粓姝㈡墍鏈?PTY 杩涚▼锛?
       await window.electronAPI.closeWindow(terminalWindow.id);
 
@@ -307,7 +389,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error('Failed to pause window:', error);
     }
-  }, [terminalWindow.id, pauseWindowState]);
+  }, [destroyRemoteWindows, getOwnedEphemeralWindowIds, pauseWindowState, terminalWindow]);
 
   // 处理启动窗口
   const handleStartWindow = useCallback(async () => {
@@ -346,7 +428,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-    const clonedWindowDraft = createWindowDraftFromSourcePane(sourceWindow, sourcePane);
+    const ownerWindowId = getSSHSessionOwnerWindowId(sourceWindow) ?? sourceWindow.id;
+    const clonedWindowDraft: Window = {
+      ...createWindowDraftFromSourcePane(sourceWindow, sourcePane),
+      ephemeral: true,
+      sshTabOwnerWindowId: ownerWindowId,
+    };
 
     try {
       const result = await startClonedWindowFromSourcePane({
@@ -375,13 +462,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
+    const closeWindowFamily = !isEphemeralSSHCloneWindow(targetWindow)
+      && getSSHSessionOwnerWindowId(targetWindow) === targetWindow.id;
+    const closingWindowIds = closeWindowFamily
+      ? getSSHSessionFamilyWindows(allWindows, windowId).map((window) => window.id)
+      : [windowId];
+    const closingWindowIdSet = new Set(closingWindowIds);
     const scopedWindows = getStandaloneSSHWindowsForTarget(allWindows, terminalWindow.id);
-    const targetIndex = scopedWindows.findIndex((window) => window.id === windowId);
-    const adjacentWindowId = targetIndex >= 0
-      ? scopedWindows[targetIndex + 1]?.id ?? scopedWindows[targetIndex - 1]?.id ?? null
+    const currentWindowWillClose = closingWindowIdSet.has(terminalWindow.id);
+    const adjacentWindowId = currentWindowWillClose
+      ? getAdjacentSSHWindowId(scopedWindows, terminalWindow.id, closingWindowIdSet)
       : null;
-    const fallbackWindowId = allWindows.find((window) => !window.archived && window.id !== windowId)?.id ?? null;
-    const nextWindowId = windowId === terminalWindow.id
+    const fallbackWindowId = currentWindowWillClose
+      ? getPersistableWindows(allWindows).find((window) => !window.archived && !closingWindowIdSet.has(window.id))?.id ?? null
+      : null;
+    const nextWindowId = currentWindowWillClose
       ? adjacentWindowId ?? fallbackWindowId
       : null;
 
@@ -390,25 +485,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         onWindowSwitch(nextWindowId);
       }
 
-      const closeResponse = await window.electronAPI.closeWindow(windowId);
-      if (closeResponse && !closeResponse.success) {
-        throw new Error(closeResponse.error || `Failed to close remote window ${windowId}`);
-      }
+      await destroyRemoteWindows(closingWindowIds);
 
-      const deleteResponse = await window.electronAPI.deleteWindow(windowId);
-      if (deleteResponse && !deleteResponse.success) {
-        throw new Error(deleteResponse.error || `Failed to delete remote window ${windowId}`);
-      }
-
-      removeWindow(windowId);
-
-      if (!nextWindowId && windowId === terminalWindow.id) {
+      if (!nextWindowId && currentWindowWillClose) {
         onReturn();
       }
     } catch (error) {
       console.error('Failed to close remote window:', error);
     }
-  }, [embedded, onReturn, onWindowSwitch, removeWindow, terminalWindow.id]);
+  }, [destroyRemoteWindows, embedded, onReturn, onWindowSwitch, terminalWindow.id]);
 
   const handleOpenSSHSftp = useCallback(() => {
     if (!activePane || !activePaneCapabilities?.canOpenSFTP) {
@@ -432,10 +517,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // 澶勭悊褰掓。绐楀彛
   const handleArchiveWindow = useCallback(async () => {
+    if (isEphemeralSSHCloneWindow(terminalWindow)) {
+      await handleCloseRemoteWindow(terminalWindow.id);
+      return;
+    }
+
     try {
+      const ownedEphemeralWindowIds = getOwnedEphemeralWindowIds(terminalWindow.id);
+      if (ownedEphemeralWindowIds.length > 0) {
+        await destroyRemoteWindows(ownedEphemeralWindowIds);
+      }
+
       // 鑾峰彇鎵€鏈夋湭褰掓。鐨勭獥鍙?
       const { windows } = useWindowStore.getState();
-      const activeWindows = windows.filter(w => !w.archived && w.id !== terminalWindow.id);
+      const activeWindows = getPersistableWindows(windows).filter(w => !w.archived && w.id !== terminalWindow.id);
 
       // 鏌ユ壘绗竴涓瓑寰呰緭鍏ョ殑绐楀彛
       let targetWindow = activeWindows.find(w => {
@@ -470,7 +565,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error('Failed to archive window:', error);
     }
-  }, [terminalWindow.id, archiveWindow, onReturn, onWindowSwitch]);
+  }, [archiveWindow, destroyRemoteWindows, getOwnedEphemeralWindowIds, handleCloseRemoteWindow, onReturn, onWindowSwitch, terminalWindow]);
 
   // 澶勭悊蹇€熷垏鎹?
   const handleQuickSwitcherSelect = useCallback(
@@ -552,7 +647,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* 渚ц竟鏍?*/}
       {!embedded && (
         <Sidebar
-          activeWindowId={terminalWindow.id}
+          activeWindowId={sidebarActiveWindowId}
           onWindowSelect={onWindowSwitch}
           onGroupSelect={onGroupSwitch}
           onSettingsClick={() => setIsSettingsPanelOpen(true)}

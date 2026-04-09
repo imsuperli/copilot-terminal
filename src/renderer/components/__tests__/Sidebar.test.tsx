@@ -213,6 +213,35 @@ describe('Terminal Sidebar', () => {
     ]);
   });
 
+  it('does not show ephemeral ssh clone tabs in the terminal sidebar', () => {
+    const onWindowSelect = vi.fn();
+
+    const ownerWindow = {
+      ...createRunningWindow('Remote Owner', '/workspace/remote', 'bash'),
+      kind: 'ssh' as const,
+    };
+    const cloneWindow = {
+      ...createRunningWindow('Remote Clone', '/workspace/remote-clone', 'bash'),
+      kind: 'ssh' as const,
+      ephemeral: true,
+      sshTabOwnerWindowId: ownerWindow.id,
+    };
+
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow],
+      activeWindowId: cloneWindow.id,
+      mruList: [cloneWindow.id, ownerWindow.id],
+      terminalSidebarFilter: 'all',
+    });
+
+    render(
+      <Sidebar activeWindowId={ownerWindow.id} onWindowSelect={onWindowSelect} />,
+    );
+
+    expect(screen.getByText('Remote Owner')).toBeInTheDocument();
+    expect(screen.queryByText('Remote Clone')).not.toBeInTheDocument();
+  });
+
   it('uses a stable scroll region when expanded and hides scrollbar occupancy when collapsed', () => {
     const onWindowSelect = vi.fn();
     const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');

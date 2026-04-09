@@ -76,22 +76,18 @@ export function getStandaloneSSHWindowsForTarget(
   targetWindowId: string,
 ): Window[] {
   const targetWindow = windows.find((window) => window.id === targetWindowId);
-  const targetKey = targetWindow ? getStandaloneSSHTargetKey(targetWindow) : null;
+  const ownerWindowId = targetWindow ? getSSHSessionOwnerWindowId(targetWindow) : null;
 
   return windows.filter((window) => {
     if (window.archived || getWindowKind(window) !== 'ssh') {
       return false;
     }
 
-    if (window.id === targetWindowId) {
-      return true;
-    }
-
-    if (!targetKey) {
+    if (!ownerWindowId) {
       return false;
     }
 
-    return getStandaloneSSHTargetKey(window) === targetKey;
+    return getSSHSessionOwnerWindowId(window) === ownerWindowId;
   });
 }
 
@@ -103,7 +99,7 @@ export function buildStandaloneSSHWindowMap(
   const nextMap: Record<string, Window> = {};
 
   for (const window of windows) {
-    if (window.archived) {
+    if (window.archived || isEphemeralSSHCloneWindow(window)) {
       continue;
     }
 
@@ -130,4 +126,53 @@ export function buildStandaloneSSHWindowMap(
   }
 
   return nextMap;
+}
+
+export function isEphemeralSSHCloneWindow(window: Window): boolean {
+  return Boolean(window.ephemeral && window.sshTabOwnerWindowId);
+}
+
+export function getSSHSessionOwnerWindowId(window: Window): string | null {
+  if (getWindowKind(window) !== 'ssh') {
+    return null;
+  }
+
+  return window.sshTabOwnerWindowId ?? window.id;
+}
+
+export function getOwnedEphemeralSSHWindows(
+  windows: Window[],
+  ownerWindowId: string,
+): Window[] {
+  return windows.filter((window) => (
+    !window.archived
+    && isEphemeralSSHCloneWindow(window)
+    && window.sshTabOwnerWindowId === ownerWindowId
+  ));
+}
+
+export function getSSHSessionFamilyWindows(
+  windows: Window[],
+  targetWindowId: string,
+  options?: {
+    includeArchived?: boolean;
+  },
+): Window[] {
+  const targetWindow = windows.find((window) => window.id === targetWindowId);
+  const ownerWindowId = targetWindow ? getSSHSessionOwnerWindowId(targetWindow) : null;
+  const includeArchived = options?.includeArchived ?? false;
+
+  if (!ownerWindowId) {
+    return [];
+  }
+
+  return windows.filter((window) => (
+    (includeArchived || !window.archived)
+    && getWindowKind(window) === 'ssh'
+    && getSSHSessionOwnerWindowId(window) === ownerWindowId
+  ));
+}
+
+export function getPersistableWindows(windows: Window[]): Window[] {
+  return windows.filter((window) => !window.ephemeral);
 }

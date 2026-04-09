@@ -216,7 +216,9 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
   private sanitizeWorkspaceForPersistence(workspace: Workspace): PersistedWorkspace {
     return {
       ...workspace,
-      windows: workspace.windows.map((window) => this.sanitizeWindowForPersistence(window)),
+      windows: workspace.windows
+        .filter((window) => !window.ephemeral)
+        .map((window) => this.sanitizeWindowForPersistence(window)),
       groups: workspace.groups || [], // 确保 groups 被保存
     };
   }

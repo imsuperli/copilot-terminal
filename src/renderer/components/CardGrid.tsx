@@ -24,7 +24,7 @@ import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
-import { buildStandaloneSSHWindowMap, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
+import { buildStandaloneSSHWindowMap, getPersistableWindows, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
 import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
@@ -113,6 +113,7 @@ export const CardGrid = React.memo<CardGridProps>(({
   const [sshDeleteTarget, setSSHDeleteTarget] = useState<SSHProfile | null>(null);
   const [sshDeleteError, setSSHDeleteError] = useState('');
   const [isDeletingSSHCard, setIsDeletingSSHCard] = useState(false);
+  const persistableWindows = useMemo(() => getPersistableWindows(windows), [windows]);
 
   const sortedSSHProfiles = useMemo(
     () => [...sshProfiles].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
@@ -124,10 +125,10 @@ export const CardGrid = React.memo<CardGridProps>(({
   );
   const standaloneSSHWindowsByProfile = useMemo(
     () => buildStandaloneSSHWindowMap(
-      windows.filter((window) => !groupedWindowIds.has(window.id)),
+      persistableWindows.filter((window) => !groupedWindowIds.has(window.id)),
       sshProfiles.map((profile) => profile.id),
     ),
-    [groupedWindowIds, sshProfiles, windows],
+    [groupedWindowIds, persistableWindows, sshProfiles],
   );
   const activeCustomCategory = useMemo(
     () => customCategories.find((category) => category.id === currentTab) ?? null,
@@ -177,7 +178,7 @@ export const CardGrid = React.memo<CardGridProps>(({
 
       // 筛选包含目标状态窗格的未归档窗口
       const matchedWindows = filterVisibleStandaloneWindows(
-        windows.filter(w => !w.archived && getAllPanes(w.layout).some(p => p.status === targetStatus))
+        persistableWindows.filter(w => !w.archived && getAllPanes(w.layout).some(p => p.status === targetStatus))
       );
       const windowItems: CardItem[] = sortWindows(matchedWindows, 'createdAt').map(w => ({ type: 'window', data: w }));
 
@@ -185,7 +186,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       const matchedGroups = groups.filter(g => {
         if (g.archived) return false;
         const groupWindowIds = getAllWindowIds(g.layout);
-        return windows.some(w => groupWindowIds.includes(w.id) && getAllPanes(w.layout).some(p => p.status === targetStatus));
+        return persistableWindows.some(w => groupWindowIds.includes(w.id) && getAllPanes(w.layout).some(p => p.status === targetStatus));
       });
       const groupItems: CardItem[] = sortGroupsByCreatedAt(matchedGroups).map(g => ({ type: 'group', data: g }));
 
@@ -195,13 +196,13 @@ export const CardGrid = React.memo<CardGridProps>(({
     // 本地终端标签
     if (currentTab === 'local') {
       const activeGroups = groups.filter(g => !g.archived);
-      const activeWindows = filterVisibleStandaloneWindows(windows.filter(w => !w.archived));
+      const activeWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => !w.archived));
       const localWindows = activeWindows.filter(w => getWindowKind(w) !== 'ssh');
 
       // 过滤包含本地窗口的组
       const localGroups = activeGroups.filter(g => {
         const windowIds = getAllWindowIds(g.layout);
-        const groupWindows = windows.filter(w => windowIds.includes(w.id));
+        const groupWindows = persistableWindows.filter(w => windowIds.includes(w.id));
         return groupWindows.some(w => getWindowKind(w) !== 'ssh');
       });
 
@@ -214,13 +215,13 @@ export const CardGrid = React.memo<CardGridProps>(({
     // 远程终端标签
     if (currentTab === 'ssh') {
       const activeGroups = groups.filter(g => !g.archived);
-      const activeWindows = filterVisibleStandaloneWindows(windows.filter(w => !w.archived));
+      const activeWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => !w.archived));
       const sshWindows = activeWindows.filter(w => getWindowKind(w) === 'ssh');
 
       // 过滤包含 SSH 窗口的组
       const sshGroups = activeGroups.filter(g => {
         const windowIds = getAllWindowIds(g.layout);
-        const groupWindows = windows.filter(w => windowIds.includes(w.id));
+        const groupWindows = persistableWindows.filter(w => windowIds.includes(w.id));
         return groupWindows.some(w => getWindowKind(w) === 'ssh');
       });
 
@@ -236,7 +237,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       const seenSSHProfileIds = new Set<string>();
       const categoryGroups = groups.filter((group) => activeCustomCategory.groupIds.includes(group.id));
       const categoryWindows = sortWindows(
-        windows.filter((window) => activeCustomCategory.windowIds.includes(window.id)),
+        persistableWindows.filter((window) => activeCustomCategory.windowIds.includes(window.id)),
         'createdAt',
       );
 
@@ -271,8 +272,8 @@ export const CardGrid = React.memo<CardGridProps>(({
       // 全部终端：活跃组 → 活跃窗口 → 归档组 → 归档窗口
       const activeGroups = groups.filter(g => !g.archived);
       const archivedGroups = groups.filter(g => g.archived);
-      const activeWindows = filterVisibleStandaloneWindows(windows.filter(w => !w.archived));
-      const archivedWindows = filterVisibleStandaloneWindows(windows.filter(w => w.archived));
+      const activeWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => !w.archived));
+      const archivedWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => w.archived));
 
       return [
         ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -286,7 +287,7 @@ export const CardGrid = React.memo<CardGridProps>(({
     if (currentTab === 'archived') {
       // 归档终端：归档组 → 归档窗口
       const archivedGroups = groups.filter(g => g.archived);
-      const archivedWindows = filterVisibleStandaloneWindows(windows.filter(w => w.archived));
+      const archivedWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => w.archived));
 
       return [
         ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -296,14 +297,14 @@ export const CardGrid = React.memo<CardGridProps>(({
 
     // 活跃终端（默认）：活跃组 → 活跃窗口
     const activeGroups = groups.filter(g => !g.archived);
-    const activeWindows = filterVisibleStandaloneWindows(windows.filter(w => !w.archived));
+    const activeWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => !w.archived));
 
     return [
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
       ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
     ];
-  }, [activeCustomCategory, currentTab, groupedWindowIds, groups, isCustomCategoryTab, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById, windows]);
+  }, [activeCustomCategory, currentTab, groupedWindowIds, groups, isCustomCategoryTab, persistableWindows, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById]);
 
   // 全局搜索：始终搜索所有终端和组，不受 currentTab 限制
   const allCardItems = useMemo<CardItem[]>(() => {
@@ -313,8 +314,8 @@ export const CardGrid = React.memo<CardGridProps>(({
     // 全部终端：活跃组 → 活跃窗口 → 归档组 → 归档窗口
     const activeGroups = groups.filter(g => !g.archived);
     const archivedGroups = groups.filter(g => g.archived);
-    const activeWindows = windows.filter(w => !w.archived && !groupedWindowIds.has(w.id) && shouldRenderWindowCard(w));
-    const archivedWindows = windows.filter(w => w.archived && !groupedWindowIds.has(w.id) && shouldRenderWindowCard(w));
+    const activeWindows = persistableWindows.filter(w => !w.archived && !groupedWindowIds.has(w.id) && shouldRenderWindowCard(w));
+    const archivedWindows = persistableWindows.filter(w => w.archived && !groupedWindowIds.has(w.id) && shouldRenderWindowCard(w));
 
     return [
       ...sortGroupsByCreatedAt(activeGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -323,7 +324,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       ...sortGroupsByCreatedAt(archivedGroups).map(g => ({ type: 'group' as const, data: g })),
       ...sortWindows(archivedWindows, 'lastActiveAt').map(w => ({ type: 'window' as const, data: w })),
     ];
-  }, [groupedWindowIds, groups, shouldRenderWindowCard, sshEnabled, sortedSSHProfiles, windows]);
+  }, [groupedWindowIds, groups, persistableWindows, shouldRenderWindowCard, sshEnabled, sortedSSHProfiles]);
 
   // 根据搜索关键词过滤卡片项（窗口和组）
   const filteredCardItems = useMemo(() => {
@@ -354,7 +355,7 @@ export const CardGrid = React.memo<CardGridProps>(({
 
         // 搜索组内窗口的名称和路径
         const windowIds = getAllWindowIds(group.layout);
-        const windowsInGroup = windows.filter(w => windowIds.includes(w.id));
+        const windowsInGroup = persistableWindows.filter(w => windowIds.includes(w.id));
         return windowsInGroup.some(win => {
           if (win.name.toLowerCase().includes(query)) return true;
           const panes = getAllPanes(win.layout);
@@ -371,7 +372,7 @@ export const CardGrid = React.memo<CardGridProps>(({
         || (profile.notes?.toLowerCase().includes(query) ?? false)
       );
     });
-  }, [cardItems, allCardItems, searchQuery, windows]);
+  }, [allCardItems, cardItems, persistableWindows, searchQuery]);
 
   const handleConnectSSHProfile = useCallback(async (profile: SSHProfile) => {
     await onConnectSSHProfile?.(profile);

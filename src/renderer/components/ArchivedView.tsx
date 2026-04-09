@@ -13,6 +13,7 @@ import { Window, WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { startWindowPanes } from '../utils/paneSessionActions';
+import { getPersistableWindows } from '../utils/sshWindowBindings';
 
 interface ArchivedViewProps {
   onEnterTerminal?: (window: Window) => void;
@@ -33,9 +34,10 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
   const { runWithWindowDirectory, dialogState } = useWindowDirectoryGuard();
   const { requestDeleteWindow, dialogState: deleteDialogState } = useDeleteWindowDialog();
   const [editingWindow, setEditingWindow] = useState<Window | null>(null);
+  const persistableWindows = useMemo(() => getPersistableWindows(windows), [windows]);
 
   // 只显示已归档的窗口
-  const archivedWindows = useMemo(() => windows.filter(w => w.archived), [windows]);
+  const archivedWindows = useMemo(() => persistableWindows.filter(w => w.archived), [persistableWindows]);
 
   // 按 lastActiveAt 降序排序
   const sortedWindows = useMemo(() => sortWindows(archivedWindows, 'lastActiveAt'), [archivedWindows]);
@@ -92,13 +94,13 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
   }, [unarchiveWindow]);
 
   const handleDeleteWindow = useCallback(async (windowId: string) => {
-    const targetWindow = windows.find((window) => window.id === windowId);
+    const targetWindow = persistableWindows.find((window) => window.id === windowId);
     if (!targetWindow) {
       return;
     }
 
     requestDeleteWindow(targetWindow);
-  }, [requestDeleteWindow, windows]);
+  }, [persistableWindows, requestDeleteWindow]);
 
   const openFolder = useCallback(async (win: Window) => {
     const workingDirectory = getCurrentWindowWorkingDirectory(win);
@@ -143,7 +145,7 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
       }
 
       // 更新第一个窗格的 command 和 cwd
-      const window = windows.find(w => w.id === windowId);
+      const window = persistableWindows.find(w => w.id === windowId);
       if (window) {
         const panes = getAllPanes(window.layout);
         if (panes.length > 0) {
@@ -166,7 +168,7 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
     } catch (error) {
       console.error('Failed to update window:', error);
     }
-  }, [updateWindow, updatePane, windows]);
+  }, [persistableWindows, updatePane, updateWindow]);
 
   const handleCloseEdit = useCallback(() => {
     setEditingWindow(null);

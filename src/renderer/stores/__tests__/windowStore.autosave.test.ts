@@ -165,6 +165,38 @@ describe('windowStore auto-save gating', () => {
     expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
   });
 
+  it('excludes ephemeral ssh clone tabs from auto-save payloads', () => {
+    const ownerWindow = createSinglePaneWindow('Owner', 'D:\\repo-owner', 'pwsh.exe');
+    const cloneWindow = {
+      ...createSinglePaneWindow('Clone', 'D:\\repo-clone', 'pwsh.exe'),
+      ephemeral: true,
+      sshTabOwnerWindowId: ownerWindow.id,
+    };
+
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow],
+      activeWindowId: ownerWindow.id,
+      mruList: [ownerWindow.id, cloneWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    useWindowStore.getState().updateWindow(ownerWindow.id, {
+      name: 'Owner Updated',
+    });
+
+    expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.triggerAutoSave).toHaveBeenLastCalledWith(
+      [
+        expect.objectContaining({
+          id: ownerWindow.id,
+          name: 'Owner Updated',
+        }),
+      ],
+      expect.anything(),
+    );
+  });
+
   it('collapses tmux agent panes and auto-saves the new single-pane layout on pause', () => {
     const terminalWindow = createSinglePaneWindow('Agent Team', 'D:\\repo', 'pwsh.exe');
     const leaderPaneId = terminalWindow.activePaneId;

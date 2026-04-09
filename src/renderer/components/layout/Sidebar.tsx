@@ -13,7 +13,7 @@ import { CustomCategory } from '../../../shared/types/custom-category';
 import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
-import { buildStandaloneSSHWindowMap } from '../../utils/sshWindowBindings';
+import { buildStandaloneSSHWindowMap, getPersistableWindows } from '../../utils/sshWindowBindings';
 import { getAllWindowIds } from '../../utils/groupLayoutHelpers';
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
@@ -61,6 +61,7 @@ export function Sidebar({
   const addCustomCategory = useWindowStore((state) => state.addCustomCategory);
   const updateCustomCategory = useWindowStore((state) => state.updateCustomCategory);
   const removeCustomCategory = useWindowStore((state) => state.removeCustomCategory);
+  const persistableWindows = useMemo(() => getPersistableWindows(windows), [windows]);
 
   const groupedWindowIds = useMemo(() => (
     new Set(groups.flatMap((group) => getAllWindowIds(group.layout)))
@@ -74,18 +75,18 @@ export function Sidebar({
     return new Set(
       Object.values(
         buildStandaloneSSHWindowMap(
-          windows.filter((window) => !groupedWindowIds.has(window.id)),
+          persistableWindows.filter((window) => !groupedWindowIds.has(window.id)),
           sshProfiles.map((profile) => profile.id),
         ),
       )
         .map((window) => window.id),
     );
-  }, [groupedWindowIds, sshEnabled, sshProfiles, windows]);
+  }, [groupedWindowIds, persistableWindows, sshEnabled, sshProfiles]);
 
-  const activeWindows = windows.filter(w => !w.archived);
-  const archivedWindows = windows.filter(w => w.archived);
-  const activeVisibleWindows = windows.filter(w => !w.archived && !groupedWindowIds.has(w.id) && !standaloneSSHWindowIds.has(w.id));
-  const archivedVisibleWindows = windows.filter(w => w.archived && !groupedWindowIds.has(w.id) && !standaloneSSHWindowIds.has(w.id));
+  const activeWindows = persistableWindows.filter(w => !w.archived);
+  const archivedWindows = persistableWindows.filter(w => w.archived);
+  const activeVisibleWindows = persistableWindows.filter(w => !w.archived && !groupedWindowIds.has(w.id) && !standaloneSSHWindowIds.has(w.id));
+  const archivedVisibleWindows = persistableWindows.filter(w => w.archived && !groupedWindowIds.has(w.id) && !standaloneSSHWindowIds.has(w.id));
   const activeGroups = groups.filter(g => !g.archived);
   const archivedGroups = groups.filter(g => g.archived);
 
@@ -96,11 +97,11 @@ export function Sidebar({
   const localVisibleWindows = activeVisibleWindows.filter(w => getWindowKind(w) !== 'ssh');
   const localGroupCount = activeGroups.filter((group) => {
     const windowIds = getAllWindowIds(group.layout);
-    return windows.some((window) => windowIds.includes(window.id) && getWindowKind(window) !== 'ssh');
+    return persistableWindows.some((window) => windowIds.includes(window.id) && getWindowKind(window) !== 'ssh');
   }).length;
   const sshGroupCount = activeGroups.filter((group) => {
     const windowIds = getAllWindowIds(group.layout);
-    return windows.some((window) => windowIds.includes(window.id) && getWindowKind(window) === 'ssh');
+    return persistableWindows.some((window) => windowIds.includes(window.id) && getWindowKind(window) === 'ssh');
   }).length;
 
   // 各标签的计数

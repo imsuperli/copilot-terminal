@@ -57,23 +57,23 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   }
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 xl:block">
+    <div className="flex min-w-0 self-stretch items-stretch gap-3">
+      <span className="hidden shrink-0 self-center text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 xl:block">
         {tabsLabel}
       </span>
-      <div className="flex min-w-0 items-center gap-2 overflow-x-auto pb-1 pt-1">
-        {remoteWindows.map((window) => (
+      <div className="flex min-w-0 self-stretch items-stretch overflow-x-auto border-x border-zinc-800">
+        {remoteWindows.map((window, index) => (
           <ContextMenu.Root key={window.id}>
             <ContextMenu.Trigger asChild>
               <button
                 type="button"
                 aria-label={window.name}
                 onClick={() => onWindowSelect(window.id)}
-                className={`group flex h-8 min-w-[140px] max-w-[220px] items-center rounded-lg border px-3 text-left transition-colors ${
+                className={`group flex h-full min-w-[140px] max-w-[220px] items-center px-4 text-left transition-colors ${
                   window.isActive
-                    ? 'border-amber-400/70 bg-amber-500/12 text-zinc-50'
-                    : 'border-zinc-700 bg-zinc-800/90 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800'
-                }`}
+                    ? 'bg-zinc-800/85 text-zinc-50'
+                    : 'text-zinc-300 hover:bg-zinc-800/55'
+                } ${index < remoteWindows.length - 1 ? 'border-r border-zinc-800' : ''}`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-xs font-medium">

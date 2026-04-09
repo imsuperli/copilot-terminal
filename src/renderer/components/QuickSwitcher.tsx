@@ -8,7 +8,7 @@ import { Window, WindowStatus } from '../types/window';
 import { WindowGroup } from '../../shared/types/window-group';
 import { getAggregatedStatus } from '../utils/layoutHelpers';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
-import { getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
+import { getPersistableWindows, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
 import { useI18n } from '../i18n';
 import type { SSHProfile } from '../../shared/types/ssh';
 
@@ -53,6 +53,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
     () => new Map(sshProfiles.map((profile) => [profile.id, profile])),
     [sshProfiles],
   );
+  const visibleWindows = useMemo(() => getPersistableWindows(windows), [windows]);
 
   const getWindowDisplayInfo = (window: Window) => {
     const profileId = getStandaloneSSHProfileId(window);
@@ -120,7 +121,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
   // 过滤并合并窗口和窗口组
   const filteredItems = useMemo(() => {
     // 过滤窗口
-    const filteredWindows: SwitcherItem[] = windows
+    const filteredWindows: SwitcherItem[] = visibleWindows
       .filter((window) => {
         const displayInfo = getWindowDisplayInfo(window);
         return displayInfo.searchTerms.some((value) => fuzzyMatch(query, value));
@@ -181,7 +182,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
 
       return 0;
     });
-  }, [windows, groups, query, currentWindowId, currentGroupId, sshProfilesById]);
+  }, [visibleWindows, groups, query, currentWindowId, currentGroupId, sshProfilesById]);
 
   // 重置状态和处理动画
   useEffect(() => {

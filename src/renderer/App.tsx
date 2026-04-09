@@ -46,12 +46,13 @@ import {
 } from './utils/sshPasswordPrompt';
 import { APP_ERROR_EVENT, type AppErrorEventDetail } from './utils/appNotice';
 import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './utils/sshConnectionRetry';
+import { isEphemeralSSHCloneWindow } from './utils/sshWindowBindings';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
 
 function findReusableSSHWindow(windows: Window[], profileId: string): Window | null {
   const matchedWindows = windows.filter((window) => {
-    if (window.archived) {
+    if (window.archived || isEphemeralSSHCloneWindow(window)) {
       return false;
     }
 

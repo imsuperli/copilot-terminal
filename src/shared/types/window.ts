@@ -127,6 +127,8 @@ export interface Window {
   claudeModelId?: string;        // Claude 模型 ID（运行态）
   claudeContextPercentage?: number; // Claude 上下文占比（运行态）
   claudeCost?: number;           // Claude 成本统计（运行态）
+  ephemeral?: boolean;           // 运行态临时窗口，不参与持久化/恢复
+  sshTabOwnerWindowId?: string;  // 临时 SSH tab 归属的持久化窗口 ID
 }
 
 /**

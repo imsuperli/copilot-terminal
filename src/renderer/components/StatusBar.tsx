@@ -4,6 +4,7 @@ import { useWindowStore } from '../stores/windowStore';
 import { WindowStatus } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
+import { getPersistableWindows } from '../utils/sshWindowBindings';
 
 export type StatusFilterTab = 'status:running' | 'status:waiting' | 'status:paused';
 
@@ -22,7 +23,7 @@ export const StatusBar = React.memo(function StatusBar({ currentTab, onTabChange
 
   // 缓存状态计数（统计所有未归档窗口中的所有窗格）
   const statusCounts = useMemo(() => {
-    const activeWindows = windows.filter(w => !w.archived);
+    const activeWindows = getPersistableWindows(windows).filter(w => !w.archived);
     const allPanes = activeWindows.flatMap(w => getAllPanes(w.layout));
 
     return {

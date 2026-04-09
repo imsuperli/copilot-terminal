@@ -196,6 +196,74 @@ describe('WorkspaceManager', () => {
       });
     });
 
+    it('should not persist ephemeral clone windows', async () => {
+      const workspace = {
+        version: '3.0',
+        windows: [
+          {
+            id: 'ssh-window-root',
+            name: 'Prod SSH',
+            layout: {
+              type: 'pane',
+              id: 'ssh-pane-root',
+              pane: {
+                id: 'ssh-pane-root',
+                cwd: '~/root',
+                command: '',
+                status: 'paused',
+                pid: null,
+                backend: 'ssh',
+                ssh: {
+                  profileId: 'ssh-profile-1',
+                },
+              },
+            },
+            activePaneId: 'ssh-pane-root',
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T12:00:00Z',
+          },
+          {
+            id: 'ssh-window-clone',
+            name: 'Prod SSH Clone',
+            ephemeral: true,
+            sshTabOwnerWindowId: 'ssh-window-root',
+            layout: {
+              type: 'pane',
+              id: 'ssh-pane-clone',
+              pane: {
+                id: 'ssh-pane-clone',
+                cwd: '~/clone',
+                command: '',
+                status: 'running',
+                pid: 3210,
+                backend: 'ssh',
+                ssh: {
+                  profileId: 'ssh-profile-1',
+                },
+              },
+            },
+            activePaneId: 'ssh-pane-clone',
+            createdAt: '2026-02-28T10:05:00Z',
+            lastActiveAt: '2026-02-28T12:05:00Z',
+          },
+        ],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+        },
+        lastSavedAt: '',
+      } as Workspace;
+
+      await workspaceManager.saveWorkspace(workspace);
+
+      const saved = await fs.readJson(workspacePath);
+      expect(saved.windows).toHaveLength(1);
+      expect(saved.windows[0].id).toBe('ssh-window-root');
+    });
+
     it('should use atomic write (temp file + rename)', async () => {
       const workspace: Workspace = {
         version: '1.0',

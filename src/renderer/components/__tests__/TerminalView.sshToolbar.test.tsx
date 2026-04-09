@@ -140,6 +140,8 @@ function createSSHWindow(options: {
   cwd?: string;
   remoteCwd?: string;
   lastActiveAt?: string;
+  ephemeral?: boolean;
+  sshTabOwnerWindowId?: string;
 } = {}): Window {
   const paneId = options.paneId ?? 'pane-ssh-1';
   const runtimeCwd = options.cwd ?? options.remoteCwd ?? '/srv/app';
@@ -151,6 +153,8 @@ function createSSHWindow(options: {
     createdAt: new Date().toISOString(),
     lastActiveAt: options.lastActiveAt ?? new Date().toISOString(),
     kind: 'ssh',
+    ...(options.ephemeral ? { ephemeral: true } : {}),
+    ...(options.sshTabOwnerWindowId ? { sshTabOwnerWindowId: options.sshTabOwnerWindowId } : {}),
     layout: {
       type: 'pane',
       id: paneId,
@@ -210,8 +214,8 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByText('Prod SSH')).not.toBeInTheDocument();
   });
 
-  it('only shows remote tabs for the same ssh target and keeps their original order', () => {
-    const firstWindow = createSSHWindow({
+  it('only shows remote tabs for the same owner family and keeps their original order', () => {
+    const ownerWindow = createSSHWindow({
       id: 'win-ssh-1',
       paneId: 'pane-ssh-1',
       name: 'Prod SSH A',
@@ -226,19 +230,20 @@ describe('TerminalView SSH toolbar', () => {
       host: '10.0.0.21',
       remoteCwd: '/srv/worker',
       lastActiveAt: '2026-04-09T00:00:03.000Z',
+      ephemeral: true,
+      sshTabOwnerWindowId: 'win-ssh-1',
     });
-    const differentTargetWindow = createSSHWindow({
+    const unrelatedWindow = createSSHWindow({
       id: 'win-ssh-3',
       paneId: 'pane-ssh-3',
-      name: 'Stage SSH',
-      profileId: 'profile-2',
-      host: '10.0.0.99',
-      remoteCwd: '/srv/stage',
-      lastActiveAt: '2026-04-09T00:00:01.000Z',
+      name: 'Prod SSH C',
+      host: '10.0.0.21',
+      remoteCwd: '/srv/other',
+      lastActiveAt: '2026-04-09T00:00:05.000Z',
     });
 
     useWindowStore.setState({
-      windows: [firstWindow, activeWindow, differentTargetWindow],
+      windows: [ownerWindow, activeWindow, unrelatedWindow],
       activeWindowId: activeWindow.id,
       mruList: [],
       sidebarExpanded: false,
@@ -260,7 +265,7 @@ describe('TerminalView SSH toolbar', () => {
       .filter((label): label is string => label === 'Prod SSH A' || label === 'Prod SSH B');
 
     expect(remoteTabOrder).toEqual(['Prod SSH A', 'Prod SSH B']);
-    expect(screen.queryByRole('button', { name: 'Stage SSH' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Prod SSH C' })).not.toBeInTheDocument();
   });
 
   it('opens the ssh sftp dialog from the toolbar', async () => {
@@ -329,15 +334,9 @@ describe('TerminalView SSH toolbar', () => {
       name: 'Prod SSH A',
       remoteCwd: '/srv/app',
     });
-    const sourceWindow = createSSHWindow({
-      id: 'win-ssh-2',
-      paneId: 'pane-ssh-2',
-      name: 'Prod SSH B',
-      remoteCwd: '/srv/worker',
-    });
 
     useWindowStore.setState({
-      windows: [activeWindow, sourceWindow],
+      windows: [activeWindow],
       activeWindowId: activeWindow.id,
       mruList: [],
       sidebarExpanded: false,
@@ -361,39 +360,46 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH B' }) });
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH A' }) });
     await user.click(screen.getByText('克隆 SSH 终端'));
 
     expect(window.electronAPI.cloneSSHPane).toHaveBeenCalledWith(expect.objectContaining({
-      sourceWindowId: 'win-ssh-2',
-      sourcePaneId: 'pane-ssh-2',
+      sourceWindowId: 'win-ssh-1',
+      sourcePaneId: 'pane-ssh-1',
       targetWindowId: expect.any(String),
       targetPaneId: expect.any(String),
-      remoteCwd: '/srv/worker',
+      remoteCwd: '/srv/app',
     }));
 
+    const clonedWindow = useWindowStore.getState().windows[1];
+    expect(clonedWindow).toMatchObject({
+      ephemeral: true,
+      sshTabOwnerWindowId: 'win-ssh-1',
+    });
     expect(onWindowSwitch).toHaveBeenCalledWith(expect.any(String));
-    expect(useWindowStore.getState().windows).toHaveLength(3);
+    expect(useWindowStore.getState().windows).toHaveLength(2);
   });
 
   it('closes the active remote tab from its context menu and switches to the adjacent tab', async () => {
     const user = userEvent.setup();
     const onWindowSwitch = vi.fn();
-    const activeWindow = createSSHWindow({
+    const ownerWindow = createSSHWindow({
       id: 'win-ssh-1',
       paneId: 'pane-ssh-1',
       name: 'Prod SSH A',
       remoteCwd: '/srv/app',
     });
-    const adjacentWindow = createSSHWindow({
+    const activeWindow = createSSHWindow({
       id: 'win-ssh-2',
       paneId: 'pane-ssh-2',
       name: 'Prod SSH B',
       remoteCwd: '/srv/worker',
+      ephemeral: true,
+      sshTabOwnerWindowId: 'win-ssh-1',
     });
 
     useWindowStore.setState({
-      windows: [activeWindow, adjacentWindow],
+      windows: [ownerWindow, activeWindow],
       activeWindowId: activeWindow.id,
       mruList: [],
       sidebarExpanded: false,
@@ -412,13 +418,13 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH A' }) });
-    await user.click(screen.getByText('关闭'));
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH B' }) });
+    await user.click(screen.getAllByText('关闭')[0]);
 
-    expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-1');
-    expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-1');
-    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-2');
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-2']);
+    expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
+    expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
   it('does not leave a placeholder window behind when cloning fails', async () => {

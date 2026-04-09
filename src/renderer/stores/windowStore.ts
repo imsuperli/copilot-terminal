@@ -19,6 +19,7 @@ import {
   addWindowToGroup as addWindowToGroupInLayout,
   getWindowCount,
 } from '../utils/groupLayoutHelpers';
+import { getPersistableWindows } from '../utils/sshWindowBindings';
 import { updateSettingsCategories } from './categoryHelpers';
 
 // 全局标志：是否启用自动保存
@@ -46,7 +47,7 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
  */
 function triggerAutoSave(windows: Window[], groups?: WindowGroup[]): void {
   if (autoSaveEnabled && window.electronAPI) {
-    window.electronAPI.triggerAutoSave(windows, groups);
+    window.electronAPI.triggerAutoSave(getPersistableWindows(windows), groups);
   }
 }
 
@@ -724,7 +725,8 @@ export const useWindowStore = create<WindowStore>()(
     // 获取按 MRU 排序的窗口列表
     getMRUWindows: () => {
       const { windows, mruList } = get();
-      const windowMap = new Map(windows.map(w => [w.id, w]));
+      const persistableWindows = getPersistableWindows(windows);
+      const windowMap = new Map(persistableWindows.map(w => [w.id, w]));
       return mruList
         .map(id => windowMap.get(id))
         .filter((w): w is Window => w !== undefined && !w.archived);
@@ -784,12 +786,12 @@ export const useWindowStore = create<WindowStore>()(
 
     // 获取未归档的窗口
     getActiveWindows: () => {
-      return get().windows.filter(w => !w.archived);
+      return getPersistableWindows(get().windows).filter(w => !w.archived);
     },
 
     // 获取已归档的窗口
     getArchivedWindows: () => {
-      return get().windows.filter(w => w.archived);
+      return getPersistableWindows(get().windows).filter(w => w.archived);
     },
 
     // 更新 Claude 模型信息

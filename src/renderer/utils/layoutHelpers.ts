@@ -248,8 +248,20 @@ export function isTmuxAgentPane(pane: Pane): boolean {
 }
 
 function sanitizePaneForPause(pane: Pane): Pane {
+  const {
+    title,
+    borderColor,
+    activeBorderColor,
+    teamName,
+    agentId,
+    agentName,
+    agentColor,
+    teammateMode,
+    ...restPane
+  } = pane;
+
   return {
-    ...pane,
+    ...restPane,
     status: WindowStatus.Paused,
     pid: null,
   };

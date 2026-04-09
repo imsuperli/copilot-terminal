@@ -78,6 +78,22 @@ describe('getSSHCredentialCleanupAvailability', () => {
     });
   });
 
+  it('ignores ephemeral clone tabs from the same owner family when checking credential cleanup', () => {
+    const targetWindow = createWindow('target', createPane('pane-target', 'profile-1'));
+    const ephemeralCloneWindow = {
+      ...createWindow('clone', createPane('pane-clone', 'profile-1')),
+      ephemeral: true,
+      sshTabOwnerWindowId: 'target',
+    };
+
+    expect(getSSHCredentialCleanupAvailability(targetWindow, [targetWindow, ephemeralCloneWindow])).toEqual({
+      profileId: 'profile-1',
+      eligible: true,
+      canClearCredentials: true,
+      blockingWindowCount: 0,
+    });
+  });
+
   it('does not offer credential cleanup for mixed or local windows', () => {
     const mixedWindow: Window = {
       id: 'mixed',
