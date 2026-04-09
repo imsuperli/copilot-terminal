@@ -1,12 +1,13 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Copy } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
 import { QuickSwitcher } from './QuickSwitcher';
 import { SplitLayout } from './SplitLayout';
 import { SettingsPanel } from './SettingsPanel';
+import { RemoteWindowTabs } from './RemoteWindowTabs';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { IDEIcon } from './icons/IDEIcons';
@@ -508,11 +509,24 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* 主内容区 */}
       <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 - 在嵌入模式下也显示 */}
-        <div className="h-8 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-1 pr-4 flex-shrink-0">
-          <div className="flex min-w-0 items-center gap-2" />
+        <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between pl-2 pr-4 flex-shrink-0 gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+            {!embedded && isActiveSshPane && (
+              <RemoteWindowTabs
+                windows={windows}
+                activeWindowId={terminalWindow.id}
+                tabsLabel={t('terminalView.remoteTabs')}
+                createLabel={t('terminalView.newRemoteTab')}
+                onWindowSelect={onWindowSwitch}
+                onCreate={() => {
+                  void handleCloneSession();
+                }}
+              />
+            )}
+          </div>
 
           {/* 鍙充晶鎸夐挳缁?*/}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             {/* 椤圭洰閾炬帴 */}
             {terminalWindow.projectConfig && terminalWindow.projectConfig.links.length > 0 && (
               <>
@@ -615,19 +629,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
                   <Waypoints size={14} />
-                </button>
-              </AppTooltip>
-            )}
-
-            {!embedded && isActiveSshPane && activePaneCapabilities?.canCloneSession && (
-              <AppTooltip content={t('terminalView.cloneSshTerminal')} placement="toolbar-trailing">
-                <button
-                  type="button"
-                  aria-label={t('terminalView.cloneSshTerminal')}
-                  onClick={handleCloneSession}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
-                >
-                  <Copy size={14} />
                 </button>
               </AppTooltip>
             )}

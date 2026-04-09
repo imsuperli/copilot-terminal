@@ -87,6 +87,10 @@ vi.mock('../../i18n', () => ({
           return '重启';
         case 'terminalView.start':
           return '启动';
+        case 'terminalView.remoteTabs':
+          return '远程终端';
+        case 'terminalView.newRemoteTab':
+          return '新建远程终端';
         default:
           return key;
       }
@@ -186,7 +190,8 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.getByRole('button', { name: '打开 SSH 文件面板' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '显示 SSH 监控' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '管理 SSH 端口转发' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '克隆 SSH 终端' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '新建远程终端' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
   });
 
   it('opens the ssh sftp dialog from the toolbar', async () => {
@@ -267,7 +272,7 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '克隆 SSH 终端' }));
+    await user.click(screen.getByRole('button', { name: '新建远程终端' }));
 
     expect(window.electronAPI.cloneSSHPane).toHaveBeenCalledWith(expect.objectContaining({
       sourceWindowId: 'win-ssh-1',
@@ -299,7 +304,7 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: '克隆 SSH 终端' }));
+    await user.click(screen.getByRole('button', { name: '新建远程终端' }));
 
     expect(useWindowStore.getState().windows).toHaveLength(1);
   });

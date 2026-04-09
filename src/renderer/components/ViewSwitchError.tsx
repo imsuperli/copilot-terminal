@@ -12,7 +12,7 @@ export interface ViewSwitchErrorProps {
 export const ViewSwitchError: React.FC<ViewSwitchErrorProps> = ({ message }) => {
   return (
     <div
-      className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 bg-red-900/90 text-red-100 rounded-lg shadow-lg"
+      className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[12050] flex items-center gap-2 px-4 py-2 bg-red-900/90 text-red-100 rounded-lg shadow-2xl"
       role="alert"
       data-testid="view-switch-error"
     >
