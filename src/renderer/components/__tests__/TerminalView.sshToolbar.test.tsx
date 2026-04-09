@@ -127,15 +127,25 @@ vi.mock('../SSHPortForwardDialog', () => ({
   },
 }));
 
-function createSSHWindow(): Window {
-  const paneId = 'pane-ssh-1';
+function createSSHWindow(options: {
+  id?: string;
+  paneId?: string;
+  name?: string;
+  profileId?: string;
+  host?: string;
+  port?: number;
+  user?: string;
+  remoteCwd?: string;
+  lastActiveAt?: string;
+} = {}): Window {
+  const paneId = options.paneId ?? 'pane-ssh-1';
 
   return {
-    id: 'win-ssh-1',
-    name: 'Prod SSH',
+    id: options.id ?? 'win-ssh-1',
+    name: options.name ?? 'Prod SSH',
     activePaneId: paneId,
     createdAt: new Date().toISOString(),
-    lastActiveAt: new Date().toISOString(),
+    lastActiveAt: options.lastActiveAt ?? new Date().toISOString(),
     kind: 'ssh',
     layout: {
       type: 'pane',
@@ -148,12 +158,12 @@ function createSSHWindow(): Window {
         pid: 2001,
         backend: 'ssh',
         ssh: {
-          profileId: 'profile-1',
-          host: '10.0.0.21',
-          port: 22,
-          user: 'root',
+          profileId: options.profileId ?? 'profile-1',
+          host: options.host ?? '10.0.0.21',
+          port: options.port ?? 22,
+          user: options.user ?? 'root',
           authType: 'password',
-          remoteCwd: '/srv/app',
+          remoteCwd: options.remoteCwd ?? '/srv/app',
           reuseSession: true,
         },
       },
@@ -192,6 +202,54 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.getByRole('button', { name: '管理 SSH 端口转发' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新建远程终端' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
+  });
+
+  it('only shows remote tabs for the same ssh target as the active window', () => {
+    const activeWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      host: '10.0.0.21',
+      lastActiveAt: '2026-04-09T00:00:03.000Z',
+    });
+    const sameTargetWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      host: '10.0.0.21',
+      remoteCwd: '/srv/worker',
+      lastActiveAt: '2026-04-09T00:00:02.000Z',
+    });
+    const differentTargetWindow = createSSHWindow({
+      id: 'win-ssh-3',
+      paneId: 'pane-ssh-3',
+      name: 'Stage SSH',
+      profileId: 'profile-2',
+      host: '10.0.0.99',
+      remoteCwd: '/srv/stage',
+      lastActiveAt: '2026-04-09T00:00:01.000Z',
+    });
+
+    useWindowStore.setState({
+      windows: [activeWindow, sameTargetWindow, differentTargetWindow],
+      activeWindowId: activeWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={activeWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Prod SSH A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prod SSH B' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Stage SSH' })).not.toBeInTheDocument();
   });
 
   it('opens the ssh sftp dialog from the toolbar', async () => {

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Plus } from 'lucide-react';
 import { Window } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
+import { getStandaloneSSHTargetKey } from '../utils/sshWindowBindings';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { StatusDot } from './StatusDot';
 
@@ -31,8 +32,24 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   onCreate,
 }) => {
   const remoteWindows = useMemo<RemoteWindowTabItem[]>(() => {
+    const activeWindow = windows.find((window) => window.id === activeWindowId);
+    const activeTargetKey = activeWindow ? getStandaloneSSHTargetKey(activeWindow) : null;
     const candidates = windows
-      .filter((window) => !window.archived && getWindowKind(window) === 'ssh')
+      .filter((window) => {
+        if (window.archived || getWindowKind(window) !== 'ssh') {
+          return false;
+        }
+
+        if (window.id === activeWindowId) {
+          return true;
+        }
+
+        if (!activeTargetKey) {
+          return false;
+        }
+
+        return getStandaloneSSHTargetKey(window) === activeTargetKey;
+      })
       .sort((left, right) => {
         if (left.id === activeWindowId) {
           return -1;
