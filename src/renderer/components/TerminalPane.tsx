@@ -231,13 +231,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         return;
       }
 
-      updatePaneRuntime(windowId, pane.id, {
-        cwd: nextRemoteCwd,
-        ssh: {
-          ...sshBinding,
-          remoteCwd: nextRemoteCwd,
-        },
-      });
+      updatePaneRuntime(windowId, pane.id, { cwd: nextRemoteCwd });
     });
 
     return unsubscribe;

@@ -20,7 +20,7 @@ import { useViewSwitcher } from './hooks/useViewSwitcher';
 import { useWindowSwitcher } from './hooks/useWindowSwitcher';
 import { useWorkspaceRestore } from './hooks/useWorkspaceRestore';
 import { subscribeToPaneStatusChange, subscribeToWindowGitBranchChange } from './api/events';
-import { Pane, Window } from './types/window';
+import { Pane, Window, WindowStatus } from './types/window';
 import { WindowGroup } from '../shared/types/window-group';
 import { I18nProvider } from './i18n';
 import { SSHCredentialState, SSHProfile } from '../shared/types/ssh';
@@ -512,6 +512,35 @@ function AppContent() {
   }, []);
 
   const handleSSHProfileSaved = useCallback((profile: SSHProfile, credentialState: SSHCredentialState) => {
+    const previousProfile = sshProfiles.find((item) => item.id === profile.id) ?? null;
+
+    if (previousProfile) {
+      const previousDefaultRemoteCwd = previousProfile.defaultRemoteCwd?.trim() || '~';
+      const nextDefaultRemoteCwd = profile.defaultRemoteCwd?.trim() || '~';
+
+      for (const sshWindow of windows) {
+        const panes = getAllPanes(sshWindow.layout).filter((pane) => pane.ssh?.profileId === profile.id);
+        if (panes.length === 0) {
+          continue;
+        }
+
+        if (sshWindow.name === previousProfile.name && sshWindow.name !== profile.name) {
+          updateWindow(sshWindow.id, { name: profile.name });
+        }
+
+        for (const pane of panes) {
+          if (pane.status !== WindowStatus.Paused) {
+            continue;
+          }
+
+          const currentRemoteCwd = pane.cwd?.trim() || '~';
+          if (currentRemoteCwd === previousDefaultRemoteCwd && currentRemoteCwd !== nextDefaultRemoteCwd) {
+            updatePane(sshWindow.id, pane.id, { cwd: nextDefaultRemoteCwd });
+          }
+        }
+      }
+    }
+
     setSSHProfiles((previousProfiles) => {
       const nextProfiles = previousProfiles.some((item) => item.id === profile.id)
         ? previousProfiles.map((item) => (item.id === profile.id ? profile : item))
@@ -523,7 +552,7 @@ function AppContent() {
       ...previousStates,
       [profile.id]: credentialState,
     }));
-  }, []);
+  }, [sshProfiles, updatePane, updateWindow, windows]);
 
   const handleDeleteSSHProfile = useCallback(async (profile: SSHProfile) => {
     if (!window.electronAPI) {
@@ -550,7 +579,9 @@ function AppContent() {
       return;
     }
 
-    const reusableWindow = findReusableSSHWindow(windows, profile.id);
+    const reusableWindow = profile.reuseSession
+      ? findReusableSSHWindow(windows, profile.id)
+      : null;
     if (reusableWindow) {
       switchToWindow(reusableWindow.id);
       return;

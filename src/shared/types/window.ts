@@ -28,10 +28,10 @@ export interface PaneCapabilities {
 
 export interface SshPaneBinding {
   profileId: string;
-  host: string;
-  port: number;
-  user: string;
-  authType: SSHAuthType;
+  host?: string;
+  port?: number;
+  user?: string;
+  authType?: SSHAuthType;
   remoteCwd?: string;
   jumpHostProfileId?: string;
   proxyCommand?: string;

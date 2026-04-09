@@ -1,4 +1,5 @@
 import { StartSSHPaneResult, StartWindowResult } from '../../shared/types/electron-api';
+import { SSHProfile } from '../../shared/types/ssh';
 import { getPaneBackend, getPaneCapabilities } from '../../shared/utils/terminalCapabilities';
 import { Pane, Window, WindowStatus } from '../types/window';
 import { dispatchAppError } from './appNotice';
@@ -44,6 +45,50 @@ function getSplitSuccessStatus(pane: Pane): WindowStatus {
     : WindowStatus.Running;
 }
 
+async function loadSSHProfile(profileId: string): Promise<SSHProfile> {
+  const response = await window.electronAPI.getSSHProfile(profileId);
+  if (!response?.success || !response.data) {
+    throw new Error(response?.error || `SSH profile not found: ${profileId}`);
+  }
+
+  return response.data;
+}
+
+async function resolveSSHPromptRequest(options: {
+  pane: Pane;
+  profileNameFallback: string;
+}): Promise<{
+  profileId: string;
+  profileName: string;
+  host: string;
+  user: string;
+  authType: SSHProfile['auth'];
+}> {
+  const ssh = options.pane.ssh;
+  if (!ssh) {
+    throw new Error(`SSH pane metadata is missing for ${options.pane.id}`);
+  }
+
+  if (ssh.host && ssh.user && ssh.authType) {
+    return {
+      profileId: ssh.profileId,
+      profileName: options.profileNameFallback,
+      host: ssh.host,
+      user: ssh.user,
+      authType: ssh.authType,
+    };
+  }
+
+  const profile = await loadSSHProfile(ssh.profileId);
+  return {
+    profileId: profile.id,
+    profileName: profile.name || options.profileNameFallback,
+    host: profile.host,
+    user: profile.user,
+    authType: profile.auth,
+  };
+}
+
 export function createPaneDraftFromSource(sourcePane: Pane, paneId: string): Pane {
   const backend = getPaneBackend(sourcePane);
   const ssh = sourcePane.ssh ? { ...sourcePane.ssh } : undefined;
@@ -68,20 +113,18 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
       throw new Error(`SSH pane metadata is missing for ${targetWindow.id}/${pane.id}`);
     }
     const ssh = pane.ssh;
+    const request = await resolveSSHPromptRequest({
+      pane,
+      profileNameFallback: targetWindow.name,
+    });
 
     const response = await runSSHActionWithPasswordRetry({
-      request: {
-        profileId: ssh.profileId,
-        profileName: targetWindow.name,
-        host: ssh.host,
-        user: ssh.user,
-        authType: ssh.authType,
-      },
+      request,
       action: () => window.electronAPI.startSSHPane({
         windowId: targetWindow.id,
         paneId: pane.id,
         profileId: ssh.profileId,
-        remoteCwd: ssh.remoteCwd,
+        remoteCwd: pane.cwd,
         command: pane.command,
         initialCols,
         initialRows,
@@ -160,21 +203,19 @@ export async function startSplitPaneFromSource(options: {
     if (!sshBinding) {
       throw new Error(`SSH pane metadata is missing for ${sourceWindowId}/${sourcePane.id}`);
     }
+    const request = await resolveSSHPromptRequest({
+      pane: sourcePane,
+      profileNameFallback: sourceWindowId,
+    });
 
     const response = await runSSHActionWithPasswordRetry({
-      request: {
-        profileId: sshBinding.profileId,
-        profileName: `${sshBinding.user}@${sshBinding.host}`,
-        host: sshBinding.host,
-        user: sshBinding.user,
-        authType: sshBinding.authType,
-      },
+      request,
       action: () => window.electronAPI.cloneSSHPane({
         sourceWindowId,
         sourcePaneId: sourcePane.id,
         targetWindowId,
         targetPaneId,
-        remoteCwd: remoteCwdOverride ?? sshBinding.remoteCwd ?? sourcePane.cwd,
+        remoteCwd: remoteCwdOverride ?? sourcePane.cwd,
       }),
     });
 

@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
 
 vi.mock('../../utils/ideScanner', () => ({
   scanInstalledIDEs: vi.fn(() => []),
+  getSupportedIDEIds: vi.fn(() => new Set()),
 }));
 
 describe('WorkspaceManager', () => {
@@ -50,19 +51,28 @@ describe('WorkspaceManager', () => {
   describe('saveWorkspace', () => {
     it('should save workspace to file', async () => {
       const workspace: Workspace = {
-        version: '1.0',
+        version: '3.0',
         windows: [
           {
             id: 'test-1',
             name: 'Test Window',
-            workingDirectory: '/test/dir',
-            command: 'claude',
-            status: 'running' as any,
-            pid: 1234,
+            layout: {
+              type: 'pane',
+              id: 'pane-1',
+              pane: {
+                id: 'pane-1',
+                cwd: '/test/dir',
+                command: 'claude',
+                status: 'running' as any,
+                pid: 1234,
+              },
+            },
+            activePaneId: 'pane-1',
             createdAt: '2026-02-28T10:00:00Z',
             lastActiveAt: '2026-02-28T12:00:00Z',
           },
         ],
+        groups: [],
         settings: {
           notificationsEnabled: true,
           theme: 'dark',
@@ -79,7 +89,7 @@ describe('WorkspaceManager', () => {
 
       // Verify content
       const saved = await fs.readJson(workspacePath);
-      expect(saved.version).toBe('1.0');
+      expect(saved.version).toBe('3.0');
       expect(saved.windows).toHaveLength(1);
       expect(saved.windows[0].id).toBe('test-1');
       expect(saved.lastSavedAt).toBeTruthy();
@@ -132,6 +142,58 @@ describe('WorkspaceManager', () => {
       expect(saved.windows[0]).not.toHaveProperty('claudeModelId');
       expect(saved.windows[0]).not.toHaveProperty('claudeContextPercentage');
       expect(saved.windows[0]).not.toHaveProperty('claudeCost');
+    });
+
+    it('should persist SSH panes with only the profile binding key', async () => {
+      const workspace = {
+        version: '3.0',
+        windows: [
+          {
+            id: 'ssh-window-1',
+            name: 'Prod SSH',
+            layout: {
+              type: 'pane',
+              id: 'ssh-pane-1',
+              pane: {
+                id: 'ssh-pane-1',
+                cwd: '~/develop/copilot-terminal',
+                command: '',
+                status: 'paused',
+                pid: null,
+                backend: 'ssh',
+                ssh: {
+                  profileId: 'ssh-profile-1',
+                  host: '127.0.0.1',
+                  port: 8022,
+                  user: 'u0_a123',
+                  authType: 'password',
+                  remoteCwd: '~/develop/copilot-terminal',
+                  reuseSession: true,
+                },
+              },
+            },
+            activePaneId: 'ssh-pane-1',
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T12:00:00Z',
+          },
+        ],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+        },
+        lastSavedAt: '',
+      } as Workspace;
+
+      await workspaceManager.saveWorkspace(workspace);
+
+      const saved = await fs.readJson(workspacePath);
+      expect(saved.windows[0].layout.pane.cwd).toBe('~/develop/copilot-terminal');
+      expect(saved.windows[0].layout.pane.ssh).toEqual({
+        profileId: 'ssh-profile-1',
+      });
     });
 
     it('should use atomic write (temp file + rename)', async () => {
@@ -239,13 +301,13 @@ describe('WorkspaceManager', () => {
       // Load workspace
       const loaded = await workspaceManager.loadWorkspace();
 
-      expect(loaded.version).toBe('2.0');
+      expect(loaded.version).toBe('3.0');
       expect(loaded.windows).toHaveLength(1);
       expect(loaded.windows[0].id).toBe('test-1');
       expect(loaded.settings.language).toBe('zh-CN');
 
       const persisted = await fs.readJson(workspacePath);
-      expect(persisted.version).toBe('2.0');
+      expect(persisted.version).toBe('3.0');
       expect(persisted.settings.language).toBe('zh-CN');
     });
 
@@ -296,7 +358,7 @@ describe('WorkspaceManager', () => {
     it('should return default workspace if file does not exist', async () => {
       const loaded = await workspaceManager.loadWorkspace();
 
-      expect(loaded.version).toBe('2.0');
+      expect(loaded.version).toBe('3.0');
       expect(loaded.windows).toHaveLength(0);
       expect(loaded.settings.notificationsEnabled).toBe(true);
       expect(loaded.settings.theme).toBe('dark');
@@ -354,8 +416,9 @@ describe('WorkspaceManager', () => {
 
     it('should validate workspace version', async () => {
       const invalidWorkspace = {
-        version: '3.0',  // Unsupported version
+        version: '4.0',  // Unsupported version
         windows: [],
+        groups: [],
         settings: {
           notificationsEnabled: true,
           theme: 'dark',
@@ -369,7 +432,7 @@ describe('WorkspaceManager', () => {
 
       // Should return default workspace due to version mismatch
       const loaded = await workspaceManager.loadWorkspace();
-      expect(loaded.version).toBe('2.0');
+      expect(loaded.version).toBe('3.0');
       expect(loaded.windows).toHaveLength(0);
     });
 
@@ -405,8 +468,9 @@ describe('WorkspaceManager', () => {
   describe('backupWorkspace', () => {
     it('should keep the most recent 3 backups', async () => {
       const workspace: Workspace = {
-        version: '1.0',
+        version: '3.0',
         windows: [],
+        groups: [],
         settings: {
           notificationsEnabled: true,
           theme: 'dark',
@@ -422,10 +486,18 @@ describe('WorkspaceManager', () => {
           {
             id: `window-${i}`,
             name: `Window ${i}`,
-            workingDirectory: '/test',
-            command: 'claude',
-            status: 'running' as any,
-            pid: 1000 + i,
+            layout: {
+              type: 'pane',
+              id: `pane-${i}`,
+              pane: {
+                id: `pane-${i}`,
+                cwd: '/test',
+                command: 'claude',
+                status: 'running' as any,
+                pid: 1000 + i,
+              },
+            },
+            activePaneId: `pane-${i}`,
             createdAt: '2026-02-28T10:00:00Z',
             lastActiveAt: '2026-02-28T12:00:00Z',
           },

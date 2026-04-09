@@ -241,13 +241,26 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       const { status, pid, ...pane } = layout.pane;
       return {
         ...layout,
-        pane,
+        pane: this.sanitizePaneForPersistence(pane),
       };
     }
 
     return {
       ...layout,
       children: layout.children.map((child) => this.sanitizeLayoutForPersistence(child)),
+    };
+  }
+
+  private sanitizePaneForPersistence(pane: PersistedPane): PersistedPane {
+    if (pane.backend !== 'ssh' || !pane.ssh) {
+      return pane;
+    }
+
+    return {
+      ...pane,
+      ssh: {
+        profileId: pane.ssh.profileId,
+      },
     };
   }
 

@@ -553,14 +553,6 @@ function createSshPaneDraft(
     backend: 'ssh',
     ssh: {
       profileId: profile.id,
-      host: profile.host,
-      port: profile.port,
-      user: profile.user,
-      authType: profile.auth,
-      ...(remoteCwd ? { remoteCwd } : {}),
-      ...(profile.jumpHostProfileId ? { jumpHostProfileId: profile.jumpHostProfileId } : {}),
-      ...(profile.proxyCommand ? { proxyCommand: profile.proxyCommand } : {}),
-      reuseSession: profile.reuseSession,
     },
   };
 
@@ -628,7 +620,7 @@ function findPaneInLayout(layout: Window['layout'], paneId: string): Pane | null
 }
 
 function resolvePaneRemoteCwd(pane: Pane): string | undefined {
-  return resolveSSHRemoteCwd(pane.ssh?.remoteCwd);
+  return resolveSSHRemoteCwd(pane.cwd, pane.ssh?.remoteCwd);
 }
 
 function resolveSSHRemoteCwd(...values: Array<string | undefined>): string | undefined {
