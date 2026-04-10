@@ -234,6 +234,93 @@ describe('TmuxCompatService', () => {
       expect(response.exitCode).toBe(0);
       expect(response.stdout).toContain('%1');
     });
+
+    it('多 terminal pane 场景下应只返回当前 pane 子树', async () => {
+      const { service, store } = createService();
+
+      store.getState().windows[0].layout = {
+        type: 'split',
+        direction: 'horizontal',
+        sizes: [0.5, 0.5],
+        children: [
+          {
+            type: 'pane',
+            id: 'pane-1',
+            pane: createTerminalPane('pane-1'),
+          },
+          {
+            type: 'pane',
+            id: 'pane-2',
+            pane: createTerminalPane('pane-2'),
+          },
+        ],
+      };
+      service.registerPane('%2', 'win-1', 'pane-2');
+
+      const windowIdResponse = await service.executeCommand({
+        argv: ['display-message', '-t', '%1', '-p', '#{window_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      const response = await service.executeCommand({
+        argv: ['list-panes', '-t', windowIdResponse.stdout.trim(), '-F', '#{pane_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      expect(response.exitCode).toBe(0);
+      expect(response.stdout).toContain('%1');
+      expect(response.stdout).not.toContain('%2');
+    });
+
+    it('teams scope 建立后 list-panes 不应包含外部 terminal sibling', async () => {
+      const { service, store } = createService();
+
+      store.getState().windows[0].layout = {
+        type: 'split',
+        direction: 'horizontal',
+        sizes: [0.5, 0.5],
+        children: [
+          {
+            type: 'pane',
+            id: 'pane-1',
+            pane: createTerminalPane('pane-1'),
+          },
+          {
+            type: 'pane',
+            id: 'pane-2',
+            pane: createTerminalPane('pane-2'),
+          },
+        ],
+      };
+      service.registerPane('%2', 'win-1', 'pane-2');
+
+      const splitResponse = await service.executeCommand({
+        argv: ['split-window', '-h', '-l', '70%', '-P', '-F', '#{pane_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+      expect(splitResponse.exitCode).toBe(0);
+      const newTmuxPaneId = splitResponse.stdout.trim();
+
+      const windowIdResponse = await service.executeCommand({
+        argv: ['display-message', '-t', '%1', '-p', '#{window_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      const response = await service.executeCommand({
+        argv: ['list-panes', '-t', windowIdResponse.stdout.trim(), '-F', '#{pane_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      expect(response.exitCode).toBe(0);
+      expect(response.stdout).toContain('%1');
+      expect(response.stdout).toContain(newTmuxPaneId);
+      expect(response.stdout).not.toContain('%2');
+    });
   });
 
   describe('split-window', () => {
@@ -380,6 +467,77 @@ describe('TmuxCompatService', () => {
         },
       });
       expect(window.layout.children[0].type).toBe('split');
+    });
+
+    it('从当前 terminal pane 启动 teams 时只重排该 pane 子树，保留 terminal sibling', async () => {
+      const { service, store } = createService();
+
+      store.getState().windows[0].layout = {
+        type: 'split',
+        direction: 'horizontal',
+        sizes: [0.5, 0.5],
+        children: [
+          {
+            type: 'pane',
+            id: 'pane-1',
+            pane: createTerminalPane('pane-1'),
+          },
+          {
+            type: 'pane',
+            id: 'pane-2',
+            pane: createTerminalPane('pane-2'),
+          },
+        ],
+      };
+      service.registerPane('%2', 'win-1', 'pane-2');
+
+      const splitResponse = await service.executeCommand({
+        argv: ['split-window', '-h', '-l', '70%', '-P', '-F', '#{pane_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      expect(splitResponse.exitCode).toBe(0);
+      const newTmuxPaneId = splitResponse.stdout.trim();
+      const resolvedNewPane = service.resolvePaneId(newTmuxPaneId);
+      expect(resolvedNewPane).not.toBeNull();
+
+      const response = await service.executeCommand({
+        argv: ['select-layout', 'main-vertical'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      expect(response.exitCode).toBe(0);
+
+      const window = store.getState().windows[0];
+      expect(window.layout.type).toBe('split');
+      if (window.layout.type !== 'split') {
+        throw new Error('expected root split layout');
+      }
+
+      expect(window.layout.direction).toBe('horizontal');
+      expect(window.layout.children[1]).toMatchObject({
+        type: 'pane',
+        id: 'pane-2',
+        pane: {
+          id: 'pane-2',
+        },
+      });
+
+      expect(window.layout.children[0].type).toBe('split');
+      if (window.layout.children[0].type !== 'split') {
+        throw new Error('expected left subtree split layout');
+      }
+
+      const scopedIds = window.layout.children[0].children.flatMap((child) => (
+        child.type === 'pane'
+          ? [child.id]
+          : child.children.map((nestedChild) => nestedChild.id)
+      ));
+      expect(scopedIds).toContain('pane-1');
+      expect(scopedIds).toContain(resolvedNewPane!.paneId);
+      expect(scopedIds).not.toContain('pane-2');
     });
   });
 

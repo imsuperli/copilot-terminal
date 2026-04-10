@@ -1188,6 +1188,37 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     return this.findPane(windowId, resolved.paneId)?.tmuxScopeId;
   }
 
+  private getScopedLayoutMatchForRequest(
+    window: Window,
+    request: TmuxCommandRequest,
+    explicitPaneId?: string,
+  ): TmuxScopedLayoutMatch | null {
+    const scopeId = this.getScopeIdForWindowRequest(window.id, request, explicitPaneId);
+    if (scopeId) {
+      return this.findScopedLayoutMatch(window.layout, (pane) => pane.tmuxScopeId === scopeId);
+    }
+
+    const fallbackPaneId = explicitPaneId ?? (() => {
+      const requestTmuxPaneId = this.getRequestTmuxPaneId(request);
+      if (!requestTmuxPaneId) {
+        return undefined;
+      }
+
+      const resolved = this.resolvePaneTarget(requestTmuxPaneId, request);
+      if (!resolved?.paneId || resolved.windowId !== window.id) {
+        return undefined;
+      }
+
+      return resolved.paneId;
+    })();
+
+    if (!fallbackPaneId) {
+      return null;
+    }
+
+    return this.findScopedLayoutMatch(window.layout, (pane) => pane.id === fallbackPaneId);
+  }
+
   private collapseTmuxScopesInWindow(window: Window): { changed: boolean; affectedPaneIds: string[] } {
     let nextLayout = window.layout;
     let nextActivePaneId = window.activePaneId;
@@ -1759,6 +1790,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       // 缂傚倸鍊烽懗鍫曟惞鎼淬劌鐭楅幖娣妼缁愭鏌″搴″箺闁稿鏅涜灃闁挎繂鎳庨弳鐐烘煕鎼粹€愁劉闁靛洤瀚板顕€宕掑☉娆戝涧闂?window
 
       let windowId: string | undefined;
+      let targetPaneId: string | undefined;
 
       if (options.target) {
         const targetInfo = TmuxCommandParser.parseTarget(options.target);
@@ -1774,6 +1806,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
           const resolved = this.resolvePaneTarget(targetInfo.paneId, request);
           if (resolved) {
             windowId = resolved.windowId;
+            targetPaneId = resolved.paneId;
           }
         }
       } else {
@@ -1793,9 +1826,28 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       }
 
       // 闂傚倸鍊风粈渚€宕ョ€ｎ喖纾块柟鎯版鎼村﹪鏌ら懝鎵牚濞?window 闂傚倸鍊烽悞锕傛儑瑜版帒绀夌€光偓閳ь剟鍩€椤掍礁鍤柛妯圭矙瀵尙鎹勬笟顖氭倯婵犮垼娉涢敃銈夋偟?panes
+      const window = this.getWindowById(windowId);
+      if (!window) {
+        return {
+          exitCode: 1,
+          stdout: '',
+          stderr: 'tmux: can\'t find window\n',
+        };
+      }
 
-      const panes = this.getAllTerminalPanes(windowId);
+      const scopedMatch = this.getScopedLayoutMatchForRequest(window, request, targetPaneId);
+      const panes = scopedMatch
+        ? scopedMatch.panes.filter((pane) => isTerminalPane(pane))
+        : this.getAllTerminalPanes(windowId);
       const output: string[] = [];
+
+      this.debugLog(request, 'list-panes resolved panes', {
+        target: options.target,
+        windowId,
+        targetPaneId,
+        scopedPath: scopedMatch?.path,
+        paneIds: panes.map((pane) => pane.id),
+      });
 
       for (const pane of panes) {
         // 闂傚倸鍊风粈渚€骞栭銈嗗仏妞ゆ劧绠戠壕鍧楁煕濞嗗浚妲洪柣?tmux pane ID
@@ -1912,6 +1964,17 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       if (options.percentage) {
         sizeRatio = options.percentage / 100;
       }
+
+      this.debugLog(request, 'split-window resolved target', {
+        target: options.target,
+        windowId,
+        targetPaneId,
+        fallbackPaneId: fallbackPane?.id,
+        sourcePaneId: sourcePane?.id,
+        tmuxScopeId,
+        direction,
+        sizeRatio,
+      });
 
       // 闂傚倸鍊风粈渚€骞栭鈷氭椽濡舵径瀣槐闂侀潧艌閺呮盯鎷?layout 闂?
 
@@ -2111,11 +2174,18 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       // 闂傚倷绀佸﹢閬嶅储瑜旈幃娲Ω閵夘喗缍庢繝鐢靛У閼归箖寮告笟鈧弻鏇㈠醇濠靛洤顦╅梺鍝勬缁捇寮诲☉銏犵疀闁宠桨绀侀‖瀣攽閻橆偄浜?
 
       const scopeId = this.getScopeIdForWindowRequest(windowId, request, targetPaneId);
+      this.debugLog(request, 'select-layout scope resolution', {
+        layout: options.layout,
+        windowId,
+        targetPaneId,
+        requestPaneId: request.paneId,
+        scopeId,
+      });
 
       if (options.layout === 'main-vertical') {
-        this.applyMainVerticalLayout(windowId, scopeId);
+        this.applyMainVerticalLayout(windowId, request, targetPaneId, scopeId);
       } else if (options.layout === 'tiled') {
-        this.applyTiledLayout(windowId, scopeId);
+        this.applyTiledLayout(windowId, request, targetPaneId, scopeId);
       }
 
       this.emitWindowSynced(windowId);
@@ -2136,7 +2206,12 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
   /**
    * 闂傚倷绀佸﹢閬嶅储瑜旈幃娲Ω閵夘喗缍庢繝鐢靛У閼归箖寮?main-vertical 闂傚倷鐒﹂惇褰掑春閸曨垰鍨傚ù鍏兼綑閻ゎ喗銇勯幇鍫曟闁稿孩鍨堕妵鍕箳閹存繍浠鹃梺鍝勬媼閸撶喖寮诲☉銏╂晝闁挎繂娲ㄩ悾杈╃磽?30% leader闂傚倸鍊烽悞锔锯偓绗涘懐鐭欓柟杈鹃檮閸ゆ劖銇勯弽銊х細濞?70% teammates闂?   */
-  private applyMainVerticalLayout(windowId: string, scopeId?: string): void {
+  private applyMainVerticalLayout(
+    windowId: string,
+    request: TmuxCommandRequest,
+    explicitPaneId?: string,
+    scopeId?: string,
+  ): void {
     this.config.updateWindowStore((state: any) => {
       const window = state.windows.find((w: Window) => w.id === windowId);
       if (!window) {
@@ -2145,7 +2220,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
       const scopedMatch = scopeId
         ? this.findScopedLayoutMatch(window.layout, (pane) => pane.tmuxScopeId === scopeId)
-        : null;
+        : this.getScopedLayoutMatchForRequest(window, request, explicitPaneId);
       const panes = scopedMatch
         ? scopedMatch.panes
         : this.getAllPanesFromLayout(window.layout).filter((pane) => isTerminalPane(pane));
@@ -2162,7 +2237,12 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
   /**
    * 闂傚倷绀佸﹢閬嶅储瑜旈幃娲Ω閵夘喗缍庢繝鐢靛У閼归箖寮?tiled 闂傚倷鐒﹂惇褰掑春閸曨垰鍨傚ù鍏兼綑閻ゎ喗銇勯幇鍫曟闁稿孩鍨堕妵鍕箳閹存繍浠鹃梺鍝勬媼閸撶喖寮诲☉銏╂晝闁挎繂娲ㄩ悿鍕⒑閻熸澘顥忛柛鎾跺枎椤繐煤椤忓嫮顦悷婊冪Ч瀹曟繄鈧綆浜堕悢鍡欐喐瀹ュ洨鐭撻柣鐔煎亰閸?panes闂?   */
-  private applyTiledLayout(windowId: string, scopeId?: string): void {
+  private applyTiledLayout(
+    windowId: string,
+    request: TmuxCommandRequest,
+    explicitPaneId?: string,
+    scopeId?: string,
+  ): void {
     this.config.updateWindowStore((state: any) => {
       const window = state.windows.find((w: Window) => w.id === windowId);
       if (!window) {
@@ -2171,7 +2251,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
       const scopedMatch = scopeId
         ? this.findScopedLayoutMatch(window.layout, (pane) => pane.tmuxScopeId === scopeId)
-        : null;
+        : this.getScopedLayoutMatchForRequest(window, request, explicitPaneId);
       const panes = scopedMatch
         ? scopedMatch.panes
         : this.getAllPanesFromLayout(window.layout).filter((pane) => isTerminalPane(pane));
