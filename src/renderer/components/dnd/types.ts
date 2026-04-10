@@ -49,10 +49,32 @@ export interface BrowserPaneDragItem {
   url: string;
 }
 
+export interface NativeBrowserUrlDragItem {
+  urls: string[];
+  dataTransfer?: DataTransfer;
+}
+
+export type BrowserDropDragItem =
+  | BrowserToolDragItem
+  | BrowserPaneDragItem
+  | NativeBrowserUrlDragItem;
+
+export function isBrowserToolDragItem(item: BrowserDropDragItem): item is BrowserToolDragItem {
+  return 'type' in item && item.type === DragItemTypes.BROWSER_TOOL;
+}
+
+export function isBrowserPaneDragItem(item: BrowserDropDragItem): item is BrowserPaneDragItem {
+  return 'type' in item && item.type === DragItemTypes.BROWSER_PANE;
+}
+
+export function isNativeBrowserUrlDragItem(item: BrowserDropDragItem): item is NativeBrowserUrlDragItem {
+  return !('type' in item) && Array.isArray((item as NativeBrowserUrlDragItem).urls);
+}
+
 /** DropZone 放置位置（用于确定分割方向） */
 export type DropPosition = 'left' | 'right' | 'top' | 'bottom' | 'center';
 
-export type PaneDropPosition = Exclude<DropPosition, 'center'>;
+export type PaneDropPosition = DropPosition;
 
 /** DropZone 放置结果 */
 export interface DropResult {

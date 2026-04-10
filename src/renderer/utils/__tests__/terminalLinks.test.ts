@@ -108,4 +108,67 @@ describe('terminalLinks', () => {
     document.removeEventListener('mouseup', documentMouseUpListener);
     element.remove();
   });
+
+  it('emits hover and leave callbacks for detected terminal URLs', () => {
+    const terminal = createMockTerminal(40, [
+      { text: 'visit https://example.com/docs' },
+    ]);
+    const onHover = vi.fn();
+    const onLeave = vi.fn();
+    const provider = createTerminalWebLinkProvider(terminal, vi.fn(), { onHover, onLeave });
+    const callback = vi.fn();
+
+    provider.provideLinks(1, callback);
+
+    const link = callback.mock.calls[0]?.[0]?.[0];
+    expect(link).toBeDefined();
+
+    const hoverEvent = new MouseEvent('mousemove');
+    link.hover?.(hoverEvent, link.text);
+    link.leave?.(hoverEvent, link.text);
+
+    expect(onHover).toHaveBeenCalledWith({
+      event: hoverEvent,
+      text: 'https://example.com/docs',
+      range: {
+        start: { x: 7, y: 1 },
+        end: { x: 30, y: 1 },
+      },
+    });
+    expect(onLeave).toHaveBeenCalledWith({
+      event: hoverEvent,
+      text: 'https://example.com/docs',
+      range: {
+        start: { x: 7, y: 1 },
+        end: { x: 30, y: 1 },
+      },
+    });
+  });
+
+  it('sanitizes hovered OSC8/http links before surfacing drag interactions', () => {
+    const onHover = vi.fn();
+    const onLeave = vi.fn();
+    const handler = createTerminalLinkHandler(vi.fn(), { onHover, onLeave });
+    const event = new MouseEvent('mousemove');
+    const range = {
+      start: { x: 1, y: 2 },
+      end: { x: 10, y: 2 },
+    };
+
+    handler.hover?.(event, 'https://example.com/docs).', range);
+    handler.leave?.(event, 'https://example.com/docs).', range);
+    handler.hover?.(event, 'file:///etc/hosts', range);
+
+    expect(onHover).toHaveBeenCalledTimes(1);
+    expect(onHover).toHaveBeenCalledWith({
+      event,
+      text: 'https://example.com/docs',
+      range,
+    });
+    expect(onLeave).toHaveBeenCalledWith({
+      event,
+      text: 'https://example.com/docs',
+      range,
+    });
+  });
 });

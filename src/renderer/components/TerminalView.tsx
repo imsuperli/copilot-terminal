@@ -17,7 +17,7 @@ import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
 import { useI18n } from '../i18n';
 import { DragItemTypes, DropZone } from './dnd';
-import type { BrowserPaneDragItem, BrowserToolDragItem, PaneDropResult, WindowCardDragItem, DropResult } from './dnd';
+import type { BrowserDropDragItem, BrowserToolDragItem, PaneDropResult, WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
@@ -44,6 +44,7 @@ import {
   DEFAULT_BROWSER_URL,
   getSmartBrowserSplitDirection,
 } from '../utils/browserPane';
+import { resolveBrowserDropAction } from '../utils/browserDrop';
 import {
   applyWindowStartResult,
   createWindowDraftFromSourcePane,
@@ -487,41 +488,49 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   }, [previewBrowserTool]);
 
   const handleBrowserPaneDrop = useCallback((
-    item: BrowserPaneDragItem | BrowserToolDragItem,
+    item: BrowserDropDragItem,
     result: PaneDropResult,
   ) => {
-    const direction = (result.position === 'left' || result.position === 'right')
-      ? 'horizontal'
-      : 'vertical';
-    const insertBefore = result.position === 'left' || result.position === 'top';
+    const targetPane = useWindowStore.getState().getPaneById(terminalWindow.id, result.targetPaneId);
+    const action = resolveBrowserDropAction(item, result, targetPane, terminalWindow.id);
 
-    if (item.type === DragItemTypes.BROWSER_TOOL) {
+    if (action.type === 'none') {
+      return;
+    }
+
+    if (action.type === 'open-in-browser-pane') {
+      updatePane(terminalWindow.id, action.targetPaneId, {
+        browser: {
+          url: action.url,
+        },
+      });
+      setActivePane(terminalWindow.id, action.targetPaneId);
+      return;
+    }
+
+    if (action.type === 'create-browser-pane') {
       const newPaneId = uuidv4();
-      const newPane = createBrowserPaneDraft(newPaneId, item.url || DEFAULT_BROWSER_URL);
+      const newPane = createBrowserPaneDraft(newPaneId, action.url);
       placePaneInWindow(
         terminalWindow.id,
-        result.targetPaneId,
-        direction,
+        action.targetPaneId,
+        action.direction,
         newPane,
-        insertBefore,
+        action.insertBefore,
       );
       setActivePane(terminalWindow.id, newPaneId);
       return;
     }
 
-    if (item.windowId !== terminalWindow.id) {
-      return;
-    }
-
     movePaneInWindow(
       terminalWindow.id,
-      item.paneId,
-      result.targetPaneId,
-      direction,
-      insertBefore,
+      action.paneId,
+      action.targetPaneId,
+      action.direction,
+      action.insertBefore,
     );
-    setActivePane(terminalWindow.id, item.paneId);
-  }, [movePaneInWindow, placePaneInWindow, setActivePane, terminalWindow.id]);
+    setActivePane(terminalWindow.id, action.paneId);
+  }, [movePaneInWindow, placePaneInWindow, setActivePane, terminalWindow.id, updatePane]);
 
   // 澶勭悊鎵撳紑鏂囦欢澶?
   const handleOpenFolder = useCallback(async () => {

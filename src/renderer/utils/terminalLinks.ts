@@ -1,5 +1,6 @@
 import type {
   IBufferCellPosition,
+  IBufferRange,
   IDisposable,
   ILink,
   ILinkHandler,
@@ -8,6 +9,17 @@ import type {
 } from '@xterm/xterm';
 
 export type ExternalUrlOpener = (url: string) => Promise<unknown> | unknown;
+
+export interface TerminalLinkInteractionPayload {
+  event: MouseEvent;
+  text: string;
+  range: IBufferRange;
+}
+
+export interface TerminalLinkInteractionHandlers {
+  onHover?: (payload: TerminalLinkInteractionPayload) => void;
+  onLeave?: (payload: TerminalLinkInteractionPayload) => void;
+}
 
 type TerminalBufferLike = Pick<Terminal, 'buffer' | 'cols'>;
 
@@ -194,9 +206,12 @@ function createLink(
   start: IBufferCellPosition,
   end: IBufferCellPosition,
   openExternalUrl: ExternalUrlOpener,
+  interactionHandlers?: TerminalLinkInteractionHandlers,
 ): ILink {
+  const range = { start, end };
+
   return {
-    range: { start, end },
+    range,
     text: displayText,
     decorations: {
       pointerCursor: true,
@@ -205,12 +220,27 @@ function createLink(
     activate: (event, text) => {
       void openTerminalHttpUrl(text, openExternalUrl, event);
     },
+    hover: (event, text) => {
+      interactionHandlers?.onHover?.({
+        event,
+        text,
+        range,
+      });
+    },
+    leave: (event, text) => {
+      interactionHandlers?.onLeave?.({
+        event,
+        text,
+        range,
+      });
+    },
   };
 }
 
 export function createTerminalWebLinkProvider(
   terminal: TerminalBufferLike,
   openExternalUrl: ExternalUrlOpener,
+  interactionHandlers?: TerminalLinkInteractionHandlers,
 ): ILinkProvider {
   return {
     provideLinks(bufferLineNumber, callback) {
@@ -243,7 +273,7 @@ export function createTerminalWebLinkProvider(
           continue;
         }
 
-        links.push(createLink(displayText, start, end, openExternalUrl));
+        links.push(createLink(displayText, start, end, openExternalUrl, interactionHandlers));
       }
 
       callback(links.length > 0 ? links : undefined);
@@ -251,10 +281,37 @@ export function createTerminalWebLinkProvider(
   };
 }
 
-export function createTerminalLinkHandler(openExternalUrl: ExternalUrlOpener): ILinkHandler {
+export function createTerminalLinkHandler(
+  openExternalUrl: ExternalUrlOpener,
+  interactionHandlers?: TerminalLinkInteractionHandlers,
+): ILinkHandler {
   return {
     activate: (event, text) => {
       void openTerminalHttpUrl(text, openExternalUrl, event);
+    },
+    hover: (event, text, range) => {
+      const sanitizedUrl = sanitizeTerminalHttpUrl(text);
+      if (!sanitizedUrl) {
+        return;
+      }
+
+      interactionHandlers?.onHover?.({
+        event,
+        text: sanitizedUrl,
+        range,
+      });
+    },
+    leave: (event, text, range) => {
+      const sanitizedUrl = sanitizeTerminalHttpUrl(text);
+      if (!sanitizedUrl) {
+        return;
+      }
+
+      interactionHandlers?.onLeave?.({
+        event,
+        text: sanitizedUrl,
+        range,
+      });
     },
     allowNonHttpProtocols: false,
   };
@@ -263,6 +320,9 @@ export function createTerminalLinkHandler(openExternalUrl: ExternalUrlOpener): I
 export function registerTerminalWebLinks(
   terminal: Terminal,
   openExternalUrl: ExternalUrlOpener,
+  interactionHandlers?: TerminalLinkInteractionHandlers,
 ): IDisposable {
-  return terminal.registerLinkProvider(createTerminalWebLinkProvider(terminal, openExternalUrl));
+  return terminal.registerLinkProvider(
+    createTerminalWebLinkProvider(terminal, openExternalUrl, interactionHandlers),
+  );
 }

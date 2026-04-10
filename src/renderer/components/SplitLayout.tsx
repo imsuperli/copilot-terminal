@@ -10,7 +10,7 @@ import { useWindowStore } from '../stores/windowStore';
 import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
 import { DEFAULT_BROWSER_URL } from '../utils/browserPane';
 import { DragItemTypes, PaneDropZone } from './dnd';
-import type { BrowserPaneDragItem, BrowserToolDragItem, PaneDropResult } from './dnd';
+import type { BrowserDropDragItem, BrowserPaneDragItem, BrowserToolDragItem, PaneDropResult } from './dnd';
 
 export interface SplitLayoutProps {
   windowId: string;
@@ -20,7 +20,7 @@ export interface SplitLayoutProps {
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
   onPaneExit?: (paneId: string) => void;
-  onBrowserPaneDrop?: (item: BrowserPaneDragItem | BrowserToolDragItem, result: PaneDropResult) => void;
+  onBrowserPaneDrop?: (item: BrowserDropDragItem, result: PaneDropResult) => void;
 }
 
 /**
@@ -93,7 +93,7 @@ interface SplitContainerProps {
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
   onPaneExit?: (paneId: string) => void;
-  onBrowserPaneDrop?: (item: BrowserPaneDragItem | BrowserToolDragItem, result: PaneDropResult) => void;
+  onBrowserPaneDrop?: (item: BrowserDropDragItem, result: PaneDropResult) => void;
   onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
 
@@ -254,7 +254,7 @@ interface LayoutNodeRendererProps {
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
   onPaneExit?: (paneId: string) => void;
-  onBrowserPaneDrop?: (item: BrowserPaneDragItem | BrowserToolDragItem, result: PaneDropResult) => void;
+  onBrowserPaneDrop?: (item: BrowserDropDragItem, result: PaneDropResult) => void;
   onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
 
@@ -348,6 +348,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
       <PaneDropZone
         targetWindowId={windowId}
         targetPaneId={layout.id}
+        targetPaneKind={isBrowserPane(layout.pane) ? 'browser' : 'terminal'}
         onDrop={onBrowserPaneDrop}
       >
         {paneContent}

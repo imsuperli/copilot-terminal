@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '../utils/xtermAddonFit';
-import { X } from 'lucide-react';
+import { GripVertical, X } from 'lucide-react';
 import { Pane, WindowStatus } from '../types/window';
 import { StatusDot } from './StatusDot';
 import { useI18n } from '../i18n';
@@ -10,7 +10,11 @@ import type { PtyDataPayload, PtyHistorySnapshot } from '../../shared/types/elec
 import { ensureTerminalFontsLoaded, TERMINAL_FONT_FAMILY } from '../utils/terminalFonts';
 import { onTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { installTerminalImeFix, type ImeCompositionState } from '../utils/terminalImeFix';
-import { createTerminalLinkHandler, registerTerminalWebLinks } from '../utils/terminalLinks';
+import {
+  createTerminalLinkHandler,
+  registerTerminalWebLinks,
+  type TerminalLinkInteractionPayload,
+} from '../utils/terminalLinks';
 import { AppTooltip } from './ui/AppTooltip';
 import { useWindowStore } from '../stores/windowStore';
 import {
@@ -158,6 +162,73 @@ function stripReplayDeviceAttributeQueries(data: string): string {
   return data.replace(/\x1b\[(?:[>=])?c/g, '');
 }
 
+interface TerminalLinkDragOverlayState {
+  url: string;
+  left: number;
+  top: number;
+}
+
+interface TerminalLinkDragOverlayProps {
+  url: string;
+  label: string;
+  left: number;
+  top: number;
+  isDragging: boolean;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onDragStateChange: (isDragging: boolean) => void;
+}
+
+const TerminalLinkDragOverlay: React.FC<TerminalLinkDragOverlayProps> = ({
+  url,
+  label,
+  left,
+  top,
+  isDragging,
+  onMouseEnter,
+  onMouseLeave,
+  onDragStateChange,
+}) => (
+  <div
+    className="xterm-hover absolute z-30"
+    style={{
+      left,
+      top,
+      opacity: isDragging ? 0.72 : 1,
+    }}
+    onMouseEnter={onMouseEnter}
+    onMouseLeave={onMouseLeave}
+  >
+    <button
+      type="button"
+      draggable
+      aria-label={label}
+      title={url}
+      className="flex max-w-[260px] items-center gap-2 rounded-full border border-sky-400/45 bg-zinc-950/96 px-2.5 py-1 text-[11px] text-sky-100 shadow-[0_8px_24px_rgba(2,6,23,0.45)] backdrop-blur cursor-grab active:cursor-grabbing"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onMouseDown={(event) => {
+        event.stopPropagation();
+      }}
+      onDragStart={(event) => {
+        event.stopPropagation();
+        event.dataTransfer.effectAllowed = 'copy';
+        event.dataTransfer.setData('text/uri-list', url);
+        event.dataTransfer.setData('text/plain', url);
+        onDragStateChange(true);
+      }}
+      onDragEnd={() => {
+        onDragStateChange(false);
+      }}
+    >
+      <GripVertical size={12} className="shrink-0 text-sky-300" />
+      <span className="truncate">{url}</span>
+    </button>
+  </div>
+);
+
 export interface TerminalPaneProps {
   windowId: string;
   pane: Pane;
@@ -182,6 +253,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   onProcessExit,
 }) => {
   const { t } = useI18n();
+  const paneRootRef = useRef<HTMLDivElement>(null);
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -208,7 +280,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const replayHistoryRef = useRef<((options?: { resetTerminal?: boolean }) => Promise<void>) | null>(null);
   const imeCompositionStateRef = useRef<ImeCompositionState>({ isComposing: false });
   const sshCwdTrackerRef = useRef(createSSHCwdTrackerState(pane.cwd));
+  const linkDragOverlayHideTimerRef = useRef<number | null>(null);
+  const isLinkDragOverlayHoveredRef = useRef(false);
+  const isLinkDragActiveRef = useRef(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [linkDragOverlay, setLinkDragOverlay] = useState<TerminalLinkDragOverlayState | null>(null);
+  const [isLinkDragActive, setIsLinkDragActive] = useState(false);
   const updatePane = useWindowStore((state) => state.updatePane);
 
   // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
@@ -318,6 +395,91 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     }
   }, []);
 
+  const clearLinkDragOverlayHideTimer = useCallback(() => {
+    if (linkDragOverlayHideTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(linkDragOverlayHideTimerRef.current);
+    linkDragOverlayHideTimerRef.current = null;
+  }, []);
+
+  const hideLinkDragOverlay = useCallback(() => {
+    if (isLinkDragActiveRef.current || isLinkDragOverlayHoveredRef.current) {
+      return;
+    }
+
+    setLinkDragOverlay(null);
+  }, []);
+
+  const scheduleLinkDragOverlayHide = useCallback(() => {
+    clearLinkDragOverlayHideTimer();
+    linkDragOverlayHideTimerRef.current = window.setTimeout(() => {
+      linkDragOverlayHideTimerRef.current = null;
+      hideLinkDragOverlay();
+    }, 90);
+  }, [clearLinkDragOverlayHideTimer, hideLinkDragOverlay]);
+
+  const updateLinkDragOverlay = useCallback((payload: TerminalLinkInteractionPayload) => {
+    const root = paneRootRef.current;
+    const sanitizedUrl = payload.text.trim();
+    if (!root || !sanitizedUrl) {
+      return;
+    }
+
+    clearLinkDragOverlayHideTimer();
+
+    const rootRect = root.getBoundingClientRect();
+    const overlayWidth = Math.min(260, Math.max(168, rootRect.width - 24));
+    const overlayHeight = 32;
+    const left = Math.min(
+      Math.max(payload.event.clientX - rootRect.left + 12, 8),
+      Math.max(rootRect.width - overlayWidth - 8, 8),
+    );
+    const top = Math.min(
+      Math.max(payload.event.clientY - rootRect.top - overlayHeight - 6, 8),
+      Math.max(rootRect.height - overlayHeight - 8, 8),
+    );
+
+    setLinkDragOverlay({
+      url: sanitizedUrl,
+      left,
+      top,
+    });
+  }, [clearLinkDragOverlayHideTimer]);
+
+  const handleTerminalLinkHover = useCallback((payload: TerminalLinkInteractionPayload) => {
+    updateLinkDragOverlay(payload);
+  }, [updateLinkDragOverlay]);
+
+  const handleTerminalLinkLeave = useCallback(() => {
+    scheduleLinkDragOverlayHide();
+  }, [scheduleLinkDragOverlayHide]);
+
+  const handleLinkDragOverlayMouseEnter = useCallback(() => {
+    isLinkDragOverlayHoveredRef.current = true;
+    clearLinkDragOverlayHideTimer();
+  }, [clearLinkDragOverlayHideTimer]);
+
+  const handleLinkDragOverlayMouseLeave = useCallback(() => {
+    isLinkDragOverlayHoveredRef.current = false;
+    scheduleLinkDragOverlayHide();
+  }, [scheduleLinkDragOverlayHide]);
+
+  const handleLinkDragOverlayStateChange = useCallback((dragging: boolean) => {
+    isLinkDragActiveRef.current = dragging;
+    setIsLinkDragActive(dragging);
+
+    if (dragging) {
+      clearLinkDragOverlayHideTimer();
+      return;
+    }
+
+    if (!isLinkDragOverlayHoveredRef.current) {
+      setLinkDragOverlay(null);
+    }
+  }, [clearLinkDragOverlayHideTimer]);
+
   // 更新 isActive ref
   useEffect(() => {
     isActiveRef.current = isActive;
@@ -326,6 +488,32 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   useEffect(() => {
     onActivateRef.current = onActivate;
   }, [onActivate]);
+
+  useEffect(() => {
+    return () => {
+      clearLinkDragOverlayHideTimer();
+    };
+  }, [clearLinkDragOverlayHideTimer]);
+
+  useEffect(() => {
+    setLinkDragOverlay(null);
+    setIsLinkDragActive(false);
+    isLinkDragOverlayHoveredRef.current = false;
+    isLinkDragActiveRef.current = false;
+    clearLinkDragOverlayHideTimer();
+  }, [clearLinkDragOverlayHideTimer, pane.id, windowId]);
+
+  useEffect(() => {
+    if (isActive && isWindowActive) {
+      return;
+    }
+
+    setLinkDragOverlay(null);
+    setIsLinkDragActive(false);
+    isLinkDragOverlayHoveredRef.current = false;
+    isLinkDragActiveRef.current = false;
+    clearLinkDragOverlayHideTimer();
+  }, [clearLinkDragOverlayHideTimer, isActive, isWindowActive]);
 
   useEffect(() => {
     const sessionKey = getReplaySessionKey(windowId, pane.id, pane.pid);
@@ -500,7 +688,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   useEffect(() => {
     if (!terminalContainerRef.current) return;
 
-    const terminalLinkHandler = createTerminalLinkHandler(openExternalUrl);
+    const terminalLinkHandler = createTerminalLinkHandler(openExternalUrl, {
+      onHover: handleTerminalLinkHover,
+      onLeave: handleTerminalLinkLeave,
+    });
     const terminal = new Terminal({
       cols: 80,
       rows: 30,
@@ -563,7 +754,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
-    const webLinkProviderDisposable = registerTerminalWebLinks(terminal, openExternalUrl);
+    const webLinkProviderDisposable = registerTerminalWebLinks(terminal, openExternalUrl, {
+      onHover: handleTerminalLinkHover,
+      onLeave: handleTerminalLinkLeave,
+    });
     terminal.open(terminalContainerRef.current);
     const pasteCaptureBlockMs = 300;
     const disposeImeFix = installTerminalImeFix(terminal, imeCompositionStateRef.current);
@@ -964,7 +1158,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [windowId, pane.id, openExternalUrl]); // 剪贴板与外链回调均已 useCallback 包裹，依赖稳定
+  }, [windowId, pane.id, openExternalUrl, handleTerminalLinkHover, handleTerminalLinkLeave]); // 依赖均已 useCallback 包裹，保持终端实例生命周期稳定
 
   useEffect(() => {
     const previousSession = lastSessionRef.current;
@@ -1014,6 +1208,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
   return (
     <div
+      ref={paneRootRef}
       className={`relative flex h-full min-h-0 min-w-0 flex-col bg-[#0f0f0f] ${
         isActive ? `ring-1 ${ringColor}` : ''
       }`}
@@ -1083,6 +1278,19 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
             <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
           )}
         </div>
+      )}
+
+      {linkDragOverlay && (
+        <TerminalLinkDragOverlay
+          url={linkDragOverlay.url}
+          label={t('terminalPane.dragLinkIntoBrowser')}
+          left={linkDragOverlay.left}
+          top={linkDragOverlay.top}
+          isDragging={isLinkDragActive}
+          onMouseEnter={handleLinkDragOverlayMouseEnter}
+          onMouseLeave={handleLinkDragOverlayMouseLeave}
+          onDragStateChange={handleLinkDragOverlayStateChange}
+        />
       )}
 
       {/* 终端容器 */}

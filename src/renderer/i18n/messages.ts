@@ -594,6 +594,7 @@ export const zhCNMessages = {
 
   'terminalPane.status': '窗格状态',
   'terminalPane.close': '关闭窗格',
+  'terminalPane.dragLinkIntoBrowser': '拖动链接到浏览器窗格',
   'browserPane.address': '浏览器地址栏',
   'browserPane.addressPlaceholder': '输入网址或搜索内容',
   'browserPane.back': '后退',
@@ -1211,6 +1212,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
 
   'terminalPane.status': 'Pane status',
   'terminalPane.close': 'Close pane',
+  'terminalPane.dragLinkIntoBrowser': 'Drag link into browser panes',
   'browserPane.address': 'Browser address bar',
   'browserPane.addressPlaceholder': 'Enter a URL or search query',
   'browserPane.back': 'Back',
