@@ -9,6 +9,7 @@ import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { formatRelativeTime, useI18n, TranslationParams, TranslationKey } from '../i18n';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
+import { getPathLeafLabel } from '../utils/pathDisplay';
 import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 
 interface QuickSwitcherItemProps {
@@ -104,16 +105,6 @@ function getSelectedBorderColor(status: WindowStatus, archived: boolean): string
 }
 
 /**
- * 获取文件夹名称（从完整路径中提取）
- */
-function getFolderName(cwd: string | undefined): string {
-  if (!cwd) return '';
-  const normalized = cwd.replace(/\\/g, '/');
-  const parts = normalized.split('/').filter(p => p.length > 0);
-  return parts[parts.length - 1] || cwd;
-}
-
-/**
  * 获取上下文信息
  */
 function getContextInfo(
@@ -168,7 +159,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   const borderColor = getSelectedBorderColor(aggregatedStatus, terminalWindow.archived || false);
   const contextInfo = getContextInfo(aggregatedStatus, terminalWindow.archived || false, lastOutput, t);
   const iconAnimation = aggregatedStatus === WindowStatus.Running ? 'animate-pulse' : '';
-  const folderName = getFolderName(workingDirectory);
+  const folderName = getPathLeafLabel(workingDirectory);
 
   // 格式化相对时间（移除"大约"）
   const relativeTime = useMemo(() => {

@@ -4,6 +4,7 @@ import { Window } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
 import { isTerminalPane } from '../../shared/utils/terminalCapabilities';
+import { getPathLeafLabel } from '../utils/pathDisplay';
 import { AppTooltip } from './ui/AppTooltip';
 
 interface RemoteWindowTabsProps {
@@ -20,6 +21,7 @@ interface RemoteWindowTabItem {
   id: string;
   name: string;
   primaryText: string;
+  tooltipText: string;
   isActive: boolean;
 }
 
@@ -42,12 +44,13 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
       const resolvedText = activePane?.ssh?.remoteCwd
         ?? activePane?.cwd
         ?? (activePane?.ssh ? `${activePane.ssh.user}@${activePane.ssh.host}` : '');
-      const primaryText = resolvedText || window.name;
+      const primaryText = getPathLeafLabel(resolvedText) || resolvedText || window.name;
 
       return {
         id: window.id,
         name: window.name,
         primaryText,
+        tooltipText: resolvedText || window.name,
         isActive: window.id === activeWindowId,
       };
     });
@@ -69,7 +72,7 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
                 } border-x border-zinc-700/80`}
               >
                 <AppTooltip
-                  content={window.primaryText}
+                  content={window.tooltipText}
                   delayDuration={250}
                 >
                   <button

@@ -273,7 +273,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.getByRole('button', { name: '管理 SSH 端口转发' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '新建远程终端' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
-    expect(screen.getByText('/srv/app')).toBeInTheDocument();
+    expect(screen.getByText('app')).toBeInTheDocument();
     expect(screen.queryByText('Prod SSH')).not.toBeInTheDocument();
   });
 
