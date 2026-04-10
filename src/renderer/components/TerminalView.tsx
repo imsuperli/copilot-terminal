@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -88,7 +88,7 @@ function SplitBrowserIcon() {
     <span className="relative inline-flex h-[14px] w-[14px] items-center justify-center">
       <Globe size={14} strokeWidth={1.8} />
       <span className="absolute -right-0.5 -top-0.5 flex h-[7px] w-[7px] items-center justify-center rounded-[2px] border border-current bg-zinc-900">
-        <span className="block h-[3px] w-[3px] border-r border-t border-current" />
+        <Plus size={5} strokeWidth={2.6} />
       </span>
     </span>
   );
