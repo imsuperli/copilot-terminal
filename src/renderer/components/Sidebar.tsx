@@ -268,11 +268,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Tooltip.Trigger asChild>
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
-                  className="w-8 h-8 flex items-center justify-center rounded border border-zinc-700 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 hover:border-zinc-600 transition-all duration-200"
+                  className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors duration-200"
                   aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
                 >
                   <SidebarToggleIcon
-                    size={16}
+                    size={18}
                     expanded={sidebarExpanded}
                     className="transition-all duration-200"
                   />

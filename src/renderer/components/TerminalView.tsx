@@ -89,10 +89,10 @@ function getAdjacentSSHWindowId(
 
 function SplitBrowserIcon() {
   return (
-    <span className="relative inline-flex h-[14px] w-[14px] items-center justify-center">
-      <Globe size={14} strokeWidth={1.8} />
-      <span className="absolute -right-0.5 -top-0.5 flex h-[7px] w-[7px] items-center justify-center rounded-[2px] border border-current bg-zinc-900">
-        <Plus size={5} strokeWidth={2.6} />
+    <span className="relative inline-flex h-[15px] w-[15px] items-center justify-center">
+      <Globe size={15} strokeWidth={1.8} />
+      <span className="absolute -right-1 -top-1 flex h-[7px] w-[7px] items-center justify-center text-current">
+        <Plus size={6} strokeWidth={2.6} />
       </span>
     </span>
   );
@@ -1026,7 +1026,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 aria-label={t('terminalView.splitBrowser')}
                 onClick={handleSplitBrowserPane}
                 ref={dragBrowserTool}
-                className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 text-zinc-100 transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-sky-500/30' : 'cursor-grab hover:bg-zinc-700 active:cursor-grabbing'}`}
+                className={`flex h-6 w-6 items-center justify-center rounded text-zinc-100 transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-sky-500/20 text-sky-100' : 'cursor-grab hover:bg-zinc-800/80 active:cursor-grabbing'}`}
               >
                 <SplitBrowserIcon />
               </button>
