@@ -13,6 +13,7 @@ const { fitAddonInstances } = vi.hoisted(() => ({
 vi.mock('@xterm/xterm', () => ({
   Terminal: vi.fn().mockImplementation(() => ({
     loadAddon: vi.fn(),
+    registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
     open: vi.fn(),
     focus: vi.fn(),
     blur: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('@xterm/xterm', () => ({
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
     attachCustomKeyEventHandler: vi.fn(),
+    options: {},
     cols: 120,
     rows: 40,
   })),

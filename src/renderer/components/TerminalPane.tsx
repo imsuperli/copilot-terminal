@@ -10,6 +10,7 @@ import type { PtyDataPayload, PtyHistorySnapshot } from '../../shared/types/elec
 import { ensureTerminalFontsLoaded, TERMINAL_FONT_FAMILY } from '../utils/terminalFonts';
 import { onTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { installTerminalImeFix, type ImeCompositionState } from '../utils/terminalImeFix';
+import { createTerminalLinkHandler, registerTerminalWebLinks } from '../utils/terminalLinks';
 import { AppTooltip } from './ui/AppTooltip';
 import { useWindowStore } from '../stores/windowStore';
 import {
@@ -301,6 +302,22 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     return '';
   }, []);
 
+  const openExternalUrl = useCallback(async (url: string) => {
+    if (!window.electronAPI?.openExternalUrl) {
+      return;
+    }
+
+    const response = await window.electronAPI.openExternalUrl(url);
+    if (
+      response &&
+      typeof response === 'object' &&
+      'success' in response &&
+      !(response as { success?: boolean }).success
+    ) {
+      throw new Error((response as { error?: string }).error || 'Failed to open external URL');
+    }
+  }, []);
+
   // 更新 isActive ref
   useEffect(() => {
     isActiveRef.current = isActive;
@@ -483,6 +500,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   useEffect(() => {
     if (!terminalContainerRef.current) return;
 
+    const terminalLinkHandler = createTerminalLinkHandler(openExternalUrl);
     const terminal = new Terminal({
       cols: 80,
       rows: 30,
@@ -522,6 +540,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       allowProposedApi: true,
       scrollOnUserInput: true,
       smoothScrollDuration: 0, // 禁用平滑滚动，减少晃动
+      linkHandler: terminalLinkHandler,
     });
 
     // 异步加载并应用字体设置
@@ -544,6 +563,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
+    const webLinkProviderDisposable = registerTerminalWebLinks(terminal, openExternalUrl);
     terminal.open(terminalContainerRef.current);
     const pasteCaptureBlockMs = 300;
     const disposeImeFix = installTerminalImeFix(terminal, imeCompositionStateRef.current);
@@ -938,12 +958,13 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       helperTextarea?.removeEventListener('paste', suppressNativePaste, true);
       terminalContainer?.removeEventListener('paste', suppressNativePaste as EventListener, true);
       terminalContainer?.removeEventListener('contextmenu', handleNativeContextMenu, true);
+      webLinkProviderDisposable.dispose();
 
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [windowId, pane.id]); // writeClipboardText 和 readClipboardText 已用 useCallback 包裹且依赖为空，引用稳定，无需作为依赖
+  }, [windowId, pane.id, openExternalUrl]); // 剪贴板与外链回调均已 useCallback 包裹，依赖稳定
 
   useEffect(() => {
     const previousSession = lastSessionRef.current;

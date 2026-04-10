@@ -8,6 +8,7 @@ import type { PtyDataPayload } from '../../../shared/types/electron-api';
 const { terminalInstances, ptyCallbacks, terminalDataCallbacks } = vi.hoisted(() => ({
   terminalInstances: [] as Array<{
     loadAddon: ReturnType<typeof vi.fn>;
+    registerLinkProvider: ReturnType<typeof vi.fn>;
     open: ReturnType<typeof vi.fn>;
     focus: ReturnType<typeof vi.fn>;
     blur: ReturnType<typeof vi.fn>;
@@ -19,6 +20,7 @@ const { terminalInstances, ptyCallbacks, terminalDataCallbacks } = vi.hoisted(()
     onData: ReturnType<typeof vi.fn>;
     onSelectionChange: ReturnType<typeof vi.fn>;
     attachCustomKeyEventHandler: ReturnType<typeof vi.fn>;
+    options: Record<string, unknown>;
     cols: number;
     rows: number;
   }>,
@@ -27,9 +29,10 @@ const { terminalInstances, ptyCallbacks, terminalDataCallbacks } = vi.hoisted(()
 }));
 
 vi.mock('@xterm/xterm', () => ({
-  Terminal: vi.fn().mockImplementation(() => {
+  Terminal: vi.fn().mockImplementation((options?: Record<string, unknown>) => {
     const instance = {
       loadAddon: vi.fn(),
+      registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
       open: vi.fn(),
       focus: vi.fn(),
       blur: vi.fn(),
@@ -51,6 +54,7 @@ vi.mock('@xterm/xterm', () => ({
       }),
       onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
       attachCustomKeyEventHandler: vi.fn(),
+      options: { ...(options ?? {}) },
       cols: 120,
       rows: 40,
     };
@@ -217,6 +221,38 @@ describe('TerminalPane history replay', () => {
       '\u001b[?1;2c',
       { source: 'xterm.onData' },
     );
+  });
+
+  it('registers terminal link handling and routes OSC 8 activation through electron', async () => {
+    render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances[0]?.registerLinkProvider).toHaveBeenCalledTimes(1);
+    });
+
+    const linkHandler = terminalInstances[0]?.options.linkHandler as {
+      activate: (event: MouseEvent, text: string) => void;
+    };
+
+    linkHandler.activate(new MouseEvent('mouseup'), 'https://example.com/docs');
+
+    await waitFor(() => {
+      expect(window.electronAPI.openExternalUrl).toHaveBeenCalledWith('https://example.com/docs');
+    });
   });
 
   it('routes right-click paste through xterm instead of direct pty writes', async () => {
