@@ -104,7 +104,9 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
   /** tmux 闂傚倸鍊风粈渚€骞夐敍鍕殰婵°倕鍟伴惌娆撴煙鐎电啸缁?pane 闂?PTY 闂傚倸鍊峰ù鍥ь浖閵娾晜鍤勯柤绋跨仛濞呯姵淇婇妶鍌氫壕闂佷紮绲介悘姘跺箯閸涘瓨鍊绘俊顖欒閳ь剚鐩娲濞戞氨鐤勯梺绋匡攻閻楃娀鏁?*/
   private paneSubscriptions: Map<string, () => void>;
   private paneStartupBarriers: Map<string, PaneStartupBarrier>;
+  private recentDeviceAttributesRequests: Map<string, number>;
   private readonly PANE_STARTUP_BARRIER_TIMEOUT_MS = 1200;
+  private readonly DEVICE_ATTRIBUTES_REQUEST_WINDOW_MS = 1500;
 
   constructor(config: TmuxCompatServiceConfig) {
     super();
@@ -120,6 +122,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     this.paneMetadata = new Map();
     this.paneSubscriptions = new Map();
     this.paneStartupBarriers = new Map();
+    this.recentDeviceAttributesRequests = new Map();
   }
 
   /**
@@ -319,6 +322,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     if (mapping) {
       const reverseKey = `${mapping.windowId}:${mapping.paneId}`;
       this.reversePaneIdMap.delete(reverseKey);
+      this.recentDeviceAttributesRequests.delete(mapping.paneId);
     }
     this.paneIdMap.delete(tmuxPaneId);
     this.paneMetadata.delete(tmuxPaneId);
@@ -563,6 +567,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     }
 
     this.clearPaneStartupBarrier(paneId, 'disposed');
+    this.recentDeviceAttributesRequests.delete(paneId);
     this.config.onPaneProcessStopped?.({ windowId, paneId, pid });
   }
 
@@ -757,12 +762,69 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     this.clearPaneStartupBarrier(paneId, 'renderer-da-reply');
   }
 
+  observePaneOutput(windowId: string, paneId: string, data: string): void {
+    if (!this.hasDeviceAttributesRequest(data)) {
+      return;
+    }
+
+    this.recordDeviceAttributesRequest(paneId);
+    this.debugLog(undefined, 'recorded live pane DA request', {
+      windowId,
+      paneId,
+    });
+  }
+
+  shouldForwardRendererInput(
+    windowId: string,
+    paneId: string | undefined,
+    data: string,
+    metadata?: PtyWriteMetadata,
+  ): boolean {
+    if (!paneId) {
+      return true;
+    }
+
+    if (metadata?.source !== 'xterm.onData' || !this.isPureDeviceAttributesResponse(data)) {
+      return true;
+    }
+
+    const now = Date.now();
+    const lastRequestAt = this.recentDeviceAttributesRequests.get(paneId);
+    if (lastRequestAt === undefined || (now - lastRequestAt) > this.DEVICE_ATTRIBUTES_REQUEST_WINDOW_MS) {
+      this.recentDeviceAttributesRequests.delete(paneId);
+      this.debugLog(undefined, 'suppressing stale renderer DA reply', {
+        windowId,
+        paneId,
+        source: metadata?.source,
+        ageMs: lastRequestAt === undefined ? null : now - lastRequestAt,
+      });
+      return false;
+    }
+
+    this.recentDeviceAttributesRequests.delete(paneId);
+    this.debugLog(undefined, 'forwarding renderer DA reply after live request', {
+      windowId,
+      paneId,
+      source: metadata?.source,
+      ageMs: now - lastRequestAt,
+    });
+    return true;
+  }
+
   private hasDeviceAttributesRequest(data: string): boolean {
     return data.includes('\x1b[c');
   }
 
   private hasDeviceAttributesResponse(data: string): boolean {
     return data.includes('\x1b[?1;2c');
+  }
+
+  private isPureDeviceAttributesResponse(data: string): boolean {
+    return data === '\x1b[?1;2c';
+  }
+
+  private recordDeviceAttributesRequest(paneId: string): void {
+    this.recentDeviceAttributesRequests.set(paneId, Date.now());
   }
 
   private hasVisibleTerminalOutput(data: string): boolean {

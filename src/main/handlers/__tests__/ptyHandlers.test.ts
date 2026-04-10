@@ -50,7 +50,7 @@ describe('registerPtyHandlers', () => {
     });
   });
 
-  it('forwards PTY writes to tmux compat so startup protocol replies can release send-keys barriers', async () => {
+  it('forwards PTY writes to tmux compat when protocol replies are current', async () => {
     const processManager = {
       getPidByPane: vi.fn().mockReturnValue(1234),
       listProcesses: vi.fn(),
@@ -59,6 +59,7 @@ describe('registerPtyHandlers', () => {
       getPtyHistory: vi.fn(),
     };
     const tmuxCompatService = {
+      shouldForwardRendererInput: vi.fn().mockReturnValue(true),
       notifyPaneInputWritten: vi.fn(),
     };
     const ctx = {
@@ -76,7 +77,50 @@ describe('registerPtyHandlers', () => {
       metadata: { source: 'xterm.onData' },
     }) as { success: boolean };
 
+    expect(tmuxCompatService.shouldForwardRendererInput).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '\u001b[?1;2c',
+      { source: 'xterm.onData' },
+    );
     expect(processManager.writeToPty).toHaveBeenCalledWith(1234, '\u001b[?1;2c');
+    expect(tmuxCompatService.notifyPaneInputWritten).toHaveBeenCalledWith(
+      'win-1',
+      'pane-1',
+      '\u001b[?1;2c',
+      { source: 'xterm.onData' },
+    );
+    expect(response).toEqual({ success: true, data: undefined });
+  });
+
+  it('suppresses stale renderer protocol replies while still notifying tmux compat', async () => {
+    const processManager = {
+      getPidByPane: vi.fn().mockReturnValue(1234),
+      listProcesses: vi.fn(),
+      writeToPty: vi.fn(),
+      resizePty: vi.fn(),
+      getPtyHistory: vi.fn(),
+    };
+    const tmuxCompatService = {
+      shouldForwardRendererInput: vi.fn().mockReturnValue(false),
+      notifyPaneInputWritten: vi.fn(),
+    };
+    const ctx = {
+      processManager,
+      tmuxCompatService,
+    } as unknown as HandlerContext;
+
+    registerPtyHandlers(ctx);
+    const writeHandler = getRegisteredHandler('pty-write');
+
+    const response = await writeHandler({}, {
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      data: '\u001b[?1;2c',
+      metadata: { source: 'xterm.onData' },
+    }) as { success: boolean };
+
+    expect(processManager.writeToPty).not.toHaveBeenCalled();
     expect(tmuxCompatService.notifyPaneInputWritten).toHaveBeenCalledWith(
       'win-1',
       'pane-1',

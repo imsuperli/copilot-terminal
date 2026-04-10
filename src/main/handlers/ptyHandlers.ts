@@ -41,7 +41,16 @@ export function registerPtyHandlers(ctx: HandlerContext) {
         pid = found.pid;
       }
 
-      processManager.writeToPty(pid, data);
+      const shouldForwardToPty = tmuxCompatService?.shouldForwardRendererInput(
+        windowId,
+        paneId,
+        data,
+        metadata,
+      ) ?? true;
+
+      if (shouldForwardToPty) {
+        processManager.writeToPty(pid, data);
+      }
       tmuxCompatService?.notifyPaneInputWritten(windowId, paneId, data, metadata);
       return successResponse();
     } catch (error) {

@@ -291,6 +291,9 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     // 绔嬪嵆寮€濮嬬紦瀛?PTY 杈撳嚭锛堝湪浠讳綍璁㈤槄涔嬪墠锛?
     const onDataDisposable = ptyProcess.onData((data: string) => {
+      if (this.tmuxCompatService && config.windowId && config.paneId) {
+        this.tmuxCompatService.observePaneOutput(config.windowId, config.paneId, data);
+      }
       const seq = this.appendPaneHistory(config.paneId, data);
       const buffer = this.ptyOutputBuffers.get(pid);
       if (buffer) {

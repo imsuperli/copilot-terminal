@@ -604,6 +604,40 @@ describe('TmuxCompatService', () => {
     });
   });
 
+  describe('renderer protocol replies', () => {
+    it('suppresses stale xterm DA replies when no live request was observed', () => {
+      const { service } = createService();
+
+      expect(
+        service.shouldForwardRendererInput('win-1', 'pane-1', '\u001b[?1;2c', { source: 'xterm.onData' }),
+      ).toBe(false);
+    });
+
+    it('allows xterm DA replies only after a recent live request and consumes the request window', () => {
+      const { service } = createService();
+
+      service.observePaneOutput('win-1', 'pane-1', '\u001b[c');
+
+      expect(
+        service.shouldForwardRendererInput('win-1', 'pane-1', '\u001b[?1;2c', { source: 'xterm.onData' }),
+      ).toBe(true);
+      expect(
+        service.shouldForwardRendererInput('win-1', 'pane-1', '\u001b[?1;2c', { source: 'xterm.onData' }),
+      ).toBe(false);
+    });
+
+    it('does not filter non-protocol renderer input', () => {
+      const { service } = createService();
+
+      expect(
+        service.shouldForwardRendererInput('win-1', 'pane-1', 'echo hello', { source: 'xterm.onData' }),
+      ).toBe(true);
+      expect(
+        service.shouldForwardRendererInput('win-1', 'pane-1', '\u001b[?1;2c', { source: 'clipboard-shortcut' }),
+      ).toBe(true);
+    });
+  });
+
   describe('kill-pane', () => {
     it('应终止 pane 进程并从 layout 中移除', async () => {
       const { service, processManager, store } = createService();

@@ -392,6 +392,21 @@ export interface ITmuxCompatService {
   getRpcSocketPath(windowId: string): string;
 
   /**
+   * 观察 pane 的实时 PTY 输出，用于跟踪终端协议请求。
+   */
+  observePaneOutput(windowId: string, paneId: string, data: string): void;
+
+  /**
+   * 判断 renderer 产生的输入是否应该继续写入 PTY。
+   */
+  shouldForwardRendererInput(
+    windowId: string,
+    paneId: string | undefined,
+    data: string,
+    metadata?: { source?: string },
+  ): boolean;
+
+  /**
    * 闂傚倸鍊风粈浣鸿姳闁秴纾婚柟鎯х摠閸欏繘鏌ㄥ┑鍡楊伀闁告柨绉电换婵嬪焵椤掑嫬鐐婃い鎺嗗亾缂佲偓?   */
   destroy(): void;
 }
