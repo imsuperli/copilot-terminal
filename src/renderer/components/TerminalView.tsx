@@ -324,8 +324,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     (paneId: string) => {
       if (!terminalWindow) return;
       const currentPanes = getAllPanes(terminalWindow.layout);
+      const exitingPane = currentPanes.find((pane) => pane.id === paneId);
+      const currentTerminalPaneCount = currentPanes.filter((pane) => isTerminalPane(pane)).length;
 
-      if (currentPanes.length <= 1) {
+      if (exitingPane && isTerminalPane(exitingPane) && currentTerminalPaneCount <= 1) {
         // 单窗格窗口退出
         if (embedded && onStopAndRemoveFromGroup) {
           // 窗口组内：复用"停止并移除"逻辑

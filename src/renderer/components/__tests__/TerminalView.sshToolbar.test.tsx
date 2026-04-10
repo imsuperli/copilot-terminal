@@ -187,6 +187,49 @@ function createSSHWindow(options: {
   };
 }
 
+function createLocalWindowWithBrowserSibling(): Window {
+  return {
+    id: 'win-local-1',
+    name: 'Local Browser Pair',
+    activePaneId: 'pane-local-1',
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    layout: {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        {
+          type: 'pane',
+          id: 'pane-local-1',
+          pane: {
+            id: 'pane-local-1',
+            cwd: '/workspace/project',
+            command: 'bash',
+            status: WindowStatus.Running,
+            pid: 3001,
+          },
+        },
+        {
+          type: 'pane',
+          id: 'browser-1',
+          pane: {
+            id: 'browser-1',
+            cwd: '',
+            command: '',
+            kind: 'browser',
+            status: WindowStatus.Paused,
+            pid: null,
+            browser: {
+              url: 'https://example.com',
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
 describe('TerminalView SSH toolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -220,6 +263,35 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
     expect(screen.getByText('/srv/app')).toBeInTheDocument();
     expect(screen.queryByText('Prod SSH')).not.toBeInTheDocument();
+  });
+
+  it('treats the last terminal pane exit as a window pause even when browser siblings exist', async () => {
+    const user = userEvent.setup();
+    const localWindow = createLocalWindowWithBrowserSibling();
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={localWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '模拟窗格退出' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(localWindow.id);
+    });
+    expect(window.electronAPI.closePane).not.toHaveBeenCalled();
   });
 
   it('only shows remote tabs for the same owner family and keeps their original order', () => {

@@ -648,6 +648,73 @@ describe('TmuxCompatService', () => {
     });
   });
 
+  describe('join-pane', () => {
+    it('falls back to a terminal pane when the target window active pane is a browser', async () => {
+      const { service, store } = createService();
+      (service as any).registerTmuxWindow('default', 'default', 'win-1', 'Test Window', false, false);
+
+      store.getState().windows.push({
+        id: 'win-2',
+        name: 'Target Window',
+        activePaneId: 'browser-1',
+        createdAt: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString(),
+        layout: {
+          type: 'split',
+          direction: 'horizontal',
+          sizes: [0.5, 0.5],
+          children: [
+            {
+              type: 'pane',
+              id: 'pane-2',
+              pane: createTerminalPane('pane-2'),
+            },
+            {
+              type: 'pane',
+              id: 'browser-1',
+              pane: createBrowserPane('browser-1'),
+            },
+          ],
+        },
+      });
+
+      service.registerPane('%2', 'win-2', 'pane-2');
+      (service as any).registerTmuxWindow('default', 'default', 'win-2', 'Target Window', false, false);
+
+      const response = await service.executeCommand({
+        argv: ['join-pane', '-s', '%1', '-t', 'default:1'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      expect(response.exitCode).toBe(0);
+
+      const targetWindow = store.getState().windows.find((window) => window.id === 'win-2');
+      expect(targetWindow?.layout.type).toBe('split');
+      if (!targetWindow || targetWindow.layout.type !== 'split') {
+        throw new Error('expected target split layout');
+      }
+
+      expect(targetWindow.layout.children[1]).toMatchObject({
+        type: 'pane',
+        id: 'browser-1',
+        pane: {
+          kind: 'browser',
+        },
+      });
+
+      const leftSide = targetWindow.layout.children[0];
+      expect(leftSide.type).toBe('split');
+      if (leftSide.type !== 'split') {
+        throw new Error('expected nested target split');
+      }
+
+      expect(leftSide.children).toHaveLength(2);
+      expect(leftSide.children[0]).toMatchObject({ type: 'pane', id: 'pane-2' });
+      expect(leftSide.children[1]).toMatchObject({ type: 'pane', id: 'pane-1' });
+    });
+  });
+
   describe('select-pane', () => {
     it('应设置 pane 标题', async () => {
       const { service } = createService();

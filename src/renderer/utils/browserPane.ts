@@ -1,8 +1,14 @@
 import type { LayoutNode, Pane } from '../types/window';
 import { WindowStatus } from '../types/window';
 import { findPanePath, getPaneCount } from './layoutHelpers';
+import {
+  DEFAULT_BROWSER_URL,
+  isAllowedBrowserUrl,
+  sanitizeBrowserUrl,
+} from '../../shared/utils/browserUrls';
 
-export const DEFAULT_BROWSER_URL = 'about:blank';
+export { DEFAULT_BROWSER_URL } from '../../shared/utils/browserUrls';
+
 const DEFAULT_SEARCH_BASE_URL = 'https://duckduckgo.com/?q=';
 
 function hasExplicitProtocol(value: string): boolean {
@@ -24,11 +30,9 @@ export function normalizeBrowserInput(rawValue: string): string {
   }
 
   if (hasExplicitProtocol(value)) {
-    try {
-      return new URL(value).toString();
-    } catch {
-      return `${DEFAULT_SEARCH_BASE_URL}${encodeURIComponent(value)}`;
-    }
+    return isAllowedBrowserUrl(value)
+      ? sanitizeBrowserUrl(value)
+      : `${DEFAULT_SEARCH_BASE_URL}${encodeURIComponent(value)}`;
   }
 
   if (isLikelyWebHost(value)) {
@@ -52,7 +56,7 @@ export function createBrowserPaneDraft(paneId: string, url: string = DEFAULT_BRO
     status: WindowStatus.Paused,
     pid: null,
     browser: {
-      url,
+      url: sanitizeBrowserUrl(url),
     },
   };
 }

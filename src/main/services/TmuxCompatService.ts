@@ -3190,13 +3190,14 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     const requestTargetPaneId = requestTargetTmuxPaneId
       ? this.resolvePaneTarget(requestTargetTmuxPaneId, request)
       : null;
+    const activeTargetPane = targetWindow?.activePaneId
+      ? this.findPane(targetWindowId, targetWindow.activePaneId)
+      : null;
     const targetPane = requestTargetPaneId?.windowId === targetWindowId
       ? this.findPane(targetWindowId, requestTargetPaneId.paneId ?? '')
-      : (targetWindow?.activePaneId
-        ? this.findPane(targetWindowId, targetWindow.activePaneId)
-        : null)
-        || this.getAllTerminalPanes(targetWindowId)[0]
-        || null;
+      : (activeTargetPane && isTerminalPane(activeTargetPane)
+        ? activeTargetPane
+        : this.getAllTerminalPanes(targetWindowId)[0] || null);
 
     if (!targetPane || !isTerminalPane(targetPane)) {
       return {

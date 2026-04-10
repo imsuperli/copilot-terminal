@@ -5,11 +5,12 @@ import { AppTooltip } from './ui/AppTooltip';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { DEFAULT_BROWSER_URL, normalizeBrowserInput } from '../utils/browserPane';
+import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/browserUrls';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
 
 function getBrowserPaneUrl(pane: Pane): string {
-  return pane.browser?.url || DEFAULT_BROWSER_URL;
+  return sanitizeBrowserUrl(pane.browser?.url || DEFAULT_BROWSER_URL);
 }
 
 export interface BrowserPaneProps {
@@ -42,7 +43,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const persistedUrl = useMemo(() => getBrowserPaneUrl(pane), [pane]);
 
   const syncPaneUrl = useCallback((nextUrl: string) => {
-    const normalizedUrl = nextUrl || DEFAULT_BROWSER_URL;
+    const normalizedUrl = sanitizeBrowserUrl(nextUrl || DEFAULT_BROWSER_URL);
     setCurrentUrl(normalizedUrl);
     setInputValue(normalizedUrl);
     if (pane.browser?.url === normalizedUrl) {
@@ -150,7 +151,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   }, [inputValue, navigateTo]);
 
   const openCurrentUrlExternally = useCallback(() => {
-    if (!currentUrl || currentUrl === DEFAULT_BROWSER_URL) {
+    if (!currentUrl || currentUrl === DEFAULT_BROWSER_URL || !isAllowedBrowserUrl(currentUrl)) {
       return;
     }
 

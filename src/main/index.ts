@@ -21,6 +21,7 @@ import { ElectronSSHHostKeyPromptService } from './services/ssh/SSHHostKeyPrompt
 import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 import { isTerminalPane } from '../shared/utils/terminalCapabilities';
+import { isAllowedBrowserUrl } from '../shared/utils/browserUrls';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -42,6 +43,23 @@ const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
 // 退出标志，防止重复执行退出逻辑
 let isQuitting = false;
+
+function registerBrowserWebviewGuards(): void {
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.getType() !== 'webview') {
+      return;
+    }
+
+    const blockDisallowedNavigation = (event: Electron.Event, url: string) => {
+      if (!isAllowedBrowserUrl(url)) {
+        event.preventDefault();
+      }
+    };
+
+    contents.on('will-navigate', blockDisallowedNavigation);
+    contents.on('will-redirect', blockDisallowedNavigation);
+  });
+}
 
 function getAllPanesFromLayout(layout: LayoutNode): Pane[] {
   if (layout.type === 'pane') {
@@ -86,10 +104,7 @@ function createWindow() {
     webPreferences.sandbox = true;
 
     const src = typeof params.src === 'string' ? params.src.trim() : '';
-    const isAllowedSrc = src === 'about:blank'
-      || /^https?:\/\//i.test(src);
-
-    if (!isAllowedSrc) {
+    if (!isAllowedBrowserUrl(src)) {
       event.preventDefault();
     }
   });
@@ -264,6 +279,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  registerBrowserWebviewGuards();
+
   // 强制使用暗色主题（包括标题栏）
   nativeTheme.themeSource = 'dark';
 
