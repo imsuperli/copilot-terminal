@@ -75,7 +75,6 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
                   <button
                     type="button"
                     aria-label={window.name}
-                    title={window.primaryText}
                     onClick={() => onWindowSelect(window.id)}
                     className={`relative z-[1] flex h-full w-full min-w-0 items-center pl-3 pr-8 text-left focus:outline-none transition-colors ${
                       window.isActive
