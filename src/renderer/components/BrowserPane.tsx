@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ExternalLink, Globe, GripVertical, RefreshCw, X } from 'lucide-react';
 import type { Pane } from '../types/window';
 import { AppTooltip } from './ui/AppTooltip';
@@ -8,6 +8,8 @@ import { DEFAULT_BROWSER_URL, normalizeBrowserInput } from '../utils/browserPane
 import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/browserUrls';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
+const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-zinc-950';
+const BROWSER_WEBVIEW_CACHE_TTL_MS = 2_000;
 const BLANK_PAGE_THEME_CSS = `
   :root { color-scheme: dark; }
   html, body {
@@ -16,8 +18,104 @@ const BLANK_PAGE_THEME_CSS = `
   }
 `;
 
+type CachedBrowserWebviewEntry = {
+  element: HTMLWebViewElement;
+  isReady: boolean;
+  disposeTimer: number | null;
+};
+
+const cachedBrowserWebviews = new Map<string, CachedBrowserWebviewEntry>();
+let browserWebviewParkingLot: HTMLDivElement | null = null;
+
 function getBrowserPaneUrl(pane: Pane): string {
   return sanitizeBrowserUrl(pane.browser?.url || DEFAULT_BROWSER_URL);
+}
+
+function ensureBrowserWebviewParkingLot(): HTMLDivElement | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  if (browserWebviewParkingLot && document.body.contains(browserWebviewParkingLot)) {
+    return browserWebviewParkingLot;
+  }
+
+  const parkingLot = document.createElement('div');
+  parkingLot.dataset.browserWebviewParkingLot = 'true';
+  Object.assign(parkingLot.style, {
+    position: 'fixed',
+    left: '-10000px',
+    top: '-10000px',
+    width: '1px',
+    height: '1px',
+    overflow: 'hidden',
+    opacity: '0',
+    pointerEvents: 'none',
+  });
+  document.body.appendChild(parkingLot);
+  browserWebviewParkingLot = parkingLot;
+  return parkingLot;
+}
+
+function clearBrowserWebviewDisposeTimer(entry: CachedBrowserWebviewEntry): void {
+  if (entry.disposeTimer === null) {
+    return;
+  }
+
+  window.clearTimeout(entry.disposeTimer);
+  entry.disposeTimer = null;
+}
+
+function destroyCachedBrowserWebview(paneId: string): void {
+  const entry = cachedBrowserWebviews.get(paneId);
+  if (!entry) {
+    return;
+  }
+
+  clearBrowserWebviewDisposeTimer(entry);
+  entry.element.remove();
+  cachedBrowserWebviews.delete(paneId);
+}
+
+function scheduleCachedBrowserWebviewDispose(paneId: string): void {
+  const entry = cachedBrowserWebviews.get(paneId);
+  if (!entry) {
+    return;
+  }
+
+  clearBrowserWebviewDisposeTimer(entry);
+  entry.disposeTimer = window.setTimeout(() => {
+    destroyCachedBrowserWebview(paneId);
+  }, BROWSER_WEBVIEW_CACHE_TTL_MS);
+}
+
+function getOrCreateCachedBrowserWebview(paneId: string, initialUrl: string): CachedBrowserWebviewEntry {
+  const existingEntry = cachedBrowserWebviews.get(paneId);
+  if (existingEntry) {
+    clearBrowserWebviewDisposeTimer(existingEntry);
+    return existingEntry;
+  }
+
+  const element = document.createElement('webview') as HTMLWebViewElement;
+  element.className = BROWSER_WEBVIEW_CLASSNAME;
+  element.setAttribute('partition', BROWSER_PARTITION);
+  element.setAttribute('src', initialUrl);
+
+  const entry: CachedBrowserWebviewEntry = {
+    element,
+    isReady: false,
+    disposeTimer: null,
+  };
+  cachedBrowserWebviews.set(paneId, entry);
+  return entry;
+}
+
+export function __resetBrowserPaneWebviewCacheForTests(): void {
+  cachedBrowserWebviews.forEach((_entry, paneId) => {
+    destroyCachedBrowserWebview(paneId);
+  });
+  browserWebviewParkingLot?.remove();
+  browserWebviewParkingLot = null;
 }
 
 export interface BrowserPaneProps {
@@ -42,6 +140,8 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const { t } = useI18n();
   const updatePane = useWindowStore((state) => state.updatePane);
   const webviewRef = useRef<HTMLWebViewElement | null>(null);
+  const webviewHostRef = useRef<HTMLDivElement | null>(null);
+  const cachedWebviewEntryRef = useRef<CachedBrowserWebviewEntry | null>(null);
   const webviewReadyRef = useRef(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState(() => getBrowserPaneUrl(pane));
@@ -185,6 +285,38 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     setCurrentUrl(nextUrl);
   }, [persistedUrl, pane.id]);
 
+  useLayoutEffect(() => {
+    const host = webviewHostRef.current;
+    if (!host) {
+      return undefined;
+    }
+
+    const entry = getOrCreateCachedBrowserWebview(pane.id, persistedUrl);
+    const webview = entry.element;
+    cachedWebviewEntryRef.current = entry;
+    webviewRef.current = webview;
+
+    webview.className = BROWSER_WEBVIEW_CLASSNAME;
+    webview.setAttribute('partition', BROWSER_PARTITION);
+    if (!webview.getAttribute('src')) {
+      webview.setAttribute('src', persistedUrl);
+    }
+
+    if (webview.parentElement !== host) {
+      host.replaceChildren(webview);
+    }
+
+    return () => {
+      const parkingLot = ensureBrowserWebviewParkingLot();
+      if (parkingLot && webview.parentElement !== parkingLot) {
+        parkingLot.appendChild(webview);
+      }
+      scheduleCachedBrowserWebviewDispose(pane.id);
+      cachedWebviewEntryRef.current = null;
+      webviewRef.current = null;
+    };
+  }, [pane.id]);
+
   useEffect(() => {
     if (!isActive) {
       return;
@@ -202,14 +334,18 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
   useEffect(() => {
     const webview = webviewRef.current;
-    if (!webview) {
+    const cachedEntry = cachedWebviewEntryRef.current;
+    if (!webview || !cachedEntry) {
       return undefined;
     }
 
-    setWebviewReady(false);
-    resetNavigationState();
+    setWebviewReady(cachedEntry.isReady);
+    if (!cachedEntry.isReady) {
+      resetNavigationState();
+    }
 
     const handleDomReady = () => {
+      cachedEntry.isReady = true;
       setWebviewReady(true);
       applyBlankPageTheme();
       syncNavigationState();
@@ -230,6 +366,11 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     webview.addEventListener('did-stop-loading', handleDidStopLoading);
     webview.addEventListener('did-navigate', handleDidNavigate);
     webview.addEventListener('did-navigate-in-page', handleDidNavigate);
+
+    if (cachedEntry.isReady) {
+      applyBlankPageTheme();
+      syncNavigationState();
+    }
 
     return () => {
       setWebviewReady(false);
@@ -384,14 +525,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         </div>
       </div>
 
-      <webview
-        ref={(element) => {
-          webviewRef.current = element;
-        }}
-        src={persistedUrl}
-        partition={BROWSER_PARTITION}
-        className="min-h-0 min-w-0 flex-1 bg-zinc-950"
-      />
+      <div ref={webviewHostRef} className="min-h-0 min-w-0 flex-1 bg-zinc-950" />
     </div>
   );
 };

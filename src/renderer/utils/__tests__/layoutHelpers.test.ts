@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closePane, collapseTmuxAgentPanesForPause, movePane, updateSplitSizes } from '../layoutHelpers';
+import { closePane, collapseTmuxAgentPanesForPause, getLayoutDepth, movePane, updateSplitSizes } from '../layoutHelpers';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 
 function createPane(id: string, overrides: Partial<Pane> = {}): Pane {
@@ -164,6 +164,23 @@ describe('layoutHelpers.movePane', () => {
     };
 
     expect(movePane(layout, 'left', 'left', 'vertical', false)).toBe(layout);
+  });
+
+  it('does not accumulate redundant single-child splits on repeated equivalent moves', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('browser'), createPaneNode('left')],
+    };
+
+    const nextLayout = movePane(layout, 'browser', 'left', 'horizontal', true);
+    const repeatedLayout = nextLayout ? movePane(nextLayout, 'browser', 'left', 'horizontal', true) : null;
+
+    expect(nextLayout).not.toBeNull();
+    expect(repeatedLayout).not.toBeNull();
+    expect(getLayoutDepth(nextLayout!)).toBe(2);
+    expect(getLayoutDepth(repeatedLayout!)).toBe(2);
   });
 });
 

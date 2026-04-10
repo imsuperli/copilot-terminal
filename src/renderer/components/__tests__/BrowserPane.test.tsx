@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
-import { BrowserPane } from '../BrowserPane';
+import { BrowserPane, __resetBrowserPaneWebviewCacheForTests } from '../BrowserPane';
 import { I18nProvider } from '../../i18n';
 import type { Pane } from '../../types/window';
 import { WindowStatus } from '../../types/window';
@@ -96,7 +96,7 @@ function decorateWebViewElement(element: HTMLElement): MockWebViewElement {
 
 function createBrowserPane(url: string = DEFAULT_BROWSER_URL): Pane {
   return {
-    id: 'pane-browser-1',
+    id: `pane-browser-${Math.random().toString(36).slice(2, 10)}`,
     cwd: '',
     command: '',
     status: WindowStatus.Paused,
@@ -129,6 +129,7 @@ describe('BrowserPane', () => {
 
   beforeEach(() => {
     updatePane.mockReset();
+    __resetBrowserPaneWebviewCacheForTests();
   });
 
   it('does not call ready-only webview APIs before dom-ready', () => {
@@ -149,11 +150,12 @@ describe('BrowserPane', () => {
   });
 
   it('syncs navigation state after dom-ready without throwing', () => {
+    const pane = createBrowserPane();
     const { container } = render(
       <I18nProvider>
         <BrowserPane
           windowId="win-1"
-          pane={createBrowserPane()}
+          pane={pane}
           isActive={false}
           onActivate={vi.fn()}
         />
@@ -168,7 +170,7 @@ describe('BrowserPane', () => {
     webview.markReady('https://example.com/docs');
     fireEvent(webview, new Event('dom-ready'));
 
-    expect(updatePane).toHaveBeenCalledWith('win-1', 'pane-browser-1', {
+    expect(updatePane).toHaveBeenCalledWith('win-1', pane.id, {
       browser: {
         url: 'https://example.com/docs',
       },
@@ -198,5 +200,42 @@ describe('BrowserPane', () => {
 
     expect(webview.insertCssCalls).toHaveLength(1);
     expect(webview.insertCssCalls[0]).toContain('background: #09090b');
+  });
+
+  it('reuses the same webview element when the pane is remounted', () => {
+    const pane = createBrowserPane();
+    const firstRender = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={pane}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const firstWebview = firstRender.container.querySelector('webview') as MockWebViewElement | null;
+    if (!firstWebview) {
+      throw new Error('expected first webview element');
+    }
+
+    firstWebview.markReady('https://example.com/preserved');
+    fireEvent(firstWebview, new Event('dom-ready'));
+    firstRender.unmount();
+
+    const secondRender = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={pane}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const secondWebview = secondRender.container.querySelector('webview') as MockWebViewElement | null;
+    expect(secondWebview).toBe(firstWebview);
   });
 });

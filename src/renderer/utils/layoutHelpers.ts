@@ -198,6 +198,22 @@ export function splitPane(
   };
 }
 
+function collapseRedundantSplits(layout: LayoutNode): LayoutNode {
+  if (layout.type === 'pane') {
+    return layout;
+  }
+
+  const collapsedChildren = layout.children.map(collapseRedundantSplits);
+  if (collapsedChildren.length === 1) {
+    return collapsedChildren[0];
+  }
+
+  return {
+    ...layout,
+    children: collapsedChildren,
+  };
+}
+
 export function movePane(
   layout: LayoutNode,
   sourcePaneId: string,
@@ -219,8 +235,10 @@ export function movePane(
     return layout;
   }
 
+  const collapsedLayout = collapseRedundantSplits(layoutWithoutSource);
+
   return splitPane(
-    layoutWithoutSource,
+    collapsedLayout,
     targetPaneId,
     direction,
     sourcePaneNode.pane,
