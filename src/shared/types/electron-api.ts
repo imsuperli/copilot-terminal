@@ -455,7 +455,10 @@ export interface ElectronAPI {
   // Window controls
   windowMinimize: () => Promise<IpcResponse<void>>;
   windowMaximize: () => Promise<IpcResponse<void>>;
+  windowToggleFullScreen: () => Promise<IpcResponse<void>>;
   windowClose: () => Promise<IpcResponse<void>>;
   windowIsMaximized: () => Promise<IpcResponse<boolean>>;
+  windowIsFullScreen: () => Promise<IpcResponse<boolean>>;
   onWindowMaximized: (callback: (isMaximized: boolean) => void) => () => void;
+  onWindowFullScreen: (callback: (isFullScreen: boolean) => void) => () => void;
 }

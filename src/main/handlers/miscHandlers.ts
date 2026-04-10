@@ -51,4 +51,14 @@ export function registerMiscHandlers(ctx: HandlerContext) {
   ipcMain.handle('window-is-maximized', () => {
     return successResponse(ctx.mainWindow?.isMaximized() ?? false);
   });
+
+  ipcMain.handle('window-toggle-fullscreen', () => {
+    const isFullScreen = ctx.mainWindow?.isFullScreen() ?? false;
+    ctx.mainWindow?.setFullScreen(!isFullScreen);
+    return successResponse();
+  });
+
+  ipcMain.handle('window-is-fullscreen', () => {
+    return successResponse(ctx.mainWindow?.isFullScreen() ?? false);
+  });
 }

@@ -22,6 +22,20 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
   const appLogoSrc = resolveRendererAssetUrl('resources/icon.png');
 
   useEffect(() => {
+    if (isMac) {
+      window.electronAPI?.windowIsFullScreen().then((result) => {
+        if (result.success && typeof result.data === 'boolean') {
+          setIsMaximized(result.data);
+        }
+      });
+
+      const unsubscribe = window.electronAPI?.onWindowFullScreen((isFullScreen) => {
+        setIsMaximized(isFullScreen);
+      });
+
+      return () => { unsubscribe?.(); };
+    }
+
     window.electronAPI?.windowIsMaximized().then((result) => {
       if (result.success && typeof result.data === 'boolean') {
         setIsMaximized(result.data);
@@ -33,10 +47,14 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
     });
 
     return () => { unsubscribe?.(); };
-  }, []);
+  }, [isMac]);
 
   const handleMinimize = () => window.electronAPI?.windowMinimize();
-  const handleMaximize = () => window.electronAPI?.windowMaximize();
+  const handleMaximize = () => (
+    isMac
+      ? window.electronAPI?.windowToggleFullScreen()
+      : window.electronAPI?.windowMaximize()
+  );
   const handleClose = () => window.electronAPI?.windowClose();
   const handleDoubleClick = () => { if (!isMac) handleMaximize(); };
 

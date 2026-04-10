@@ -77,6 +77,7 @@ function getWindowWorkingDirectory(window: Workspace['windows'][number]): string
 
 function createWindow() {
   const preloadPath = path.join(__dirname, '../preload/index.js');
+  const shouldMaximizeOnShow = process.platform !== 'darwin';
 
   mainWindow = new BrowserWindow({
     width: 1024,
@@ -88,6 +89,7 @@ function createWindow() {
     icon: path.join(__dirname, '../../resources/icon.png'),
     show: false, // 创建时不显示，等待渲染进程通知
     frame: false, // 使用自定义标题栏
+    fullscreenable: true,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -138,6 +140,12 @@ function createWindow() {
         ],
       },
       {
+        label: 'View',
+        submenu: [
+          { role: 'togglefullscreen' },
+        ],
+      },
+      {
         label: 'Window',
         submenu: [
           { role: 'minimize' },
@@ -162,8 +170,10 @@ function createWindow() {
       // 1. 先设置窗口为完全透明
       mainWindow.setOpacity(0);
 
-      // 2. 最大化并显示窗口（此时是透明的，用户看不到）
-      mainWindow.maximize();
+      // 2. Windows/Linux 启动即最大化；macOS 保持标准窗口态
+      if (shouldMaximizeOnShow) {
+        mainWindow.maximize();
+      }
       mainWindow.show();
 
       // 3. 延迟 50ms 后开始淡入（确保内容完全渲染）
@@ -190,7 +200,9 @@ function createWindow() {
     if (!rendererReady && mainWindow && !mainWindow.isDestroyed()) {
       console.log('[ELECTRON] Renderer ready timeout, forcing window show');
       mainWindow.setOpacity(1);
-      mainWindow.maximize();
+      if (shouldMaximizeOnShow) {
+        mainWindow.maximize();
+      }
       mainWindow.show();
     }
   }, 5000);
@@ -202,6 +214,14 @@ function createWindow() {
 
   mainWindow.on('unmaximize', () => {
     mainWindow?.webContents.send('window-maximized', false);
+  });
+
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow?.webContents.send('window-fullscreen', true);
+  });
+
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow?.webContents.send('window-fullscreen', false);
   });
 
   // 开发环境加载 dev server，优先读取环境变量，避免 localhost 在不同系统下解析差异

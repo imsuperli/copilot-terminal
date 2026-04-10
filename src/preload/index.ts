@@ -282,14 +282,23 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('window-minimize'),
   windowMaximize: () =>
     ipcRenderer.invoke('window-maximize'),
+  windowToggleFullScreen: () =>
+    ipcRenderer.invoke('window-toggle-fullscreen'),
   windowClose: () =>
     ipcRenderer.invoke('window-close'),
   windowIsMaximized: () =>
     ipcRenderer.invoke('window-is-maximized'),
+  windowIsFullScreen: () =>
+    ipcRenderer.invoke('window-is-fullscreen'),
   onWindowMaximized: (callback: (isMaximized: boolean) => void) => {
     const listener = (_event: unknown, isMaximized: boolean) => callback(isMaximized);
     ipcRenderer.on('window-maximized', listener);
     return () => ipcRenderer.removeListener('window-maximized', listener);
+  },
+  onWindowFullScreen: (callback: (isFullScreen: boolean) => void) => {
+    const listener = (_event: unknown, isFullScreen: boolean) => callback(isFullScreen);
+    ipcRenderer.on('window-fullscreen', listener);
+    return () => ipcRenderer.removeListener('window-fullscreen', listener);
   },
 };
 
