@@ -453,7 +453,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               onClick={goBack}
               className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <ArrowLeft size={13} />
+              <ArrowLeft size={15} />
             </button>
           </AppTooltip>
           <AppTooltip content={t('browserPane.forward')} placement="pane-corner">
@@ -464,7 +464,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               onClick={goForward}
               className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <ArrowRight size={13} />
+              <ArrowRight size={15} />
             </button>
           </AppTooltip>
           <AppTooltip content={t('browserPane.refresh')} placement="pane-corner">
@@ -475,7 +475,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               onClick={reloadPage}
               className={`flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${isLoading ? 'animate-spin text-sky-300' : ''}`}
             >
-              <RefreshCw size={13} />
+              <RefreshCw size={15} />
             </button>
           </AppTooltip>
         </div>
