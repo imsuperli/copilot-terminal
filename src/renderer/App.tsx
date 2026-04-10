@@ -35,7 +35,7 @@ import type {
   TmuxWindowSyncedPayload,
 } from '../shared/types/electron-api';
 import './api/ptyDataBus';
-import { getAllPanes } from './utils/layoutHelpers';
+import { getAggregatedStatus, getAllPanes } from './utils/layoutHelpers';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from './utils/settingsEvents';
 import {
   authNeedsPassword,
@@ -49,6 +49,11 @@ import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './u
 import { isEphemeralSSHCloneWindow } from './utils/sshWindowBindings';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
+const UNLOADABLE_HIDDEN_WINDOW_STATUSES = new Set<WindowStatus>([
+  WindowStatus.Paused,
+  WindowStatus.Completed,
+  WindowStatus.Error,
+]);
 
 function findReusableSSHWindow(windows: Window[], profileId: string): Window | null {
   const matchedWindows = windows.filter((window) => {
@@ -362,12 +367,24 @@ function AppContent() {
   }, [activeWindowId]);
 
   useEffect(() => {
-    const existingWindowIds = new Set(windows.map((window) => window.id));
+    const windowsById = new Map(windows.map((window) => [window.id, window] as const));
     setMountedTerminalWindowIds((previousIds) => {
-      const nextIds = previousIds.filter((id) => existingWindowIds.has(id));
+      const nextIds = previousIds.filter((id) => {
+        const terminalWindow = windowsById.get(id);
+        if (!terminalWindow) {
+          return false;
+        }
+
+        if (id === activeWindowId) {
+          return true;
+        }
+
+        return !UNLOADABLE_HIDDEN_WINDOW_STATUSES.has(getAggregatedStatus(terminalWindow.layout));
+      });
+
       return nextIds.length === previousIds.length ? previousIds : nextIds;
     });
-  }, [windows]);
+  }, [activeWindowId, windows]);
 
   // 订阅主进程推送的窗格状态变化事件
   useEffect(() => {

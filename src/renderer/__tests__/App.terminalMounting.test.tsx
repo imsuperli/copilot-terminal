@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWindowStore } from '../stores/windowStore';
+import { WindowStatus } from '../types/window';
 import { createSinglePaneWindow } from '../utils/layoutHelpers';
 
 const { mockTerminalView, mockUseViewSwitcher, mockUseWindowSwitcher, mockUseWorkspaceRestore } = vi.hoisted(() => ({
@@ -61,6 +62,26 @@ vi.mock('../hooks/useWorkspaceRestore', () => ({
 }));
 
 import App from '../App';
+
+function withSinglePaneStatus<T extends ReturnType<typeof createSinglePaneWindow>>(
+  terminalWindow: T,
+  status: WindowStatus,
+): T {
+  if (terminalWindow.layout.type !== 'pane') {
+    return terminalWindow;
+  }
+
+  return {
+    ...terminalWindow,
+    layout: {
+      ...terminalWindow.layout,
+      pane: {
+        ...terminalWindow.layout.pane,
+        status,
+      },
+    },
+  };
+}
 
 describe('App terminal mounting', () => {
   beforeEach(() => {
@@ -126,9 +147,42 @@ describe('App terminal mounting', () => {
     expect(screen.getByTestId(`terminal-${windowOne.id}`)).toHaveAttribute('data-active', 'false');
   });
 
-  it('keeps previously opened terminal views mounted when switching windows', async () => {
+  it('unmounts previously opened paused terminal views when switching windows', async () => {
     const windowOne = createSinglePaneWindow('Window One', 'D:\\repo-one', 'pwsh.exe');
     const windowTwo = createSinglePaneWindow('Window Two', 'D:\\repo-two', 'pwsh.exe');
+
+    useWindowStore.setState({
+      windows: [windowOne, windowTwo],
+      activeWindowId: windowOne.id,
+      mruList: [windowOne.id, windowTwo.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(<App />);
+
+    expect(screen.getByTestId(`terminal-${windowOne.id}`)).toHaveAttribute('data-active', 'true');
+
+    act(() => {
+      useWindowStore.getState().setActiveWindow(windowTwo.id);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`terminal-${windowTwo.id}`)).toBeInTheDocument();
+      expect(screen.queryByTestId(`terminal-${windowOne.id}`)).not.toBeInTheDocument();
+    });
+    expect(screen.getByTestId(`terminal-${windowTwo.id}`)).toHaveAttribute('data-active', 'true');
+  });
+
+  it('keeps previously opened running terminal views mounted when switching windows', async () => {
+    const windowOne = withSinglePaneStatus(
+      createSinglePaneWindow('Window One', 'D:\\repo-one', 'pwsh.exe'),
+      WindowStatus.Running,
+    );
+    const windowTwo = withSinglePaneStatus(
+      createSinglePaneWindow('Window Two', 'D:\\repo-two', 'pwsh.exe'),
+      WindowStatus.Running,
+    );
 
     useWindowStore.setState({
       windows: [windowOne, windowTwo],
