@@ -452,4 +452,72 @@ describe('SSHPtySession', () => {
 
     rmSync(tempDir, { recursive: true, force: true });
   });
+
+  it('retries with a dedicated SSH connection when a reused connection hits a channel-open limit', async () => {
+    const retriedChannel = createMockChannel();
+    const sharedRelease = vi.fn().mockResolvedValue(undefined);
+    const dedicatedRelease = vi.fn().mockResolvedValue(undefined);
+    const sharedConnection = {
+      openShell: vi.fn().mockRejectedValue(new Error('(SSH) Channel open failure: open failed')),
+      listPortForwards: vi.fn().mockReturnValue([]),
+      addPortForward: vi.fn(),
+      removePortForward: vi.fn(),
+      listSftpDirectory: vi.fn(),
+      downloadSftpFile: vi.fn(),
+      uploadSftpFiles: vi.fn(),
+    };
+    const dedicatedConnection = {
+      openShell: vi.fn().mockResolvedValue(retriedChannel),
+      listPortForwards: vi.fn().mockReturnValue([]),
+      addPortForward: vi.fn(),
+      removePortForward: vi.fn(),
+      listSftpDirectory: vi.fn(),
+      downloadSftpFile: vi.fn(),
+      uploadSftpFiles: vi.fn(),
+    };
+    const acquire = vi.fn()
+      .mockResolvedValueOnce({
+        connection: sharedConnection,
+        release: sharedRelease,
+      })
+      .mockResolvedValueOnce({
+        connection: dedicatedConnection,
+        release: dedicatedRelease,
+      });
+
+    const session = await SSHPtySession.create({
+      pid: 2208,
+      ssh: {
+        profileId: 'profile-1',
+        host: '10.0.0.21',
+        port: 22,
+        user: 'root',
+        authType: 'password',
+        privateKeys: [],
+        password: 'secret',
+        keepaliveInterval: 30,
+        keepaliveCountMax: 3,
+        readyTimeout: null,
+        verifyHostKeys: true,
+        agentForward: false,
+        reuseSession: true,
+        forwardedPorts: [],
+      },
+      connectionPool: {
+        acquire,
+      } as any,
+    });
+
+    expect(acquire).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      reuseSession: true,
+    }), expect.any(Function));
+    expect(acquire).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      reuseSession: false,
+    }), expect.any(Function));
+    expect(sharedRelease).toHaveBeenCalledOnce();
+    expect(dedicatedConnection.openShell).toHaveBeenCalledOnce();
+
+    session.kill();
+    expect(dedicatedRelease).toHaveBeenCalledOnce();
+  });
 });

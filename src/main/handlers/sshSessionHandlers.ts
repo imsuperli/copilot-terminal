@@ -4,6 +4,7 @@ import { dialog, ipcMain } from 'electron';
 import {
   AddSSHSessionPortForwardConfig,
   CloneSSHPaneConfig,
+  CloneSSHPaneSourceConfig,
   CreateSSHSftpDirectoryConfig,
   CreateSSHWindowConfig,
   DeleteSSHSftpEntryConfig,
@@ -55,7 +56,7 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
       const handle = await processManager.spawnTerminal(await buildSSHSpawnConfig(profile, vaultEntry, {
         windowId,
         paneId,
-        remoteCwd: pane.ssh?.remoteCwd,
+        remoteCwd: resolvePaneRemoteCwd(pane),
         command: config.command,
       }, {
         sshProfileStore,
@@ -147,22 +148,18 @@ export function registerSSHSessionHandlers(ctx: HandlerContext) {
       }
 
       const workspace = getCurrentWorkspace();
-      if (!workspace) {
-        throw new Error('Workspace is not loaded');
-      }
-
-      const sourcePane = findPaneInWorkspace(workspace.windows, config.sourceWindowId, config.sourcePaneId);
-      if (!sourcePane || sourcePane.backend !== 'ssh' || !sourcePane.ssh) {
+      const sourceState = resolveCloneSSHSourceState(config, workspace?.windows);
+      if (!sourceState) {
         throw new Error(`SSH source pane not found: ${config.sourceWindowId}/${config.sourcePaneId}`);
       }
 
-      const profile = await requireSSHProfile(sshProfileStore, sourcePane.ssh.profileId);
+      const profile = await requireSSHProfile(sshProfileStore, sourceState.profileId);
       const vaultEntry = await sshVaultService?.get(profile.id) ?? null;
       const handle = await processManager.spawnTerminal(await buildSSHSpawnConfig(profile, vaultEntry, {
         windowId: config.targetWindowId,
         paneId: config.targetPaneId,
-        remoteCwd: resolveSSHRemoteCwd(config.remoteCwd, resolvePaneRemoteCwd(sourcePane)),
-        command: sourcePane.command,
+        remoteCwd: resolveSSHRemoteCwd(config.remoteCwd, sourceState.remoteCwd),
+        command: sourceState.command,
       }, {
         sshProfileStore,
         sshVaultService,
@@ -621,6 +618,47 @@ function findPaneInLayout(layout: Window['layout'], paneId: string): Pane | null
 
 function resolvePaneRemoteCwd(pane: Pane): string | undefined {
   return resolveSSHRemoteCwd(pane.cwd, pane.ssh?.remoteCwd);
+}
+
+function resolveCloneSSHSourceState(
+  config: CloneSSHPaneConfig,
+  workspaceWindows: Window[] | undefined,
+): CloneSSHPaneSourceConfig | null {
+  const requestSourceState = normalizeCloneSSHSourceState(config.sourceSsh);
+  if (requestSourceState) {
+    return requestSourceState;
+  }
+
+  if (!workspaceWindows) {
+    return null;
+  }
+
+  const sourcePane = findPaneInWorkspace(workspaceWindows, config.sourceWindowId, config.sourcePaneId);
+  if (!sourcePane || sourcePane.backend !== 'ssh' || !sourcePane.ssh) {
+    return null;
+  }
+
+  return {
+    profileId: sourcePane.ssh.profileId,
+    remoteCwd: resolvePaneRemoteCwd(sourcePane),
+    ...(sourcePane.command ? { command: sourcePane.command } : {}),
+  };
+}
+
+function normalizeCloneSSHSourceState(
+  source: CloneSSHPaneConfig['sourceSsh'],
+): CloneSSHPaneSourceConfig | null {
+  if (!source?.profileId?.trim()) {
+    return null;
+  }
+
+  const remoteCwd = resolveSSHRemoteCwd(source.remoteCwd);
+
+  return {
+    profileId: source.profileId,
+    ...(remoteCwd ? { remoteCwd } : {}),
+    ...(source.command?.trim() ? { command: source.command } : {}),
+  };
 }
 
 function resolveSSHRemoteCwd(...values: Array<string | undefined>): string | undefined {

@@ -80,12 +80,19 @@ export interface StartSSHPaneConfig {
   initialRows?: number;
 }
 
+export interface CloneSSHPaneSourceConfig {
+  profileId: string;
+  remoteCwd?: string;
+  command?: string;
+}
+
 export interface CloneSSHPaneConfig {
   sourceWindowId: string;
   sourcePaneId: string;
   targetWindowId: string;
   targetPaneId: string;
   remoteCwd?: string;
+  sourceSsh?: CloneSSHPaneSourceConfig;
 }
 
 export interface SSHSessionPortForwardTarget {

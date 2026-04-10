@@ -576,6 +576,67 @@ describe('registerSSHSessionHandlers', () => {
     });
   });
 
+  it('clones SSH panes from request-carried source state when the source tab is ephemeral', async () => {
+    const processManager = {
+      spawnTerminal: vi.fn().mockResolvedValue({ pid: 2208, sessionId: 'ssh-session-8' }),
+      subscribePtyData: vi.fn().mockReturnValue(vi.fn()),
+      getLatestPaneOutputSeq: vi.fn().mockReturnValue(0),
+    };
+    const sshProfileStore = {
+      get: vi.fn().mockResolvedValue(createProfile()),
+    };
+
+    registerSSHSessionHandlers({
+      mainWindow: null,
+      processManager: processManager as any,
+      statusPoller: { addPane: vi.fn() } as any,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: { add: vi.fn() } as any,
+      gitBranchWatcher: null,
+      currentWorkspace: null,
+      getCurrentWorkspace: () => null,
+      setCurrentWorkspace: () => undefined,
+      sshProfileStore: sshProfileStore as any,
+      sshVaultService: { get: vi.fn().mockResolvedValue(null) } as any,
+      sshKnownHostsStore: null,
+    } as HandlerContext);
+
+    const handler = getRegisteredHandler('clone-ssh-pane');
+    const response = await handler({}, {
+      sourceWindowId: 'win-ephemeral',
+      sourcePaneId: 'pane-ephemeral',
+      targetWindowId: 'win-target',
+      targetPaneId: 'pane-target',
+      remoteCwd: '/srv/app/releases',
+      sourceSsh: {
+        profileId: 'profile-1',
+        remoteCwd: '/srv/app/current',
+        command: 'bash',
+      },
+    });
+
+    expect(processManager.spawnTerminal).toHaveBeenCalledWith(expect.objectContaining({
+      backend: 'ssh',
+      windowId: 'win-target',
+      paneId: 'pane-target',
+      workingDirectory: '/srv/app/releases',
+      command: 'bash',
+      ssh: expect.objectContaining({
+        profileId: 'profile-1',
+        remoteCwd: '/srv/app/releases',
+      }),
+    }));
+    expect(response).toEqual({
+      success: true,
+      data: {
+        pid: 2208,
+        sessionId: 'ssh-session-8',
+      },
+    });
+  });
+
   it('manages active SSH session port forwards through the process manager', async () => {
     const processManager = {
       listSSHPortForwards: vi.fn().mockReturnValue([

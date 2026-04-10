@@ -3,6 +3,8 @@ import * as ContextMenu from '@radix-ui/react-context-menu';
 import { Window } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
+import { isTerminalPane } from '../../shared/utils/terminalCapabilities';
+import { AppTooltip } from './ui/AppTooltip';
 
 interface RemoteWindowTabsProps {
   windows: Window[];
@@ -35,7 +37,8 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
 
     return candidates.map((window) => {
       const panes = getAllPanes(window.layout);
-      const activePane = panes.find((pane) => pane.id === window.activePaneId) ?? panes[0];
+      const activePane = panes.find((pane) => pane.id === window.activePaneId && isTerminalPane(pane))
+        ?? panes.find((pane) => isTerminalPane(pane));
       const resolvedText = activePane?.ssh?.remoteCwd
         ?? activePane?.cwd
         ?? (activePane?.ssh ? `${activePane.ssh.user}@${activePane.ssh.host}` : '');
@@ -61,26 +64,32 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
           <ContextMenu.Root key={window.id}>
             <ContextMenu.Trigger asChild>
               <div
-                className={`group relative flex h-full min-w-[132px] max-w-[220px] items-stretch ${
+                className={`group relative flex h-full min-w-[108px] max-w-[164px] items-stretch ${
                   index > 0 ? '-ml-px' : ''
                 } border-x border-zinc-700/80`}
               >
-                <button
-                  type="button"
-                  aria-label={window.name}
-                  onClick={() => onWindowSelect(window.id)}
-                  className={`relative z-[1] flex h-full w-full min-w-0 items-center pl-4 pr-9 text-left focus:outline-none transition-colors ${
-                    window.isActive
-                      ? 'text-zinc-50'
-                      : 'text-zinc-400 hover:text-zinc-100'
-                  }`}
+                <AppTooltip
+                  content={window.primaryText}
+                  delayDuration={250}
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-mono text-[12px] font-medium tracking-[0.01em]">
-                      {window.primaryText}
+                  <button
+                    type="button"
+                    aria-label={window.name}
+                    title={window.primaryText}
+                    onClick={() => onWindowSelect(window.id)}
+                    className={`relative z-[1] flex h-full w-full min-w-0 items-center pl-3 pr-8 text-left focus:outline-none transition-colors ${
+                      window.isActive
+                        ? 'text-zinc-50'
+                        : 'text-zinc-400 hover:text-zinc-100'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-mono text-[12px] font-medium tracking-[0.01em]">
+                        {window.primaryText}
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                </AppTooltip>
                 <div
                   aria-hidden="true"
                   className={`pointer-events-none absolute bottom-0 left-0 right-0 h-0.5 transition-colors ${

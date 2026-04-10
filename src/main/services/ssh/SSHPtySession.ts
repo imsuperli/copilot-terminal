@@ -234,16 +234,36 @@ export class SSHPtySession implements IPty {
   }
 
   private async connect(): Promise<void> {
-    this.connectionLease = await this.connectionPool.acquire(this.ssh, (data) => {
-      this.emitData(data);
-    });
+    await this.acquireConnectionLease(this.ssh);
 
     try {
       await this.openShellChannel();
     } catch (error) {
+      if (this.shouldRetryWithDedicatedConnection(error)) {
+        await this.releaseConnectionLease();
+        await this.acquireConnectionLease({
+          ...this.ssh,
+          reuseSession: false,
+        });
+
+        try {
+          await this.openShellChannel();
+          return;
+        } catch (retryError) {
+          await this.releaseConnectionLease();
+          throw retryError;
+        }
+      }
+
       await this.releaseConnectionLease();
       throw error;
     }
+  }
+
+  private async acquireConnectionLease(config: SSHSessionConfig): Promise<void> {
+    this.connectionLease = await this.connectionPool.acquire(config, (data) => {
+      this.emitData(data);
+    });
   }
 
   private async openShellChannel(): Promise<void> {
@@ -259,6 +279,15 @@ export class SSHPtySession implements IPty {
 
     this.attachChannel(stream);
     this.scheduleInitializeRemoteShell(150);
+  }
+
+  private shouldRetryWithDedicatedConnection(error: unknown): boolean {
+    if (!this.ssh.reuseSession || !this.connectionLease) {
+      return false;
+    }
+
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    return /channel open failure|open failed|maxsessions|too many sessions|administratively prohibited|resource shortage/i.test(message);
   }
 
   private attachChannel(stream: ClientChannel): void {

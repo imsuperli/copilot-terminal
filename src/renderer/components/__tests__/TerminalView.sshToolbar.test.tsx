@@ -337,14 +337,24 @@ describe('TerminalView SSH toolbar', () => {
     const user = userEvent.setup();
     const onWindowSwitch = vi.fn();
     const activeWindow = createSSHWindow({
-      id: 'win-ssh-1',
-      paneId: 'pane-ssh-1',
-      name: 'Prod SSH A',
-      remoteCwd: '/srv/app',
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+      ephemeral: true,
+      sshTabOwnerWindowId: 'win-ssh-1',
     });
 
     useWindowStore.setState({
-      windows: [activeWindow],
+      windows: [
+        createSSHWindow({
+          id: 'win-ssh-1',
+          paneId: 'pane-ssh-1',
+          name: 'Prod SSH A',
+          remoteCwd: '/srv/app',
+        }),
+        activeWindow,
+      ],
       activeWindowId: activeWindow.id,
       mruList: [],
       sidebarExpanded: false,
@@ -368,24 +378,28 @@ describe('TerminalView SSH toolbar', () => {
       />,
     );
 
-    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH A' }) });
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH B' }) });
     await user.click(screen.getByText('克隆 SSH 终端'));
 
     expect(window.electronAPI.cloneSSHPane).toHaveBeenCalledWith(expect.objectContaining({
-      sourceWindowId: 'win-ssh-1',
-      sourcePaneId: 'pane-ssh-1',
+      sourceWindowId: 'win-ssh-2',
+      sourcePaneId: 'pane-ssh-2',
       targetWindowId: expect.any(String),
       targetPaneId: expect.any(String),
-      remoteCwd: '/srv/app',
+      remoteCwd: '/srv/worker',
+      sourceSsh: {
+        profileId: 'profile-1',
+        remoteCwd: '/srv/worker',
+      },
     }));
 
-    const clonedWindow = useWindowStore.getState().windows[1];
+    const clonedWindow = useWindowStore.getState().windows[2];
     expect(clonedWindow).toMatchObject({
       ephemeral: true,
       sshTabOwnerWindowId: 'win-ssh-1',
     });
     expect(onWindowSwitch).toHaveBeenCalledWith(expect.any(String));
-    expect(useWindowStore.getState().windows).toHaveLength(2);
+    expect(useWindowStore.getState().windows).toHaveLength(3);
   });
 
   it('closes the active remote tab from its context menu and switches to the adjacent tab', async () => {

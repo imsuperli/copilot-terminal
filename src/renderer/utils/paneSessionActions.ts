@@ -1,6 +1,6 @@
 import { StartSSHPaneResult, StartWindowResult } from '../../shared/types/electron-api';
 import { SSHProfile } from '../../shared/types/ssh';
-import { getPaneBackend, getPaneCapabilities } from '../../shared/utils/terminalCapabilities';
+import { getPaneBackend, getPaneCapabilities, isBrowserPane } from '../../shared/utils/terminalCapabilities';
 import { Pane, Window, WindowStatus } from '../types/window';
 import { dispatchAppError } from './appNotice';
 import { getAllPanes } from './layoutHelpers';
@@ -90,6 +90,10 @@ async function resolveSSHPromptRequest(options: {
 }
 
 export function createPaneDraftFromSource(sourcePane: Pane, paneId: string): Pane {
+  if (isBrowserPane(sourcePane)) {
+    throw new Error(`Cannot clone browser pane into terminal session draft: ${sourcePane.id}`);
+  }
+
   const backend = getPaneBackend(sourcePane);
   const ssh = sourcePane.ssh ? { ...sourcePane.ssh } : undefined;
 
@@ -105,7 +109,25 @@ export function createPaneDraftFromSource(sourcePane: Pane, paneId: string): Pan
   };
 }
 
+function resolveCloneSourceRemoteCwd(pane: Pane): string | undefined {
+  const runtimeCwd = pane.cwd?.trim();
+  if (runtimeCwd && runtimeCwd !== '~') {
+    return runtimeCwd;
+  }
+
+  const configuredRemoteCwd = pane.ssh?.remoteCwd?.trim();
+  if (configuredRemoteCwd && configuredRemoteCwd !== '~') {
+    return configuredRemoteCwd;
+  }
+
+  return undefined;
+}
+
 export async function startPaneForWindow(targetWindow: Window, pane: Pane): Promise<PaneStartResult> {
+  if (isBrowserPane(pane)) {
+    throw new Error(`Cannot start browser pane as PTY session: ${targetWindow.id}/${pane.id}`);
+  }
+
   const { cols: initialCols, rows: initialRows } = estimateInitialTerminalSize();
 
   if (getPaneBackend(pane) === 'ssh') {
@@ -158,14 +180,19 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
 export async function startWindowPanes(
   targetWindow: Window,
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void,
-  panesToStart: Pane[] = getAllPanes(targetWindow.layout),
+  panesToStart: Pane[] = getAllPanes(targetWindow.layout).filter((pane) => !isBrowserPane(pane)),
 ): Promise<void> {
-  for (const pane of panesToStart) {
+  const terminalPanes = panesToStart.filter((pane) => !isBrowserPane(pane));
+  if (terminalPanes.length === 0) {
+    return;
+  }
+
+  for (const pane of terminalPanes) {
     updatePane(targetWindow.id, pane.id, { status: WindowStatus.Restoring });
   }
 
   await Promise.all(
-    panesToStart.map(async (pane) => {
+    terminalPanes.map(async (pane) => {
       try {
         const result = await startPaneForWindow(targetWindow, pane);
         updatePane(targetWindow.id, pane.id, {
@@ -196,6 +223,10 @@ export async function startSplitPaneFromSource(options: {
   status: WindowStatus;
 }> {
   const { sourceWindowId, sourcePane, targetWindowId, targetPaneId, remoteCwdOverride } = options;
+  if (isBrowserPane(sourcePane)) {
+    throw new Error(`Cannot split browser pane into PTY session: ${sourceWindowId}/${sourcePane.id}`);
+  }
+
   const { cols: initialCols, rows: initialRows } = estimateInitialTerminalSize();
 
   if (getPaneBackend(sourcePane) === 'ssh') {
@@ -216,6 +247,11 @@ export async function startSplitPaneFromSource(options: {
         targetWindowId,
         targetPaneId,
         remoteCwd: remoteCwdOverride ?? sourcePane.cwd,
+        sourceSsh: {
+          profileId: sshBinding.profileId,
+          remoteCwd: resolveCloneSourceRemoteCwd(sourcePane),
+          ...(sourcePane.command ? { command: sourcePane.command } : {}),
+        },
       }),
     });
 
