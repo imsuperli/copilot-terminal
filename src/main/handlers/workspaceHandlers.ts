@@ -4,10 +4,11 @@ import { Window } from '../../shared/types/window';
 import { WindowGroup } from '../../shared/types/window-group';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { LayoutNode } from '../../shared/types/window';
+import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
 
 function getWindowWorkingDirectory(layout: LayoutNode): string | null {
   if (layout.type === 'pane') {
-    if (layout.pane.backend === 'ssh') {
+    if (isBrowserPane(layout.pane) || layout.pane.backend === 'ssh') {
       return null;
     }
 

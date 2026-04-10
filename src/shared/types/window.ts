@@ -15,6 +15,11 @@ export enum WindowStatus {
 }
 
 export type PaneBackend = 'local' | 'ssh';
+export type PaneKind = 'terminal' | 'browser';
+
+export interface BrowserPaneState {
+  url: string;
+}
 
 export interface PaneCapabilities {
   canOpenLocalFolder: boolean;
@@ -50,10 +55,12 @@ export interface Pane {
   command: string;               // 启动的 shell 程序（如 "pwsh.exe"）
   status: WindowStatus;          // 当前状态
   pid: number | null;            // 进程 PID
+  kind?: PaneKind;               // 窗格类型，缺失时视为 terminal
   backend?: PaneBackend;         // 会话后端类型，缺失时视为 local
   sessionId?: string;            // 统一会话标识，逐步替代仅依赖 pid 的索引
   capabilities?: PaneCapabilities; // pane 能力描述，用于 UI/主进程按能力分流
   ssh?: SshPaneBinding;          // SSH pane 绑定信息
+  browser?: BrowserPaneState;    // 浏览器 pane 元数据
   lastOutput?: string;           // 最新输出摘要（前 100 字符）
 
   // tmux 兼容层扩展字段（用于 Claude Code Agent Teams）
@@ -80,6 +87,9 @@ export interface Pane {
 
   /** Teammate 模式：tmux（真实 tmux）、in-process（进程内模拟）、auto（自动检测） */
   teammateMode?: 'tmux' | 'in-process' | 'auto';
+
+  /** tmux 管理的 pane 子树作用域（运行态） */
+  tmuxScopeId?: string;
 }
 
 /**

@@ -1,10 +1,38 @@
 import { Pane, Window } from '../types/window';
 
+export function getPaneKind(pane: Pane): NonNullable<Pane['kind']> {
+  return pane.kind ?? 'terminal';
+}
+
+export function isBrowserPane(pane: Pane): boolean {
+  return getPaneKind(pane) === 'browser';
+}
+
+export function isTerminalPane(pane: Pane): boolean {
+  return !isBrowserPane(pane);
+}
+
 export function getPaneBackend(pane: Pane): NonNullable<Pane['backend']> {
+  if (isBrowserPane(pane)) {
+    return 'local';
+  }
+
   return pane.backend ?? 'local';
 }
 
 export function getPaneCapabilities(pane: Pane): NonNullable<Pane['capabilities']> {
+  if (isBrowserPane(pane)) {
+    return {
+      canOpenLocalFolder: false,
+      canOpenInIDE: false,
+      canWatchGitBranch: false,
+      canReconnect: false,
+      canOpenSFTP: false,
+      canManagePortForwards: false,
+      canCloneSession: false,
+    };
+  }
+
   if (pane.capabilities) {
     return pane.capabilities;
   }
@@ -53,6 +81,9 @@ export function getWindowKind(window: Window): NonNullable<Window['kind']> {
 
   const collect = (node: Window['layout']) => {
     if (node.type === 'pane') {
+      if (isBrowserPane(node.pane)) {
+        return;
+      }
       backends.add(getPaneBackend(node.pane));
       return;
     }

@@ -1,8 +1,12 @@
 import { Pane, Window } from '../types/window';
-import { getWindowKind } from '../../shared/utils/terminalCapabilities';
+import { getWindowKind, isBrowserPane, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { getAllPanes } from './layoutHelpers';
 
 function getPaneSSHTargetKey(pane: Pane): string | null {
+  if (isBrowserPane(pane)) {
+    return null;
+  }
+
   const ssh = pane.ssh;
   if (pane.backend !== 'ssh' || !ssh?.profileId) {
     return null;
@@ -24,7 +28,7 @@ function getPaneSSHTargetKey(pane: Pane): string | null {
 }
 
 export function getStandaloneSSHProfileId(window: Window): string | null {
-  const panes = getAllPanes(window.layout);
+  const panes = getAllPanes(window.layout).filter((pane) => isTerminalPane(pane));
   if (panes.length === 0) {
     return null;
   }
@@ -48,7 +52,7 @@ export function getStandaloneSSHProfileId(window: Window): string | null {
 }
 
 export function getStandaloneSSHTargetKey(window: Window): string | null {
-  const panes = getAllPanes(window.layout);
+  const panes = getAllPanes(window.layout).filter((pane) => isTerminalPane(pane));
   if (panes.length === 0) {
     return null;
   }

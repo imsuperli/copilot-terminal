@@ -37,6 +37,7 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
   'agentName',
   'agentColor',
   'teammateMode',
+  'tmuxScopeId',
 ]);
 
 /**
@@ -504,7 +505,7 @@ export const useWindowStore = create<WindowStore>()(
           return;
         }
 
-        const collapsed = collapseTmuxAgentPanesForPause(window.layout);
+        const collapsed = collapseTmuxAgentPanesForPause(window.layout, window.activePaneId);
         if (collapsed) {
           window.layout = collapsed.layout;
           window.activePaneId = collapsed.activePaneId;

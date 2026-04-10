@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { LayoutNode, SplitNode } from '../types/window';
 import { TerminalPane } from './TerminalPane';
+import { BrowserPane } from './BrowserPane';
 import { getPaneCount } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
+import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
 
 export interface SplitLayoutProps {
   windowId: string;
@@ -258,6 +260,18 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
 }) => {
   if (layout.type === 'pane') {
     const isActive = layout.id === activePaneId;
+    if (isBrowserPane(layout.pane)) {
+      return (
+        <BrowserPane
+          windowId={windowId}
+          pane={layout.pane}
+          isActive={isActive}
+          onActivate={() => onPaneActivate(layout.id)}
+          onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
+        />
+      );
+    }
+
     return (
       <TerminalPane
         windowId={windowId}

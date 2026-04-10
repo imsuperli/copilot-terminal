@@ -11,7 +11,7 @@ import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
 import { formatRelativeTime, useI18n } from '../i18n';
-import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 
 interface WindowCardProps {
@@ -99,9 +99,9 @@ export const WindowCard = React.memo<WindowCardProps>(({
   const paneCount = useMemo(() => getPaneCount(window.layout), [window.layout]);
   const panes = useMemo(() => getAllPanes(window.layout), [window.layout]);
   const windowKind = useMemo(() => getWindowKind(window), [window]);
-  const activePane = useMemo(
-    () => panes.find((pane) => pane.id === window.activePaneId) ?? panes[0],
-    [panes, window.activePaneId]
+  const activeTerminalPane = useMemo(
+    () => getCurrentWindowTerminalPane(window),
+    [window]
   );
 
   // 获取第一个窗格的工作目录作为显示
@@ -122,10 +122,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
   // 检查是否有左侧快捷方式
   const hasLeftShortcuts = useMemo(
     () => Boolean(
-      (activePane && canPaneOpenLocalFolder(activePane) && workingDirectory)
-      || (activePane && canPaneOpenInIDE(activePane) && enabledIDEs.length > 0)
+      (activeTerminalPane && canPaneOpenLocalFolder(activeTerminalPane) && workingDirectory)
+      || (activeTerminalPane && canPaneOpenInIDE(activeTerminalPane) && enabledIDEs.length > 0)
     ),
-    [activePane, enabledIDEs.length, workingDirectory]
+    [activeTerminalPane, enabledIDEs.length, workingDirectory]
   );
 
   // 缓存状态色和标签
@@ -500,7 +500,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
           {hasLeftShortcuts && (
             <div className="flex items-center gap-1 flex-[6]">
               {/* 显示前 3 个 IDE 图标 */}
-              {activePane && canPaneOpenInIDE(activePane) && enabledIDEs.slice(0, 3).map((ide) => (
+              {activeTerminalPane && canPaneOpenInIDE(activeTerminalPane) && enabledIDEs.slice(0, 3).map((ide) => (
                 <Tooltip.Provider key={ide.id}>
                   <Tooltip.Root delayDuration={300}>
                     <Tooltip.Trigger asChild>
@@ -526,7 +526,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
               ))}
 
               {/* 文件夹图标 */}
-              {workingDirectory && activePane && canPaneOpenLocalFolder(activePane) && (
+              {workingDirectory && activeTerminalPane && canPaneOpenLocalFolder(activeTerminalPane) && (
                 <Tooltip.Provider>
                   <Tooltip.Root delayDuration={300}>
                     <Tooltip.Trigger asChild>
@@ -552,7 +552,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
               )}
 
               {/* 如果有超过 3 个 IDE，显示"更多"按钮 */}
-              {activePane && canPaneOpenInIDE(activePane) && enabledIDEs.length > 3 && (
+              {activeTerminalPane && canPaneOpenInIDE(activeTerminalPane) && enabledIDEs.length > 3 && (
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger asChild>
                     <button

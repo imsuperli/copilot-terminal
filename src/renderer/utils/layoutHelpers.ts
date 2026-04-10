@@ -10,7 +10,7 @@ import {
 } from '../types/window';
 
 type PauseCollapseResult = {
-  layout: PaneNode;
+  layout: LayoutNode;
   activePaneId: string;
 };
 
@@ -95,6 +95,32 @@ export function findPaneNode(
   for (const child of layout.children) {
     const found = findPaneNode(child, paneId);
     if (found) return found;
+  }
+
+  return null;
+}
+
+type PanePathEntry = {
+  node: SplitNode;
+  childIndex: number;
+};
+
+export function findPanePath(
+  layout: LayoutNode,
+  paneId: string,
+  ancestors: PanePathEntry[] = [],
+): PanePathEntry[] | null {
+  if (layout.type === 'pane') {
+    return layout.id === paneId ? ancestors : null;
+  }
+
+  for (let index = 0; index < layout.children.length; index += 1) {
+    const child = layout.children[index];
+    const nextAncestors = [...ancestors, { node: layout, childIndex: index }];
+    const found = findPanePath(child, paneId, nextAncestors);
+    if (found) {
+      return found;
+    }
   }
 
   return null;
@@ -208,9 +234,13 @@ export function closePane(
     return null;
   }
 
-  // 如果只剩一个子节点，折叠 SplitNode，直接返回该子节点
+  // 仅保留一个子节点时继续保留当前 split，避免幸存 pane 被卸载重建
   if (newChildren.length === 1) {
-    return newChildren[0];
+    return {
+      ...layout,
+      children: newChildren,
+      sizes: [1],
+    };
   }
 
   const sizesChanged = newChildren.length !== layout.children.length;
@@ -249,6 +279,8 @@ export function isTmuxAgentPane(pane: Pane): boolean {
 
 function sanitizePaneForPause(pane: Pane): Pane {
   const {
+    sessionId,
+    lastOutput,
     title,
     borderColor,
     activeBorderColor,
@@ -257,6 +289,7 @@ function sanitizePaneForPause(pane: Pane): Pane {
     agentName,
     agentColor,
     teammateMode,
+    tmuxScopeId,
     ...restPane
   } = pane;
 
@@ -267,30 +300,145 @@ function sanitizePaneForPause(pane: Pane): Pane {
   };
 }
 
-export function collapseTmuxAgentPanesForPause(layout: LayoutNode): PauseCollapseResult | null {
-  const panes = getAllPanes(layout);
-  if (panes.length <= 1) {
+type ScopedLayoutMatch = {
+  path: number[];
+  node: LayoutNode;
+  panes: Pane[];
+};
+
+function findScopedSubtree(
+  node: LayoutNode,
+  matchesPane: (pane: Pane) => boolean,
+  path: number[] = [],
+): ScopedLayoutMatch | null {
+  if (node.type === 'pane') {
+    return matchesPane(node.pane)
+      ? { path, node, panes: [node.pane] }
+      : null;
+  }
+
+  const childMatches = node.children
+    .map((child, childIndex) => findScopedSubtree(child, matchesPane, [...path, childIndex]))
+    .filter((match): match is ScopedLayoutMatch => match !== null);
+
+  if (childMatches.length === 0) {
     return null;
   }
 
-  const strongMarkerCount = panes.filter(hasStrongTmuxAgentMarker).length;
-  const weakMarkerCount = panes.filter(hasWeakTmuxAgentMarker).length;
+  if (childMatches.length === 1) {
+    return childMatches[0];
+  }
+
+  return {
+    path,
+    node,
+    panes: childMatches.flatMap((match) => match.panes),
+  };
+}
+
+function replaceLayoutNodeAtPath(
+  layout: LayoutNode,
+  path: number[],
+  replacement: LayoutNode,
+): LayoutNode {
+  if (path.length === 0) {
+    return replacement;
+  }
+
+  if (layout.type !== 'split') {
+    return layout;
+  }
+
+  const [childIndex, ...restPath] = path;
+  const targetChild = layout.children[childIndex];
+  if (!targetChild) {
+    return layout;
+  }
+
+  const nextChild = replaceLayoutNodeAtPath(targetChild, restPath, replacement);
+  if (nextChild === targetChild) {
+    return layout;
+  }
+
+  return {
+    ...layout,
+    children: layout.children.map((child, index) => (
+      index === childIndex ? nextChild : child
+    )),
+  };
+}
+
+function getPaneToKeep(panes: Pane[]): Pane {
+  return panes.find((pane) => !isTmuxAgentPane(pane))
+    || panes.find((pane) => !hasStrongTmuxAgentMarker(pane))
+    || panes[0];
+}
+
+export function collapseTmuxAgentPanesForPause(
+  layout: LayoutNode,
+  activePaneId?: string,
+): PauseCollapseResult | null {
+  let nextLayout = layout;
+  let nextActivePaneId = activePaneId;
+  let didCollapse = false;
+
+  const scopeIds = Array.from(new Set(
+    getAllPanes(layout)
+      .map((pane) => pane.tmuxScopeId)
+      .filter((scopeId): scopeId is string => Boolean(scopeId))
+  ));
+
+  for (const scopeId of scopeIds) {
+    const match = findScopedSubtree(nextLayout, (pane) => pane.tmuxScopeId === scopeId);
+    if (!match) {
+      continue;
+    }
+
+    const paneToKeep = getPaneToKeep(match.panes);
+    const sanitizedPane = sanitizePaneForPause(paneToKeep);
+    nextLayout = replaceLayoutNodeAtPath(nextLayout, match.path, {
+      type: 'pane',
+      id: sanitizedPane.id,
+      pane: sanitizedPane,
+    });
+
+    if (nextActivePaneId && match.panes.some((pane) => pane.id === nextActivePaneId)) {
+      nextActivePaneId = sanitizedPane.id;
+    }
+    didCollapse = true;
+  }
+
+  if (didCollapse) {
+    return {
+      layout: nextLayout,
+      activePaneId: nextActivePaneId || getAllPanes(nextLayout)[0]?.id || '',
+    };
+  }
+
+  const fallbackMatch = findScopedSubtree(layout, (pane) => isTmuxAgentPane(pane));
+  if (!fallbackMatch || fallbackMatch.panes.length <= 1) {
+    return null;
+  }
+
+  const strongMarkerCount = fallbackMatch.panes.filter(hasStrongTmuxAgentMarker).length;
+  const weakMarkerCount = fallbackMatch.panes.filter(hasWeakTmuxAgentMarker).length;
   if (strongMarkerCount === 0 && weakMarkerCount < 2) {
     return null;
   }
 
-  const paneToKeep = panes.find((pane) => !isTmuxAgentPane(pane))
-    || panes.find((pane) => !hasStrongTmuxAgentMarker(pane))
-    || panes[0];
-
+  const paneToKeep = getPaneToKeep(fallbackMatch.panes);
   const sanitizedPane = sanitizePaneForPause(paneToKeep);
+  const collapsedLayout = replaceLayoutNodeAtPath(layout, fallbackMatch.path, {
+    type: 'pane',
+    id: sanitizedPane.id,
+    pane: sanitizedPane,
+  });
+
   return {
-    layout: {
-      type: 'pane',
-      id: sanitizedPane.id,
-      pane: sanitizedPane,
-    },
-    activePaneId: sanitizedPane.id,
+    layout: collapsedLayout,
+    activePaneId: fallbackMatch.panes.some((pane) => pane.id === activePaneId)
+      ? sanitizedPane.id
+      : activePaneId || sanitizedPane.id,
   };
 }
 

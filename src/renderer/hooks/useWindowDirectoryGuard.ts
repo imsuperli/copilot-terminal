@@ -3,7 +3,7 @@ import { canPaneOpenLocalFolder } from '../../shared/utils/terminalCapabilities'
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { Window } from '../types/window';
-import { findPaneNode, getAllPanes } from '../utils/layoutHelpers';
+import { getCurrentWindowTerminalPane } from '../utils/windowWorkingDirectory';
 
 interface IpcResponse<T = unknown> {
   success: boolean;
@@ -45,8 +45,7 @@ export function useWindowDirectoryGuard() {
     targetWindow: Window,
     onContinue: (window: Window) => void | Promise<void>
   ) => {
-    const targetPane = findPaneNode(targetWindow.layout, targetWindow.activePaneId)?.pane
-      ?? getAllPanes(targetWindow.layout)[0];
+    const targetPane = getCurrentWindowTerminalPane(targetWindow);
 
     if (!targetPane || !canPaneOpenLocalFolder(targetPane)) {
       await onContinue(targetWindow);

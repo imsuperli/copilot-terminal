@@ -3,6 +3,7 @@ import * as ScrollArea from '@radix-ui/react-scroll-area';
 import { useWindowStore } from '../stores/windowStore';
 import { sortWindows } from '../utils/sortWindows';
 import { getAllPanes } from '../utils/layoutHelpers';
+import { getCurrentWindowTerminalPane } from '../utils/windowWorkingDirectory';
 import { WindowCard } from './WindowCard';
 import { EditWindowPanel } from './EditWindowPanel';
 import { MissingWorkingDirectoryDialog } from './MissingWorkingDirectoryDialog';
@@ -166,12 +167,11 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
         updateWindow(windowId, { name: updates.name });
       }
 
-      // 更新第一个窗格的 command 和 cwd
+      // 更新当前可编辑的 terminal pane
       const window = persistableWindows.find(w => w.id === windowId);
       if (window) {
-        const panes = getAllPanes(window.layout);
-        if (panes.length > 0) {
-          const firstPane = panes[0];
+        const firstPane = getCurrentWindowTerminalPane(window);
+        if (firstPane) {
           const paneUpdates: Partial<typeof firstPane> = {};
 
           if (updates.command && updates.command !== firstPane.command) {

@@ -23,6 +23,7 @@ import { WindowGroup } from '../../shared/types/window-group';
 import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { getCurrentWindowTerminalPane } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import {
   buildStandaloneSSHWindowMap,
@@ -541,8 +542,7 @@ export const CardGrid = React.memo<CardGridProps>(({
   }, [requestDeleteWindow, windows]);
 
   const openFolder = useCallback(async (win: Window) => {
-    const panes = getAllPanes(win.layout);
-    const activePane = panes.find((pane) => pane.id === win.activePaneId) ?? panes[0];
+    const activePane = getCurrentWindowTerminalPane(win);
     if (!activePane || !canPaneOpenLocalFolder(activePane)) {
       return;
     }
@@ -560,8 +560,7 @@ export const CardGrid = React.memo<CardGridProps>(({
   }, [openFolder, runWithWindowDirectory]);
 
   const openInIDE = useCallback(async (ide: string, win: Window) => {
-    const panes = getAllPanes(win.layout);
-    const activePane = panes.find((pane) => pane.id === win.activePaneId) ?? panes[0];
+    const activePane = getCurrentWindowTerminalPane(win);
     if (!activePane || !canPaneOpenInIDE(activePane)) {
       return;
     }
@@ -595,12 +594,11 @@ export const CardGrid = React.memo<CardGridProps>(({
         updateWindow(windowId, { name: updates.name });
       }
 
-      // 更新第一个窗格的 command 和 cwd
+      // 更新当前可编辑的 terminal pane
       const window = windows.find(w => w.id === windowId);
       if (window) {
-        const panes = getAllPanes(window.layout);
-        if (panes.length > 0) {
-          const firstPane = panes[0];
+        const firstPane = getCurrentWindowTerminalPane(window);
+        if (firstPane) {
           const paneUpdates: Partial<typeof firstPane> = {};
 
           if (updates.command && updates.command !== firstPane.command) {

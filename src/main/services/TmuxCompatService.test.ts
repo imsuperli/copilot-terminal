@@ -79,6 +79,30 @@ function createService(): {
   return { service, processManager, store };
 }
 
+function createTerminalPane(id: string): Pane {
+  return {
+    id,
+    cwd: '/home/user/project',
+    command: 'pwsh.exe',
+    status: WindowStatus.WaitingForInput,
+    pid: 1001,
+  };
+}
+
+function createBrowserPane(id: string): Pane {
+  return {
+    id,
+    cwd: '',
+    command: '',
+    status: WindowStatus.Paused,
+    pid: null,
+    kind: 'browser',
+    browser: {
+      url: 'https://example.com',
+    },
+  };
+}
+
 describe('TmuxCompatService', () => {
   describe('tmux -V', () => {
     it('应返回版本字符串', async () => {
@@ -273,6 +297,57 @@ describe('TmuxCompatService', () => {
         expect(window.layout.sizes[0]).toBeCloseTo(0.3);
         expect(window.layout.sizes[1]).toBeCloseTo(0.7);
       }
+    });
+
+    it('只重排当前 tmux scope，保留 browser sibling', async () => {
+      const { service, store } = createService();
+
+      store.getState().windows[0].layout = {
+        type: 'split',
+        direction: 'horizontal',
+        sizes: [0.6, 0.4],
+        children: [
+          {
+            type: 'pane',
+            id: 'pane-1',
+            pane: createTerminalPane('pane-1'),
+          },
+          {
+            type: 'pane',
+            id: 'browser-1',
+            pane: createBrowserPane('browser-1'),
+          },
+        ],
+      };
+
+      await service.executeCommand({
+        argv: ['split-window', '-t', '%1', '-P', '-F', '#{pane_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      const response = await service.executeCommand({
+        argv: ['select-layout', 'tiled'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      expect(response.exitCode).toBe(0);
+
+      const window = store.getState().windows[0];
+      expect(window.layout.type).toBe('split');
+      if (window.layout.type !== 'split') {
+        throw new Error('expected root split layout');
+      }
+
+      expect(window.layout.children[1]).toMatchObject({
+        type: 'pane',
+        id: 'browser-1',
+        pane: {
+          kind: 'browser',
+        },
+      });
+      expect(window.layout.children[0].type).toBe('split');
     });
   });
 
@@ -505,6 +580,71 @@ describe('TmuxCompatService', () => {
       expect(rightSide.children).toHaveLength(1);
       expect(rightSide.sizes).toEqual([1]);
       expect(rightSide.children[0]).toMatchObject({ type: 'pane', id: 'pane-3' });
+    });
+  });
+
+  describe('kill-session', () => {
+    it('应折叠 tmux subtree 并保留 browser sibling', async () => {
+      const { service, store } = createService();
+
+      store.getState().windows[0].layout = {
+        type: 'split',
+        direction: 'horizontal',
+        sizes: [0.6, 0.4],
+        children: [
+          {
+            type: 'pane',
+            id: 'pane-1',
+            pane: createTerminalPane('pane-1'),
+          },
+          {
+            type: 'pane',
+            id: 'browser-1',
+            pane: createBrowserPane('browser-1'),
+          },
+        ],
+      };
+
+      const splitResponse = await service.executeCommand({
+        argv: ['split-window', '-t', '%1', '-P', '-F', '#{pane_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+      const teammatePaneId = splitResponse.stdout.trim();
+
+      const response = await service.executeCommand({
+        argv: ['kill-session', '-t', 'default'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      expect(response.exitCode).toBe(0);
+      expect(service.resolvePaneId('%1')).toBeNull();
+      expect(service.resolvePaneId(teammatePaneId)).toBeNull();
+
+      const window = store.getState().windows[0];
+      expect(window).toBeDefined();
+      expect(window.layout.type).toBe('split');
+      if (window.layout.type !== 'split') {
+        throw new Error('expected root split layout');
+      }
+
+      expect(window.layout.children[0]).toMatchObject({
+        type: 'pane',
+        id: 'pane-1',
+        pane: {
+          status: WindowStatus.Paused,
+          pid: null,
+        },
+      });
+      expect(window.layout.children[1]).toMatchObject({
+        type: 'pane',
+        id: 'browser-1',
+        pane: {
+          kind: 'browser',
+          browser: { url: 'https://example.com' },
+        },
+      });
     });
   });
 

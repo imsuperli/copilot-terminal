@@ -9,6 +9,7 @@ import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { formatRelativeTime, useI18n, TranslationParams, TranslationKey } from '../i18n';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
+import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 
 interface QuickSwitcherItemProps {
   window: Window;
@@ -151,15 +152,14 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
   const paneCount = panes.length;
   const windowKind = useMemo(() => getWindowKind(terminalWindow), [terminalWindow]);
   const activePane = useMemo(
-    () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
-    [panes, terminalWindow.activePaneId]
+    () => getCurrentWindowTerminalPane(terminalWindow),
+    [terminalWindow]
   );
   const resolvedDisplayName = displayName ?? terminalWindow.name;
 
-  // 获取第一个窗格的工作目录作为显示
-  const workingDirectory = useMemo(() => panes[0]?.cwd || '', [panes]);
+  const workingDirectory = useMemo(() => getCurrentWindowWorkingDirectory(terminalWindow), [terminalWindow]);
   const resolvedSecondaryText = secondaryText ?? workingDirectory;
-  const lastOutput = useMemo(() => panes[0]?.lastOutput, [panes]);
+  const lastOutput = useMemo(() => activePane?.lastOutput, [activePane]);
 
   const StatusIcon = getStatusIcon(aggregatedStatus);
   const iconColor = getStatusIconColor(aggregatedStatus);

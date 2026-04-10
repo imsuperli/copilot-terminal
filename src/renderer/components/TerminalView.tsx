@@ -1,6 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -28,12 +28,20 @@ import {
   canPaneWatchGitBranch,
   getPaneBackend,
   getPaneCapabilities,
+  getWindowKind,
+  isBrowserPane,
+  isTerminalPane,
 } from '../../shared/utils/terminalCapabilities';
 import {
   createPaneDraftFromSource,
   startSplitPaneFromSource,
   startWindowPanes,
 } from '../utils/paneSessionActions';
+import {
+  createBrowserPaneDraft,
+  DEFAULT_BROWSER_URL,
+  getSmartBrowserSplitDirection,
+} from '../utils/browserPane';
 import {
   applyWindowStartResult,
   createWindowDraftFromSourcePane,
@@ -73,6 +81,17 @@ function getAdjacentSSHWindowId(
   }
 
   return null;
+}
+
+function SplitBrowserIcon() {
+  return (
+    <span className="relative inline-flex h-[14px] w-[14px] items-center justify-center">
+      <Globe size={14} strokeWidth={1.8} />
+      <span className="absolute -right-0.5 -top-0.5 flex h-[7px] w-[7px] items-center justify-center rounded-[2px] border border-current bg-zinc-900">
+        <span className="block h-[3px] w-[3px] border-r border-t border-current" />
+      </span>
+    </span>
+  );
 }
 
 export interface TerminalViewProps {
@@ -117,19 +136,34 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const { enabledIDEs } = useIDESettings();
   const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
   const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
+  const terminalPanes = useMemo(
+    () => panes.filter((pane) => isTerminalPane(pane)),
+    [panes]
+  );
+  const terminalPaneCount = terminalPanes.length;
   const activePane = useMemo(
     () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
     [panes, terminalWindow.activePaneId]
   );
+  const activeTerminalPane = useMemo(
+    () => {
+      if (activePane && isTerminalPane(activePane)) {
+        return activePane;
+      }
+
+      return terminalPanes[0] ?? null;
+    },
+    [activePane, terminalPanes]
+  );
   const activePaneCapabilities = useMemo(
-    () => activePane ? getPaneCapabilities(activePane) : null,
-    [activePane]
+    () => activeTerminalPane ? getPaneCapabilities(activeTerminalPane) : null,
+    [activeTerminalPane]
   );
-  const isActiveSshPane = useMemo(
-    () => activePane ? getPaneBackend(activePane) === 'ssh' : false,
-    [activePane]
+  const isStandaloneSshWindow = useMemo(
+    () => getWindowKind(terminalWindow) === 'ssh',
+    [terminalWindow]
   );
-  const activeSshRuntimeCwd = activePane?.cwd ?? activePane?.ssh?.remoteCwd ?? null;
+  const activeSshRuntimeCwd = activeTerminalPane?.cwd ?? activeTerminalPane?.ssh?.remoteCwd ?? null;
   const visibleIDEs = useMemo(
     () => activePaneCapabilities?.canOpenInIDE ? enabledIDEs : [],
     [activePaneCapabilities?.canOpenInIDE, enabledIDEs]
@@ -202,9 +236,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
 
     // 绐楀彛婵€娲绘椂锛屽惎鍔?git 鍒嗘敮鐩戝惉
-    const firstPane = panes[0];
-    if (firstPane && firstPane.cwd && canPaneWatchGitBranch(firstPane) && window.electronAPI?.startGitWatch) {
-      window.electronAPI.startGitWatch(terminalWindow.id, firstPane.cwd).catch((error: any) => {
+    const firstWatchablePane = terminalPanes.find((pane) => pane.cwd && canPaneWatchGitBranch(pane));
+    if (firstWatchablePane && window.electronAPI?.startGitWatch) {
+      window.electronAPI.startGitWatch(terminalWindow.id, firstWatchablePane.cwd).catch((error: any) => {
         // 蹇界暐閿欒
       });
     }
@@ -247,13 +281,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // 澶勭悊绐楁牸鍏抽棴
   const handlePaneClose = useCallback(
     (paneId: string) => {
-      // 濡傛灉鍙湁涓€涓獥鏍硷紝涓嶅厑璁稿叧闂?
-      if (panes.length <= 1) {
+      const paneToClose = panes.find((pane) => pane.id === paneId);
+      if (!paneToClose) {
         return;
       }
+
+      if (isTerminalPane(paneToClose) && terminalPaneCount <= 1) {
+        return;
+      }
+
+      if (!isTerminalPane(paneToClose) && panes.length <= 1) {
+        return;
+      }
+
       closePaneInWindow(terminalWindow.id, paneId);
     },
-    [terminalWindow.id, panes.length, closePaneInWindow]
+    [terminalWindow.id, panes, terminalPaneCount, closePaneInWindow]
   );
 
   const destroyCurrentEphemeralRemoteWindow = useCallback(async () => {
@@ -346,6 +389,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
 
+      if (isBrowserPane(sourcePane)) {
+        const newPaneId = uuidv4();
+        const newPane = createBrowserPaneDraft(newPaneId, sourcePane.browser?.url ?? DEFAULT_BROWSER_URL);
+        splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+        return;
+      }
+
       const newPaneId = uuidv4();
       const newPane: Pane = createPaneDraftFromSource(sourcePane, newPaneId);
 
@@ -379,22 +429,45 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [t, terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow, updatePane, closePaneInWindow]
   );
 
+  const handleSplitBrowserPane = useCallback(() => {
+    const activePaneId = terminalWindow.activePaneId;
+    if (!activePaneId) {
+      return;
+    }
+
+    const { getPaneById } = useWindowStore.getState();
+    const sourcePane = getPaneById(terminalWindow.id, activePaneId);
+    if (!sourcePane) {
+      return;
+    }
+
+    const newPaneId = uuidv4();
+    const sourceUrl = isBrowserPane(sourcePane)
+      ? sourcePane.browser?.url ?? DEFAULT_BROWSER_URL
+      : DEFAULT_BROWSER_URL;
+    const newPane = createBrowserPaneDraft(newPaneId, sourceUrl);
+    const direction = getSmartBrowserSplitDirection(terminalWindow.layout, activePaneId);
+
+    splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+    setActivePane(terminalWindow.id, newPaneId);
+  }, [setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
+
   // 澶勭悊鎵撳紑鏂囦欢澶?
   const handleOpenFolder = useCallback(async () => {
     try {
-      if (activePane && canPaneOpenLocalFolder(activePane) && window.electronAPI) {
-        await window.electronAPI.openFolder(activePane.cwd);
+      if (activeTerminalPane && canPaneOpenLocalFolder(activeTerminalPane) && window.electronAPI) {
+        await window.electronAPI.openFolder(activeTerminalPane.cwd);
       }
     } catch (error) {
       console.error('Failed to open folder:', error);
     }
-  }, [activePane]);
+  }, [activeTerminalPane]);
 
   // 澶勭悊鍦?IDE 涓墦寮€
   const handleOpenInIDE = useCallback(async (ide: string) => {
     try {
-      if (activePane && canPaneOpenInIDE(activePane) && window.electronAPI) {
-        const response = await window.electronAPI.openInIDE(ide, activePane.cwd);
+      if (activeTerminalPane && canPaneOpenInIDE(activeTerminalPane) && window.electronAPI) {
+        const response = await window.electronAPI.openInIDE(ide, activeTerminalPane.cwd);
         if (!response.success) {
           console.error(`Failed to open in ${ide}:`, response.error);
         }
@@ -402,7 +475,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error(`Failed to open in ${ide}:`, error);
     }
-  }, [activePane]);
+  }, [activeTerminalPane]);
 
   // 澶勭悊鏆傚仠绐楀彛
   const handlePauseWindow = useCallback(async () => {
@@ -433,18 +506,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // 处理启动窗口
   const handleStartWindow = useCallback(async () => {
     await startWindowPanes(terminalWindow, updatePane);
-  }, [terminalWindow.id, terminalWindow.name, terminalWindow.layout, updatePane]);
+  }, [terminalWindow, updatePane]);
 
   const handleOpenSSHPortForwards = useCallback(() => {
-    if (!activePane || !activePaneCapabilities?.canManagePortForwards) {
+    if (!activeTerminalPane || !activePaneCapabilities?.canManagePortForwards) {
       return;
     }
 
     setSSHPortForwardTarget({
       windowId: terminalWindow.id,
-      paneId: activePane.id,
+      paneId: activeTerminalPane.id,
     });
-  }, [activePane, activePaneCapabilities, terminalWindow.id]);
+  }, [activeTerminalPane, activePaneCapabilities, terminalWindow.id]);
 
   const handleCloneRemoteWindow = useCallback(async (windowId: string) => {
     if (embedded) {
@@ -457,7 +530,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
 
     const sourcePanes = getAllPanes(sourceWindow.layout);
-    const sourcePane = sourcePanes.find((pane) => pane.id === sourceWindow.activePaneId) ?? sourcePanes[0];
+    const sourcePane = sourcePanes.find((pane) => pane.id === sourceWindow.activePaneId && isTerminalPane(pane))
+      ?? sourcePanes.find((pane) => isTerminalPane(pane));
     if (!sourcePane) {
       return;
     }
@@ -535,12 +609,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   }, [destroyRemoteWindows, embedded, onReturn, onWindowSwitch, terminalWindow.id]);
 
   const handleOpenSSHSftp = useCallback(() => {
-    if (!activePane || !activePaneCapabilities?.canOpenSFTP) {
+    if (!activeTerminalPane || !activePaneCapabilities?.canOpenSFTP) {
       return;
     }
 
     setSSHSftpOpen((current) => !current);
-  }, [activePane, activePaneCapabilities, terminalWindow.id]);
+  }, [activeTerminalPane, activePaneCapabilities, terminalWindow.id]);
 
   useEffect(() => {
     if (sshSftpOpen && !activePaneCapabilities?.canOpenSFTP) {
@@ -707,7 +781,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         {/* 顶部工具栏 - 在嵌入模式下也显示 */}
         <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-stretch justify-between pl-2 pr-4 flex-shrink-0 gap-3">
           <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-hidden">
-            {!embedded && isActiveSshPane && (
+            {!embedded && isStandaloneSshWindow && (
               <RemoteWindowTabs
                 windows={windows}
                 activeWindowId={terminalWindow.id}
@@ -858,6 +932,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </button>
             </AppTooltip>
 
+            <AppTooltip content={t('terminalView.splitBrowser')} placement="toolbar-trailing">
+              <button
+                type="button"
+                aria-label={t('terminalView.splitBrowser')}
+                onClick={handleSplitBrowserPane}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+              >
+                <SplitBrowserIcon />
+              </button>
+            </AppTooltip>
+
             {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
             {/* 嵌入模式（组内）：移除和停止并移除按钮 */}
             {embedded && groupId && (
@@ -941,7 +1026,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             open={sshSftpOpen && Boolean(activePaneCapabilities?.canOpenSFTP)}
             onOpenChange={setSSHSftpOpen}
             windowId={activePaneCapabilities?.canOpenSFTP ? terminalWindow.id : null}
-            paneId={activePaneCapabilities?.canOpenSFTP ? activePane?.id ?? null : null}
+            paneId={activePaneCapabilities?.canOpenSFTP ? activeTerminalPane?.id ?? null : null}
             initialPath={activeSshRuntimeCwd}
             currentCwd={activeSshRuntimeCwd}
           />
@@ -980,8 +1065,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         {activePaneCapabilities?.canOpenSFTP && sshMetricsOpen && (
           <SSHSessionStatusBar
             windowId={terminalWindow.id}
-            paneId={activePane?.id ?? null}
-            paneStatus={activePane?.status ?? null}
+            paneId={activeTerminalPane?.id ?? null}
+            paneStatus={activeTerminalPane?.status ?? null}
             currentCwd={activeSshRuntimeCwd}
             onClose={() => setSSHMetricsOpen(false)}
           />

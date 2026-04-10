@@ -20,6 +20,7 @@ import { SSHKnownHostsStore } from './services/ssh/SSHKnownHostsStore';
 import { ElectronSSHHostKeyPromptService } from './services/ssh/SSHHostKeyPromptService';
 import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
+import { isTerminalPane } from '../shared/utils/terminalCapabilities';
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
@@ -52,7 +53,7 @@ function getAllPanesFromLayout(layout: LayoutNode): Pane[] {
 
 function getWindowWorkingDirectory(window: Workspace['windows'][number]): string | null {
   const panes = getAllPanesFromLayout(window.layout);
-  const localPane = panes.find((pane) => pane.backend !== 'ssh' && pane.cwd);
+  const localPane = panes.find((pane) => isTerminalPane(pane) && pane.backend !== 'ssh' && pane.cwd);
   return localPane?.cwd || null;
 }
 
@@ -74,7 +75,23 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
+      webviewTag: true,
     },
+  });
+
+  mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    delete webPreferences.preload;
+    webPreferences.nodeIntegration = false;
+    webPreferences.contextIsolation = true;
+    webPreferences.sandbox = true;
+
+    const src = typeof params.src === 'string' ? params.src.trim() : '';
+    const isAllowedSrc = src === 'about:blank'
+      || /^https?:\/\//i.test(src);
+
+    if (!isAllowedSrc) {
+      event.preventDefault();
+    }
   });
 
   // macOS: 创建标准菜单栏（恢复 ⌘Q/⌘H/⌘M 等系统快捷键）

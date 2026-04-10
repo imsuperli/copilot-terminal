@@ -253,4 +253,67 @@ describe('layoutHelpers.collapseTmuxAgentPanesForPause', () => {
 
     expect(collapseTmuxAgentPanesForPause(layout)).toBeNull();
   });
+
+  it('collapses only the tmux subtree and preserves browser siblings', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.6, 0.4],
+      children: [
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [
+            createPaneNode('leader', {
+              status: WindowStatus.Running,
+              pid: 101,
+              tmuxScopeId: 'scope-1',
+              teamName: 'team-1',
+            }),
+            createPaneNode('agent-a', {
+              status: WindowStatus.WaitingForInput,
+              pid: 202,
+              tmuxScopeId: 'scope-1',
+              teamName: 'team-1',
+              agentName: 'agent-a',
+            }),
+          ],
+        },
+        createPaneNode('browser', {
+          kind: 'browser',
+          command: '',
+          cwd: '',
+          status: WindowStatus.Paused,
+          browser: { url: 'https://example.com' },
+        }),
+      ],
+    };
+
+    const collapsed = collapseTmuxAgentPanesForPause(layout, 'agent-a');
+
+    expect(collapsed).not.toBeNull();
+    if (!collapsed || collapsed.layout.type !== 'split') {
+      throw new Error('expected root split layout');
+    }
+
+    expect(collapsed.activePaneId).toBe('leader');
+    expect(collapsed.layout.children[1]).toMatchObject({
+      type: 'pane',
+      id: 'browser',
+      pane: {
+        kind: 'browser',
+        browser: { url: 'https://example.com' },
+      },
+    });
+    expect(collapsed.layout.children[0]).toMatchObject({
+      type: 'pane',
+      id: 'leader',
+      pane: {
+        id: 'leader',
+        status: WindowStatus.Paused,
+        pid: null,
+      },
+    });
+  });
 });

@@ -10,6 +10,7 @@ import { readProjectConfig } from '../utils/project-config';
 import { PathValidator } from '../utils/pathValidator';
 import { normalizeShellProgram } from '../utils/shell';
 import { getSupportedIDEIds } from '../utils/ideScanner';
+import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
 
 type PersistedPane = Omit<PaneNode['pane'], 'status' | 'pid'> & {
   status?: PaneNode['pane']['status'];
@@ -254,14 +255,27 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
   }
 
   private sanitizePaneForPersistence(pane: PersistedPane): PersistedPane {
-    if (pane.backend !== 'ssh' || !pane.ssh) {
-      return pane;
+    const {
+      tmuxScopeId,
+      ...persistedPane
+    } = pane;
+
+    if (persistedPane.kind === 'browser') {
+      return {
+        ...persistedPane,
+        cwd: '',
+        command: '',
+      };
+    }
+
+    if (persistedPane.backend !== 'ssh' || !persistedPane.ssh) {
+      return persistedPane;
     }
 
     return {
-      ...pane,
+      ...persistedPane,
       ssh: {
-        profileId: pane.ssh.profileId,
+        profileId: persistedPane.ssh.profileId,
       },
     };
   }
@@ -271,10 +285,15 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
    */
   private getFirstPane(layout: LayoutNode): PaneNode['pane'] | null {
     if (layout.type === 'pane') {
-      return layout.pane;
+      return isBrowserPane(layout.pane) ? null : layout.pane;
     } else {
       if (layout.children.length > 0) {
-        return this.getFirstPane(layout.children[0]);
+        for (const child of layout.children) {
+          const pane = this.getFirstPane(child);
+          if (pane) {
+            return pane;
+          }
+        }
       }
       return null;
     }
@@ -285,6 +304,10 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
    */
   private resetLayoutPaneStates(layout: LayoutNode): LayoutNode {
     if (layout.type === 'pane') {
+      if (isBrowserPane(layout.pane)) {
+        return layout;
+      }
+
       return {
         ...layout,
         pane: {
@@ -769,7 +792,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
 
   private hydrateLayout(layout: LayoutNode): LayoutNode {
     if (layout.type === 'pane') {
-      if (layout.pane.backend === 'ssh') {
+      if (isBrowserPane(layout.pane) || layout.pane.backend === 'ssh') {
         return layout;
       }
 

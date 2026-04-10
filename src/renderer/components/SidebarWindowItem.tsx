@@ -7,6 +7,7 @@ import { DragItemTypes, WindowCardDragItem } from './dnd/types';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { StatusDot } from './StatusDot';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
+import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 
 interface SidebarWindowItemProps {
   window: Window;
@@ -77,9 +78,8 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
 
   // 从第一个窗格获取工作目录
   const workingDirectory = useMemo(() => {
-    const panes = getAllPanes(terminalWindow.layout);
-    return panes.length > 0 ? panes[0].cwd : '';
-  }, [terminalWindow.layout]);
+    return getCurrentWindowWorkingDirectory(terminalWindow);
+  }, [terminalWindow]);
 
   // 处理窗口项点击
   const handleWindowClick = useCallback((e: React.MouseEvent) => {

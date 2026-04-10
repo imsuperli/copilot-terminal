@@ -18,6 +18,7 @@ import { IProcessManager } from '../types/process';
 import { TmuxCommandParser } from './TmuxCommandParser';
 import { Window, LayoutNode, Pane, WindowStatus } from '../../shared/types/window';
 import type { PtyWriteMetadata } from '../../shared/types/electron-api';
+import { isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { randomUUID } from 'crypto';
 import { TmuxRpcServer } from './TmuxRpcServer';
 import * as fs from 'fs';
@@ -67,6 +68,12 @@ type PaneStartupBarrier = {
   sawDeviceAttributesRequest: boolean;
   promise: Promise<void>;
   resolve: (reason: 'visible-output' | 'renderer-da-reply' | 'timeout' | 'disposed' | 'replaced') => void;
+};
+
+type TmuxScopedLayoutMatch = {
+  path: number[];
+  node: LayoutNode;
+  panes: Pane[];
 };
 
 /**
@@ -903,12 +910,319 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     return panes;
   }
 
+  private getAllTerminalPanes(windowId: string): Pane[] {
+    return this.getAllPanes(windowId).filter((pane) => isTerminalPane(pane));
+  }
+
   /**
    * 闂傚倸鍊风粈渚€骞栭銈嗗仏妞ゆ劧绠戠壕鍧楁煕濞嗗浚妲洪柣?pane
    */
   private findPane(windowId: string, paneId: string): Pane | null {
     const panes = this.getAllPanes(windowId);
     return panes.find(p => p.id === paneId) || null;
+  }
+
+  private hasStrongTmuxAgentMarker(pane: Pane): boolean {
+    return Boolean(
+      pane.teamName
+      || pane.agentId
+      || pane.agentName
+      || pane.agentColor
+    );
+  }
+
+  private hasWeakTmuxAgentMarker(pane: Pane): boolean {
+    return Boolean(
+      pane.title
+      || pane.borderColor
+      || pane.activeBorderColor
+      || pane.teammateMode === 'tmux'
+    );
+  }
+
+  private isTmuxAgentPane(pane: Pane): boolean {
+    return this.hasStrongTmuxAgentMarker(pane) || this.hasWeakTmuxAgentMarker(pane);
+  }
+
+  private sanitizePaneForTmuxTeardown(pane: Pane): Pane {
+    const {
+      sessionId,
+      lastOutput,
+      title,
+      borderColor,
+      activeBorderColor,
+      teamName,
+      agentId,
+      agentName,
+      agentColor,
+      teammateMode,
+      tmuxScopeId,
+      ...restPane
+    } = pane;
+
+    return {
+      ...restPane,
+      status: WindowStatus.Paused,
+      pid: null,
+    };
+  }
+
+  private getPaneToKeepAfterTmuxTeardown(panes: Pane[]): Pane {
+    return panes.find((pane) => !this.isTmuxAgentPane(pane))
+      || panes.find((pane) => !this.hasStrongTmuxAgentMarker(pane))
+      || panes[0];
+  }
+
+  private assignPaneScopeInLayout(node: LayoutNode, paneId: string, scopeId: string): boolean {
+    if (node.type === 'pane') {
+      if (node.id !== paneId) {
+        return false;
+      }
+
+      node.pane.tmuxScopeId = scopeId;
+      return true;
+    }
+
+    for (const child of node.children) {
+      if (this.assignPaneScopeInLayout(child, paneId, scopeId)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private findScopedLayoutMatch(
+    node: LayoutNode,
+    matchesPane: (pane: Pane) => boolean,
+    path: number[] = [],
+  ): TmuxScopedLayoutMatch | null {
+    if (node.type === 'pane') {
+      return matchesPane(node.pane)
+        ? { path, node, panes: [node.pane] }
+        : null;
+    }
+
+    const childMatches = node.children
+      .map((child, childIndex) => this.findScopedLayoutMatch(child, matchesPane, [...path, childIndex]))
+      .filter((match): match is TmuxScopedLayoutMatch => match !== null);
+
+    if (childMatches.length === 0) {
+      return null;
+    }
+
+    if (childMatches.length === 1) {
+      return childMatches[0];
+    }
+
+    return {
+      path,
+      node,
+      panes: childMatches.flatMap((match) => match.panes),
+    };
+  }
+
+  private replaceLayoutNodeAtPath(
+    layout: LayoutNode,
+    path: number[],
+    replacement: LayoutNode,
+  ): LayoutNode {
+    if (path.length === 0) {
+      return replacement;
+    }
+
+    if (layout.type !== 'split') {
+      return layout;
+    }
+
+    const [childIndex, ...restPath] = path;
+    const targetChild = layout.children[childIndex];
+    if (!targetChild) {
+      return layout;
+    }
+
+    const nextChild = this.replaceLayoutNodeAtPath(targetChild, restPath, replacement);
+    if (nextChild === targetChild) {
+      return layout;
+    }
+
+    return {
+      ...layout,
+      children: layout.children.map((child, index) => (
+        index === childIndex ? nextChild : child
+      )),
+    };
+  }
+
+  private createPaneNode(pane: Pane): LayoutNode {
+    return {
+      type: 'pane',
+      id: pane.id,
+      pane,
+    };
+  }
+
+  private buildMainVerticalLayout(panes: Pane[]): LayoutNode {
+    if (panes.length === 0) {
+      throw new Error('Cannot build layout without panes');
+    }
+
+    if (panes.length === 1) {
+      return this.createPaneNode(panes[0]);
+    }
+
+    const leaderPane = panes[0];
+    const teammatesPanes = panes.slice(1);
+    const teammatesLayout: LayoutNode = teammatesPanes.length === 1
+      ? this.createPaneNode(teammatesPanes[0])
+      : {
+          type: 'split',
+          direction: 'vertical',
+          sizes: Array(teammatesPanes.length).fill(1 / teammatesPanes.length),
+          children: teammatesPanes.map((pane) => this.createPaneNode(pane)),
+        };
+
+    return {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.3, 0.7],
+      children: [
+        this.createPaneNode(leaderPane),
+        teammatesLayout,
+      ],
+    };
+  }
+
+  private buildTiledLayout(panes: Pane[]): LayoutNode {
+    if (panes.length === 0) {
+      throw new Error('Cannot build layout without panes');
+    }
+
+    if (panes.length === 1) {
+      return this.createPaneNode(panes[0]);
+    }
+
+    const cols = Math.ceil(Math.sqrt(panes.length));
+    const rows = Math.ceil(panes.length / cols);
+    const rowNodes: LayoutNode[] = [];
+
+    for (let row = 0; row < rows; row += 1) {
+      const startIdx = row * cols;
+      const endIdx = Math.min(startIdx + cols, panes.length);
+      const rowPanes = panes.slice(startIdx, endIdx);
+
+      if (rowPanes.length === 1) {
+        rowNodes.push(this.createPaneNode(rowPanes[0]));
+        continue;
+      }
+
+      rowNodes.push({
+        type: 'split',
+        direction: 'horizontal',
+        sizes: Array(rowPanes.length).fill(1 / rowPanes.length),
+        children: rowPanes.map((pane) => this.createPaneNode(pane)),
+      });
+    }
+
+    if (rowNodes.length === 1) {
+      return rowNodes[0];
+    }
+
+    return {
+      type: 'split',
+      direction: 'vertical',
+      sizes: Array(rowNodes.length).fill(1 / rowNodes.length),
+      children: rowNodes,
+    };
+  }
+
+  private getScopeIdForWindowRequest(
+    windowId: string,
+    request: TmuxCommandRequest,
+    explicitPaneId?: string,
+  ): string | undefined {
+    if (explicitPaneId) {
+      return this.findPane(windowId, explicitPaneId)?.tmuxScopeId;
+    }
+
+    const requestTmuxPaneId = this.getRequestTmuxPaneId(request);
+    if (!requestTmuxPaneId) {
+      return undefined;
+    }
+
+    const resolved = this.resolvePaneTarget(requestTmuxPaneId, request);
+    if (!resolved?.paneId || resolved.windowId !== windowId) {
+      return undefined;
+    }
+
+    return this.findPane(windowId, resolved.paneId)?.tmuxScopeId;
+  }
+
+  private collapseTmuxScopesInWindow(window: Window): { changed: boolean; affectedPaneIds: string[] } {
+    let nextLayout = window.layout;
+    let nextActivePaneId = window.activePaneId;
+    let changed = false;
+    const affectedPaneIds = new Set<string>();
+
+    const scopeIds = Array.from(new Set(
+      this.getAllPanesFromLayout(window.layout)
+        .map((pane) => pane.tmuxScopeId)
+        .filter((scopeId): scopeId is string => Boolean(scopeId))
+    ));
+
+    for (const scopeId of scopeIds) {
+      const match = this.findScopedLayoutMatch(nextLayout, (pane) => pane.tmuxScopeId === scopeId);
+      if (!match) {
+        continue;
+      }
+
+      match.panes.forEach((pane) => affectedPaneIds.add(pane.id));
+      const paneToKeep = this.getPaneToKeepAfterTmuxTeardown(match.panes);
+      const sanitizedPane = this.sanitizePaneForTmuxTeardown(paneToKeep);
+
+      nextLayout = this.replaceLayoutNodeAtPath(nextLayout, match.path, {
+        type: 'pane',
+        id: sanitizedPane.id,
+        pane: sanitizedPane,
+      });
+
+      if (match.panes.some((pane) => pane.id === nextActivePaneId)) {
+        nextActivePaneId = sanitizedPane.id;
+      }
+      changed = true;
+    }
+
+    if (!changed) {
+      const match = this.findScopedLayoutMatch(window.layout, (pane) => this.isTmuxAgentPane(pane));
+      if (match) {
+        const strongMarkerCount = match.panes.filter((pane) => this.hasStrongTmuxAgentMarker(pane)).length;
+        const weakMarkerCount = match.panes.filter((pane) => this.hasWeakTmuxAgentMarker(pane)).length;
+        if (strongMarkerCount > 0 || weakMarkerCount >= 2) {
+          match.panes.forEach((pane) => affectedPaneIds.add(pane.id));
+          const paneToKeep = this.getPaneToKeepAfterTmuxTeardown(match.panes);
+          const sanitizedPane = this.sanitizePaneForTmuxTeardown(paneToKeep);
+          nextLayout = this.replaceLayoutNodeAtPath(window.layout, match.path, {
+            type: 'pane',
+            id: sanitizedPane.id,
+            pane: sanitizedPane,
+          });
+          if (match.panes.some((pane) => pane.id === nextActivePaneId)) {
+            nextActivePaneId = sanitizedPane.id;
+          }
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) {
+      window.layout = nextLayout;
+      window.activePaneId = nextActivePaneId || this.getAllPanesFromLayout(nextLayout)[0]?.id || '';
+    }
+
+    return {
+      changed,
+      affectedPaneIds: Array.from(affectedPaneIds),
+    };
   }
 
   private adaptSendKeysForPane(keys: string, windowId: string, paneId: string, request?: TmuxCommandRequest): string {
@@ -1447,7 +1761,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
       // 闂傚倸鍊风粈渚€宕ョ€ｎ喖纾块柟鎯版鎼村﹪鏌ら懝鎵牚濞?window 闂傚倸鍊烽悞锕傛儑瑜版帒绀夌€光偓閳ь剟鍩€椤掍礁鍤柛妯圭矙瀵尙鎹勬笟顖氭倯婵犮垼娉涢敃銈夋偟?panes
 
-      const panes = this.getAllPanes(windowId);
+      const panes = this.getAllTerminalPanes(windowId);
       const output: string[] = [];
 
       for (const pane of panes) {
@@ -1540,10 +1854,20 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       const newPaneId = randomUUID();
       const newTmuxPaneId = this.allocatePaneId();
       const targetWindow = this.getWindowById(windowId);
-      const fallbackPane = targetWindow ? this.getAllPanesFromLayout(targetWindow.layout)[0] : null;
+      const fallbackPane = targetWindow
+        ? this.getAllPanesFromLayout(targetWindow.layout).find((pane) => isTerminalPane(pane)) ?? null
+        : null;
       const sourcePane = targetPaneId ? this.findPane(windowId, targetPaneId) : fallbackPane;
+      if (sourcePane && !isTerminalPane(sourcePane)) {
+        return {
+          exitCode: 1,
+          stdout: '',
+          stderr: 'tmux: can\'t find pane\n',
+        };
+      }
       const paneCwd = sourcePane?.cwd || request.cwd || process.cwd();
       const paneCommand = sourcePane?.command || 'shell';
+      const tmuxScopeId = sourcePane?.tmuxScopeId || randomUUID();
 
       // 缂傚倸鍊烽懗鍫曟惞鎼淬劌鐭楅幖娣妼缁愭鏌″搴″箺闁稿鏅涜灃闁挎繂鎳庨弳娆戠磼閳ь剟宕卞☉娆戝幈闂佹枼鏅涢崰姘枔閺冣偓閵囧嫰濡烽妷褏顔掗梺鍝勭焿缁绘繂鐣烽幒鎴叆闁告洦鍋呴悾顒勬⒒?
 
@@ -1572,7 +1896,12 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
           command: paneCommand,
           status: WindowStatus.Paused,
           pid: null,
+          tmuxScopeId,
         };
+
+        if (sourcePane?.id && !sourcePane.tmuxScopeId) {
+          this.assignPaneScopeInLayout(window.layout, sourcePane.id, tmuxScopeId);
+        }
 
         // 闂傚倸鍊风粈浣革耿鏉堚晛鍨濇い鏍ㄧ矋閺嗘粓鏌熼悜姗嗘當闁活厽顨婇弻娑㈠焺閸愵亖妲堝┑?pane 闂?layout 闂?
 
@@ -1717,6 +2046,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       // 缂傚倸鍊烽懗鍫曟惞鎼淬劌鐭楅幖娣妼缁愭鏌″搴″箺闁稿鏅涜灃闁挎繂鎳庨弳鐐烘煕鎼粹€愁劉闁靛洤瀚板顕€宕掑☉娆戝涧闂?window
 
       let windowId: string | undefined;
+      let targetPaneId: string | undefined;
 
       if (options.target) {
         const targetInfo = TmuxCommandParser.parseTarget(options.target);
@@ -1730,6 +2060,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
           const resolved = this.resolvePaneTarget(targetInfo.paneId, request);
           if (resolved) {
             windowId = resolved.windowId;
+            targetPaneId = resolved.paneId;
           }
         }
       } else {
@@ -1746,10 +2077,12 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
       // 闂傚倷绀佸﹢閬嶅储瑜旈幃娲Ω閵夘喗缍庢繝鐢靛У閼归箖寮告笟鈧弻鏇㈠醇濠靛洤顦╅梺鍝勬缁捇寮诲☉銏犵疀闁宠桨绀侀‖瀣攽閻橆偄浜?
 
+      const scopeId = this.getScopeIdForWindowRequest(windowId, request, targetPaneId);
+
       if (options.layout === 'main-vertical') {
-        this.applyMainVerticalLayout(windowId);
+        this.applyMainVerticalLayout(windowId, scopeId);
       } else if (options.layout === 'tiled') {
-        this.applyTiledLayout(windowId);
+        this.applyTiledLayout(windowId, scopeId);
       }
 
       this.emitWindowSynced(windowId);
@@ -1770,115 +2103,53 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
   /**
    * 闂傚倷绀佸﹢閬嶅储瑜旈幃娲Ω閵夘喗缍庢繝鐢靛У閼归箖寮?main-vertical 闂傚倷鐒﹂惇褰掑春閸曨垰鍨傚ù鍏兼綑閻ゎ喗銇勯幇鍫曟闁稿孩鍨堕妵鍕箳閹存繍浠鹃梺鍝勬媼閸撶喖寮诲☉銏╂晝闁挎繂娲ㄩ悾杈╃磽?30% leader闂傚倸鍊烽悞锔锯偓绗涘懐鐭欓柟杈鹃檮閸ゆ劖銇勯弽銊х細濞?70% teammates闂?   */
-  private applyMainVerticalLayout(windowId: string): void {
+  private applyMainVerticalLayout(windowId: string, scopeId?: string): void {
     this.config.updateWindowStore((state: any) => {
       const window = state.windows.find((w: Window) => w.id === windowId);
       if (!window) {
         throw new Error('Window not found');
       }
 
-      const panes = this.getAllPanesFromLayout(window.layout);
+      const scopedMatch = scopeId
+        ? this.findScopedLayoutMatch(window.layout, (pane) => pane.tmuxScopeId === scopeId)
+        : null;
+      const panes = scopedMatch
+        ? scopedMatch.panes
+        : this.getAllPanesFromLayout(window.layout).filter((pane) => isTerminalPane(pane));
       if (panes.length === 0) {
         return;
       }
 
-      // 缂傚倸鍊搁崐鐑芥倿閿曞倶鈧啳绠涘☉妯碱槯濠电偞鍨跺銊╁础濮樿埖鍊垫繛鎴炵懐閻掍粙鏌?pane 濠电姷鏁搁崑鐘诲箵椤忓棗绶ら柛鎾楀啫鐏婇梺鍓插亖閸ㄨ櫣鈧?leader闂傚倸鍊烽悞锔锯偓绗涘懐鐭欓柟杈鹃檮閸嬪鏌涢埄鍐剧劷闁崇粯娲熼悡顐﹀炊閵婏腹鎷婚梺?30%闂?
-
-      const leaderPane = panes[0];
-      const teammatesPanes = panes.slice(1);
-
-      if (teammatesPanes.length === 0) {
-        // 闂傚倸鍊风粈渚€骞夐敓鐘冲仭妞ゆ牗绋撻々鍙夌節闂堟稒锛旈柤鏉跨仢闇夐柨婵嗘噺鐠愶繝鏌嶇紒妯活棃闁哄苯绉烽¨渚€鏌涢幘瀛樼殤缂?pane闂傚倸鍊烽悞锔锯偓绗涘懐鐭欓柟瀵稿仧闂勫嫰鏌￠崘銊モ偓鑽ょ不閺傛鐔嗛柤鎼佹涧婵牊銇勯妷銉︻棦闁哄苯绉烽¨渚€鏌涢幘瀵告创妤犵偛顦甸幃褔宕奸悢濂夆偓鎾绘⒑閸涘﹦缂氶柛搴ｅ劋鐎电厧鐣濋崟顒傚幗闂婎偄娲﹀ú鏍ㄧ瑜版帗鐓?
-        return;
-      }
-
-      // 闂傚倸鍊风粈渚€骞栭锔绘晞闁告侗鍨崑鎾愁潩閻撳骸顫紓浣介哺閹瑰洭鐛Ο鍏煎珰闁肩⒈鍓涢崢顒勬⒒娴ｄ警鐒剧紒缁樺姍楠炲﹨绠涢幘顖涚€?teammates 闂傚倷鐒﹂惇褰掑春閸曨垰鍨傚ù鍏兼綑閻ゎ喗銇勯幇鍫曟闁稿孩鍨堕妵鍕箳閹存繍浠鹃梺鍝勬媼閸撶喖寮诲☉銏╂晝闁挎繂娲ㄩ悾濂告⒑闁偛鑻晶濠氭煕濞嗗繐鏆ｆ鐐叉瀹曠喖顢涘閬嶇崜闂備胶鎳撻顓熸叏閹绢喗鍊舵い鏇楀亾婵﹥妞藉畷銊︾節閸曨剙娅樺┑鐘愁問閸ㄤ即顢氶鐐?
-
-      const teammatesLayout: LayoutNode = teammatesPanes.length === 1
-        ? { type: 'pane', id: teammatesPanes[0].id, pane: teammatesPanes[0] }
-        : {
-            type: 'split',
-            direction: 'vertical',
-            sizes: Array(teammatesPanes.length).fill(1 / teammatesPanes.length),
-            children: teammatesPanes.map(p => ({
-              type: 'pane',
-              id: p.id,
-              pane: p,
-            })),
-          };
-
-      window.layout = {
-        type: 'split',
-        direction: 'horizontal',
-        sizes: [0.3, 0.7],
-        children: [
-          { type: 'pane', id: leaderPane.id, pane: leaderPane },
-          teammatesLayout,
-        ],
-      };
+      const nextLayout = this.buildMainVerticalLayout(panes);
+      window.layout = scopedMatch
+        ? this.replaceLayoutNodeAtPath(window.layout, scopedMatch.path, nextLayout)
+        : nextLayout;
     });
   }
 
   /**
    * 闂傚倷绀佸﹢閬嶅储瑜旈幃娲Ω閵夘喗缍庢繝鐢靛У閼归箖寮?tiled 闂傚倷鐒﹂惇褰掑春閸曨垰鍨傚ù鍏兼綑閻ゎ喗銇勯幇鍫曟闁稿孩鍨堕妵鍕箳閹存繍浠鹃梺鍝勬媼閸撶喖寮诲☉銏╂晝闁挎繂娲ㄩ悿鍕⒑閻熸澘顥忛柛鎾跺枎椤繐煤椤忓嫮顦悷婊冪Ч瀹曟繄鈧綆浜堕悢鍡欐喐瀹ュ洨鐭撻柣鐔煎亰閸?panes闂?   */
-  private applyTiledLayout(windowId: string): void {
+  private applyTiledLayout(windowId: string, scopeId?: string): void {
     this.config.updateWindowStore((state: any) => {
       const window = state.windows.find((w: Window) => w.id === windowId);
       if (!window) {
         throw new Error('Window not found');
       }
 
-      const panes = this.getAllPanesFromLayout(window.layout);
+      const scopedMatch = scopeId
+        ? this.findScopedLayoutMatch(window.layout, (pane) => pane.tmuxScopeId === scopeId)
+        : null;
+      const panes = scopedMatch
+        ? scopedMatch.panes
+        : this.getAllPanesFromLayout(window.layout).filter((pane) => isTerminalPane(pane));
       if (panes.length === 0) {
         return;
       }
 
-      if (panes.length === 1) {
-        window.layout = { type: 'pane', id: panes[0].id, pane: panes[0] };
-        return;
-      }
-
-      // 闂傚倷娴囧畷鍨叏瀹曞洦顐介柕鍫濇处椤洟鏌￠崶銉ョ仾闁稿鏅犻弻銈嗘叏閹邦兘鍋撳Δ鍐棜濡わ絽鍟悡娆撴倵閻㈡鐒惧ù鐘欏喚鐔嗛悷娆忓婵秹鏌熼鑽ょ煓妞ゃ垺绋戦～婵嬵敆娴ｈ鍞查梻?
-
-      const cols = Math.ceil(Math.sqrt(panes.length));
-      const rows = Math.ceil(panes.length / cols);
-
-      // 闂傚倸鍊风粈渚€骞栭锔绘晞闁告侗鍨崑鎾愁潩閻撳骸顫紓浣介哺閹瑰洭鐛鈧幊婊堟濞戞閽?
-
-      const rowNodes: LayoutNode[] = [];
-      for (let row = 0; row < rows; row++) {
-        const startIdx = row * cols;
-        const endIdx = Math.min(startIdx + cols, panes.length);
-        const rowPanes = panes.slice(startIdx, endIdx);
-
-        if (rowPanes.length === 1) {
-          rowNodes.push({ type: 'pane', id: rowPanes[0].id, pane: rowPanes[0] });
-        } else {
-          rowNodes.push({
-            type: 'split',
-            direction: 'horizontal',
-            sizes: Array(rowPanes.length).fill(1 / rowPanes.length),
-            children: rowPanes.map(p => ({
-              type: 'pane',
-              id: p.id,
-              pane: p,
-            })),
-          });
-        }
-      }
-
-      // 闂傚倸鍊风粈渚€骞栭锔绘晞闁告侗鍨崑鎾愁潩閻撳骸顫紓浣介哺閹瑰洭鐛Ο鍏煎珰闁圭粯甯炶ぐ澶愭⒒娓氣偓閳ь剛鍋涢懟顖涙櫠閹殿喚纾奸弶鍫涘妼濞搭喚鈧娲滈崢褔鍩為幋锕€閱囨い鎰剁磿缁€澶愭⒒娴ｇ瓔鍤欑紒缁樺浮瀹曟垿骞囬弶璺紱?
-
-      if (rowNodes.length === 1) {
-        window.layout = rowNodes[0];
-      } else {
-        window.layout = {
-          type: 'split',
-          direction: 'vertical',
-          sizes: Array(rowNodes.length).fill(1 / rowNodes.length),
-          children: rowNodes,
-        };
-      }
+      const nextLayout = this.buildTiledLayout(panes);
+      window.layout = scopedMatch
+        ? this.replaceLayoutNodeAtPath(window.layout, scopedMatch.path, nextLayout)
+        : nextLayout;
     });
   }
 
@@ -2914,6 +3185,29 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
     const movedPane = { ...sourcePane };
     const direction = parsed.options.horizontal ? 'horizontal' : 'vertical';
+    const targetWindow = this.getWindowById(targetWindowId);
+    const requestTargetTmuxPaneId = this.getRequestTmuxPaneId(request);
+    const requestTargetPaneId = requestTargetTmuxPaneId
+      ? this.resolvePaneTarget(requestTargetTmuxPaneId, request)
+      : null;
+    const targetPane = requestTargetPaneId?.windowId === targetWindowId
+      ? this.findPane(targetWindowId, requestTargetPaneId.paneId ?? '')
+      : (targetWindow?.activePaneId
+        ? this.findPane(targetWindowId, targetWindow.activePaneId)
+        : null)
+        || this.getAllTerminalPanes(targetWindowId)[0]
+        || null;
+
+    if (!targetPane || !isTerminalPane(targetPane)) {
+      return {
+        exitCode: 1,
+        stdout: '',
+        stderr: 'tmux: can\'t find pane\n',
+      };
+    }
+
+    const tmuxScopeId = targetPane.tmuxScopeId || movedPane.tmuxScopeId || randomUUID();
+    movedPane.tmuxScopeId = tmuxScopeId;
     let sourceWindowRemoved = false;
 
     this.config.updateWindowStore((state: any) => {
@@ -2934,20 +3228,27 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         }
       }
 
-      const oldRoot = targetWindow.layout;
-      targetWindow.layout = {
-        type: 'split',
-        direction,
-        sizes: [0.5, 0.5],
-        children: [
-          oldRoot,
-          {
-            type: 'pane',
-            id: movedPane.id,
-            pane: movedPane,
-          },
-        ],
-      };
+      if (!targetPane.tmuxScopeId) {
+        this.assignPaneScopeInLayout(targetWindow.layout, targetPane.id, tmuxScopeId);
+      }
+
+      if (targetWindow.layout.type === 'pane' && targetWindow.layout.id === targetPane.id) {
+        targetWindow.layout = {
+          type: 'split',
+          direction,
+          sizes: [0.5, 0.5],
+          children: [
+            targetWindow.layout,
+            {
+              type: 'pane',
+              id: movedPane.id,
+              pane: movedPane,
+            },
+          ],
+        };
+      } else {
+        this.splitPaneInLayout(targetWindow.layout, targetPane.id, movedPane, direction, 0.5);
+      }
     });
 
     this.rebindPaneMapping(sourceInfo.paneId, targetWindowId, movedPane.id);
@@ -2994,21 +3295,38 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     }
 
     for (const tmuxWindow of [...session.windows]) {
-      if (!tmuxWindow.managed) {
-        continue;
-      }
-
       const window = this.getWindowById(tmuxWindow.actualWindowId);
       if (!window) {
         continue;
       }
 
-      const panes = this.getAllPanesFromLayout(window.layout);
-      for (const pane of panes) {
-        const tmuxPaneId = this.getTmuxPaneId(window.id, pane.id);
-        const pid = this.config.processManager.getPidByPane(window.id, pane.id);
+      if (tmuxWindow.managed) {
+        const panes = this.getAllTerminalPanes(window.id);
+        for (const pane of panes) {
+          const tmuxPaneId = this.getTmuxPaneId(window.id, pane.id);
+          const pid = this.config.processManager.getPidByPane(window.id, pane.id);
+          if (pid) {
+            this.detachPaneRuntime(window.id, pane.id, pid);
+            try {
+              await this.config.processManager.killProcess(pid);
+            } catch {}
+          }
+          if (tmuxPaneId) {
+            this.unregisterPane(tmuxPaneId);
+          }
+        }
+
+        this.removeWindowFromStore(window.id);
+        this.emitWindowRemoved(window.id);
+        continue;
+      }
+
+      const collapseResult = this.collapseTmuxScopesInWindow(window);
+      for (const paneId of collapseResult.affectedPaneIds) {
+        const pid = this.config.processManager.getPidByPane(window.id, paneId);
+        const tmuxPaneId = this.getTmuxPaneId(window.id, paneId);
         if (pid) {
-          this.detachPaneRuntime(window.id, pane.id, pid);
+          this.detachPaneRuntime(window.id, paneId, pid);
           try {
             await this.config.processManager.killProcess(pid);
           } catch {}
@@ -3018,8 +3336,15 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
         }
       }
 
-      this.removeWindowFromStore(window.id);
-      this.emitWindowRemoved(window.id);
+      const panes = this.getAllTerminalPanes(window.id);
+      for (const pane of panes) {
+        const tmuxPaneId = this.getTmuxPaneId(window.id, pane.id);
+        if (tmuxPaneId) {
+          this.unregisterPane(tmuxPaneId);
+        }
+      }
+
+      this.emitWindowSynced(window.id);
     }
 
     this.sessions.delete(sessionKey);

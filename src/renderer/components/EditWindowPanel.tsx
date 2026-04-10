@@ -5,7 +5,7 @@ import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { Window } from '../types/window';
 import { useI18n } from '../i18n';
-import { getAllPanes } from '../utils/layoutHelpers';
+import { getCurrentWindowTerminalPane } from '../utils/windowWorkingDirectory';
 
 interface EditWindowPanelProps {
   window: Window;
@@ -27,8 +27,7 @@ const AUTO_SHELL_OPTION_VALUE = '__auto__';
  */
 export const EditWindowPanel: React.FC<EditWindowPanelProps> = ({ window, onClose, onSave }) => {
   const { t } = useI18n();
-  const panes = getAllPanes(window.layout);
-  const firstPane = panes[0];
+  const firstPane = getCurrentWindowTerminalPane(window);
 
   const [name, setName] = useState(window.name);
   const [workingDirectory, setWorkingDirectory] = useState(firstPane?.cwd || '');
