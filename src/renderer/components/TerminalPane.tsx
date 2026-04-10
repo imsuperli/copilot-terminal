@@ -17,6 +17,7 @@ import {
 } from '../utils/terminalLinks';
 import { AppTooltip } from './ui/AppTooltip';
 import { useWindowStore } from '../stores/windowStore';
+import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import {
   applyTerminalInputToSSHCwdTracker,
   createSSHCwdTrackerState,
@@ -217,9 +218,11 @@ const TerminalLinkDragOverlay: React.FC<TerminalLinkDragOverlayProps> = ({
         event.dataTransfer.effectAllowed = 'copy';
         event.dataTransfer.setData('text/uri-list', url);
         event.dataTransfer.setData('text/plain', url);
+        setBrowserDropDragActive(true);
         onDragStateChange(true);
       }}
       onDragEnd={() => {
+        setBrowserDropDragActive(false);
         onDragStateChange(false);
       }}
     >

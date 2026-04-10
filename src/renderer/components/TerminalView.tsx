@@ -44,6 +44,7 @@ import {
   DEFAULT_BROWSER_URL,
   getSmartBrowserSplitDirection,
 } from '../utils/browserPane';
+import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import { resolveBrowserDropAction } from '../utils/browserDrop';
 import {
   applyWindowStartResult,
@@ -472,11 +473,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   >(() => ({
     type: DragItemTypes.BROWSER_TOOL,
     canDrag: Boolean(terminalWindow.activePaneId),
-    item: {
-      type: DragItemTypes.BROWSER_TOOL,
-      windowId: terminalWindow.id,
-      sourcePaneId: terminalWindow.activePaneId ?? '',
-      url: activeBrowserDragUrl,
+    item: () => {
+      setBrowserDropDragActive(true);
+
+      return {
+        type: DragItemTypes.BROWSER_TOOL,
+        windowId: terminalWindow.id,
+        sourcePaneId: terminalWindow.activePaneId ?? '',
+        url: activeBrowserDragUrl,
+      };
+    },
+    end: () => {
+      setBrowserDropDragActive(false);
     },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),

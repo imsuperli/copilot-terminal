@@ -9,6 +9,7 @@ import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
 import { DEFAULT_BROWSER_URL } from '../utils/browserPane';
+import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import { DragItemTypes, PaneDropZone } from './dnd';
 import type { BrowserDropDragItem, BrowserPaneDragItem, BrowserToolDragItem, PaneDropResult } from './dnd';
 
@@ -275,11 +276,18 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
 }) => {
   const [{ isDragging }, drag, preview] = useDrag<BrowserPaneDragItem, unknown, { isDragging: boolean }>(() => ({
     type: DragItemTypes.BROWSER_PANE,
-    item: {
-      type: DragItemTypes.BROWSER_PANE,
-      windowId,
-      paneId: pane.id,
-      url: pane.browser?.url ?? DEFAULT_BROWSER_URL,
+    item: () => {
+      setBrowserDropDragActive(true);
+
+      return {
+        type: DragItemTypes.BROWSER_PANE,
+        windowId,
+        paneId: pane.id,
+        url: pane.browser?.url ?? DEFAULT_BROWSER_URL,
+      };
+    },
+    end: () => {
+      setBrowserDropDragActive(false);
     },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),

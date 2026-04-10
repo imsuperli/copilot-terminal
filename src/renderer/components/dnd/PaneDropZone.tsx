@@ -12,6 +12,10 @@ import {
   isBrowserDropItemType,
   isCenterBrowserDropAllowed,
 } from '../../utils/browserDrop';
+import {
+  getBrowserDropDragActive,
+  subscribeBrowserDropDragActive,
+} from '../../utils/browserDropDragState';
 
 interface PaneDropZoneProps {
   targetWindowId: string;
@@ -60,6 +64,9 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [hoverPosition, setHoverPosition] = useState<PaneDropPosition | null>(null);
+  const [isBrowserDropDragActive, setIsBrowserDropDragActive] = useState(() => getBrowserDropDragActive());
+
+  useEffect(() => subscribeBrowserDropDragActive(setIsBrowserDropDragActive), []);
 
   const canAcceptItem = useCallback((item: BrowserDropDragItem) => {
     return canBrowserDropTargetAcceptItem(item, targetWindowId, targetPaneId);
@@ -136,7 +143,7 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
   drop(overlayRef);
 
   const showIndicator = isOver && canDrop && hoverPosition;
-  const dropOverlayActive = isBrowserDropItemType(itemType);
+  const dropOverlayActive = isBrowserDropDragActive || isBrowserDropItemType(itemType);
 
   return (
     <div className={`relative h-full w-full ${className}`}>
