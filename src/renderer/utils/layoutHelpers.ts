@@ -159,7 +159,8 @@ export function splitPane(
   layout: LayoutNode,
   targetPaneId: string,
   direction: 'horizontal' | 'vertical',
-  newPane: Pane
+  newPane: Pane,
+  insertBefore: boolean = false,
 ): LayoutNode | null {
   if (layout.type === 'pane') {
     if (layout.id === targetPaneId) {
@@ -174,7 +175,7 @@ export function splitPane(
         type: 'split',
         direction,
         sizes: [0.5, 0.5], // 默认均分
-        children: [layout, newPaneNode],
+        children: insertBefore ? [newPaneNode, layout] : [layout, newPaneNode],
       };
 
       return splitNode;
@@ -184,7 +185,7 @@ export function splitPane(
 
   // SplitNode: 递归处理子节点
   const newChildren = layout.children.map(child =>
-    splitPane(child, targetPaneId, direction, newPane)
+    splitPane(child, targetPaneId, direction, newPane, insertBefore)
   );
 
   // 检查是否有子节点被修改
@@ -195,6 +196,36 @@ export function splitPane(
     ...layout,
     children: newChildren.filter((child): child is LayoutNode => child !== null),
   };
+}
+
+export function movePane(
+  layout: LayoutNode,
+  sourcePaneId: string,
+  targetPaneId: string,
+  direction: 'horizontal' | 'vertical',
+  insertBefore: boolean = false,
+): LayoutNode | null {
+  if (sourcePaneId === targetPaneId) {
+    return layout;
+  }
+
+  const sourcePaneNode = findPaneNode(layout, sourcePaneId);
+  if (!sourcePaneNode) {
+    return layout;
+  }
+
+  const layoutWithoutSource = closePane(layout, sourcePaneId);
+  if (!layoutWithoutSource) {
+    return layout;
+  }
+
+  return splitPane(
+    layoutWithoutSource,
+    targetPaneId,
+    direction,
+    sourcePaneNode.pane,
+    insertBefore,
+  );
 }
 
 /**

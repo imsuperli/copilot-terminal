@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, ExternalLink, Globe, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, Globe, GripVertical, RefreshCw, X } from 'lucide-react';
 import type { Pane } from '../types/window';
 import { AppTooltip } from './ui/AppTooltip';
 import { useI18n } from '../i18n';
@@ -26,6 +26,8 @@ export interface BrowserPaneProps {
   isActive: boolean;
   onActivate: () => void;
   onClose?: () => void;
+  dragHandleRef?: ((node: HTMLDivElement | null) => void) | null;
+  isDragging?: boolean;
 }
 
 export const BrowserPane: React.FC<BrowserPaneProps> = ({
@@ -34,6 +36,8 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   isActive,
   onActivate,
   onClose,
+  dragHandleRef,
+  isDragging = false,
 }) => {
   const { t } = useI18n();
   const updatePane = useWindowStore((state) => state.updatePane);
@@ -287,9 +291,19 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-zinc-800 bg-zinc-950
         ${isActive ? 'ring-1 ring-sky-400 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]' : ''}
       `}
+      style={{ opacity: isDragging ? 0.45 : 1 }}
       onMouseDownCapture={onActivate}
     >
       <div className="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
+        <div
+          ref={dragHandleRef ?? undefined}
+          className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:cursor-grabbing"
+          aria-label={t('browserPane.move')}
+          title={t('browserPane.move')}
+        >
+          <GripVertical size={12} />
+        </div>
+
         <div className="flex items-center gap-1 text-zinc-400">
           <AppTooltip content={t('browserPane.back')} placement="pane-corner">
             <button

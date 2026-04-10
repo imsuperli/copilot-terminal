@@ -1,4 +1,6 @@
 ﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import { useDrag } from 'react-dnd';
+import { getEmptyImage } from 'react-dnd-html5-backend';
 import { v4 as uuidv4 } from 'uuid';
 import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
@@ -14,8 +16,8 @@ import { IDEIcon } from './icons/IDEIcons';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
 import { useI18n } from '../i18n';
-import { DropZone } from './dnd';
-import type { WindowCardDragItem, DropResult } from './dnd';
+import { DragItemTypes, DropZone } from './dnd';
+import type { BrowserPaneDragItem, BrowserToolDragItem, PaneDropResult, WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
@@ -190,6 +192,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     addWindow,
     removeWindow,
     splitPaneInWindow,
+    placePaneInWindow,
+    movePaneInWindow,
     closePaneInWindow,
     setActivePane,
     archiveWindow,
@@ -453,6 +457,71 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
     setActivePane(terminalWindow.id, newPaneId);
   }, [setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
+
+  const activeBrowserDragUrl = useMemo(() => (
+    activePane && isBrowserPane(activePane)
+      ? activePane.browser?.url ?? DEFAULT_BROWSER_URL
+      : DEFAULT_BROWSER_URL
+  ), [activePane]);
+
+  const [{ isDragging: isDraggingBrowserTool }, dragBrowserTool, previewBrowserTool] = useDrag<
+    BrowserToolDragItem,
+    unknown,
+    { isDragging: boolean }
+  >(() => ({
+    type: DragItemTypes.BROWSER_TOOL,
+    canDrag: Boolean(terminalWindow.activePaneId),
+    item: {
+      type: DragItemTypes.BROWSER_TOOL,
+      windowId: terminalWindow.id,
+      sourcePaneId: terminalWindow.activePaneId ?? '',
+      url: activeBrowserDragUrl,
+    },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }), [activeBrowserDragUrl, terminalWindow.activePaneId, terminalWindow.id]);
+
+  useEffect(() => {
+    previewBrowserTool(getEmptyImage(), { captureDraggingState: true });
+  }, [previewBrowserTool]);
+
+  const handleBrowserPaneDrop = useCallback((
+    item: BrowserPaneDragItem | BrowserToolDragItem,
+    result: PaneDropResult,
+  ) => {
+    const direction = (result.position === 'left' || result.position === 'right')
+      ? 'horizontal'
+      : 'vertical';
+    const insertBefore = result.position === 'left' || result.position === 'top';
+
+    if (item.type === DragItemTypes.BROWSER_TOOL) {
+      const newPaneId = uuidv4();
+      const newPane = createBrowserPaneDraft(newPaneId, item.url || DEFAULT_BROWSER_URL);
+      placePaneInWindow(
+        terminalWindow.id,
+        result.targetPaneId,
+        direction,
+        newPane,
+        insertBefore,
+      );
+      setActivePane(terminalWindow.id, newPaneId);
+      return;
+    }
+
+    if (item.windowId !== terminalWindow.id) {
+      return;
+    }
+
+    movePaneInWindow(
+      terminalWindow.id,
+      item.paneId,
+      result.targetPaneId,
+      direction,
+      insertBefore,
+    );
+    setActivePane(terminalWindow.id, item.paneId);
+  }, [movePaneInWindow, placePaneInWindow, setActivePane, terminalWindow.id]);
 
   // 澶勭悊鎵撳紑鏂囦欢澶?
   const handleOpenFolder = useCallback(async () => {
@@ -939,7 +1008,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 type="button"
                 aria-label={t('terminalView.splitBrowser')}
                 onClick={handleSplitBrowserPane}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                ref={dragBrowserTool}
+                className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 text-zinc-100 transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-sky-500/30' : 'cursor-grab hover:bg-zinc-700 active:cursor-grabbing'}`}
               >
                 <SplitBrowserIcon />
               </button>
@@ -1043,6 +1113,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 onPaneActivate={handlePaneActivate}
                 onPaneClose={handlePaneClose}
                 onPaneExit={handlePaneExit}
+                onBrowserPaneDrop={handleBrowserPaneDrop}
               />
             ) : (
               <DropZone
@@ -1058,6 +1129,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   onPaneActivate={handlePaneActivate}
                   onPaneClose={handlePaneClose}
                   onPaneExit={handlePaneExit}
+                  onBrowserPaneDrop={handleBrowserPaneDrop}
                 />
               </DropZone>
             )}

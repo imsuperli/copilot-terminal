@@ -75,14 +75,13 @@ export function getSmartBrowserSplitDirection(
   }
 
   const path = findPanePath(layout, activePaneId);
-  const nearestParent = path?.[path.length - 1]?.node;
+  const nearestParent = [...(path ?? [])]
+    .reverse()
+    .find((entry) => entry.node.children.length > 1)
+    ?.node;
   if (!nearestParent) {
     return paneCount >= 3 ? 'vertical' : 'horizontal';
   }
 
-  if (paneCount >= 3) {
-    return getOppositeDirection(nearestParent.direction);
-  }
-
-  return nearestParent.direction === 'horizontal' ? 'vertical' : 'horizontal';
+  return getOppositeDirection(nearestParent.direction);
 }

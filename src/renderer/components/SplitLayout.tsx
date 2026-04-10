@@ -1,11 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LayoutNode, SplitNode } from '../types/window';
+import { useDrag } from 'react-dnd';
+import { getEmptyImage } from 'react-dnd-html5-backend';
+import { LayoutNode, SplitNode, Pane } from '../types/window';
 import { TerminalPane } from './TerminalPane';
 import { BrowserPane } from './BrowserPane';
 import { getPaneCount } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
+import { DEFAULT_BROWSER_URL } from '../utils/browserPane';
+import { DragItemTypes, PaneDropZone } from './dnd';
+import type { BrowserPaneDragItem, BrowserToolDragItem, PaneDropResult } from './dnd';
 
 export interface SplitLayoutProps {
   windowId: string;
@@ -15,6 +20,7 @@ export interface SplitLayoutProps {
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
   onPaneExit?: (paneId: string) => void;
+  onBrowserPaneDrop?: (item: BrowserPaneDragItem | BrowserToolDragItem, result: PaneDropResult) => void;
 }
 
 /**
@@ -29,6 +35,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   onPaneActivate,
   onPaneClose,
   onPaneExit,
+  onBrowserPaneDrop,
 }) => {
   const { t } = useI18n();
   const updateSplitSizes = useWindowStore((state) => state.updateSplitSizes);
@@ -63,6 +70,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
         onPaneActivate={onPaneActivate}
         onPaneClose={onPaneClose}
         onPaneExit={onPaneExit}
+        onBrowserPaneDrop={onBrowserPaneDrop}
         onSplitResize={updateSplitSizes}
       />
     </div>
@@ -85,6 +93,7 @@ interface SplitContainerProps {
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
   onPaneExit?: (paneId: string) => void;
+  onBrowserPaneDrop?: (item: BrowserPaneDragItem | BrowserToolDragItem, result: PaneDropResult) => void;
   onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
 
@@ -98,6 +107,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   onPaneActivate,
   onPaneClose,
   onPaneExit,
+  onBrowserPaneDrop,
   onSplitResize,
 }) => {
   const { t } = useI18n();
@@ -195,6 +205,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
               onPaneActivate={onPaneActivate}
               onPaneClose={onPaneClose}
               onPaneExit={onPaneExit}
+              onBrowserPaneDrop={onBrowserPaneDrop}
               onSplitResize={onSplitResize}
             />
           </div>
@@ -243,8 +254,54 @@ interface LayoutNodeRendererProps {
   onPaneActivate: (paneId: string) => void;
   onPaneClose: (paneId: string) => void;
   onPaneExit?: (paneId: string) => void;
+  onBrowserPaneDrop?: (item: BrowserPaneDragItem | BrowserToolDragItem, result: PaneDropResult) => void;
   onSplitResize: (windowId: string, splitPath: number[], sizes: number[]) => void;
 }
+
+interface DraggableBrowserPaneProps {
+  windowId: string;
+  pane: Pane;
+  isActive: boolean;
+  onActivate: () => void;
+  onClose?: () => void;
+}
+
+const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
+  windowId,
+  pane,
+  isActive,
+  onActivate,
+  onClose,
+}) => {
+  const [{ isDragging }, drag, preview] = useDrag<BrowserPaneDragItem, unknown, { isDragging: boolean }>(() => ({
+    type: DragItemTypes.BROWSER_PANE,
+    item: {
+      type: DragItemTypes.BROWSER_PANE,
+      windowId,
+      paneId: pane.id,
+      url: pane.browser?.url ?? DEFAULT_BROWSER_URL,
+    },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }), [windowId, pane.browser?.url, pane.id]);
+
+  useEffect(() => {
+    preview(getEmptyImage(), { captureDraggingState: true });
+  }, [preview]);
+
+  return (
+    <BrowserPane
+      windowId={windowId}
+      pane={pane}
+      isActive={isActive}
+      onActivate={onActivate}
+      onClose={onClose}
+      dragHandleRef={drag}
+      isDragging={isDragging}
+    />
+  );
+};
 
 const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
   windowId,
@@ -256,32 +313,45 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
   onPaneActivate,
   onPaneClose,
   onPaneExit,
+  onBrowserPaneDrop,
   onSplitResize,
 }) => {
   if (layout.type === 'pane') {
     const isActive = layout.id === activePaneId;
-    if (isBrowserPane(layout.pane)) {
-      return (
-        <BrowserPane
+    const paneContent = isBrowserPane(layout.pane)
+      ? (
+        <DraggableBrowserPane
           windowId={windowId}
           pane={layout.pane}
           isActive={isActive}
           onActivate={() => onPaneActivate(layout.id)}
           onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
         />
+      )
+      : (
+        <TerminalPane
+          windowId={windowId}
+          pane={layout.pane}
+          isActive={isActive}
+          isWindowActive={isWindowActive}
+          onActivate={() => onPaneActivate(layout.id)}
+          onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
+          onProcessExit={onPaneExit ? () => onPaneExit(layout.id) : undefined}
+        />
       );
+
+    if (!onBrowserPaneDrop) {
+      return paneContent;
     }
 
     return (
-      <TerminalPane
-        windowId={windowId}
-        pane={layout.pane}
-        isActive={isActive}
-        isWindowActive={isWindowActive}
-        onActivate={() => onPaneActivate(layout.id)}
-        onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
-        onProcessExit={onPaneExit ? () => onPaneExit(layout.id) : undefined}
-      />
+      <PaneDropZone
+        targetWindowId={windowId}
+        targetPaneId={layout.id}
+        onDrop={onBrowserPaneDrop}
+      >
+        {paneContent}
+      </PaneDropZone>
     );
   }
 
@@ -296,6 +366,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
       onPaneActivate={onPaneActivate}
       onPaneClose={onPaneClose}
       onPaneExit={onPaneExit}
+      onBrowserPaneDrop={onBrowserPaneDrop}
       onSplitResize={onSplitResize}
     />
   );

@@ -22,7 +22,19 @@ vi.mock('../SettingsPanel', () => ({
   SettingsPanel: () => null,
 }));
 
+vi.mock('react-dnd', () => ({
+  useDrag: () => [{ isDragging: false }, () => undefined, () => undefined],
+}));
+
+vi.mock('react-dnd-html5-backend', () => ({
+  getEmptyImage: () => ({}),
+}));
+
 vi.mock('../dnd', () => ({
+  DragItemTypes: {
+    BROWSER_TOOL: 'BROWSER_TOOL',
+    BROWSER_PANE: 'BROWSER_PANE',
+  },
   DropZone: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 

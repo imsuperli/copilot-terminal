@@ -6,6 +6,7 @@ import { CustomCategory } from '../../shared/types/custom-category';
 import {
   splitPane as splitPaneInLayout,
   closePane as closePaneInLayout,
+  movePane as movePaneInLayout,
   updatePaneInLayout,
   updateSplitSizes as updateSplitSizesInLayout,
   getAllPanes,
@@ -214,6 +215,20 @@ interface WindowStore {
   updatePaneRuntime: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
   pauseWindowState: (windowId: string) => void;
   splitPaneInWindow: (windowId: string, targetPaneId: string, direction: 'horizontal' | 'vertical', newPane: Pane) => void;
+  placePaneInWindow: (
+    windowId: string,
+    targetPaneId: string,
+    direction: 'horizontal' | 'vertical',
+    newPane: Pane,
+    insertBefore: boolean,
+  ) => void;
+  movePaneInWindow: (
+    windowId: string,
+    paneId: string,
+    targetPaneId: string,
+    direction: 'horizontal' | 'vertical',
+    insertBefore: boolean,
+  ) => void;
   closePaneInWindow: (windowId: string, paneId: string, options?: { syncProcess?: boolean }) => void;
   updateSplitSizes: (windowId: string, splitPath: number[], sizes: number[]) => void;
   setActivePane: (windowId: string, paneId: string) => void;
@@ -553,6 +568,44 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
       // 触发自动保存
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
+    },
+
+    placePaneInWindow: (windowId, targetPaneId, direction, newPane, insertBefore) => {
+      set((state) => {
+        const window = state.windows.find(w => w.id === windowId);
+        if (window) {
+          const newLayout = splitPaneInLayout(window.layout, targetPaneId, direction, newPane, insertBefore);
+          if (newLayout) {
+            window.layout = newLayout;
+            window.lastActiveAt = new Date().toISOString();
+          }
+        }
+      });
+      const { windows, groups } = get();
+      triggerAutoSave(windows, groups);
+    },
+
+    movePaneInWindow: (windowId, paneId, targetPaneId, direction, insertBefore) => {
+      if (paneId === targetPaneId) {
+        return;
+      }
+
+      set((state) => {
+        const window = state.windows.find(w => w.id === windowId);
+        if (!window) {
+          return;
+        }
+
+        const newLayout = movePaneInLayout(window.layout, paneId, targetPaneId, direction, insertBefore);
+        if (!newLayout || newLayout === window.layout) {
+          return;
+        }
+
+        window.layout = newLayout;
+        window.lastActiveAt = new Date().toISOString();
+      });
       const { windows, groups } = get();
       triggerAutoSave(windows, groups);
     },

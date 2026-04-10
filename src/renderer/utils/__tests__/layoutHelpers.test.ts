@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closePane, collapseTmuxAgentPanesForPause, updateSplitSizes } from '../layoutHelpers';
+import { closePane, collapseTmuxAgentPanesForPause, movePane, updateSplitSizes } from '../layoutHelpers';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 
 function createPane(id: string, overrides: Partial<Pane> = {}): Pane {
@@ -114,6 +114,56 @@ describe('layoutHelpers.closePane', () => {
     expect(rightSide.children).toHaveLength(1);
     expect(rightSide.sizes).toEqual([1]);
     expect(rightSide.children[0]).toMatchObject({ type: 'pane', id: 'teammate-b' });
+  });
+});
+
+describe('layoutHelpers.movePane', () => {
+  it('moves a pane before the target on a horizontal drop', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        createPaneNode('left'),
+        {
+          type: 'split',
+          direction: 'vertical',
+          sizes: [0.5, 0.5],
+          children: [
+            createPaneNode('browser'),
+            createPaneNode('bottom'),
+          ],
+        },
+      ],
+    };
+
+    const nextLayout = movePane(layout, 'browser', 'left', 'horizontal', true);
+    expect(nextLayout).not.toBeNull();
+
+    if (!nextLayout || nextLayout.type !== 'split') {
+      throw new Error('expected root split');
+    }
+
+    const movedNode = nextLayout.children[0];
+    expect(movedNode.type).toBe('split');
+    if (movedNode.type !== 'split') {
+      throw new Error('expected moved subtree split');
+    }
+
+    expect(movedNode.direction).toBe('horizontal');
+    expect(movedNode.children[0]).toMatchObject({ type: 'pane', id: 'browser' });
+    expect(movedNode.children[1]).toMatchObject({ type: 'pane', id: 'left' });
+  });
+
+  it('returns the original layout when moving onto the same pane', () => {
+    const layout: LayoutNode = {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [createPaneNode('left'), createPaneNode('right')],
+    };
+
+    expect(movePane(layout, 'left', 'left', 'vertical', false)).toBe(layout);
   });
 });
 

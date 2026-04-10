@@ -10,6 +10,10 @@ export const DragItemTypes = {
   GROUP_CARD: 'GROUP_CARD',
   /** 分类项（侧边栏中的 CategoryItem，用于分类排序） */
   CATEGORY_ITEM: 'CATEGORY_ITEM',
+  /** 浏览器工具按钮（用于拖拽创建浏览器 pane） */
+  BROWSER_TOOL: 'BROWSER_TOOL',
+  /** 浏览器 pane（用于拖拽调整位置） */
+  BROWSER_PANE: 'BROWSER_PANE',
 } as const;
 
 /** WindowCard 拖拽数据 */
@@ -31,8 +35,24 @@ export interface GroupCardDragItem {
   source: 'cardGrid';
 }
 
+export interface BrowserToolDragItem {
+  type: typeof DragItemTypes.BROWSER_TOOL;
+  windowId: string;
+  sourcePaneId: string;
+  url: string;
+}
+
+export interface BrowserPaneDragItem {
+  type: typeof DragItemTypes.BROWSER_PANE;
+  windowId: string;
+  paneId: string;
+  url: string;
+}
+
 /** DropZone 放置位置（用于确定分割方向） */
 export type DropPosition = 'left' | 'right' | 'top' | 'bottom' | 'center';
+
+export type PaneDropPosition = Exclude<DropPosition, 'center'>;
 
 /** DropZone 放置结果 */
 export interface DropResult {
@@ -42,4 +62,10 @@ export interface DropResult {
   targetWindowId?: string;
   /** 目标组 ID（拖到某个组上时） */
   targetGroupId?: string;
+}
+
+export interface PaneDropResult {
+  position: PaneDropPosition;
+  targetPaneId: string;
+  targetWindowId: string;
 }

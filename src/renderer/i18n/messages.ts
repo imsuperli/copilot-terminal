@@ -600,6 +600,7 @@ export const zhCNMessages = {
   'browserPane.forward': '前进',
   'browserPane.refresh': '刷新',
   'browserPane.openExternal': '在系统浏览器中打开',
+  'browserPane.move': '拖动浏览器窗格',
 
   'cleanup.title': '正在清理子进程',
   'cleanup.progress': '进度',
@@ -1216,6 +1217,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'browserPane.forward': 'Forward',
   'browserPane.refresh': 'Refresh',
   'browserPane.openExternal': 'Open in system browser',
+  'browserPane.move': 'Move browser pane',
 
   'cleanup.title': 'Cleaning up child processes',
   'cleanup.progress': 'Progress',
