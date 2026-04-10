@@ -430,8 +430,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     <div
       className={`
         relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-zinc-800 bg-zinc-950
-        ${isDragging ? 'rounded-none' : 'rounded-md'}
-        ${isActive && !isDragging ? 'ring-1 ring-sky-400 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]' : ''}
       `}
       style={{ opacity: isDragging ? 0.45 : 1 }}
       onMouseDownCapture={onActivate}
