@@ -87,4 +87,25 @@ describe('terminalLinks', () => {
 
     expect(openExternalUrl).toHaveBeenCalledTimes(1);
   });
+
+  it('does not block document mouseup when activating a link', async () => {
+    const openExternalUrl = vi.fn().mockResolvedValue(undefined);
+    const handler = createTerminalLinkHandler(openExternalUrl);
+    const element = document.createElement('div');
+    const documentMouseUpListener = vi.fn();
+
+    document.body.appendChild(element);
+    document.addEventListener('mouseup', documentMouseUpListener);
+    element.addEventListener('mouseup', (event) => {
+      handler.activate(event, 'https://example.com/docs');
+    });
+
+    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+
+    expect(documentMouseUpListener).toHaveBeenCalledTimes(1);
+
+    document.removeEventListener('mouseup', documentMouseUpListener);
+    element.remove();
+  });
 });

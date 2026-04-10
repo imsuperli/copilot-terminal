@@ -94,7 +94,6 @@ async function openTerminalHttpUrl(
   }
 
   event?.preventDefault();
-  event?.stopPropagation();
 
   try {
     await openExternalUrl(sanitizedUrl);
