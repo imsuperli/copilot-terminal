@@ -20,6 +20,13 @@ describe('TmuxCommandParser', () => {
       expect(result.command).toBe(TmuxCommand.ListPanes);
     });
 
+    it('应该解析全局 -f config-file 参数', () => {
+      const result = TmuxCommandParser.parse(['tmux', '-f', 'C:/tmp/tmux.conf', 'new-session', '-s', 'demo']);
+      expect(result.globalOptions.configFile).toBe('C:/tmp/tmux.conf');
+      expect(result.command).toBe(TmuxCommand.NewSession);
+      expect(result.options.sessionName).toBe('demo');
+    });
+
     it('应该解析 split-window 命令', () => {
       const result = TmuxCommandParser.parse([
         'tmux',

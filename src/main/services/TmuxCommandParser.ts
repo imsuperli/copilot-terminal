@@ -48,9 +48,19 @@ export class TmuxCommandParser {
     // 移除 'tmux' 本身（如果存在）
     const args = argv[0] === 'tmux' ? argv.slice(1) : [...argv];
 
-    // 解析全局选项（-L socket）
+    if (args.length === 1 && args[0] === '-V') {
+      return {
+        command: TmuxCommand.Version,
+        globalOptions: {},
+        options: {},
+        args: [],
+      };
+    }
+
+    // 解析全局选项（-L socket、-f config-file 等）
     const globalOptions: ParsedTmuxCommand['globalOptions'] = {};
     let commandStartIndex = 0;
+    const globalFlagPattern = /^-[248ClNuv]+$/;
 
     while (commandStartIndex < args.length) {
       const arg = args[commandStartIndex];
@@ -58,6 +68,27 @@ export class TmuxCommandParser {
       if (arg === '-L' && commandStartIndex + 1 < args.length) {
         globalOptions.socket = args[commandStartIndex + 1];
         commandStartIndex += 2;
+      } else if (arg === '-f' && commandStartIndex + 1 < args.length) {
+        globalOptions.configFile = args[commandStartIndex + 1];
+        commandStartIndex += 2;
+      } else if (arg === '-S' && commandStartIndex + 1 < args.length) {
+        globalOptions.socketPath = args[commandStartIndex + 1];
+        commandStartIndex += 2;
+      } else if (arg === '-T' && commandStartIndex + 1 < args.length) {
+        globalOptions.features = args[commandStartIndex + 1];
+        commandStartIndex += 2;
+      } else if (arg === '-c' && commandStartIndex + 1 < args.length) {
+        globalOptions.shellCommand = args[commandStartIndex + 1];
+        commandStartIndex += 2;
+      } else if (globalFlagPattern.test(arg)) {
+        commandStartIndex += 1;
+      } else if (arg === '-V' && commandStartIndex === args.length - 1) {
+        return {
+          command: TmuxCommand.Version,
+          globalOptions,
+          options: {},
+          args: [],
+        };
       } else if (arg.startsWith('-')) {
         // 遇到其他选项，停止解析全局选项
         break;

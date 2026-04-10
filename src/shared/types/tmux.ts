@@ -193,6 +193,14 @@ export interface ParsedTmuxCommand {
   globalOptions: {
     /** -L socket 闂傚倷绀侀幉锟犳偡閵夆晛纾圭憸鐗堝笒濮?*/
     socket?: string;
+    /** -f config-file */
+    configFile?: string;
+    /** -S socket-path */
+    socketPath?: string;
+    /** -T features */
+    features?: string;
+    /** -c shell-command */
+    shellCommand?: string;
   };
 
   /** 闂傚倷绀侀幉锛勭矙閹烘鍨傛繝闈涱儏缁狀噣鏌曢崼婵愭Ч闁绘帟顕ч…鍧楁嚋闂堟稑顫囬梺?*/

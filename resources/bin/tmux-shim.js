@@ -71,11 +71,63 @@ const RPC_COMMANDS = new Set([
   'attach-session',
 ]);
 
-function getSubcommand(args) {
-  for (const arg of args) {
-    if (!arg.startsWith('-')) return arg;
+const TMUX_GLOBAL_OPTIONS_WITH_VALUE = new Set(['-L', '-f', '-S', '-T', '-c']);
+const TMUX_GLOBAL_FLAG_PATTERN = /^-[248ClNuvV]+$/;
+
+function parseInvocation(args) {
+  const globalOptions = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === '--') {
+      return {
+        globalOptions,
+        subcommand: args[index + 1] ?? null,
+        unsupportedGlobalOption: null,
+      };
+    }
+
+    if (!arg.startsWith('-') || arg === '-') {
+      return {
+        globalOptions,
+        subcommand: arg,
+        unsupportedGlobalOption: null,
+      };
+    }
+
+    if (TMUX_GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
+      const value = args[index + 1];
+      if (value === undefined) {
+        return {
+          globalOptions,
+          subcommand: null,
+          unsupportedGlobalOption: `${arg}:missing-value`,
+        };
+      }
+
+      globalOptions.push({ option: arg, value });
+      index += 1;
+      continue;
+    }
+
+    if (TMUX_GLOBAL_FLAG_PATTERN.test(arg)) {
+      globalOptions.push({ option: arg, value: true });
+      continue;
+    }
+
+    return {
+      globalOptions,
+      subcommand: null,
+      unsupportedGlobalOption: arg,
+    };
   }
-  return null;
+
+  return {
+    globalOptions,
+    subcommand: null,
+    unsupportedGlobalOption: null,
+  };
 }
 
 function findRealTmux() {
@@ -93,6 +145,7 @@ function findRealTmux() {
 function execRealTmux(args) {
   const realTmux = findRealTmux();
   if (!realTmux) {
+    debug('passthrough failed because real tmux was not found');
     process.stderr.write('tmux: command not found\n');
     process.exit(127);
   }
@@ -110,6 +163,13 @@ function execRealTmux(args) {
   delete env.AUSOME_TMUX_LOG_FILE;
   delete env.AUSOME_TMUX_DEBUG;
   delete env.AUSOME_NODE_PATH;
+
+  debug('execRealTmux', {
+    realTmux,
+    args,
+    cwd: process.cwd(),
+    hadFakeTmuxEnv: Boolean(process.env.AUSOME_TMUX_RPC),
+  });
 
   const child = spawn(realTmux, args, { env, stdio: 'inherit' });
 
@@ -137,16 +197,40 @@ function execRealTmux(args) {
 const rpcPathEnv = process.env.AUSOME_TMUX_RPC;
 const expectedTmux = process.env.AUSOME_TMUX_EXPECTED_TMUX;
 const currentTmux = process.env.TMUX;
-const subcommand = getSubcommand(argv);
+const invocation = parseInvocation(argv);
+const subcommand = invocation.subcommand;
+
+const passthroughReasons = {
+  missingRpcPath: !rpcPathEnv,
+  nestedRealTmux: Boolean(expectedTmux && currentTmux && expectedTmux !== currentTmux),
+  unsupportedGlobalOption: invocation.unsupportedGlobalOption,
+  missingSubcommand: !subcommand,
+  unsupportedCommand: Boolean(subcommand && !RPC_COMMANDS.has(subcommand)),
+};
 
 const shouldPassthrough =
-  !rpcPathEnv ||                                                          // 无 RPC 路径
-  (expectedTmux && currentTmux && expectedTmux !== currentTmux) ||        // 处于真实 tmux 内
-  (!subcommand) ||                                                        // 无子命令（如 tmux 无参数启动）
-  (subcommand && !RPC_COMMANDS.has(subcommand));                          // 非 P0 命令
+  passthroughReasons.missingRpcPath ||                                    // 无 RPC 路径
+  passthroughReasons.nestedRealTmux ||                                    // 处于真实 tmux 内
+  Boolean(passthroughReasons.unsupportedGlobalOption) ||                  // 未识别的全局参数，保守透传
+  passthroughReasons.missingSubcommand ||                                 // 无子命令（如 tmux 无参数启动）
+  passthroughReasons.unsupportedCommand;                                  // 非 P0 命令
+
+debug('invocation analysis', {
+  argv,
+  globalOptions: invocation.globalOptions,
+  subcommand,
+  passthroughReasons,
+  shouldPassthrough,
+});
 
 if (shouldPassthrough) {
-  debug('passthrough to real tmux', { rpcPathEnv, expectedTmux, currentTmux, subcommand });
+  debug('passthrough to real tmux', {
+    rpcPathEnv,
+    expectedTmux,
+    currentTmux,
+    subcommand,
+    unsupportedGlobalOption: invocation.unsupportedGlobalOption,
+  });
   execRealTmux(process.argv.slice(2));
   // spawn 是异步的，子进程退出时会调用 process.exit()
   // 这里不能继续执行 RPC 逻辑，直接 return

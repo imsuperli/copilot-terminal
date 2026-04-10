@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { platform, tmpdir } from 'os';
-import { existsSync } from 'fs';
+import { appendFileSync, existsSync } from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
@@ -1013,6 +1013,18 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     if (this.shouldEnableTmuxCompat()) {
       const tmuxEnv = this.buildTmuxEnvironment(config, cleanEnv);
       Object.assign(cleanEnv, tmuxEnv);
+      this.appendTmuxDebugFile('tmux environment injected into PTY', {
+        windowId: config.windowId,
+        paneId: config.paneId,
+        executable,
+        args,
+        cwd: config.workingDirectory,
+        tmux: cleanEnv.TMUX,
+        tmuxPane: cleanEnv.TMUX_PANE,
+        rpcPath: cleanEnv.AUSOME_TMUX_RPC,
+        logFile: cleanEnv.AUSOME_TMUX_LOG_FILE,
+        nodePath: cleanEnv.AUSOME_NODE_PATH,
+      }, cleanEnv.AUSOME_TMUX_LOG_FILE);
 
       if (process.env.AUSOME_TMUX_DEBUG === '1') {
         console.log('[ProcessManager] Injected tmux environment:', {
@@ -1048,6 +1060,13 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     }
 
     try {
+      this.appendTmuxDebugFile('spawning PTY', {
+        executable,
+        args,
+        cwd: config.workingDirectory,
+        platform: platform(),
+        tmuxEnabled: this.shouldEnableTmuxCompat(),
+      }, cleanEnv.AUSOME_TMUX_LOG_FILE);
       console.log('[ProcessManager] Spawning PTY:', {
         executable,
         args,
@@ -1056,8 +1075,24 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       });
 
       const ptyProcess = pty.spawn(executable, args, ptySpawnOptions);
+      this.appendTmuxDebugFile('PTY spawned', {
+        pid: ptyProcess.pid,
+        executable,
+        args,
+        cwd: config.workingDirectory,
+      }, cleanEnv.AUSOME_TMUX_LOG_FILE);
       return ptyProcess;
     } catch (error) {
+      this.appendTmuxDebugFile('PTY spawn failed', {
+        executable,
+        args,
+        cwd: config.workingDirectory,
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        } : String(error),
+      }, cleanEnv.AUSOME_TMUX_LOG_FILE);
       console.error('[ProcessManager] Failed to spawn PTY:', {
         error,
         executable,
@@ -1199,22 +1234,52 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    * 妫€鏌ユ槸鍚﹀惎鐢?tmux 鍏煎妯″紡
    */
   private async ensureTmuxRpcServer(config: TerminalConfig): Promise<void> {
+    const logFile = this.getTmuxDebugLogFilePath();
+    this.appendTmuxDebugFile('ensureTmuxRpcServer invoked', {
+      tmuxCompatEnabled: this.shouldEnableTmuxCompat(),
+      windowId: config.windowId,
+      paneId: config.paneId,
+    }, logFile);
+
     if (!this.shouldEnableTmuxCompat()) {
       return;
     }
 
     if (!this.tmuxCompatService) {
+      this.appendTmuxDebugFile('tmux compat service unavailable during ensureTmuxRpcServer', {
+        windowId: config.windowId,
+        paneId: config.paneId,
+      }, logFile);
       console.warn('[ProcessManager] Tmux compat enabled but service is unavailable, skipping RPC server ensure');
       return;
     }
 
     if (!config.windowId) {
+      this.appendTmuxDebugFile('windowId missing during ensureTmuxRpcServer', {
+        paneId: config.paneId,
+      }, logFile);
       console.warn('[ProcessManager] Tmux compat enabled but windowId is missing, skipping RPC server ensure');
       return;
     }
 
-    const socketPath = await this.tmuxCompatService.ensureRpcServer(config.windowId);
-    console.log(`[ProcessManager] Ensured tmux RPC server for windowId=${config.windowId} at ${socketPath}`);
+    try {
+      const socketPath = await this.tmuxCompatService.ensureRpcServer(config.windowId);
+      this.appendTmuxDebugFile('tmux RPC server ensured', {
+        windowId: config.windowId,
+        socketPath,
+      }, logFile);
+      console.log(`[ProcessManager] Ensured tmux RPC server for windowId=${config.windowId} at ${socketPath}`);
+    } catch (error) {
+      this.appendTmuxDebugFile('tmux RPC server ensure failed', {
+        windowId: config.windowId,
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        } : String(error),
+      }, logFile);
+      throw error;
+    }
   }
 
   private shouldEnableTmuxCompat(): boolean {
@@ -1226,12 +1291,22 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
    * 鏋勫缓 tmux 鐜鍙橀噺
    */
   private buildTmuxEnvironment(config: TerminalConfig, baseEnv: NodeJS.ProcessEnv): Partial<NodeJS.ProcessEnv> {
+    const tmuxLogFile = this.getTmuxDebugLogFilePath();
+
     if (!this.tmuxCompatService) {
+      this.appendTmuxDebugFile('skipping tmux environment injection because service is unavailable', {
+        windowId: config.windowId,
+        paneId: config.paneId,
+      }, tmuxLogFile);
       console.warn('[ProcessManager] TmuxCompatService not available, skipping tmux environment injection');
       return {};
     }
 
     if (!config.windowId || !config.paneId) {
+      this.appendTmuxDebugFile('skipping tmux environment injection because pane identity is incomplete', {
+        windowId: config.windowId,
+        paneId: config.paneId,
+      }, tmuxLogFile);
       console.warn('[ProcessManager] windowId or paneId missing, skipping tmux environment injection');
       return {};
     }
@@ -1256,12 +1331,11 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
 
     const currentPath = baseEnv.Path || baseEnv.PATH || process.env.Path || process.env.PATH || '';
     let newPath = currentPath;
+    let fakeTmuxDir: string | undefined;
     if (autoInjectPath) {
-      const fakeTmuxDir = this.getFakeTmuxDir();
+      fakeTmuxDir = this.getFakeTmuxDir();
       newPath = `${fakeTmuxDir}${path.delimiter}${currentPath}`;
     }
-
-    const tmuxLogFile = path.join(tmpdir(), 'copilot-terminal-tmux-debug.log');
 
     // Resolve absolute path to node so the tmux shim script can find it
     // even when Electron's PATH doesn't include the node binary directory.
@@ -1277,6 +1351,19 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
           preferredShell,
         })
       : process.execPath;
+
+    this.appendTmuxDebugFile('buildTmuxEnvironment', {
+      windowId: config.windowId,
+      paneId: config.paneId,
+      tmuxPaneId,
+      rpcSocketPath,
+      tmuxValue,
+      autoInjectPath,
+      fakeTmuxDir,
+      nodePath,
+      preferredShell,
+      isElectron: Boolean(isElectron),
+    }, tmuxLogFile);
 
     return {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
@@ -1310,6 +1397,30 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       return `\\\\.\\pipe\\ausome-tmux-${windowId}`;
     } else {
       return `/tmp/ausome-tmux-${windowId}.sock`;
+    }
+  }
+
+  private getTmuxDebugLogFilePath(): string {
+    return path.join(tmpdir(), 'copilot-terminal-tmux-debug.log');
+  }
+
+  private appendTmuxDebugFile(
+    message: string,
+    extra?: unknown,
+    logFile: string = this.getTmuxDebugLogFilePath(),
+  ): void {
+    const payload = extra === undefined
+      ? ''
+      : ` ${JSON.stringify(extra, (_key, value) => value instanceof Error ? {
+          name: value.name,
+          message: value.message,
+          stack: value.stack,
+        } : value)}`;
+
+    try {
+      appendFileSync(logFile, `[ProcessManager ${new Date().toISOString()}] ${message}${payload}\n`, 'utf8');
+    } catch {
+      // ignore file logging failures
     }
   }
 

@@ -172,6 +172,66 @@ describe('tmux-shim', () => {
     expect(result.exitCode).toBe(0);
   });
 
+  it('should keep RPC mode when -L socket is provided before the command', async () => {
+    const socketPath = getTestSocketPath();
+    let receivedRequest: any = null;
+
+    const server = await startMockServer(socketPath, (req) => {
+      receivedRequest = req;
+      return {
+        type: 'response',
+        requestId: req.requestId,
+        response: {
+          exitCode: 0,
+          stdout: '',
+          stderr: '',
+        },
+      };
+    });
+    servers.push(server);
+
+    const result = await runShim(['-L', 'my-socket', 'has-session', '-t', 'demo'], {
+      AUSOME_TMUX_RPC: socketPath,
+      AUSOME_TERMINAL_WINDOW_ID: 'win-1',
+      AUSOME_TERMINAL_PANE_ID: 'pane-1',
+      TMUX_PANE: '%1',
+      PATH: '',
+    });
+
+    expect(receivedRequest?.request?.argv).toEqual(['-L', 'my-socket', 'has-session', '-t', 'demo']);
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('should keep RPC mode when -f config is provided before the command', async () => {
+    const socketPath = getTestSocketPath();
+    let receivedRequest: any = null;
+
+    const server = await startMockServer(socketPath, (req) => {
+      receivedRequest = req;
+      return {
+        type: 'response',
+        requestId: req.requestId,
+        response: {
+          exitCode: 0,
+          stdout: '',
+          stderr: '',
+        },
+      };
+    });
+    servers.push(server);
+
+    const result = await runShim(['-f', 'C:/tmp/tmux.conf', 'new-session', '-s', 'demo'], {
+      AUSOME_TMUX_RPC: socketPath,
+      AUSOME_TERMINAL_WINDOW_ID: 'win-1',
+      AUSOME_TERMINAL_PANE_ID: 'pane-1',
+      TMUX_PANE: '%1',
+      PATH: '',
+    });
+
+    expect(receivedRequest?.request?.argv).toEqual(['-f', 'C:/tmp/tmux.conf', 'new-session', '-s', 'demo']);
+    expect(result.exitCode).toBe(0);
+  });
+
   it('should relay stderr and non-zero exit code', async () => {
     const socketPath = getTestSocketPath();
 
@@ -232,6 +292,28 @@ describe('tmux-shim', () => {
 
     expect(result.stderr).toContain('cannot connect to RPC server');
     expect(result.exitCode).not.toBe(0);
+  });
+
+  it('should keep passthrough behavior when nested inside a real tmux session', async () => {
+    const result = await runShim(['list-panes'], {
+      AUSOME_TMUX_RPC: getTestSocketPath(),
+      AUSOME_TMUX_EXPECTED_TMUX: 'fake-socket,100,0',
+      TMUX: 'real-socket,200,0',
+      PATH: '',
+    });
+
+    expect(result.stderr).toContain('tmux: command not found');
+    expect(result.exitCode).toBe(127);
+  });
+
+  it('should keep passthrough behavior for unsupported commands', async () => {
+    const result = await runShim(['capture-pane'], {
+      AUSOME_TMUX_RPC: getTestSocketPath(),
+      PATH: '',
+    });
+
+    expect(result.stderr).toContain('tmux: command not found');
+    expect(result.exitCode).toBe(127);
   });
 
   it('should include cwd in RPC request', async () => {

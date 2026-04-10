@@ -114,6 +114,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     this.rpcServer = new TmuxRpcServer({
       tmuxCompatService: this,
       debug: config.debug,
+      logFilePath: this.getTmuxDebugLogFilePath(),
     });
     this.paneMetadata = new Map();
     this.paneSubscriptions = new Map();
