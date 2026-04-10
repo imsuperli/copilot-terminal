@@ -15,7 +15,7 @@ import * as net from 'net';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
-import { platform } from 'os';
+import { platform, tmpdir } from 'os';
 
 const SHIM_PATH = path.resolve(__dirname, '../../../resources/bin/tmux-shim.js');
 
@@ -27,7 +27,7 @@ function getTestSocketPath(): string {
   if (platform() === 'win32') {
     return `\\\\.\\pipe\\${id}`;
   }
-  return `/tmp/${id}.sock`;
+  return path.join(tmpdir(), `${id}.sock`);
 }
 
 /**
@@ -105,6 +105,13 @@ afterEach(async () => {
 });
 
 describe('tmux-shim', () => {
+  it('should keep the Windows wrapper bound to AUSOME_NODE_PATH', () => {
+    const windowsWrapperPath = path.resolve(__dirname, '../../../resources/bin/tmux.cmd');
+    const wrapper = fs.readFileSync(windowsWrapperPath, 'utf8');
+
+    expect(wrapper).toContain('AUSOME_NODE_PATH');
+  });
+
   it('should return version without RPC for -V flag', async () => {
     const result = await runShim(['-V'], {});
     expect(result.stdout).toContain('tmux 3.4');
@@ -112,16 +119,13 @@ describe('tmux-shim', () => {
   });
 
   it('should fail when AUSOME_TMUX_RPC is not set', async () => {
-    // Remove the env var explicitly
-    const env: Record<string, string> = {};
-    // Ensure it's not inherited
-    delete (env as any).AUSOME_TMUX_RPC;
-
     const result = await runShim(['list-panes'], {
       AUSOME_TMUX_RPC: '',
+      PATH: '',
     });
-    expect(result.stderr).toContain('AUSOME_TMUX_RPC');
-    expect(result.exitCode).not.toBe(0);
+
+    expect(result.stderr).toContain('tmux: command not found');
+    expect(result.exitCode).toBe(127);
   });
 
   it('should send correct RPC request and relay stdout', async () => {
@@ -193,7 +197,7 @@ describe('tmux-shim', () => {
     expect(result.exitCode).toBe(1);
   });
 
-  it('should handle RPC error response', async () => {
+  it('should handle RPC error response for supported commands', async () => {
     const socketPath = getTestSocketPath();
 
     const server = await startMockServer(socketPath, (req) => ({
@@ -203,7 +207,7 @@ describe('tmux-shim', () => {
     }));
     servers.push(server);
 
-    const result = await runShim(['foobar'], {
+    const result = await runShim(['list-panes'], {
       AUSOME_TMUX_RPC: socketPath,
       AUSOME_TERMINAL_WINDOW_ID: 'win-1',
       AUSOME_TERMINAL_PANE_ID: 'pane-1',
@@ -217,7 +221,7 @@ describe('tmux-shim', () => {
   it('should fail gracefully when RPC server is unreachable', async () => {
     const socketPath = platform() === 'win32'
       ? '\\\\.\\pipe\\ausome-tmux-nonexistent-test'
-      : '/tmp/ausome-tmux-nonexistent-test.sock';
+      : path.join(tmpdir(), 'ausome-tmux-nonexistent-test.sock');
 
     const result = await runShim(['list-panes'], {
       AUSOME_TMUX_RPC: socketPath,

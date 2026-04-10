@@ -66,6 +66,9 @@ if (argv.length === 1 && argv[0] === '-V') {
 const RPC_COMMANDS = new Set([
   'display-message', 'list-panes', 'split-window', 'send-keys',
   'select-layout', 'select-pane', 'resize-pane', 'kill-pane', 'set-option',
+  'has-session', 'new-session', 'list-windows', 'new-window',
+  'break-pane', 'join-pane', 'kill-session', 'switch-client',
+  'attach-session',
 ]);
 
 function getSubcommand(args) {
