@@ -81,6 +81,7 @@ type TmuxScopedLayoutMatch = {
  * 闂傚倸鍊风粈渚€骞栭銈囩煋闁割偅娲嶉埀顒婄畵瀹曞ジ濮€閵忋垹顦╁┑掳鍊х徊浠嬪疮椤栫偛鍚归柛灞惧閸嬫捇宕楁径濠佸闂備礁鎲￠崝锔界閻愬搫鍌ㄦい鎺戝閳? * 1. 闂傚倸鍊峰ù鍥綖婢跺顩插ù鐘差儏绾惧潡鏌＄仦璇插姎闁哄鑳堕幉鎼佹偋閸繄鐟ㄥ┑锛勫仧閺咁偊鍩€椤掆偓閸樻粓宕戦幘缁樼厱闁归偊鍓欓弳鐐烘偨椤栨せ鍋撻幇浣告?tmux 闂傚倸鍊风粈渚€骞夐敍鍕煓闁圭儤顨呴崹鍌涚節闂堟侗鍎忕紒鐙€鍣ｉ弻鏇㈠醇濠靛洤顦╅柣搴㈢瀹€绋款潖濞差亜鍨傛い鏇炴噹閸撳啿鈹戦悩顐壕? * 2. 缂傚倸鍊搁崐鎼佸磹妞嬪海鐭嗗〒姘ｅ亾闁诡喗妞芥俊鎼佹晜閽樺浼?tmux pane ID 闂傚倸鍊风粈渚€骞夐敍鍕殰婵°倐鍋撴い顓炵仢椤粓鍩€椤掑嫬绠栭柛褎顨呯粈瀣亜閺嶃劎鈻撻柟?(windowId, paneId) 闂傚倸鍊烽悞锕傛儑瑜版帒绀夌€光偓閳ь剟鍩€椤掍礁鍤柛妯煎帶瀹撳嫰鎮峰鍐缂? * 3. 缂傚倸鍊搁崐鐑芥嚄閼搁潧鍨旈悗闈涙啞椤洟鏌￠崶銉ョ仼缂佺姵鐗曢埞鎴︽偐閸欏顦╅梺璇″灣閸嬬偤骞堥妸銉建闁糕剝顨呯粻褰掓⒑?session/window 缂傚倸鍊搁崐鎼佸磹閻戣姤鍊块柨鏇炲€哥粻鏉库攽閻樺磭顣查柛? * 4. 闂傚倷娴囧畷鍨叏閹绢噮鏁勯柛娑欐綑閻ゎ喖霉閸忓吋缍戦柡瀣╃窔閺屾洟宕煎┑鎰ч梺绋款儐缁诲牓寮婚敐鍛傛棃鍩€椤掑嫭鍋嬪┑鐘插娑撳秹鏌熼悜姗嗘畷闁绘挻鐩弻娑㈩敃閿濆洨鐣奸悗娑欑箖缁绘繂鈻撻崹顔界亾闂佸摜濮甸悧鐘差嚕椤愩埄鍚嬪璺猴攻瀹撳秴顪冮妵鍗炴噽瑜扮珟essManager, LayoutOperations闂傚倸鍊烽悞锔锯偓绗涘懐鐭欓柟娆¤娲幃褔宕奸悢鍝ュ娇闂備椒绱徊浠嬪嫉椤掑嫬纾绘慨妞诲亾闁诡喗锕㈤幃娆撳垂椤愶絿褰ч梻浣告惈椤︻喚鍒掑▎蹇ｆ綎濠电姵鑹剧粈瀣亜閹板墎鍒版繛鍛€濆娲偡閼割剙浠梺琛″亾闂侇剙绉寸粻? * 5. 闂傚倸鍊风粈渚€骞栭銈囩煋闁割偅娲栭崒銊ф喐韫囨拹锝夊箛閻楀牊娅㈤梺缁橆焾鐏忔瑩藝闁秵鈷戦柛婵嗗閳诲鏌涢幘瀵搞€掔紒杈ㄧ懄缁绘繂顫濋鐘插箞闂備胶顢婇幓顏嗗緤妤ｅ啫违闁告劦鍠楅崑?tmux 濠电姷顣槐鏇㈠磻濞戙埄鏁勯柛娑卞灙閸嬫挸鈽夐幒鎾寸彋闂佽鍟崶褏顔愭繛杈剧悼閹虫捇宕滈銏♀拺闁告稑锕ユ径鍕煕鐎ｎ亝鍤囨鐐叉閳诲酣骞樺畷鍥跺晣? */
 export class TmuxCompatService extends EventEmitter implements ITmuxCompatService {
   private config: TmuxCompatServiceConfig;
+  private windowIdCounter: number = 0;
 
   /** tmux pane ID 闂傚倷娴囧畷鍨叏瀹曞洦濯奸柡灞诲劚缁€鍫熺節闂堟侗鍎忔慨瑙勭叀閺岋綁寮崒姘粯闂傚倸鍋嗛崹閬嶅Φ閸曨垼鏁囬柣鏃堫棑椤戝倻绱撴担鎻掍壕闂佸憡娲﹂崐?1 闂備浇顕х€涒晠顢欓弽顓炵獥闁圭儤顨呯壕濠氭煙閻愵剚鐏遍柡鈧懞銉ｄ簻闁哄啫鍊甸幏锟犳煕鎼淬垻鐭岀紒?*/
   private paneIdCounter: number = 1;
@@ -249,6 +250,15 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
    * - "session:windowName" 闂?闂傚倸鍊风粈渚€骞栭銈嗗仏妞ゆ劧绠戠壕鍧楁煕濞嗗浚妲洪柣?session 濠电姷鏁搁崑鐐哄垂閸洖绠归柍鍝勬噹閸屻劌鈹戦崒婊庣劸缂佺姵鐗犻弻锟犲炊閳轰焦鐏侀梺?windowName 闂?window
    */
   resolveWindowTarget(target: TmuxWindowTarget, namespace: string = 'default'): string | null {
+    if (target.startsWith('@')) {
+      const tmuxWindowId = parseInt(target.slice(1), 10);
+      if (Number.isNaN(tmuxWindowId)) {
+        return null;
+      }
+
+      return this.findTmuxWindowByTmuxWindowId(tmuxWindowId, namespace)?.actualWindowId || null;
+    }
+
     // 缂傚倸鍊搁崐鐑芥嚄閼稿灚鍙忔い鎾卞灩绾惧鏌熼崜褏甯涢柣鎾存礋閺屸€愁吋閸愩劌顬嬫繝鈷€灞奸偗闁哄矉缍佹俊鍫曞川椤撗傜磾闂備浇顕栭崰鏍椤撱垹鏋佹い鏇楀亾妞ゃ垺鐟╁畷婊嗩槾鐎规洖鐖煎缁樻媴娓氼垳鍔稿銈嗗灥閹冲海鍙呴梺鍐叉惈閹峰寮?target 闂傚倸鍊风粈渚€骞栭銈囩煋闁割偅娲栭崒銊ф喐韫囨拹锝夊箛閺夎法鍔撮梺鍛婂姦娴滄牠寮?"session:index"
     // 闂傚倷娴囬褎顨ョ粙鍖¤€块梺顒€绉寸壕濠氭煏閸繃濯奸柣搴ゅ煐閵囧嫰寮介妸銉闂佺顑嗛幑鍥х暦閻戠瓔鏁囬柣鎰閸╂稒淇婇妶鍥ラ柛瀣☉鐓ゆい鎾跺€ｅ☉娆戠懝闁逞屽墴瀹曟椽鍩€椤掍降浜滈柟鐑樺灥閳ь剙缍婂畷顖炲传閸旇棄缍婇弫鎰板川椤撶偟绱﹂梻浣告贡閸庛倝銆冮崨鏉戠?session 闂?window 闂傚倸鍊风粈渚€骞栭銈傚亾濮樼厧鏋熼柟渚垮姂楠炴﹢顢欓挊澶婂?
     const parts = target.split(':');
@@ -381,6 +391,21 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     return null;
   }
 
+  private findTmuxWindowByTmuxWindowId(tmuxWindowId: number, namespace?: string) {
+    for (const session of this.sessions.values()) {
+      if (namespace && session.namespace !== namespace) {
+        continue;
+      }
+
+      const tmuxWindow = session.windows.find((window) => window.tmuxWindowId === tmuxWindowId);
+      if (tmuxWindow) {
+        return tmuxWindow;
+      }
+    }
+
+    return null;
+  }
+
   /**
    * 闂傚倷娴囬褏鎹㈤幇顔藉床闁归偊鍎靛☉妯滄棃宕ㄩ鐙€妲遍梻浣芥硶閸犳挻鎱ㄧ€电硶鍋?workspace window 闂傚倸鍊风粈渚€骞栭銈傚亾濮樼厧鏋熼柟渚垮姂楠炴﹢顢欓挊澶婂闂備胶绮…鍫ヮ敋瑜忕划鍫ュ幢濡炴洖缍婇幃鈩冩償椤斿吋顔嶉梺姹囧焺閸ㄩ亶鎯勯鐐茬畺?session
    */
@@ -418,6 +443,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       : Math.max(...session.windows.map((window) => window.index)) + 1;
 
     const tmuxWindow = {
+      tmuxWindowId: this.windowIdCounter++,
       index: nextIndex,
       name,
       actualWindowId,
@@ -445,6 +471,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
     if (!windowId) {
       return {
         sessionName: 'default',
+        tmuxWindowId: '',
         windowIndex: 0,
         windowName: '',
       };
@@ -457,6 +484,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       const window = this.getWindowById(windowId);
       return {
         sessionName: 'default',
+        tmuxWindowId: '',
         windowIndex: 0,
         windowName: window?.name || '',
       };
@@ -464,6 +492,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
     return {
       sessionName: mapped.sessionName,
+      tmuxWindowId: `@${mapped.tmuxWindowId}`,
       windowIndex: mapped.index,
       windowName: mapped.name,
     };
@@ -1578,6 +1607,9 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
       case 'session_name':
         return tmuxWindowContext.sessionName;
+
+      case 'window_id':
+        return tmuxWindowContext.tmuxWindowId;
 
       case 'window_index':
         return String(tmuxWindowContext.windowIndex);

@@ -56,6 +56,7 @@ export type TmuxWindowTarget = string;
 export enum TmuxFormatField {
   PaneId = '#{pane_id}',
   SessionName = '#{session_name}',
+  WindowId = '#{window_id}',
   WindowIndex = '#{window_index}',
   WindowName = '#{window_name}',
   PaneTitle = '#{pane_title}',
@@ -163,6 +164,9 @@ export interface TmuxSession {
 /**
  * tmux Window 闂傚倷鑳剁划顖炩€﹂崼銉ユ槬闁哄稁鍘奸悞鍨亜閹达絾纭剁紒娑樼箳缁辨帗娼忛妸褎鍣伴梺纭呭亹閹虫捇锝炲┑瀣垫晣闁绘劙娼х拋鏌ユ⒒娴ｅ憡鎯堥悗姘煎枟閹便劑骞橀钘夊壄闂佺粯顭囩划顖炲疾? */
 export interface TmuxWindow {
+  /** tmux 风格的 window ID，例如 @0、@1 */
+  tmuxWindowId: number;
+
   /** Window 缂傚倸鍊峰鎺旂矚閸洖鍨傞柛锔诲幗椤?*/
   index: number;
 

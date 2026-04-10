@@ -213,6 +213,14 @@ describe('tmux 兼容层集成测试', () => {
       expect(result.stdout.trim()).toBe('%0');
     });
 
+    it('display-message -p #{window_id} 应该返回当前 tmux window ID', async () => {
+      const result = await sendRpcCommand(socketPath, [
+        'display-message', '-p', '#{window_id}',
+      ], 'win-integration', '%0');
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe('@0');
+    });
+
     it('display-message -p -t %0 应该返回指定 pane 的信息', async () => {
       const result = await sendRpcCommand(socketPath, [
         'display-message', '-p', '-t', '%0', '#{pane_id}',
@@ -224,6 +232,18 @@ describe('tmux 兼容层集成测试', () => {
     it('list-panes 应该列出当前 window 的已注册 panes', async () => {
       const result = await sendRpcCommand(socketPath, [
         'list-panes', '-F', '#{pane_id}',
+      ]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.trim()).toBe('%0');
+    });
+
+    it('list-panes 应该支持 tmux window ID target', async () => {
+      const currentWindow = await sendRpcCommand(socketPath, [
+        'display-message', '-p', '#{window_id}',
+      ], 'win-integration', '%0');
+
+      const result = await sendRpcCommand(socketPath, [
+        'list-panes', '-t', currentWindow.stdout.trim(), '-F', '#{pane_id}',
       ]);
       expect(result.exitCode).toBe(0);
       expect(result.stdout.trim()).toBe('%0');

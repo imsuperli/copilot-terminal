@@ -342,6 +342,7 @@ export class TmuxCommandParser {
     sessionName?: string;
     windowIndex?: number;
     windowName?: string;
+    tmuxWindowId?: number;
   } {
     // Pane ID 格式：%1, %2, %3...
     if (target.startsWith('%')) {
@@ -349,6 +350,17 @@ export class TmuxCommandParser {
         type: 'pane',
         paneId: target,
       };
+    }
+
+    // Window ID 格式：@0, @1...
+    if (target.startsWith('@')) {
+      const tmuxWindowId = parseInt(target.slice(1), 10);
+      if (!isNaN(tmuxWindowId)) {
+        return {
+          type: 'window',
+          tmuxWindowId,
+        };
+      }
     }
 
     // Window target 格式：session:index 或 session:name

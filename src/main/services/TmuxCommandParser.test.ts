@@ -251,6 +251,14 @@ describe('TmuxCommandParser', () => {
       });
     });
 
+    it('应该解析 tmux window ID 格式', () => {
+      const target = TmuxCommandParser.parseTarget('@3');
+      expect(target).toEqual({
+        type: 'window',
+        tmuxWindowId: 3,
+      });
+    });
+
     it('应该解析 window target（session + name）', () => {
       const target = TmuxCommandParser.parseTarget('my-session:main-window');
       expect(target).toEqual({

@@ -144,6 +144,19 @@ describe('TmuxCompatService', () => {
       expect(response.stdout).toBe('default:0\n');
     });
 
+    it('应返回 tmux 风格 window_id', async () => {
+      const { service } = createService();
+
+      const response = await service.executeCommand({
+        argv: ['display-message', '-t', '%1', '-p', '#{window_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      expect(response.exitCode).toBe(0);
+      expect(response.stdout).toBe('@0\n');
+    });
+
     it('当前 pane 映射丢失时应从请求上下文恢复 window target', async () => {
       const { service } = createService();
       service.unregisterPane('%1');
@@ -197,6 +210,25 @@ describe('TmuxCompatService', () => {
       const response = await service.executeCommand({
         argv: ['list-panes', '-F', '#{pane_id}'],
         windowId: 'win-1',
+      });
+
+      expect(response.exitCode).toBe(0);
+      expect(response.stdout).toContain('%1');
+    });
+
+    it('应支持使用 tmux window_id 作为 target', async () => {
+      const { service } = createService();
+
+      const windowIdResponse = await service.executeCommand({
+        argv: ['display-message', '-t', '%1', '-p', '#{window_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
+      });
+
+      const response = await service.executeCommand({
+        argv: ['list-panes', '-t', windowIdResponse.stdout.trim(), '-F', '#{pane_id}'],
+        windowId: 'win-1',
+        paneId: '%1',
       });
 
       expect(response.exitCode).toBe(0);
