@@ -4,6 +4,7 @@ declare global {
   interface HTMLWebViewElement extends HTMLElement {
     src: string;
     loadURL(url: string): Promise<void>;
+    insertCSS(css: string): Promise<string>;
     getURL(): string;
     canGoBack(): boolean;
     canGoForward(): boolean;

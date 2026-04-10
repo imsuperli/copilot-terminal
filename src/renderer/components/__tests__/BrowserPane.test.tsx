@@ -21,6 +21,7 @@ vi.mock('../ui/AppTooltip', () => ({
 
 type MockWebViewElement = HTMLWebViewElement & {
   preReadyGetUrlAttempts: number;
+  insertCssCalls: string[];
   markReady: (url?: string) => void;
 };
 
@@ -31,6 +32,7 @@ function decorateWebViewElement(element: HTMLElement): MockWebViewElement {
   const webview = element as MockWebViewElement;
 
   webview.preReadyGetUrlAttempts = 0;
+  webview.insertCssCalls = [];
   webview.markReady = (url: string = webview.getAttribute('src') ?? DEFAULT_BROWSER_URL) => {
     ready = true;
     currentUrl = url;
@@ -42,6 +44,14 @@ function decorateWebViewElement(element: HTMLElement): MockWebViewElement {
 
     currentUrl = url;
     webview.setAttribute('src', url);
+  };
+  webview.insertCSS = async (css: string) => {
+    if (!ready) {
+      throw new Error(WEBVIEW_READY_ERROR);
+    }
+
+    webview.insertCssCalls.push(css);
+    return 'css-key';
   };
   webview.getURL = () => {
     if (!ready) {
@@ -163,5 +173,30 @@ describe('BrowserPane', () => {
         url: 'https://example.com/docs',
       },
     });
+    expect(webview.insertCssCalls).toHaveLength(0);
+  });
+
+  it('applies a dark theme to the blank page after dom-ready', () => {
+    const { container } = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={createBrowserPane()}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const webview = container.querySelector('webview') as MockWebViewElement | null;
+    if (!webview) {
+      throw new Error('expected webview element');
+    }
+
+    webview.markReady(DEFAULT_BROWSER_URL);
+    fireEvent(webview, new Event('dom-ready'));
+
+    expect(webview.insertCssCalls).toHaveLength(1);
+    expect(webview.insertCssCalls[0]).toContain('background: #09090b');
   });
 });

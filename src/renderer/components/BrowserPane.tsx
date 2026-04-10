@@ -8,6 +8,13 @@ import { DEFAULT_BROWSER_URL, normalizeBrowserInput } from '../utils/browserPane
 import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/browserUrls';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
+const BLANK_PAGE_THEME_CSS = `
+  :root { color-scheme: dark; }
+  html, body {
+    background: #09090b !important;
+    color: #d4d4d8 !important;
+  }
+`;
 
 function getBrowserPaneUrl(pane: Pane): string {
   return sanitizeBrowserUrl(pane.browser?.url || DEFAULT_BROWSER_URL);
@@ -35,11 +42,9 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const addressInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState(() => getBrowserPaneUrl(pane));
   const [currentUrl, setCurrentUrl] = useState(() => getBrowserPaneUrl(pane));
-  const [pageTitle, setPageTitle] = useState('');
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [isWebviewReady, setIsWebviewReady] = useState(false);
 
   const persistedUrl = useMemo(() => getBrowserPaneUrl(pane), [pane]);
@@ -54,7 +59,28 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     setCanGoBack(false);
     setCanGoForward(false);
     setIsLoading(false);
-    setPageTitle('');
+  }, []);
+
+  const applyBlankPageTheme = useCallback((url?: string) => {
+    const webview = webviewRef.current;
+    if (!webview || !webviewReadyRef.current) {
+      return;
+    }
+
+    const applyTheme = async () => {
+      try {
+        const currentWebviewUrl = url ?? webview.getURL?.() ?? DEFAULT_BROWSER_URL;
+        if (currentWebviewUrl !== DEFAULT_BROWSER_URL) {
+          return;
+        }
+
+        await webview.insertCSS(BLANK_PAGE_THEME_CSS);
+      } catch (error) {
+        console.error('Failed to apply blank browser pane theme:', error);
+      }
+    };
+
+    void applyTheme();
   }, []);
 
   const syncPaneUrl = useCallback((nextUrl: string) => {
@@ -181,6 +207,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
     const handleDomReady = () => {
       setWebviewReady(true);
+      applyBlankPageTheme();
       syncNavigationState();
     };
     const handleDidStartLoading = () => {
@@ -193,17 +220,12 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     const handleDidNavigate = () => {
       syncNavigationState();
     };
-    const handlePageTitleUpdated = (event: Event) => {
-      const title = (event as Event & { title?: string }).title ?? '';
-      setPageTitle(title);
-    };
 
     webview.addEventListener('dom-ready', handleDomReady);
     webview.addEventListener('did-start-loading', handleDidStartLoading);
     webview.addEventListener('did-stop-loading', handleDidStopLoading);
     webview.addEventListener('did-navigate', handleDidNavigate);
     webview.addEventListener('did-navigate-in-page', handleDidNavigate);
-    webview.addEventListener('page-title-updated', handlePageTitleUpdated);
 
     return () => {
       setWebviewReady(false);
@@ -212,9 +234,8 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       webview.removeEventListener('did-stop-loading', handleDidStopLoading);
       webview.removeEventListener('did-navigate', handleDidNavigate);
       webview.removeEventListener('did-navigate-in-page', handleDidNavigate);
-      webview.removeEventListener('page-title-updated', handlePageTitleUpdated);
     };
-  }, [pane.id, resetNavigationState, setWebviewReady, syncNavigationState]);
+  }, [applyBlankPageTheme, pane.id, resetNavigationState, setWebviewReady, syncNavigationState]);
 
   useEffect(() => {
     const webview = webviewRef.current;
@@ -267,8 +288,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         ${isActive ? 'ring-1 ring-sky-400 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]' : ''}
       `}
       onMouseDownCapture={onActivate}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       <div className="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
         <div className="flex items-center gap-1 text-zinc-400">
@@ -333,7 +352,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
             </button>
           </AppTooltip>
 
-          {onClose && isHovered && (
+          {onClose && (
             <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
               <button
                 type="button"
@@ -351,17 +370,13 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         </div>
       </div>
 
-      <div className="flex min-h-0 min-w-0 items-center gap-2 border-b border-zinc-900 bg-zinc-950/80 px-2 py-1 text-[11px] text-zinc-500">
-        <span className="truncate">{pageTitle || currentUrl || DEFAULT_BROWSER_URL}</span>
-      </div>
-
       <webview
         ref={(element) => {
           webviewRef.current = element;
         }}
         src={persistedUrl}
         partition={BROWSER_PARTITION}
-        className="min-h-0 min-w-0 flex-1 bg-white"
+        className="min-h-0 min-w-0 flex-1 bg-zinc-950"
       />
     </div>
   );
