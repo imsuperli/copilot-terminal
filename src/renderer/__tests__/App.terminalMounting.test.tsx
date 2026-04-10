@@ -99,13 +99,8 @@ describe('App terminal mounting', () => {
 
     render(<App />);
 
-    expect(mockTerminalView).toHaveBeenCalledTimes(1);
-    expect(mockTerminalView.mock.calls[0][0]).toEqual(
-      expect.objectContaining({
-        window: expect.objectContaining({ id: windowTwo.id }),
-        isActive: true,
-      }),
-    );
+    expect(screen.getByTestId(`terminal-${windowTwo.id}`)).toHaveAttribute('data-active', 'true');
+    expect(screen.queryByTestId(`terminal-${windowOne.id}`)).not.toBeInTheDocument();
   });
 
   it('keeps the active terminal view mounted but inactive when returning to unified view', () => {
@@ -128,13 +123,7 @@ describe('App terminal mounting', () => {
 
     render(<App />);
 
-    expect(mockTerminalView).toHaveBeenCalledTimes(1);
-    expect(mockTerminalView.mock.calls[0][0]).toEqual(
-      expect.objectContaining({
-        window: expect.objectContaining({ id: windowOne.id }),
-        isActive: false,
-      }),
-    );
+    expect(screen.getByTestId(`terminal-${windowOne.id}`)).toHaveAttribute('data-active', 'false');
   });
 
   it('keeps previously opened terminal views mounted when switching windows', async () => {

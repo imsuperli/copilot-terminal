@@ -741,10 +741,17 @@ function AppContent() {
   );
   const activeSSHHostKeyPrompt = sshHostKeyPromptQueue[0] ?? null;
 
-  const mountedTerminalWindowIdSet = useMemo(
-    () => new Set(mountedTerminalWindowIds),
-    [mountedTerminalWindowIds]
-  );
+  const mountedTerminalWindowIdSet = useMemo(() => {
+    const nextIds = new Set(mountedTerminalWindowIds);
+
+    // 当切换到一个首次打开的终端窗口时，确保它在当前渲染帧就参与挂载，
+    // 避免 activeWindowId 已切换但 mounted 列表尚未同步时出现一帧空白闪烁。
+    if (activeWindowId) {
+      nextIds.add(activeWindowId);
+    }
+
+    return nextIds;
+  }, [activeWindowId, mountedTerminalWindowIds]);
   const mountedTerminalWindows = useMemo(
     () => windows.filter((window) => mountedTerminalWindowIdSet.has(window.id)),
     [windows, mountedTerminalWindowIdSet]
