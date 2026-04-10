@@ -31,6 +31,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const { t } = useI18n();
   const updatePane = useWindowStore((state) => state.updatePane);
   const webviewRef = useRef<HTMLWebViewElement | null>(null);
+  const webviewReadyRef = useRef(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState(() => getBrowserPaneUrl(pane));
   const [currentUrl, setCurrentUrl] = useState(() => getBrowserPaneUrl(pane));
@@ -39,35 +40,56 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const [canGoForward, setCanGoForward] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isWebviewReady, setIsWebviewReady] = useState(false);
 
   const persistedUrl = useMemo(() => getBrowserPaneUrl(pane), [pane]);
+  const persistedUrlRef = useRef(persistedUrl);
+
+  const setWebviewReady = useCallback((ready: boolean) => {
+    webviewReadyRef.current = ready;
+    setIsWebviewReady((currentReady) => (currentReady === ready ? currentReady : ready));
+  }, []);
+
+  const resetNavigationState = useCallback(() => {
+    setCanGoBack(false);
+    setCanGoForward(false);
+    setIsLoading(false);
+    setPageTitle('');
+  }, []);
 
   const syncPaneUrl = useCallback((nextUrl: string) => {
     const normalizedUrl = sanitizeBrowserUrl(nextUrl || DEFAULT_BROWSER_URL);
+    const previousUrl = persistedUrlRef.current;
+
     setCurrentUrl(normalizedUrl);
     setInputValue(normalizedUrl);
-    if (pane.browser?.url === normalizedUrl) {
+    if (previousUrl === normalizedUrl) {
       return;
     }
 
+    persistedUrlRef.current = normalizedUrl;
     updatePane(windowId, pane.id, {
       browser: {
         url: normalizedUrl,
       },
     });
-  }, [pane.browser?.url, pane.id, updatePane, windowId]);
+  }, [pane.id, updatePane, windowId]);
 
   const syncNavigationState = useCallback(() => {
     const webview = webviewRef.current;
-    if (!webview) {
+    if (!webview || !webviewReadyRef.current) {
       return;
     }
 
-    const nextUrl = webview.getURL?.() || persistedUrl;
-    syncPaneUrl(nextUrl);
-    setCanGoBack(Boolean(webview.canGoBack?.()));
-    setCanGoForward(Boolean(webview.canGoForward?.()));
-  }, [persistedUrl, syncPaneUrl]);
+    try {
+      const nextUrl = webview.getURL?.() || persistedUrlRef.current;
+      syncPaneUrl(nextUrl);
+      setCanGoBack(Boolean(webview.canGoBack?.()));
+      setCanGoForward(Boolean(webview.canGoForward?.()));
+    } catch (error) {
+      console.error('Failed to sync browser pane navigation state:', error);
+    }
+  }, [syncPaneUrl]);
 
   const navigateTo = useCallback((rawValue: string) => {
     const nextUrl = normalizeBrowserInput(rawValue);
@@ -76,14 +98,59 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     syncPaneUrl(nextUrl);
 
     if (webview) {
+      if (!webviewReadyRef.current) {
+        webview.src = nextUrl;
+        return;
+      }
+
       void webview.loadURL(nextUrl).catch((error: unknown) => {
         console.error('Failed to navigate browser pane:', error);
       });
     }
   }, [syncPaneUrl]);
 
+  const goBack = useCallback(() => {
+    const webview = webviewRef.current;
+    if (!webview || !webviewReadyRef.current) {
+      return;
+    }
+
+    try {
+      webview.goBack();
+    } catch (error) {
+      console.error('Failed to navigate back in browser pane:', error);
+    }
+  }, []);
+
+  const goForward = useCallback(() => {
+    const webview = webviewRef.current;
+    if (!webview || !webviewReadyRef.current) {
+      return;
+    }
+
+    try {
+      webview.goForward();
+    } catch (error) {
+      console.error('Failed to navigate forward in browser pane:', error);
+    }
+  }, []);
+
+  const reloadPage = useCallback(() => {
+    const webview = webviewRef.current;
+    if (!webview || !webviewReadyRef.current) {
+      return;
+    }
+
+    try {
+      webview.reload();
+    } catch (error) {
+      console.error('Failed to reload browser pane:', error);
+    }
+  }, []);
+
   useEffect(() => {
     const nextUrl = persistedUrl;
+    persistedUrlRef.current = nextUrl;
     setInputValue(nextUrl);
     setCurrentUrl(nextUrl);
   }, [persistedUrl, pane.id]);
@@ -109,6 +176,13 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       return undefined;
     }
 
+    setWebviewReady(false);
+    resetNavigationState();
+
+    const handleDomReady = () => {
+      setWebviewReady(true);
+      syncNavigationState();
+    };
     const handleDidStartLoading = () => {
       setIsLoading(true);
     };
@@ -124,26 +198,52 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       setPageTitle(title);
     };
 
+    webview.addEventListener('dom-ready', handleDomReady);
     webview.addEventListener('did-start-loading', handleDidStartLoading);
     webview.addEventListener('did-stop-loading', handleDidStopLoading);
     webview.addEventListener('did-navigate', handleDidNavigate);
     webview.addEventListener('did-navigate-in-page', handleDidNavigate);
     webview.addEventListener('page-title-updated', handlePageTitleUpdated);
 
-    if ((webview.getURL?.() || DEFAULT_BROWSER_URL) !== persistedUrl) {
-      webview.src = persistedUrl;
-    } else {
-      syncNavigationState();
-    }
-
     return () => {
+      setWebviewReady(false);
+      webview.removeEventListener('dom-ready', handleDomReady);
       webview.removeEventListener('did-start-loading', handleDidStartLoading);
       webview.removeEventListener('did-stop-loading', handleDidStopLoading);
       webview.removeEventListener('did-navigate', handleDidNavigate);
       webview.removeEventListener('did-navigate-in-page', handleDidNavigate);
       webview.removeEventListener('page-title-updated', handlePageTitleUpdated);
     };
-  }, [pane.id, persistedUrl, syncNavigationState]);
+  }, [pane.id, resetNavigationState, setWebviewReady, syncNavigationState]);
+
+  useEffect(() => {
+    const webview = webviewRef.current;
+    if (!webview) {
+      return;
+    }
+
+    if (!isWebviewReady) {
+      if (webview.getAttribute('src') !== persistedUrl) {
+        webview.src = persistedUrl;
+      }
+      return;
+    }
+
+    try {
+      const currentWebviewUrl = webview.getURL?.() || DEFAULT_BROWSER_URL;
+      if (currentWebviewUrl !== persistedUrl) {
+        void webview.loadURL(persistedUrl).catch((error: unknown) => {
+          console.error('Failed to sync browser pane URL:', error);
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to inspect browser pane URL:', error);
+      return;
+    }
+
+    syncNavigationState();
+  }, [isWebviewReady, persistedUrl, syncNavigationState]);
 
   const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -176,8 +276,8 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
             <button
               type="button"
               aria-label={t('browserPane.back')}
-              disabled={!canGoBack}
-              onClick={() => webviewRef.current?.goBack()}
+              disabled={!isWebviewReady || !canGoBack}
+              onClick={goBack}
               className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ArrowLeft size={13} />
@@ -187,8 +287,8 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
             <button
               type="button"
               aria-label={t('browserPane.forward')}
-              disabled={!canGoForward}
-              onClick={() => webviewRef.current?.goForward()}
+              disabled={!isWebviewReady || !canGoForward}
+              onClick={goForward}
               className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ArrowRight size={13} />
@@ -198,8 +298,9 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
             <button
               type="button"
               aria-label={t('browserPane.refresh')}
-              onClick={() => webviewRef.current?.reload()}
-              className={`flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 ${isLoading ? 'animate-spin text-sky-300' : ''}`}
+              disabled={!isWebviewReady}
+              onClick={reloadPage}
+              className={`flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${isLoading ? 'animate-spin text-sky-300' : ''}`}
             >
               <RefreshCw size={13} />
             </button>
