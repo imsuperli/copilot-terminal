@@ -290,17 +290,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
 
-      if (isTerminalPane(paneToClose) && terminalPaneCount <= 1) {
-        return;
-      }
-
-      if (!isTerminalPane(paneToClose) && panes.length <= 1) {
+      if (panes.length <= 1) {
         return;
       }
 
       closePaneInWindow(terminalWindow.id, paneId);
     },
-    [terminalWindow.id, panes, terminalPaneCount, closePaneInWindow]
+    [terminalWindow.id, panes, closePaneInWindow]
   );
 
   const destroyCurrentEphemeralRemoteWindow = useCallback(async () => {

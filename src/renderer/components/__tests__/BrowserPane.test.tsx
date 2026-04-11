@@ -1,6 +1,6 @@
 import React from 'react';
-import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
-import { fireEvent, render } from '@testing-library/react';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
+import { act, fireEvent, render } from '@testing-library/react';
 import { BrowserPane, __resetBrowserPaneWebviewCacheForTests } from '../BrowserPane';
 import { I18nProvider } from '../../i18n';
 import type { Pane } from '../../types/window';
@@ -22,6 +22,7 @@ vi.mock('../ui/AppTooltip', () => ({
 type MockWebViewElement = HTMLWebViewElement & {
   preReadyGetUrlAttempts: number;
   insertCssCalls: string[];
+  partitionSetCount: number;
   markReady: (url?: string) => void;
 };
 
@@ -30,9 +31,18 @@ function decorateWebViewElement(element: HTMLElement): MockWebViewElement {
   let currentUrl = DEFAULT_BROWSER_URL;
 
   const webview = element as MockWebViewElement;
+  const originalSetAttribute = element.setAttribute.bind(element);
 
   webview.preReadyGetUrlAttempts = 0;
   webview.insertCssCalls = [];
+  webview.partitionSetCount = 0;
+  webview.setAttribute = ((qualifiedName: string, value: string) => {
+    if (qualifiedName === 'partition') {
+      webview.partitionSetCount += 1;
+    }
+
+    originalSetAttribute(qualifiedName, value);
+  }) as typeof webview.setAttribute;
   webview.markReady = (url: string = webview.getAttribute('src') ?? DEFAULT_BROWSER_URL) => {
     ready = true;
     currentUrl = url;
@@ -128,8 +138,14 @@ describe('BrowserPane', () => {
   });
 
   beforeEach(() => {
+    vi.useFakeTimers();
     updatePane.mockReset();
     __resetBrowserPaneWebviewCacheForTests();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   it('does not call ready-only webview APIs before dom-ready', () => {
@@ -149,7 +165,7 @@ describe('BrowserPane', () => {
     expect(webview?.preReadyGetUrlAttempts).toBe(0);
   });
 
-  it('syncs navigation state after dom-ready without throwing', () => {
+  it('syncs navigation state after dom-ready without throwing', async () => {
     const pane = createBrowserPane();
     const { container } = render(
       <I18nProvider>
@@ -167,8 +183,11 @@ describe('BrowserPane', () => {
       throw new Error('expected webview element');
     }
 
-    webview.markReady('https://example.com/docs');
-    fireEvent(webview, new Event('dom-ready'));
+    await act(async () => {
+      webview.markReady('https://example.com/docs');
+      fireEvent(webview, new Event('dom-ready'));
+      await vi.runAllTimersAsync();
+    });
 
     expect(updatePane).toHaveBeenCalledWith('win-1', pane.id, {
       browser: {
@@ -178,7 +197,7 @@ describe('BrowserPane', () => {
     expect(webview.insertCssCalls).toHaveLength(0);
   });
 
-  it('applies a dark theme to the blank page after dom-ready', () => {
+  it('applies a dark theme to the blank page after dom-ready', async () => {
     const { container } = render(
       <I18nProvider>
         <BrowserPane
@@ -195,14 +214,17 @@ describe('BrowserPane', () => {
       throw new Error('expected webview element');
     }
 
-    webview.markReady(DEFAULT_BROWSER_URL);
-    fireEvent(webview, new Event('dom-ready'));
+    await act(async () => {
+      webview.markReady(DEFAULT_BROWSER_URL);
+      fireEvent(webview, new Event('dom-ready'));
+      await vi.runAllTimersAsync();
+    });
 
     expect(webview.insertCssCalls).toHaveLength(1);
     expect(webview.insertCssCalls[0]).toContain('background: #09090b');
   });
 
-  it('reuses the same webview element when the pane is remounted', () => {
+  it('reuses the same webview element when the pane is remounted without reassigning its partition', async () => {
     const pane = createBrowserPane();
     const firstRender = render(
       <I18nProvider>
@@ -220,8 +242,11 @@ describe('BrowserPane', () => {
       throw new Error('expected first webview element');
     }
 
-    firstWebview.markReady('https://example.com/preserved');
-    fireEvent(firstWebview, new Event('dom-ready'));
+    await act(async () => {
+      firstWebview.markReady('https://example.com/preserved');
+      fireEvent(firstWebview, new Event('dom-ready'));
+      await vi.runAllTimersAsync();
+    });
     firstRender.unmount();
 
     const secondRender = render(
@@ -237,5 +262,6 @@ describe('BrowserPane', () => {
 
     const secondWebview = secondRender.container.querySelector('webview') as MockWebViewElement | null;
     expect(secondWebview).toBe(firstWebview);
+    expect(secondWebview?.partitionSetCount).toBe(1);
   });
 });
