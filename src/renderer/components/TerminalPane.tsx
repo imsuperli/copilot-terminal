@@ -235,6 +235,7 @@ const TerminalLinkDragOverlay: React.FC<TerminalLinkDragOverlayProps> = ({
 export interface TerminalPaneProps {
   windowId: string;
   pane: Pane;
+  layoutPaneCount?: number;
   isActive: boolean; // 是否是当前激活的窗格
   isWindowActive: boolean; // 窗口是否是当前激活的窗口
   onActivate: () => void; // 点击激活
@@ -249,6 +250,7 @@ export interface TerminalPaneProps {
 export const TerminalPane: React.FC<TerminalPaneProps> = ({
   windowId,
   pane,
+  layoutPaneCount = 1,
   isActive,
   isWindowActive,
   onActivate,
@@ -270,6 +272,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const lastCtrlEnterTimeRef = useRef(0); // 记录上次 Ctrl+Enter 的时间戳
   const lastStatusRef = useRef<WindowStatus>(pane.status); // 跟踪上一次的状态
   const lastSessionRef = useRef({ pid: pane.pid, status: pane.status });
+  const lastLayoutPaneCountRef = useRef(layoutPaneCount);
   const isHistoryLoadedRef = useRef(false);
   const bufferedLiveDataRef = useRef<PtyDataPayload[]>([]);
   const historyReplayTokenRef = useRef(0);
@@ -648,6 +651,23 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       window.clearTimeout(delayedResizeTimer);
     };
   }, [forceResizeToContainer, isWindowActive]);
+
+  useEffect(() => {
+    if (lastLayoutPaneCountRef.current === layoutPaneCount) {
+      return;
+    }
+
+    lastLayoutPaneCountRef.current = layoutPaneCount;
+
+    forceResizeToContainer();
+    const delayedResizeTimer = window.setTimeout(() => {
+      forceResizeToContainer();
+    }, 120);
+
+    return () => {
+      window.clearTimeout(delayedResizeTimer);
+    };
+  }, [forceResizeToContainer, layoutPaneCount]);
 
   // 监听字体设置更新
   useEffect(() => {

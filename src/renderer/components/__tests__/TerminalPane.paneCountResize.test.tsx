@@ -11,27 +11,29 @@ const { fitAddonInstances } = vi.hoisted(() => ({
 }));
 
 vi.mock('@xterm/xterm', () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    loadAddon: vi.fn(),
-    registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
-    open: vi.fn(),
-    focus: vi.fn(),
-    blur: vi.fn(),
+  Terminal: vi.fn(function MockTerminal() {
+    return {
+      loadAddon: vi.fn(),
+      registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
+      open: vi.fn(),
+      focus: vi.fn(),
+      blur: vi.fn(),
     dispose: vi.fn(),
     write: vi.fn(),
     paste: vi.fn(),
     getSelection: vi.fn().mockReturnValue(''),
     onData: vi.fn(() => ({ dispose: vi.fn() })),
     onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
-    attachCustomKeyEventHandler: vi.fn(),
-    options: {},
-    cols: 120,
-    rows: 40,
-  })),
+      attachCustomKeyEventHandler: vi.fn(),
+      options: {},
+      cols: 120,
+      rows: 40,
+    };
+  }),
 }));
 
 vi.mock('../../utils/xtermAddonFit', () => ({
-  FitAddon: vi.fn().mockImplementation(() => {
+  FitAddon: vi.fn(function MockFitAddon() {
     const instance = {
       fit: vi.fn(),
     };
@@ -130,6 +132,54 @@ describe('TerminalPane resize on resume', () => {
 
     await waitFor(() => {
       expect(fitAddonInstances[0]?.fit).toHaveBeenCalledTimes(1);
+      expect(window.electronAPI.ptyResize).toHaveBeenCalledWith('win-1', 'pane-1', 120, 40);
+    });
+  });
+
+  it('forces fit and pty resize when the pane count changes after a split', async () => {
+    const { rerender } = render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        layoutPaneCount={1}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.ptyResize).toHaveBeenCalled();
+    });
+
+    vi.mocked(window.electronAPI.ptyResize).mockClear();
+    fitAddonInstances[0]?.fit.mockClear();
+
+    rerender(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        layoutPaneCount={2}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />
+    );
+
+    await waitFor(() => {
+      expect(fitAddonInstances[0]?.fit).toHaveBeenCalled();
       expect(window.electronAPI.ptyResize).toHaveBeenCalledWith('win-1', 'pane-1', 120, 40);
     });
   });

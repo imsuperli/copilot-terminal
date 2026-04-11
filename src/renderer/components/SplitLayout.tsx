@@ -508,6 +508,7 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
         <TerminalPane
           windowId={windowId}
           pane={layout.pane}
+          layoutPaneCount={totalPaneCount}
           isActive={isActive}
           isWindowActive={isWindowActive}
           onActivate={() => onPaneActivate(layout.id)}
