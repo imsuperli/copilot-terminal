@@ -643,12 +643,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
       const startedWindow = applyWindowStartResult(clonedWindowDraft, result);
       addWindow(startedWindow);
-
-      onWindowSwitch(startedWindow.id);
     } catch (error) {
       console.error('Failed to clone session into a new window:', error);
     }
-  }, [addWindow, embedded, onWindowSwitch]);
+  }, [addWindow, embedded]);
 
   const handleCloseRemoteWindow = useCallback(async (windowId: string) => {
     if (embedded) {

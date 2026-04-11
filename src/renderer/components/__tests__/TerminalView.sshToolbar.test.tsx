@@ -417,7 +417,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
   });
 
-  it('clones a remote tab from its context menu', async () => {
+  it('clones a remote tab from its context menu without switching the active view', async () => {
     const user = userEvent.setup();
     const onWindowSwitch = vi.fn();
     const activeWindow = createSSHWindow({
@@ -482,7 +482,7 @@ describe('TerminalView SSH toolbar', () => {
       ephemeral: true,
       sshTabOwnerWindowId: 'win-ssh-1',
     });
-    expect(onWindowSwitch).toHaveBeenCalledWith(expect.any(String));
+    expect(onWindowSwitch).not.toHaveBeenCalled();
     expect(useWindowStore.getState().windows).toHaveLength(3);
   });
 
