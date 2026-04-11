@@ -58,6 +58,7 @@ describe('CustomTitleBar', () => {
 
     const homeButton = container.querySelector('button');
     expect(homeButton).not.toBeNull();
+    expect(homeButton).toHaveAttribute('tabIndex', '-1');
 
     const mouseDownEvent = createEvent.mouseDown(homeButton!);
     fireEvent(homeButton!, mouseDownEvent);

@@ -281,17 +281,20 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
   }
 
   private sanitizeLayoutForPersistence(layout: LayoutNode): PersistedLayoutNode {
-    if (layout.type === 'pane') {
-      const { status, pid, ...pane } = layout.pane;
+    const collapsedLayout = this.collapseRedundantLayoutSplits(layout);
+
+    if (collapsedLayout.type === 'pane') {
+      const { status, pid, ...pane } = collapsedLayout.pane;
       return {
-        ...layout,
+        ...collapsedLayout,
         pane: this.sanitizePaneForPersistence(pane),
       };
     }
 
     return {
-      ...layout,
-      children: layout.children.map((child) => this.sanitizeLayoutForPersistence(child)),
+      ...collapsedLayout,
+      sizes: this.normalizeSplitSizes(collapsedLayout.sizes, collapsedLayout.children.length),
+      children: collapsedLayout.children.map((child) => this.sanitizeLayoutForPersistence(child)),
     };
   }
 
@@ -832,36 +835,84 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
   }
 
   private hydrateLayout(layout: LayoutNode): LayoutNode {
-    if (layout.type === 'pane') {
-      if (isBrowserPane(layout.pane) || layout.pane.backend === 'ssh') {
-        return layout;
+    const collapsedLayout = this.collapseRedundantLayoutSplits(layout);
+
+    if (collapsedLayout.type === 'pane') {
+      if (isBrowserPane(collapsedLayout.pane) || collapsedLayout.pane.backend === 'ssh') {
+        return collapsedLayout;
       }
 
-      const normalizedCwd = PathValidator.expandHomePath(layout.pane.cwd);
-      if (normalizedCwd === layout.pane.cwd) {
-        return layout;
+      const normalizedCwd = PathValidator.expandHomePath(collapsedLayout.pane.cwd);
+      if (normalizedCwd === collapsedLayout.pane.cwd) {
+        return collapsedLayout;
       }
 
       return {
-        ...layout,
+        ...collapsedLayout,
         pane: {
-          ...layout.pane,
+          ...collapsedLayout.pane,
           cwd: normalizedCwd,
         },
       };
     }
 
-    const hydratedChildren = layout.children.map((child) => this.hydrateLayout(child));
-    const didChange = hydratedChildren.some((child, index) => child !== layout.children[index]);
+    const hydratedChildren = collapsedLayout.children.map((child) => this.hydrateLayout(child));
+    const didChange = hydratedChildren.some((child, index) => child !== collapsedLayout.children[index]);
 
     if (!didChange) {
+      return {
+        ...collapsedLayout,
+        sizes: this.normalizeSplitSizes(collapsedLayout.sizes, collapsedLayout.children.length),
+      };
+    }
+
+    return {
+      ...collapsedLayout,
+      sizes: this.normalizeSplitSizes(collapsedLayout.sizes, hydratedChildren.length),
+      children: hydratedChildren,
+    };
+  }
+
+  private collapseRedundantLayoutSplits(layout: LayoutNode): LayoutNode {
+    if (layout.type === 'pane') {
       return layout;
+    }
+
+    const collapsedChildren = layout.children.map((child) => this.collapseRedundantLayoutSplits(child));
+    if (collapsedChildren.length === 1) {
+      return collapsedChildren[0];
     }
 
     return {
       ...layout,
-      children: hydratedChildren,
+      children: collapsedChildren,
+      sizes: this.normalizeSplitSizes(layout.sizes, collapsedChildren.length),
     };
+  }
+
+  private normalizeSplitSizes(sizes: number[] | undefined, childCount: number): number[] {
+    if (childCount <= 0) {
+      return [];
+    }
+
+    if (childCount === 1) {
+      return [1];
+    }
+
+    const nextSizes = Array.isArray(sizes)
+      ? sizes.slice(0, childCount).map((size) => (Number.isFinite(size) && size > 0 ? size : 0))
+      : [];
+
+    if (nextSizes.length !== childCount) {
+      return Array.from({ length: childCount }, () => 1 / childCount);
+    }
+
+    const total = nextSizes.reduce((sum, size) => sum + size, 0);
+    if (total <= 0) {
+      return Array.from({ length: childCount }, () => 1 / childCount);
+    }
+
+    return nextSizes.map((size) => size / total);
   }
 
   private normalizeSettings(settings?: Partial<Settings>): Settings {

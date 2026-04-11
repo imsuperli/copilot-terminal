@@ -19,6 +19,15 @@ describe('extractLatestOsc7RemoteCwd', () => {
     expect(extractLatestOsc7RemoteCwd('\u001b]0;u0_a123@phone: ~/de/de/win/de/co/de/co\u0007')).toBeNull();
   });
 
+  it('accepts home-relative terminal title paths when they are consistent with the tracked cwd', () => {
+    expect(
+      extractLatestOsc7RemoteCwd('\u001b]0;u0_a123@phone: ~/develop/copilot-terminal\u0007', {
+        cwd: '~/develop',
+        homeCwd: null,
+      }),
+    ).toBe('~/develop/copilot-terminal');
+  });
+
   it('parses OSC 633 cwd markers when shell integration is present', () => {
     expect(extractLatestOsc7RemoteCwd('\u001b]633;P;Cwd=/srv/app/releases\u0007')).toBe('/srv/app/releases');
   });
@@ -37,5 +46,23 @@ describe('applyTerminalInputToSSHCwdTracker', () => {
     expect(result.resolvedCwd).toBeNull();
     expect(result.nextState.commandBuffer).toBe('cd releases');
     expect(result.nextState.cwd).toBe('/srv/app');
+  });
+
+  it('does not infer plain relative cd targets that may still be incomplete shell completions', () => {
+    const state = createSSHCwdTrackerState('~/develop');
+
+    const result = applyTerminalInputToSSHCwdTracker(state, 'cd co\r');
+
+    expect(result.resolvedCwd).toBeNull();
+    expect(result.nextState.cwd).toBe('~/develop');
+  });
+
+  it('still infers explicit relative cd targets when the path separator is present', () => {
+    const state = createSSHCwdTrackerState('~/develop');
+
+    const result = applyTerminalInputToSSHCwdTracker(state, 'cd copilot-terminal/\r');
+
+    expect(result.resolvedCwd).toBe('~/develop/copilot-terminal');
+    expect(result.nextState.cwd).toBe('~/develop/copilot-terminal');
   });
 });

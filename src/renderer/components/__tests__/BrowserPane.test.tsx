@@ -280,10 +280,32 @@ describe('BrowserPane', () => {
     const toolbarButtons = container.querySelectorAll('button');
     const openExternalButton = toolbarButtons[3] as HTMLButtonElement | undefined;
     expect(openExternalButton).toBeDefined();
+    expect(openExternalButton).toHaveAttribute('tabIndex', '-1');
 
     const mouseDownEvent = createEvent.mouseDown(openExternalButton!);
     fireEvent(openExternalButton!, mouseDownEvent);
 
     expect(mouseDownEvent.defaultPrevented).toBe(true);
+  });
+
+  it('does not activate the pane on drag handle mousedown before dragstart', () => {
+    const onActivate = vi.fn();
+    const { container } = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={createBrowserPane('https://example.com')}
+          isActive={false}
+          onActivate={onActivate}
+        />
+      </I18nProvider>,
+    );
+
+    const dragHandle = container.querySelector('[data-browser-drag-handle="true"]');
+    expect(dragHandle).not.toBeNull();
+
+    fireEvent.mouseDown(dragHandle!);
+
+    expect(onActivate).not.toHaveBeenCalled();
   });
 });

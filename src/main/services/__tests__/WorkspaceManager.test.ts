@@ -144,6 +144,64 @@ describe('WorkspaceManager', () => {
       expect(saved.windows[0]).not.toHaveProperty('claudeCost');
     });
 
+    it('should collapse redundant single-child split layouts before writing', async () => {
+      const workspace: Workspace = {
+        version: '3.0',
+        windows: [
+          {
+            id: 'ssh-window-1',
+            name: 'Prod SSH',
+            layout: {
+              type: 'split',
+              direction: 'vertical',
+              sizes: [1],
+              children: [
+                {
+                  type: 'split',
+                  direction: 'horizontal',
+                  sizes: [1],
+                  children: [
+                    {
+                      type: 'pane',
+                      id: 'ssh-pane-1',
+                      pane: {
+                        id: 'ssh-pane-1',
+                        cwd: '~/develop/copilot-terminal',
+                        command: '',
+                        backend: 'ssh',
+                        status: 'running' as any,
+                        pid: 1234,
+                        ssh: {
+                          profileId: 'profile-1',
+                        },
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+            activePaneId: 'ssh-pane-1',
+            createdAt: '2026-04-11T00:00:00Z',
+            lastActiveAt: '2026-04-11T00:10:00Z',
+          },
+        ],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+        },
+        lastSavedAt: '',
+      };
+
+      await workspaceManager.saveWorkspace(workspace);
+
+      const saved = await fs.readJson(workspacePath);
+      expect(saved.windows[0].layout.type).toBe('pane');
+      expect(saved.windows[0].layout.id).toBe('ssh-pane-1');
+    });
+
     it('should persist SSH panes with only the profile binding key', async () => {
       const workspace = {
         version: '3.0',
@@ -706,6 +764,64 @@ describe('WorkspaceManager', () => {
       // Should return default workspace due to invalid structure
       const loaded = await workspaceManager.loadWorkspace();
       expect(loaded.windows).toHaveLength(0);
+    });
+
+    it('should collapse redundant single-child split layouts when loading', async () => {
+      const workspace = {
+        version: '3.0',
+        windows: [
+          {
+            id: 'ssh-window-1',
+            name: 'Prod SSH',
+            layout: {
+              type: 'split',
+              direction: 'vertical',
+              sizes: [1],
+              children: [
+                {
+                  type: 'split',
+                  direction: 'horizontal',
+                  sizes: [1],
+                  children: [
+                    {
+                      type: 'pane',
+                      id: 'ssh-pane-1',
+                      pane: {
+                        id: 'ssh-pane-1',
+                        cwd: '~/develop/copilot-terminal',
+                        command: '',
+                        backend: 'ssh',
+                        status: 'paused',
+                        pid: null,
+                        ssh: {
+                          profileId: 'profile-1',
+                        },
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+            activePaneId: 'ssh-pane-1',
+            createdAt: '2026-04-11T00:00:00Z',
+            lastActiveAt: '2026-04-11T00:10:00Z',
+          },
+        ],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+        },
+        lastSavedAt: '2026-04-11T00:10:00Z',
+      };
+
+      await fs.writeJson(workspacePath, workspace, { spaces: 2 });
+
+      const loaded = await workspaceManager.loadWorkspace();
+      expect(loaded.windows[0].layout.type).toBe('pane');
+      expect(loaded.windows[0].layout.id).toBe('ssh-pane-1');
     });
   });
 

@@ -349,6 +349,8 @@ describe('TerminalView', () => {
     );
 
     const archiveButton = screen.getByRole('button', { name: 'terminalView.archive' });
+    expect(archiveButton).toHaveAttribute('tabIndex', '-1');
+
     const mouseDownEvent = createEvent.mouseDown(archiveButton);
     fireEvent(archiveButton, mouseDownEvent);
 

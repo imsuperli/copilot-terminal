@@ -359,8 +359,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
   const handleDragHandleMouseDown = useCallback(() => {
     skipNextAutoFocusRef.current = true;
-    onActivate();
-  }, [onActivate]);
+  }, []);
 
   return (
     <div
@@ -386,6 +385,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
           <AppTooltip content={t('browserPane.back')} placement="pane-corner">
             <button
               type="button"
+              tabIndex={-1}
               aria-label={t('browserPane.back')}
               disabled={!isWebviewReady || !canGoBack}
               onMouseDown={preventMouseButtonFocus}
@@ -398,6 +398,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
           <AppTooltip content={t('browserPane.forward')} placement="pane-corner">
             <button
               type="button"
+              tabIndex={-1}
               aria-label={t('browserPane.forward')}
               disabled={!isWebviewReady || !canGoForward}
               onMouseDown={preventMouseButtonFocus}
@@ -410,6 +411,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
           <AppTooltip content={t('browserPane.refresh')} placement="pane-corner">
             <button
               type="button"
+              tabIndex={-1}
               aria-label={t('browserPane.refresh')}
               disabled={!isWebviewReady}
               onMouseDown={preventMouseButtonFocus}
@@ -439,6 +441,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
           <AppTooltip content={t('browserPane.openExternal')} placement="pane-corner">
             <button
               type="button"
+              tabIndex={-1}
               aria-label={t('browserPane.openExternal')}
               onMouseDown={preventMouseButtonFocus}
               onClick={openCurrentUrlExternally}
@@ -452,6 +455,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
             <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
               <button
                 type="button"
+                tabIndex={-1}
                 aria-label={t('terminalPane.close')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={(event) => {

@@ -317,7 +317,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     }
 
     const unsubscribe = subscribeToPanePtyData(windowId, pane.id, (payload) => {
-      const nextRemoteCwd = extractLatestOsc7RemoteCwd(payload.data);
+      const nextRemoteCwd = extractLatestOsc7RemoteCwd(payload.data, sshCwdTrackerRef.current);
       if (!nextRemoteCwd) {
         return;
       }

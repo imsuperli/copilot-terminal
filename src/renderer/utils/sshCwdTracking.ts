@@ -26,7 +26,10 @@ export function createSSHCwdTrackerState(initialCwd?: string | null): SSHCwdTrac
   };
 }
 
-export function extractLatestOsc7RemoteCwd(data: string): string | null {
+export function extractLatestOsc7RemoteCwd(
+  data: string,
+  trackerState?: Pick<SSHCwdTrackerState, 'cwd' | 'homeCwd'>,
+): string | null {
   if (!data || !mayContainRemoteCwdMarker(data)) {
     return null;
   }
@@ -64,7 +67,7 @@ export function extractLatestOsc7RemoteCwd(data: string): string | null {
     let match = pattern.exec(data);
 
     while (match) {
-      const parsed = parseTitlePath(match[1]);
+      const parsed = parseTitlePath(match[1], trackerState);
       if (parsed) {
         latestPath = parsed;
       }
@@ -239,6 +242,10 @@ function resolveCwdFromCommand(state: SSHCwdTrackerState): string | null {
     return state.previousCwd;
   }
 
+  if (!shouldInferCwdFromCdTarget(target)) {
+    return null;
+  }
+
   if (!target || target === '~') {
     return state.homeCwd ?? '~';
   }
@@ -257,6 +264,18 @@ function resolveCwdFromCommand(state: SSHCwdTrackerState): string | null {
 
   const basePath = state.cwd ?? state.homeCwd ?? '~';
   return normalizeRemoteCwd(joinRemotePath(basePath, target));
+}
+
+function shouldInferCwdFromCdTarget(target: string): boolean {
+  if (!target || target === '~' || target === '-' || target === '.' || target === '..') {
+    return true;
+  }
+
+  if (target.startsWith('/') || target.startsWith('./') || target.startsWith('../') || target.startsWith('~/')) {
+    return true;
+  }
+
+  return target.includes('/');
 }
 
 function tokenizeShellWords(command: string): string[] {
@@ -393,7 +412,10 @@ function parseFileUriPath(uri: string): string | null {
   }
 }
 
-function parseTitlePath(title: string): string | null {
+function parseTitlePath(
+  title: string,
+  trackerState?: Pick<SSHCwdTrackerState, 'cwd' | 'homeCwd'>,
+): string | null {
   const trimmed = title.trim();
   if (!trimmed) {
     return null;
@@ -405,11 +427,47 @@ function parseTitlePath(title: string): string | null {
   }
 
   const normalized = normalizeRemoteCwd(match[1]);
-  if (!normalized || !normalized.startsWith('/')) {
+  if (!normalized) {
     return null;
   }
 
-  return normalized;
+  if (normalized.startsWith('/')) {
+    return normalized;
+  }
+
+  return resolveHomeRelativeTitlePath(normalized, trackerState);
+}
+
+function resolveHomeRelativeTitlePath(
+  normalizedTitlePath: string,
+  trackerState?: Pick<SSHCwdTrackerState, 'cwd' | 'homeCwd'>,
+): string | null {
+  if (!normalizedTitlePath.startsWith('~')) {
+    return null;
+  }
+
+  if (!trackerState) {
+    return null;
+  }
+
+  if (trackerState.homeCwd) {
+    return normalizedTitlePath;
+  }
+
+  const currentCwd = normalizeRemoteCwd(trackerState.cwd);
+  if (!currentCwd || !currentCwd.startsWith('~')) {
+    return null;
+  }
+
+  if (
+    normalizedTitlePath === currentCwd
+    || normalizedTitlePath.startsWith(`${currentCwd}/`)
+    || currentCwd.startsWith(`${normalizedTitlePath}/`)
+  ) {
+    return normalizedTitlePath;
+  }
+
+  return null;
 }
 
 function getTerminalEscapeSequenceLength(value: string): number {

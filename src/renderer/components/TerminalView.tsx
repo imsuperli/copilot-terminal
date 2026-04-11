@@ -938,6 +938,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               >
                 <button
                   type="button"
+                  tabIndex={-1}
                   aria-label={t('common.openInIDE', { name: ide.name })}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={() => handleOpenInIDE(ide.id)}
@@ -953,6 +954,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               <AppTooltip content={t('terminalView.archive')} placement="toolbar-trailing">
                 <button
                   type="button"
+                  tabIndex={-1}
                   aria-label={t('terminalView.archive')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handleArchiveWindow}
@@ -968,6 +970,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               <AppTooltip content={t('terminalView.openFolder')} placement="toolbar-trailing">
                 <button
                   type="button"
+                  tabIndex={-1}
                   aria-label={t('terminalView.openFolder')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handleOpenFolder}
@@ -983,6 +986,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <AppTooltip content={t('terminalView.openSftp')} placement="toolbar-trailing">
                   <button
                     type="button"
+                    tabIndex={-1}
                     aria-label={t('terminalView.openSftp')}
                     onMouseDown={preventMouseButtonFocus}
                     onClick={handleOpenSSHSftp}
@@ -1001,6 +1005,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 >
                   <button
                     type="button"
+                    tabIndex={-1}
                     aria-label={sshMetricsOpen ? t('terminalView.hideSshMonitor') : t('terminalView.showSshMonitor')}
                     onMouseDown={preventMouseButtonFocus}
                     onClick={() => setSSHMetricsOpen((current) => !current)}
@@ -1020,6 +1025,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               <AppTooltip content={t('terminalView.managePortForwards')} placement="toolbar-trailing">
                 <button
                   type="button"
+                  tabIndex={-1}
                   aria-label={t('terminalView.managePortForwards')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handleOpenSSHPortForwards}
@@ -1034,6 +1040,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             <AppTooltip content={t('terminalView.splitHorizontal')} placement="toolbar-trailing">
               <button
                 type="button"
+                tabIndex={-1}
                 aria-label={t('terminalView.splitHorizontal')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={() => handleSplitPane('horizontal')}
@@ -1047,6 +1054,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             <AppTooltip content={t('terminalView.splitVertical')} placement="toolbar-trailing">
               <button
                 type="button"
+                tabIndex={-1}
                 aria-label={t('terminalView.splitVertical')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={() => handleSplitPane('vertical')}
@@ -1059,6 +1067,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             <AppTooltip content={t('terminalView.splitBrowser')} placement="toolbar-trailing">
               <button
                 type="button"
+                tabIndex={-1}
                 aria-label={t('terminalView.splitBrowser')}
                 onClick={handleSplitBrowserPane}
                 ref={dragBrowserTool}
@@ -1079,6 +1088,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 >
                   <button
                     type="button"
+                    tabIndex={-1}
                     onMouseDown={preventMouseButtonFocus}
                     onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
                     className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
@@ -1094,6 +1104,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 >
                   <button
                     type="button"
+                    tabIndex={-1}
                     onMouseDown={preventMouseButtonFocus}
                     onClick={() => {
                       if (isWindowRunning) {
@@ -1118,6 +1129,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               <AppTooltip content={t('terminalView.stop')} placement="toolbar-trailing">
                 <button
                   type="button"
+                  tabIndex={-1}
                   aria-label={t('terminalView.stop')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handlePauseWindow}
@@ -1136,6 +1148,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               >
                 <button
                   type="button"
+                  tabIndex={-1}
                   aria-label={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={isWindowRunning ? handleRestartWindow : handleStartWindow}

@@ -746,7 +746,7 @@ describe('SSHSftpDialog', () => {
     });
   });
 
-  it('maps Termux home paths to ~ before requesting the SFTP listing', async () => {
+  it('preserves absolute Termux paths when requesting the SFTP listing', async () => {
     vi.mocked(window.electronAPI.listSSHSftpDirectory)
       .mockResolvedValueOnce({
         success: true,
@@ -771,7 +771,7 @@ describe('SSHSftpDialog', () => {
       expect(window.electronAPI.listSSHSftpDirectory).toHaveBeenCalledWith({
         windowId: 'win-1',
         paneId: 'pane-1',
-        path: '~/projects/demo',
+        path: '/data/data/com.termux/files/home/projects/demo',
       });
     });
   });
