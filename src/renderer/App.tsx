@@ -47,6 +47,11 @@ import {
 import { APP_ERROR_EVENT, type AppErrorEventDetail } from './utils/appNotice';
 import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './utils/sshConnectionRetry';
 import { isEphemeralSSHCloneWindow } from './utils/sshWindowBindings';
+import {
+  createMountedTerminalObservationSnapshot,
+  logMountedTerminalObservation,
+  markTerminalSwitchVisible,
+} from './utils/perfObservability';
 import { useShallow } from 'zustand/react/shallow';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
@@ -89,6 +94,12 @@ function selectMountedWindowRecordKeys(state: { windows: Window[] }) {
   return state.windows.map((window) => `${window.id}:${getAggregatedStatus(window.layout)}`);
 }
 
+function selectMountedWindowTerminalPaneCountKeys(state: { windows: Window[] }) {
+  return state.windows.map((window) => (
+    `${window.id}:${getAllPanes(window.layout).filter((pane) => pane.kind !== 'browser').length}`
+  ));
+}
+
 const MountedTerminalSurface = React.memo(({
   isVisible,
   onGroupSwitch,
@@ -111,6 +122,14 @@ const MountedTerminalSurface = React.memo(({
   const terminalWindow = useWindowStore((state) => (
     state.windows.find((window) => window.id === windowId) ?? null
   ));
+
+  useEffect(() => {
+    if (!isVisible) {
+      return;
+    }
+
+    markTerminalSwitchVisible(windowId);
+  }, [isVisible, windowId]);
 
   if (!terminalWindow) {
     return null;
@@ -208,6 +227,7 @@ function AppContent() {
   const activeGroupId = useWindowStore((state) => state.activeGroupId);
   const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
   const mountedWindowRecordKeys = useWindowStore(useShallow(selectMountedWindowRecordKeys));
+  const mountedWindowTerminalPaneCountKeys = useWindowStore(useShallow(selectMountedWindowTerminalPaneCountKeys));
   const activeWindowTitle = useWindowStore((state) => (
     storeActiveWindowId
       ? state.windows.find((window) => window.id === storeActiveWindowId)?.name ?? ''
@@ -901,10 +921,31 @@ function AppContent() {
 
     return nextIds;
   }, [activeWindowId, mountedTerminalWindowIds]);
+  const mountedTerminalObservation = useMemo(() => (
+    createMountedTerminalObservationSnapshot({
+      currentView,
+      activeWindowId,
+      activeGroupId,
+      mountedWindowIds: Array.from(mountedTerminalWindowIdSet),
+      mountedWindowStatusKeys: mountedWindowRecordKeys,
+      mountedWindowTerminalPaneCountKeys,
+    })
+  ), [
+    activeGroupId,
+    activeWindowId,
+    currentView,
+    mountedTerminalWindowIdSet,
+    mountedWindowRecordKeys,
+    mountedWindowTerminalPaneCountKeys,
+  ]);
   const hasActiveWindows = useMemo(
     () => hasPersistedEntries || (sshEnabled && sshProfiles.length > 0),
     [hasPersistedEntries, sshEnabled, sshProfiles.length]
   );
+
+  useEffect(() => {
+    logMountedTerminalObservation(mountedTerminalObservation);
+  }, [mountedTerminalObservation]);
 
   const handleSSHHostKeyPromptDecision = useCallback((decision: { trusted: boolean; persist: boolean }) => {
     setSSHHostKeyPromptQueue((currentQueue) => {

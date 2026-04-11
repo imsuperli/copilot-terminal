@@ -3,6 +3,7 @@ import { useWindowStore } from '../stores/windowStore';
 import { WindowStatus } from '../types/window';
 import { getAllPanes, getAggregatedStatus } from '../utils/layoutHelpers';
 import { startWindowPanes } from '../utils/paneSessionActions';
+import { markTerminalSwitchStart } from '../utils/perfObservability';
 
 /**
  * 窗口切换 Hook
@@ -23,6 +24,7 @@ export function useWindowSwitcher(onSwitchView: (windowId: string) => void | Pro
 
     // 如果窗口是暂停状态，启动所有窗格
     if (aggregatedStatus === WindowStatus.Paused) {
+      markTerminalSwitchStart(win.id);
       setActiveWindow(win.id);
       void onSwitchView(win.id);
 
@@ -45,6 +47,7 @@ export function useWindowSwitcher(onSwitchView: (windowId: string) => void | Pro
     }
 
     // 切换到终端视图
+    markTerminalSwitchStart(win.id);
     setActiveWindow(win.id);
     void onSwitchView(win.id);
   }, [onSwitchView]);
