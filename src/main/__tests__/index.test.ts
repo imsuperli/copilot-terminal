@@ -94,7 +94,7 @@ describe('Electron Main Process', () => {
       const config = mockBrowserWindow.mock.calls[0][0];
       
       // Verify dark theme background (AC: 4)
-      expect(config.backgroundColor).toBe('#0a0a0a');
+      expect(config.backgroundColor).toBe('#0c0c0c');
     });
 
     it('should configure window title', async () => {

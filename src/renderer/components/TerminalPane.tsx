@@ -163,6 +163,41 @@ function stripReplayDeviceAttributeQueries(data: string): string {
   return data.replace(/\x1b\[(?:[>=])?c/g, '');
 }
 
+function readRootCssColor(variableName: string, fallback: string): string {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return fallback;
+  }
+
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+  return value || fallback;
+}
+
+function getWindowsTerminalTheme() {
+  return {
+    background: readRootCssColor('--terminal-background', '#0c0c0c'),
+    foreground: readRootCssColor('--terminal-foreground', '#cccccc'),
+    cursor: readRootCssColor('--terminal-cursor', '#f2f2f2'),
+    cursorAccent: readRootCssColor('--terminal-cursor-accent', '#0c0c0c'),
+    selectionBackground: readRootCssColor('--terminal-selection', 'rgba(204, 204, 204, 0.28)'),
+    black: readRootCssColor('--terminal-black', '#0c0c0c'),
+    red: readRootCssColor('--terminal-red', '#c50f1f'),
+    green: readRootCssColor('--terminal-green', '#13a10e'),
+    yellow: readRootCssColor('--terminal-yellow', '#c19c00'),
+    blue: readRootCssColor('--terminal-blue', '#0037da'),
+    magenta: readRootCssColor('--terminal-magenta', '#881798'),
+    cyan: readRootCssColor('--terminal-cyan', '#3a96dd'),
+    white: readRootCssColor('--terminal-white', '#cccccc'),
+    brightBlack: readRootCssColor('--terminal-bright-black', '#767676'),
+    brightRed: readRootCssColor('--terminal-bright-red', '#e74856'),
+    brightGreen: readRootCssColor('--terminal-bright-green', '#16c60c'),
+    brightYellow: readRootCssColor('--terminal-bright-yellow', '#f9f1a5'),
+    brightBlue: readRootCssColor('--terminal-bright-blue', '#3b78ff'),
+    brightMagenta: readRootCssColor('--terminal-bright-magenta', '#b4009e'),
+    brightCyan: readRootCssColor('--terminal-bright-cyan', '#61d6d6'),
+    brightWhite: readRootCssColor('--terminal-bright-white', '#f2f2f2'),
+  };
+}
+
 interface TerminalLinkDragOverlayState {
   url: string;
   left: number;
@@ -718,29 +753,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     const terminal = new Terminal({
       cols: 80,
       rows: 30,
-      theme: {
-        background: '#0f0f0f',
-        foreground: '#e0e0e0',
-        cursor: '#e0e0e0',
-        cursorAccent: '#0f0f0f',
-        selectionBackground: '#3a3a3a',
-        black: '#000000',
-        red: '#e06c75',
-        green: '#98c379',
-        yellow: '#d19a66',
-        blue: '#61afef',
-        magenta: '#c678dd',
-        cyan: '#56b6c2',
-        white: '#abb2bf',
-        brightBlack: '#5c6370',
-        brightRed: '#e06c75',
-        brightGreen: '#98c379',
-        brightYellow: '#d19a66',
-        brightBlue: '#61afef',
-        brightMagenta: '#c678dd',
-        brightCyan: '#56b6c2',
-        brightWhite: '#ffffff',
-      },
+      theme: getWindowsTerminalTheme(),
       fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: 14,
       lineHeight: 1.2,
@@ -1232,11 +1245,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   return (
     <div
       ref={paneRootRef}
-      className={`relative flex h-full min-h-0 min-w-0 flex-col bg-[#0f0f0f] ${
+      className={`relative flex h-full min-h-0 min-w-0 flex-col ${
         isActive ? `ring-1 ${ringColor}` : ''
       }`}
       style={{
         ...activePaneStyle,
+        backgroundColor: 'var(--terminal-background)',
         filter: isActive || isHovered ? 'brightness(1.0)' : 'brightness(0.85)',
         transition: 'filter 0.2s ease-in-out',
       }}

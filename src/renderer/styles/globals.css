@@ -2,42 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Auto-Claude inspired color scheme - Oscura Midnight Theme */
+/* Windows Terminal-inspired dark chrome + Campbell terminal palette */
 @layer base {
   :root {
-    /* Dark Mode - Primary theme */
-    --background: 11 11 15; /* #0B0B0F */
-    --foreground: 230 230 230; /* #E6E6E6 */
+    --background: 12 12 12; /* #0C0C0C */
+    --foreground: 242 242 242; /* #F2F2F2 */
 
-    --card: 18 18 22; /* #121216 */
-    --card-foreground: 230 230 230;
+    --card: 22 22 22; /* #161616 */
+    --card-foreground: 242 242 242;
 
-    --primary: 168 170 88; /* #A8AA58 - Darker, more muted yellow */
-    --primary-foreground: 11 11 15;
+    --primary: 59 120 255; /* #3B78FF */
+    --primary-foreground: 242 242 242;
 
-    --secondary: 26 26 31; /* #1A1A1F */
-    --secondary-foreground: 230 230 230;
+    --secondary: 28 28 28; /* #1C1C1C */
+    --secondary-foreground: 242 242 242;
 
-    --muted: 26 26 31;
-    --muted-foreground: 156 163 175; /* #9CA3AF - 更亮的灰色，提高可读性 */
+    --muted: 34 34 34; /* #222222 */
+    --muted-foreground: 161 161 161; /* #A1A1A1 */
 
-    --accent: 42 42 31; /* #2A2A1F */
-    --accent-foreground: 168 170 88;
+    --accent: 40 40 40; /* #282828 */
+    --accent-foreground: 242 242 242;
 
-    --destructive: 255 92 92; /* #FF5C5C */
-    --destructive-foreground: 11 11 15;
+    --destructive: 231 72 86; /* #E74856 */
+    --destructive-foreground: 242 242 242;
 
-    --border: 35 35 35; /* #232323 */
-    --input: 35 35 35;
-    --ring: 168 170 88;
+    --border: 50 50 50; /* #323232 */
+    --input: 58 58 58; /* #3A3A3A */
+    --ring: 59 120 255;
 
-    --sidebar: 14 14 18; /* #0E0E12 */
-    --sidebar-foreground: 230 230 230;
+    --sidebar: 18 18 18; /* #121212 */
+    --sidebar-foreground: 242 242 242;
 
-    --success: 78 190 150; /* #4EBE96 */
-    --warning: 210 215 20; /* #D2D714 */
-    --info: 71 159 250; /* #479FFA */
-    --error: 255 92 92;
+    --success: 22 198 12; /* #16C60C */
+    --warning: 255 185 0; /* #FFB900 */
+    --info: 97 214 214; /* #61D6D6 */
+    --error: 231 72 86; /* #E74856 */
+
+    --titlebar: 43 43 43; /* #2B2B2B */
+    --titlebar-foreground: 236 236 236; /* #ECECEC */
+    --titlebar-muted: 181 181 181; /* #B5B5B5 */
+    --titlebar-border: 60 60 60; /* #3C3C3C */
+    --titlebar-hover: 58 58 58; /* #3A3A3A */
+
+    --terminal-background: #0c0c0c;
+    --terminal-foreground: #cccccc;
+    --terminal-cursor: #f2f2f2;
+    --terminal-cursor-accent: #0c0c0c;
+    --terminal-selection: rgba(204, 204, 204, 0.28);
+
+    --terminal-black: #0c0c0c;
+    --terminal-red: #c50f1f;
+    --terminal-green: #13a10e;
+    --terminal-yellow: #c19c00;
+    --terminal-blue: #0037da;
+    --terminal-magenta: #881798;
+    --terminal-cyan: #3a96dd;
+    --terminal-white: #cccccc;
+    --terminal-bright-black: #767676;
+    --terminal-bright-red: #e74856;
+    --terminal-bright-green: #16c60c;
+    --terminal-bright-yellow: #f9f1a5;
+    --terminal-bright-blue: #3b78ff;
+    --terminal-bright-magenta: #b4009e;
+    --terminal-bright-cyan: #61d6d6;
+    --terminal-bright-white: #f2f2f2;
 
     --radius: 0.75rem;
   }

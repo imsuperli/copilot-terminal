@@ -7,27 +7,41 @@ export default {
     extend: {
       colors: {
         // 状态色
-        'status-running': '#3b82f6',
-        'status-waiting': '#f59e0b',
-        'status-completed': '#10b981',
-        'status-error': '#ef4444',
-        'status-restoring': '#6b7280',
+        'status-running': '#16c60c',
+        'status-waiting': '#3b78ff',
+        'status-completed': '#61d6d6',
+        'status-error': '#e74856',
+        'status-restoring': '#ffb900',
 
         // 背景色
-        'bg-app': '#0a0a0a',
-        'bg-card': '#1a1a1a',
-        'bg-card-hover': '#2a2a2a',
+        'bg-app': '#0c0c0c',
+        'bg-card': '#161616',
+        'bg-card-hover': '#232323',
+        'bg-hover': '#232323',
+        'bg-elevated': '#1c1c1c',
 
         // 文字色
-        'text-primary': '#e5e5e5',
-        'text-secondary': '#a3a3a3',
-        'text-disabled': '#737373',
+        'text-primary': '#f2f2f2',
+        'text-secondary': '#a1a1a1',
+        'text-disabled': '#6a6a6a',
 
         // 边框色
-        'border-subtle': '#2a2a2a',
+        'border-subtle': '#323232',
+        'border-default': '#454545',
 
-        // Zinc 色系扩展（用于 WindowCard）
+        // Windows Terminal 风格的 Zinc 色表
         zinc: {
+          50: '#fafafa',
+          100: '#f2f2f2',
+          200: '#e6e6e6',
+          300: '#c9c9c9',
+          400: '#a0a0a0',
+          500: '#7a7a7a',
+          600: '#525252',
+          700: '#303030',
+          800: '#232323',
+          900: '#171717',
+          950: '#0c0c0c',
           750: '#323238',
         },
       },

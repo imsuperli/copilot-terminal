@@ -198,6 +198,7 @@ function createWindow() {
 
     if (!supportsOpacityReveal) {
       mainWindow.show();
+      mainWindow.webContents.send('window-startup-reveal');
       return;
     }
 
@@ -207,6 +208,8 @@ function createWindow() {
     if (!mainWindow.isVisible()) {
       mainWindow.show();
     }
+
+    mainWindow.webContents.send('window-startup-reveal');
 
     startupRevealTimer = setInterval(() => {
       if (!mainWindow || mainWindow.isDestroyed()) {

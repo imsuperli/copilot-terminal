@@ -11,13 +11,20 @@ function hasClassToken(container: HTMLElement, token: string) {
 describe('App - Dark Theme and Design Tokens', () => {
   it('uses the dark custom title bar chrome', async () => {
     const { container } = await renderApp();
-    const titleBar = container.querySelector('.h-8.bg-zinc-900.border-b.border-zinc-800');
+    const titleBar = Array.from(container.querySelectorAll('div')).find((element) => (
+      typeof element.className === 'string'
+      && element.className.split(/\s+/).includes('bg-[rgb(var(--titlebar))]')
+    ));
     expect(titleBar).toHaveClass('flex', 'items-center', 'justify-between');
   });
 
   it('styles the title bar app name with the current text token', async () => {
     await renderApp();
-    expect(screen.getByText('Copilot-Terminal')).toHaveClass('text-sm', 'text-zinc-300', 'font-medium');
+    expect(screen.getByText('Copilot-Terminal')).toHaveClass(
+      'text-sm',
+      'font-medium',
+      'text-[rgb(var(--titlebar-foreground))]',
+    );
   });
 
   it('applies background tokens to the split layout shell', async () => {

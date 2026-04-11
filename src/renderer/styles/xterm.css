@@ -42,19 +42,19 @@
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider,
 .xterm .xterm-scrollable-element > .scrollbar > .slider {
   width: 4px !important;
-  background: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
   border-radius: 999px !important;
   transition: background 0.2s ease !important;
 }
 
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider:hover,
 .xterm .xterm-scrollable-element > .scrollbar > .slider:hover {
-  background: rgba(255, 255, 255, 0.3) !important;
+  background: rgba(255, 255, 255, 0.26) !important;
 }
 
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider:active,
 .xterm .xterm-scrollable-element > .scrollbar > .slider:active {
-  background: rgba(255, 255, 255, 0.4) !important;
+  background: rgba(255, 255, 255, 0.34) !important;
 }
 
 .xterm .xterm-decoration-overview-ruler {
