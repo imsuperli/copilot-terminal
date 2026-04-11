@@ -110,6 +110,15 @@ function SplitBrowserIcon() {
   );
 }
 
+function isArchiveSwitchCandidate(window: Window): boolean {
+  const status = getAggregatedStatus(window.layout);
+  return (
+    status === WindowStatus.Running
+    || status === WindowStatus.WaitingForInput
+    || status === WindowStatus.Restoring
+  );
+}
+
 export interface TerminalViewProps {
   window: Window;
   onReturn: () => void;
@@ -767,7 +776,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
       // 鑾峰彇鎵€鏈夋湭褰掓。鐨勭獥鍙?
       const { windows } = useWindowStore.getState();
-      const activeWindows = getPersistableWindows(windows).filter(w => !w.archived && w.id !== terminalWindow.id);
+      const activeWindows = getPersistableWindows(windows).filter((window) => (
+        !window.archived
+        && window.id !== terminalWindow.id
+        && isArchiveSwitchCandidate(window)
+      ));
 
       // 鏌ユ壘绗竴涓瓑寰呰緭鍏ョ殑绐楀彛
       let targetWindow = activeWindows.find(w => {

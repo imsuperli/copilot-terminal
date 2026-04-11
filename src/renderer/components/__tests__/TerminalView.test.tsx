@@ -1,5 +1,5 @@
 import React from 'react';
-import { createEvent, fireEvent, render, screen } from '@testing-library/react';
+import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalView } from '../TerminalView';
 import { useWindowStore } from '../../stores/windowStore';
@@ -355,5 +355,131 @@ describe('TerminalView', () => {
     fireEvent(archiveButton, mouseDownEvent);
 
     expect(mouseDownEvent.defaultPrevented).toBe(true);
+  });
+
+  it('returns to unified view after archive when only paused windows remain', async () => {
+    const currentWindow = createLocalWindow(WindowStatus.Running);
+    const pausedWindow: Window = {
+      ...createLocalWindow(WindowStatus.Paused),
+      id: 'win-local-2',
+      name: 'Paused Window',
+      layout: {
+        type: 'pane',
+        id: 'pane-local-2',
+        pane: {
+          id: 'pane-local-2',
+          cwd: '/workspace/paused',
+          command: 'bash',
+          status: WindowStatus.Paused,
+          pid: null,
+        },
+      },
+      activePaneId: 'pane-local-2',
+    };
+    const onReturn = vi.fn();
+    const onWindowSwitch = vi.fn();
+
+    useWindowStore.setState({
+      windows: [currentWindow, pausedWindow],
+      activeWindowId: currentWindow.id,
+      mruList: [currentWindow.id, pausedWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={currentWindow}
+        onReturn={onReturn}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'terminalView.archive' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(currentWindow.id);
+      expect(onReturn).toHaveBeenCalledTimes(1);
+    });
+
+    expect(onWindowSwitch).not.toHaveBeenCalled();
+    expect(useWindowStore.getState().windows.find((window) => window.id === currentWindow.id)?.archived).toBe(true);
+    expect(useWindowStore.getState().windows.find((window) => window.id === pausedWindow.id)?.archived).not.toBe(true);
+  });
+
+  it('skips paused windows when choosing the next window after archive', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const currentWindow = createLocalWindow(WindowStatus.Running);
+      const pausedWindow: Window = {
+        ...createLocalWindow(WindowStatus.Paused),
+        id: 'win-local-2',
+        name: 'Paused Window',
+        layout: {
+          type: 'pane',
+          id: 'pane-local-2',
+          pane: {
+            id: 'pane-local-2',
+            cwd: '/workspace/paused',
+            command: 'bash',
+            status: WindowStatus.Paused,
+            pid: null,
+          },
+        },
+        activePaneId: 'pane-local-2',
+      };
+      const runningWindow: Window = {
+        ...createLocalWindow(WindowStatus.Running),
+        id: 'win-local-3',
+        name: 'Running Window',
+        layout: {
+          type: 'pane',
+          id: 'pane-local-3',
+          pane: {
+            id: 'pane-local-3',
+            cwd: '/workspace/running',
+            command: 'bash',
+            status: WindowStatus.Running,
+            pid: 303,
+          },
+        },
+        activePaneId: 'pane-local-3',
+      };
+      const onReturn = vi.fn();
+      const onWindowSwitch = vi.fn();
+
+      useWindowStore.setState({
+        windows: [currentWindow, pausedWindow, runningWindow],
+        activeWindowId: currentWindow.id,
+        mruList: [currentWindow.id, pausedWindow.id, runningWindow.id],
+        sidebarExpanded: false,
+        sidebarWidth: 200,
+      });
+
+      render(
+        <TerminalView
+          window={currentWindow}
+          onReturn={onReturn}
+          onWindowSwitch={onWindowSwitch}
+          isActive
+        />
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'terminalView.archive' }));
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(onWindowSwitch).toHaveBeenCalledWith(runningWindow.id);
+      expect(onWindowSwitch).not.toHaveBeenCalledWith(pausedWindow.id);
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(currentWindow.id);
+
+      expect(onReturn).not.toHaveBeenCalled();
+      expect(useWindowStore.getState().windows.find((window) => window.id === currentWindow.id)?.archived).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
