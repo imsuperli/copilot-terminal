@@ -340,7 +340,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部工具栏 */}
-        <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-center px-3 gap-2 flex-shrink-0">
+        <div className="h-8 bg-zinc-900 flex items-center px-3 gap-2 flex-shrink-0">
           <div className="flex-1" />
 
           {/* 批量操作按钮 */}
