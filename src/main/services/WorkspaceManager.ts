@@ -136,25 +136,30 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
 
         // 校验数据格式
         if (this.validateWorkspace(workspace)) {
+          const normalizedWorkspace = {
+            ...workspace,
+            windows: this.deduplicateWindowsById(workspace.windows, 'load'),
+          };
+
           // 如果是旧版数据（version 1.0），迁移到新版
-          if (workspace.version === '1.0') {
+          if (normalizedWorkspace.version === '1.0') {
             console.log('Migrating workspace from version 1.0 to 3.0');
-            const migratedWorkspace = this.migrateFrom1To2(workspace);
+            const migratedWorkspace = this.migrateFrom1To2(normalizedWorkspace);
             const finalWorkspace = this.migrateFrom2To3(migratedWorkspace);
             await this.saveWorkspace(finalWorkspace);
             return this.resetPaneStates(finalWorkspace);
           }
 
           // 如果是 2.0 版本，迁移到 3.0
-          if (workspace.version === '2.0') {
+          if (normalizedWorkspace.version === '2.0') {
             console.log('Migrating workspace from version 2.0 to 3.0');
-            const migratedWorkspace = this.migrateFrom2To3(workspace);
+            const migratedWorkspace = this.migrateFrom2To3(normalizedWorkspace);
             await this.saveWorkspace(migratedWorkspace);
             return this.resetPaneStates(migratedWorkspace);
           }
 
           // 3.0 版本：验证组完整性
-          const validatedWorkspace = this.validateGroupIntegrity(workspace);
+          const validatedWorkspace = this.validateGroupIntegrity(normalizedWorkspace);
 
           const hydratedWorkspace = this.hydrateWorkspace(validatedWorkspace);
           if (JSON.stringify(hydratedWorkspace) !== JSON.stringify(validatedWorkspace)) {
@@ -215,11 +220,13 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
   }
 
   private sanitizeWorkspaceForPersistence(workspace: Workspace): PersistedWorkspace {
+    const persistableWindows = workspace.windows.filter((window) => !window.ephemeral);
+    const deduplicatedWindows = this.deduplicateWindowsById(persistableWindows, 'save');
+
     return {
       ...workspace,
-      windows: workspace.windows
-        .filter((window) => !window.ephemeral)
-        .map((window) => this.sanitizeWindowForPersistence(window)),
+      version: '3.0',
+      windows: deduplicatedWindows.map((window) => this.sanitizeWindowForPersistence(window)),
       groups: workspace.groups || [], // 确保 groups 被保存
     };
   }
@@ -891,5 +898,54 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     } catch {
       return DEFAULT_LANGUAGE;
     }
+  }
+
+  private deduplicateWindowsById<T extends { id: string; lastActiveAt?: string; createdAt?: string }>(
+    windows: T[],
+    source: 'load' | 'save',
+  ): T[] {
+    if (windows.length <= 1) {
+      return windows;
+    }
+
+    let duplicateCount = 0;
+    const uniqueWindows = new Map<string, T>();
+
+    for (const window of windows) {
+      const existingWindow = uniqueWindows.get(window.id);
+      if (!existingWindow) {
+        uniqueWindows.set(window.id, window);
+        continue;
+      }
+
+      duplicateCount += 1;
+      uniqueWindows.set(window.id, this.pickNewerWindow(existingWindow, window));
+    }
+
+    if (duplicateCount > 0) {
+      console.warn(`[WorkspaceManager] Removed ${duplicateCount} duplicate window record(s) during ${source}`);
+    }
+
+    return Array.from(uniqueWindows.values());
+  }
+
+  private pickNewerWindow<T extends { lastActiveAt?: string; createdAt?: string }>(current: T, candidate: T): T {
+    return this.getWindowTimestamp(candidate) >= this.getWindowTimestamp(current)
+      ? candidate
+      : current;
+  }
+
+  private getWindowTimestamp(window: { lastActiveAt?: string; createdAt?: string }): number {
+    const lastActiveAt = Date.parse(window.lastActiveAt ?? '');
+    if (Number.isFinite(lastActiveAt)) {
+      return lastActiveAt;
+    }
+
+    const createdAt = Date.parse(window.createdAt ?? '');
+    if (Number.isFinite(createdAt)) {
+      return createdAt;
+    }
+
+    return Number.NEGATIVE_INFINITY;
   }
 }

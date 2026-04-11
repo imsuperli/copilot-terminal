@@ -322,7 +322,13 @@ export const useWindowStore = create<WindowStore>()(
     // 添加窗口
     addWindow: (window) => {
       set((state) => {
-        state.windows.push(window);
+        const existingIndex = state.windows.findIndex((item) => item.id === window.id);
+        if (existingIndex >= 0) {
+          state.windows[existingIndex] = window;
+        } else {
+          state.windows.push(window);
+        }
+
         // 添加到 MRU 列表首位
         state.mruList = [window.id, ...state.mruList.filter(id => id !== window.id)];
       });

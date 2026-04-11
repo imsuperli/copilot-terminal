@@ -196,6 +196,67 @@ describe('WorkspaceManager', () => {
       });
     });
 
+    it('should deduplicate windows with the same id before writing', async () => {
+      const workspace = {
+        version: '3.0',
+        windows: [
+          {
+            id: 'duplicate-window',
+            name: 'Original Window',
+            layout: {
+              type: 'pane',
+              id: 'pane-1',
+              pane: {
+                id: 'pane-1',
+                cwd: '/test/original',
+                command: 'claude',
+                status: 'paused',
+                pid: null,
+              },
+            },
+            activePaneId: 'pane-1',
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T10:00:00Z',
+          },
+          {
+            id: 'duplicate-window',
+            name: 'Updated Window',
+            layout: {
+              type: 'pane',
+              id: 'pane-2',
+              pane: {
+                id: 'pane-2',
+                cwd: '/test/updated',
+                command: 'pwsh.exe',
+                status: 'running',
+                pid: 4321,
+              },
+            },
+            activePaneId: 'pane-2',
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T12:00:00Z',
+          },
+        ],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+        },
+        lastSavedAt: '',
+      } as Workspace;
+
+      await workspaceManager.saveWorkspace(workspace);
+
+      const saved = await fs.readJson(workspacePath);
+      expect(saved.version).toBe('3.0');
+      expect(saved.windows).toHaveLength(1);
+      expect(saved.windows[0].id).toBe('duplicate-window');
+      expect(saved.windows[0].name).toBe('Updated Window');
+      expect(saved.windows[0].layout.pane.cwd).toBe('/test/updated');
+    });
+
     it('should not persist ephemeral clone windows', async () => {
       const workspace = {
         version: '3.0',
@@ -377,6 +438,61 @@ describe('WorkspaceManager', () => {
       const persisted = await fs.readJson(workspacePath);
       expect(persisted.version).toBe('3.0');
       expect(persisted.settings.language).toBe('zh-CN');
+    });
+
+    it('should deduplicate legacy duplicate windows during migration', async () => {
+      const workspace = {
+        version: '1.0',
+        windows: [
+          {
+            id: 'duplicate-window',
+            name: 'Original Window',
+            workingDirectory: '/test/original',
+            command: 'claude',
+            status: 'error',
+            pid: 1111,
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T10:00:00Z',
+          },
+          {
+            id: 'duplicate-window',
+            name: 'Updated Window',
+            workingDirectory: '/test/updated',
+            command: 'pwsh.exe',
+            status: 'restoring',
+            pid: 2222,
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T12:00:00Z',
+          },
+        ],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+        },
+        lastSavedAt: '2026-02-28T12:00:00Z',
+      };
+
+      await fs.writeJson(workspacePath, workspace, { spaces: 2 });
+
+      const loaded = await workspaceManager.loadWorkspace();
+
+      expect(loaded.version).toBe('3.0');
+      expect(loaded.windows).toHaveLength(1);
+      expect(loaded.windows[0].id).toBe('duplicate-window');
+      expect(loaded.windows[0].name).toBe('Updated Window');
+      expect(loaded.windows[0].lastActiveAt).toBe('2026-02-28T12:00:00Z');
+      expect(loaded.windows[0].layout.type).toBe('pane');
+      if (loaded.windows[0].layout.type !== 'pane') {
+        throw new Error('expected pane layout');
+      }
+      expect(loaded.windows[0].layout.pane.cwd).toBe('/test/updated');
+
+      const persisted = await fs.readJson(workspacePath);
+      expect(persisted.version).toBe('3.0');
+      expect(persisted.windows).toHaveLength(1);
+      expect(persisted.windows[0].name).toBe('Updated Window');
     });
 
     it('should load persisted workspaces without pane runtime fields', async () => {
