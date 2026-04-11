@@ -289,7 +289,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [linkDragOverlay, setLinkDragOverlay] = useState<TerminalLinkDragOverlayState | null>(null);
   const [isLinkDragActive, setIsLinkDragActive] = useState(false);
-  const updatePane = useWindowStore((state) => state.updatePane);
+  const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
 
   // 确定边框颜色：优先使用自定义 borderColor，否则使用状态颜色
   const customBorderStyle = getCustomBorderStyle(pane.borderColor);
@@ -328,11 +328,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         return;
       }
 
-      updatePane(windowId, pane.id, { cwd: nextRemoteCwd });
+      updatePaneRuntime(windowId, pane.id, { cwd: nextRemoteCwd });
     });
 
     return unsubscribe;
-  }, [isActive, isWindowActive, pane.cwd, pane.id, pane.ssh, updatePane, windowId]);
+  }, [isActive, isWindowActive, pane.cwd, pane.id, pane.ssh, updatePaneRuntime, windowId]);
 
   // 写入系统剪贴板（优先走 Electron IPC，失败时回退到浏览器 API）
   const writeClipboardText = useCallback(async (text: string) => {
@@ -1079,7 +1079,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         sshCwdTrackerRef.current = nextState;
 
         if (resolvedCwd && resolvedCwd !== pane.cwd) {
-          updatePane(windowId, pane.id, { cwd: resolvedCwd });
+          updatePaneRuntime(windowId, pane.id, { cwd: resolvedCwd });
         }
       }
 

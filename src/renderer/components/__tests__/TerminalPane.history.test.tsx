@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetTerminalPaneReplaySessionCacheForTests, TerminalPane } from '../TerminalPane';
 import { WindowStatus } from '../../types/window';
 import { subscribeToPanePtyData } from '../../api/ptyDataBus';
+import { useWindowStore } from '../../stores/windowStore';
 import type { PtyDataPayload } from '../../../shared/types/electron-api';
 
 const { terminalInstances, ptyCallbacks, terminalDataCallbacks } = vi.hoisted(() => ({
@@ -88,6 +89,23 @@ describe('TerminalPane history replay', () => {
     terminalInstances.length = 0;
     ptyCallbacks.length = 0;
     terminalDataCallbacks.length = 0;
+    useWindowStore.setState({
+      windows: [],
+      activeWindowId: null,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+      groups: [],
+      activeGroupId: null,
+      groupMruList: [],
+      customCategories: [],
+      terminalSidebarSections: {
+        archived: false,
+        local: true,
+        ssh: true,
+      },
+      terminalSidebarFilter: 'all',
+    });
     vi.mocked(window.electronAPI.getPtyHistory).mockReset();
     vi.mocked(window.electronAPI.ptyWrite).mockReset();
     vi.mocked(window.electronAPI.ptyResize).mockReset();
@@ -145,6 +163,69 @@ describe('TerminalPane history replay', () => {
     await waitFor(() => {
       expect(terminalInstances[0]?.write.mock.calls[0]?.[0]).toBe('history-1history-2');
     });
+  });
+
+  it('tracks ssh cwd updates as runtime-only without triggering auto-save', async () => {
+    const sshPane = {
+      id: 'pane-ssh',
+      cwd: '/srv/app',
+      command: '',
+      status: WindowStatus.WaitingForInput,
+      pid: 1234,
+      backend: 'ssh' as const,
+      ssh: {
+        profileId: 'profile-1',
+        remoteCwd: '/srv/app',
+      },
+    };
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-ssh',
+          name: 'Prod SSH',
+          layout: {
+            type: 'pane',
+            id: 'pane-ssh',
+            pane: { ...sshPane },
+          },
+          activePaneId: 'pane-ssh',
+          createdAt: '2026-04-11T00:00:00.000Z',
+          lastActiveAt: '2026-04-11T00:00:00.000Z',
+        },
+      ],
+      activeWindowId: 'win-ssh',
+      mruList: ['win-ssh'],
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-ssh"
+        pane={sshPane}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(ptyCallbacks.length).toBeGreaterThanOrEqual(2);
+    });
+
+    for (const callback of ptyCallbacks) {
+      callback({
+        windowId: 'win-ssh',
+        paneId: 'pane-ssh',
+        data: '\u001b]633;P;Cwd=/srv/app/releases\u0007',
+        seq: 1,
+      });
+    }
+
+    await waitFor(() => {
+      expect(useWindowStore.getState().getPaneById('win-ssh', 'pane-ssh')?.cwd).toBe('/srv/app/releases');
+    });
+
+    expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
   });
 
   it('deduplicates live output that is already covered by the history snapshot', async () => {

@@ -34,4 +34,35 @@ describe('windowStore persisted pane updates', () => {
     expect(pane?.cwd).toBe('D:\\repo\\next');
     expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
   });
+
+  it('does not auto-save runtime-only ssh cwd changes', () => {
+    const terminalWindow = createSinglePaneWindow('SSH Pane Cwd', '/srv/app', '');
+    const paneId = terminalWindow.activePaneId;
+
+    if (terminalWindow.layout.type !== 'pane') {
+      throw new Error('Expected single pane layout');
+    }
+
+    terminalWindow.layout.pane.backend = 'ssh';
+    terminalWindow.layout.pane.ssh = {
+      profileId: 'profile-1',
+      remoteCwd: '/srv/app',
+    };
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      activeWindowId: terminalWindow.id,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    useWindowStore.getState().updatePaneRuntime(terminalWindow.id, paneId, {
+      cwd: '/srv/app/releases',
+    });
+
+    const pane = useWindowStore.getState().getPaneById(terminalWindow.id, paneId);
+    expect(pane?.cwd).toBe('/srv/app/releases');
+    expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
+  });
 });
