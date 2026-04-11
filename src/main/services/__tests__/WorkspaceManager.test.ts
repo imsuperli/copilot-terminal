@@ -325,7 +325,7 @@ describe('WorkspaceManager', () => {
       expect(saved.windows[0].id).toBe('ssh-window-root');
     });
 
-    it('should use atomic write (temp file + rename)', async () => {
+    it('should write via temp file and replace the main workspace file', async () => {
       const workspace: Workspace = {
         version: '1.0',
         windows: [],
@@ -340,7 +340,7 @@ describe('WorkspaceManager', () => {
 
       // Spy on fs methods
       const writeJsonSpy = vi.spyOn(fs, 'writeJson');
-      const renameSpy = vi.spyOn(fs, 'rename');
+      const moveSpy = vi.spyOn(fs, 'move');
 
       await workspaceManager.saveWorkspace(workspace);
 
@@ -350,7 +350,7 @@ describe('WorkspaceManager', () => {
         expect.any(Object),
         { spaces: 2 }
       );
-      expect(renameSpy).toHaveBeenCalledWith(tempPath, workspacePath);
+      expect(moveSpy).toHaveBeenCalledWith(tempPath, workspacePath, { overwrite: true });
 
       // Verify temp file is cleaned up
       expect(await fs.pathExists(tempPath)).toBe(false);
@@ -389,8 +389,8 @@ describe('WorkspaceManager', () => {
         lastSavedAt: '',
       };
 
-      // Mock rename to fail
-      vi.spyOn(fs, 'rename').mockRejectedValueOnce(new Error('Rename failed'));
+      // Mock move to fail
+      vi.spyOn(fs, 'move').mockRejectedValueOnce(new Error('Move failed'));
 
       await expect(workspaceManager.saveWorkspace(workspace)).rejects.toThrow();
 

@@ -111,8 +111,22 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       // 写入临时文件
       await fs.writeJson(this.tempPath, workspaceToSave, { spaces: 2 });
 
-      // 原子重命名（如果目标文件存在，会被覆盖）
-      await fs.rename(this.tempPath, this.workspacePath);
+      // 使用覆盖式 move 替换主文件，兼容 Windows 上已存在目标文件的场景
+      await fs.move(this.tempPath, this.workspacePath, { overwrite: true });
+
+      // 读回校验，避免启动迁移时静默保留旧文件内容
+      const persistedWorkspace = await fs.readJson(this.workspacePath);
+      if (
+        persistedWorkspace?.version !== workspaceToSave.version
+        || (persistedWorkspace?.windows?.length ?? -1) !== workspaceToSave.windows.length
+      ) {
+        console.warn('[WorkspaceManager] Detected stale workspace file after move, forcing direct rewrite');
+        await fs.writeJson(this.workspacePath, workspaceToSave, { spaces: 2 });
+      }
+
+      console.log(
+        `[WorkspaceManager] Saved workspace version=${workspaceToSave.version} windows=${workspaceToSave.windows.length}`,
+      );
 
       // 创建备份
       await this.backupWorkspace();
@@ -536,7 +550,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
 
           if (this.validateWorkspace(workspace)) {
             // 临时文件有效，恢复到主文件
-            await fs.rename(this.tempPath, this.workspacePath);
+            await fs.move(this.tempPath, this.workspacePath, { overwrite: true });
             console.log('Successfully recovered workspace from temporary file');
           } else {
             // 临时文件无效，删除它
