@@ -44,7 +44,7 @@ function getStatusIconColor(status: WindowStatus): string {
     case WindowStatus.Running:
       return 'text-green-500'; // 运行中：绿色
     case WindowStatus.WaitingForInput:
-      return 'text-blue-500'; // 等待输入：蓝色
+      return 'text-[rgb(var(--primary))]'; // 等待输入：主题高亮
     case WindowStatus.Paused:
       return 'text-gray-500'; // 暂停：灰色
     default:
@@ -78,7 +78,7 @@ function getStatusLabelColor(status: WindowStatus): string {
     case WindowStatus.Running:
       return 'text-green-500 bg-green-500/10';
     case WindowStatus.WaitingForInput:
-      return 'text-blue-500 bg-blue-500/10';
+      return 'text-[rgb(var(--primary))] bg-[rgb(var(--primary))]/10';
     case WindowStatus.Paused:
       return 'text-gray-500 bg-gray-500/10';
     default:
@@ -96,7 +96,7 @@ function getSelectedBorderColor(status: WindowStatus, archived: boolean): string
     case WindowStatus.Running:
       return 'border-green-500';
     case WindowStatus.WaitingForInput:
-      return 'border-blue-500';
+      return 'border-[rgb(var(--primary))]';
     case WindowStatus.Paused:
       return 'border-gray-500';
     default:

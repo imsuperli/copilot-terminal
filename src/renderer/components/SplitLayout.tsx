@@ -183,8 +183,8 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   }, [isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
-  const dividerActiveClassName = 'bg-sky-400 shadow-[0_0_0_1px_rgba(56,189,248,0.28)]';
-  const dividerIdleClassName = 'bg-zinc-500/90 shadow-[0_0_0_1px_rgba(24,24,27,0.65)] group-hover:bg-sky-400 group-hover:shadow-[0_0_0_1px_rgba(56,189,248,0.28)]';
+  const dividerActiveClassName = 'bg-[rgb(var(--primary))] shadow-[0_0_0_1px_rgba(168,170,88,0.28)]';
+  const dividerIdleClassName = 'bg-zinc-500/90 shadow-[0_0_0_1px_rgba(24,24,27,0.65)] group-hover:bg-[rgb(var(--primary))] group-hover:shadow-[0_0_0_1px_rgba(168,170,88,0.28)]';
 
   return (
     <div
@@ -226,7 +226,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
               className={`
                 ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
                 group relative flex-shrink-0 select-none
-                bg-zinc-950/70 hover:bg-sky-500/10 transition-colors
+                bg-zinc-950/70 hover:bg-[rgb(var(--primary))]/10 transition-colors
               `}
               onMouseDown={handleMouseDown(index)}
             >

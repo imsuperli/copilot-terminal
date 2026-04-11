@@ -10,10 +10,10 @@ import { CustomCategory } from '../../../shared/types/custom-category';
 import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
-import { buildStandaloneSSHWindowMap, getOwnedEphemeralSSHWindowIds, getPersistableWindows } from '../../utils/sshWindowBindings';
-import { getAllWindowIds } from '../../utils/groupLayoutHelpers';
+import { getOwnedEphemeralSSHWindowIds, getPersistableWindows } from '../../utils/sshWindowBindings';
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
+import { getSidebarCardCounts, getVisibleStandaloneWindows } from '../../utils/cardCollection';
 
 const LazySettingsPanel = lazy(async () => ({
   default: (await import('../SettingsPanel')).SettingsPanel,
@@ -52,7 +52,6 @@ export function Sidebar({
   isDialogOpen = false,
   onDialogChange,
   sshEnabled = false,
-  sshProfileCount = 0,
   sshProfiles = [],
   onSSHProfileSaved,
   currentTab = 'active',
@@ -72,53 +71,27 @@ export function Sidebar({
   const removeCustomCategory = useWindowStore((state) => state.removeCustomCategory);
   const persistableWindows = useMemo(() => getPersistableWindows(windows), [windows]);
 
-  const groupedWindowIds = useMemo(() => (
-    new Set(groups.flatMap((group) => getAllWindowIds(group.layout)))
-  ), [groups]);
-
-  const standaloneSSHWindowIds = useMemo(() => {
-    if (!sshEnabled || sshProfiles.length === 0) {
-      return new Set<string>();
-    }
-
-    return new Set(
-      Object.values(
-        buildStandaloneSSHWindowMap(
-          persistableWindows.filter((window) => !groupedWindowIds.has(window.id)),
-          sshProfiles.map((profile) => profile.id),
-        ),
-      )
-        .map((window) => window.id),
-    );
-  }, [groupedWindowIds, persistableWindows, sshEnabled, sshProfiles]);
-
   const activeWindows = persistableWindows.filter(w => !w.archived);
   const archivedWindows = persistableWindows.filter(w => w.archived);
-  const activeVisibleWindows = persistableWindows.filter(w => !w.archived && !groupedWindowIds.has(w.id) && !standaloneSSHWindowIds.has(w.id));
-  const archivedVisibleWindows = persistableWindows.filter(w => w.archived && !groupedWindowIds.has(w.id) && !standaloneSSHWindowIds.has(w.id));
-  const activeGroups = groups.filter(g => !g.archived);
-  const archivedGroups = groups.filter(g => g.archived);
+  const visibleStandaloneWindows = useMemo(
+    () => getVisibleStandaloneWindows(windows, groups, { sshEnabled, sshProfiles }),
+    [groups, sshEnabled, sshProfiles, windows],
+  );
+  const activeVisibleWindows = visibleStandaloneWindows.filter((window) => !window.archived);
 
   const localActiveWindows = activeWindows.filter(w => getWindowKind(w) !== 'ssh');
   const sshActiveWindows = sshEnabled
     ? activeVisibleWindows.filter(w => getWindowKind(w) === 'ssh')
     : [];
-  const localVisibleWindows = activeVisibleWindows.filter(w => getWindowKind(w) !== 'ssh');
-  const localGroupCount = activeGroups.filter((group) => {
-    const windowIds = getAllWindowIds(group.layout);
-    return persistableWindows.some((window) => windowIds.includes(window.id) && getWindowKind(window) !== 'ssh');
-  }).length;
-  const sshGroupCount = activeGroups.filter((group) => {
-    const windowIds = getAllWindowIds(group.layout);
-    return persistableWindows.some((window) => windowIds.includes(window.id) && getWindowKind(window) === 'ssh');
-  }).length;
-
-  // 各标签的计数
-  const allCount = activeVisibleWindows.length + archivedVisibleWindows.length + groups.length + (sshEnabled ? sshProfileCount : 0);
-  const activeCount = activeVisibleWindows.length + activeGroups.length + (sshEnabled ? sshProfileCount : 0);
-  const archivedCount = archivedVisibleWindows.length + archivedGroups.length;
-  const localCount = localVisibleWindows.length + localGroupCount;
-  const sshCount = sshActiveWindows.length + sshGroupCount + (sshEnabled ? sshProfileCount : 0);
+  const counts = useMemo(
+    () => getSidebarCardCounts(windows, groups, { sshEnabled, sshProfiles }),
+    [groups, sshEnabled, sshProfiles, windows],
+  );
+  const allCount = counts.all;
+  const activeCount = counts.active;
+  const archivedCount = counts.archived;
+  const localCount = counts.local;
+  const sshCount = counts.ssh;
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
@@ -391,7 +364,7 @@ export function Sidebar({
                 value={searchQuery}
                 onChange={(e) => onSearchChange?.(e.target.value)}
                 placeholder={t('common.searchWindows')}
-                className="w-full pl-8 pr-7 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pl-8 pr-7 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[rgb(var(--ring))] focus:border-transparent transition-all"
               />
               {searchQuery && (
                 <Tooltip.Provider>
@@ -421,7 +394,12 @@ export function Sidebar({
           <h3 className="text-xs font-semibold text-[rgb(var(--muted-foreground))] tracking-wide mb-3" style={{ letterSpacing: '0.05em' }}>
             {t('sidebar.section.statusSummary')}
           </h3>
-          <StatusBar currentTab={currentTab} onTabChange={onTabChange} />
+          <StatusBar
+            currentTab={currentTab}
+            onTabChange={onTabChange}
+            sshEnabled={sshEnabled}
+            sshProfiles={sshProfiles}
+          />
         </div>
 
         {/* 窗格管理 */}
@@ -562,7 +540,7 @@ export function Sidebar({
                             }}
                             onBlur={handleSaveEdit}
                             onClick={(e) => e.stopPropagation()}
-                            className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 focus:outline-none focus:border-blue-500"
+                            className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 focus:outline-none focus:border-[rgb(var(--ring))]"
                           />
                           <Tooltip.Provider>
                             <Tooltip.Root delayDuration={300}>
@@ -676,7 +654,7 @@ export function Sidebar({
                         }
                       }}
                       placeholder={t('category.namePlaceholder')}
-                      className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+                      className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[rgb(var(--ring))]"
                     />
                   </div>
                 ) : (

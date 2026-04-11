@@ -56,7 +56,7 @@ export function SSHHostKeyPromptDialog({
               <div className={`mt-0.5 rounded-full p-2 ${
                 isMismatch
                   ? 'bg-amber-500/15 text-amber-200'
-                  : 'bg-status-running/15 text-blue-200'
+                  : 'bg-status-running/15 text-[rgb(var(--primary))]'
               }`}>
                 {isMismatch ? <AlertTriangle size={18} /> : <ShieldQuestion size={18} />}
               </div>
@@ -135,4 +135,3 @@ function FieldCard(props: {
     </div>
   );
 }
-

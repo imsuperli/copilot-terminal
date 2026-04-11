@@ -1023,7 +1023,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     onClick={handleOpenSSHSftp}
                     className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
                       sshSftpOpen
-                        ? 'bg-blue-500/20 text-blue-300'
+                        ? 'bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]'
                         : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
                     }`}
                   >
@@ -1042,7 +1042,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     onClick={() => setSSHMetricsOpen((current) => !current)}
                     className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
                       sshMetricsOpen
-                        ? 'bg-blue-500/20 text-blue-300'
+                        ? 'bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]'
                         : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
                     }`}
                   >
@@ -1102,7 +1102,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 aria-label={t('terminalView.splitBrowser')}
                 onClick={handleSplitBrowserPane}
                 ref={browserToolButtonRef}
-                className={`flex h-6 w-6 items-center justify-center rounded text-zinc-100 transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-sky-500/20 text-sky-100' : 'cursor-grab hover:bg-zinc-800/80 active:cursor-grabbing'}`}
+                className={`flex h-6 w-6 items-center justify-center rounded text-zinc-100 transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]' : 'cursor-grab hover:bg-zinc-800/80 active:cursor-grabbing'}`}
               >
                 <SplitBrowserIcon />
               </button>

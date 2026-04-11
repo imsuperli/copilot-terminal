@@ -70,7 +70,7 @@ export const CleanupOverlay: React.FC = () => {
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center">
       <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-8 shadow-2xl max-w-md w-full mx-4">
         <div className="flex items-center justify-center mb-6">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(var(--primary))]"></div>
         </div>
 
         <h2 className="text-xl font-semibold text-center mb-4 text-zinc-100">
@@ -86,7 +86,7 @@ export const CleanupOverlay: React.FC = () => {
               </div>
               <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
                 <div
-                  className="bg-blue-500 h-full transition-all duration-200 ease-out"
+                  className="bg-[rgb(var(--primary))] h-full transition-all duration-200 ease-out"
                   style={{ width: `${smoothProgress}%` }}
                 />
               </div>

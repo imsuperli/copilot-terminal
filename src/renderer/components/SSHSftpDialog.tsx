@@ -621,7 +621,7 @@ export function SSHSftpDialog({
           aria-orientation="vertical"
           onMouseDown={handleResizeStart}
           className={`absolute inset-y-0 -right-1 z-10 w-2 cursor-col-resize ${
-            isResizing ? 'bg-blue-500/20' : 'bg-transparent'
+            isResizing ? 'bg-[rgb(var(--primary))]/20' : 'bg-transparent'
           }`}
         />
 
@@ -643,7 +643,7 @@ export function SSHSftpDialog({
                       setIsEditingPath(false);
                     }
                   }}
-                  className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none transition-colors focus:border-blue-500"
+                  className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none transition-colors focus:border-[rgb(var(--ring))]"
                   placeholder="/srv/app"
                   data-testid="ssh-sftp-path-input"
                 />
@@ -765,13 +765,13 @@ export function SSHSftpDialog({
               <input
                 value={directoryName}
                 onChange={(event) => setDirectoryName(event.target.value)}
-                className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none transition-colors focus:border-blue-500"
+                className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none transition-colors focus:border-[rgb(var(--ring))]"
                 placeholder={t('sshSftpDialog.directoryNamePlaceholder')}
               />
               <button
                 type="submit"
                 disabled={isCreatingDirectory}
-                className="rounded bg-blue-600 px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded bg-[rgb(var(--primary))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isCreatingDirectory ? t('common.creating') : t('common.create')}
               </button>
@@ -804,7 +804,7 @@ export function SSHSftpDialog({
               <div className="pointer-events-auto">
                 <div className={`rounded-md border px-3 py-2 text-sm shadow-xl backdrop-blur-sm ${
                   notice.tone === 'progress'
-                    ? 'border-blue-500/30 bg-blue-500/10 text-blue-100'
+                    ? 'border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]'
                     : notice.tone === 'success'
                       ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
                       : 'border-zinc-700 bg-zinc-900/95 text-zinc-200'
@@ -868,7 +868,7 @@ export function SSHSftpDialog({
                   key={entry.path}
                   className={`group relative flex items-center gap-1.5 rounded border px-1.5 py-px transition-colors ${
                     isSelected
-                      ? 'border-blue-500/40 bg-blue-500/10'
+                      ? 'border-[rgb(var(--primary))]/40 bg-[rgb(var(--primary))]/10'
                       : 'border-transparent hover:border-zinc-800 hover:bg-zinc-900/80'
                   }`}
                 >
@@ -890,7 +890,7 @@ export function SSHSftpDialog({
                     title={entry.path}
                   >
                     {isDirectory ? (
-                      <Folder size={14} className="shrink-0 text-blue-400" />
+                      <Folder size={14} className="shrink-0 text-[rgb(var(--primary))]" />
                     ) : (
                       <File size={14} className="shrink-0 text-zinc-500" />
                     )}
@@ -1062,7 +1062,7 @@ function IconToolbarButton({
         disabled={disabled}
         className={`flex h-7 w-7 items-center justify-center rounded border transition-colors ${
           active
-            ? 'border-blue-500/40 bg-blue-500/10 text-blue-200'
+            ? 'border-[rgb(var(--primary))]/40 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]'
             : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
         } disabled:cursor-not-allowed disabled:opacity-50`}
       >
@@ -1090,7 +1090,7 @@ function InlineActionButton({
         aria-label={label}
         onClick={onClick}
         disabled={disabled}
-        className="flex h-5 w-5 items-center justify-center rounded text-blue-300 transition-colors hover:bg-blue-500/10 hover:text-blue-200 disabled:cursor-not-allowed disabled:opacity-50"
+        className="flex h-5 w-5 items-center justify-center rounded text-[rgb(var(--primary))] transition-colors hover:bg-[rgb(var(--primary))]/10 hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {icon}
       </button>

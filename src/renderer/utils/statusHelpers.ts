@@ -5,8 +5,8 @@ import { TranslationKey } from '../i18n';
  * 状态色映射表（常量，避免重复创建）
  */
 const STATUS_COLOR_MAP: Record<WindowStatus, string> = {
-  [WindowStatus.Running]: 'bg-blue-500',
-  [WindowStatus.WaitingForInput]: 'bg-amber-500',
+  [WindowStatus.Running]: 'bg-green-500',
+  [WindowStatus.WaitingForInput]: 'bg-[rgb(var(--primary))]',
   [WindowStatus.Completed]: 'bg-green-500',
   [WindowStatus.Error]: 'bg-red-500',
   [WindowStatus.Restoring]: 'bg-gray-500',
@@ -17,8 +17,8 @@ const STATUS_COLOR_MAP: Record<WindowStatus, string> = {
  * 状态实际颜色值映射表（用于内联样式）
  */
 const STATUS_COLOR_VALUE_MAP: Record<WindowStatus, string> = {
-  [WindowStatus.Running]: '#3b82f6', // blue-500
-  [WindowStatus.WaitingForInput]: '#f59e0b', // amber-500
+  [WindowStatus.Running]: '#16c60c',
+  [WindowStatus.WaitingForInput]: '#a8aa58',
   [WindowStatus.Completed]: '#22c55e', // green-500
   [WindowStatus.Error]: '#ef4444', // red-500
   [WindowStatus.Restoring]: '#6b7280', // gray-500
@@ -29,8 +29,8 @@ const STATUS_COLOR_VALUE_MAP: Record<WindowStatus, string> = {
  * 状态文字色映射表（text-* 变体，用于文字和图标着色）
  */
 const STATUS_TEXT_COLOR_MAP: Record<WindowStatus, string> = {
-  [WindowStatus.Running]: 'text-blue-500',
-  [WindowStatus.WaitingForInput]: 'text-amber-500',
+  [WindowStatus.Running]: 'text-green-500',
+  [WindowStatus.WaitingForInput]: 'text-[rgb(var(--primary))]',
   [WindowStatus.Completed]: 'text-green-500',
   [WindowStatus.Error]: 'text-red-500',
   [WindowStatus.Restoring]: 'text-gray-500',

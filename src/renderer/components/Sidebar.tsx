@@ -309,7 +309,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             aria-label={t('sidebar.terminalFilterLabel')}
             value={terminalSidebarFilter}
             onChange={(event) => setTerminalSidebarFilter(event.target.value as typeof terminalSidebarFilter)}
-            className="w-full h-8 px-2 text-xs text-zinc-100 bg-zinc-800 border border-zinc-700 rounded focus:outline-none focus:border-blue-500"
+            className="w-full h-8 px-2 text-xs text-zinc-100 bg-zinc-800 border border-zinc-700 rounded focus:outline-none focus:border-[rgb(var(--ring))]"
           >
             <option value="all">{t('sidebar.tab.all')}</option>
             <option value="local">{t('sidebar.tab.local')}</option>
@@ -412,7 +412,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 调整宽度的拖拽条（仅展开时显示） */}
       {sidebarExpanded && (
         <div
-          className="w-1 cursor-col-resize hover:bg-blue-500 transition-colors"
+          className="w-1 cursor-col-resize hover:bg-[rgb(var(--primary))] transition-colors"
           onMouseDown={() => setIsResizing(true)}
           aria-label="调整侧边栏宽度"
         />

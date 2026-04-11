@@ -228,7 +228,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       {/* 启动中加载遮罩 */}
       {aggregatedStatus === WindowStatus.Restoring && (
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3 rounded-lg transition-opacity duration-200">
-          <Loader2 className="w-12 h-12 text-blue-500 animate-spin" />
+          <Loader2 className="w-12 h-12 text-[rgb(var(--primary))] animate-spin" />
           <div className="text-white text-sm font-medium">{t('windowCard.startingTerminal')}</div>
           <div className="text-zinc-400 text-xs">{t('windowCard.pleaseWait')}</div>
         </div>

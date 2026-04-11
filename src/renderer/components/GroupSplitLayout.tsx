@@ -207,8 +207,8 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
             <div
               className={`
                 ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'}
-                bg-zinc-600 hover:bg-blue-500 transition-colors flex-shrink-0
-                ${isResizing && resizingIndex === index ? 'bg-blue-500' : ''}
+                bg-zinc-600 hover:bg-[rgb(var(--primary))] transition-colors flex-shrink-0
+                ${isResizing && resizingIndex === index ? 'bg-[rgb(var(--primary))]' : ''}
               `}
               onMouseDown={handleMouseDown(index)}
             />
@@ -350,7 +350,7 @@ const GroupWindowPane: React.FC<GroupWindowPaneProps> = ({
         className="h-full w-full"
       >
         <div
-          className={`h-full w-full border ${isActive ? 'border-blue-500/50' : 'border-zinc-800'}`}
+          className={`h-full w-full border ${isActive ? 'border-[rgb(var(--primary))]/50' : 'border-zinc-800'}`}
           onMouseDown={onActivate}
         >
           <TerminalView

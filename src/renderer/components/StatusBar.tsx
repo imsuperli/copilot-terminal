@@ -1,37 +1,40 @@
 import React, { useMemo } from 'react';
 import { Activity, Keyboard, Pause } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
-import { WindowStatus } from '../types/window';
-import { getAllPanes } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
-import { getPersistableWindows } from '../utils/sshWindowBindings';
+import { SSHProfile } from '../../shared/types/ssh';
+import { getStatusCardCounts } from '../utils/cardCollection';
 
 export type StatusFilterTab = 'status:running' | 'status:waiting' | 'status:paused';
 
 interface StatusBarProps {
   currentTab?: string;
   onTabChange?: (tab: string) => void;
+  sshEnabled?: boolean;
+  sshProfiles?: SSHProfile[];
 }
 
 /**
  * StatusBar 组件
- * 在侧边栏中显示各状态的窗格数量统计，点击可按状态筛选
+ * 在侧边栏中显示各状态的卡片数量统计，点击可按状态筛选
  */
-export const StatusBar = React.memo(function StatusBar({ currentTab, onTabChange }: StatusBarProps) {
+export const StatusBar = React.memo(function StatusBar({
+  currentTab,
+  onTabChange,
+  sshEnabled = false,
+  sshProfiles = [],
+}: StatusBarProps) {
   const windows = useWindowStore((state) => state.windows);
+  const groups = useWindowStore((state) => state.groups);
   const { t } = useI18n();
 
-  // 缓存状态计数（统计所有未归档窗口中的所有窗格）
+  // 计数逻辑与 CardGrid 保持一致，避免状态数字与实际列表不匹配。
   const statusCounts = useMemo(() => {
-    const activeWindows = getPersistableWindows(windows).filter(w => !w.archived);
-    const allPanes = activeWindows.flatMap(w => getAllPanes(w.layout));
-
-    return {
-      running: allPanes.filter(p => p.status === WindowStatus.Running).length,
-      waiting: allPanes.filter(p => p.status === WindowStatus.WaitingForInput).length,
-      paused: allPanes.filter(p => p.status === WindowStatus.Paused).length,
-    };
-  }, [windows]);
+    return getStatusCardCounts(windows, groups, {
+      sshEnabled,
+      sshProfiles,
+    });
+  }, [groups, sshEnabled, sshProfiles, windows]);
 
   // 缓存 aria-label
   const ariaLabel = useMemo(
@@ -51,7 +54,7 @@ export const StatusBar = React.memo(function StatusBar({ currentTab, onTabChange
 
   const items: { tab: StatusFilterTab; icon: typeof Activity; colorClass: string; activeClass: string; label: string; count: number }[] = [
     { tab: 'status:running', icon: Activity, colorClass: 'text-green-500', activeClass: 'bg-green-500/10 border-green-500/50', label: t('status.running'), count: statusCounts.running },
-    { tab: 'status:waiting', icon: Keyboard, colorClass: 'text-blue-500', activeClass: 'bg-blue-500/10 border-blue-500/50', label: t('status.waitingInput'), count: statusCounts.waiting },
+    { tab: 'status:waiting', icon: Keyboard, colorClass: 'text-[rgb(var(--primary))]', activeClass: 'bg-[rgb(var(--primary))]/10 border-[rgb(var(--primary))]/40', label: t('status.waitingInput'), count: statusCounts.waiting },
     { tab: 'status:paused', icon: Pause, colorClass: 'text-gray-500', activeClass: 'bg-gray-500/10 border-gray-500/50', label: t('status.paused'), count: statusCounts.paused },
   ];
 

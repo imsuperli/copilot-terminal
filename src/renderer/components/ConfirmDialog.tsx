@@ -45,8 +45,8 @@ export function ConfirmDialog({
         };
       case 'info':
         return {
-          icon: 'text-blue-500',
-          button: 'bg-blue-600 hover:bg-blue-700 text-white',
+          icon: 'text-[rgb(var(--primary))]',
+          button: 'bg-[rgb(var(--primary))] hover:opacity-90 text-[rgb(var(--primary-foreground))]',
         };
     }
   };

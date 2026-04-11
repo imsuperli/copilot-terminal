@@ -24,7 +24,7 @@ const BADGE_CLASSES: Record<NonNullable<TerminalTypeLogoProps['size']>, string> 
 
 const VARIANT_CLASSES: Record<TerminalTypeLogoVariant, string> = {
   local: 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400',
-  ssh:   'bg-sky-500/10 border-sky-500/25 text-sky-400',
+  ssh:   'bg-[rgb(var(--primary))]/10 border-[rgb(var(--primary))]/25 text-[rgb(var(--primary))]',
   mixed: 'bg-amber-500/10 border-amber-500/25 text-amber-400',
   group: 'bg-violet-500/10 border-violet-500/25 text-violet-400',
 };

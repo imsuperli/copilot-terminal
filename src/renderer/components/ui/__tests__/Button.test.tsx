@@ -11,7 +11,7 @@ describe('Button Component', () => {
   it('applies primary variant styles by default', () => {
     render(<Button>Primary</Button>);
     const button = screen.getByText('Primary');
-    expect(button.className).toContain('bg-status-running');
+    expect(button.className).toContain('bg-[rgb(var(--primary))]');
   });
 
   it('applies secondary variant styles', () => {

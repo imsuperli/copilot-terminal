@@ -48,7 +48,7 @@ function getStatusBorderColor(status: WindowStatus): string {
     case WindowStatus.Running:
       return 'border-t-green-500';
     case WindowStatus.WaitingForInput:
-      return 'border-t-blue-500';
+      return 'border-t-[rgb(var(--primary))]';
     case WindowStatus.Paused:
       return 'border-t-zinc-600';
     case WindowStatus.Error:
@@ -98,7 +98,7 @@ function getStatusRingColor(status: WindowStatus): string {
     case WindowStatus.Running:
       return 'ring-green-500';
     case WindowStatus.WaitingForInput:
-      return 'ring-blue-500';
+      return 'ring-[rgb(var(--primary))]';
     case WindowStatus.Paused:
       return 'ring-zinc-600';
     case WindowStatus.Error:
@@ -240,7 +240,7 @@ const TerminalLinkDragOverlay: React.FC<TerminalLinkDragOverlayProps> = ({
       draggable
       aria-label={label}
       title={url}
-      className="flex max-w-[260px] items-center gap-2 rounded-full border border-sky-400/45 bg-zinc-950/96 px-2.5 py-1 text-[11px] text-sky-100 shadow-[0_8px_24px_rgba(2,6,23,0.45)] backdrop-blur cursor-grab active:cursor-grabbing"
+      className="flex max-w-[260px] items-center gap-2 rounded-full border border-[rgb(var(--primary))]/45 bg-zinc-950/96 px-2.5 py-1 text-[11px] text-[rgb(var(--primary))] shadow-[0_8px_24px_rgba(2,6,23,0.45)] backdrop-blur cursor-grab active:cursor-grabbing"
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -261,7 +261,7 @@ const TerminalLinkDragOverlay: React.FC<TerminalLinkDragOverlayProps> = ({
         onDragStateChange(false);
       }}
     >
-      <GripVertical size={12} className="shrink-0 text-sky-300" />
+      <GripVertical size={12} className="shrink-0 text-[rgb(var(--primary))]" />
       <span className="truncate">{url}</span>
     </button>
   </div>

@@ -8,7 +8,7 @@ export default {
       colors: {
         // 状态色
         'status-running': '#16c60c',
-        'status-waiting': '#3b78ff',
+        'status-waiting': '#a8aa58',
         'status-completed': '#61d6d6',
         'status-error': '#e74856',
         'status-restoring': '#ffb900',

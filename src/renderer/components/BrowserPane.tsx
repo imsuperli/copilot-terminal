@@ -524,7 +524,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               disabled={!isWebviewReady}
               onMouseDown={preventMouseButtonFocus}
               onClick={reloadPage}
-              className={`flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${isLoading ? 'animate-spin text-sky-300' : ''}`}
+              className={`flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${isLoading ? 'animate-spin text-[rgb(var(--primary))]' : ''}`}
             >
               <RefreshCw size={15} />
             </button>
@@ -532,7 +532,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         </div>
 
         <form className="min-w-0 flex-1" onSubmit={handleSubmit}>
-          <label className="flex h-7 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-zinc-300 focus-within:border-sky-400/60">
+          <label className="flex h-7 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-zinc-300 focus-within:border-[rgb(var(--ring))]/60">
             <Globe size={13} className="shrink-0 text-zinc-500" />
             <input
               ref={addressInputRef}

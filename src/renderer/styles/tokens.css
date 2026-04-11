@@ -1,7 +1,7 @@
 :root {
   /* 状态色 */
   --color-running: #16c60c;
-  --color-waiting: #3b78ff;
+  --color-waiting: #a8aa58;
   --color-completed: #61d6d6;
   --color-error: #e74856;
   --color-restoring: #ffb900;

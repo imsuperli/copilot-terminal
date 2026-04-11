@@ -95,7 +95,7 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
                 <div
                   aria-hidden="true"
                   className={`pointer-events-none absolute bottom-0 left-0 right-0 h-0.5 transition-colors ${
-                    window.isActive ? 'bg-sky-400' : 'bg-transparent'
+                    window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'
                   }`}
                 />
                 <button

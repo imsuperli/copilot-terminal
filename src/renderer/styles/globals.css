@@ -11,8 +11,8 @@
     --card: 22 22 22; /* #161616 */
     --card-foreground: 242 242 242;
 
-    --primary: 59 120 255; /* #3B78FF */
-    --primary-foreground: 242 242 242;
+    --primary: 168 170 88; /* #A8AA58 */
+    --primary-foreground: 12 12 12;
 
     --secondary: 28 28 28; /* #1C1C1C */
     --secondary-foreground: 242 242 242;
@@ -28,7 +28,7 @@
 
     --border: 50 50 50; /* #323232 */
     --input: 58 58 58; /* #3A3A3A */
-    --ring: 59 120 255;
+    --ring: 168 170 88;
 
     --sidebar: 18 18 18; /* #121212 */
     --sidebar-foreground: 242 242 242;

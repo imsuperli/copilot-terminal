@@ -89,13 +89,13 @@ export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) =
                   <button
                     key={item.id}
                     onClick={() => handleItemClick(item)}
-                    className="group flex flex-col items-center gap-3 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700/50 hover:border-blue-500/50 hover:bg-zinc-800 transition-all duration-200 hover:scale-105"
+                    className="group flex flex-col items-center gap-3 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700/50 hover:border-[rgb(var(--primary))]/50 hover:bg-zinc-800 transition-all duration-200 hover:scale-105"
                     title={item.path}
                   >
                     {/* 图标 */}
-                    <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-zinc-700/50 group-hover:bg-blue-600/20 transition-colors">
+                    <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-zinc-700/50 group-hover:bg-[rgb(var(--primary))]/20 transition-colors">
                       {item.type === 'url' ? (
-                        <Globe size={24} className="text-blue-400" />
+                        <Globe size={24} className="text-[rgb(var(--primary))]" />
                       ) : (
                         <Folder size={24} className="text-yellow-400" />
                       )}
@@ -122,4 +122,3 @@ export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) =
     </Dialog.Root>
   );
 };
-

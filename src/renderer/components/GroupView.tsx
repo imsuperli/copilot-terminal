@@ -313,7 +313,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
   const statusColor = groupAggregatedStatus === WindowStatus.Running
     ? 'bg-green-500'
     : groupAggregatedStatus === WindowStatus.WaitingForInput
-      ? 'bg-blue-500'
+      ? 'bg-[rgb(var(--primary))]'
       : 'bg-zinc-500';
 
   return (

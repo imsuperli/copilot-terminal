@@ -210,7 +210,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
 
             {credentialState?.hasPassword && (
               <span className="inline-flex items-center gap-1 text-xs text-zinc-300 bg-zinc-800 px-2 py-1 rounded-full">
-                <LockKeyhole size={12} className="text-sky-400" />
+                <LockKeyhole size={12} className="text-[rgb(var(--primary))]" />
                 {t('sshProfileCard.passwordSaved')}
               </span>
             )}

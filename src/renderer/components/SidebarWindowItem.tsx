@@ -28,7 +28,7 @@ function getWindowBackgroundColor(status: WindowStatus, isActive: boolean): stri
     case WindowStatus.Running:
       return 'bg-green-900/10 hover:bg-green-900/20'; // 运行中：绿色背景
     case WindowStatus.WaitingForInput:
-      return 'bg-blue-900/10 hover:bg-blue-900/20'; // 等待输入：蓝色背景
+      return 'bg-[rgb(var(--primary))]/10 hover:bg-[rgb(var(--primary))]/20'; // 等待输入：主题高亮
     case WindowStatus.Paused:
       return 'bg-zinc-800 hover:bg-zinc-700'; // 暂停：灰色背景
     case WindowStatus.Error:

@@ -17,7 +17,7 @@ function getStatusIconColor(status: WindowStatus): string {
     case WindowStatus.Running:
       return 'text-green-500';
     case WindowStatus.WaitingForInput:
-      return 'text-blue-500';
+      return 'text-[rgb(var(--primary))]';
     case WindowStatus.Paused:
       return 'text-zinc-500';
     case WindowStatus.Error:
