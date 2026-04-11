@@ -165,39 +165,19 @@ function createWindow() {
     Menu.setApplicationMenu(null);
   }
 
-  // 🎯 等待渲染进程明确通知"我准备好了"
-  // 使用淡入效果掩盖任何系统级的白色闪烁
+  // 等待渲染进程明确通知“首屏已可见”后再显示窗口，
+  // 避免依赖额外的固定延迟去掩盖首帧抖动。
   let rendererReady = false;
 
   ipcMain.once('renderer-ready', () => {
     rendererReady = true;
     if (mainWindow && !mainWindow.isDestroyed()) {
       console.log('[ELECTRON] Renderer ready, showing window');
-      // 1. 先设置窗口为完全透明
-      mainWindow.setOpacity(0);
-
-      // 2. Windows/Linux 启动即最大化；macOS 保持标准窗口态
       if (shouldMaximizeOnShow) {
         mainWindow.maximize();
       }
-      mainWindow.show();
 
-      // 3. 延迟 50ms 后开始淡入（确保内容完全渲染）
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          // 使用平滑的淡入动画（约 160ms）
-          let opacity = 0;
-          const fadeInterval = setInterval(() => {
-            opacity += 0.05;
-            if (opacity >= 1) {
-              mainWindow?.setOpacity(1);
-              clearInterval(fadeInterval);
-            } else {
-              mainWindow?.setOpacity(opacity);
-            }
-          }, 8); // 每 8ms 增加 0.05
-        }
-      }, 50);
+      mainWindow.show();
     }
   });
 
@@ -205,7 +185,6 @@ function createWindow() {
   setTimeout(() => {
     if (!rendererReady && mainWindow && !mainWindow.isDestroyed()) {
       console.log('[ELECTRON] Renderer ready timeout, forcing window show');
-      mainWindow.setOpacity(1);
       if (shouldMaximizeOnShow) {
         mainWindow.maximize();
       }

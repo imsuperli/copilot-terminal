@@ -1,13 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useMemo, useRef } from 'react';
 import { Plus, Settings, HelpCircle, Archive, FolderPlus, Search, X, Trash2, Terminal, Compass, Folder, Grid, ChevronRight, ChevronDown, Tag, Check, Edit2 } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { StatusBar } from '../StatusBar';
 import { CreateWindowDialog } from '../CreateWindowDialog';
 import { BatchCreateWindowDialog } from '../BatchCreateWindowDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { SettingsPanel } from '../SettingsPanel';
-import { QuickNavPanel } from '../QuickNavPanel';
-import { AboutPanel } from '../AboutPanel';
 import { CategoryDropZone } from '../dnd/CategoryDropZone';
 import { CustomCategory } from '../../../shared/types/custom-category';
 import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
@@ -17,6 +14,18 @@ import { buildStandaloneSSHWindowMap, getOwnedEphemeralSSHWindowIds, getPersista
 import { getAllWindowIds } from '../../utils/groupLayoutHelpers';
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
+
+const LazySettingsPanel = lazy(async () => ({
+  default: (await import('../SettingsPanel')).SettingsPanel,
+}));
+
+const LazyQuickNavPanel = lazy(async () => ({
+  default: (await import('../QuickNavPanel')).QuickNavPanel,
+}));
+
+const LazyAboutPanel = lazy(async () => ({
+  default: (await import('../AboutPanel')).AboutPanel,
+}));
 
 interface SidebarProps {
   appName?: string;
@@ -849,22 +858,34 @@ export function Sidebar({
         variant="danger"
       />
 
-      <SettingsPanel
-        open={isSettingsPanelOpen}
-        onClose={() => setIsSettingsPanelOpen(false)}
-      />
+      {isSettingsPanelOpen && (
+        <Suspense fallback={null}>
+          <LazySettingsPanel
+            open={isSettingsPanelOpen}
+            onClose={() => setIsSettingsPanelOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <QuickNavPanel
-        open={isQuickNavPanelOpen}
-        onClose={() => setIsQuickNavPanelOpen(false)}
-      />
+      {isQuickNavPanelOpen && (
+        <Suspense fallback={null}>
+          <LazyQuickNavPanel
+            open={isQuickNavPanelOpen}
+            onClose={() => setIsQuickNavPanelOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <AboutPanel
-        open={isAboutPanelOpen}
-        onClose={() => setIsAboutPanelOpen(false)}
-        appName={appName}
-        version={version}
-      />
+      {isAboutPanelOpen && (
+        <Suspense fallback={null}>
+          <LazyAboutPanel
+            open={isAboutPanelOpen}
+            onClose={() => setIsAboutPanelOpen(false)}
+            appName={appName}
+            version={version}
+          />
+        </Suspense>
+      )}
 
       <ConfirmDialog
         open={!!categoryToDelete}

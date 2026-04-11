@@ -1,10 +1,8 @@
-﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
+﻿import React, { Suspense, lazy, useCallback, useState, useEffect, useMemo } from 'react';
 import { FolderOpen, Play, Square, Archive } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { GroupSplitLayout } from './GroupSplitLayout';
-import { QuickSwitcher } from './QuickSwitcher';
-import { SettingsPanel } from './SettingsPanel';
 import { Sidebar } from './Sidebar';
 import { WindowGroup } from '../../shared/types/window-group';
 import { Window, WindowStatus } from '../types/window';
@@ -15,6 +13,14 @@ import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import type { SSHProfile } from '../../shared/types/ssh';
 import { getOwnedEphemeralSSHWindowIds, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
+
+const LazyQuickSwitcher = lazy(async () => ({
+  default: (await import('./QuickSwitcher')).QuickSwitcher,
+}));
+
+const LazySettingsPanel = lazy(async () => ({
+  default: (await import('./SettingsPanel')).SettingsPanel,
+}));
 
 export interface GroupViewProps {
   group: WindowGroup;
@@ -401,22 +407,28 @@ export const GroupView: React.FC<GroupViewProps> = ({
 
       {/* 快速切换面板 */}
       {quickSwitcherOpen && (
-        <QuickSwitcher
-          isOpen={quickSwitcherOpen}
-          currentWindowId={group.activeWindowId}
-          currentGroupId={group.id}
-          sshProfiles={sshProfiles}
-          onSelect={handleQuickSwitcherSelect}
-          onSelectGroup={handleQuickSwitcherSelectGroup}
-          onClose={() => setQuickSwitcherOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <LazyQuickSwitcher
+            isOpen={quickSwitcherOpen}
+            currentWindowId={group.activeWindowId}
+            currentGroupId={group.id}
+            sshProfiles={sshProfiles}
+            onSelect={handleQuickSwitcherSelect}
+            onSelectGroup={handleQuickSwitcherSelectGroup}
+            onClose={() => setQuickSwitcherOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* 设置面板 */}
-      <SettingsPanel
-        open={isSettingsPanelOpen}
-        onClose={() => setIsSettingsPanelOpen(false)}
-      />
+      {isSettingsPanelOpen && (
+        <Suspense fallback={null}>
+          <LazySettingsPanel
+            open={isSettingsPanelOpen}
+            onClose={() => setIsSettingsPanelOpen(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

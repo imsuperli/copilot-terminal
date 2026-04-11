@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useState, useEffect, useMemo } from 'react';
+﻿import React, { Suspense, lazy, useCallback, useState, useEffect, useMemo } from 'react';
 import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { v4 as uuidv4 } from 'uuid';
@@ -6,9 +6,7 @@ import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, Lo
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
-import { QuickSwitcher } from './QuickSwitcher';
 import { SplitLayout } from './SplitLayout';
-import { SettingsPanel } from './SettingsPanel';
 import { RemoteWindowTabs } from './RemoteWindowTabs';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
@@ -23,7 +21,6 @@ import { AppTooltip } from './ui/AppTooltip';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { StatusDot } from './StatusDot';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
-import { SSHSftpDialog } from './SSHSftpDialog';
 import { SSHSessionStatusBar } from './SSHSessionStatusBar';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import {
@@ -62,6 +59,18 @@ import {
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
+
+const LazyQuickSwitcher = lazy(async () => ({
+  default: (await import('./QuickSwitcher')).QuickSwitcher,
+}));
+
+const LazySettingsPanel = lazy(async () => ({
+  default: (await import('./SettingsPanel')).SettingsPanel,
+}));
+
+const LazySSHSftpDialog = lazy(async () => ({
+  default: (await import('./SSHSftpDialog')).SSHSftpDialog,
+}));
 
 function getAdjacentSSHWindowId(
   windows: Window[],
@@ -1173,14 +1182,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         </div>
         {/* 缁堢甯冨眬鍖哄煙 */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <SSHSftpDialog
-            open={sshSftpOpen && Boolean(activePaneCapabilities?.canOpenSFTP)}
-            onOpenChange={setSSHSftpOpen}
-            windowId={activePaneCapabilities?.canOpenSFTP ? terminalWindow.id : null}
-            paneId={activePaneCapabilities?.canOpenSFTP ? activeTerminalPane?.id ?? null : null}
-            initialPath={activeSshRuntimeCwd}
-            currentCwd={activeSshRuntimeCwd}
-          />
+          {sshSftpOpen && activePaneCapabilities?.canOpenSFTP && (
+            <Suspense fallback={null}>
+              <LazySSHSftpDialog
+                open={sshSftpOpen}
+                onOpenChange={setSSHSftpOpen}
+                windowId={terminalWindow.id}
+                paneId={activeTerminalPane?.id ?? null}
+                initialPath={activeSshRuntimeCwd}
+                currentCwd={activeSshRuntimeCwd}
+              />
+            </Suspense>
+          )}
 
           <div className="min-w-0 flex-1 overflow-hidden">
             {embedded ? (
@@ -1229,21 +1242,27 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {!embedded && (<>
       {/* 蹇€熷垏鎹㈤潰鏉?*/}
       {quickSwitcherOpen && (
-        <QuickSwitcher
-          isOpen={quickSwitcherOpen}
-          currentWindowId={terminalWindow.id}
-          sshProfiles={sshProfiles}
-          onSelect={handleQuickSwitcherSelect}
-          onSelectGroup={handleQuickSwitcherSelectGroup}
-          onClose={() => setQuickSwitcherOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <LazyQuickSwitcher
+            isOpen={quickSwitcherOpen}
+            currentWindowId={terminalWindow.id}
+            sshProfiles={sshProfiles}
+            onSelect={handleQuickSwitcherSelect}
+            onSelectGroup={handleQuickSwitcherSelectGroup}
+            onClose={() => setQuickSwitcherOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* 设置面板 */}
-      <SettingsPanel
-        open={isSettingsPanelOpen}
-        onClose={() => setIsSettingsPanelOpen(false)}
-      />
+      {isSettingsPanelOpen && (
+        <Suspense fallback={null}>
+          <LazySettingsPanel
+            open={isSettingsPanelOpen}
+            onClose={() => setIsSettingsPanelOpen(false)}
+          />
+        </Suspense>
+      )}
       </>)}
 
       <SSHPortForwardDialog

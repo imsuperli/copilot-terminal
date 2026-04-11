@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { Suspense, lazy, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { MainLayout } from './components/layout/MainLayout';
@@ -11,7 +11,6 @@ import { TerminalView } from './components/TerminalView';
 import { GroupView } from './components/GroupView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
-import { QuickNavPanel } from './components/QuickNavPanel';
 import { SSHHostKeyPromptDialog } from './components/SSHHostKeyPromptDialog';
 import { SSHPasswordPromptDialog } from './components/SSHPasswordPromptDialog';
 import { CustomTitleBar } from './components/CustomTitleBar';
@@ -55,6 +54,9 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
+const LazyQuickNavPanel = lazy(async () => ({
+  default: (await import('./components/QuickNavPanel')).QuickNavPanel,
+}));
 const UNLOADABLE_HIDDEN_WINDOW_STATUSES = new Set<WindowStatus>([
   WindowStatus.Paused,
   WindowStatus.Completed,
@@ -444,12 +446,33 @@ function AppContent() {
   // 工作区恢复
   useWorkspaceRestore();
 
-  // 通知主进程渲染完成（延迟确保主题和样式完全应用）
+  // 等待首屏至少完成一次绘制，再通知主进程显示窗口，避免使用固定延迟。
   useEffect(() => {
-    const timer = setTimeout(() => {
-      window.electronAPI.notifyRendererReady();
-    }, 100);
-    return () => clearTimeout(timer);
+    if (typeof window.requestAnimationFrame !== 'function') {
+      const timer = window.setTimeout(() => {
+        window.electronAPI.notifyRendererReady();
+      }, 0);
+
+      return () => window.clearTimeout(timer);
+    }
+
+    let firstFrame: number | null = null;
+    let secondFrame: number | null = null;
+
+    firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        window.electronAPI.notifyRendererReady();
+      });
+    });
+
+    return () => {
+      if (firstFrame !== null) {
+        window.cancelAnimationFrame(firstFrame);
+      }
+      if (secondFrame !== null) {
+        window.cancelAnimationFrame(secondFrame);
+      }
+    };
   }, []);
 
   // 全局快捷键：双击 Shift 唤出快捷导航（必须是两次完整的按下+松开）
@@ -1106,10 +1129,14 @@ function AppContent() {
       <CleanupOverlay />
 
       {/* 快捷导航面板 */}
-      <QuickNavPanel
-        open={isQuickNavOpen}
-        onClose={() => setIsQuickNavOpen(false)}
-      />
+      {isQuickNavOpen && (
+        <Suspense fallback={null}>
+          <LazyQuickNavPanel
+            open={isQuickNavOpen}
+            onClose={() => setIsQuickNavOpen(false)}
+          />
+        </Suspense>
+      )}
 
       {/* 创建组对话框 */}
       {showCreateGroupDialog && (

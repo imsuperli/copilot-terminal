@@ -4,7 +4,7 @@ import { useWindowStore } from '../stores/windowStore';
 
 const { mockQuickNavPanel, mockUseViewSwitcher, mockUseWindowSwitcher, mockUseWorkspaceRestore } = vi.hoisted(() => ({
   mockQuickNavPanel: vi.fn(({ open }: { open: boolean }) => (
-    <div data-testid="quick-nav-state">{open ? 'open' : 'closed'}</div>
+    open ? <div data-testid="quick-nav-state">open</div> : null
   )),
   mockUseViewSwitcher: vi.fn(),
   mockUseWindowSwitcher: vi.fn(),
@@ -125,12 +125,14 @@ describe('App quick navigation shortcut', () => {
   it('opens quick navigation when Shift is double-tapped within 149ms', async () => {
     await renderApp();
 
-    expect(screen.getByTestId('quick-nav-state')).toHaveTextContent('closed');
+    expect(screen.queryByTestId('quick-nav-state')).not.toBeInTheDocument();
 
-    act(() => {
+    await act(async () => {
       pressShift();
       vi.advanceTimersByTime(149);
       pressShift();
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(screen.getByTestId('quick-nav-state')).toHaveTextContent('open');
@@ -145,6 +147,6 @@ describe('App quick navigation shortcut', () => {
       pressShift();
     });
 
-    expect(screen.getByTestId('quick-nav-state')).toHaveTextContent('closed');
+    expect(screen.queryByTestId('quick-nav-state')).not.toBeInTheDocument();
   });
 });
