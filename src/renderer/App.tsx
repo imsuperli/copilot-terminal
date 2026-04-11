@@ -47,6 +47,7 @@ import {
 import { APP_ERROR_EVENT, type AppErrorEventDetail } from './utils/appNotice';
 import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './utils/sshConnectionRetry';
 import { isEphemeralSSHCloneWindow } from './utils/sshWindowBindings';
+import { useShallow } from 'zustand/react/shallow';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
 const UNLOADABLE_HIDDEN_WINDOW_STATUSES = new Set<WindowStatus>([
@@ -84,8 +85,118 @@ function resolveSSHProfileEntryCommand(profile: SSHProfile): string {
   return profile.remoteCommand || '';
 }
 
+function selectMountedWindowRecordKeys(state: { windows: Window[] }) {
+  return state.windows.map((window) => `${window.id}:${getAggregatedStatus(window.layout)}`);
+}
+
+const MountedTerminalSurface = React.memo(({
+  isVisible,
+  onGroupSwitch,
+  onReturn,
+  onSSHProfileSaved,
+  onWindowSwitch,
+  sshEnabled,
+  sshProfiles,
+  windowId,
+}: {
+  isVisible: boolean;
+  onGroupSwitch: (groupId: string) => void | Promise<void>;
+  onReturn: () => void;
+  onSSHProfileSaved: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
+  onWindowSwitch: (windowId: string) => void;
+  sshEnabled: boolean;
+  sshProfiles: SSHProfile[];
+  windowId: string;
+}) => {
+  const terminalWindow = useWindowStore((state) => (
+    state.windows.find((window) => window.id === windowId) ?? null
+  ));
+
+  if (!terminalWindow) {
+    return null;
+  }
+
+  const isMac = window.electronAPI?.platform === 'darwin';
+  const titleBarHeight = isMac ? 36 : 32;
+
+  return (
+    <div
+      className="transition-opacity duration-300"
+      style={{
+        display: isVisible ? 'block' : 'none',
+        opacity: isVisible ? 1 : 0,
+        position: 'fixed',
+        top: titleBarHeight,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+      }}
+    >
+      <TerminalView
+        key={terminalWindow.id}
+        window={terminalWindow}
+        onReturn={onReturn}
+        onWindowSwitch={onWindowSwitch}
+        onGroupSwitch={onGroupSwitch}
+        isActive={isVisible}
+        sshEnabled={sshEnabled}
+        sshProfiles={sshProfiles}
+        onSSHProfileSaved={onSSHProfileSaved}
+      />
+    </div>
+  );
+});
+
+MountedTerminalSurface.displayName = 'MountedTerminalSurface';
+
+const ActiveGroupSurface = React.memo(({
+  activeGroupId,
+  onGroupSwitch,
+  onReturn,
+  onWindowSwitch,
+  sshProfiles,
+}: {
+  activeGroupId: string;
+  onGroupSwitch: (groupId: string) => void | Promise<void>;
+  onReturn: () => void;
+  onWindowSwitch: (windowId: string) => void;
+  sshProfiles: SSHProfile[];
+}) => {
+  const activeGroup = useWindowStore((state) => (
+    state.groups.find((group) => group.id === activeGroupId) ?? null
+  ));
+
+  if (!activeGroup) {
+    return null;
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: window.electronAPI?.platform === 'darwin' ? 36 : 32,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1001,
+      }}
+    >
+      <GroupView
+        group={activeGroup}
+        onReturn={onReturn}
+        onWindowSwitch={onWindowSwitch}
+        onGroupSwitch={onGroupSwitch}
+        isActive={true}
+        sshProfiles={sshProfiles}
+      />
+    </div>
+  );
+});
+
+ActiveGroupSurface.displayName = 'ActiveGroupSurface';
+
 function AppContent() {
-  const windows = useWindowStore((state) => state.windows);
   const addWindow = useWindowStore((state) => state.addWindow);
   const syncWindow = useWindowStore((state) => state.syncWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
@@ -95,8 +206,26 @@ function AppContent() {
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
   const activeGroupId = useWindowStore((state) => state.activeGroupId);
-  const groups = useWindowStore((state) => state.groups);
   const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
+  const mountedWindowRecordKeys = useWindowStore(useShallow(selectMountedWindowRecordKeys));
+  const activeWindowTitle = useWindowStore((state) => (
+    storeActiveWindowId
+      ? state.windows.find((window) => window.id === storeActiveWindowId)?.name ?? ''
+      : ''
+  ));
+  const activeWindowGitBranch = useWindowStore((state) => (
+    storeActiveWindowId
+      ? state.windows.find((window) => window.id === storeActiveWindowId)?.gitBranch ?? undefined
+      : undefined
+  ));
+  const activeGroupName = useWindowStore((state) => (
+    activeGroupId
+      ? state.groups.find((group) => group.id === activeGroupId)?.name ?? ''
+      : ''
+  ));
+  const hasPersistedEntries = useWindowStore((state) => (
+    state.windows.some((window) => !window.archived) || state.groups.some((group) => !group.archived)
+  ));
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [showCreateGroupDialog, setShowCreateGroupDialog] = useState(false);
   const [isSSHDialogOpen, setIsSSHDialogOpen] = useState(false);
@@ -367,11 +496,18 @@ function AppContent() {
   }, [activeWindowId]);
 
   useEffect(() => {
-    const windowsById = new Map(windows.map((window) => [window.id, window] as const));
+    const statusByWindowId = new Map(
+      mountedWindowRecordKeys.map((recordKey) => {
+        const separatorIndex = recordKey.lastIndexOf(':');
+        const windowId = recordKey.slice(0, separatorIndex);
+        const status = recordKey.slice(separatorIndex + 1) as WindowStatus;
+        return [windowId, status] as const;
+      }),
+    );
     setMountedTerminalWindowIds((previousIds) => {
       const nextIds = previousIds.filter((id) => {
-        const terminalWindow = windowsById.get(id);
-        if (!terminalWindow) {
+        const windowStatus = statusByWindowId.get(id);
+        if (!windowStatus) {
           return false;
         }
 
@@ -379,12 +515,12 @@ function AppContent() {
           return true;
         }
 
-        return !UNLOADABLE_HIDDEN_WINDOW_STATUSES.has(getAggregatedStatus(terminalWindow.layout));
+        return !UNLOADABLE_HIDDEN_WINDOW_STATUSES.has(windowStatus);
       });
 
       return nextIds.length === previousIds.length ? previousIds : nextIds;
     });
-  }, [activeWindowId, windows]);
+  }, [activeWindowId, mountedWindowRecordKeys]);
 
   // 订阅主进程推送的窗格状态变化事件
   useEffect(() => {
@@ -544,6 +680,7 @@ function AppContent() {
     if (previousProfile) {
       const previousDefaultRemoteCwd = previousProfile.defaultRemoteCwd?.trim() || '~';
       const nextDefaultRemoteCwd = profile.defaultRemoteCwd?.trim() || '~';
+      const windows = useWindowStore.getState().windows;
 
       for (const sshWindow of windows) {
         const panes = getAllPanes(sshWindow.layout).filter((pane) => pane.ssh?.profileId === profile.id);
@@ -579,7 +716,7 @@ function AppContent() {
       ...previousStates,
       [profile.id]: credentialState,
     }));
-  }, [sshProfiles, updatePane, updateWindow, windows]);
+  }, [sshProfiles, updatePane, updateWindow]);
 
   const handleDeleteSSHProfile = useCallback(async (profile: SSHProfile) => {
     if (!window.electronAPI) {
@@ -606,6 +743,7 @@ function AppContent() {
       return;
     }
 
+    const windows = useWindowStore.getState().windows;
     const reusableWindow = profile.reuseSession
       ? findReusableSSHWindow(windows, profile.id)
       : null;
@@ -683,7 +821,7 @@ function AppContent() {
     } finally {
       setConnectingSSHProfileId(null);
     }
-  }, [addWindow, connectingSSHProfileId, showAppError, switchToWindow, updatePane, updateWindow, windows]);
+  }, [addWindow, connectingSSHProfileId, showAppError, switchToWindow, updatePane, updateWindow]);
 
   const handleCreateGroup = useCallback(() => {
     setShowCreateGroupDialog(true);
@@ -737,7 +875,7 @@ function AppContent() {
     setActiveGroup(groupId);
 
     // 获取目标组
-    const targetGroup = groups.find(g => g.id === groupId);
+    const targetGroup = useWindowStore.getState().groups.find((group) => group.id === groupId);
     if (!targetGroup) {
       console.error('Target group not found:', groupId);
       return;
@@ -749,13 +887,7 @@ function AppContent() {
     } catch (error) {
       console.error('Failed to notify main process of view change:', error);
     }
-  }, [setActiveGroup, groups]);
-
-  // 计算当前激活的组
-  const activeGroup = useMemo(
-    () => groups.find(g => g.id === activeGroupId),
-    [groups, activeGroupId]
-  );
+  }, [setActiveGroup]);
   const activeSSHHostKeyPrompt = sshHostKeyPromptQueue[0] ?? null;
 
   const mountedTerminalWindowIdSet = useMemo(() => {
@@ -769,13 +901,9 @@ function AppContent() {
 
     return nextIds;
   }, [activeWindowId, mountedTerminalWindowIds]);
-  const mountedTerminalWindows = useMemo(
-    () => windows.filter((window) => mountedTerminalWindowIdSet.has(window.id)),
-    [windows, mountedTerminalWindowIdSet]
-  );
   const hasActiveWindows = useMemo(
-    () => windows.some(w => !w.archived) || groups.some(g => !g.archived) || (sshEnabled && sshProfiles.length > 0),
-    [groups, sshEnabled, sshProfiles.length, windows]
+    () => hasPersistedEntries || (sshEnabled && sshProfiles.length > 0),
+    [hasPersistedEntries, sshEnabled, sshProfiles.length]
   );
 
   const handleSSHHostKeyPromptDecision = useCallback((decision: { trusted: boolean; persist: boolean }) => {
@@ -828,24 +956,18 @@ function AppContent() {
   const titleBarTitle = useMemo(() => {
     if (currentView === 'unified') return '';
     if (activeGroupId) {
-      const group = groups.find(g => g.id === activeGroupId);
-      return group?.name || '';
+      return activeGroupName;
     }
     if (activeWindowId) {
-      const win = windows.find(w => w.id === activeWindowId);
-      return win?.name || '';
+      return activeWindowTitle;
     }
     return '';
-  }, [currentView, activeGroupId, activeWindowId, groups, windows]);
+  }, [currentView, activeGroupId, activeGroupName, activeWindowId, activeWindowTitle]);
 
   const titleBarGitBranch = useMemo(() => {
     if (currentView === 'unified' || activeGroupId) return undefined;
-    if (activeWindowId) {
-      const win = windows.find(w => w.id === activeWindowId);
-      return win?.gitBranch || undefined;
-    }
-    return undefined;
-  }, [currentView, activeGroupId, activeWindowId, windows]);
+    return activeWindowGitBranch;
+  }, [currentView, activeGroupId, activeWindowGitBranch]);
 
   return (
     <div className="flex flex-col h-screen">
@@ -911,65 +1033,32 @@ function AppContent() {
       </div>
 
       {/* 终端视图：窗口一旦打开过就保持挂载，仅切换显示状态，避免返回或窗口切换时销毁 xterm 实例 */}
-      {mountedTerminalWindows.map((terminalWindow) => {
-        const isVisible = currentView === 'terminal' && activeWindowId === terminalWindow.id;
-        const isMac = window.electronAPI?.platform === 'darwin';
-        const titleBarHeight = isMac ? 36 : 32; // h-9 = 36px, h-8 = 32px
-
-        return (
-          <div
-            key={terminalWindow.id}
-            className="transition-opacity duration-300"
-            style={{
-              display: isVisible ? 'block' : 'none',
-              opacity: isVisible ? 1 : 0,
-              position: 'fixed',
-              top: titleBarHeight,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 1000,
-            }}
-          >
-            <TerminalView
-              key={terminalWindow.id}
-              window={terminalWindow}
-              onReturn={switchToUnifiedView}
-              onWindowSwitch={handleWindowSwitch}
-              onGroupSwitch={handleGroupSwitch}
-              isActive={isVisible}
-              sshEnabled={sshEnabled}
-              sshProfiles={sshProfiles}
-              onSSHProfileSaved={handleSSHProfileSaved}
-            />
-          </div>
-        );
-      })}
+      {mountedTerminalWindowIds.map((windowId) => (
+        <MountedTerminalSurface
+          key={windowId}
+          windowId={windowId}
+          isVisible={currentView === 'terminal' && activeWindowId === windowId}
+          onReturn={switchToUnifiedView}
+          onWindowSwitch={handleWindowSwitch}
+          onGroupSwitch={handleGroupSwitch}
+          sshEnabled={sshEnabled}
+          sshProfiles={sshProfiles}
+          onSSHProfileSaved={handleSSHProfileSaved}
+        />
+      ))}
 
       {error && <ViewSwitchError message={error} />}
       {!error && appError && <ViewSwitchError message={appError} />}
 
       {/* 组视图：当 activeGroupId 有效时显示 */}
-      {activeGroup && (
-        <div
-          style={{
-            position: 'fixed',
-            top: window.electronAPI?.platform === 'darwin' ? 36 : 32,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 1001,
-          }}
-        >
-          <GroupView
-            group={activeGroup}
-            onReturn={handleReturnFromGroup}
-            onWindowSwitch={handleWindowSwitch}
-            onGroupSwitch={handleGroupSwitch}
-            isActive={true}
-            sshProfiles={sshProfiles}
-          />
-        </div>
+      {activeGroupId && (
+        <ActiveGroupSurface
+          activeGroupId={activeGroupId}
+          onReturn={handleReturnFromGroup}
+          onWindowSwitch={handleWindowSwitch}
+          onGroupSwitch={handleGroupSwitch}
+          sshProfiles={sshProfiles}
+        />
       )}
 
       {/* 清理进度覆盖层 */}
