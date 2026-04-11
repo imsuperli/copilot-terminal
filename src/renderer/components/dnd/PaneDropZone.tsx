@@ -67,11 +67,25 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const lastNativeHoverPositionRef = useRef<PaneDropPosition | null>(null);
+  const lastNativeSkipReasonRef = useRef<string | null>(null);
   const [hoverPosition, setHoverPosition] = useState<PaneDropPosition | null>(null);
   const [isBrowserDropDragActive, setIsBrowserDropDragActive] = useState(() => getBrowserDropDragActive());
   const [isNativeBrowserPaneOver, setIsNativeBrowserPaneOver] = useState(false);
 
   useEffect(() => subscribeBrowserDropDragActive(setIsBrowserDropDragActive), []);
+
+  useEffect(() => {
+    if (!isBrowserDropDragActive) {
+      lastNativeSkipReasonRef.current = null;
+      return;
+    }
+
+    logBrowserDnd('drop surface active', {
+      targetWindowId,
+      targetPaneId,
+      targetPaneKind,
+    });
+  }, [isBrowserDropDragActive, targetPaneId, targetPaneKind, targetWindowId]);
 
   const canAcceptItem = useCallback((item: BrowserDropDragItem) => {
     return canBrowserDropTargetAcceptItem(item, targetWindowId, targetPaneId);
@@ -161,18 +175,44 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
   drop(containerRef);
 
   const updateNativeBrowserPaneHover = useCallback((clientX: number, clientY: number): PaneDropPosition | null => {
-    const item = getActiveBrowserPaneDragItem();
-    const boundsElement = containerRef.current;
-    if (!item || !boundsElement || !canAcceptItem(item)) {
+    const activeItem = getActiveBrowserPaneDragItem();
+    const containerElement = containerRef.current;
+    let skipReason: string | null = null;
+
+    if (!activeItem) {
+      skipReason = 'no-active-browser-pane-item';
+    } else if (!containerElement) {
+      skipReason = 'missing-container';
+    } else if (!canAcceptItem(activeItem)) {
+      skipReason = 'item-rejected';
+    }
+
+    if (skipReason) {
+      if (lastNativeSkipReasonRef.current !== skipReason) {
+        lastNativeSkipReasonRef.current = skipReason;
+        logBrowserDnd('native target skip', {
+          targetWindowId,
+          targetPaneId,
+          targetPaneKind,
+          reason: skipReason,
+          sourceWindowId: activeItem?.windowId,
+          sourcePaneId: activeItem?.paneId,
+        });
+      }
       return null;
     }
 
-    const rect = boundsElement.getBoundingClientRect();
+    if (!activeItem || !containerElement) {
+      return null;
+    }
+
+    lastNativeSkipReasonRef.current = null;
+    const rect = containerElement.getBoundingClientRect();
     return calcPaneDropPosition(
       clientX,
       clientY,
       rect,
-      isCenterBrowserDropAllowed(item, targetPaneKind),
+      isCenterBrowserDropAllowed(activeItem, targetPaneKind),
     );
   }, [canAcceptItem, targetPaneKind]);
 
@@ -276,6 +316,10 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
     <div
       ref={containerRef}
       className={`relative h-full w-full ${className}`}
+      onDragEnterCapture={handleNativeDragEnter}
+      onDragOverCapture={handleNativeDragOver}
+      onDragLeaveCapture={handleNativeDragLeave}
+      onDropCapture={handleNativeDrop}
       onDragEnter={handleNativeDragEnter}
       onDragOver={handleNativeDragOver}
       onDragLeave={handleNativeDragLeave}
@@ -284,7 +328,13 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
       {children}
       <div
         ref={overlayRef}
+        data-pane-drop-overlay="true"
+        onDragEnter={handleNativeDragEnter}
+        onDragOver={handleNativeDragOver}
+        onDragLeave={handleNativeDragLeave}
+        onDrop={handleNativeDrop}
         className={`absolute inset-0 z-30 ${dropOverlayActive ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        style={dropOverlayActive ? { backgroundColor: 'rgba(15, 23, 42, 0.001)' } : undefined}
       >
         {showIndicator && hoverPosition && (
           <div

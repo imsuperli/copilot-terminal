@@ -79,4 +79,72 @@ describe('PaneDropZone', () => {
       },
     );
   });
+
+  it('handles browser pane move drops through the overlay surface', () => {
+    const onDrop = vi.fn();
+
+    render(
+      <PaneDropZone
+        targetWindowId="win-1"
+        targetPaneId="pane-target"
+        targetPaneKind="terminal"
+        onDrop={onDrop}
+      >
+        <div data-testid="pane-content-overlay">content</div>
+      </PaneDropZone>,
+    );
+
+    const container = screen.getByTestId('pane-content-overlay').parentElement as HTMLDivElement | null;
+    if (!container) {
+      throw new Error('expected pane drop container');
+    }
+
+    const overlay = container.querySelector('[data-pane-drop-overlay="true"]') as HTMLDivElement | null;
+    if (!overlay) {
+      throw new Error('expected pane drop overlay');
+    }
+
+    vi.spyOn(container, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 200,
+      bottom: 100,
+      width: 200,
+      height: 100,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    setActiveBrowserPaneDragItem({
+      type: DragItemTypes.BROWSER_PANE,
+      windowId: 'win-1',
+      paneId: 'pane-source',
+      url: 'https://example.com',
+    });
+
+    fireEvent.dragOver(overlay, {
+      clientX: 190,
+      clientY: 50,
+    });
+
+    fireEvent.drop(overlay, {
+      clientX: 190,
+      clientY: 50,
+    });
+
+    expect(onDrop).toHaveBeenCalledWith(
+      {
+        type: DragItemTypes.BROWSER_PANE,
+        windowId: 'win-1',
+        paneId: 'pane-source',
+        url: 'https://example.com',
+      },
+      {
+        position: 'bottom',
+        targetPaneId: 'pane-target',
+        targetWindowId: 'win-1',
+      },
+    );
+  });
 });
