@@ -162,7 +162,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
           const validatedWorkspace = this.validateGroupIntegrity(normalizedWorkspace);
 
           const hydratedWorkspace = this.hydrateWorkspace(validatedWorkspace);
-          if (JSON.stringify(hydratedWorkspace) !== JSON.stringify(validatedWorkspace)) {
+          if (JSON.stringify(hydratedWorkspace) !== JSON.stringify(workspace)) {
             await this.saveWorkspace(hydratedWorkspace);
           }
 

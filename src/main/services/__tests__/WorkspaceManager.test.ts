@@ -495,6 +495,66 @@ describe('WorkspaceManager', () => {
       expect(persisted.windows[0].name).toBe('Updated Window');
     });
 
+    it('should rewrite duplicated 3.0 workspaces on load without waiting for another save', async () => {
+      const workspace = {
+        version: '3.0',
+        windows: [
+          {
+            id: 'duplicate-window',
+            name: 'Original Window',
+            layout: {
+              type: 'pane',
+              id: 'pane-1',
+              pane: {
+                id: 'pane-1',
+                cwd: '/test/original',
+                command: 'claude',
+              },
+            },
+            activePaneId: 'pane-1',
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T10:00:00Z',
+          },
+          {
+            id: 'duplicate-window',
+            name: 'Updated Window',
+            layout: {
+              type: 'pane',
+              id: 'pane-2',
+              pane: {
+                id: 'pane-2',
+                cwd: '/test/updated',
+                command: 'pwsh.exe',
+              },
+            },
+            activePaneId: 'pane-2',
+            createdAt: '2026-02-28T10:00:00Z',
+            lastActiveAt: '2026-02-28T12:00:00Z',
+          },
+        ],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+        },
+        lastSavedAt: '2026-02-28T12:00:00Z',
+      };
+
+      await fs.writeJson(workspacePath, workspace, { spaces: 2 });
+
+      const loaded = await workspaceManager.loadWorkspace();
+
+      expect(loaded.windows).toHaveLength(1);
+      expect(loaded.windows[0].name).toBe('Updated Window');
+
+      const persisted = await fs.readJson(workspacePath);
+      expect(persisted.version).toBe('3.0');
+      expect(persisted.windows).toHaveLength(1);
+      expect(persisted.windows[0].name).toBe('Updated Window');
+    });
+
     it('should load persisted workspaces without pane runtime fields', async () => {
       const workspace = {
         version: '2.0',
