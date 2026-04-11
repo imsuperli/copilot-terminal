@@ -17,7 +17,6 @@ import {
   subscribeBrowserDropDragActive,
 } from '../../utils/browserDropDragState';
 import { logBrowserDnd } from '../../utils/browserDndDebug';
-import { getActiveBrowserPaneDragItem } from '../../utils/browserPaneDragState';
 
 interface PaneDropZoneProps {
   targetWindowId: string;
@@ -66,10 +65,8 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const lastNativeHoverPositionRef = useRef<PaneDropPosition | null>(null);
   const [hoverPosition, setHoverPosition] = useState<PaneDropPosition | null>(null);
   const [isBrowserDropDragActive, setIsBrowserDropDragActive] = useState(() => getBrowserDropDragActive());
-  const [isNativeBrowserPaneOver, setIsNativeBrowserPaneOver] = useState(false);
 
   useEffect(() => subscribeBrowserDropDragActive(setIsBrowserDropDragActive), []);
 
@@ -138,7 +135,9 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
         position,
         itemType: 'type' in item ? item.type : NativeTypes.URL,
         sourceWindowId: 'windowId' in item ? item.windowId : undefined,
-        sourcePaneId: 'paneId' in item ? item.paneId : undefined,
+        sourcePaneId: 'paneId' in item
+          ? item.paneId
+          : ('sourceBrowserPaneId' in item ? item.sourceBrowserPaneId : undefined),
       });
       onDrop(item, result);
       return result;
@@ -157,128 +156,11 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
   }, [isOver]);
 
   drop(containerRef);
-
-  const updateNativeBrowserPaneHover = useCallback((clientX: number, clientY: number): PaneDropPosition | null => {
-    const item = getActiveBrowserPaneDragItem();
-    const boundsElement = containerRef.current;
-    if (!item || !boundsElement || !canAcceptItem(item)) {
-      return null;
-    }
-
-    const rect = boundsElement.getBoundingClientRect();
-    return calcPaneDropPosition(
-      clientX,
-      clientY,
-      rect,
-      isCenterBrowserDropAllowed(item, targetPaneKind),
-    );
-  }, [canAcceptItem, targetPaneKind]);
-
-  const handleNativeDragEnter = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    const position = updateNativeBrowserPaneHover(event.clientX, event.clientY);
-    if (!position) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    setIsNativeBrowserPaneOver(true);
-    setHoverPosition(position);
-
-    if (lastNativeHoverPositionRef.current !== position) {
-      lastNativeHoverPositionRef.current = position;
-      const item = getActiveBrowserPaneDragItem();
-      logBrowserDnd('native target enter', {
-        targetWindowId,
-        targetPaneId,
-        position,
-        sourceWindowId: item?.windowId,
-        sourcePaneId: item?.paneId,
-      });
-    }
-  }, [targetPaneId, targetWindowId, updateNativeBrowserPaneHover]);
-
-  const handleNativeDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    const position = updateNativeBrowserPaneHover(event.clientX, event.clientY);
-    if (!position) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    setIsNativeBrowserPaneOver(true);
-
-    if (hoverPosition !== position) {
-      setHoverPosition(position);
-    }
-
-    if (lastNativeHoverPositionRef.current !== position) {
-      lastNativeHoverPositionRef.current = position;
-      const item = getActiveBrowserPaneDragItem();
-      logBrowserDnd('native target over', {
-        targetWindowId,
-        targetPaneId,
-        position,
-        sourceWindowId: item?.windowId,
-        sourcePaneId: item?.paneId,
-      });
-    }
-  }, [hoverPosition, targetPaneId, targetWindowId, updateNativeBrowserPaneHover]);
-
-  const handleNativeDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && containerRef.current?.contains(nextTarget)) {
-      return;
-    }
-
-    lastNativeHoverPositionRef.current = null;
-    setIsNativeBrowserPaneOver(false);
-    setHoverPosition(null);
-  }, []);
-
-  const handleNativeDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    const item = getActiveBrowserPaneDragItem();
-    const position = updateNativeBrowserPaneHover(event.clientX, event.clientY);
-    if (!item || !position) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    const result: PaneDropResult = {
-      position,
-      targetPaneId,
-      targetWindowId,
-    };
-
-    lastNativeHoverPositionRef.current = null;
-    setIsNativeBrowserPaneOver(false);
-    setHoverPosition(null);
-    logBrowserDnd('native drop', {
-      targetWindowId,
-      targetPaneId,
-      position,
-      sourceWindowId: item.windowId,
-      sourcePaneId: item.paneId,
-    });
-    onDrop(item, result);
-  }, [onDrop, targetPaneId, targetWindowId, updateNativeBrowserPaneHover]);
-
-  const showIndicator = Boolean(
-    hoverPosition && ((isOver && canDrop) || isNativeBrowserPaneOver),
-  );
+  const showIndicator = isOver && canDrop && hoverPosition;
   const dropOverlayActive = isBrowserDropDragActive || isBrowserDropItemType(itemType);
 
   return (
-    <div
-      ref={containerRef}
-      className={`relative h-full w-full ${className}`}
-      onDragEnter={handleNativeDragEnter}
-      onDragOver={handleNativeDragOver}
-      onDragLeave={handleNativeDragLeave}
-      onDrop={handleNativeDrop}
-    >
+    <div ref={containerRef} className={`relative h-full w-full ${className}`}>
       {children}
       <div
         ref={overlayRef}

@@ -40,6 +40,7 @@ export interface BrowserToolDragItem {
   windowId: string;
   sourcePaneId: string;
   url: string;
+  sourceBrowserPaneId?: string;
 }
 
 export interface BrowserPaneDragItem {

@@ -48,6 +48,18 @@ function shouldInsertBefore(position: PaneDropResult['position']): boolean {
   return position === 'left' || position === 'top';
 }
 
+function getBrowserMoveSourcePaneId(item: BrowserDropDragItem): string | null {
+  if (isBrowserPaneDragItem(item)) {
+    return item.paneId;
+  }
+
+  if (isBrowserToolDragItem(item) && item.sourceBrowserPaneId) {
+    return item.sourceBrowserPaneId;
+  }
+
+  return null;
+}
+
 export function extractBrowserDropUrl(item: BrowserDropDragItem): string | null {
   if (isBrowserToolDragItem(item)) {
     return sanitizeBrowserUrl(item.url || DEFAULT_BROWSER_URL);
@@ -67,14 +79,20 @@ export function resolveBrowserDropAction(
   targetPane: Pane | undefined,
   currentWindowId: string,
 ): BrowserDropAction {
-  if (isBrowserPaneDragItem(item)) {
-    if (item.windowId !== currentWindowId || item.paneId === result.targetPaneId || result.position === 'center') {
+  const moveSourcePaneId = getBrowserMoveSourcePaneId(item);
+  if (moveSourcePaneId) {
+    if (
+      !('windowId' in item)
+      || item.windowId !== currentWindowId
+      || moveSourcePaneId === result.targetPaneId
+      || result.position === 'center'
+    ) {
       return { type: 'none' };
     }
 
     return {
       type: 'move-browser-pane',
-      paneId: item.paneId,
+      paneId: moveSourcePaneId,
       targetPaneId: result.targetPaneId,
       direction: toSplitDirection(result.position),
       insertBefore: shouldInsertBefore(result.position),
@@ -120,8 +138,9 @@ export function canBrowserDropTargetAcceptItem(
   targetWindowId: string,
   targetPaneId: string,
 ): boolean {
-  if (isBrowserPaneDragItem(item)) {
-    return item.windowId === targetWindowId && item.paneId !== targetPaneId;
+  const moveSourcePaneId = getBrowserMoveSourcePaneId(item);
+  if (moveSourcePaneId) {
+    return 'windowId' in item && item.windowId === targetWindowId && moveSourcePaneId !== targetPaneId;
   }
 
   if (isBrowserToolDragItem(item)) {

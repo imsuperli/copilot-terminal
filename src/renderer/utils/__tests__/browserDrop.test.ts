@@ -124,6 +124,33 @@ describe('browserDrop', () => {
     });
   });
 
+  it('treats a browser-pane handle drag as a move on the same browser tool path', () => {
+    const item: BrowserToolDragItem = {
+      type: DragItemTypes.BROWSER_TOOL,
+      windowId: 'win-1',
+      sourcePaneId: 'pane-browser-source',
+      sourceBrowserPaneId: 'pane-browser-source',
+      url: 'https://example.com/source',
+    };
+
+    expect(resolveBrowserDropAction(
+      item,
+      {
+        position: 'bottom',
+        targetPaneId: 'pane-browser-target',
+        targetWindowId: 'win-1',
+      },
+      createTerminalPane('pane-terminal'),
+      'win-1',
+    )).toEqual({
+      type: 'move-browser-pane',
+      paneId: 'pane-browser-source',
+      targetPaneId: 'pane-browser-target',
+      direction: 'vertical',
+      insertBefore: false,
+    });
+  });
+
   it('rejects incompatible browser pane drops onto the same pane or another window', () => {
     const item: BrowserPaneDragItem = {
       type: DragItemTypes.BROWSER_PANE,
@@ -134,5 +161,16 @@ describe('browserDrop', () => {
 
     expect(canBrowserDropTargetAcceptItem(item, 'win-1', 'pane-browser-source')).toBe(false);
     expect(canBrowserDropTargetAcceptItem(item, 'win-2', 'pane-browser-target')).toBe(false);
+
+    const browserToolMoveItem: BrowserToolDragItem = {
+      type: DragItemTypes.BROWSER_TOOL,
+      windowId: 'win-1',
+      sourcePaneId: 'pane-browser-source',
+      sourceBrowserPaneId: 'pane-browser-source',
+      url: 'https://example.com/source',
+    };
+
+    expect(canBrowserDropTargetAcceptItem(browserToolMoveItem, 'win-1', 'pane-browser-source')).toBe(false);
+    expect(canBrowserDropTargetAcceptItem(browserToolMoveItem, 'win-2', 'pane-browser-target')).toBe(false);
   });
 });
