@@ -6,6 +6,7 @@ import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { DEFAULT_BROWSER_URL, normalizeBrowserInput } from '../utils/browserPane';
 import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/browserUrls';
+import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
 const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-zinc-950';
@@ -387,6 +388,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               type="button"
               aria-label={t('browserPane.back')}
               disabled={!isWebviewReady || !canGoBack}
+              onMouseDown={preventMouseButtonFocus}
               onClick={goBack}
               className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -398,6 +400,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               type="button"
               aria-label={t('browserPane.forward')}
               disabled={!isWebviewReady || !canGoForward}
+              onMouseDown={preventMouseButtonFocus}
               onClick={goForward}
               className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
             >
@@ -409,6 +412,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               type="button"
               aria-label={t('browserPane.refresh')}
               disabled={!isWebviewReady}
+              onMouseDown={preventMouseButtonFocus}
               onClick={reloadPage}
               className={`flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${isLoading ? 'animate-spin text-sky-300' : ''}`}
             >
@@ -436,6 +440,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
             <button
               type="button"
               aria-label={t('browserPane.openExternal')}
+              onMouseDown={preventMouseButtonFocus}
               onClick={openCurrentUrlExternally}
               className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800"
             >
@@ -448,6 +453,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               <button
                 type="button"
                 aria-label={t('terminalPane.close')}
+                onMouseDown={preventMouseButtonFocus}
                 onClick={(event) => {
                   event.stopPropagation();
                   onClose();

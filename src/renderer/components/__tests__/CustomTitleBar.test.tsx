@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, cleanup } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen, cleanup } from '@testing-library/react';
 import { CustomTitleBar } from '../CustomTitleBar';
 
 describe('CustomTitleBar', () => {
@@ -46,5 +46,22 @@ describe('CustomTitleBar', () => {
 
     expect(window.electronAPI.windowToggleFullScreen).toHaveBeenCalledTimes(1);
     expect(window.electronAPI.windowMaximize).not.toHaveBeenCalled();
+  });
+
+  it('prevents mouse focus on title bar buttons', () => {
+    const { container } = render(
+      <CustomTitleBar
+        title="Workspace"
+        onReturn={vi.fn()}
+      />,
+    );
+
+    const homeButton = container.querySelector('button');
+    expect(homeButton).not.toBeNull();
+
+    const mouseDownEvent = createEvent.mouseDown(homeButton!);
+    fireEvent(homeButton!, mouseDownEvent);
+
+    expect(mouseDownEvent.defaultPrevented).toBe(true);
   });
 });

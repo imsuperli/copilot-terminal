@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalView } from '../TerminalView';
 import { useWindowStore } from '../../stores/windowStore';
@@ -336,5 +336,22 @@ describe('TerminalView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'close-active-pane' }));
 
     expect(window.electronAPI.closePane).not.toHaveBeenCalled();
+  });
+
+  it('prevents mouse focus on toolbar action buttons', () => {
+    render(
+      <TerminalView
+        window={createLocalWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    const archiveButton = screen.getByRole('button', { name: 'terminalView.archive' });
+    const mouseDownEvent = createEvent.mouseDown(archiveButton);
+    fireEvent(archiveButton, mouseDownEvent);
+
+    expect(mouseDownEvent.defaultPrevented).toBe(true);
   });
 });

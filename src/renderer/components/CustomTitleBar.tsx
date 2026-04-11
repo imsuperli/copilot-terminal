@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Minus, Square, X, Maximize2, Home } from 'lucide-react';
 import { resolveRendererAssetUrl } from '../utils/assetUrl';
+import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 interface CustomTitleBarProps {
   title?: string;
@@ -68,9 +69,9 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
         {/* 左侧：窗口控制 + logo + 应用名 */}
         <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <div className="flex items-center gap-2">
-            <button onClick={handleClose} className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors" aria-label="Close" />
-            <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors" aria-label="Minimize" />
-            <button onClick={handleMaximize} className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors" aria-label="Maximize" />
+            <button onMouseDown={preventMouseButtonFocus} onClick={handleClose} className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors" aria-label="Close" />
+            <button onMouseDown={preventMouseButtonFocus} onClick={handleMinimize} className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors" aria-label="Minimize" />
+            <button onMouseDown={preventMouseButtonFocus} onClick={handleMaximize} className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors" aria-label="Maximize" />
           </div>
           <div className="flex items-center gap-2 ml-1">
             <img src={appLogoSrc} alt="Logo" className="w-5 h-5" />
@@ -82,7 +83,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
         {title && (
           <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
             {onReturn && (
-              <button onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0">
+              <button onMouseDown={preventMouseButtonFocus} onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0">
                 <Home size={15} />
               </button>
             )}
@@ -118,7 +119,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
       {title && (
         <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           {onReturn && (
-            <button onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0">
+            <button onMouseDown={preventMouseButtonFocus} onClick={onReturn} className="flex items-center justify-center w-6 h-6 rounded hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors flex-shrink-0">
               <Home size={15} />
             </button>
           )}
@@ -136,13 +137,13 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
 
       {/* 右侧：窗口控制按钮 */}
       <div className="flex items-center h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-        <button onClick={handleMinimize} className="h-full px-4 hover:bg-zinc-800 transition-colors flex items-center justify-center" aria-label="Minimize">
+        <button onMouseDown={preventMouseButtonFocus} onClick={handleMinimize} className="h-full px-4 hover:bg-zinc-800 transition-colors flex items-center justify-center" aria-label="Minimize">
           <Minus size={14} className="text-zinc-400" />
         </button>
-        <button onClick={handleMaximize} className="h-full px-4 hover:bg-zinc-800 transition-colors flex items-center justify-center" aria-label="Maximize">
+        <button onMouseDown={preventMouseButtonFocus} onClick={handleMaximize} className="h-full px-4 hover:bg-zinc-800 transition-colors flex items-center justify-center" aria-label="Maximize">
           {isMaximized ? <Square size={12} className="text-zinc-400" /> : <Maximize2 size={12} className="text-zinc-400" />}
         </button>
-        <button onClick={handleClose} className="h-full px-4 hover:bg-red-600 transition-colors flex items-center justify-center group" aria-label="Close">
+        <button onMouseDown={preventMouseButtonFocus} onClick={handleClose} className="h-full px-4 hover:bg-red-600 transition-colors flex items-center justify-center group" aria-label="Close">
           <X size={14} className="text-zinc-400 group-hover:text-white" />
         </button>
       </div>

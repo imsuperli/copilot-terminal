@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from 'vitest';
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, createEvent, fireEvent, render } from '@testing-library/react';
 import { BrowserPane, __resetBrowserPaneWebviewCacheForTests } from '../BrowserPane';
 import { I18nProvider } from '../../i18n';
 import type { Pane } from '../../types/window';
@@ -263,5 +263,27 @@ describe('BrowserPane', () => {
     const secondWebview = secondRender.container.querySelector('webview') as MockWebViewElement | null;
     expect(secondWebview).not.toBe(firstWebview);
     expect(secondWebview?.partitionSetCount).toBe(1);
+  });
+
+  it('prevents mouse focus on browser toolbar buttons', () => {
+    const { container } = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={createBrowserPane('https://example.com')}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const toolbarButtons = container.querySelectorAll('button');
+    const openExternalButton = toolbarButtons[3] as HTMLButtonElement | undefined;
+    expect(openExternalButton).toBeDefined();
+
+    const mouseDownEvent = createEvent.mouseDown(openExternalButton!);
+    fireEvent(openExternalButton!, mouseDownEvent);
+
+    expect(mouseDownEvent.defaultPrevented).toBe(true);
   });
 });

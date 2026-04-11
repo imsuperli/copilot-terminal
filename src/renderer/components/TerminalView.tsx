@@ -61,6 +61,7 @@ import {
   getStandaloneSSHWindowsForTarget,
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
+import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 function getAdjacentSSHWindowId(
   windows: Window[],
@@ -938,6 +939,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <button
                   type="button"
                   aria-label={t('common.openInIDE', { name: ide.name })}
+                  onMouseDown={preventMouseButtonFocus}
                   onClick={() => handleOpenInIDE(ide.id)}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
@@ -952,6 +954,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <button
                   type="button"
                   aria-label={t('terminalView.archive')}
+                  onMouseDown={preventMouseButtonFocus}
                   onClick={handleArchiveWindow}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
@@ -966,6 +969,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <button
                   type="button"
                   aria-label={t('terminalView.openFolder')}
+                  onMouseDown={preventMouseButtonFocus}
                   onClick={handleOpenFolder}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
@@ -980,6 +984,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <button
                     type="button"
                     aria-label={t('terminalView.openSftp')}
+                    onMouseDown={preventMouseButtonFocus}
                     onClick={handleOpenSSHSftp}
                     className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
                       sshSftpOpen
@@ -997,6 +1002,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <button
                     type="button"
                     aria-label={sshMetricsOpen ? t('terminalView.hideSshMonitor') : t('terminalView.showSshMonitor')}
+                    onMouseDown={preventMouseButtonFocus}
                     onClick={() => setSSHMetricsOpen((current) => !current)}
                     className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
                       sshMetricsOpen
@@ -1015,6 +1021,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <button
                   type="button"
                   aria-label={t('terminalView.managePortForwards')}
+                  onMouseDown={preventMouseButtonFocus}
                   onClick={handleOpenSSHPortForwards}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 >
@@ -1028,6 +1035,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               <button
                 type="button"
                 aria-label={t('terminalView.splitHorizontal')}
+                onMouseDown={preventMouseButtonFocus}
                 onClick={() => handleSplitPane('horizontal')}
                 className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
               >
@@ -1040,6 +1048,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               <button
                 type="button"
                 aria-label={t('terminalView.splitVertical')}
+                onMouseDown={preventMouseButtonFocus}
                 onClick={() => handleSplitPane('vertical')}
                 className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
               >
@@ -1070,6 +1079,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 >
                   <button
                     type="button"
+                    onMouseDown={preventMouseButtonFocus}
                     onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
                     className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
                   >
@@ -1084,6 +1094,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 >
                   <button
                     type="button"
+                    onMouseDown={preventMouseButtonFocus}
                     onClick={() => {
                       if (isWindowRunning) {
                         onStopAndRemoveFromGroup?.(terminalWindow.id);
@@ -1108,6 +1119,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <button
                   type="button"
                   aria-label={t('terminalView.stop')}
+                  onMouseDown={preventMouseButtonFocus}
                   onClick={handlePauseWindow}
                   className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
                 >
@@ -1125,6 +1137,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <button
                   type="button"
                   aria-label={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
+                  onMouseDown={preventMouseButtonFocus}
                   onClick={isWindowRunning ? handleRestartWindow : handleStartWindow}
                   className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
                     isWindowRunning ? 'text-yellow-500' : 'text-green-500'
