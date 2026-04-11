@@ -1,7 +1,8 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalView } from '../TerminalView';
+import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
 
 vi.mock('../Sidebar', () => ({
@@ -21,7 +22,15 @@ vi.mock('../RemoteWindowTabs', () => ({
 }));
 
 vi.mock('../SplitLayout', () => ({
-  SplitLayout: () => <div data-testid="split-layout" />,
+  SplitLayout: (props: { activePaneId?: string; onPaneClose?: (paneId: string) => void }) => (
+    <div data-testid="split-layout">
+      {props.onPaneClose && props.activePaneId ? (
+        <button type="button" aria-label="close-active-pane" onClick={() => props.onPaneClose?.(props.activePaneId!)}>
+          close-active-pane
+        </button>
+      ) : null}
+    </div>
+  ),
 }));
 
 vi.mock('react-dnd', () => ({
@@ -131,7 +140,100 @@ function createSshWindow(): Window {
   };
 }
 
+function createBrowserOnlyWindow(kind: Window['kind'] = 'local'): Window {
+  const paneId = 'pane-browser-only-1';
+
+  return {
+    id: `win-browser-${kind ?? 'local'}`,
+    name: `Browser ${kind ?? 'local'}`,
+    activePaneId: paneId,
+    kind,
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    layout: {
+      type: 'pane',
+      id: paneId,
+      pane: {
+        id: paneId,
+        cwd: '',
+        command: '',
+        kind: 'browser',
+        status: WindowStatus.Paused,
+        pid: null,
+        browser: {
+          url: 'https://example.com',
+        },
+      },
+    },
+  };
+}
+
+function createTerminalWithTwoBrowsersWindow(): Window {
+  return {
+    id: 'win-mixed-browser-only-after-close',
+    name: 'Terminal With Browsers',
+    activePaneId: 'pane-local-1',
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    layout: {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.34, 0.33, 0.33],
+      children: [
+        {
+          type: 'pane',
+          id: 'pane-local-1',
+          pane: {
+            id: 'pane-local-1',
+            cwd: '/workspace/project',
+            command: 'bash',
+            status: WindowStatus.Running,
+            pid: 101,
+          },
+        },
+        {
+          type: 'pane',
+          id: 'browser-1',
+          pane: {
+            id: 'browser-1',
+            cwd: '',
+            command: '',
+            kind: 'browser',
+            status: WindowStatus.Paused,
+            pid: null,
+            browser: { url: 'https://example.com/1' },
+          },
+        },
+        {
+          type: 'pane',
+          id: 'browser-2',
+          pane: {
+            id: 'browser-2',
+            cwd: '',
+            command: '',
+            kind: 'browser',
+            status: WindowStatus.Paused,
+            pid: null,
+            browser: { url: 'https://example.com/2' },
+          },
+        },
+      ],
+    },
+  };
+}
+
 describe('TerminalView', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useWindowStore.setState({
+      windows: [],
+      activeWindowId: null,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+  });
+
   it('renders sidebar and local toolbar actions in normal mode', () => {
     render(
       <TerminalView
@@ -197,5 +299,42 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'terminalView.showSshMonitor' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.managePortForwards' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'terminalView.openFolder' })).not.toBeInTheDocument();
+  });
+
+  it('shows the window identity logo when the active pane is a browser pane', () => {
+    render(
+      <TerminalView
+        window={createBrowserOnlyWindow('ssh')}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    expect(screen.getByTestId('toolbar-window-identity')).toBeInTheDocument();
+  });
+
+  it('does not close a terminal pane when that would leave only browser panes', () => {
+    const windowWithBrowsers = createTerminalWithTwoBrowsersWindow();
+    useWindowStore.setState({
+      windows: [windowWithBrowsers],
+      activeWindowId: windowWithBrowsers.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={windowWithBrowsers}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'close-active-pane' }));
+
+    expect(window.electronAPI.closePane).not.toHaveBeenCalled();
   });
 });

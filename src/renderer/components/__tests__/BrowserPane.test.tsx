@@ -224,7 +224,7 @@ describe('BrowserPane', () => {
     expect(webview.insertCssCalls[0]).toContain('background: #09090b');
   });
 
-  it('reuses the same webview element when the pane is remounted without reassigning its partition', async () => {
+  it('creates a fresh webview guest when the pane is remounted', async () => {
     const pane = createBrowserPane();
     const firstRender = render(
       <I18nProvider>
@@ -261,7 +261,7 @@ describe('BrowserPane', () => {
     );
 
     const secondWebview = secondRender.container.querySelector('webview') as MockWebViewElement | null;
-    expect(secondWebview).toBe(firstWebview);
+    expect(secondWebview).not.toBe(firstWebview);
     expect(secondWebview?.partitionSetCount).toBe(1);
   });
 });

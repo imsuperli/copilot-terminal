@@ -277,6 +277,7 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
   const [{ isDragging }, drag, preview] = useDrag<BrowserPaneDragItem, unknown, { isDragging: boolean }>(() => ({
     type: DragItemTypes.BROWSER_PANE,
     item: () => {
+      onActivate();
       setBrowserDropDragActive(true);
 
       return {
@@ -292,7 +293,7 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [windowId, pane.browser?.url, pane.id]);
+  }), [onActivate, windowId, pane.browser?.url, pane.id]);
 
   useEffect(() => {
     preview(getEmptyImage(), { captureDraggingState: true });

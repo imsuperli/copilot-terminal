@@ -9,7 +9,6 @@ import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/brow
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
 const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-zinc-950';
-const BROWSER_WEBVIEW_CACHE_TTL_MS = 2_000;
 const BLANK_PAGE_THEME_CSS = `
   :root { color-scheme: dark; }
   html, body {
@@ -18,104 +17,12 @@ const BLANK_PAGE_THEME_CSS = `
   }
 `;
 
-type CachedBrowserWebviewEntry = {
-  element: HTMLWebViewElement;
-  isReady: boolean;
-  disposeTimer: number | null;
-};
-
-const cachedBrowserWebviews = new Map<string, CachedBrowserWebviewEntry>();
-let browserWebviewParkingLot: HTMLDivElement | null = null;
-
 function getBrowserPaneUrl(pane: Pane): string {
   return sanitizeBrowserUrl(pane.browser?.url || DEFAULT_BROWSER_URL);
 }
 
-function ensureBrowserWebviewParkingLot(): HTMLDivElement | null {
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  if (browserWebviewParkingLot && document.body.contains(browserWebviewParkingLot)) {
-    return browserWebviewParkingLot;
-  }
-
-  const parkingLot = document.createElement('div');
-  parkingLot.dataset.browserWebviewParkingLot = 'true';
-  Object.assign(parkingLot.style, {
-    position: 'fixed',
-    left: '-10000px',
-    top: '-10000px',
-    width: '1px',
-    height: '1px',
-    overflow: 'hidden',
-    opacity: '0',
-    pointerEvents: 'none',
-  });
-  document.body.appendChild(parkingLot);
-  browserWebviewParkingLot = parkingLot;
-  return parkingLot;
-}
-
-function clearBrowserWebviewDisposeTimer(entry: CachedBrowserWebviewEntry): void {
-  if (entry.disposeTimer === null) {
-    return;
-  }
-
-  window.clearTimeout(entry.disposeTimer);
-  entry.disposeTimer = null;
-}
-
-function destroyCachedBrowserWebview(paneId: string): void {
-  const entry = cachedBrowserWebviews.get(paneId);
-  if (!entry) {
-    return;
-  }
-
-  clearBrowserWebviewDisposeTimer(entry);
-  entry.element.remove();
-  cachedBrowserWebviews.delete(paneId);
-}
-
-function scheduleCachedBrowserWebviewDispose(paneId: string): void {
-  const entry = cachedBrowserWebviews.get(paneId);
-  if (!entry) {
-    return;
-  }
-
-  clearBrowserWebviewDisposeTimer(entry);
-  entry.disposeTimer = window.setTimeout(() => {
-    destroyCachedBrowserWebview(paneId);
-  }, BROWSER_WEBVIEW_CACHE_TTL_MS);
-}
-
-function getOrCreateCachedBrowserWebview(paneId: string, initialUrl: string): CachedBrowserWebviewEntry {
-  const existingEntry = cachedBrowserWebviews.get(paneId);
-  if (existingEntry) {
-    clearBrowserWebviewDisposeTimer(existingEntry);
-    return existingEntry;
-  }
-
-  const element = document.createElement('webview') as HTMLWebViewElement;
-  element.className = BROWSER_WEBVIEW_CLASSNAME;
-  element.setAttribute('partition', BROWSER_PARTITION);
-  element.setAttribute('src', initialUrl);
-
-  const entry: CachedBrowserWebviewEntry = {
-    element,
-    isReady: false,
-    disposeTimer: null,
-  };
-  cachedBrowserWebviews.set(paneId, entry);
-  return entry;
-}
-
 export function __resetBrowserPaneWebviewCacheForTests(): void {
-  cachedBrowserWebviews.forEach((_entry, paneId) => {
-    destroyCachedBrowserWebview(paneId);
-  });
-  browserWebviewParkingLot?.remove();
-  browserWebviewParkingLot = null;
+  // BrowserPane no longer reuses guest instances across remounts.
 }
 
 export interface BrowserPaneProps {
@@ -141,7 +48,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const updatePane = useWindowStore((state) => state.updatePane);
   const webviewRef = useRef<HTMLWebViewElement | null>(null);
   const webviewHostRef = useRef<HTMLDivElement | null>(null);
-  const cachedWebviewEntryRef = useRef<CachedBrowserWebviewEntry | null>(null);
   const restoreReadyTimerRef = useRef<number | null>(null);
   const webviewReadyRef = useRef(false);
   const addressInputRef = useRef<HTMLInputElement>(null);
@@ -315,31 +221,22 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       return undefined;
     }
 
-    const entry = getOrCreateCachedBrowserWebview(pane.id, persistedUrl);
-    const webview = entry.element;
-    cachedWebviewEntryRef.current = entry;
+    const webview = document.createElement('webview') as HTMLWebViewElement;
     webviewRef.current = webview;
 
     webview.className = BROWSER_WEBVIEW_CLASSNAME;
-    if (!webview.getAttribute('src')) {
-      webview.setAttribute('src', persistedUrl);
-    }
-
-    if (webview.parentElement !== host) {
-      host.replaceChildren(webview);
-    }
+    webview.setAttribute('partition', BROWSER_PARTITION);
+    webview.setAttribute('src', persistedUrl);
+    host.replaceChildren(webview);
 
     return () => {
-      const parkingLot = ensureBrowserWebviewParkingLot();
-      if (parkingLot && webview.parentElement !== parkingLot) {
-        parkingLot.appendChild(webview);
-      }
       clearRestoreReadyTimer();
-      scheduleCachedBrowserWebviewDispose(pane.id);
-      cachedWebviewEntryRef.current = null;
+      setWebviewReady(false);
+      resetNavigationState();
+      webview.remove();
       webviewRef.current = null;
     };
-  }, [clearRestoreReadyTimer, pane.id, persistedUrl]);
+  }, [clearRestoreReadyTimer, pane.id, persistedUrl, resetNavigationState, setWebviewReady]);
 
   useEffect(() => {
     if (!isActive) {
@@ -363,8 +260,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
   useEffect(() => {
     const webview = webviewRef.current;
-    const cachedEntry = cachedWebviewEntryRef.current;
-    if (!webview || !cachedEntry) {
+    if (!webview) {
       return undefined;
     }
 
@@ -373,7 +269,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     resetNavigationState();
 
     const handleDomReady = () => {
-      cachedEntry.isReady = true;
       restoreReadyWebviewState(webview);
     };
     const handleDidStartLoading = () => {
@@ -392,10 +287,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     webview.addEventListener('did-stop-loading', handleDidStopLoading);
     webview.addEventListener('did-navigate', handleDidNavigate);
     webview.addEventListener('did-navigate-in-page', handleDidNavigate);
-
-    if (cachedEntry.isReady) {
-      restoreReadyWebviewState(webview);
-    }
 
     return () => {
       clearRestoreReadyTimer();
@@ -453,6 +344,19 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   }, [currentUrl]);
 
   const handleRootMouseDownCapture = useCallback(() => {
+    onActivate();
+  }, [onActivate]);
+
+  const handleMouseDownCapture = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest('[data-browser-drag-handle="true"]')) {
+      return;
+    }
+
+    handleRootMouseDownCapture();
+  }, [handleRootMouseDownCapture]);
+
+  const handleDragHandleMouseDown = useCallback(() => {
     skipNextAutoFocusRef.current = true;
     onActivate();
   }, [onActivate]);
@@ -463,11 +367,13 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-zinc-800 bg-zinc-950
       `}
       style={{ opacity: isDragging ? 0.45 : 1 }}
-      onMouseDownCapture={handleRootMouseDownCapture}
+      onMouseDownCapture={handleMouseDownCapture}
     >
       <div className="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
         <div
+          data-browser-drag-handle="true"
           ref={dragHandleRef ?? undefined}
+          onMouseDown={handleDragHandleMouseDown}
           className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:cursor-grabbing"
           aria-label={t('browserPane.move')}
           title={t('browserPane.move')}

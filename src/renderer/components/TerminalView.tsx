@@ -20,6 +20,8 @@ import { DragItemTypes, DropZone } from './dnd';
 import type { BrowserDropDragItem, BrowserToolDragItem, PaneDropResult, WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
+import { StatusDot } from './StatusDot';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import { SSHSftpDialog } from './SSHSftpDialog';
 import { SSHSessionStatusBar } from './SSHSessionStatusBar';
@@ -139,6 +141,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const { t } = useI18n();
   const { enabledIDEs } = useIDESettings();
   const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
+  const windowKind = useMemo(
+    () => getWindowKind(terminalWindow),
+    [terminalWindow],
+  );
   const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
   const terminalPanes = useMemo(
     () => panes.filter((pane) => isTerminalPane(pane)),
@@ -180,6 +186,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const sidebarActiveWindowId = useMemo(
     () => getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id,
     [terminalWindow],
+  );
+  const toolbarWindowLogoVariant = useMemo(
+    () => windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local',
+    [windowKind],
+  );
+  const showToolbarWindowIdentity = useMemo(
+    () => Boolean(activePane && isBrowserPane(activePane)),
+    [activePane],
   );
 
   // 鍒囨崲闈㈡澘鐘舵€?
@@ -291,6 +305,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       }
 
       if (panes.length <= 1) {
+        return;
+      }
+
+      const remainingPanes = panes.filter((pane) => pane.id !== paneId);
+      if (remainingPanes.length > 0 && remainingPanes.every((pane) => isBrowserPane(pane))) {
         return;
       }
 
@@ -861,6 +880,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         {/* 顶部工具栏 - 在嵌入模式下也显示 */}
         <div className="h-10 bg-zinc-900 border-b border-zinc-800 flex items-stretch justify-between pl-2 pr-4 flex-shrink-0 gap-3">
           <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-hidden">
+            {showToolbarWindowIdentity && (
+              <div
+                data-testid="toolbar-window-identity"
+                className="flex h-full min-w-0 shrink-0 items-center gap-2 border-r border-zinc-800 pr-3"
+              >
+                <div className="relative shrink-0">
+                  <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
+                  <span className="absolute -bottom-1 -right-1">
+                    <StatusDot status={aggregatedStatus} size="sm" />
+                  </span>
+                </div>
+                <span className="max-w-[180px] truncate text-xs font-medium text-zinc-200">
+                  {terminalWindow.name}
+                </span>
+              </div>
+            )}
             {!embedded && isStandaloneSshWindow && (
               <RemoteWindowTabs
                 windows={windows}
