@@ -11,8 +11,9 @@ import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
 import { DEFAULT_BROWSER_URL } from '../utils/browserPane';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import { logBrowserDnd } from '../utils/browserDndDebug';
+import { setActiveBrowserPaneDragItem } from '../utils/browserPaneDragState';
 import { DragItemTypes, PaneDropZone } from './dnd';
-import type { BrowserDropDragItem, BrowserToolDragItem, PaneDropResult } from './dnd';
+import type { BrowserDropDragItem, BrowserPaneDragItem, PaneDropResult } from './dnd';
 
 export interface SplitLayoutProps {
   windowId: string;
@@ -275,17 +276,17 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
   onActivate,
   onClose,
 }) => {
-  const [{ isDragging }, drag, preview] = useDrag<BrowserToolDragItem, unknown, { isDragging: boolean }>(() => ({
-    type: DragItemTypes.BROWSER_TOOL,
+  const [{ isDragging }, drag, preview] = useDrag<BrowserPaneDragItem, unknown, { isDragging: boolean }>(() => ({
+    type: DragItemTypes.BROWSER_PANE,
     item: () => {
-      const dragItem: BrowserToolDragItem = {
-        type: DragItemTypes.BROWSER_TOOL,
+      const dragItem: BrowserPaneDragItem = {
+        type: DragItemTypes.BROWSER_PANE,
         windowId,
-        sourcePaneId: pane.id,
-        sourceBrowserPaneId: pane.id,
+        paneId: pane.id,
         url: pane.browser?.url ?? DEFAULT_BROWSER_URL,
       };
 
+      setActiveBrowserPaneDragItem(dragItem);
       setBrowserDropDragActive(true);
       logBrowserDnd('react-dnd begin', {
         windowId,
@@ -297,6 +298,7 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
       return dragItem;
     },
     end: (_item, monitor) => {
+      setActiveBrowserPaneDragItem(null);
       setBrowserDropDragActive(false);
       logBrowserDnd('react-dnd end', {
         windowId,
