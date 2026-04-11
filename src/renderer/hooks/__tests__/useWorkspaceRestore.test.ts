@@ -1,138 +1,170 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { useWorkspaceRestore } from '../useWorkspaceRestore';
 import { useWindowStore } from '../../stores/windowStore';
 import { WindowStatus } from '../../types/window';
-import { Workspace } from '../../../main/types/workspace';
+import { Workspace } from '../../../shared/types/workspace';
 
-// Mock window.electronAPI
-const mockElectronAPI = {
-  onWorkspaceLoaded: vi.fn(),
-  offWorkspaceLoaded: vi.fn(),
-  onWindowRestored: vi.fn(),
-  offWindowRestored: vi.fn(),
-  triggerAutoSave: vi.fn(),
-};
-
-(global as any).window = {
-  electronAPI: mockElectronAPI,
-};
+function createWorkspace(): Workspace {
+  return {
+    version: '1.0',
+    windows: [
+      {
+        id: 'window-1',
+        name: 'Local Terminal',
+        activePaneId: 'pane-1',
+        createdAt: '2026-04-10T00:00:00.000Z',
+        lastActiveAt: '2026-04-10T00:00:00.000Z',
+        layout: {
+          type: 'pane',
+          id: 'pane-node-1',
+          pane: {
+            id: 'pane-1',
+            cwd: '/workspace/project-a',
+            command: 'pwsh.exe',
+            status: WindowStatus.Paused,
+            pid: null,
+            backend: 'local',
+          },
+        },
+      },
+      {
+        id: 'window-2',
+        name: 'Remote Terminal',
+        activePaneId: 'pane-2',
+        createdAt: '2026-04-10T00:01:00.000Z',
+        lastActiveAt: '2026-04-10T00:01:00.000Z',
+        layout: {
+          type: 'pane',
+          id: 'pane-node-2',
+          pane: {
+            id: 'pane-2',
+            cwd: '/srv/app',
+            command: '/bin/zsh',
+            status: WindowStatus.Paused,
+            pid: null,
+            backend: 'ssh',
+            ssh: {
+              profileId: 'profile-1',
+              host: '10.0.0.21',
+              port: 22,
+              user: 'root',
+              remoteCwd: '/srv/app',
+              reuseSession: true,
+            },
+          },
+        },
+      },
+    ],
+    groups: [
+      {
+        id: 'group-1',
+        name: 'Backend',
+        layout: {
+          type: 'split',
+          direction: 'horizontal',
+          sizes: [0.5, 0.5],
+          children: [
+            { type: 'window', id: 'window-1' },
+            { type: 'window', id: 'window-2' },
+          ],
+        },
+        activeWindowId: 'window-1',
+        createdAt: '2026-04-10T00:02:00.000Z',
+        lastActiveAt: '2026-04-10T00:02:00.000Z',
+      },
+    ],
+    settings: {
+      notificationsEnabled: true,
+      theme: 'dark',
+      autoSave: true,
+      autoSaveInterval: 5,
+      ides: [],
+    },
+    lastSavedAt: '2026-04-10T00:03:00.000Z',
+  };
+}
 
 describe('useWorkspaceRestore', () => {
+  let workspaceLoadedHandler: ((event: unknown, workspace: Workspace) => void) | undefined;
+
   beforeEach(() => {
-    // 清空 store
-    useWindowStore.setState({ windows: [], activeWindowId: null });
-    vi.clearAllMocks();
-  });
-
-  it('should register event listeners on mount', () => {
-    expect(mockElectronAPI.onWorkspaceLoaded).toBeDefined();
-    expect(mockElectronAPI.offWorkspaceLoaded).toBeDefined();
-  });
-
-  it('should add windows with Restoring status when workspace is loaded', () => {
-    const workspace: Workspace = {
-      version: '1.0',
-      windows: [
-        {
-          id: 'window-1',
-          name: 'Test Window 1',
-          workingDirectory: '/test/path1',
-          command: 'bash',
-          status: WindowStatus.Running,
-          pid: 1234,
-          createdAt: new Date().toISOString(),
-          lastActiveAt: new Date().toISOString(),
-        },
-        {
-          id: 'window-2',
-          name: 'Test Window 2',
-          workingDirectory: '/test/path2',
-          command: 'zsh',
-          status: WindowStatus.Running,
-          pid: 5678,
-          createdAt: new Date().toISOString(),
-          lastActiveAt: new Date().toISOString(),
-        },
-      ],
-      settings: {
-        notificationsEnabled: true,
-        theme: 'dark',
-        autoSave: true,
-        autoSaveInterval: 5,
+    workspaceLoadedHandler = undefined;
+    useWindowStore.setState({
+      windows: [],
+      groups: [],
+      activeWindowId: null,
+      activeGroupId: null,
+      mruList: [],
+      groupMruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+      customCategories: [],
+      terminalSidebarSections: {
+        archived: false,
+        local: true,
+        ssh: true,
       },
-      lastSavedAt: new Date().toISOString(),
-    };
+      terminalSidebarFilter: 'all',
+    });
+    vi.clearAllMocks();
 
-    // Simulate workspace loaded by directly adding windows to store
-    workspace.windows.forEach(window => {
-      useWindowStore.getState().addWindow({
-        ...window,
-        status: WindowStatus.Restoring,
-      });
+    vi.mocked(window.electronAPI.loadWorkspace).mockResolvedValue({
+      success: true,
+      data: createWorkspace(),
+    });
+    vi.mocked(window.electronAPI.onWorkspaceLoaded).mockImplementation((handler) => {
+      workspaceLoadedHandler = handler as (event: unknown, workspace: Workspace) => void;
+    });
+  });
+
+  it('registers the workspace listener and requests the current workspace on mount', async () => {
+    const { unmount } = renderHook(() => useWorkspaceRestore());
+
+    await waitFor(() => {
+      expect(window.electronAPI.onWorkspaceLoaded).toHaveBeenCalledTimes(1);
+      expect(window.electronAPI.loadWorkspace).toHaveBeenCalledTimes(1);
     });
 
-    const windows = useWindowStore.getState().windows;
-    expect(windows).toHaveLength(2);
-    expect(windows[0].status).toBe(WindowStatus.Restoring);
-    expect(windows[1].status).toBe(WindowStatus.Restoring);
+    unmount();
   });
 
-  it('should update window status to Running when window is restored successfully', () => {
-    // Add a window with Restoring status
-    useWindowStore.getState().addWindow({
-      id: 'window-1',
-      name: 'Test Window',
-      workingDirectory: '/test/path',
-      command: 'bash',
-      status: WindowStatus.Restoring,
-      pid: 1234,
-      createdAt: new Date().toISOString(),
-      lastActiveAt: new Date().toISOString(),
+  it('restores windows and groups from the initial workspace load', async () => {
+    const { unmount } = renderHook(() => useWorkspaceRestore());
+
+    await waitFor(() => {
+      expect(useWindowStore.getState().windows).toHaveLength(2);
+      expect(useWindowStore.getState().groups).toHaveLength(1);
     });
 
-    // Simulate window restored successfully
-    useWindowStore.getState().updateWindowStatus('window-1', WindowStatus.Running);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual([
+      'window-1',
+      'window-2',
+    ]);
+    expect(useWindowStore.getState().groups[0]?.id).toBe('group-1');
 
-    const windows = useWindowStore.getState().windows;
-    expect(windows[0].status).toBe(WindowStatus.Running);
+    unmount();
   });
 
-  it('should update window status to Error when restore fails', () => {
-    // Add a window with Restoring status
-    useWindowStore.getState().addWindow({
-      id: 'window-1',
-      name: 'Test Window',
-      workingDirectory: '/invalid/path',
-      command: 'bash',
-      status: WindowStatus.Restoring,
-      pid: null,
-      createdAt: new Date().toISOString(),
-      lastActiveAt: new Date().toISOString(),
+  it('ignores duplicate workspace payloads after the initial restore', async () => {
+    const workspace = createWorkspace();
+    vi.mocked(window.electronAPI.loadWorkspace).mockResolvedValue({
+      success: true,
+      data: workspace,
     });
 
-    // Simulate window restore failed
-    useWindowStore.getState().updateWindowStatus('window-1', WindowStatus.Error);
+    const { unmount } = renderHook(() => useWorkspaceRestore());
 
-    const windows = useWindowStore.getState().windows;
-    expect(windows[0].status).toBe(WindowStatus.Error);
-  });
+    await waitFor(() => {
+      expect(useWindowStore.getState().windows).toHaveLength(2);
+    });
 
-  it('should handle empty workspace gracefully', () => {
-    const windows = useWindowStore.getState().windows;
-    expect(windows).toHaveLength(0);
-  });
+    const restoredWindows = useWindowStore.getState().windows;
+    workspaceLoadedHandler?.({}, workspace);
 
-  it('should handle missing electronAPI gracefully', () => {
-    // Remove electronAPI temporarily
-    const originalAPI = (global as any).window.electronAPI;
-    (global as any).window = {};
+    expect(useWindowStore.getState().windows).toBe(restoredWindows);
+    expect(useWindowStore.getState().windows).toHaveLength(2);
 
-    // Should not throw
-    expect(() => {
-      // Just verify the API is missing
-      expect((global as any).window.electronAPI).toBeUndefined();
-    }).not.toThrow();
-
-    // Restore electronAPI
-    (global as any).window.electronAPI = originalAPI;
+    unmount();
   });
 });

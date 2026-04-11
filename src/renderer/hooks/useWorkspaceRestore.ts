@@ -1,39 +1,69 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useWindowStore, setAutoSaveEnabled } from '../stores/windowStore';
 import { Workspace } from '../../shared/types/workspace';
+
+function buildWorkspaceRestoreKey(workspace: Workspace): string {
+  const windowIds = workspace.windows.map((window) => window.id).join(',');
+  const groupIds = (workspace.groups ?? []).map((group) => group.id).join(',');
+
+  return `${workspace.lastSavedAt}|${workspace.windows.length}|${workspace.groups?.length ?? 0}|${windowIds}|${groupIds}`;
+}
+
+function isWorkspacePayload(value: unknown): value is Workspace {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<Workspace>;
+  return Array.isArray(candidate.windows) && Array.isArray(candidate.groups);
+}
 
 /**
  * 工作区恢复 Hook
  *
  * 功能：
  * - 监听主进程的 workspace-loaded 事件
+ * - 订阅建立后主动拉取当前工作区，避免错过启动时的一次性事件
  * - 立即渲染卡片（状态：Paused，不启动 PTY 进程）
- * - 渐进式渲染：先显示卡片，状态由 StatusPoller 实时更新
  */
 export const useWorkspaceRestore = () => {
   const addWindow = useWindowStore((state) => state.addWindow);
   const addGroup = useWindowStore((state) => state.addGroup);
   const clearWindows = useWindowStore((state) => state.clearWindows);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoredWorkspaceKeyRef = useRef<string | null>(null);
 
-  /**
-   * 处理工作区加载事件
-   * 立即渲染所有窗口为暂停状态（不启动 PTY 进程）
-   */
-  const handleWorkspaceLoaded = useCallback((event: unknown, workspace: Workspace) => {
-    console.log(`[useWorkspaceRestore] Workspace loaded with ${workspace.windows.length} windows, ${workspace.groups?.length || 0} groups`);
+  const scheduleAutoSaveEnable = useCallback(() => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
 
-    // 禁用自动保存，避免恢复过程中的临时状态被保存
+    autoSaveTimerRef.current = setTimeout(() => {
+      setAutoSaveEnabled(true);
+      autoSaveTimerRef.current = null;
+      console.log('[useWorkspaceRestore] Auto-save enabled, windows in paused state');
+    }, 2000);
+  }, []);
+
+  const restoreWorkspace = useCallback((workspace: Workspace) => {
+    const restoreKey = buildWorkspaceRestoreKey(workspace);
+    if (restoredWorkspaceKeyRef.current === restoreKey) {
+      return;
+    }
+
+    restoredWorkspaceKeyRef.current = restoreKey;
+
+    console.log(
+      `[useWorkspaceRestore] Restoring workspace with ${workspace.windows.length} windows, ${workspace.groups?.length || 0} groups`,
+    );
+
     setAutoSaveEnabled(false);
-
-    // 先清空现有窗口和组，避免重复
     clearWindows();
 
-    // 将所有窗口添加到 store（窗口已经包含正确的 layout 结构）
     for (const window of workspace.windows) {
       addWindow(window);
     }
 
-    // 恢复窗口组
     if (workspace.groups && workspace.groups.length > 0) {
       for (const group of workspace.groups) {
         addGroup(group);
@@ -42,30 +72,64 @@ export const useWorkspaceRestore = () => {
     }
 
     console.log(`[useWorkspaceRestore] Restored ${workspace.windows.length} windows`);
+    scheduleAutoSaveEnable();
+  }, [addGroup, addWindow, clearWindows, scheduleAutoSaveEnable]);
 
-    // 延迟启用自动保存，确保所有窗口都已添加完成
-    // 使用更长的延迟（2秒）确保恢复过程完全完成
-    setTimeout(() => {
-      setAutoSaveEnabled(true);
-      console.log('[useWorkspaceRestore] Auto-save enabled, windows in paused state');
-    }, 2000);
-  }, [addWindow, addGroup, clearWindows]);
-
-  /**
-   * 订阅 IPC 事件
-   */
   useEffect(() => {
     if (!window.electronAPI) {
       console.warn('[useWorkspaceRestore] electronAPI not available');
       return;
     }
 
-    // 监听工作区加载事件
+    let cancelled = false;
+
+    const handleWorkspaceLoaded = (_event: unknown, workspace: Workspace) => {
+      if (!isWorkspacePayload(workspace)) {
+        console.error('[useWorkspaceRestore] Ignoring invalid workspace-loaded payload');
+        return;
+      }
+
+      restoreWorkspace(workspace);
+    };
+
+    setAutoSaveEnabled(false);
     window.electronAPI.onWorkspaceLoaded(handleWorkspaceLoaded);
 
-    // 清理事件监听器
+    const restoreInitialWorkspace = async () => {
+      try {
+        const response = await window.electronAPI.loadWorkspace();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.success || !isWorkspacePayload(response.data)) {
+          console.error('[useWorkspaceRestore] Failed to load workspace:', response.error);
+          scheduleAutoSaveEnable();
+          return;
+        }
+
+        restoreWorkspace(response.data);
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[useWorkspaceRestore] Failed to restore workspace:', error);
+          scheduleAutoSaveEnable();
+        }
+      }
+    };
+
+    void restoreInitialWorkspace();
+
     return () => {
+      cancelled = true;
+
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+
+      setAutoSaveEnabled(true);
       window.electronAPI.offWorkspaceLoaded(handleWorkspaceLoaded);
     };
-  }, [handleWorkspaceLoaded]);
+  }, [restoreWorkspace, scheduleAutoSaveEnable]);
 };

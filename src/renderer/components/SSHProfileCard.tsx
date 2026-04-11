@@ -46,9 +46,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
     [window],
   );
   const isWindowRunning = runtimeStatus === WindowStatus.Running || runtimeStatus === WindowStatus.WaitingForInput;
-  const topBorderColor = runtimeStatus
-    ? getStatusColorValue(runtimeStatus)
-    : 'rgb(59 130 246)';
+  const topBorderColor = getStatusColorValue(runtimeStatus ?? WindowStatus.Paused);
   const statusTooltip = useMemo(() => {
     if (!runtimeStatus) {
       return null;

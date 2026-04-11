@@ -192,7 +192,29 @@ Object.defineProperty(window, 'electronAPI', {
     statusLineConfigure: vi.fn().mockResolvedValue({ success: true }),
     statusLineRemove: vi.fn().mockResolvedValue({ success: true }),
     saveWorkspace: vi.fn().mockResolvedValue({ success: true }),
-    loadWorkspace: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    loadWorkspace: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        version: '1.0',
+        windows: [],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+          ides: [],
+          terminal: {
+            useBundledConptyDll: false,
+            defaultShellProgram: '',
+          },
+          features: {
+            sshEnabled: true,
+          },
+        },
+        lastSavedAt: '2026-04-11T00:00:00.000Z',
+      },
+    }),
     onWorkspaceLoaded: vi.fn(),
     offWorkspaceLoaded: vi.fn(),
     triggerAutoSave: vi.fn(),
@@ -211,7 +233,29 @@ Object.defineProperty(window, 'electronAPI', {
     offWindowRestored: vi.fn(),
     onWorkspaceRestoreError: vi.fn(),
     offWorkspaceRestoreError: vi.fn(),
-    recoverFromBackup: vi.fn().mockResolvedValue({ success: true, data: {} }),
+    recoverFromBackup: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        version: '1.0',
+        windows: [],
+        groups: [],
+        settings: {
+          notificationsEnabled: true,
+          theme: 'dark',
+          autoSave: true,
+          autoSaveInterval: 5,
+          ides: [],
+          terminal: {
+            useBundledConptyDll: false,
+            defaultShellProgram: '',
+          },
+          features: {
+            sshEnabled: true,
+          },
+        },
+        lastSavedAt: '2026-04-11T00:00:00.000Z',
+      },
+    }),
     onCleanupStarted: vi.fn(),
     offCleanupStarted: vi.fn(),
     onCleanupProgress: vi.fn(),

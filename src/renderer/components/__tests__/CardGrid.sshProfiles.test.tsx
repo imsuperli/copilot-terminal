@@ -208,6 +208,19 @@ describe('CardGrid SSH profile cards', () => {
     expect(screen.queryByText(/已被 .* 个窗口使用/)).not.toBeInTheDocument();
   });
 
+  it('uses the paused status color for unbound SSH profile cards', () => {
+    const profile = createSSHProfile();
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+    });
+
+    expect(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' })).toHaveStyle({
+      borderTop: `2px solid ${getStatusColorValue(WindowStatus.Paused)}`,
+    });
+  });
+
   it('binds a standalone SSH runtime window back onto the SSH profile card', async () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();
