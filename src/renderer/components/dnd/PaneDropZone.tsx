@@ -63,6 +63,7 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
   children,
   className = '',
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [hoverPosition, setHoverPosition] = useState<PaneDropPosition | null>(null);
   const [isBrowserDropDragActive, setIsBrowserDropDragActive] = useState(() => getBrowserDropDragActive());
@@ -80,11 +81,12 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
     }
 
     const clientOffset = monitor.getClientOffset();
-    if (!clientOffset || !overlayRef.current) {
+    const boundsElement = containerRef.current;
+    if (!clientOffset || !boundsElement) {
       return;
     }
 
-    const rect = overlayRef.current.getBoundingClientRect();
+    const rect = boundsElement.getBoundingClientRect();
     setHoverPosition(
       calcPaneDropPosition(
         clientOffset.x,
@@ -104,7 +106,8 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
     canDrop: canAcceptItem,
     hover: handleHover,
     drop: (item, monitor) => {
-      if (!overlayRef.current) {
+      const boundsElement = containerRef.current;
+      if (!boundsElement) {
         return;
       }
 
@@ -113,7 +116,7 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
         return;
       }
 
-      const rect = overlayRef.current.getBoundingClientRect();
+      const rect = boundsElement.getBoundingClientRect();
       const position = calcPaneDropPosition(
         clientOffset.x,
         clientOffset.y,
@@ -150,13 +153,13 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
     }
   }, [isOver]);
 
-  drop(overlayRef);
+  drop(containerRef);
 
   const showIndicator = isOver && canDrop && hoverPosition;
   const dropOverlayActive = isBrowserDropDragActive || isBrowserDropItemType(itemType);
 
   return (
-    <div className={`relative h-full w-full ${className}`}>
+    <div ref={containerRef} className={`relative h-full w-full ${className}`}>
       {children}
       <div
         ref={overlayRef}
