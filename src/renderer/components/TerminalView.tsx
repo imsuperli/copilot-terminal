@@ -513,6 +513,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     previewBrowserTool(getEmptyImage(), { captureDraggingState: true });
   }, [previewBrowserTool]);
 
+  const browserToolButtonRef = useCallback((node: HTMLButtonElement | null) => {
+    dragBrowserTool(node);
+  }, [dragBrowserTool]);
+
   const handleBrowserPaneDrop = useCallback((
     item: BrowserDropDragItem,
     result: PaneDropResult,
@@ -1075,7 +1079,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 tabIndex={-1}
                 aria-label={t('terminalView.splitBrowser')}
                 onClick={handleSplitBrowserPane}
-                ref={dragBrowserTool}
+                ref={browserToolButtonRef}
                 className={`flex h-6 w-6 items-center justify-center rounded text-zinc-100 transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-sky-500/20 text-sky-100' : 'cursor-grab hover:bg-zinc-800/80 active:cursor-grabbing'}`}
               >
                 <SplitBrowserIcon />

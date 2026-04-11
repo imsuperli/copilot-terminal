@@ -1,95 +1,74 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import App from '../App';
+import { screen } from '@testing-library/react';
+import { renderApp } from './appTestUtils';
+
+function hasClassToken(container: HTMLElement, token: string) {
+  return Array.from(container.querySelectorAll('*')).some((element) => (
+    typeof element.className === 'string' && element.className.split(/\s+/).includes(token)
+  ));
+}
 
 describe('App - Dark Theme and Design Tokens', () => {
-  it('should apply dark theme background color (#0a0a0a) to main layout', () => {
-    const { container } = render(<App />);
-
-    const layout = container.querySelector('.bg-bg-app');
-    expect(layout).toBeInTheDocument();
+  it('uses the dark custom title bar chrome', async () => {
+    const { container } = await renderApp();
+    const titleBar = container.querySelector('.h-8.bg-zinc-900.border-b.border-zinc-800');
+    expect(titleBar).toHaveClass('flex', 'items-center', 'justify-between');
   });
 
-  it('should apply card background color to toolbar', () => {
-    const { container } = render(<App />);
-
-    const header = container.querySelector('header');
-    expect(header).toHaveClass('bg-bg-card');
+  it('styles the title bar app name with the current text token', async () => {
+    await renderApp();
+    expect(screen.getByText('Copilot-Terminal')).toHaveClass('text-sm', 'text-zinc-300', 'font-medium');
   });
 
-  it('should apply primary text color to app name', () => {
-    render(<App />);
-
-    const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading).toHaveClass('text-text-primary');
+  it('applies background tokens to the split layout shell', async () => {
+    await renderApp();
+    const main = screen.getByRole('main');
+    expect(main).toHaveClass('bg-[rgb(var(--background))]');
+    expect(main.parentElement).toHaveClass('flex', 'h-full', 'bg-[rgb(var(--background))]');
   });
 
-  it('should apply secondary text color to version', () => {
-    render(<App />);
-
-    const version = screen.getByText('v0.1.0');
-    expect(version).toHaveClass('text-text-secondary');
+  it('applies sidebar background and border tokens', async () => {
+    await renderApp();
+    expect(screen.getByRole('complementary')).toHaveClass(
+      'bg-[rgb(var(--sidebar))]',
+      'border-r',
+      'border-[rgb(var(--border))]',
+    );
   });
 
-  it('should apply primary text color to empty state guidance', () => {
-    render(<App />);
-
-    const guidance = screen.getByText('创建你的第一个任务窗口');
-    expect(guidance).toHaveClass('text-text-primary');
+  it('styles section headings with the muted foreground token', async () => {
+    await renderApp();
+    expect(screen.getByRole('heading', { level: 3, name: '状态统计' })).toHaveClass(
+      'text-[rgb(var(--muted-foreground))]',
+      'tracking-wide',
+    );
   });
 
-  it('should apply subtle border to toolbar', () => {
-    const { container } = render(<App />);
-
-    const header = container.querySelector('header');
-    expect(header).toHaveClass('border-b', 'border-border-subtle');
+  it('styles the empty state heading and description with current tokens', async () => {
+    await renderApp();
+    expect(screen.getByRole('heading', { level: 2, name: '欢迎使用 Copilot-Terminal' })).toHaveClass(
+      'text-[rgb(var(--foreground))]',
+      'mb-2',
+    );
+    expect(screen.getByText('创建你的第一个终端窗口开始工作')).toHaveClass(
+      'text-[rgb(var(--muted-foreground))]',
+      'mb-8',
+    );
   });
 
-  it('should use correct spacing for toolbar height (56px / h-14)', () => {
-    const { container } = render(<App />);
-
-    const header = container.querySelector('header');
-    expect(header).toHaveClass('h-14'); // 14 * 4px = 56px
-  });
-
-  it('should use correct spacing for toolbar padding', () => {
-    const { container } = render(<App />);
-
-    const header = container.querySelector('header');
-    expect(header).toHaveClass('px-6'); // Horizontal padding
-  });
-
-  it('should use correct spacing for empty state text margin', () => {
-    render(<App />);
-
-    const guidance = screen.getByText('创建你的第一个任务窗口');
-    expect(guidance).toHaveClass('mb-6'); // Bottom margin
-  });
-
-  it('should apply status-running color to primary button', () => {
-    render(<App />);
-
-    const buttons = screen.getAllByRole('button', { name: '+ 新建窗口' });
-    // Button component uses bg-status-running for primary variant
-    buttons.forEach(button => {
-      expect(button).toHaveClass('bg-status-running');
+  it('styles primary create buttons with the primary color tokens', async () => {
+    await renderApp();
+    const buttons = await screen.findAllByRole('button', { name: '新建终端' });
+    buttons.forEach((button) => {
+      expect(button).toHaveClass('bg-[rgb(var(--primary))]', 'text-[rgb(var(--primary-foreground))]');
     });
   });
 
-  it('should maintain consistent design token usage across components', () => {
-    const { container } = render(<App />);
-
-    // Verify all components use design tokens (not hardcoded colors)
-    const elementsWithBgApp = container.querySelectorAll('.bg-bg-app');
-    expect(elementsWithBgApp.length).toBeGreaterThan(0);
-
-    const elementsWithBgCard = container.querySelectorAll('.bg-bg-card');
-    expect(elementsWithBgCard.length).toBeGreaterThan(0);
-
-    const elementsWithTextPrimary = container.querySelectorAll('.text-text-primary');
-    expect(elementsWithTextPrimary.length).toBeGreaterThan(0);
-
-    const elementsWithTextSecondary = container.querySelectorAll('.text-text-secondary');
-    expect(elementsWithTextSecondary.length).toBeGreaterThan(0);
+  it('keeps the expected design-token classes present across the shell', async () => {
+    const { container } = await renderApp();
+    expect(hasClassToken(container, 'bg-[rgb(var(--background))]')).toBe(true);
+    expect(hasClassToken(container, 'bg-[rgb(var(--sidebar))]')).toBe(true);
+    expect(hasClassToken(container, 'text-[rgb(var(--foreground))]')).toBe(true);
+    expect(hasClassToken(container, 'text-[rgb(var(--muted-foreground))]')).toBe(true);
   });
 });

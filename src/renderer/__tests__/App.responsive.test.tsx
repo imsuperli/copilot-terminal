@@ -1,85 +1,70 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import App from '../App';
+import { screen } from '@testing-library/react';
+import { renderApp, setViewport } from './appTestUtils';
+
+async function renderAppAtSize(width: number, height: number) {
+  setViewport(width, height);
+  return renderApp();
+}
 
 describe('App - Responsive Layout', () => {
-  it('should maintain layout structure at minimum window size (480x360)', () => {
-    // Simulate minimum window size
-    global.innerWidth = 480;
-    global.innerHeight = 360;
-
-    const { container } = render(<App />);
-
-    // Verify layout structure is maintained
+  it('maintains the shell layout at minimum window size (480x360)', async () => {
+    const { container } = await renderAppAtSize(480, 360);
     const layout = container.querySelector('.h-screen');
-    expect(layout).toBeDefined();
-
-    // Verify toolbar is visible
-    expect(screen.getByText('ausome-terminal')).toBeInTheDocument();
-
-    // Verify empty state is visible
-    expect(screen.getByText('创建你的第一个任务窗口')).toBeInTheDocument();
+    expect(layout).toBeInTheDocument();
+    expect(screen.getByText('Copilot-Terminal')).toBeInTheDocument();
+    expect(screen.getByRole('complementary')).toHaveClass('w-64');
+    expect(screen.getByRole('heading', { level: 2, name: '欢迎使用 Copilot-Terminal' })).toBeInTheDocument();
   });
 
-  it('should maintain layout structure at standard window size (1024x768)', () => {
-    global.innerWidth = 1024;
-    global.innerHeight = 768;
-
-    const { container } = render(<App />);
-
+  it('maintains the shell layout at standard window size (1024x768)', async () => {
+    const { container } = await renderAppAtSize(1024, 768);
     const layout = container.querySelector('.h-screen');
-    expect(layout).toBeDefined();
-
-    expect(screen.getByText('ausome-terminal')).toBeInTheDocument();
-    expect(screen.getByText('创建你的第一个任务窗口')).toBeInTheDocument();
+    expect(layout).toBeInTheDocument();
+    expect(screen.getByText('Copilot-Terminal')).toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveClass('flex-1', 'overflow-auto');
+    expect(screen.getByRole('heading', { level: 2, name: '欢迎使用 Copilot-Terminal' })).toBeInTheDocument();
   });
 
-  it('should maintain layout structure at large window size (1920x1080)', () => {
-    global.innerWidth = 1920;
-    global.innerHeight = 1080;
-
-    const { container } = render(<App />);
-
+  it('maintains the shell layout at large window size (1920x1080)', async () => {
+    const { container } = await renderAppAtSize(1920, 1080);
     const layout = container.querySelector('.h-screen');
-    expect(layout).toBeDefined();
-
-    expect(screen.getByText('ausome-terminal')).toBeInTheDocument();
-    expect(screen.getByText('创建你的第一个任务窗口')).toBeInTheDocument();
+    expect(layout).toBeInTheDocument();
+    expect(screen.getByText('Copilot-Terminal')).toBeInTheDocument();
+    expect(screen.getByRole('complementary')).toHaveClass('flex', 'flex-col');
+    expect(screen.getByRole('heading', { level: 2, name: '欢迎使用 Copilot-Terminal' })).toBeInTheDocument();
   });
 
-  it('should have toolbar with fixed height at all sizes', () => {
-    const { container } = render(<App />);
-
-    const header = container.querySelector('header');
-    expect(header).toHaveClass('h-14'); // 56px fixed height
+  it('keeps the custom title bar at a fixed height', async () => {
+    const { container } = await renderApp();
+    const titleBar = container.querySelector('.h-8.bg-zinc-900.border-b.border-zinc-800');
+    expect(titleBar).toHaveClass('h-8');
   });
 
-  it('should have main content area that fills remaining space', () => {
-    const { container } = render(<App />);
-
-    const main = container.querySelector('main');
-    expect(main).toHaveClass('flex-1'); // Fills remaining space
-    expect(main).toHaveClass('overflow-auto'); // Allows scrolling if needed
+  it('keeps the content wrapper filling the remaining height', async () => {
+    const { container } = await renderApp();
+    const contentWrapper = container.querySelector('.flex-1.overflow-hidden');
+    expect(contentWrapper).toHaveClass('flex-1', 'overflow-hidden');
   });
 
-  it('should center empty state content at all sizes', () => {
-    const { container } = render(<App />);
-
-    const emptyStateContainer = screen.getByText('创建你的第一个任务窗口').parentElement;
+  it('centers the empty state content', async () => {
+    await renderApp();
+    const emptyStateContainer = screen.getByRole('heading', {
+      level: 2,
+      name: '欢迎使用 Copilot-Terminal',
+    }).parentElement;
     expect(emptyStateContainer).toHaveClass('flex', 'flex-col', 'items-center', 'justify-center', 'h-full');
   });
 
-  it('should not have horizontal overflow', () => {
-    const { container } = render(<App />);
-
+  it('does not introduce horizontal scrolling on the root shell', async () => {
+    const { container } = await renderApp();
     const layout = container.querySelector('.h-screen');
     expect(layout).not.toHaveClass('overflow-x-scroll');
   });
 
-  it('should allow vertical scrolling in main content area', () => {
-    const { container } = render(<App />);
-
-    const main = container.querySelector('main');
+  it('allows vertical scrolling in the main content area', async () => {
+    await renderApp();
+    const main = screen.getByRole('main');
     expect(main).toHaveClass('overflow-auto');
   });
 });

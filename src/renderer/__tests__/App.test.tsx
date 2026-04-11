@@ -1,53 +1,51 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import App from '../App';
+import { screen } from '@testing-library/react';
+import { renderApp } from './appTestUtils';
 
 describe('App - Main Window and Basic Layout', () => {
-  it('renders main layout with toolbar and content area', () => {
-    const { container } = render(<App />);
+  it('renders the main shell layout with title bar, sidebar, and content area', async () => {
+    const { container } = await renderApp();
     const mainLayout = container.querySelector('.h-screen');
-    expect(mainLayout).toBeDefined();
+    expect(mainLayout).toBeInTheDocument();
     expect(mainLayout?.className).toContain('flex');
     expect(mainLayout?.className).toContain('flex-col');
-    expect(mainLayout?.className).toContain('bg-bg-app');
+    expect(screen.getByRole('complementary')).toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveClass('flex-1', 'overflow-auto');
   });
 
-  it('displays application name in toolbar', () => {
-    render(<App />);
-    expect(screen.getByText('ausome-terminal')).toBeInTheDocument();
+  it('uses the app version API result for the title bar app name', async () => {
+    vi.mocked(window.electronAPI.getAppVersion).mockResolvedValueOnce({
+      success: true,
+      data: {
+        name: 'Terminal X',
+        version: '9.9.9',
+      },
+    });
+
+    await renderApp('Terminal X');
+    expect(screen.getByText('Terminal X')).toBeInTheDocument();
   });
 
-  it('displays version number in toolbar', () => {
-    render(<App />);
-    expect(screen.getByText('v0.1.0')).toBeInTheDocument();
+  it('renders the current empty state copy', async () => {
+    await renderApp();
+    expect(
+      await screen.findByRole('heading', { level: 2, name: '欢迎使用 Copilot-Terminal' }),
+    ).toHaveClass('text-2xl', 'font-semibold', 'text-[rgb(var(--foreground))]', 'mb-2');
+    expect(screen.getByText('创建你的第一个终端窗口开始工作')).toBeInTheDocument();
   });
 
-  it('renders empty state with guidance message', () => {
-    render(<App />);
-    expect(screen.getByText('创建你的第一个任务窗口')).toBeInTheDocument();
+  it('renders the primary create actions in the unified view', async () => {
+    await renderApp();
+    expect(await screen.findAllByRole('button', { name: '新建终端' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '批量添加' })).toBeInTheDocument();
   });
 
-  it('renders create window button', () => {
-    render(<App />);
-    const buttons = screen.getAllByRole('button', { name: /新建窗口/i });
-    expect(buttons.length).toBeGreaterThan(0);
-  });
-
-  it('logs to console when create window button is clicked', () => {
-    const consoleSpy = vi.spyOn(console, 'log');
-    render(<App />);
-
-    const buttons = screen.getAllByRole('button', { name: /新建窗口/i });
-    buttons[0].click();
-
-    // Note: This test may need to be updated based on actual implementation
-    // The button now opens a dialog instead of logging
-    consoleSpy.mockRestore();
-  });
-
-  it('applies dark theme background color', () => {
-    const { container } = render(<App />);
-    const mainLayout = container.querySelector('.bg-bg-app');
-    expect(mainLayout).toBeDefined();
+  it('renders the current sidebar navigation tabs', async () => {
+    await renderApp();
+    expect(screen.getByRole('button', { name: '工作区' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '本地终端' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '远程终端' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '归档终端' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '全部终端' })).toBeInTheDocument();
   });
 });
