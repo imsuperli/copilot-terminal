@@ -23,12 +23,41 @@ const BLANK_PAGE_THEME_CSS = `
   }
 `;
 
+let browserWebviewParkingLot: HTMLDivElement | null = null;
+
 function getBrowserPaneUrl(pane: Pane): string {
   return sanitizeBrowserUrl(pane.browser?.url || DEFAULT_BROWSER_URL);
 }
 
+function ensureBrowserWebviewParkingLot(): HTMLDivElement | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  if (browserWebviewParkingLot && document.body.contains(browserWebviewParkingLot)) {
+    return browserWebviewParkingLot;
+  }
+
+  const parkingLot = document.createElement('div');
+  parkingLot.dataset.browserWebviewParkingLot = 'true';
+  Object.assign(parkingLot.style, {
+    position: 'fixed',
+    left: '-10000px',
+    top: '-10000px',
+    width: '1px',
+    height: '1px',
+    overflow: 'hidden',
+    opacity: '0',
+    pointerEvents: 'none',
+  });
+  document.body.appendChild(parkingLot);
+  browserWebviewParkingLot = parkingLot;
+  return parkingLot;
+}
+
 export function __resetBrowserPaneWebviewCacheForTests(): void {
-  // BrowserPane no longer reuses guest instances across remounts.
+  browserWebviewParkingLot?.remove();
+  browserWebviewParkingLot = null;
 }
 
 export interface BrowserPaneProps {
@@ -337,34 +366,33 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     syncNavigationState();
   }, [isWebviewReady, persistedUrl, syncNavigationState]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const webview = webviewRef.current;
     const host = webviewHostRef.current;
 
-    if (host) {
-      host.style.pointerEvents = isBrowserDropDragActive ? 'none' : 'auto';
-    }
-
-    if (webview) {
-      webview.style.pointerEvents = isBrowserDropDragActive ? 'none' : 'auto';
+    if (!webview || !host) {
+      return;
     }
 
     if (isBrowserDropDragActive) {
-      logBrowserDnd('webview pointer-events disabled', {
+      const parkingLot = ensureBrowserWebviewParkingLot();
+      if (parkingLot && webview.parentElement !== parkingLot) {
+        parkingLot.appendChild(webview);
+        logBrowserDnd('webview parked for drag', {
+          windowId,
+          paneId: pane.id,
+        });
+      }
+      return;
+    }
+
+    if (webview.parentElement !== host) {
+      host.replaceChildren(webview);
+      logBrowserDnd('webview restored after drag', {
         windowId,
         paneId: pane.id,
       });
     }
-
-    return () => {
-      if (host) {
-        host.style.pointerEvents = 'auto';
-      }
-
-      if (webview) {
-        webview.style.pointerEvents = 'auto';
-      }
-    };
   }, [isBrowserDropDragActive, pane.id, windowId]);
 
   const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
