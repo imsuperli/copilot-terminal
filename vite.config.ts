@@ -7,6 +7,7 @@ import { readFileSync } from 'fs';
 const pkg = JSON.parse(
   readFileSync(path.join(__dirname, 'package.json'), 'utf-8')
 );
+const rendererMinify = process.env.VITE_RENDERER_MINIFY === 'false' ? false : 'esbuild';
 
 export default defineConfig({
   plugins: [react()],
@@ -26,8 +27,8 @@ export default defineConfig({
   build: {
     outDir: path.join(__dirname, 'dist/renderer'),
     emptyOutDir: true,
-    // 禁用代码压缩以避免 xterm.js 出现运行时错误
-    minify: false,
+    // 默认恢复 esbuild 压缩；如需排查历史 xterm 兼容问题，可临时关闭。
+    minify: rendererMinify,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'src/renderer/index.html'),
