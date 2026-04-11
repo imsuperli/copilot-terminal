@@ -43,6 +43,10 @@ const SSH_SFTP_PANEL_WIDTH_STORAGE_KEY = 'ssh-sftp-panel-width';
 const SSH_SFTP_PANEL_DEFAULT_WIDTH = 288;
 const SSH_SFTP_PANEL_MIN_WIDTH = 240;
 const SSH_SFTP_PANEL_MAX_WIDTH = 520;
+const TERMUX_HOME_PREFIXES = [
+  '/data/data/com.termux/files/home',
+  '/data/user/0/com.termux/files/home',
+];
 export function SSHSftpDialog({
   open,
   onOpenChange,
@@ -1121,7 +1125,18 @@ function normalizeSftpTargetPath(value: string | null | undefined): string | und
     return undefined;
   }
 
-  return trimmed.replace(/\\/g, '/');
+  const normalized = trimmed.replace(/\\/g, '/');
+  for (const prefix of TERMUX_HOME_PREFIXES) {
+    if (normalized === prefix) {
+      return '~';
+    }
+
+    if (normalized.startsWith(`${prefix}/`)) {
+      return `~/${normalized.slice(prefix.length + 1)}`;
+    }
+  }
+
+  return normalized;
 }
 
 function shouldFallbackToHomeDirectory(message: string): boolean {
