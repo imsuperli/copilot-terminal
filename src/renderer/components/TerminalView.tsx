@@ -190,23 +190,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [sshMetricsOpen, setSSHMetricsOpen] = useState(false);
 
   // Store
-  const {
-    addWindow,
-    removeWindow,
-    splitPaneInWindow,
-    placePaneInWindow,
-    movePaneInWindow,
-    closePaneInWindow,
-    setActivePane,
-    archiveWindow,
-    updatePane,
-    pauseWindowState,
-    addGroup,
-    setActiveGroup,
-    findGroupByWindowId,
-    addWindowToGroupLayout,
-    removeWindowFromGroupLayout,
-  } = useWindowStore();
+  const addWindow = useWindowStore((state) => state.addWindow);
+  const removeWindow = useWindowStore((state) => state.removeWindow);
+  const splitPaneInWindow = useWindowStore((state) => state.splitPaneInWindow);
+  const placePaneInWindow = useWindowStore((state) => state.placePaneInWindow);
+  const movePaneInWindow = useWindowStore((state) => state.movePaneInWindow);
+  const closePaneInWindow = useWindowStore((state) => state.closePaneInWindow);
+  const setActivePane = useWindowStore((state) => state.setActivePane);
+  const archiveWindow = useWindowStore((state) => state.archiveWindow);
+  const updatePane = useWindowStore((state) => state.updatePane);
+  const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
+  const addGroup = useWindowStore((state) => state.addGroup);
+  const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
+  const findGroupByWindowId = useWindowStore((state) => state.findGroupByWindowId);
+  const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
+  const removeWindowFromGroupLayout = useWindowStore((state) => state.removeWindowFromGroupLayout);
   const windows = useWindowStore((state) => state.windows);
 
   const destroyRemoteWindows = useCallback(

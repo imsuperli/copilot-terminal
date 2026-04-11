@@ -9,9 +9,8 @@ import { startWindowPanes } from '../utils/paneSessionActions';
  * 统一处理窗口切换逻辑：如果窗口是暂停状态，先切换到终端视图，再在后台启动窗格
  */
 export function useWindowSwitcher(onSwitchView: (windowId: string) => void | Promise<void>) {
-  const { getWindowById, updatePane, setActiveWindow } = useWindowStore();
-
   const switchToWindow = useCallback(async (windowId: string) => {
+    const { getWindowById, updatePane, setActiveWindow } = useWindowStore.getState();
     const win = getWindowById(windowId);
     if (!win) {
       console.error('Window not found:', windowId);
@@ -48,7 +47,7 @@ export function useWindowSwitcher(onSwitchView: (windowId: string) => void | Pro
     // 切换到终端视图
     setActiveWindow(win.id);
     void onSwitchView(win.id);
-  }, [getWindowById, updatePane, setActiveWindow, onSwitchView]);
+  }, [onSwitchView]);
 
   return { switchToWindow };
 }

@@ -15,6 +15,7 @@ import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import type { WindowGroup } from '../../shared/types/window-group';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { SidebarToggleIcon } from './icons/SidebarToggleIcon';
+import { getPersistableWindows } from '../utils/sshWindowBindings';
 
 interface SidebarProps {
   activeWindowId: string | null;
@@ -56,28 +57,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSSHProfileSaved,
 }) => {
   const { t } = useI18n();
-  const {
-    sidebarExpanded,
-    sidebarWidth,
-    toggleSidebar,
-    setSidebarWidth,
-    getActiveWindows,
-    getArchivedWindows,
-    getActiveGroups,
-    getArchivedGroups,
-    windows,
-    terminalSidebarFilter,
-    setTerminalSidebarFilter,
-  } = useWindowStore();
+  const sidebarExpanded = useWindowStore((state) => state.sidebarExpanded);
+  const sidebarWidth = useWindowStore((state) => state.sidebarWidth);
+  const toggleSidebar = useWindowStore((state) => state.toggleSidebar);
+  const setSidebarWidth = useWindowStore((state) => state.setSidebarWidth);
+  const windows = useWindowStore((state) => state.windows);
+  const groups = useWindowStore((state) => state.groups);
+  const terminalSidebarFilter = useWindowStore((state) => state.terminalSidebarFilter);
+  const setTerminalSidebarFilter = useWindowStore((state) => state.setTerminalSidebarFilter);
 
   const [isResizing, setIsResizing] = useState(false);
   const [isCreateWindowDialogOpen, setIsCreateWindowDialogOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  const activeWindows = getActiveWindows();
-  const archivedWindows = getArchivedWindows();
-  const activeGroups = getActiveGroups();
-  const archivedGroups = getArchivedGroups();
+  const activeWindows = useMemo(
+    () => getPersistableWindows(windows).filter((window) => !window.archived),
+    [windows],
+  );
+  const archivedWindows = useMemo(
+    () => getPersistableWindows(windows).filter((window) => window.archived),
+    [windows],
+  );
+  const activeGroups = useMemo(
+    () => groups.filter((group) => !group.archived),
+    [groups],
+  );
+  const archivedGroups = useMemo(
+    () => groups.filter((group) => group.archived),
+    [groups],
+  );
 
   const activeGroupedWindowIds = useMemo(
     () => new Set(activeGroups.flatMap((group) => getAllWindowIds(group.layout))),
@@ -439,7 +447,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   isExpanded,
   onClick,
 }) => {
-  const { windows } = useWindowStore();
+  const windows = useWindowStore((state) => state.windows);
   const windowCount = getWindowCount(group.layout);
   const aggregatedStatus = getGroupStatus(group, windows);
   const bgColor = 'bg-zinc-800 hover:bg-zinc-700';

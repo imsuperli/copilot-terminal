@@ -40,21 +40,22 @@ export const GroupView: React.FC<GroupViewProps> = ({
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
 
-  const {
-    windows,
-    toggleSidebar,
-    getActiveWindows,
-    setActiveWindowInGroup,
-    archiveGroup,
-    getWindowsInGroup,
-    addWindowToGroupLayout,
-    removeWindowFromGroupLayout,
-    rearrangeWindowInGroupLayout,
-    findGroupByWindowId,
-  } = useWindowStore();
+  const windows = useWindowStore((state) => state.windows);
+  const setActiveWindowInGroup = useWindowStore((state) => state.setActiveWindowInGroup);
+  const archiveGroup = useWindowStore((state) => state.archiveGroup);
+  const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
+  const removeWindowFromGroupLayout = useWindowStore((state) => state.removeWindowFromGroupLayout);
+  const rearrangeWindowInGroupLayout = useWindowStore((state) => state.rearrangeWindowInGroupLayout);
+  const findGroupByWindowId = useWindowStore((state) => state.findGroupByWindowId);
 
-  const activeWindows = getActiveWindows();
-  const groupWindows = useMemo(() => getWindowsInGroup(group.id), [group.id, windows]);
+  const groupWindowIdSet = useMemo(
+    () => new Set(getAllWindowIds(group.layout)),
+    [group.layout],
+  );
+  const groupWindows = useMemo(
+    () => windows.filter((window) => groupWindowIdSet.has(window.id)),
+    [groupWindowIdSet, windows],
+  );
   const windowCount = getWindowCount(group.layout);
 
   // 自动启动组内所有暂停的窗口
