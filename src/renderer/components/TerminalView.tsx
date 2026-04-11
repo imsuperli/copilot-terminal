@@ -192,9 +192,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local',
     [windowKind],
   );
+  const showRemoteWindowTabs = useMemo(
+    () => !embedded && isStandaloneSshWindow,
+    [embedded, isStandaloneSshWindow],
+  );
   const showToolbarWindowIdentity = useMemo(
-    () => Boolean(activePane && isBrowserPane(activePane)),
-    [activePane],
+    () => Boolean(activePane && isBrowserPane(activePane) && !showRemoteWindowTabs),
+    [activePane, showRemoteWindowTabs],
   );
 
   // 鍒囨崲闈㈡澘鐘舵€?
@@ -897,7 +901,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 </span>
               </div>
             )}
-            {!embedded && isStandaloneSshWindow && (
+            {showRemoteWindowTabs && (
               <RemoteWindowTabs
                 windows={windows}
                 activeWindowId={terminalWindow.id}

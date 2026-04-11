@@ -304,7 +304,7 @@ describe('TerminalView', () => {
   it('shows the window identity logo when the active pane is a browser pane', () => {
     render(
       <TerminalView
-        window={createBrowserOnlyWindow('ssh')}
+        window={createBrowserOnlyWindow('local')}
         onReturn={vi.fn()}
         onWindowSwitch={vi.fn()}
         isActive

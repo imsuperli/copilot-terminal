@@ -242,6 +242,62 @@ function createLocalWindowWithBrowserSibling(): Window {
   };
 }
 
+function createSSHWindowWithBrowserSibling(options: {
+  activeBrowser?: boolean;
+} = {}): Window {
+  return {
+    id: 'win-ssh-browser-1',
+    name: 'Prod SSH',
+    activePaneId: options.activeBrowser ? 'browser-1' : 'pane-ssh-1',
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    kind: 'ssh',
+    layout: {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        {
+          type: 'pane',
+          id: 'pane-ssh-1',
+          pane: {
+            id: 'pane-ssh-1',
+            cwd: '/srv/app',
+            command: '',
+            status: WindowStatus.Running,
+            pid: 2001,
+            backend: 'ssh',
+            ssh: {
+              profileId: 'profile-1',
+              host: '10.0.0.21',
+              port: 22,
+              user: 'root',
+              authType: 'password',
+              remoteCwd: '/srv/app',
+              reuseSession: true,
+            },
+          },
+        },
+        {
+          type: 'pane',
+          id: 'browser-1',
+          pane: {
+            id: 'browser-1',
+            cwd: '',
+            command: '',
+            kind: 'browser',
+            status: WindowStatus.Paused,
+            pid: null,
+            browser: {
+              url: 'https://example.com',
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
 describe('TerminalView SSH toolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -304,6 +360,32 @@ describe('TerminalView SSH toolbar', () => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(localWindow.id);
     });
     expect(window.electronAPI.closePane).not.toHaveBeenCalled();
+  });
+
+  it('does not render a duplicate identity block when a browser pane is active inside an ssh window', () => {
+    const sshWindow = createSSHWindowWithBrowserSibling({ activeBrowser: true });
+
+    useWindowStore.setState({
+      windows: [sshWindow],
+      activeWindowId: sshWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={sshWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
+    expect(screen.getByText('app')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-window-identity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Prod SSH')).not.toBeInTheDocument();
   });
 
   it('only shows remote tabs for the same owner family and keeps their original order', () => {
