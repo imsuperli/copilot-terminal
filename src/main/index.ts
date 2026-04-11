@@ -23,6 +23,12 @@ import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 import { isTerminalPane } from '../shared/utils/terminalCapabilities';
 import { isAllowedBrowserUrl } from '../shared/utils/browserUrls';
 
+const APP_DISPLAY_NAME = 'Copilot-Terminal';
+const USER_DATA_DIR_NAME = 'copilot-terminal';
+
+app.setName(APP_DISPLAY_NAME);
+app.setPath('userData', path.join(app.getPath('appData'), USER_DATA_DIR_NAME));
+
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let statusPoller: StatusPoller | null = null;

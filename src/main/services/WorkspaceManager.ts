@@ -62,6 +62,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     this.workspacePath = path.join(userDataPath, 'workspace.json');
     this.tempPath = `${this.workspacePath}.tmp`;
     this.backupBasePath = `${this.workspacePath}.backup`;
+    console.log(`[WorkspaceManager] Workspace path: ${this.workspacePath}`);
   }
 
   /**

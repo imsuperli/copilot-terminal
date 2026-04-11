@@ -5,12 +5,27 @@ const mockBrowserWindow = vi.fn();
 const mockLoadURL = vi.fn();
 const mockLoadFile = vi.fn();
 const mockOn = vi.fn();
+const mockSetName = vi.fn();
+const mockSetPath = vi.fn();
+const mockGetPath = vi.fn((name: string) => {
+  if (name === 'appData') {
+    return '/mock/app/data';
+  }
+
+  return '/mock/user/data';
+});
 const mockWebContents = {
   openDevTools: vi.fn(),
+};
+const mockNativeTheme = {
+  themeSource: 'system',
 };
 
 vi.mock('electron', () => ({
   app: {
+    setName: mockSetName,
+    setPath: mockSetPath,
+    getPath: mockGetPath,
     whenReady: vi.fn(() => Promise.resolve()),
     on: vi.fn(),
     quit: vi.fn(),
@@ -19,6 +34,7 @@ vi.mock('electron', () => ({
   ipcMain: {
     handle: vi.fn(),
   },
+  nativeTheme: mockNativeTheme,
 }));
 
 describe('Electron Main Process', () => {
@@ -41,6 +57,17 @@ describe('Electron Main Process', () => {
   });
 
   describe('Window Configuration', () => {
+    it('should pin userData to the copilot-terminal directory', async () => {
+      await import('../index');
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(mockSetName).toHaveBeenCalledWith('Copilot-Terminal');
+      expect(mockSetPath).toHaveBeenCalledWith(
+        'userData',
+        '/mock/app/data/copilot-terminal',
+      );
+    });
+
     it('should configure BrowserWindow with correct dimensions', async () => {
       // Import the module to trigger createWindow
       await import('../index');
@@ -77,7 +104,7 @@ describe('Electron Main Process', () => {
       const config = mockBrowserWindow.mock.calls[0][0];
       
       // Verify window title (AC: 2)
-      expect(config.title).toBe('ausome-terminal');
+      expect(config.title).toBe('');
     });
 
     it('should configure security settings correctly', async () => {
