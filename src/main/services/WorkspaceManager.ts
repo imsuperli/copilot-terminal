@@ -148,6 +148,12 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       // 检查工作区文件是否存在
       if (await fs.pathExists(this.workspacePath)) {
         const workspace = await fs.readJson(this.workspacePath);
+        const rawVersion = typeof workspace?.version === 'string' ? workspace.version : '<invalid>';
+        const rawWindowCount = Array.isArray(workspace?.windows) ? workspace.windows.length : '<invalid>';
+
+        console.log(
+          `[WorkspaceManager] Loaded raw workspace version=${rawVersion} windows=${rawWindowCount}`,
+        );
 
         // 校验数据格式
         if (this.validateWorkspace(workspace)) {
@@ -155,10 +161,15 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
             ...workspace,
             windows: this.deduplicateWindowsById(workspace.windows, 'load'),
           };
+          const didDeduplicateWindows = normalizedWorkspace.windows.length !== workspace.windows.length;
+
+          console.log(
+            `[WorkspaceManager] Workspace validated as version=${normalizedWorkspace.version} windows=${normalizedWorkspace.windows.length}${didDeduplicateWindows ? ' deduplicated=true' : ''}`,
+          );
 
           // 如果是旧版数据（version 1.0），迁移到新版
           if (normalizedWorkspace.version === '1.0') {
-            console.log('Migrating workspace from version 1.0 to 3.0');
+            console.log('[WorkspaceManager] Branch: migrate 1.0 -> 3.0');
             const migratedWorkspace = this.migrateFrom1To2(normalizedWorkspace);
             const finalWorkspace = this.migrateFrom2To3(migratedWorkspace);
             await this.saveWorkspace(finalWorkspace);
@@ -167,7 +178,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
 
           // 如果是 2.0 版本，迁移到 3.0
           if (normalizedWorkspace.version === '2.0') {
-            console.log('Migrating workspace from version 2.0 to 3.0');
+            console.log('[WorkspaceManager] Branch: migrate 2.0 -> 3.0');
             const migratedWorkspace = this.migrateFrom2To3(normalizedWorkspace);
             await this.saveWorkspace(migratedWorkspace);
             return this.resetPaneStates(migratedWorkspace);
@@ -175,9 +186,14 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
 
           // 3.0 版本：验证组完整性
           const validatedWorkspace = this.validateGroupIntegrity(normalizedWorkspace);
-
           const hydratedWorkspace = this.hydrateWorkspace(validatedWorkspace);
-          if (JSON.stringify(hydratedWorkspace) !== JSON.stringify(workspace)) {
+          const requiresRewrite = JSON.stringify(hydratedWorkspace) !== JSON.stringify(workspace);
+
+          console.log(
+            `[WorkspaceManager] Branch: normalize 3.0 rewrite=${requiresRewrite ? 'yes' : 'no'}`,
+          );
+
+          if (requiresRewrite) {
             await this.saveWorkspace(hydratedWorkspace);
           }
 
@@ -185,14 +201,17 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         }
 
         // 校验失败，尝试从备份恢复
-        console.warn('Workspace validation failed, attempting to restore from backup');
+        console.warn(
+          `[WorkspaceManager] Validation failed for raw workspace version=${rawVersion}, attempting backup restore`,
+        );
         return await this.restoreFromBackup();
       }
 
       // 文件不存在，返回默认工作区
+      console.log('[WorkspaceManager] No workspace file found, using default workspace');
       return this.getDefaultWorkspace();
     } catch (error) {
-      console.error('Failed to load workspace:', error);
+      console.error('[WorkspaceManager] Failed to load workspace:', error);
 
       // 尝试从备份恢复
       return await this.restoreFromBackup();
