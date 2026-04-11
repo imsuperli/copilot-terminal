@@ -499,14 +499,15 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByTestId('ssh-session-status-bar')).not.toBeInTheDocument();
   });
 
-  it('clones a remote tab from its context menu without switching the active view', async () => {
+  it('clones a remote tab from its context menu and switches to the new tab immediately', async () => {
     const user = userEvent.setup();
     const onWindowSwitch = vi.fn();
     const activeWindow = createSSHWindow({
       id: 'win-ssh-2',
       paneId: 'pane-ssh-2',
       name: 'Prod SSH B',
-      remoteCwd: '/srv/worker',
+      cwd: '~/develop/copilot-terminal',
+      remoteCwd: '~',
       ephemeral: true,
       sshTabOwnerWindowId: 'win-ssh-1',
     });
@@ -552,10 +553,10 @@ describe('TerminalView SSH toolbar', () => {
       sourcePaneId: 'pane-ssh-2',
       targetWindowId: expect.any(String),
       targetPaneId: expect.any(String),
-      remoteCwd: '/srv/worker',
+      remoteCwd: '~/develop/copilot-terminal',
       sourceSsh: {
         profileId: 'profile-1',
-        remoteCwd: '/srv/worker',
+        remoteCwd: '~/develop/copilot-terminal',
       },
     }));
 
@@ -564,8 +565,38 @@ describe('TerminalView SSH toolbar', () => {
       ephemeral: true,
       sshTabOwnerWindowId: 'win-ssh-1',
     });
-    expect(onWindowSwitch).not.toHaveBeenCalled();
+    expect(onWindowSwitch).toHaveBeenCalledWith(clonedWindow.id);
     expect(useWindowStore.getState().windows).toHaveLength(3);
+  });
+
+  it('uses the runtime ssh cwd for remote tab labels when configured remote cwd is stale', () => {
+    const sshWindow = createSSHWindow({
+      id: 'win-ssh-runtime-cwd',
+      paneId: 'pane-ssh-runtime-cwd',
+      name: 'Prod SSH Runtime',
+      cwd: '~/develop/copilot-terminal',
+      remoteCwd: '~',
+    });
+
+    useWindowStore.setState({
+      windows: [sshWindow],
+      activeWindowId: sshWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={sshWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    expect(screen.getByText('copilot-terminal')).toBeInTheDocument();
+    expect(screen.queryByText('~')).not.toBeInTheDocument();
   });
 
   it('closes the active remote tab from its context menu and switches to the adjacent tab', async () => {

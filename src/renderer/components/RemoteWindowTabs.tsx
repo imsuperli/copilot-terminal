@@ -41,8 +41,8 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
       const panes = getAllPanes(window.layout);
       const activePane = panes.find((pane) => pane.id === window.activePaneId && isTerminalPane(pane))
         ?? panes.find((pane) => isTerminalPane(pane));
-      const resolvedText = activePane?.ssh?.remoteCwd
-        ?? activePane?.cwd
+      const resolvedText = activePane?.cwd
+        ?? activePane?.ssh?.remoteCwd
         ?? (activePane?.ssh ? `${activePane.ssh.user}@${activePane.ssh.host}` : '');
       const primaryText = getPathLeafLabel(resolvedText) || resolvedText || window.name;
 
