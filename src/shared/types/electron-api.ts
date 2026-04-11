@@ -461,4 +461,5 @@ export interface ElectronAPI {
   windowIsFullScreen: () => Promise<IpcResponse<boolean>>;
   onWindowMaximized: (callback: (isMaximized: boolean) => void) => () => void;
   onWindowFullScreen: (callback: (isFullScreen: boolean) => void) => () => void;
+  onStartupReveal?: (callback: () => void) => () => void;
 }

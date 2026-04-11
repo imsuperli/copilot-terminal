@@ -54,6 +54,8 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
+const STARTUP_MASK_HOLD_MS = 40;
+const STARTUP_MASK_FADE_MS = 140;
 const LazyQuickNavPanel = lazy(async () => ({
   default: (await import('./components/QuickNavPanel')).QuickNavPanel,
 }));
@@ -267,8 +269,13 @@ function AppContent() {
     name: 'Copilot-Terminal',
     version: '1.0.0',
   });
+  const [isStartupMaskVisible, setIsStartupMaskVisible] = useState(true);
+  const [isStartupMaskHiding, setIsStartupMaskHiding] = useState(false);
   const sshPasswordPromptResolverRef = useRef<((password: string | null) => void) | null>(null);
   const appErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startupMaskDismissedRef = useRef(false);
+  const startupMaskHoldTimerRef = useRef<number | null>(null);
+  const startupMaskRemoveTimerRef = useRef<number | null>(null);
 
   // 获取应用版本信息
   useEffect(() => {
@@ -445,6 +452,52 @@ function AppContent() {
 
   // 工作区恢复
   useWorkspaceRestore();
+
+  const beginStartupMaskDismiss = useCallback(() => {
+    if (startupMaskDismissedRef.current) {
+      return;
+    }
+
+    startupMaskDismissedRef.current = true;
+
+    if (startupMaskHoldTimerRef.current) {
+      window.clearTimeout(startupMaskHoldTimerRef.current);
+    }
+
+    if (startupMaskRemoveTimerRef.current) {
+      window.clearTimeout(startupMaskRemoveTimerRef.current);
+    }
+
+    startupMaskHoldTimerRef.current = window.setTimeout(() => {
+      setIsStartupMaskHiding(true);
+      startupMaskRemoveTimerRef.current = window.setTimeout(() => {
+        setIsStartupMaskVisible(false);
+      }, STARTUP_MASK_FADE_MS);
+    }, STARTUP_MASK_HOLD_MS);
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onStartupReveal?.(() => {
+      beginStartupMaskDismiss();
+    });
+
+    const fallbackTimer = window.setTimeout(() => {
+      beginStartupMaskDismiss();
+    }, 320);
+
+    return () => {
+      unsubscribe?.();
+      window.clearTimeout(fallbackTimer);
+
+      if (startupMaskHoldTimerRef.current) {
+        window.clearTimeout(startupMaskHoldTimerRef.current);
+      }
+
+      if (startupMaskRemoveTimerRef.current) {
+        window.clearTimeout(startupMaskRemoveTimerRef.current);
+      }
+    };
+  }, [beginStartupMaskDismiss]);
 
   // 等待首屏至少完成一次绘制，再通知主进程显示窗口，避免使用固定延迟。
   useEffect(() => {
@@ -1169,6 +1222,17 @@ function AppContent() {
         onSubmit={(password) => closeSSHPasswordPrompt(password)}
         onCancel={() => closeSSHPasswordPrompt(null)}
       />
+      {isStartupMaskVisible && (
+        <div
+          className="pointer-events-none fixed inset-0 z-[2000] bg-[rgb(var(--background))] transition-opacity ease-out"
+          style={{
+            opacity: isStartupMaskHiding ? 0 : 1,
+            transitionDuration: `${STARTUP_MASK_FADE_MS}ms`,
+          }}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(39,39,42,0.42),rgba(10,10,10,1)_72%)]" />
+        </div>
+      )}
       </div>
     </div>
   );

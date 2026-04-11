@@ -300,6 +300,11 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on('window-fullscreen', listener);
     return () => ipcRenderer.removeListener('window-fullscreen', listener);
   },
+  onStartupReveal: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on('window-startup-reveal', listener);
+    return () => ipcRenderer.removeListener('window-startup-reveal', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI);
