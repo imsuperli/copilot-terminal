@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen } from 'electron';
 import path from 'path';
 import { ProcessManager } from './services/ProcessManager';
 import { StatusPoller } from './services/StatusPoller';
@@ -85,10 +85,16 @@ function createWindow() {
   const preloadPath = path.join(__dirname, '../preload/index.js');
   const shouldMaximizeOnShow = process.platform !== 'darwin';
   const supportsOpacityReveal = process.platform === 'win32' || process.platform === 'darwin';
+  const startupDisplay = shouldMaximizeOnShow
+    ? screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    : null;
+  const startupWorkArea = startupDisplay?.workArea;
 
   mainWindow = new BrowserWindow({
-    width: 1024,
-    height: 768,
+    width: startupWorkArea?.width ?? 1024,
+    height: startupWorkArea?.height ?? 768,
+    x: startupWorkArea?.x,
+    y: startupWorkArea?.y,
     minWidth: 480,
     minHeight: 360,
     backgroundColor: '#0a0a0a',
@@ -235,17 +241,39 @@ function createWindow() {
 
     let revealed = false;
     const revealAfterMaximize = () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+      }
+
       if (revealed) {
         return;
       }
 
       revealed = true;
+      const wasMaximized = mainWindow.isMaximized();
       revealWindow();
+
+      if (wasMaximized) {
+        mainWindow.webContents.send('window-maximized', true);
+        return;
+      }
+
+      setTimeout(() => {
+        if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized()) {
+          return;
+        }
+
+        mainWindow.maximize();
+      }, 0);
     };
 
     mainWindow.once('maximize', revealAfterMaximize);
     mainWindow.maximize();
-    mainWindow.show();
+
+    if (mainWindow.isMaximized()) {
+      revealAfterMaximize();
+      return;
+    }
 
     startupRevealFallbackTimer = setTimeout(() => {
       revealAfterMaximize();
