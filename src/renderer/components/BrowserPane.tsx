@@ -345,21 +345,9 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   }, [currentUrl]);
 
   const handleRootMouseDownCapture = useCallback(() => {
+    skipNextAutoFocusRef.current = true;
     onActivate();
   }, [onActivate]);
-
-  const handleMouseDownCapture = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest('[data-browser-drag-handle="true"]')) {
-      return;
-    }
-
-    handleRootMouseDownCapture();
-  }, [handleRootMouseDownCapture]);
-
-  const handleDragHandleMouseDown = useCallback(() => {
-    skipNextAutoFocusRef.current = true;
-  }, []);
 
   return (
     <div
@@ -367,13 +355,12 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-zinc-800 bg-zinc-950
       `}
       style={{ opacity: isDragging ? 0.45 : 1 }}
-      onMouseDownCapture={handleMouseDownCapture}
+      onMouseDownCapture={handleRootMouseDownCapture}
     >
       <div className="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
         <div
           data-browser-drag-handle="true"
           ref={dragHandleRef ?? undefined}
-          onMouseDown={handleDragHandleMouseDown}
           className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:cursor-grabbing"
           aria-label={t('browserPane.move')}
           title={t('browserPane.move')}
