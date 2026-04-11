@@ -288,4 +288,31 @@ describe('BrowserPane', () => {
     expect(mouseDownEvent.defaultPrevented).toBe(true);
   });
 
+  it('does not activate on drag-handle mouse down before a drag starts', () => {
+    const onActivate = vi.fn();
+    const { container } = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={createBrowserPane('https://example.com')}
+          isActive={false}
+          onActivate={onActivate}
+        />
+      </I18nProvider>,
+    );
+
+    const dragHandle = container.querySelector('[data-browser-drag-handle="true"]') as HTMLDivElement | null;
+    if (!dragHandle) {
+      throw new Error('expected drag handle');
+    }
+
+    fireEvent.mouseDown(dragHandle);
+
+    expect(onActivate).not.toHaveBeenCalled();
+
+    fireEvent.click(dragHandle);
+
+    expect(onActivate).toHaveBeenCalledTimes(1);
+  });
+
 });
