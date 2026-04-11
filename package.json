@@ -13,7 +13,9 @@
     "build:renderer:typecheck": "tsc -p tsconfig.renderer.json --noEmit",
     "build:statusline": "tsc -p src/statusline/tsconfig.json",
     "pack": "npm run build && electron-builder --dir",
+    "pack:no-rebuild": "npm run build && electron-builder --dir -c.npmRebuild=false",
     "dist": "npm run build && electron-builder",
+    "dist:no-rebuild": "npm run build && electron-builder -c.npmRebuild=false",
     "test": "vitest",
     "prepare": "git config core.hooksPath .githooks"
   },

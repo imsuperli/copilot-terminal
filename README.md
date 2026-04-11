@@ -95,6 +95,12 @@ It provides a unified card view to manage multiple project terminals and an imme
    npm run dist
    ```
 
+   On Windows machines without Visual Studio C++ build tools, you can use:
+
+   ```bash
+   npm run dist:no-rebuild
+   ```
+
 ## Documentation
 
 - [Complete Chinese Documentation](docs/README.zh-CN.md)

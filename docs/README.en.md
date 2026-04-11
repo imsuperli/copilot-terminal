@@ -180,6 +180,12 @@ npm run pack
 npm run dist
 ```
 
+On Windows machines without Visual Studio C++ build tools, you can use:
+
+```bash
+npm run dist:no-rebuild
+```
+
 ## Usage
 
 ### 1. Create a Terminal Window

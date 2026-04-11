@@ -178,6 +178,12 @@ npm run pack
 npm run dist
 ```
 
+如果是在没有安装 Visual Studio C++ Build Tools 的 Windows 机器上本地打包，可以改用：
+
+```bash
+npm run dist:no-rebuild
+```
+
 ## 使用说明
 
 ### 1. 创建终端窗口
