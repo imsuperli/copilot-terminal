@@ -18,6 +18,10 @@ import {
 } from '../../utils/browserDropDragState';
 import { logBrowserDnd } from '../../utils/browserDndDebug';
 import { getActiveBrowserPaneDragItem } from '../../utils/browserPaneDragState';
+import {
+  getBrowserPanePointerDragState,
+  subscribeBrowserPanePointerDrag,
+} from '../../utils/browserPanePointerDragState';
 
 interface PaneDropZoneProps {
   targetWindowId: string;
@@ -71,8 +75,10 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
   const [hoverPosition, setHoverPosition] = useState<PaneDropPosition | null>(null);
   const [isBrowserDropDragActive, setIsBrowserDropDragActive] = useState(() => getBrowserDropDragActive());
   const [isNativeBrowserPaneOver, setIsNativeBrowserPaneOver] = useState(false);
+  const [pointerDragState, setPointerDragState] = useState(() => getBrowserPanePointerDragState());
 
   useEffect(() => subscribeBrowserDropDragActive(setIsBrowserDropDragActive), []);
+  useEffect(() => subscribeBrowserPanePointerDrag(setPointerDragState), []);
 
   useEffect(() => {
     if (!isBrowserDropDragActive) {
@@ -310,11 +316,24 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
   const showIndicator = Boolean(
     hoverPosition && ((isOver && canDrop) || isNativeBrowserPaneOver),
   );
+  const showPointerIndicator = Boolean(
+    pointerDragState.active
+    && pointerDragState.hover?.targetPaneId === targetPaneId
+    && pointerDragState.hover?.targetWindowId === targetWindowId
+    && pointerDragState.item?.paneId !== targetPaneId,
+  );
+  const activeIndicatorPosition = showPointerIndicator
+    ? pointerDragState.hover?.position ?? null
+    : hoverPosition;
   const dropOverlayActive = isBrowserDropDragActive || isBrowserDropItemType(itemType);
 
   return (
     <div
       ref={containerRef}
+      data-pane-drop-zone="true"
+      data-target-window-id={targetWindowId}
+      data-target-pane-id={targetPaneId}
+      data-target-pane-kind={targetPaneKind}
       className={`relative h-full w-full ${className}`}
       onDragEnterCapture={handleNativeDragEnter}
       onDragOverCapture={handleNativeDragOver}
@@ -329,6 +348,10 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
       <div
         ref={overlayRef}
         data-pane-drop-overlay="true"
+        data-pane-drop-zone="true"
+        data-target-window-id={targetWindowId}
+        data-target-pane-id={targetPaneId}
+        data-target-pane-kind={targetPaneKind}
         onDragEnter={handleNativeDragEnter}
         onDragOver={handleNativeDragOver}
         onDragLeave={handleNativeDragLeave}
@@ -336,18 +359,18 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
         className={`absolute inset-0 z-30 ${dropOverlayActive ? 'pointer-events-auto' : 'pointer-events-none'}`}
         style={dropOverlayActive ? { backgroundColor: 'rgba(15, 23, 42, 0.001)' } : undefined}
       >
-        {showIndicator && hoverPosition && (
+        {(showPointerIndicator || showIndicator) && activeIndicatorPosition && (
           <div
             style={{
               position: 'absolute',
-              ...positionStyles[hoverPosition],
-              backgroundColor: hoverPosition === 'center'
+              ...positionStyles[activeIndicatorPosition],
+              backgroundColor: activeIndicatorPosition === 'center'
                 ? 'rgba(14, 165, 233, 0.18)'
                 : 'rgba(39, 39, 42, 0.22)',
-              border: hoverPosition === 'center'
+              border: activeIndicatorPosition === 'center'
                 ? '1px solid rgba(56, 189, 248, 0.55)'
                 : 'none',
-              borderRadius: hoverPosition === 'center' ? '0.75rem' : '0',
+              borderRadius: activeIndicatorPosition === 'center' ? '0.75rem' : '0',
               boxShadow: 'none',
               pointerEvents: 'none',
               zIndex: 20,

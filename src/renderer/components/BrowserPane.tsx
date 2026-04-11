@@ -67,6 +67,8 @@ export interface BrowserPaneProps {
   onActivate: () => void;
   onClose?: () => void;
   dragHandleRef?: ((node: HTMLDivElement | null) => void) | null;
+  onDragHandleMouseDown?: ((event: React.MouseEvent<HTMLDivElement>) => void) | null;
+  consumeDragHandleClick?: (() => boolean) | null;
   isDragging?: boolean;
 }
 
@@ -77,6 +79,8 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   onActivate,
   onClose,
   dragHandleRef,
+  onDragHandleMouseDown,
+  consumeDragHandleClick,
   isDragging = false,
 }) => {
   const { t } = useI18n();
@@ -424,7 +428,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     handleRootMouseDownCapture();
   }, [handleRootMouseDownCapture]);
 
-  const handleDragHandleMouseDown = useCallback(() => {
+  const handleDragHandleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     // Drag activation already happens in the react-dnd source begin callback.
     // Avoid mutating pane active state here so the native dragstart is not interrupted.
     skipNextAutoFocusRef.current = true;
@@ -433,15 +437,24 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       paneId: pane.id,
       isActive,
     });
-  }, [isActive, pane.id, windowId]);
+    onDragHandleMouseDown?.(event);
+  }, [isActive, onDragHandleMouseDown, pane.id, windowId]);
 
   const handleDragHandleClick = useCallback(() => {
+    if (consumeDragHandleClick?.()) {
+      logBrowserDnd('handle click suppressed after pointer drag', {
+        windowId,
+        paneId: pane.id,
+      });
+      return;
+    }
+
     logBrowserDnd('handle click activate', {
       windowId,
       paneId: pane.id,
     });
     onActivate();
-  }, [onActivate, pane.id, windowId]);
+  }, [consumeDragHandleClick, onActivate, pane.id, windowId]);
 
   return (
     <div

@@ -1,6 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useDrag } from 'react-dnd';
-import { getEmptyImage } from 'react-dnd-html5-backend';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { LayoutNode, SplitNode, Pane } from '../types/window';
 import { TerminalPane } from './TerminalPane';
 import { BrowserPane } from './BrowserPane';
@@ -12,6 +10,12 @@ import { DEFAULT_BROWSER_URL } from '../utils/browserPane';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import { logBrowserDnd } from '../utils/browserDndDebug';
 import { setActiveBrowserPaneDragItem } from '../utils/browserPaneDragState';
+import {
+  endBrowserPanePointerDrag,
+  getBrowserPanePointerDragState,
+  startBrowserPanePointerDrag,
+  updateBrowserPanePointerDragHover,
+} from '../utils/browserPanePointerDragState';
 import { DragItemTypes, PaneDropZone } from './dnd';
 import type { BrowserDropDragItem, BrowserPaneDragItem, PaneDropResult } from './dnd';
 
@@ -276,45 +280,190 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
   onActivate,
   onClose,
 }) => {
-  const [{ isDragging }, drag, preview] = useDrag<BrowserPaneDragItem, unknown, { isDragging: boolean }>(() => ({
-    type: DragItemTypes.BROWSER_PANE,
-    item: () => {
-      const dragItem: BrowserPaneDragItem = {
-        type: DragItemTypes.BROWSER_PANE,
+  const movePaneInWindow = useWindowStore((state) => state.movePaneInWindow);
+  const setActivePane = useWindowStore((state) => state.setActivePane);
+  const [isDragging, setIsDragging] = useState(false);
+  const pendingDragItemRef = useRef<BrowserPaneDragItem | null>(null);
+  const dragStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const isPointerDraggingRef = useRef(false);
+  const suppressHandleClickRef = useRef(false);
+  const lastPointerHoverKeyRef = useRef<string | null>(null);
+
+  const cleanupPointerListeners = useCallback(() => {
+    document.removeEventListener('mousemove', handleDocumentMouseMove);
+    document.removeEventListener('mouseup', handleDocumentMouseUp);
+    document.body.style.removeProperty('user-select');
+    document.body.style.removeProperty('cursor');
+  }, []);
+
+  function calcPointerDropPosition(
+    clientX: number,
+    clientY: number,
+    rect: DOMRect,
+  ): PaneDropResult['position'] {
+    const relX = (clientX - rect.left) / rect.width - 0.5;
+    const relY = (clientY - rect.top) / rect.height - 0.5;
+
+    if (Math.abs(relX) > Math.abs(relY)) {
+      return relX < 0 ? 'left' : 'right';
+    }
+
+    return relY < 0 ? 'top' : 'bottom';
+  }
+
+  const resolvePointerHoverTarget = useCallback((clientX: number, clientY: number): PaneDropResult | null => {
+    const activeItem = pendingDragItemRef.current;
+    if (!activeItem) {
+      return null;
+    }
+
+    const elements = document.elementsFromPoint(clientX, clientY);
+    const targetElement = elements.find((element) => (
+      element instanceof HTMLElement
+      && element.dataset.paneDropZone === 'true'
+    )) as HTMLElement | undefined;
+
+    if (!targetElement) {
+      return null;
+    }
+
+    const targetWindowId = targetElement.dataset.targetWindowId;
+    const targetPaneId = targetElement.dataset.targetPaneId;
+    if (!targetWindowId || !targetPaneId || targetWindowId !== windowId || targetPaneId === pane.id) {
+      return null;
+    }
+
+    const rect = targetElement.getBoundingClientRect();
+    return {
+      position: calcPointerDropPosition(clientX, clientY, rect),
+      targetPaneId,
+      targetWindowId,
+    };
+  }, [pane.id, windowId]);
+
+  const finishPointerDrag = useCallback((shouldDrop: boolean) => {
+    cleanupPointerListeners();
+
+    const activeItem = pendingDragItemRef.current;
+    const pointerState = getBrowserPanePointerDragState();
+
+    if (shouldDrop && isPointerDraggingRef.current && activeItem && pointerState.hover) {
+      const { position, targetPaneId } = pointerState.hover;
+      const direction = position === 'left' || position === 'right' ? 'horizontal' : 'vertical';
+      const insertBefore = position === 'left' || position === 'top';
+
+      logBrowserDnd('pointer drop', {
         windowId,
         paneId: pane.id,
-        url: pane.browser?.url ?? DEFAULT_BROWSER_URL,
-      };
+        targetPaneId,
+        position,
+      });
 
-      setActiveBrowserPaneDragItem(dragItem);
+      movePaneInWindow(windowId, pane.id, targetPaneId, direction, insertBefore);
+      setActivePane(windowId, pane.id);
+      suppressHandleClickRef.current = true;
+    } else if (isPointerDraggingRef.current) {
+      logBrowserDnd('pointer drag cancel', {
+        windowId,
+        paneId: pane.id,
+        hover: pointerState.hover,
+      });
+    }
+
+    pendingDragItemRef.current = null;
+    dragStartPointRef.current = null;
+    isPointerDraggingRef.current = false;
+    lastPointerHoverKeyRef.current = null;
+    setIsDragging(false);
+    updateBrowserPanePointerDragHover(null);
+    endBrowserPanePointerDrag();
+    setActiveBrowserPaneDragItem(null);
+    setBrowserDropDragActive(false);
+  }, [cleanupPointerListeners, movePaneInWindow, pane.id, setActivePane, windowId]);
+
+  const handleDocumentMouseMove = useCallback((event: MouseEvent) => {
+    const activeItem = pendingDragItemRef.current;
+    const dragStartPoint = dragStartPointRef.current;
+    if (!activeItem || !dragStartPoint) {
+      return;
+    }
+
+    const distance = Math.hypot(event.clientX - dragStartPoint.x, event.clientY - dragStartPoint.y);
+    if (!isPointerDraggingRef.current && distance < 4) {
+      return;
+    }
+
+    if (!isPointerDraggingRef.current) {
+      isPointerDraggingRef.current = true;
+      setIsDragging(true);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'grabbing';
+      setActiveBrowserPaneDragItem(activeItem);
+      startBrowserPanePointerDrag(activeItem);
       setBrowserDropDragActive(true);
-      logBrowserDnd('react-dnd begin', {
+      logBrowserDnd('pointer drag begin', {
         windowId,
         paneId: pane.id,
-        url: dragItem.url,
-        dragType: dragItem.type,
+        url: activeItem.url,
       });
+    }
 
-      return dragItem;
-    },
-    end: (_item, monitor) => {
-      setActiveBrowserPaneDragItem(null);
-      setBrowserDropDragActive(false);
-      logBrowserDnd('react-dnd end', {
+    const hoverTarget = resolvePointerHoverTarget(event.clientX, event.clientY);
+    const nextHoverKey = hoverTarget
+      ? `${hoverTarget.targetWindowId}:${hoverTarget.targetPaneId}:${hoverTarget.position}`
+      : null;
+    if (lastPointerHoverKeyRef.current !== nextHoverKey) {
+      lastPointerHoverKeyRef.current = nextHoverKey;
+      logBrowserDnd('pointer hover target', {
         windowId,
         paneId: pane.id,
-        didDrop: monitor.didDrop(),
-        dropResult: monitor.getDropResult() ?? null,
+        hover: hoverTarget,
       });
-    },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  }), [windowId, pane.browser?.url, pane.id]);
+    }
+    updateBrowserPanePointerDragHover(hoverTarget);
+  }, [pane.id, resolvePointerHoverTarget, windowId]);
+
+  const handleDocumentMouseUp = useCallback(() => {
+    finishPointerDrag(true);
+  }, [finishPointerDrag]);
+
+  const handleDragHandleMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    pendingDragItemRef.current = {
+      type: DragItemTypes.BROWSER_PANE,
+      windowId,
+      paneId: pane.id,
+      url: pane.browser?.url ?? DEFAULT_BROWSER_URL,
+    };
+    dragStartPointRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+
+    document.addEventListener('mousemove', handleDocumentMouseMove);
+    document.addEventListener('mouseup', handleDocumentMouseUp);
+  }, [handleDocumentMouseMove, handleDocumentMouseUp, pane.browser?.url, pane.id, windowId]);
+
+  const consumeDragHandleClick = useCallback(() => {
+    if (!suppressHandleClickRef.current) {
+      return false;
+    }
+
+    suppressHandleClickRef.current = false;
+    return true;
+  }, []);
 
   useEffect(() => {
-    preview(getEmptyImage(), { captureDraggingState: true });
-  }, [preview]);
+    return () => {
+      finishPointerDrag(false);
+    };
+  }, [finishPointerDrag]);
 
   return (
     <BrowserPane
@@ -323,7 +472,8 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
       isActive={isActive}
       onActivate={onActivate}
       onClose={onClose}
-      dragHandleRef={drag}
+      onDragHandleMouseDown={handleDragHandleMouseDown}
+      consumeDragHandleClick={consumeDragHandleClick}
       isDragging={isDragging}
     />
   );
