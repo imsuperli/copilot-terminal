@@ -84,6 +84,7 @@ function getWindowWorkingDirectory(window: Workspace['windows'][number]): string
 function createWindow() {
   const preloadPath = path.join(__dirname, '../preload/index.js');
   const shouldMaximizeOnShow = process.platform !== 'darwin';
+  const supportsOpacityReveal = process.platform === 'win32' || process.platform === 'darwin';
 
   mainWindow = new BrowserWindow({
     width: 1024,
@@ -167,27 +168,103 @@ function createWindow() {
   // 等待渲染进程明确通知“首屏已可见”后再显示窗口，
   // 避免依赖额外的固定延迟去掩盖首帧抖动。
   let rendererReady = false;
+  let startupRevealTimer: ReturnType<typeof setInterval> | null = null;
+  let startupRevealFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearStartupRevealTimers = () => {
+    if (startupRevealTimer) {
+      clearInterval(startupRevealTimer);
+      startupRevealTimer = null;
+    }
+
+    if (startupRevealFallbackTimer) {
+      clearTimeout(startupRevealFallbackTimer);
+      startupRevealFallbackTimer = null;
+    }
+  };
+
+  const revealWindow = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    clearStartupRevealTimers();
+
+    if (!supportsOpacityReveal) {
+      mainWindow.show();
+      return;
+    }
+
+    let opacity = 0;
+    mainWindow.setOpacity(0);
+
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+
+    startupRevealTimer = setInterval(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        clearStartupRevealTimers();
+        return;
+      }
+
+      opacity = Math.min(1, opacity + 0.2);
+      mainWindow.setOpacity(opacity);
+
+      if (opacity >= 1) {
+        clearStartupRevealTimers();
+      }
+    }, 16);
+  };
+
+  const showWindowWhenReady = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+
+    clearStartupRevealTimers();
+
+    if (!shouldMaximizeOnShow) {
+      revealWindow();
+      return;
+    }
+
+    if (supportsOpacityReveal) {
+      mainWindow.setOpacity(0);
+    }
+
+    let revealed = false;
+    const revealAfterMaximize = () => {
+      if (revealed) {
+        return;
+      }
+
+      revealed = true;
+      revealWindow();
+    };
+
+    mainWindow.once('maximize', revealAfterMaximize);
+    mainWindow.maximize();
+    mainWindow.show();
+
+    startupRevealFallbackTimer = setTimeout(() => {
+      revealAfterMaximize();
+    }, 250);
+  };
 
   ipcMain.once('renderer-ready', () => {
     rendererReady = true;
     if (mainWindow && !mainWindow.isDestroyed()) {
-      console.log('[ELECTRON] Renderer ready, showing window');
-      if (shouldMaximizeOnShow) {
-        mainWindow.maximize();
-      }
-
-      mainWindow.show();
+      console.log('[ELECTRON] Renderer ready, revealing window');
+      showWindowWhenReady();
     }
   });
 
   // 超时保护：如果 5 秒后还没收到 renderer-ready，强制显示窗口
   setTimeout(() => {
     if (!rendererReady && mainWindow && !mainWindow.isDestroyed()) {
-      console.log('[ELECTRON] Renderer ready timeout, forcing window show');
-      if (shouldMaximizeOnShow) {
-        mainWindow.maximize();
-      }
-      mainWindow.show();
+      console.log('[ELECTRON] Renderer ready timeout, forcing window reveal');
+      showWindowWhenReady();
     }
   }, 5000);
 
@@ -230,6 +307,7 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    clearStartupRevealTimers();
     mainWindow = null;
   });
 
