@@ -116,6 +116,7 @@ describe('Electron Main Process', () => {
       // Verify security settings
       expect(config.webPreferences.contextIsolation).toBe(true);
       expect(config.webPreferences.nodeIntegration).toBe(false);
+      expect(config.webPreferences.backgroundThrottling).toBeUndefined();
     });
   });
 
