@@ -16,6 +16,7 @@ import {
   getBrowserDropDragActive,
   subscribeBrowserDropDragActive,
 } from '../../utils/browserDropDragState';
+import { logBrowserDnd } from '../../utils/browserDndDebug';
 
 interface PaneDropZoneProps {
   targetWindowId: string;
@@ -124,6 +125,15 @@ export const PaneDropZone: React.FC<PaneDropZoneProps> = ({
         targetPaneId,
         targetWindowId,
       };
+      logBrowserDnd('drop', {
+        targetWindowId,
+        targetPaneId,
+        targetPaneKind,
+        position,
+        itemType: 'type' in item ? item.type : NativeTypes.URL,
+        sourceWindowId: 'windowId' in item ? item.windowId : undefined,
+        sourcePaneId: 'paneId' in item ? item.paneId : undefined,
+      });
       onDrop(item, result);
       return result;
     },

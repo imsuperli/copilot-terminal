@@ -5,6 +5,7 @@ import { AppTooltip } from './ui/AppTooltip';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { DEFAULT_BROWSER_URL, normalizeBrowserInput } from '../utils/browserPane';
+import { logBrowserDnd } from '../utils/browserDndDebug';
 import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/browserUrls';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
@@ -362,11 +363,20 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     // Drag activation already happens in the react-dnd source begin callback.
     // Avoid mutating pane active state here so the native dragstart is not interrupted.
     skipNextAutoFocusRef.current = true;
-  }, []);
+    logBrowserDnd('handle mousedown', {
+      windowId,
+      paneId: pane.id,
+      isActive,
+    });
+  }, [isActive, pane.id, windowId]);
 
   const handleDragHandleClick = useCallback(() => {
+    logBrowserDnd('handle click activate', {
+      windowId,
+      paneId: pane.id,
+    });
     onActivate();
-  }, [onActivate]);
+  }, [onActivate, pane.id, windowId]);
 
   return (
     <div
@@ -382,6 +392,18 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
           ref={dragHandleRef ?? undefined}
           onMouseDown={handleDragHandleMouseDown}
           onClick={handleDragHandleClick}
+          onDragStart={() => {
+            logBrowserDnd('native dragstart', {
+              windowId,
+              paneId: pane.id,
+            });
+          }}
+          onDragEnd={() => {
+            logBrowserDnd('native dragend', {
+              windowId,
+              paneId: pane.id,
+            });
+          }}
           className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:cursor-grabbing"
           aria-label={t('browserPane.move')}
           title={t('browserPane.move')}

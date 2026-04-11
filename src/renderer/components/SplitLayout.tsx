@@ -10,6 +10,7 @@ import { useWindowStore } from '../stores/windowStore';
 import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
 import { DEFAULT_BROWSER_URL } from '../utils/browserPane';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
+import { logBrowserDnd } from '../utils/browserDndDebug';
 import { DragItemTypes, PaneDropZone } from './dnd';
 import type { BrowserDropDragItem, BrowserPaneDragItem, BrowserToolDragItem, PaneDropResult } from './dnd';
 
@@ -277,8 +278,12 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
   const [{ isDragging }, drag, preview] = useDrag<BrowserPaneDragItem, unknown, { isDragging: boolean }>(() => ({
     type: DragItemTypes.BROWSER_PANE,
     item: () => {
-      onActivate();
       setBrowserDropDragActive(true);
+      logBrowserDnd('react-dnd begin', {
+        windowId,
+        paneId: pane.id,
+        url: pane.browser?.url ?? DEFAULT_BROWSER_URL,
+      });
 
       return {
         type: DragItemTypes.BROWSER_PANE,
@@ -287,13 +292,19 @@ const DraggableBrowserPane: React.FC<DraggableBrowserPaneProps> = ({
         url: pane.browser?.url ?? DEFAULT_BROWSER_URL,
       };
     },
-    end: () => {
+    end: (_item, monitor) => {
       setBrowserDropDragActive(false);
+      logBrowserDnd('react-dnd end', {
+        windowId,
+        paneId: pane.id,
+        didDrop: monitor.didDrop(),
+        dropResult: monitor.getDropResult() ?? null,
+      });
     },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [onActivate, windowId, pane.browser?.url, pane.id]);
+  }), [windowId, pane.browser?.url, pane.id]);
 
   useEffect(() => {
     preview(getEmptyImage(), { captureDraggingState: true });
