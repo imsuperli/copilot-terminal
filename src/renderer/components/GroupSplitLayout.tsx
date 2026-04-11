@@ -112,6 +112,7 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
   onRemoveFromGroup,
   onStopAndRemoveFromGroup,
 }) => {
+  const { t } = useI18n();
   const [sizes, setSizes] = useState<number[]>(splitNode.sizes);
   const [isResizing, setIsResizing] = useState(false);
   const [resizingIndex, setResizingIndex] = useState<number>(-1);
@@ -172,11 +173,13 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
   }, [isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, groupId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
+  const dividerActiveClassName = 'bg-[rgb(var(--primary))] shadow-[0_0_0_1px_rgba(168,170,88,0.28)]';
+  const dividerIdleClassName = 'bg-zinc-500/90 shadow-[0_0_0_1px_rgba(24,24,27,0.65)] group-hover:bg-[rgb(var(--primary))] group-hover:shadow-[0_0_0_1px_rgba(168,170,88,0.28)]';
 
   return (
     <div
       ref={containerRef}
-      className={`flex ${isHorizontal ? 'flex-row' : 'flex-col'} w-full h-full`}
+      className={`flex ${isHorizontal ? 'flex-row' : 'flex-col'} w-full h-full min-h-0 min-w-0 overflow-hidden`}
     >
       {splitNode.children.map((child, index) => (
         <React.Fragment key={child.type === 'window' ? child.id : `split-${index}`}>
@@ -184,7 +187,7 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
             style={{
               [isHorizontal ? 'width' : 'height']: `${(sizes[index] ?? (1 / splitNode.children.length)) * 100}%`,
             }}
-            className="relative h-full w-full"
+            className="relative h-full min-h-0 min-w-0 overflow-hidden"
           >
             <GroupLayoutNodeRenderer
               groupId={groupId}
@@ -205,13 +208,30 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
 
           {index < splitNode.children.length - 1 && (
             <div
+              role="separator"
+              aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
+              aria-label={isHorizontal ? t('splitLayout.resizeVertical') : t('splitLayout.resizeHorizontal')}
               className={`
-                ${isHorizontal ? 'w-1 cursor-col-resize' : 'h-1 cursor-row-resize'}
-                bg-zinc-600 hover:bg-[rgb(var(--primary))] transition-colors flex-shrink-0
-                ${isResizing && resizingIndex === index ? 'bg-[rgb(var(--primary))]' : ''}
+                ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
+                group relative flex-shrink-0 select-none
+                bg-zinc-950/70 hover:bg-[rgb(var(--primary))]/10 transition-colors
               `}
               onMouseDown={handleMouseDown(index)}
-            />
+            >
+              <div
+                className={`
+                  absolute rounded-full transition-all duration-150
+                  ${isHorizontal
+                    ? 'inset-y-0 left-1/2 w-[2px] -translate-x-1/2'
+                    : 'inset-x-0 top-1/2 h-[2px] -translate-y-1/2'
+                  }
+                  ${isResizing && resizingIndex === index
+                    ? `${dividerActiveClassName} ${isHorizontal ? 'w-[3px]' : 'h-[3px]'}`
+                    : dividerIdleClassName
+                  }
+                `}
+              />
+            </div>
           )}
         </React.Fragment>
       ))}
@@ -347,10 +367,12 @@ const GroupWindowPane: React.FC<GroupWindowPaneProps> = ({
         targetWindowId={windowId}
         targetGroupId={groupId}
         onDrop={handleDrop}
-        className="h-full w-full"
+        className="h-full w-full min-h-0 min-w-0"
       >
         <div
-          className={`h-full w-full border ${isActive ? 'border-[rgb(var(--primary))]/50' : 'border-zinc-800'}`}
+          className={`h-full w-full min-h-0 min-w-0 overflow-hidden bg-zinc-900 ${
+            isActive ? 'ring-1 ring-inset ring-[rgb(var(--primary))]/50' : ''
+          }`}
           onMouseDown={onActivate}
         >
           <TerminalView
