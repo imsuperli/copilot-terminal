@@ -5,6 +5,10 @@ import { AppTooltip } from './ui/AppTooltip';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { DEFAULT_BROWSER_URL, normalizeBrowserInput } from '../utils/browserPane';
+import {
+  getBrowserDropDragActive,
+  subscribeBrowserDropDragActive,
+} from '../utils/browserDropDragState';
 import { logBrowserDnd } from '../utils/browserDndDebug';
 import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/browserUrls';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
@@ -52,6 +56,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const webviewHostRef = useRef<HTMLDivElement | null>(null);
   const restoreReadyTimerRef = useRef<number | null>(null);
   const webviewReadyRef = useRef(false);
+  const [isBrowserDropDragActive, setIsBrowserDropDragActive] = useState(() => getBrowserDropDragActive());
   const addressInputRef = useRef<HTMLInputElement>(null);
   const skipNextAutoFocusRef = useRef(false);
   const [inputValue, setInputValue] = useState(() => getBrowserPaneUrl(pane));
@@ -77,6 +82,8 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     webviewReadyRef.current = ready;
     setIsWebviewReady((currentReady) => (currentReady === ready ? currentReady : ready));
   }, []);
+
+  useEffect(() => subscribeBrowserDropDragActive(setIsBrowserDropDragActive), []);
 
   const resetNavigationState = useCallback(() => {
     setCanGoBack(false);
@@ -329,6 +336,36 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
     syncNavigationState();
   }, [isWebviewReady, persistedUrl, syncNavigationState]);
+
+  useEffect(() => {
+    const webview = webviewRef.current;
+    const host = webviewHostRef.current;
+
+    if (host) {
+      host.style.pointerEvents = isBrowserDropDragActive ? 'none' : 'auto';
+    }
+
+    if (webview) {
+      webview.style.pointerEvents = isBrowserDropDragActive ? 'none' : 'auto';
+    }
+
+    if (isBrowserDropDragActive) {
+      logBrowserDnd('webview pointer-events disabled', {
+        windowId,
+        paneId: pane.id,
+      });
+    }
+
+    return () => {
+      if (host) {
+        host.style.pointerEvents = 'auto';
+      }
+
+      if (webview) {
+        webview.style.pointerEvents = 'auto';
+      }
+    };
+  }, [isBrowserDropDragActive, pane.id, windowId]);
 
   const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
