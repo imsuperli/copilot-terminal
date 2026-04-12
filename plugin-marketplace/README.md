@@ -17,14 +17,11 @@
 
 `https://plugin.notta.top/catalog.json`
 
-如果远端不可用，开发环境会回退到当前仓库里的本地 `plugin-marketplace/catalog.json`。
-
 `catalog.json` 里的 `platforms[].downloadUrl` 现在支持相对路径：
 
 - 远端读取时，相对路径会自动解析成相对于远端 `catalog.json` 的 URL
-- 本地 fallback 读取时，相对路径会自动解析成相对于本地 `catalog.json` 的 `file://` 路径
 
-因此，仓库内保留的是插件源码和目录文件；真正对外发布时，建议使用 `release/plugin-marketplace/` 下生成的完整产物。
+应用运行时只依赖远端目录；真正对外发布时，建议使用 `release/plugin-marketplace/` 下生成的完整产物。
 
 ## 是否需要自己准备插件
 
@@ -43,14 +40,11 @@ Java 插件目标是支持 Java 8 及以上项目，但运行 JDTLS 本身仍需
 ## 更新市场内容
 
 1. 在 `plugin-marketplace/plugins/<plugin-id>/` 下准备插件目录
-2. 本地调试或需要本地 fallback 安装包时，运行 `npm run build:plugin-marketplace`
+2. 本地调试插件包时，运行 `npm run build:plugin-marketplace`
 3. 生成可发布的完整插件包时，运行 `npm run build:plugin-marketplace:release`
 4. 上传 `release/plugin-marketplace/packages/*.zip` 和 `release/plugin-marketplace/catalog.json`
 
-说明：
-
-- `npm run build:plugin-marketplace` 会在 `plugin-marketplace/packages/` 生成轻量 zip
-- 这些轻量 zip 默认被忽略，不再提交到仓库
+说明：`npm run build:plugin-marketplace` 会在 `plugin-marketplace/packages/` 生成本地调试用 zip，这些文件默认被忽略，不再提交到仓库。
 
 如果要让发布产物直接写入线上下载地址，可以在生成时设置：
 

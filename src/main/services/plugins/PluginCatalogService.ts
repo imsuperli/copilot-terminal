@@ -1,5 +1,3 @@
-import fs from 'fs-extra';
-import { pathToFileURL } from 'url';
 import type {
   PluginCatalog,
   PluginCatalogEntry,
@@ -8,40 +6,34 @@ import type {
   PluginPlatformOS,
 } from '../../../shared/types/plugin';
 import type { PluginCatalogQuery } from '../../../shared/types/electron-api';
-import { normalizeOptionalString, uniqueStrings, writeJsonFileAtomic } from '../ssh/storeUtils';
+import { normalizeOptionalString, uniqueStrings } from '../ssh/storeUtils';
 
 export interface PluginCatalogServiceOptions {
-  cachePath: string;
   catalogUrl?: string;
-  fallbackCatalogPath?: string;
   fetchImpl?: typeof fetch;
 }
 
 const DEFAULT_OFFICIAL_PLUGIN_CATALOG_URL = 'https://plugin.notta.top/catalog.json';
 
 export class PluginCatalogService {
-  private readonly cachePath: string;
   private readonly catalogUrl: string | null;
-  private readonly fallbackCatalogPath: string | null;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: PluginCatalogServiceOptions) {
-    this.cachePath = options.cachePath;
     this.catalogUrl = normalizeOptionalString(options.catalogUrl ?? process.env.CODE_PLUGIN_CATALOG_URL ?? DEFAULT_OFFICIAL_PLUGIN_CATALOG_URL) ?? null;
-    this.fallbackCatalogPath = normalizeOptionalString(options.fallbackCatalogPath) ?? null;
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
   async list(query: PluginCatalogQuery = {}): Promise<PluginCatalogEntry[]> {
-    const cachedCatalog = await this.readCatalogFile(this.cachePath);
-    if (!query.refresh && cachedCatalog) {
-      return this.filterCatalogEntriesForCurrentPlatform(cachedCatalog.plugins);
+    void query;
+
+    if (!this.catalogUrl) {
+      return [];
     }
 
     try {
       const remoteCatalog = await this.fetchRemoteCatalog();
       if (remoteCatalog) {
-        await writeJsonFileAtomic(this.cachePath, remoteCatalog);
         return this.filterCatalogEntriesForCurrentPlatform(remoteCatalog.plugins);
       }
     } catch (error) {
@@ -51,17 +43,11 @@ export class PluginCatalogService {
           error,
         );
       }
+
+      throw error;
     }
 
-    if (cachedCatalog) {
-      return this.filterCatalogEntriesForCurrentPlatform(cachedCatalog.plugins);
-    }
-
-    const fallbackCatalog = this.fallbackCatalogPath
-      ? await this.readCatalogFile(this.fallbackCatalogPath)
-      : null;
-
-    return this.filterCatalogEntriesForCurrentPlatform(fallbackCatalog?.plugins ?? []);
+    return [];
   }
 
   private async fetchRemoteCatalog(): Promise<PluginCatalog | null> {
@@ -91,17 +77,6 @@ export class PluginCatalogService {
     } finally {
       clearTimeout(timeout);
     }
-  }
-
-  private async readCatalogFile(filePath: string): Promise<PluginCatalog | null> {
-    if (!await fs.pathExists(filePath)) {
-      return null;
-    }
-
-    return resolveCatalogAssetUrls(
-      normalizePluginCatalog(await fs.readJson(filePath)),
-      pathToFileURL(filePath).href,
-    );
   }
 
   private filterCatalogEntriesForCurrentPlatform(entries: readonly PluginCatalogEntry[]): PluginCatalogEntry[] {

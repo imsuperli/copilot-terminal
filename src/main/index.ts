@@ -538,10 +538,7 @@ app.whenReady().then(async () => {
   const pluginRegistryStore = new PluginRegistryStore({
     filePath: path.join(pluginDataPath, 'registry.json'),
   });
-  const pluginCatalogService = new PluginCatalogService({
-    cachePath: path.join(pluginDataPath, 'catalog-cache.json'),
-    fallbackCatalogPath: path.join(process.cwd(), 'plugin-marketplace', 'catalog.json'),
-  });
+  const pluginCatalogService = new PluginCatalogService({});
   const pluginInstallerService = new PluginInstallerService({
     baseDir: pluginDataPath,
     registryStore: pluginRegistryStore,
