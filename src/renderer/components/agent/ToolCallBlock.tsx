@@ -1,4 +1,9 @@
 import React from 'react';
+import type {
+  AgentCommandEvent,
+  AgentCommandOutputEvent,
+  AgentToolResultEvent,
+} from '../../../shared/types/agentTimeline';
 import type { ToolCall } from '../../../shared/types/chat';
 
 function getToolStatusTone(status: ToolCall['status']) {
@@ -17,9 +22,39 @@ function getToolStatusTone(status: ToolCall['status']) {
   }
 }
 
-export function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
+function formatCommandOutput(outputs: AgentCommandOutputEvent[]): string {
+  if (outputs.length === 0) {
+    return '';
+  }
+
+  if (
+    outputs.length === 1
+    && outputs[0]
+    && outputs[0].stream !== 'stderr'
+  ) {
+    return outputs[0].content;
+  }
+
+  return outputs
+    .map((output) => `[${output.stream}]\n${output.content}`)
+    .join('\n\n');
+}
+
+export function ToolCallBlock({
+  toolCall,
+  commandEvent,
+  commandOutputs = [],
+  toolResult,
+}: {
+  toolCall: ToolCall;
+  commandEvent?: AgentCommandEvent;
+  commandOutputs?: AgentCommandOutputEvent[];
+  toolResult?: AgentToolResultEvent;
+}) {
   const shouldAutoExpand = ['pending', 'approved', 'executing', 'error', 'blocked', 'rejected'].includes(toolCall.status);
   const [expanded, setExpanded] = React.useState(shouldAutoExpand);
+  const commandOutput = React.useMemo(() => formatCommandOutput(commandOutputs), [commandOutputs]);
+  const detailContent = commandOutput || toolCall.result || toolResult?.content || '';
 
   React.useEffect(() => {
     if (shouldAutoExpand) {
@@ -43,6 +78,16 @@ export function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {commandEvent?.host && (
+            <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+              {commandEvent.host}
+            </span>
+          )}
+          {typeof commandEvent?.exitCode === 'number' && (
+            <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+              exit {commandEvent.exitCode}
+            </span>
+          )}
           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${getToolStatusTone(toolCall.status)}`}>
             {toolCall.status}
           </span>
@@ -63,11 +108,13 @@ export function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
             </div>
           )}
 
-          {toolCall.result && (
+          {detailContent && (
             <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/80 px-3 py-2.5">
-              <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Result</div>
+              <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                {commandEvent ? 'Output' : 'Result'}
+              </div>
               <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
-                {toolCall.result}
+                {detailContent}
               </pre>
             </div>
           )}

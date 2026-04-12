@@ -1,7 +1,12 @@
 import React from 'react';
 import { Sparkles, TerminalSquare, User2 } from 'lucide-react';
 import type { AgentTaskSnapshot } from '../../../shared/types/agent';
-import type { AgentTimelineEvent } from '../../../shared/types/agentTimeline';
+import type {
+  AgentCommandEvent,
+  AgentCommandOutputEvent,
+  AgentTimelineEvent,
+  AgentToolResultEvent,
+} from '../../../shared/types/agentTimeline';
 import { ApprovalCard } from './ApprovalCard';
 import { CommandOutputBlock } from './CommandOutputBlock';
 import { InteractionPrompt } from './InteractionPrompt';
@@ -43,6 +48,20 @@ function orderTimelineEvents(events: AgentTimelineEvent[]): AgentTimelineEvent[]
     .map(({ event }) => event);
 }
 
+function getToolCallIdFromCommandId(commandId: string): string | null {
+  if (!commandId.startsWith('command-')) {
+    return null;
+  }
+
+  return commandId.slice('command-'.length);
+}
+
+interface HydratedToolCallEvent {
+  commandEvent?: AgentCommandEvent;
+  commandOutputs: AgentCommandOutputEvent[];
+  toolResultEvent?: AgentToolResultEvent;
+}
+
 function EventShell({
   icon,
   title,
@@ -81,6 +100,75 @@ export function AgentTimeline({
   onCancelInteraction: (interactionId: string) => void;
 }) {
   const orderedTimeline = React.useMemo(() => orderTimelineEvents(task.timeline), [task.timeline]);
+  const { hiddenEventIds, hydratedToolCalls } = React.useMemo(() => {
+    const toolCallIds = new Set<string>();
+    const commandEventsByToolCallId = new Map<string, AgentCommandEvent>();
+    const commandOutputsByToolCallId = new Map<string, AgentCommandOutputEvent[]>();
+    const toolResultsByToolCallId = new Map<string, AgentToolResultEvent>();
+    const hiddenIds = new Set<string>();
+    const hydrated = new Map<string, HydratedToolCallEvent>();
+
+    for (const event of orderedTimeline) {
+      if (event.kind === 'tool-call') {
+        toolCallIds.add(event.toolCall.id);
+        hydrated.set(event.id, {
+          commandOutputs: [],
+        });
+      }
+    }
+
+    for (const event of orderedTimeline) {
+      if (event.kind === 'command') {
+        const toolCallId = getToolCallIdFromCommandId(event.commandId);
+        if (toolCallId) {
+          commandEventsByToolCallId.set(toolCallId, event);
+          if (toolCallIds.has(toolCallId)) {
+            hiddenIds.add(event.id);
+          }
+        }
+      }
+
+      if (event.kind === 'command-output') {
+        const toolCallId = getToolCallIdFromCommandId(event.commandId);
+        if (toolCallId) {
+          const outputs = commandOutputsByToolCallId.get(toolCallId) ?? [];
+          outputs.push(event);
+          commandOutputsByToolCallId.set(toolCallId, outputs);
+          if (toolCallIds.has(toolCallId)) {
+            hiddenIds.add(event.id);
+          }
+        }
+      }
+
+      if (event.kind === 'tool-result') {
+        toolResultsByToolCallId.set(event.toolCallId, event);
+        if (toolCallIds.has(event.toolCallId)) {
+          hiddenIds.add(event.id);
+        }
+      }
+    }
+
+    for (const event of orderedTimeline) {
+      if (event.kind !== 'tool-call') {
+        continue;
+      }
+
+      hydrated.set(event.id, {
+        commandEvent: commandEventsByToolCallId.get(event.toolCall.id),
+        commandOutputs: commandOutputsByToolCallId.get(event.toolCall.id) ?? [],
+        toolResultEvent: toolResultsByToolCallId.get(event.toolCall.id),
+      });
+    }
+
+    return {
+      hiddenEventIds: hiddenIds,
+      hydratedToolCalls: hydrated,
+    };
+  }, [orderedTimeline]);
+  const visibleTimeline = React.useMemo(
+    () => orderedTimeline.filter((event) => !hiddenEventIds.has(event.id)),
+    [hiddenEventIds, orderedTimeline],
+  );
 
   const renderEvent = (event: AgentTimelineEvent) => {
     switch (event.kind) {
@@ -108,12 +196,19 @@ export function AgentTimeline({
             </div>
           </EventShell>
         );
-      case 'tool-call':
+      case 'tool-call': {
+        const hydrated = hydratedToolCalls.get(event.id);
         return (
           <EventShell icon={<TerminalSquare size={15} />} title="Tool call">
-            <ToolCallBlock toolCall={event.toolCall} />
+            <ToolCallBlock
+              toolCall={event.toolCall}
+              commandEvent={hydrated?.commandEvent}
+              commandOutputs={hydrated?.commandOutputs}
+              toolResult={hydrated?.toolResultEvent}
+            />
           </EventShell>
         );
+      }
       case 'tool-result':
         return (
           <EventShell icon={<TerminalSquare size={15} />} title="Tool result">
@@ -194,7 +289,7 @@ export function AgentTimeline({
 
   return (
     <div className="space-y-6 pt-4">
-      {orderedTimeline.map((event) => (
+      {visibleTimeline.map((event) => (
         <div key={event.id}>
           {renderEvent(event)}
         </div>

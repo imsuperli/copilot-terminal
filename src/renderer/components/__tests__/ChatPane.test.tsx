@@ -318,7 +318,7 @@ describe('ChatPane', () => {
 
     expect(await screen.findByText('先看一下当前服务状态。')).toBeInTheDocument();
     expect(screen.getAllByText('systemctl status nginx --no-pager').length).toBeGreaterThan(0);
-    expect(screen.getByText('Thinking')).toBeInTheDocument();
+    expect(screen.getByText(/Thinking/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Approve' }));
 
@@ -923,7 +923,7 @@ describe('ChatPane', () => {
       }));
     });
 
-    expect(await screen.findByText('Thinking')).toBeInTheDocument();
+    expect(await screen.findByText(/Thinking/)).toBeInTheDocument();
     expect(screen.getByText('先确定服务是否真的在线。')).toBeInTheDocument();
     expect(screen.getByText('Remote command · 10.0.0.20')).toBeInTheDocument();
     expect(screen.getByText('Active: active (running)')).toBeInTheDocument();

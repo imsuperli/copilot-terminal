@@ -85,6 +85,41 @@ describe('AgentTimeline', () => {
                 result: 'Linux localhost',
               },
             },
+            {
+              id: 'command-tool-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:02.000Z',
+              kind: 'command',
+              status: 'completed',
+              commandId: 'command-tool-1',
+              host: '192.168.3.25',
+              command: 'uname -a',
+              interactive: false,
+              exitCode: 0,
+            },
+            {
+              id: 'command-output-tool-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:03.000Z',
+              kind: 'command-output',
+              status: 'completed',
+              commandId: 'command-tool-1',
+              stream: 'stdout',
+              content: 'Linux localhost',
+            },
+            {
+              id: 'tool-result-tool-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:04.000Z',
+              kind: 'tool-result',
+              status: 'completed',
+              toolCallId: 'tool-1',
+              toolName: 'execute_command',
+              content: 'Linux localhost',
+            },
           ],
         })}
         assistantLabel="codex"
@@ -96,9 +131,13 @@ describe('AgentTimeline', () => {
     );
 
     expect(screen.queryByText('Linux localhost')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remote command · 192.168.3.25')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tool result')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /show/i }));
 
     expect(screen.getByText('Linux localhost')).toBeInTheDocument();
+    expect(screen.getByText('192.168.3.25')).toBeInTheDocument();
+    expect(screen.getByText('exit 0')).toBeInTheDocument();
   });
 });
