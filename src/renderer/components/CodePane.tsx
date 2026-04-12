@@ -232,26 +232,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const markDirty = useCallback((filePath: string, dirty: boolean) => {
+    const nextDirtyPaths = new Set(dirtyPathsRef.current);
+    if (dirty) {
+      nextDirtyPaths.add(filePath);
+    } else {
+      nextDirtyPaths.delete(filePath);
+    }
+    dirtyPathsRef.current = nextDirtyPaths;
+
     setDirtyPaths((currentDirtyPaths) => {
-      const nextDirtyPaths = new Set(currentDirtyPaths);
-      if (dirty) {
-        nextDirtyPaths.add(filePath);
-      } else {
-        nextDirtyPaths.delete(filePath);
-      }
-      return nextDirtyPaths;
+      return new Set(nextDirtyPaths);
     });
   }, []);
 
   const markSaving = useCallback((filePath: string, saving: boolean) => {
+    const nextSavingPaths = new Set(savingPathsRef.current);
+    if (saving) {
+      nextSavingPaths.add(filePath);
+    } else {
+      nextSavingPaths.delete(filePath);
+    }
+    savingPathsRef.current = nextSavingPaths;
+
     setSavingPaths((currentSavingPaths) => {
-      const nextSavingPaths = new Set(currentSavingPaths);
-      if (saving) {
-        nextSavingPaths.add(filePath);
-      } else {
-        nextSavingPaths.delete(filePath);
-      }
-      return nextSavingPaths;
+      return new Set(nextSavingPaths);
     });
   }, []);
 
@@ -872,9 +876,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       mounted = false;
       window.electronAPI.offCodePaneFsChanged(handleFsChanged);
       void window.electronAPI.codePaneUnwatchRoot(pane.id);
-      void flushDirtyFiles();
-      disposeEditors();
-      disposeAllModels();
+      void flushDirtyFiles().finally(() => {
+        disposeEditors();
+        disposeAllModels();
+      });
     };
   }, [disposeAllModels, disposeEditors, flushDirtyFiles, loadDirectory, pane.id, refreshGitStatus, refreshLoadedDirectories, reloadFileFromDisk, rootPath, supportsMonaco, t]);
 
