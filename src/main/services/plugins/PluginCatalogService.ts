@@ -1,4 +1,5 @@
 import fs from 'fs-extra';
+import { pathToFileURL } from 'url';
 import type {
   PluginCatalog,
   PluginCatalogEntry,
@@ -80,7 +81,10 @@ export class PluginCatalogService {
         throw new Error(`Plugin catalog request failed with status ${response.status}`);
       }
 
-      return normalizePluginCatalog(await response.json());
+      return resolveCatalogAssetUrls(
+        normalizePluginCatalog(await response.json()),
+        this.catalogUrl,
+      );
     } finally {
       clearTimeout(timeout);
     }
@@ -91,7 +95,10 @@ export class PluginCatalogService {
       return null;
     }
 
-    return normalizePluginCatalog(await fs.readJson(filePath));
+    return resolveCatalogAssetUrls(
+      normalizePluginCatalog(await fs.readJson(filePath)),
+      pathToFileURL(filePath).href,
+    );
   }
 
   private filterCatalogEntriesForCurrentPlatform(entries: readonly PluginCatalogEntry[]): PluginCatalogEntry[] {
@@ -167,6 +174,10 @@ function normalizePlatformOs(value: unknown): PluginPlatformOS {
     return value;
   }
 
+  if (value === 'android') {
+    return 'linux';
+  }
+
   throw new Error(`Unsupported plugin platform os: ${String(value ?? '')}`);
 }
 
@@ -185,4 +196,19 @@ function requireNonEmptyString(value: unknown, fieldName: string): string {
   }
 
   return normalized;
+}
+
+function resolveCatalogAssetUrls(catalog: PluginCatalog, catalogRef: string): PluginCatalog {
+  const baseUrl = new URL('.', catalogRef);
+
+  return {
+    ...catalog,
+    plugins: catalog.plugins.map((entry) => ({
+      ...entry,
+      platforms: entry.platforms.map((asset) => ({
+        ...asset,
+        downloadUrl: new URL(asset.downloadUrl, baseUrl).href,
+      })),
+    })),
+  };
 }

@@ -65,6 +65,7 @@ export function buildRuntimeEnvironment(
     ...extraEnv,
     COPILOT_TERMINAL_PLUGIN_ID: context.pluginId,
     COPILOT_TERMINAL_PROJECT_ROOT: context.projectRoot,
+    COPILOT_TERMINAL_PLUGIN_SETTINGS: JSON.stringify(context.settings ?? {}),
     COPILOT_TERMINAL_WORKSPACE_STORAGE: context.workspaceStoragePath,
   };
 }

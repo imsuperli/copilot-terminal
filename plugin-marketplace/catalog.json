@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-04-12T11:41:41.277Z",
+  "plugins": [
+    {
+      "id": "official.java-jdtls",
+      "name": "Java (JDTLS)",
+      "publisher": "Copilot Terminal",
+      "latestVersion": "0.1.0",
+      "summary": "Java language support powered by Eclipse JDT Language Server.",
+      "description": "Java language support powered by Eclipse JDT Language Server.",
+      "homepage": "https://github.com/imsuperli/copilot-terminal",
+      "license": "MIT",
+      "categories": [
+        "language"
+      ],
+      "tags": [
+        "java",
+        "jdtls",
+        "lsp"
+      ],
+      "languages": [
+        "java"
+      ],
+      "platforms": [
+        {
+          "os": "darwin",
+          "arch": "x64",
+          "downloadUrl": "packages/official.java-jdtls-0.1.0.zip",
+          "sha256": "dd6262b7be97f03857b30ecb2278f10c2f46da6ad33d7633f80df57664464a87",
+          "size": 2869
+        },
+        {
+          "os": "darwin",
+          "arch": "arm64",
+          "downloadUrl": "packages/official.java-jdtls-0.1.0.zip",
+          "sha256": "dd6262b7be97f03857b30ecb2278f10c2f46da6ad33d7633f80df57664464a87",
+          "size": 2869
+        },
+        {
+          "os": "linux",
+          "arch": "x64",
+          "downloadUrl": "packages/official.java-jdtls-0.1.0.zip",
+          "sha256": "dd6262b7be97f03857b30ecb2278f10c2f46da6ad33d7633f80df57664464a87",
+          "size": 2869
+        },
+        {
+          "os": "linux",
+          "arch": "arm64",
+          "downloadUrl": "packages/official.java-jdtls-0.1.0.zip",
+          "sha256": "dd6262b7be97f03857b30ecb2278f10c2f46da6ad33d7633f80df57664464a87",
+          "size": 2869
+        },
+        {
+          "os": "win32",
+          "arch": "x64",
+          "downloadUrl": "packages/official.java-jdtls-0.1.0.zip",
+          "sha256": "dd6262b7be97f03857b30ecb2278f10c2f46da6ad33d7633f80df57664464a87",
+          "size": 2869
+        },
+        {
+          "os": "win32",
+          "arch": "arm64",
+          "downloadUrl": "packages/official.java-jdtls-0.1.0.zip",
+          "sha256": "dd6262b7be97f03857b30ecb2278f10c2f46da6ad33d7633f80df57664464a87",
+          "size": 2869
+        }
+      ]
+    },
+    {
+      "id": "official.python-pyright",
+      "name": "Python (Pyright)",
+      "publisher": "Copilot Terminal",
+      "latestVersion": "0.1.0",
+      "summary": "Python language support powered by Pyright or BasedPyright.",
+      "description": "Python language support powered by Pyright or BasedPyright.",
+      "homepage": "https://github.com/imsuperli/copilot-terminal",
+      "license": "MIT",
+      "categories": [
+        "language"
+      ],
+      "tags": [
+        "python",
+        "pyright",
+        "lsp"
+      ],
+      "languages": [
+        "python"
+      ],
+      "platforms": [
+        {
+          "os": "darwin",
+          "arch": "x64",
+          "downloadUrl": "packages/official.python-pyright-0.1.0.zip",
+          "sha256": "cf218b79d10de7e834d51550be8aebd79137da584bb0342b2f0719645ac03dfd",
+          "size": 2539
+        },
+        {
+          "os": "darwin",
+          "arch": "arm64",
+          "downloadUrl": "packages/official.python-pyright-0.1.0.zip",
+          "sha256": "cf218b79d10de7e834d51550be8aebd79137da584bb0342b2f0719645ac03dfd",
+          "size": 2539
+        },
+        {
+          "os": "linux",
+          "arch": "x64",
+          "downloadUrl": "packages/official.python-pyright-0.1.0.zip",
+          "sha256": "cf218b79d10de7e834d51550be8aebd79137da584bb0342b2f0719645ac03dfd",
+          "size": 2539
+        },
+        {
+          "os": "linux",
+          "arch": "arm64",
+          "downloadUrl": "packages/official.python-pyright-0.1.0.zip",
+          "sha256": "cf218b79d10de7e834d51550be8aebd79137da584bb0342b2f0719645ac03dfd",
+          "size": 2539
+        },
+        {
+          "os": "win32",
+          "arch": "x64",
+          "downloadUrl": "packages/official.python-pyright-0.1.0.zip",
+          "sha256": "cf218b79d10de7e834d51550be8aebd79137da584bb0342b2f0719645ac03dfd",
+          "size": 2539
+        },
+        {
+          "os": "win32",
+          "arch": "arm64",
+          "downloadUrl": "packages/official.python-pyright-0.1.0.zip",
+          "sha256": "cf218b79d10de7e834d51550be8aebd79137da584bb0342b2f0719645ac03dfd",
+          "size": 2539
+        }
+      ]
+    }
+  ]
+}

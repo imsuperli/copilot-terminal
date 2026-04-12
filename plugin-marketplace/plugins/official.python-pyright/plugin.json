@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "id": "official.python-pyright",
+  "name": "Python (Pyright)",
+  "publisher": "Copilot Terminal",
+  "version": "0.1.0",
+  "description": "Python language support powered by Pyright or BasedPyright.",
+  "homepage": "https://github.com/imsuperli/copilot-terminal",
+  "license": "MIT",
+  "categories": [
+    "language"
+  ],
+  "tags": [
+    "python",
+    "pyright",
+    "lsp"
+  ],
+  "engines": {
+    "app": ">=3.0.0"
+  },
+  "capabilities": [
+    {
+      "type": "language-server",
+      "languages": [
+        "python"
+      ],
+      "fileExtensions": [
+        ".py"
+      ],
+      "projectIndicators": [
+        "pyproject.toml",
+        "requirements.txt",
+        "setup.py",
+        "setup.cfg",
+        "Pipfile",
+        "poetry.lock"
+      ],
+      "priority": 60,
+      "features": {
+        "definition": true,
+        "hover": true,
+        "references": true,
+        "documentSymbol": true,
+        "diagnostics": true
+      },
+      "runtime": {
+        "type": "node",
+        "entry": "bin/pyright-proxy.cjs"
+      },
+      "requirements": [
+        {
+          "type": "binary",
+          "command": "pyright-langserver",
+          "envVar": "PYRIGHT_LANGSERVER_PATH",
+          "message": "Install pyright or basedpyright globally, or set python.command in plugin settings."
+        }
+      ]
+    }
+  ],
+  "settingsSchema": {
+    "python.command": {
+      "type": "string",
+      "title": "Language server command",
+      "description": "Absolute path or command name. Defaults to pyright-langserver / basedpyright-langserver.",
+      "scope": "global",
+      "placeholder": "pyright-langserver"
+    },
+    "python.serverArgs": {
+      "type": "string",
+      "title": "Extra server args",
+      "description": "Optional extra command line arguments passed to the language server process.",
+      "scope": "global",
+      "placeholder": "--verbose"
+    },
+    "python.analysis.typeCheckingMode": {
+      "type": "enum",
+      "title": "Type checking mode",
+      "scope": "workspace",
+      "defaultValue": "basic",
+      "options": [
+        {
+          "label": "off",
+          "value": "off"
+        },
+        {
+          "label": "basic",
+          "value": "basic"
+        },
+        {
+          "label": "standard",
+          "value": "standard"
+        },
+        {
+          "label": "strict",
+          "value": "strict"
+        }
+      ]
+    },
+    "python.analysis.autoImportCompletions": {
+      "type": "boolean",
+      "title": "Auto import completions",
+      "scope": "workspace",
+      "defaultValue": true
+    }
+  }
+}

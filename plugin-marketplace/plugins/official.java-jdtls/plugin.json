@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "id": "official.java-jdtls",
+  "name": "Java (JDTLS)",
+  "publisher": "Copilot Terminal",
+  "version": "0.1.0",
+  "description": "Java language support powered by Eclipse JDT Language Server.",
+  "homepage": "https://github.com/imsuperli/copilot-terminal",
+  "license": "MIT",
+  "categories": [
+    "language"
+  ],
+  "tags": [
+    "java",
+    "jdtls",
+    "lsp"
+  ],
+  "engines": {
+    "app": ">=3.0.0"
+  },
+  "capabilities": [
+    {
+      "type": "language-server",
+      "languages": [
+        "java"
+      ],
+      "fileExtensions": [
+        ".java"
+      ],
+      "projectIndicators": [
+        "pom.xml",
+        "build.gradle",
+        "build.gradle.kts",
+        "settings.gradle",
+        "mvnw",
+        "gradlew",
+        ".project"
+      ],
+      "priority": 60,
+      "features": {
+        "definition": true,
+        "hover": true,
+        "references": true,
+        "documentSymbol": true,
+        "diagnostics": true
+      },
+      "runtime": {
+        "type": "node",
+        "entry": "bin/jdtls-proxy.cjs"
+      },
+      "requirements": [
+        {
+          "type": "java",
+          "version": ">=17",
+          "message": "Install JDK 17+ and ensure java is available."
+        },
+        {
+          "type": "binary",
+          "command": "jdtls",
+          "envVar": "JDTLS_COMMAND",
+          "message": "Install a jdtls wrapper, or set jdtls.command in plugin settings."
+        }
+      ]
+    }
+  ],
+  "settingsSchema": {
+    "jdtls.command": {
+      "type": "string",
+      "title": "Language server command",
+      "description": "Absolute path, command name, or a JDTLS jar path.",
+      "scope": "global",
+      "placeholder": "jdtls"
+    },
+    "jdtls.args": {
+      "type": "string",
+      "title": "Extra server args",
+      "description": "Optional extra command line arguments passed to the JDTLS process.",
+      "scope": "global",
+      "placeholder": "-configuration /path/to/config"
+    },
+    "java.home": {
+      "type": "string",
+      "title": "JAVA_HOME",
+      "description": "Optional JDK home path used when starting the Java runtime.",
+      "scope": "global",
+      "placeholder": "/path/to/jdk"
+    },
+    "java.configuration.updateBuildConfiguration": {
+      "type": "enum",
+      "title": "Update build configuration",
+      "scope": "workspace",
+      "defaultValue": "interactive",
+      "options": [
+        {
+          "label": "disabled",
+          "value": "disabled"
+        },
+        {
+          "label": "interactive",
+          "value": "interactive"
+        },
+        {
+          "label": "automatic",
+          "value": "automatic"
+        }
+      ]
+    },
+    "java.import.maven.enabled": {
+      "type": "boolean",
+      "title": "Enable Maven import",
+      "scope": "workspace",
+      "defaultValue": true
+    },
+    "java.import.gradle.enabled": {
+      "type": "boolean",
+      "title": "Enable Gradle import",
+      "scope": "workspace",
+      "defaultValue": true
+    }
+  }
+}
