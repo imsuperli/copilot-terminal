@@ -18,35 +18,64 @@ function getToolStatusTone(status: ToolCall['status']) {
 }
 
 export function ToolCallBlock({ toolCall }: { toolCall: ToolCall }) {
+  const shouldAutoExpand = ['pending', 'approved', 'executing', 'error', 'blocked', 'rejected'].includes(toolCall.status);
+  const [expanded, setExpanded] = React.useState(shouldAutoExpand);
+
+  React.useEffect(() => {
+    if (shouldAutoExpand) {
+      setExpanded(true);
+    }
+  }, [shouldAutoExpand]);
+
   return (
     <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/70 p-4 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-medium text-zinc-100">{toolCall.name}</div>
-        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${getToolStatusTone(toolCall.status)}`}>
-          {toolCall.status}
-        </span>
-      </div>
-
-      {'command' in toolCall.params && typeof toolCall.params.command === 'string' && (
-        <div className="mt-3">
-          <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Command</div>
-          <pre className="overflow-x-auto rounded-2xl border border-zinc-800/80 bg-[#0d0d10] px-3 py-2.5 font-mono text-[12px] leading-6 text-zinc-100">
-            {toolCall.params.command}
-          </pre>
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
+      >
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-zinc-100">{toolCall.name}</div>
+          {'command' in toolCall.params && typeof toolCall.params.command === 'string' && (
+            <div className="mt-1 truncate font-mono text-xs text-zinc-500">
+              {toolCall.params.command}
+            </div>
+          )}
         </div>
-      )}
-
-      {toolCall.result && (
-        <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/80 px-3 py-2.5">
-          <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Result</div>
-          <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
-            {toolCall.result}
-          </pre>
+        <div className="flex items-center gap-2">
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${getToolStatusTone(toolCall.status)}`}>
+            {toolCall.status}
+          </span>
+          <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+            {expanded ? 'Hide' : 'Show'}
+          </span>
         </div>
-      )}
+      </button>
 
-      {toolCall.reason && (
-        <p className="mt-3 text-xs leading-5 text-zinc-400">{toolCall.reason}</p>
+      {expanded && (
+        <>
+          {'command' in toolCall.params && typeof toolCall.params.command === 'string' && (
+            <div className="mt-3">
+              <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Command</div>
+              <pre className="overflow-x-auto rounded-2xl border border-zinc-800/80 bg-[#0d0d10] px-3 py-2.5 font-mono text-[12px] leading-6 text-zinc-100">
+                {toolCall.params.command}
+              </pre>
+            </div>
+          )}
+
+          {toolCall.result && (
+            <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/80 px-3 py-2.5">
+              <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Result</div>
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
+                {toolCall.result}
+              </pre>
+            </div>
+          )}
+
+          {toolCall.reason && (
+            <p className="mt-3 text-xs leading-5 text-zinc-400">{toolCall.reason}</p>
+          )}
+        </>
       )}
     </div>
   );

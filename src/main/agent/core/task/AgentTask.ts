@@ -91,6 +91,14 @@ async function maybeOffloadContent(
   };
 }
 
+function stripTerminalControlSequences(content: string): string {
+  return content
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, '')
+    .replace(/\r/g, '');
+}
+
 export class AgentTask {
   private readonly snapshot: AgentTaskSnapshot;
   private readonly contextManager: ContextManager;
@@ -575,7 +583,9 @@ export class AgentTask {
       }
 
       if (toolCall.name === 'execute_command' && this.deps.remoteTerminalManager) {
-        result = await this.executeRemoteCommand(toolCall);
+        result = toolCall.params.interactive === true
+          ? await this.executeRemoteCommand(toolCall)
+          : await this.executeSilentRemoteCommand(toolCall);
         if (this.isCancelled) {
           this.markToolCallCancelled(toolCall, 'Task cancelled during remote command execution.');
           return;
@@ -631,6 +641,10 @@ export class AgentTask {
       command,
       callbacks: {
         onOutput: (chunk) => {
+          const sanitized = stripTerminalControlSequences(chunk);
+          if (!sanitized.trim()) {
+            return;
+          }
           this.commandOutputSeq += 1;
           const event: AgentCommandOutputEvent = {
             id: `command-output-${toolCall.id}-${this.commandOutputSeq}`,
@@ -641,7 +655,7 @@ export class AgentTask {
             status: 'completed',
             commandId: commandEventId,
             stream: 'pty',
-            content: chunk,
+            content: sanitized,
           };
           this.appendEvent(event);
         },
@@ -660,26 +674,123 @@ export class AgentTask {
       ...commandEvent,
       status: this.isCancelled
         ? 'cancelled'
-        : commandResult.exitCode === 0 && !commandResult.timedOut
-          ? 'completed'
-          : 'error',
+        : commandResult.timedOut
+          ? 'error'
+          : 'completed',
       exitCode: commandResult.exitCode,
     });
 
     const normalized = await maybeOffloadContent(
       this.snapshot.taskId,
       `command-${toolCall.id}`,
-      commandResult.output,
+      stripTerminalControlSequences(commandResult.output),
     );
     if (normalized.offloadRef) {
       this.snapshot.offloadRefs.push(normalized.offloadRef);
     }
 
-    const isError = commandResult.timedOut || commandResult.exitCode !== 0;
+    const detailSuffix = commandResult.exitCode !== 0
+      ? `\n\n[exit code: ${commandResult.exitCode}]`
+      : '';
+    const content = normalized.content
+      ? `${normalized.content}${detailSuffix}`
+      : `(command completed with no output)${detailSuffix}`;
+    return {
+      toolCallId: toolCall.id,
+      content,
+      isError: commandResult.timedOut,
+    };
+  }
+
+  private async executeSilentRemoteCommand(toolCall: ToolCall): Promise<ToolResult> {
+    if (!this.snapshot.sshContext || !this.deps.remoteTerminalManager) {
+      return {
+        toolCallId: toolCall.id,
+        content: 'Remote terminal runtime unavailable.',
+        isError: true,
+      };
+    }
+
+    const command = String(toolCall.params.command ?? '');
+    const commandEventId = `command-${toolCall.id}`;
+    const host = this.snapshot.sshContext.host;
+    const commandEvent: AgentCommandEvent = {
+      id: commandEventId,
+      taskId: this.snapshot.taskId,
+      paneId: this.snapshot.paneId,
+      timestamp: new Date().toISOString(),
+      kind: 'command',
+      status: 'running',
+      commandId: commandEventId,
+      host,
+      command,
+      interactive: false,
+    };
+    this.appendEvent(commandEvent);
+
+    let result;
+    try {
+      result = await this.deps.remoteTerminalManager.runSilentCommand({
+        windowId: this.snapshot.sshContext.windowId,
+        paneId: this.snapshot.sshContext.paneId,
+        command,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.appendEvent({
+        ...commandEvent,
+        status: 'error',
+      });
+      return {
+        toolCallId: toolCall.id,
+        content: message,
+        isError: true,
+      };
+    }
+
+    const stdout = stripTerminalControlSequences(result.stdout).trimEnd();
+    const stderr = stripTerminalControlSequences(result.stderr).trimEnd();
+    const sections = [
+      stdout,
+      stderr ? `[stderr]\n${stderr}` : '',
+      result.exitCode !== 0 ? `[exit code: ${result.exitCode}]` : '',
+    ].filter(Boolean);
+    const mergedOutput = sections.join('\n\n');
+
+    if (mergedOutput) {
+      this.commandOutputSeq += 1;
+      this.appendEvent({
+        id: `command-output-${toolCall.id}-${this.commandOutputSeq}`,
+        taskId: this.snapshot.taskId,
+        paneId: this.snapshot.paneId,
+        timestamp: new Date().toISOString(),
+        kind: 'command-output',
+        status: 'completed',
+        commandId: commandEventId,
+        stream: stderr ? 'stderr' : 'stdout',
+        content: mergedOutput,
+      });
+    }
+
+    this.appendEvent({
+      ...commandEvent,
+      status: 'completed',
+      exitCode: result.exitCode,
+    });
+
+    const normalized = await maybeOffloadContent(
+      this.snapshot.taskId,
+      `command-${toolCall.id}`,
+      mergedOutput,
+    );
+    if (normalized.offloadRef) {
+      this.snapshot.offloadRefs.push(normalized.offloadRef);
+    }
+
     return {
       toolCallId: toolCall.id,
       content: normalized.content || '(command completed with no output)',
-      isError,
+      isError: false,
     };
   }
 

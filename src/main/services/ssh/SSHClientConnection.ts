@@ -13,7 +13,7 @@ import type {
   SSHSessionMetrics,
 } from '../../../shared/types/ssh';
 import { SSH_AUTH_FAILED_ERROR_CODE } from '../../../shared/types/electron-api';
-import type { SSHSessionConfig } from '../../types/process';
+import type { SSHExecCommandResult, SSHSessionConfig } from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
 import type {
   ISSHHostKeyPromptService,
@@ -67,6 +67,7 @@ export interface ISSHConnection {
   deleteSftpEntry(remotePath: string): Promise<void>;
   /** 在远程执行非交互式命令，返回 stdout；非零退出码会 reject */
   execCommand(command: string): Promise<string>;
+  execCommandResult(command: string): Promise<SSHExecCommandResult>;
   close(): Promise<void>;
   isClosed(): boolean;
 }
@@ -606,9 +607,18 @@ export class SSHClientConnection implements ISSHConnection {
   }
 
   async execCommand(command: string): Promise<string> {
+    const result = await this.execCommandResult(command);
+    if (result.exitCode !== 0) {
+      throw new Error(result.stderr.trim() || result.stdout.trim() || `SSH command exited with code ${result.exitCode}`);
+    }
+
+    return result.stdout;
+  }
+
+  async execCommandResult(command: string): Promise<SSHExecCommandResult> {
     await this.connect();
 
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<SSHExecCommandResult>((resolve, reject) => {
       this.client.exec(command, (error, channel) => {
         if (error) {
           reject(error);
@@ -629,12 +639,11 @@ export class SSHClientConnection implements ISSHConnection {
           exitCode = typeof code === 'number' ? code : 0;
         });
         channel.on('close', () => {
-          if (exitCode && exitCode !== 0) {
-            reject(new Error(stderr.trim() || stdout.trim() || `SSH command exited with code ${exitCode}`));
-            return;
-          }
-
-          resolve(stdout);
+          resolve({
+            stdout,
+            stderr,
+            exitCode: exitCode ?? 0,
+          });
         });
         channel.on('error', (channelError: Error) => {
           reject(channelError);

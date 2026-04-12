@@ -531,6 +531,36 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     }
   }
 
+  async execSSHCommandDetailed(windowId: string, paneId: string, command: string): Promise<import('../types/process').SSHExecCommandResult> {
+    chatDebugInfo('ProcessManager.execSSHCommandDetailed', 'Executing SSH command', {
+      windowId,
+      paneId,
+      commandPreview: previewText(command, 240),
+    });
+
+    const pid = this.getPidByPane(windowId, paneId);
+    if (pid === null) {
+      throw new Error(`Pane not found: ${windowId}/${paneId}`);
+    }
+
+    const ptySession = this.ptys.get(pid);
+    if (!ptySession || !isSSHExecDetailedSession(ptySession)) {
+      throw new Error(`SSH session not found for pane: ${windowId}/${paneId}`);
+    }
+
+    const result = await ptySession.execCommandResult(command);
+    chatDebugInfo('ProcessManager.execSSHCommandDetailed', 'SSH command completed', {
+      windowId,
+      paneId,
+      exitCode: result.exitCode,
+      stdoutLength: result.stdout.length,
+      stderrLength: result.stderr.length,
+      stdoutPreview: previewText(result.stdout, 240),
+      stderrPreview: previewText(result.stderr, 240),
+    });
+    return result;
+  }
+
   /**
    * 鐢熸垚 paneIndex 鐨?key
    */
@@ -1650,5 +1680,15 @@ function isSSHExecSession(value: unknown): value is {
     value
     && typeof value === 'object'
     && typeof (value as { execCommand?: unknown }).execCommand === 'function'
+  );
+}
+
+function isSSHExecDetailedSession(value: unknown): value is {
+  execCommandResult(command: string): Promise<import('../types/process').SSHExecCommandResult>;
+} {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { execCommandResult?: unknown }).execCommandResult === 'function'
   );
 }

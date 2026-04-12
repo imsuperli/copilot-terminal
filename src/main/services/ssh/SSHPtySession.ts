@@ -1,6 +1,6 @@
 import type { ClientChannel } from 'ssh2';
 import { StringDecoder } from 'string_decoder';
-import { IPty, SSHSessionConfig, ZmodemDialogHandlers } from '../../types/process';
+import { IPty, SSHExecCommandResult, SSHSessionConfig, ZmodemDialogHandlers } from '../../types/process';
 import { ActiveSSHPortForward, ForwardedPortConfig, SSHSftpDirectoryListing, SSHSessionMetrics } from '../../../shared/types/ssh';
 import type { ISSHConnectionPool, SSHConnectionPoolLease } from './SSHConnectionPool';
 import { SSHZmodemController, type ZmodemSentry, type ZmodemSentryOptions } from './SSHZmodemController';
@@ -239,6 +239,14 @@ export class SSHPtySession implements IPty {
     }
 
     return this.connectionLease.connection.execCommand(command);
+  }
+
+  async execCommandResult(command: string): Promise<SSHExecCommandResult> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    return this.connectionLease.connection.execCommandResult(command);
   }
 
   private async connect(): Promise<void> {

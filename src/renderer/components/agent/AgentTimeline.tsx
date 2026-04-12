@@ -9,6 +9,40 @@ import { ReasoningBlock } from './ReasoningBlock';
 import { renderMarkdownLike } from './RichText';
 import { ToolCallBlock } from './ToolCallBlock';
 
+function getAssistantTurnKey(event: AgentTimelineEvent): string | null {
+  if (event.kind === 'reasoning' && event.id.startsWith('reasoning-')) {
+    return event.id.slice('reasoning-'.length);
+  }
+
+  if (event.kind === 'assistant-message' && event.id.startsWith('assistant-')) {
+    return event.id.slice('assistant-'.length);
+  }
+
+  return null;
+}
+
+function orderTimelineEvents(events: AgentTimelineEvent[]): AgentTimelineEvent[] {
+  return events
+    .map((event, index) => ({
+      event,
+      index,
+      turnKey: getAssistantTurnKey(event),
+    }))
+    .sort((left, right) => {
+      if (left.turnKey && left.turnKey === right.turnKey && left.event.kind !== right.event.kind) {
+        if (left.event.kind === 'reasoning') {
+          return -1;
+        }
+        if (right.event.kind === 'reasoning') {
+          return 1;
+        }
+      }
+
+      return left.index - right.index;
+    })
+    .map(({ event }) => event);
+}
+
 function EventShell({
   icon,
   title,
@@ -46,6 +80,8 @@ export function AgentTimeline({
   onSubmitInteraction: (interactionId: string, value: string) => void;
   onCancelInteraction: (interactionId: string) => void;
 }) {
+  const orderedTimeline = React.useMemo(() => orderTimelineEvents(task.timeline), [task.timeline]);
+
   const renderEvent = (event: AgentTimelineEvent) => {
     switch (event.kind) {
       case 'user-message':
@@ -158,7 +194,7 @@ export function AgentTimeline({
 
   return (
     <div className="space-y-6 pt-4">
-      {task.timeline.map((event) => (
+      {orderedTimeline.map((event) => (
         <div key={event.id}>
           {renderEvent(event)}
         </div>

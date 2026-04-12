@@ -103,6 +103,12 @@ export interface ProcessInfo {
   paneId?: string;  // 关联的窗格 ID
 }
 
+export interface SSHExecCommandResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
 // ProcessManager 接口
 export interface IProcessManager {
   spawnTerminal(config: TerminalConfig): Promise<ProcessHandle>;

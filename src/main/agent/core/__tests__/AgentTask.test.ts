@@ -236,6 +236,65 @@ describe('AgentTask', () => {
     await flush();
   });
 
+  it('runs non-interactive execute_command calls through the silent SSH path', async () => {
+    const commandToolCall: ToolCall = {
+      id: 'tool-silent',
+      name: 'execute_command',
+      params: {
+        command: 'uname -a && cat /etc/os-release',
+        requires_approval: false,
+        interactive: false,
+      },
+      status: 'pending',
+    };
+    const runCommand = vi.fn();
+    const runSilentCommand = vi.fn().mockResolvedValue({
+      stdout: 'Linux localhost 5.15.0\n',
+      stderr: '',
+      exitCode: 1,
+    });
+    const deps = createDeps({
+      remoteTerminalManager: {
+        runCommand,
+        runSilentCommand,
+      },
+      toolExecutor: {
+        execute: vi.fn(),
+      },
+    });
+    vi.mocked(deps.chatService.streamChat)
+      .mockImplementationOnce(async (_request, callbacks) => {
+        callbacks.onDone('<thinking>check</thinking>done', [commandToolCall]);
+      })
+      .mockImplementationOnce(async (_request, callbacks) => {
+        callbacks.onDone('系统内核已经识别出来了。', []);
+      });
+
+    const task = new AgentTask(createSnapshot(), deps);
+    task.start(createRequest('check version'), createProvider());
+    await flush();
+    await flush();
+    await flush();
+
+    expect(runCommand).not.toHaveBeenCalled();
+    expect(runSilentCommand).toHaveBeenCalledWith({
+      windowId: 'win-1',
+      paneId: 'ssh-pane-1',
+      command: 'uname -a && cat /etc/os-release',
+    });
+    expect(task.getSnapshot().status).toBe('completed');
+    expect(task.getSnapshot().timeline.some((event) => (
+      event.kind === 'command'
+      && event.status === 'completed'
+      && event.exitCode === 1
+    ))).toBe(true);
+    expect(task.getSnapshot().timeline.some((event) => (
+      event.kind === 'tool-call'
+      && event.toolCall.id === 'tool-silent'
+      && event.toolCall.status === 'completed'
+    ))).toBe(true);
+  });
+
   it('sanitizes in-flight restored snapshots into a cancelled, non-interactive state', () => {
     const restored = AgentTask.prepareSnapshotForRestore(createSnapshot({
       status: 'waiting_interaction',
