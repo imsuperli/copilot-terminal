@@ -488,4 +488,40 @@ describe('ChatService', () => {
       }),
     ]);
   });
+
+  it('injects probed ssh environment details and anti-simulation rules into the system prompt', async () => {
+    hoisted.openAICreateMock.mockResolvedValue(createAsyncIterable([
+      {
+        choices: [
+          {
+            message: {
+              content: 'ready',
+            },
+          },
+        ],
+      },
+    ]));
+
+    const request = createRequest();
+    request.environmentDetails = '[host]\nprod-01\n\n[kernel]\nLinux prod-01 6.1.0';
+    request.systemPrompt = '输出尽量简洁。';
+
+    const service = new ChatService();
+    await service.streamChat(request, {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+
+    const [payload] = hoisted.openAICreateMock.mock.calls.at(-1) ?? [];
+    expect(payload.messages[0]).toEqual(expect.objectContaining({
+      role: 'system',
+      content: expect.stringContaining('真实远端环境探测结果'),
+    }));
+    expect(payload.messages[0].content).toContain('prod-01');
+    expect(payload.messages[0].content).toContain('不要先输出“我先去查看”');
+    expect(payload.messages[0].content).toContain('禁止伪造命令输出');
+    expect(payload.messages[0].content).toContain('附加用户指令：');
+    expect(payload.messages[0].content).toContain('输出尽量简洁。');
+  });
 });

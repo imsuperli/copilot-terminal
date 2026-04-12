@@ -377,6 +377,126 @@ describe('ChatPane', () => {
     });
   });
 
+  it('prefers an ssh pane when the chat pane has no explicit linked pane id', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.chatSend).mockResolvedValue({
+      success: true,
+      data: {
+        messageId: 'assistant-ssh-default',
+      },
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Mixed Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [0.33, 0.33, 0.34],
+            children: [
+              {
+                type: 'pane',
+                id: 'local-pane-1',
+                pane: {
+                  id: 'local-pane-1',
+                  cwd: '/workspace/project',
+                  command: 'bash',
+                  status: WindowStatus.Running,
+                  pid: 11,
+                },
+              },
+              {
+                type: 'pane',
+                id: 'ssh-pane-1',
+                pane: {
+                  id: 'ssh-pane-1',
+                  cwd: '/srv/app',
+                  command: '',
+                  status: WindowStatus.Running,
+                  pid: 101,
+                  backend: 'ssh',
+                  ssh: {
+                    profileId: 'profile-1',
+                    host: '10.0.0.20',
+                    user: 'root',
+                    remoteCwd: '/srv/app',
+                  },
+                },
+              },
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '帮我看看系统版本');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.chatSend).toHaveBeenCalledWith(expect.objectContaining({
+        sshContext: {
+          host: '10.0.0.20',
+          user: 'root',
+          cwd: '/srv/app',
+          windowId: 'win-1',
+          paneId: 'ssh-pane-1',
+        },
+      }));
+    });
+  });
+
   it('uses a single provider-model selector and switches both values together', async () => {
     const user = userEvent.setup();
 

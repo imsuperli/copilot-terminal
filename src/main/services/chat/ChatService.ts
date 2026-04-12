@@ -405,26 +405,60 @@ function buildToolCallsFromRaw(
 
 /** 构建系统提示词 */
 function buildSystemPrompt(request: ChatSendRequest): string {
-  const { sshContext, systemPrompt } = request;
+  const { sshContext, systemPrompt, environmentDetails } = request;
 
   const contextSection = sshContext
     ? `
-当前远程服务器连接信息：
+当前对话已绑定到一个可执行的远程 SSH 会话：
 - 主机: ${sshContext.host}
 - 用户: ${sshContext.user}
 ${sshContext.cwd ? `- 工作目录: ${sshContext.cwd}` : ''}
 `
-    : '';
+    : `
+当前对话没有绑定可执行的远程 SSH 会话。
+`;
+
+  const executionRules = sshContext
+    ? `
+执行规则（必须严格遵守）：
+- 这是一个面向远端服务器排障的对话。只要用户在问远端机器的真实状态、配置、日志、进程、网络、资源、文件或错误原因，就应优先直接调用工具获取事实。
+- 不要先输出“我先去查看”“我现在执行命令”之类的空话；如果需要查看，就直接发起工具调用。
+- 在工具结果返回前，禁止声称“我已经检查过 / 结果显示 / 当前系统是 / 服务状态为”。
+- 如果工具不可用、SSH 会话不可执行或命令失败，要明确说明受阻原因；禁止伪造命令输出、禁止假装已经连接或已经执行。
+- 只读诊断命令应将 requires_approval 设为 false；有副作用的变更命令才设为 true。
+- 优先先做只读诊断，再给出结论或修复建议。
+`
+    : `
+执行规则（必须严格遵守）：
+- 你当前没有远端 SSH 执行上下文。
+- 禁止声称你已经登录服务器、读取文件、查看日志、执行命令或验证结果。
+- 只能明确说明当前缺少可执行连接，并要求用户将 chat 绑定到 SSH pane 后再继续远端诊断。
+`;
+
+  const environmentSection = sshContext
+    ? `
+真实远端环境探测结果（只读采样）：
+${environmentDetails?.trim() || '暂无探测结果；如需事实请继续调用工具。'}
+`
+    : `
+真实远端环境探测结果：
+无。当前没有可执行的 SSH 连接。
+`;
 
   const defaultPrompt = `你是一个专业的系统管理员助手，帮助用户管理和排查远程服务器问题。
 ${contextSection}
+${environmentSection}
+${executionRules}
 你可以使用工具在远程服务器上执行操作。遵循以下安全原则：
 - 优先使用只读命令进行诊断（ls、cat、grep、ps、df 等）
 - 对于可能影响系统状态的操作，将 requires_approval 设为 true
 - 禁止执行 rm -rf /、格式化磁盘、重启系统等破坏性命令
-- 执行命令前先解释要做什么`;
+- 不要编造执行过程或执行结果`;
 
-  return systemPrompt || defaultPrompt;
+  const customPrompt = systemPrompt?.trim();
+  return customPrompt
+    ? `${defaultPrompt}\n\n附加用户指令：\n${customPrompt}`
+    : defaultPrompt;
 }
 
 /** 将 ChatMessage[] 转换为 Anthropic API 格式 */

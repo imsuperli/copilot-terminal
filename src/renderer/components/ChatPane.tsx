@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, Plus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
+import { ChevronDown, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   ChatMessage,
@@ -19,6 +19,8 @@ import { useWindowStore } from '../stores/windowStore';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { getPaneBackend, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from '../utils/settingsEvents';
+import { ChatNewConversationIcon } from './icons/ChatNewConversationIcon';
+import { selectPreferredChatLinkedPaneId } from '../utils/chatPane';
 
 export interface ChatPaneProps {
   windowId: string;
@@ -432,7 +434,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   );
 
   const chatState = pane.chat ?? { messages: [] };
-  const resolvedLinkedPaneId = chatState.linkedPaneId ?? terminalPanes[0]?.id;
+  const resolvedLinkedPaneId = selectPreferredChatLinkedPaneId(terminalPanes, chatState.linkedPaneId);
   const linkedPane = useMemo(
     () => terminalPanes.find((candidate) => candidate.id === resolvedLinkedPaneId) ?? null,
     [resolvedLinkedPaneId, terminalPanes],
@@ -981,10 +983,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               onMouseDown={preventMouseButtonFocus}
               onClick={handleNewConversation}
               disabled={isBusy}
-              className="group relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-emerald-400/20 bg-[linear-gradient(135deg,rgba(16,185,129,0.24),rgba(24,24,27,0.92))] text-emerald-50 shadow-[0_18px_40px_-28px_rgba(16,185,129,0.65)] transition-all duration-200 before:absolute before:inset-[1px] before:rounded-full before:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.22),transparent_58%)] hover:-translate-y-0.5 hover:border-emerald-300/35 hover:shadow-[0_24px_50px_-30px_rgba(16,185,129,0.85)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+              className="group relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-zinc-800/90 bg-[linear-gradient(180deg,rgba(31,31,35,0.96),rgba(18,18,21,0.98))] text-zinc-300 shadow-[0_18px_36px_-32px_rgba(0,0,0,0.98)] transition-all duration-200 before:absolute before:inset-[1px] before:rounded-full before:bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.12),transparent_46%)] hover:-translate-y-0.5 hover:border-zinc-700 hover:text-[rgb(var(--primary))] hover:shadow-[0_24px_44px_-34px_rgba(0,0,0,0.98)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <span className="absolute inset-[7px] rounded-full border border-white/10 opacity-70 transition-opacity group-hover:opacity-100" />
-              <Plus size={16} strokeWidth={2.2} className="relative z-[1]" />
+              <span className="absolute inset-[7px] rounded-full border border-zinc-500/10 opacity-70 transition-opacity group-hover:opacity-100" />
+              <ChatNewConversationIcon size={17} className="relative z-[1]" />
             </button>
 
             {onClose && (

@@ -47,7 +47,7 @@ import {
   getSmartBrowserSplitDirection,
 } from '../utils/browserPane';
 import { createCodePaneDraft } from '../utils/codePane';
-import { createChatPaneDraft } from '../utils/chatPane';
+import { createChatPaneDraft, selectPreferredChatLinkedPaneId } from '../utils/chatPane';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import { resolveBrowserDropAction } from '../utils/browserDrop';
 import {
@@ -196,6 +196,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return terminalPanes[0] ?? null;
     },
     [activePane, terminalPanes]
+  );
+  const preferredChatLinkedPaneId = useMemo(
+    () => selectPreferredChatLinkedPaneId(panes),
+    [panes],
   );
   const activePaneCapabilities = useMemo(
     () => activeTerminalPane ? getPaneCapabilities(activeTerminalPane) : null,
@@ -474,7 +478,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       if (isChatPane(sourcePane)) {
         const newPaneId = uuidv4();
         const newPane = createChatPaneDraft(newPaneId, {
-          linkedPaneId: sourcePane.chat?.linkedPaneId ?? activeTerminalPane?.id,
+          linkedPaneId: selectPreferredChatLinkedPaneId(
+            panes,
+            sourcePane.chat?.linkedPaneId ?? preferredChatLinkedPaneId,
+          ),
           activeProviderId: sourcePane.chat?.activeProviderId,
           activeModel: sourcePane.chat?.activeModel,
         });
@@ -603,10 +610,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const sourcePane = getPaneById(terminalWindow.id, activePaneId);
     const newPaneId = uuidv4();
     const linkedPaneId = sourcePane && isChatPane(sourcePane)
-      ? sourcePane.chat?.linkedPaneId ?? activeTerminalPane?.id
+      ? selectPreferredChatLinkedPaneId(
+          panes,
+          sourcePane.chat?.linkedPaneId ?? preferredChatLinkedPaneId,
+        )
       : isTerminalPane(sourcePane ?? ({} as Pane))
-        ? sourcePane?.id
-        : activeTerminalPane?.id;
+        ? selectPreferredChatLinkedPaneId(
+            panes,
+            getPaneBackend(sourcePane as Pane) === 'ssh' ? sourcePane?.id : undefined,
+          )
+        : preferredChatLinkedPaneId;
     const newPane = createChatPaneDraft(newPaneId, {
       linkedPaneId,
       activeProviderId: sourcePane && isChatPane(sourcePane) ? sourcePane.chat?.activeProviderId : undefined,
@@ -616,7 +629,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
     setActivePane(terminalWindow.id, newPaneId);
-  }, [activeTerminalPane?.id, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
+  }, [panes, preferredChatLinkedPaneId, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
 
   const activeBrowserDragUrl = useMemo(() => (
     activePane && isBrowserPane(activePane)

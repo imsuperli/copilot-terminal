@@ -129,6 +129,8 @@ export interface ChatSendRequest {
   enableTools?: boolean;
   /** SSH 上下文（有关联终端时提供）*/
   sshContext?: ChatSshContext;
+  /** 主进程预采集的真实环境信息，供系统提示词使用 */
+  environmentDetails?: string;
 }
 
 /** Main → Renderer：流式文本块 */

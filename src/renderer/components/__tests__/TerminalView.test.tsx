@@ -141,6 +141,53 @@ function createSshWindow(): Window {
   };
 }
 
+function createMixedLocalAndSshWindow(): Window {
+  return {
+    id: 'win-mixed-1',
+    name: 'Mixed Window',
+    activePaneId: 'pane-local-1',
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    layout: {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        {
+          type: 'pane',
+          id: 'pane-local-1',
+          pane: {
+            id: 'pane-local-1',
+            cwd: '/workspace/project',
+            command: 'bash',
+            status: WindowStatus.Running,
+            pid: 101,
+          },
+        },
+        {
+          type: 'pane',
+          id: 'pane-ssh-1',
+          pane: {
+            id: 'pane-ssh-1',
+            cwd: '/srv/app',
+            command: '',
+            status: WindowStatus.Running,
+            pid: 202,
+            backend: 'ssh',
+            ssh: {
+              profileId: 'profile-1',
+              host: '10.0.0.20',
+              user: 'root',
+              remoteCwd: '/srv/app',
+              reuseSession: true,
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
 function createBrowserOnlyWindow(kind: Window['kind'] = 'local'): Window {
   const paneId = 'pane-browser-only-1';
 
@@ -456,6 +503,34 @@ describe('TerminalView', () => {
     expect(chatPane).toBeDefined();
     expect(chatPane?.chat?.linkedPaneId).toBe(linkedPaneId);
     expect(updatedWindow?.activePaneId).toBe(chatPane?.id);
+  });
+
+  it('prefers an ssh pane when creating a chat pane in a mixed window', () => {
+    const mixedWindow = createMixedLocalAndSshWindow();
+    useWindowStore.setState({
+      windows: [mixedWindow],
+      activeWindowId: mixedWindow.id,
+      mruList: [mixedWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={mixedWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'terminalView.splitChat' }));
+
+    const updatedWindow = useWindowStore.getState().getWindowById(mixedWindow.id);
+    const panes = getAllPanes(updatedWindow!.layout);
+    const chatPane = panes.find((pane) => pane.kind === 'chat');
+
+    expect(chatPane?.chat?.linkedPaneId).toBe('pane-ssh-1');
   });
 
   it('creates a code pane from the active local terminal cwd', () => {

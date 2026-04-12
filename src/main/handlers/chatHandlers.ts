@@ -51,6 +51,15 @@ function getToolExecutor(ctx: HandlerContext): ToolExecutor | null {
 }
 
 const MAX_TOOL_LOOP_ROUNDS = 4;
+const CHAT_ENVIRONMENT_DETAILS_MAX_CHARS = 4000;
+const CHAT_ENVIRONMENT_PROBE_COMMAND = [
+  'printf "[host]\\n"; hostname 2>/dev/null || true',
+  'printf "\\n[user]\\n"; id -un 2>/dev/null || whoami 2>/dev/null || true',
+  'printf "\\n[cwd]\\n"; pwd 2>/dev/null || true',
+  'printf "\\n[shell]\\n"; printf "%s\\n" "${SHELL:-unknown}"',
+  'printf "\\n[kernel]\\n"; uname -a 2>/dev/null || true',
+  'printf "\\n[os-release]\\n"; if [ -r /etc/os-release ]; then cat /etc/os-release; else echo "unavailable"; fi',
+].join('; ');
 
 /** 从 workspace settings 中查找 provider 配置 */
 async function resolveProvider(ctx: HandlerContext, providerId: string): Promise<LLMProviderConfig | null> {
@@ -140,6 +149,41 @@ function formatChatErrorForRenderer(error: string): string {
     : `${error} 调试日志：${logFilePath}`;
 }
 
+function truncateEnvironmentDetails(content: string): string {
+  const trimmed = content.trim();
+  if (trimmed.length <= CHAT_ENVIRONMENT_DETAILS_MAX_CHARS) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, CHAT_ENVIRONMENT_DETAILS_MAX_CHARS)}\n\n[environment details truncated]`;
+}
+
+async function collectEnvironmentDetails(
+  request: ChatSendRequest,
+  toolExecutor: ToolExecutor | null,
+): Promise<string | undefined> {
+  if (!request.sshContext || !toolExecutor) {
+    return undefined;
+  }
+
+  const probeToolCall: ToolCall = {
+    id: `chat-env-probe-${uuidv4()}`,
+    name: 'execute_command',
+    params: {
+      command: CHAT_ENVIRONMENT_PROBE_COMMAND,
+      requires_approval: false,
+    },
+    status: 'pending',
+  };
+
+  const result = await toolExecutor.execute(probeToolCall, request.sshContext);
+  if (result.isError) {
+    return `环境探测失败：${result.content}`;
+  }
+
+  return truncateEnvironmentDetails(result.content);
+}
+
 export function registerChatHandlers(ctx: HandlerContext) {
 
   /**
@@ -185,9 +229,10 @@ export function registerChatHandlers(ctx: HandlerContext) {
 
       const win = getWindow(ctx);
       const toolExecutor = getToolExecutor(ctx);
+      const environmentDetails = await collectEnvironmentDetails(request, toolExecutor);
 
       // 异步执行流，立即返回 messageId
-      runChatStream(enrichedRequest, messageId, abortController, win, toolExecutor, ctx);
+      runChatStream({ ...enrichedRequest, environmentDetails }, messageId, abortController, win, toolExecutor, ctx);
 
       return successResponse({ messageId });
     } catch (error) {
