@@ -3,6 +3,7 @@ import type {
   AgentCancelRequest,
   AgentGetTaskRequest,
   AgentRespondApprovalRequest,
+  AgentRestoreTaskRequest,
   AgentSendRequest,
   AgentSendResponse,
   AgentSubmitInteractionRequest,
@@ -85,6 +86,29 @@ export class AgentController {
 
   submitInteraction(request: AgentSubmitInteractionRequest): void {
     this.tasksByTaskId.get(request.taskId)?.submitInteraction(request);
+  }
+
+  restore(request: AgentRestoreTaskRequest): AgentTaskSnapshot {
+    const existingByTaskId = this.tasksByTaskId.get(request.task.taskId);
+    if (existingByTaskId) {
+      return existingByTaskId.getSnapshot();
+    }
+
+    const task = new AgentTask(request.task, {
+      chatService: this.chatService,
+      toolExecutor: this.toolExecutor,
+      remoteTerminalManager: this.remoteTerminalManager,
+      skillsManager: this.skillsManager,
+      mcpHub: this.mcpHub,
+      commandSecurityEnabled: this.options.commandSecurityEnabled(),
+      postState: this.options.postState,
+      postEvent: this.options.postEvent,
+      postError: this.options.postError,
+    });
+    this.tasksByPaneId.set(request.task.paneId, task);
+    this.tasksByTaskId.set(request.task.taskId, task);
+    this.options.postState(task.getSnapshot());
+    return task.getSnapshot();
   }
 
   private createTask(request: AgentSendRequest): AgentTask {

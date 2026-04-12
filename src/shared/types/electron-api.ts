@@ -5,6 +5,7 @@ import type {
   AgentCancelRequest,
   AgentGetTaskRequest,
   AgentRespondApprovalRequest,
+  AgentRestoreTaskRequest,
   AgentSendRequest,
   AgentSendResponse,
   AgentSubmitInteractionRequest,
@@ -785,6 +786,7 @@ export interface ElectronAPI {
   agentRespondApproval: (request: AgentRespondApprovalRequest) => Promise<IpcResponse<void>>;
   agentSubmitInteraction: (request: AgentSubmitInteractionRequest) => Promise<IpcResponse<void>>;
   agentGetTask: (request: AgentGetTaskRequest) => Promise<IpcResponse<AgentTaskStatePayload['task'] | null>>;
+  agentRestoreTask: (request: AgentRestoreTaskRequest) => Promise<IpcResponse<AgentTaskStatePayload['task']>>;
   onAgentTimelineEvent: (callback: ElectronEventHandler<AgentTaskEventPayload>) => void;
   offAgentTimelineEvent: (callback: ElectronEventHandler<AgentTaskEventPayload>) => void;
   onAgentTaskState: (callback: ElectronEventHandler<AgentTaskStatePayload>) => void;

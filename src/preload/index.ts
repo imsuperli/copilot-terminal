@@ -377,6 +377,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('agent-submit-interaction', request),
   agentGetTask: (request) =>
     ipcRenderer.invoke('agent-get-task', request),
+  agentRestoreTask: (request) =>
+    ipcRenderer.invoke('agent-restore-task', request),
   onAgentTimelineEvent: (callback) => {
     ipcRenderer.on('agent-timeline-event', callback);
   },

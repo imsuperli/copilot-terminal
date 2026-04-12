@@ -269,6 +269,7 @@ Object.defineProperty(window, 'electronAPI', {
     agentRespondApproval: vi.fn().mockResolvedValue({ success: true }),
     agentSubmitInteraction: vi.fn().mockResolvedValue({ success: true }),
     agentGetTask: vi.fn().mockResolvedValue({ success: true, data: null }),
+    agentRestoreTask: vi.fn().mockResolvedValue({ success: true, data: null }),
     onAgentTimelineEvent: vi.fn(),
     offAgentTimelineEvent: vi.fn(),
     onAgentTaskState: vi.fn(),

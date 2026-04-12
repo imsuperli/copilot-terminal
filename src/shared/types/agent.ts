@@ -102,6 +102,10 @@ export interface AgentGetTaskRequest {
   taskId?: string;
 }
 
+export interface AgentRestoreTaskRequest {
+  task: AgentTaskSnapshot;
+}
+
 export interface AgentTaskEventPayload {
   paneId: string;
   taskId: string;

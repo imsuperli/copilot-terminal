@@ -298,6 +298,16 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     void window.electronAPI.agentGetTask({ paneId: pane.id }).then((response) => {
       if (response.success && response.data) {
         syncAgentTask(response.data);
+      } else if (paneRef.current.chat?.agent) {
+        return window.electronAPI.agentRestoreTask({
+          task: paneRef.current.chat.agent,
+        }).then((restoreResponse) => {
+          if (restoreResponse.success && restoreResponse.data) {
+            syncAgentTask(restoreResponse.data);
+          } else {
+            hasLiveTaskRef.current = false;
+          }
+        });
       } else {
         hasLiveTaskRef.current = false;
       }

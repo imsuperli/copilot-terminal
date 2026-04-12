@@ -4,6 +4,7 @@ import type {
   AgentCancelRequest,
   AgentGetTaskRequest,
   AgentRespondApprovalRequest,
+  AgentRestoreTaskRequest,
   AgentSendRequest,
   AgentSubmitInteractionRequest,
 } from '../../shared/types/agent';
@@ -156,6 +157,14 @@ export function registerAgentHandlers(ctx: HandlerContext) {
   ipcMain.handle('agent-get-task', async (_event, request: AgentGetTaskRequest) => {
     try {
       return successResponse(getController(ctx).getTask(request));
+    } catch (error) {
+      return errorResponse(new Error(error instanceof Error ? error.message : String(error)));
+    }
+  });
+
+  ipcMain.handle('agent-restore-task', async (_event, request: AgentRestoreTaskRequest) => {
+    try {
+      return successResponse(getController(ctx).restore(request));
     } catch (error) {
       return errorResponse(new Error(error instanceof Error ? error.message : String(error)));
     }

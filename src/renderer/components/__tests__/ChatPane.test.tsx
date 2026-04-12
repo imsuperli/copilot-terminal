@@ -929,6 +929,114 @@ describe('ChatPane', () => {
     expect(screen.getByText('Active: active (running)')).toBeInTheDocument();
   });
 
+  it('restores a persisted agent snapshot when the main controller has no live task', async () => {
+    const persisted = createAgentSnapshot({
+      status: 'completed',
+      timeline: [
+        {
+          id: 'assistant-restore',
+          taskId: 'task-restore',
+          paneId: 'chat-pane-1',
+          timestamp: new Date().toISOString(),
+          kind: 'assistant-message',
+          status: 'completed',
+          content: '这是恢复出来的 agent 历史',
+        },
+      ],
+      messages: [
+        {
+          id: 'assistant-restore',
+          role: 'assistant',
+          content: '这是恢复出来的 agent 历史',
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      taskId: 'task-restore',
+    });
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.agentRestoreTask).mockResolvedValue({
+      success: true,
+      data: persisted,
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: persisted.messages,
+                    agent: persisted,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentRestoreTask).toHaveBeenCalledWith({
+        task: persisted,
+      });
+    });
+    expect(await screen.findByText('这是恢复出来的 agent 历史')).toBeInTheDocument();
+  });
+
   it('does not render an outer active border', async () => {
     vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
       success: true,
