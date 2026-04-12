@@ -114,15 +114,41 @@ function createFakeDiffEditor() {
 const fakeMonacoState = {
   lastDiffModel: null as { original: FakeModel; modified: FakeModel } | null,
   lastEditorModel: null as FakeModel | null,
+  markerListeners: new Set<() => void>(),
+  markersByPath: new Map<string, Array<{
+    severity: number;
+    message: string;
+    startLineNumber: number;
+    startColumn: number;
+  }>>(),
   models: new Map<string, FakeModel>(),
+  setMarkers(path: string, markers: Array<{
+    severity: number;
+    message: string;
+    startLineNumber: number;
+    startColumn: number;
+  }>) {
+    this.markersByPath.set(path, markers);
+    for (const listener of Array.from(this.markerListeners)) {
+      listener();
+    }
+  },
   reset() {
     this.lastDiffModel = null;
     this.lastEditorModel = null;
+    this.markerListeners.clear();
+    this.markersByPath.clear();
     this.models.clear();
   },
 };
 
 const fakeMonaco = {
+  MarkerSeverity: {
+    Hint: 1,
+    Info: 2,
+    Warning: 4,
+    Error: 8,
+  },
   KeyCode: {
     KeyS: 49,
   },
@@ -145,6 +171,17 @@ const fakeMonaco = {
     }),
     setModelLanguage: vi.fn((model: FakeModel, language: string) => {
       model.setLanguage(language);
+    }),
+    getModelMarkers: vi.fn(({ resource }: { resource: { path: string } }) => (
+      fakeMonacoState.markersByPath.get(resource.path) ?? []
+    )),
+    onDidChangeMarkers: vi.fn((listener: () => void) => {
+      fakeMonacoState.markerListeners.add(listener);
+      return {
+        dispose: () => {
+          fakeMonacoState.markerListeners.delete(listener);
+        },
+      };
     }),
   },
 };
@@ -425,6 +462,60 @@ describe('CodePane', () => {
         filePath: '/workspace/project/src/index.ts',
       });
     });
+  });
+
+  it('shows changed files in the SCM tab and opens a diff from there', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    expect(await screen.findByText('index.ts')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.openDiff' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadGitBaseFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+  });
+
+  it('shows Monaco diagnostics in the problems tab', async () => {
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    await act(async () => {
+      fakeMonacoState.setMarkers('/workspace/project/src/index.ts', [
+        {
+          severity: fakeMonaco.MarkerSeverity.Error,
+          message: 'Missing semicolon',
+          startLineNumber: 1,
+          startColumn: 10,
+        },
+      ]);
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.problemsTab' }));
+    });
+
+    expect(await screen.findByText('Missing semicolon')).toBeInTheDocument();
   });
 
   it('auto-saves dirty files after the debounce delay', async () => {

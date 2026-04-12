@@ -9,12 +9,14 @@ import React, {
 } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   File as FileIcon,
   FileCode2,
   Folder,
   FolderOpen,
+  GitBranch,
   GitCompareArrows,
   Loader2,
   Pin,
@@ -49,7 +51,14 @@ type MonacoDiffEditor = import('monaco-editor').editor.IStandaloneDiffEditor;
 type MonacoModel = import('monaco-editor').editor.ITextModel;
 type MonacoDisposable = import('monaco-editor').IDisposable;
 type MonacoViewState = import('monaco-editor').editor.ICodeEditorViewState | null;
-type SidebarMode = 'files' | 'search';
+type MonacoMarker = import('monaco-editor').editor.IMarker;
+type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
+
+type FileNavigationLocation = {
+  filePath: string;
+  lineNumber: number;
+  column: number;
+};
 
 type BannerState = {
   tone: 'warning' | 'error' | 'info';
@@ -158,6 +167,22 @@ function getStatusTone(status?: CodePaneGitStatusEntry['status']): {
   }
 }
 
+function getProblemTone(severity: number): {
+  label: 'error' | 'warning' | 'info' | 'hint';
+  className: string;
+} {
+  if (severity >= 8) {
+    return { label: 'error', className: 'bg-red-500/15 text-red-300' };
+  }
+  if (severity >= 4) {
+    return { label: 'warning', className: 'bg-amber-500/15 text-amber-300' };
+  }
+  if (severity >= 2) {
+    return { label: 'info', className: 'bg-sky-500/15 text-sky-300' };
+  }
+  return { label: 'hint', className: 'bg-emerald-500/15 text-emerald-300' };
+}
+
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -187,6 +212,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const viewStatesRef = useRef(new Map<string, MonacoViewState>());
   const autoSaveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const suppressModelEventsRef = useRef(new Set<string>());
+  const markerListenerRef = useRef<MonacoDisposable | null>(null);
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => (
@@ -203,6 +229,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
   const [contentSearchResults, setContentSearchResults] = useState<CodePaneContentMatch[]>([]);
   const [isContentSearching, setIsContentSearching] = useState(false);
+  const [problems, setProblems] = useState<Array<MonacoMarker & { filePath: string }>>([]);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(createEmptySet);
@@ -218,7 +245,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const dirtyPathsRef = useRef(dirtyPaths);
   const savingPathsRef = useRef(savingPaths);
   const activeFilePathRef = useRef(activeFilePath);
-  const pendingNavigationRef = useRef<CodePaneContentMatch | null>(null);
+  const pendingNavigationRef = useRef<FileNavigationLocation | null>(null);
 
   useEffect(() => {
     paneRef.current = pane;
@@ -325,6 +352,49 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return undefined;
   }, [gitStatusByPath]);
 
+  const refreshProblems = useCallback(() => {
+    const monaco = monacoRef.current;
+    if (!monaco) {
+      setProblems([]);
+      return;
+    }
+
+    const nextProblems = Array.from(fileModelsRef.current.values())
+      .flatMap((model) => monaco.editor.getModelMarkers({ resource: model.uri }).map((marker) => ({
+        ...marker,
+        filePath: model.uri.path,
+      })))
+      .sort((left, right) => {
+        if (left.severity !== right.severity) {
+          return right.severity - left.severity;
+        }
+
+        if (left.filePath !== right.filePath) {
+          return left.filePath.localeCompare(right.filePath, undefined, { sensitivity: 'base' });
+        }
+
+        if (left.startLineNumber !== right.startLineNumber) {
+          return left.startLineNumber - right.startLineNumber;
+        }
+
+        return left.startColumn - right.startColumn;
+      });
+
+    startTransition(() => {
+      setProblems(nextProblems);
+    });
+  }, []);
+
+  const ensureMarkerListener = useCallback((monaco: MonacoModule) => {
+    if (markerListenerRef.current) {
+      return;
+    }
+
+    markerListenerRef.current = monaco.editor.onDidChangeMarkers(() => {
+      refreshProblems();
+    });
+  }, [refreshProblems]);
+
   const applyPendingNavigation = useCallback((editorInstance: MonacoEditor | null, filePath: string) => {
     const pendingNavigation = pendingNavigationRef.current;
     if (!editorInstance || !pendingNavigation || pendingNavigation.filePath !== filePath) {
@@ -391,6 +461,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     fileMetaRef.current.clear();
     viewStatesRef.current.clear();
+    setProblems([]);
   }, []);
 
   const refreshGitStatus = useCallback(async () => {
@@ -499,8 +570,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     markDirty(filePath, false);
     clearBannerForFile(filePath);
+    refreshProblems();
     return model;
-  }, [clearBannerForFile, markDirty]);
+  }, [clearBannerForFile, markDirty, refreshProblems]);
 
   const loadFileIntoModel = useCallback(async (filePath: string) => {
     if (!monacoRef.current && supportsMonaco) {
@@ -1024,6 +1096,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       try {
         if (supportsMonaco) {
           monacoRef.current = await ensureMonacoEnvironment();
+          if (monacoRef.current) {
+            ensureMarkerListener(monacoRef.current);
+          }
           if (!mounted) {
             return;
           }
@@ -1097,12 +1172,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       mounted = false;
       window.electronAPI.offCodePaneFsChanged(handleFsChanged);
       void window.electronAPI.codePaneUnwatchRoot(pane.id);
+      markerListenerRef.current?.dispose();
+      markerListenerRef.current = null;
       void flushDirtyFiles().finally(() => {
         disposeEditors();
         disposeAllModels();
       });
     };
-  }, [disposeAllModels, disposeEditors, flushDirtyFiles, loadDirectory, pane.id, refreshGitStatus, refreshLoadedDirectories, reloadFileFromDisk, rootPath, supportsMonaco, t]);
+  }, [disposeAllModels, disposeEditors, ensureMarkerListener, flushDirtyFiles, loadDirectory, pane.id, refreshGitStatus, refreshLoadedDirectories, reloadFileFromDisk, rootPath, supportsMonaco, t]);
 
   useEffect(() => {
     if (!activeFilePath) {
@@ -1386,10 +1463,62 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }));
   }, [contentSearchResults]);
 
-  const openContentSearchMatch = useCallback(async (match: CodePaneContentMatch) => {
-    pendingNavigationRef.current = match;
-    await activateFile(match.filePath);
+  const scmEntries = useMemo(() => (
+    Object.values(gitStatusByPath).sort((left, right) => {
+      const leftPath = getRelativePath(rootPath, left.path);
+      const rightPath = getRelativePath(rootPath, right.path);
+      return leftPath.localeCompare(rightPath, undefined, { sensitivity: 'base' });
+    })
+  ), [gitStatusByPath, rootPath]);
+
+  const problemGroups = useMemo(() => {
+    const groups = new Map<string, Array<MonacoMarker & { filePath: string }>>();
+    for (const problem of problems) {
+      const entries = groups.get(problem.filePath) ?? [];
+      entries.push(problem);
+      groups.set(problem.filePath, entries);
+    }
+
+    return Array.from(groups.entries()).map(([filePath, entries]) => ({
+      filePath,
+      entries,
+    }));
+  }, [problems]);
+
+  const problemSummary = useMemo(() => {
+    let errorCount = 0;
+    let warningCount = 0;
+    let infoCount = 0;
+
+    for (const problem of problems) {
+      if (problem.severity >= 8) {
+        errorCount += 1;
+      } else if (problem.severity >= 4) {
+        warningCount += 1;
+      } else {
+        infoCount += 1;
+      }
+    }
+
+    return {
+      errorCount,
+      warningCount,
+      infoCount,
+    };
+  }, [problems]);
+
+  const openFileLocation = useCallback(async (location: FileNavigationLocation) => {
+    pendingNavigationRef.current = location;
+    await activateFile(location.filePath);
   }, [activateFile]);
+
+  const openContentSearchMatch = useCallback(async (match: CodePaneContentMatch) => {
+    await openFileLocation({
+      filePath: match.filePath,
+      lineNumber: match.lineNumber,
+      column: match.column,
+    });
+  }, [openFileLocation]);
 
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
@@ -1542,16 +1671,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
             <button
               type="button"
               onClick={() => setSidebarMode('files')}
-              className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'files' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
+              className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'files' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
             >
+              <FileCode2 size={12} />
               {t('codePane.filesTab')}
             </button>
             <button
               type="button"
               onClick={() => setSidebarMode('search')}
-              className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'search' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
+              className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'search' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
             >
+              <Search size={12} />
               {t('codePane.searchTab')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarMode('scm')}
+              className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'scm' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
+            >
+              <GitBranch size={12} />
+              {t('codePane.scmTab')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarMode('problems')}
+              className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'problems' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
+            >
+              <AlertTriangle size={12} />
+              {t('codePane.problemsTab')}
             </button>
           </div>
 
@@ -1599,7 +1746,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 </div>
               </div>
             </>
-          ) : (
+          ) : sidebarMode === 'search' ? (
             <>
               <div className="border-b border-zinc-800 px-2 py-2">
                 <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
@@ -1667,6 +1814,131 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     <div className="text-xs text-zinc-500">{t('codePane.searchContentsHint')}</div>
                   )}
                 </div>
+              </div>
+            </>
+          ) : sidebarMode === 'scm' ? (
+            <>
+              <div className="border-b border-zinc-800 px-2 py-2">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  <GitBranch size={12} />
+                  {t('codePane.sourceControl')}
+                </div>
+                <div className="text-xs text-zinc-500">
+                  {scmEntries.length > 0 ? t('codePane.sourceControlHint') : t('codePane.noChanges')}
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+                {scmEntries.length > 0 ? (
+                  <div className="space-y-2">
+                    {scmEntries.map((entry) => {
+                      const badge = getStatusTone(entry.status);
+                      return (
+                        <div key={entry.path} className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+                          <div className="mb-2 flex items-center gap-2">
+                            <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                            <span className="min-w-0 flex-1 truncate text-xs text-zinc-200">
+                              {getPathLeafLabel(entry.path)}
+                            </span>
+                            {badge && (
+                              <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
+                                {badge.badge}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mb-2 truncate text-[10px] text-zinc-500">
+                            {getRelativePath(rootPath, entry.path)}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {entry.status !== 'deleted' && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void activateFile(entry.path);
+                                  }}
+                                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                                >
+                                  {t('common.open')}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    void openDiffForFile(entry.path);
+                                  }}
+                                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                                >
+                                  {t('codePane.openDiff')}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-xs text-zinc-500">{t('codePane.noChanges')}</div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="border-b border-zinc-800 px-2 py-2">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  <AlertTriangle size={12} />
+                  {t('codePane.problemsTab')}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                  <span>{t('codePane.problemErrors', { count: problemSummary.errorCount })}</span>
+                  <span>{t('codePane.problemWarnings', { count: problemSummary.warningCount })}</span>
+                  <span>{t('codePane.problemInfos', { count: problemSummary.infoCount })}</span>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+                {problemGroups.length > 0 ? (
+                  <div className="space-y-3">
+                    {problemGroups.map((group) => (
+                      <div key={group.filePath} className="space-y-1">
+                        <div className="flex items-center gap-2 px-1 py-1 text-xs text-zinc-300">
+                          <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                          <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
+                          <span className="truncate text-[10px] text-zinc-500">
+                            {getRelativePath(rootPath, group.filePath)}
+                          </span>
+                        </div>
+                        {group.entries.map((problem) => {
+                          const tone = getProblemTone(problem.severity);
+                          return (
+                            <button
+                              key={`${group.filePath}:${problem.startLineNumber}:${problem.startColumn}:${problem.message}`}
+                              type="button"
+                              onClick={() => {
+                                void openFileLocation({
+                                  filePath: group.filePath,
+                                  lineNumber: problem.startLineNumber,
+                                  column: problem.startColumn,
+                                });
+                              }}
+                              className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                            >
+                              <span className={`mt-0.5 rounded px-1 py-0.5 text-[10px] font-medium uppercase ${tone.className}`}>
+                                {tone.label}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="break-words">{problem.message}</div>
+                                <div className="mt-1 text-[10px] text-zinc-500">
+                                  {problem.startLineNumber}:{problem.startColumn}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-zinc-500">{t('codePane.noProblems')}</div>
+                )}
               </div>
             </>
           )}
