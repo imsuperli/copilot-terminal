@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, ChevronDown, SendHorizonal, Sparkles, Square, TerminalSquare, X } from 'lucide-react';
+import { ChevronDown, Plus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   ChatMessage,
+  LLMProviderConfig,
   ChatSettings,
   ChatStreamChunkPayload,
   ChatStreamDonePayload,
@@ -36,6 +37,17 @@ interface StreamingMessageState {
   messageId: string;
   content: string;
   model?: string;
+}
+
+interface ChatRound {
+  id: string;
+  endMessageCount: number;
+  messages: ChatMessage[];
+}
+
+interface GroupedChatMessages {
+  preamble: ChatMessage[];
+  rounds: ChatRound[];
 }
 
 function splitInlineCode(content: string): InlineCodeFragment[] {
@@ -166,12 +178,109 @@ function inferToolStatus(result: string, isError?: boolean): ToolCall['status'] 
   return 'error';
 }
 
-function getLinkedPaneLabel(pane: Pane): string {
-  if (pane.ssh?.host) {
-    return pane.ssh.user ? `${pane.ssh.user}@${pane.ssh.host}` : pane.ssh.host;
+interface ProviderModelOption {
+  value: string;
+  providerId: string;
+  model: string;
+  label: string;
+}
+
+function encodeProviderModelSelection(providerId: string, model: string): string {
+  return JSON.stringify([providerId, model]);
+}
+
+function decodeProviderModelSelection(value: string): { providerId: string; model: string } | null {
+  try {
+    const parsed = JSON.parse(value);
+    if (
+      Array.isArray(parsed)
+      && parsed.length === 2
+      && typeof parsed[0] === 'string'
+      && typeof parsed[1] === 'string'
+    ) {
+      return {
+        providerId: parsed[0],
+        model: parsed[1],
+      };
+    }
+  } catch {
+    return null;
   }
 
-  return pane.cwd || pane.id;
+  return null;
+}
+
+function collectProviderModels(provider: LLMProviderConfig, activeModel?: string): string[] {
+  const nextModels = [
+    provider.defaultModel,
+    ...(provider.models ?? []),
+    activeModel,
+  ].filter((model): model is string => Boolean(model && model.trim()));
+
+  return Array.from(new Set(nextModels));
+}
+
+function buildProviderModelOptions(
+  providers: LLMProviderConfig[],
+  activeProviderId?: string,
+  activeModel?: string,
+): ProviderModelOption[] {
+  return providers.flatMap((provider) => {
+    const models = collectProviderModels(
+      provider,
+      provider.id === activeProviderId ? activeModel : undefined,
+    );
+
+    return models.map((model) => ({
+      value: encodeProviderModelSelection(provider.id, model),
+      providerId: provider.id,
+      model,
+      label: `${provider.name} / ${model}`,
+    }));
+  });
+}
+
+function isConversationRoundStarter(message: ChatMessage): boolean {
+  return message.role === 'user' && !message.toolResult;
+}
+
+function groupMessagesByRound(messages: ChatMessage[]): GroupedChatMessages {
+  const grouped: GroupedChatMessages = {
+    preamble: [],
+    rounds: [],
+  };
+  let currentRound: ChatRound | null = null;
+
+  messages.forEach((message, index) => {
+    if (isConversationRoundStarter(message)) {
+      currentRound = {
+        id: message.id,
+        endMessageCount: index + 1,
+        messages: [message],
+      };
+      grouped.rounds.push(currentRound);
+      return;
+    }
+
+    if (!currentRound) {
+      grouped.preamble.push(message);
+      return;
+    }
+
+    currentRound.messages.push(message);
+    currentRound.endMessageCount = index + 1;
+  });
+
+  return grouped;
+}
+
+function collectPendingApprovalIds(messages: ChatMessage[]): string[] {
+  return messages.flatMap((message) => (
+    message.toolCalls
+      ?.filter((toolCall) => toolCall.status === 'pending')
+      .map((toolCall) => toolCall.id)
+      ?? []
+  ));
 }
 
 function normalizeChatSettings(settings: ChatSettings | undefined): ChatSettings {
@@ -247,21 +356,6 @@ function ToolCallCard({
           </pre>
         </div>
       )}
-    </div>
-  );
-}
-
-function ControlPill({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-800/90 bg-zinc-900/75 px-3 py-2 text-xs text-zinc-300 shadow-[0_16px_30px_-28px_rgba(0,0,0,0.95)]">
-      <span className="text-zinc-500">{icon}</span>
-      <span className="truncate">{label}</span>
     </div>
   );
 }
@@ -347,6 +441,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const selectedProviderId = chatState.activeProviderId ?? settings.activeProviderId ?? providers[0]?.id ?? '';
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? null;
   const selectedModel = chatState.activeModel ?? selectedProvider?.defaultModel ?? selectedProvider?.models[0] ?? '';
+  const selectedProviderModelValue = selectedProvider && selectedModel
+    ? encodeProviderModelSelection(selectedProvider.id, selectedModel)
+    : '';
   const isBusy = Boolean(chatState.isStreaming || streamingMessage);
   const canSend = Boolean(selectedProvider && selectedModel && !isBusy);
 
@@ -583,28 +680,65 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     };
   }, [pane.id, persistChatState, t, updateToolCall]);
 
-  const handleProviderChange = useCallback((providerId: string) => {
-    const provider = providers.find((candidate) => candidate.id === providerId);
-    persistChatState((currentChat) => ({
-      ...currentChat,
-      activeProviderId: providerId,
-      activeModel: provider?.defaultModel ?? provider?.models[0] ?? '',
-    }));
-  }, [persistChatState, providers]);
+  const handleProviderModelChange = useCallback((value: string) => {
+    if (!value) {
+      persistChatState((currentChat) => ({
+        ...currentChat,
+        activeProviderId: undefined,
+        activeModel: '',
+      }));
+      return;
+    }
 
-  const handleModelChange = useCallback((model: string) => {
+    const nextSelection = decodeProviderModelSelection(value);
+    if (!nextSelection) {
+      return;
+    }
+
     persistChatState((currentChat) => ({
       ...currentChat,
-      activeModel: model,
+      activeProviderId: nextSelection.providerId,
+      activeModel: nextSelection.model,
     }));
   }, [persistChatState]);
 
-  const handleLinkedPaneChange = useCallback((linkedPaneId: string) => {
+  const handleNewConversation = useCallback(() => {
+    if (isBusy) {
+      return;
+    }
+
+    currentRequestRef.current = null;
+    setComposerValue('');
+    setStreamingMessage(null);
+    setErrorMessage(null);
+    setPendingApprovalIds([]);
+
     persistChatState((currentChat) => ({
       ...currentChat,
-      linkedPaneId: linkedPaneId || undefined,
+      messages: [],
+      isStreaming: false,
     }));
-  }, [persistChatState]);
+  }, [isBusy, persistChatState]);
+
+  const handleRollbackToRound = useCallback((messageCount: number) => {
+    if (isBusy) {
+      return;
+    }
+
+    const currentMessages = paneRef.current.chat?.messages ?? [];
+    const nextMessages = currentMessages.slice(0, messageCount);
+
+    currentRequestRef.current = null;
+    setStreamingMessage(null);
+    setErrorMessage(null);
+    setPendingApprovalIds(collectPendingApprovalIds(nextMessages));
+
+    persistChatState((currentChat) => ({
+      ...currentChat,
+      messages: nextMessages,
+      isStreaming: false,
+    }));
+  }, [isBusy, persistChatState]);
 
   const handleCancelStreaming = useCallback(async () => {
     try {
@@ -743,23 +877,82 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     });
   }
 
-  const modelOptions = useMemo(() => {
-    if (!selectedProvider) {
-      return [] as string[];
-    }
-
-    const models = selectedProvider.models ?? [];
-    if (selectedModel && !models.includes(selectedModel)) {
-      return [selectedModel, ...models];
-    }
-
-    return models;
-  }, [selectedModel, selectedProvider]);
+  const providerModelOptions = useMemo(() => (
+    buildProviderModelOptions(providers, selectedProvider?.id, selectedModel)
+  ), [providers, selectedModel, selectedProvider?.id]);
+  const groupedMessages = useMemo(() => (
+    groupMessagesByRound(renderedMessages)
+  ), [renderedMessages]);
 
   const assistantLabel = selectedProvider?.name?.trim() || t('chatPane.role.assistant');
-  const linkedContextLabel = linkedPane
-    ? getLinkedPaneLabel(linkedPane)
-    : t('chatPane.unlinkedOption');
+  const renderConversationMessage = (message: ChatMessage) => {
+    const isUser = message.role === 'user' && !message.toolResult;
+    const isToolResult = Boolean(message.toolResult);
+
+    if (isUser) {
+      return (
+        <div className="flex justify-end">
+          <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
+            <div className="space-y-3 text-[15px] leading-7 text-zinc-100">
+              {renderMarkdownLike(message.content)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (isToolResult) {
+      return (
+        <div className="pl-[52px]">
+          <div className="max-w-[92%] rounded-[20px] border border-zinc-800/80 bg-zinc-900/75 px-4 py-3 text-zinc-200">
+            <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+              {t('chatPane.role.tool')}
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
+              {message.toolResult?.content}
+            </pre>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex gap-3">
+        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+          <Sparkles size={15} />
+        </div>
+        <div className="min-w-0 flex-1 pt-1">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-zinc-100">{assistantLabel}</span>
+            {message.model && (
+              <span className="rounded-full border border-zinc-800/80 bg-zinc-900/70 px-2.5 py-1 text-[11px] text-zinc-400">
+                {message.model}
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-3 text-[15px] leading-7 text-zinc-200">
+            {renderMarkdownLike(message.content)}
+          </div>
+
+          {message.toolCalls?.length ? (
+            <div className="mt-4 space-y-3">
+              {message.toolCalls.map((toolCall) => (
+                <ToolCallCard
+                  key={toolCall.id}
+                  toolCall={toolCall}
+                  t={t}
+                  needsApproval={pendingApprovalIds.includes(toolCall.id)}
+                  onApprove={() => handleToolApprovalResponse(toolCall.id, true)}
+                  onReject={() => handleToolApprovalResponse(toolCall.id, false)}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -780,18 +973,33 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             </span>
           </div>
 
-          {onClose && (
+          <div className="flex items-center gap-2">
             <button
               type="button"
               tabIndex={-1}
-              aria-label={t('common.close')}
+              aria-label={t('chatPane.newConversation')}
               onMouseDown={preventMouseButtonFocus}
-              onClick={onClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800/90 bg-zinc-900/70 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+              onClick={handleNewConversation}
+              disabled={isBusy}
+              className="group relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-emerald-400/20 bg-[linear-gradient(135deg,rgba(16,185,129,0.24),rgba(24,24,27,0.92))] text-emerald-50 shadow-[0_18px_40px_-28px_rgba(16,185,129,0.65)] transition-all duration-200 before:absolute before:inset-[1px] before:rounded-full before:bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.22),transparent_58%)] hover:-translate-y-0.5 hover:border-emerald-300/35 hover:shadow-[0_24px_50px_-30px_rgba(16,185,129,0.85)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <X size={14} />
+              <span className="absolute inset-[7px] rounded-full border border-white/10 opacity-70 transition-opacity group-hover:opacity-100" />
+              <Plus size={16} strokeWidth={2.2} className="relative z-[1]" />
             </button>
-          )}
+
+            {onClose && (
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={t('common.close')}
+                onMouseDown={preventMouseButtonFocus}
+                onClick={onClose}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800/90 bg-zinc-900/70 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -833,67 +1041,36 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           </div>
         ) : (
           <div className="space-y-6 pt-4">
-            {renderedMessages.map((message) => {
-              const isUser = message.role === 'user' && !message.toolResult;
-              const isToolResult = Boolean(message.toolResult);
+            {groupedMessages.preamble.map((message) => (
+              <div key={message.id}>
+                {renderConversationMessage(message)}
+              </div>
+            ))}
+            {groupedMessages.rounds.map((round, roundIndex) => {
+              const isLatestRound = round.endMessageCount === renderedMessages.length;
 
               return (
-                <div key={message.id}>
-                  {isUser ? (
-                    <div className="flex justify-end">
-                      <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
-                        <div className="space-y-3 text-[15px] leading-7 text-zinc-100">
-                          {renderMarkdownLike(message.content)}
-                        </div>
-                      </div>
-                    </div>
-                  ) : isToolResult ? (
-                    <div className="pl-[52px]">
-                      <div className="max-w-[92%] rounded-[20px] border border-zinc-800/80 bg-zinc-900/75 px-4 py-3 text-zinc-200">
-                        <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                          {t('chatPane.role.tool')}
-                        </div>
-                        <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
-                          {message.toolResult?.content}
-                        </pre>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex gap-3">
-                      <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
-                        <Sparkles size={15} />
-                      </div>
-                      <div className="min-w-0 flex-1 pt-1">
-                        <div className="mb-3 flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium text-zinc-100">{assistantLabel}</span>
-                          {message.model && (
-                            <span className="rounded-full border border-zinc-800/80 bg-zinc-900/70 px-2.5 py-1 text-[11px] text-zinc-400">
-                              {message.model}
-                            </span>
-                          )}
-                        </div>
+                <div key={`round-${round.id}`} className="flex gap-3">
+                  <div className="flex w-9 shrink-0 justify-center pt-1">
+                    <button
+                      type="button"
+                      aria-label={t('chatPane.rollbackToRound', { round: roundIndex + 1 })}
+                      title={t('chatPane.rollbackToRound', { round: roundIndex + 1 })}
+                      onClick={() => handleRollbackToRound(round.endMessageCount)}
+                      disabled={isBusy || isLatestRound}
+                      className="group inline-flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800/80 bg-zinc-900/65 text-zinc-500 shadow-[0_18px_34px_-30px_rgba(0,0,0,0.95)] transition-all hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-35"
+                    >
+                      <Undo2 size={14} strokeWidth={2} className="transition-transform group-hover:-translate-x-0.5" />
+                    </button>
+                  </div>
 
-                        <div className="space-y-3 text-[15px] leading-7 text-zinc-200">
-                          {renderMarkdownLike(message.content)}
-                        </div>
-
-                        {message.toolCalls?.length ? (
-                          <div className="mt-4 space-y-3">
-                            {message.toolCalls.map((toolCall) => (
-                              <ToolCallCard
-                                key={toolCall.id}
-                                toolCall={toolCall}
-                                t={t}
-                                needsApproval={pendingApprovalIds.includes(toolCall.id)}
-                                onApprove={() => handleToolApprovalResponse(toolCall.id, true)}
-                                onReject={() => handleToolApprovalResponse(toolCall.id, false)}
-                              />
-                            ))}
-                          </div>
-                        ) : null}
+                  <div className="min-w-0 flex-1 space-y-6">
+                    {round.messages.map((message) => (
+                      <div key={message.id}>
+                        {renderConversationMessage(message)}
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               );
             })}
@@ -912,50 +1089,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         )}
 
         <div className="rounded-[28px] border border-zinc-800/90 bg-[#17181b]/95 p-3 shadow-[0_30px_60px_-40px_rgba(0,0,0,0.98)]">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            {providers.length > 1 ? (
-              <ControlSelect
-                ariaLabel={t('chatPane.providerLabel')}
-                value={selectedProviderId}
-                onChange={handleProviderChange}
-                icon={<Bot size={14} />}
-                minWidthClass="min-w-[156px] max-w-[220px]"
-              >
-                <option value="">{t('chatPane.providerPlaceholder')}</option>
-                {providers.map((provider) => (
-                  <option key={provider.id} value={provider.id}>{provider.name}</option>
-                ))}
-              </ControlSelect>
-            ) : (
-              <ControlPill
-                icon={<Sparkles size={14} />}
-                label={providers[0]?.name || assistantLabel}
-              />
-            )}
-
-            {terminalPanes.length > 0 ? (
-              <ControlSelect
-                ariaLabel={t('chatPane.linkedPaneLabel')}
-                value={resolvedLinkedPaneId ?? ''}
-                onChange={handleLinkedPaneChange}
-                icon={<TerminalSquare size={14} />}
-                minWidthClass="min-w-[180px] max-w-[320px]"
-              >
-                <option value="">{t('chatPane.unlinkedOption')}</option>
-                {terminalPanes.map((terminalPane) => (
-                  <option key={terminalPane.id} value={terminalPane.id}>
-                    {getLinkedPaneLabel(terminalPane)}
-                  </option>
-                ))}
-              </ControlSelect>
-            ) : (
-              <ControlPill
-                icon={<TerminalSquare size={14} />}
-                label={linkedContextLabel}
-              />
-            )}
-          </div>
-
           <textarea
             value={composerValue}
             onChange={(event) => setComposerValue(event.target.value)}
@@ -974,16 +1107,18 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
             <div className="flex flex-wrap items-center gap-2">
               <ControlSelect
-                ariaLabel={t('chatPane.modelLabel')}
-                value={selectedModel}
-                onChange={handleModelChange}
-                disabled={!selectedProvider}
+                ariaLabel={t('chatPane.providerModelLabel')}
+                value={selectedProviderModelValue}
+                onChange={handleProviderModelChange}
+                disabled={!providers.length}
                 icon={<Sparkles size={14} />}
-                minWidthClass="min-w-[168px] max-w-[240px]"
+                minWidthClass="min-w-[240px] max-w-[360px]"
               >
-                <option value="">{t('chatPane.modelPlaceholder')}</option>
-                {modelOptions.map((model) => (
-                  <option key={model} value={model}>{model}</option>
+                <option value="">{t('chatPane.providerModelPlaceholder')}</option>
+                {providerModelOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
                 ))}
               </ControlSelect>
 
