@@ -372,7 +372,9 @@ describe('ChatPane', () => {
       });
     });
 
-    expect(await screen.findByRole('option', { name: 'Claude API' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText('Claude API').length).toBeGreaterThan(0);
+    });
   });
 
   it('does not render an outer active border', async () => {

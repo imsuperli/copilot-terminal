@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { Bot, ChevronDown, SendHorizonal, Sparkles, Square, TerminalSquare, X } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   ChatMessage,
@@ -9,7 +9,6 @@ import type {
   ChatStreamErrorPayload,
   ChatToolApprovalRequestPayload,
   ChatToolResultPayload,
-  LLMProviderConfig,
   ToolCall,
 } from '../../shared/types/chat';
 import type { Pane } from '../types/window';
@@ -65,7 +64,7 @@ function renderTextBlock(content: string, keyPrefix: string): React.ReactNode {
   return paragraphs.map((paragraph, paragraphIndex) => (
     <p
       key={`${keyPrefix}-paragraph-${paragraphIndex}`}
-      className="whitespace-pre-wrap break-words leading-6 text-[rgb(var(--foreground))]"
+      className="whitespace-pre-wrap break-words leading-7 text-inherit"
     >
       {splitInlineCode(paragraph).map((fragment, fragmentIndex) => (
         fragment.type === 'code' ? (
@@ -200,9 +199,9 @@ function ToolCallCard({
   const statusKey = `chatPane.toolStatus.${toolCall.status}` as const;
 
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-3">
+    <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/70 p-4 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-white">{t(`chatPane.toolName.${toolCall.name}` as any)}</div>
+        <div className="text-sm font-medium text-zinc-100">{t(`chatPane.toolName.${toolCall.name}` as any)}</div>
         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${getToolStatusTone(toolCall.status)}`}>
           {t(statusKey as any)}
         </span>
@@ -211,7 +210,7 @@ function ToolCallCard({
       {'command' in toolCall.params && typeof toolCall.params.command === 'string' && (
         <div className="mt-3">
           <div className="mb-1 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{t('chatPane.commandLabel')}</div>
-          <pre className="overflow-x-auto rounded-xl bg-zinc-900/90 px-3 py-2 font-mono text-[12px] leading-6 text-zinc-100">
+          <pre className="overflow-x-auto rounded-2xl border border-zinc-800/80 bg-[#0d0d10] px-3 py-2.5 font-mono text-[12px] leading-6 text-zinc-100">
             {toolCall.params.command}
           </pre>
         </div>
@@ -226,14 +225,14 @@ function ToolCallCard({
           <button
             type="button"
             onClick={onApprove}
-            className="rounded-xl bg-[rgb(var(--primary))] px-3 py-1.5 text-xs font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90"
+            className="rounded-full bg-[rgb(var(--primary))] px-3 py-1.5 text-xs font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90"
           >
             {t('chatPane.approve')}
           </button>
           <button
             type="button"
             onClick={onReject}
-            className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+            className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
           >
             {t('chatPane.reject')}
           </button>
@@ -241,7 +240,7 @@ function ToolCallCard({
       )}
 
       {toolCall.result && (
-        <div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2">
+        <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/80 px-3 py-2.5">
           <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">{t('chatPane.toolResultLabel')}</div>
           <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
             {toolCall.result}
@@ -249,6 +248,58 @@ function ToolCallCard({
         </div>
       )}
     </div>
+  );
+}
+
+function ControlPill({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-zinc-800/90 bg-zinc-900/75 px-3 py-2 text-xs text-zinc-300 shadow-[0_16px_30px_-28px_rgba(0,0,0,0.95)]">
+      <span className="text-zinc-500">{icon}</span>
+      <span className="truncate">{label}</span>
+    </div>
+  );
+}
+
+function ControlSelect({
+  ariaLabel,
+  value,
+  onChange,
+  disabled = false,
+  icon,
+  minWidthClass = 'min-w-[140px]',
+  children,
+}: {
+  ariaLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  icon: React.ReactNode;
+  minWidthClass?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={`relative inline-flex max-w-full items-center ${minWidthClass}`}>
+      <span className="sr-only">{ariaLabel}</span>
+      <span className="pointer-events-none absolute left-3 text-zinc-500">
+        {icon}
+      </span>
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        className="h-10 w-full appearance-none rounded-full border border-zinc-800/90 bg-zinc-900/75 pl-9 pr-9 text-sm text-zinc-100 outline-none transition-colors focus:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {children}
+      </select>
+      <ChevronDown size={14} className="pointer-events-none absolute right-3 text-zinc-500" />
+    </label>
   );
 }
 
@@ -705,22 +756,30 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     return models;
   }, [selectedModel, selectedProvider]);
 
+  const assistantLabel = selectedProvider?.name?.trim() || t('chatPane.role.assistant');
+  const linkedContextLabel = linkedPane
+    ? getLinkedPaneLabel(linkedPane)
+    : t('chatPane.unlinkedOption');
+
   return (
     <div
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
+      style={{
+        backgroundImage: 'radial-gradient(circle at top, rgba(74, 222, 128, 0.08), transparent 28%), linear-gradient(180deg, #17171a 0%, #101012 100%)',
+      }}
       onMouseDown={onActivate}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 px-3 py-3">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-white">{t('chatPane.title')}</div>
-          <div className="mt-1 text-xs text-zinc-400">
-            {linkedPane
-              ? t('chatPane.linkedPaneDescription', { target: getLinkedPaneLabel(linkedPane) })
-              : t('chatPane.unlinkedDescription')}
+      <div className="px-4 pb-2 pt-4">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
+          <div className="inline-flex max-w-full items-center gap-3 rounded-full border border-zinc-800/90 bg-zinc-900/70 px-3 py-2 shadow-[0_18px_40px_-34px_rgba(0,0,0,0.9)]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-200">
+              <Sparkles size={14} />
+            </span>
+            <span className="truncate text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-300">
+              {assistantLabel}
+            </span>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2">
           {onClose && (
             <button
               type="button"
@@ -728,7 +787,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               aria-label={t('common.close')}
               onMouseDown={preventMouseButtonFocus}
               onClick={onClose}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-white"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800/90 bg-zinc-900/70 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-100"
             >
               <X size={14} />
             </button>
@@ -736,150 +795,174 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </div>
       </div>
 
-      <div className="grid gap-3 border-b border-zinc-900 bg-zinc-950/70 px-3 py-3 md:grid-cols-3">
-        <label className="flex min-w-0 flex-col gap-1.5">
-          <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{t('chatPane.providerLabel')}</span>
-          <select
-            value={selectedProviderId}
-            onChange={(event) => handleProviderChange(event.target.value)}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-[rgb(var(--ring))]"
-          >
-            <option value="">{t('chatPane.providerPlaceholder')}</option>
-            {providers.map((provider) => (
-              <option key={provider.id} value={provider.id}>{provider.name}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex min-w-0 flex-col gap-1.5">
-          <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{t('chatPane.modelLabel')}</span>
-          <select
-            value={selectedModel}
-            onChange={(event) => handleModelChange(event.target.value)}
-            disabled={!selectedProvider}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-[rgb(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <option value="">{t('chatPane.modelPlaceholder')}</option>
-            {modelOptions.map((model) => (
-              <option key={model} value={model}>{model}</option>
-            ))}
-          </select>
-        </label>
-
-        <label className="flex min-w-0 flex-col gap-1.5">
-          <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{t('chatPane.linkedPaneLabel')}</span>
-          <select
-            value={resolvedLinkedPaneId ?? ''}
-            onChange={(event) => handleLinkedPaneChange(event.target.value)}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors focus:border-[rgb(var(--ring))]"
-          >
-            <option value="">{t('chatPane.unlinkedOption')}</option>
-            {terminalPanes.map((terminalPane) => (
-              <option key={terminalPane.id} value={terminalPane.id}>
-                {getLinkedPaneLabel(terminalPane)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-3 py-3">
+      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2">
+        <div className="mx-auto w-full max-w-4xl">
         {!settingsLoaded ? (
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-300">
+          <div className="rounded-[24px] border border-zinc-800/80 bg-zinc-900/60 px-5 py-4 text-sm text-zinc-300">
             {t('common.loading')}
           </div>
         ) : providers.length === 0 ? (
-          <div className="rounded-[24px] border border-dashed border-zinc-800 bg-zinc-900/60 px-5 py-8 text-center">
-            <div className="text-base font-semibold text-white">{t('chatPane.noProviderTitle')}</div>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">{t('chatPane.noProviderDescription')}</p>
+          <div className="flex gap-3 pt-6">
+            <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+              <Sparkles size={15} />
+            </div>
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center rounded-full border border-zinc-800/80 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-zinc-300">
+                {assistantLabel}
+              </div>
+              <div className="mt-4 text-[15px] leading-7 text-zinc-100">{t('chatPane.noProviderTitle')}</div>
+              <p className="mt-2 text-sm leading-7 text-zinc-500">{t('chatPane.noProviderDescription')}</p>
+            </div>
           </div>
         ) : renderedMessages.length === 0 ? (
-          <div className="rounded-[24px] border border-dashed border-zinc-800 bg-zinc-900/60 px-5 py-8 text-center">
-            <div className="text-base font-semibold text-white">{t('chatPane.emptyTitle')}</div>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">
-              {linkedPane && getPaneBackend(linkedPane) === 'ssh'
-                ? t('chatPane.emptyDescriptionLinked')
-                : t('chatPane.emptyDescription')}
-            </p>
+          <div className="flex gap-3 pt-6">
+            <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+              <Sparkles size={15} />
+            </div>
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center rounded-full border border-zinc-800/80 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-zinc-300">
+                {assistantLabel}
+              </div>
+              <div className="mt-4 text-[15px] leading-7 text-zinc-100">{t('chatPane.emptyTitle')}</div>
+              <p className="mt-2 text-sm leading-7 text-zinc-500">
+                {linkedPane && getPaneBackend(linkedPane) === 'ssh'
+                  ? t('chatPane.emptyDescriptionLinked')
+                  : t('chatPane.emptyDescription')}
+              </p>
+            </div>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6 pt-4">
             {renderedMessages.map((message) => {
               const isUser = message.role === 'user' && !message.toolResult;
               const isToolResult = Boolean(message.toolResult);
-              const needsMutedChrome = isToolResult;
 
               return (
-                <div
-                  key={message.id}
-                  className={`rounded-[22px] border px-4 py-3 ${
-                    isUser
-                      ? 'ml-auto max-w-[86%] border-[rgb(var(--primary))]/35 bg-[rgb(var(--primary))]/10'
-                      : needsMutedChrome
-                        ? 'max-w-[92%] border-zinc-800 bg-zinc-900/70'
-                        : 'max-w-[92%] border-zinc-800 bg-zinc-900/90'
-                  }`}
-                >
-                  <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                    <span>
-                      {isUser
-                        ? t('chatPane.role.user')
-                        : isToolResult
-                          ? t('chatPane.role.tool')
-                          : t('chatPane.role.assistant')}
-                    </span>
-                    {message.model && !isUser && !isToolResult && (
-                      <span>{message.model}</span>
-                    )}
-                  </div>
-
-                  {isToolResult ? (
-                    <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
-                      {message.toolResult?.content}
-                    </pre>
+                <div key={message.id}>
+                  {isUser ? (
+                    <div className="flex justify-end">
+                      <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
+                        <div className="space-y-3 text-[15px] leading-7 text-zinc-100">
+                          {renderMarkdownLike(message.content)}
+                        </div>
+                      </div>
+                    </div>
+                  ) : isToolResult ? (
+                    <div className="pl-[52px]">
+                      <div className="max-w-[92%] rounded-[20px] border border-zinc-800/80 bg-zinc-900/75 px-4 py-3 text-zinc-200">
+                        <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                          {t('chatPane.role.tool')}
+                        </div>
+                        <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
+                          {message.toolResult?.content}
+                        </pre>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="space-y-3 text-sm">
-                      {renderMarkdownLike(message.content)}
+                    <div className="flex gap-3">
+                      <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+                        <Sparkles size={15} />
+                      </div>
+                      <div className="min-w-0 flex-1 pt-1">
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium text-zinc-100">{assistantLabel}</span>
+                          {message.model && (
+                            <span className="rounded-full border border-zinc-800/80 bg-zinc-900/70 px-2.5 py-1 text-[11px] text-zinc-400">
+                              {message.model}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="space-y-3 text-[15px] leading-7 text-zinc-200">
+                          {renderMarkdownLike(message.content)}
+                        </div>
+
+                        {message.toolCalls?.length ? (
+                          <div className="mt-4 space-y-3">
+                            {message.toolCalls.map((toolCall) => (
+                              <ToolCallCard
+                                key={toolCall.id}
+                                toolCall={toolCall}
+                                t={t}
+                                needsApproval={pendingApprovalIds.includes(toolCall.id)}
+                                onApprove={() => handleToolApprovalResponse(toolCall.id, true)}
+                                onReject={() => handleToolApprovalResponse(toolCall.id, false)}
+                              />
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   )}
-
-                  {message.toolCalls?.length ? (
-                    <div className="mt-4 space-y-3">
-                      {message.toolCalls.map((toolCall) => (
-                        <ToolCallCard
-                          key={toolCall.id}
-                          toolCall={toolCall}
-                          t={t}
-                          needsApproval={pendingApprovalIds.includes(toolCall.id)}
-                          onApprove={() => handleToolApprovalResponse(toolCall.id, true)}
-                          onReject={() => handleToolApprovalResponse(toolCall.id, false)}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
               );
             })}
             <div ref={messagesEndRef} />
           </div>
         )}
+        </div>
       </div>
 
-      <div className="border-t border-zinc-800 bg-zinc-950/90 px-3 py-3">
+      <div className="px-4 pb-4 pt-2">
+        <div className="mx-auto w-full max-w-5xl">
         {errorMessage && (
-          <div className="mb-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="mb-3 rounded-[20px] border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
             {errorMessage}
           </div>
         )}
 
-        <div className="rounded-[22px] border border-zinc-800 bg-zinc-900/85 p-3">
+        <div className="rounded-[28px] border border-zinc-800/90 bg-[#17181b]/95 p-3 shadow-[0_30px_60px_-40px_rgba(0,0,0,0.98)]">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            {providers.length > 1 ? (
+              <ControlSelect
+                ariaLabel={t('chatPane.providerLabel')}
+                value={selectedProviderId}
+                onChange={handleProviderChange}
+                icon={<Bot size={14} />}
+                minWidthClass="min-w-[156px] max-w-[220px]"
+              >
+                <option value="">{t('chatPane.providerPlaceholder')}</option>
+                {providers.map((provider) => (
+                  <option key={provider.id} value={provider.id}>{provider.name}</option>
+                ))}
+              </ControlSelect>
+            ) : (
+              <ControlPill
+                icon={<Sparkles size={14} />}
+                label={providers[0]?.name || assistantLabel}
+              />
+            )}
+
+            {terminalPanes.length > 0 ? (
+              <ControlSelect
+                ariaLabel={t('chatPane.linkedPaneLabel')}
+                value={resolvedLinkedPaneId ?? ''}
+                onChange={handleLinkedPaneChange}
+                icon={<TerminalSquare size={14} />}
+                minWidthClass="min-w-[180px] max-w-[320px]"
+              >
+                <option value="">{t('chatPane.unlinkedOption')}</option>
+                {terminalPanes.map((terminalPane) => (
+                  <option key={terminalPane.id} value={terminalPane.id}>
+                    {getLinkedPaneLabel(terminalPane)}
+                  </option>
+                ))}
+              </ControlSelect>
+            ) : (
+              <ControlPill
+                icon={<TerminalSquare size={14} />}
+                label={linkedContextLabel}
+              />
+            )}
+          </div>
+
           <textarea
             value={composerValue}
             onChange={(event) => setComposerValue(event.target.value)}
             onKeyDown={handleComposerKeyDown}
             placeholder={providers.length === 0 ? t('chatPane.disabledPlaceholder') : t('chatPane.inputPlaceholder')}
             disabled={!providers.length || isBusy}
-            className="min-h-[92px] w-full resize-none bg-transparent text-sm leading-6 text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-[108px] w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-7 text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
           />
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -889,15 +972,30 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 : t('chatPane.remoteToolingDisabled')}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <ControlSelect
+                ariaLabel={t('chatPane.modelLabel')}
+                value={selectedModel}
+                onChange={handleModelChange}
+                disabled={!selectedProvider}
+                icon={<Sparkles size={14} />}
+                minWidthClass="min-w-[168px] max-w-[240px]"
+              >
+                <option value="">{t('chatPane.modelPlaceholder')}</option>
+                {modelOptions.map((model) => (
+                  <option key={model} value={model}>{model}</option>
+                ))}
+              </ControlSelect>
+
               {isBusy ? (
                 <button
                   type="button"
                   onClick={() => {
                     void handleCancelStreaming();
                   }}
-                  className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-800"
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-4 text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-800"
                 >
+                  <Square size={12} />
                   {t('chatPane.cancel')}
                 </button>
               ) : (
@@ -907,13 +1005,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     void handleSend();
                   }}
                   disabled={!canSend || !composerValue.trim()}
-                  className="rounded-xl bg-[rgb(var(--primary))] px-3 py-2 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="inline-flex h-10 items-center gap-2 rounded-full bg-[rgb(var(--primary))] px-4 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
+                  <SendHorizonal size={14} />
                   {t('chatPane.send')}
                 </button>
               )}
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>
