@@ -125,7 +125,7 @@ function isPathAffectedByRemovedDirectory(removedDirectoryPaths: string[], candi
 }
 
 function getDirectoryRefreshPath(rootPath: string, change: CodePaneFsChange): string | null {
-  if (change.type === 'change') {
+  if (change.type === 'change' || change.type === 'unlink' || change.type === 'unlinkDir') {
     return null;
   }
 
@@ -1124,11 +1124,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [refreshDirectoryPaths, rootPath]);
 
   const pruneRemovedDirectories = useCallback((changes: CodePaneFsChange[]) => {
+    const removedFilePaths = new Set(
+      changes
+        .filter((change) => change.type === 'unlink' && isPathInside(rootPath, change.path))
+        .map((change) => normalizePath(change.path)),
+    );
     const removedDirectoryPaths = changes
       .filter((change) => change.type === 'unlinkDir' && isPathInside(rootPath, change.path))
       .map((change) => normalizePath(change.path));
 
-    if (removedDirectoryPaths.length === 0) {
+    if (removedFilePaths.size === 0 && removedDirectoryPaths.length === 0) {
       return;
     }
 
@@ -1141,15 +1146,48 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     startTransition(() => {
       setLoadedDirectories(new Set(nextLoadedDirectories));
-      setTreeEntriesByDirectory((currentTreeEntries) => (
-        Object.fromEntries(
-          Object.entries(currentTreeEntries).filter(([directoryPath]) => (
+      setExpandedDirectories((currentExpandedDirectories) => {
+        if (removedDirectoryPaths.length === 0) {
+          return currentExpandedDirectories;
+        }
+
+        const nextExpandedDirectories = new Set(
+          Array.from(currentExpandedDirectories).filter((directoryPath) => (
             !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
           )),
+        );
+
+        if (nextExpandedDirectories.size === currentExpandedDirectories.size) {
+          return currentExpandedDirectories;
+        }
+
+        persistCodeState({
+          expandedPaths: Array.from(nextExpandedDirectories),
+        });
+
+        return nextExpandedDirectories;
+      });
+      setTreeEntriesByDirectory((currentTreeEntries) => (
+        Object.fromEntries(
+          Object.entries(currentTreeEntries)
+            .filter(([directoryPath]) => (
+              !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
+            ))
+            .map(([directoryPath, entries]) => [
+              directoryPath,
+              entries.filter((entry) => {
+                const normalizedEntryPath = normalizePath(entry.path);
+                if (removedFilePaths.has(normalizedEntryPath)) {
+                  return false;
+                }
+
+                return !isPathAffectedByRemovedDirectory(removedDirectoryPaths, normalizedEntryPath);
+              }),
+            ]),
         )
       ));
     });
-  }, [rootPath]);
+  }, [persistCodeState, rootPath]);
 
   const ensureMarkerListenerRef = useRef(ensureMarkerListener);
   const disposeEditorsRef = useRef(disposeEditors);

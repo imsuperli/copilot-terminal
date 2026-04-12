@@ -723,6 +723,32 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
   });
 
+  it('removes deleted files from the tree without reloading the whole directory', async () => {
+    renderCodePane(createPane());
+
+    await screen.findByRole('button', { name: 'index.ts' }, { timeout: 3000 });
+
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockClear();
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'unlink',
+          path: '/workspace/project/src/index.ts',
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'index.ts' })).not.toBeInTheDocument();
+    });
+
+    expect(window.electronAPI.codePaneListDirectory).not.toHaveBeenCalled();
+    expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
+  });
+
   it('reloads only the affected directory for watcher structural changes', async () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
       if (targetPath === '/workspace/project/src') {
