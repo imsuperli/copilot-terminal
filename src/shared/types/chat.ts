@@ -142,6 +142,8 @@ export interface ChatStreamDonePayload {
   fullContent: string;
   /** LLM 输出的工具调用（如有）*/
   toolCalls?: ToolCall[];
+  /** 当前轮次是否为最终回复 */
+  isFinal?: boolean;
 }
 
 /** Main → Renderer：流式错误 */
@@ -154,7 +156,7 @@ export interface ChatStreamErrorPayload {
 export interface ChatToolResultPayload {
   paneId: string;
   toolCallId: string;
-  result: string;
+  content: string;
   isError?: boolean;
 }
 

@@ -3,6 +3,7 @@ import * as Switch from '@radix-ui/react-switch';
 import { v4 as uuidv4 } from 'uuid';
 import type { ChatSettings, LLMProviderConfig, LLMProviderType } from '../../shared/types/chat';
 import { useI18n } from '../i18n';
+import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
 
 interface ProviderFormState {
   id?: string;
@@ -87,6 +88,9 @@ export const ChatSettingsTab: React.FC = () => {
 
     try {
       await window.electronAPI.updateSettings({
+        chat: nextSettings,
+      });
+      notifyWorkspaceSettingsUpdated({
         chat: nextSettings,
       });
     } catch (error) {

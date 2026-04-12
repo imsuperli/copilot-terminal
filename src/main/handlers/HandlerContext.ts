@@ -10,6 +10,7 @@ import { TmuxCompatService } from '../services/TmuxCompatService';
 import { SSHProfileStore } from '../services/ssh/SSHProfileStore';
 import { SSHVaultService } from '../services/ssh/SSHVaultService';
 import { SSHKnownHostsStore } from '../services/ssh/SSHKnownHostsStore';
+import { ChatProviderVaultService } from '../services/chat/ChatProviderVaultService';
 import { CodeFileService } from '../services/code/CodeFileService';
 import { CodeGitService } from '../services/code/CodeGitService';
 import { CodePaneWatcherService } from '../services/code/CodePaneWatcherService';
@@ -32,6 +33,7 @@ export interface HandlerContext {
   sshProfileStore?: SSHProfileStore | null;
   sshVaultService?: SSHVaultService | null;
   sshKnownHostsStore?: SSHKnownHostsStore | null;
+  chatProviderVaultService?: ChatProviderVaultService | null;
   codeFileService?: CodeFileService | null;
   codeGitService?: CodeGitService | null;
   codePaneWatcherService?: CodePaneWatcherService | null;

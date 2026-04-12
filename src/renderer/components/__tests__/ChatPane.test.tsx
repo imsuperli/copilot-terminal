@@ -6,6 +6,7 @@ import { I18nProvider } from '../../i18n';
 import { ChatPane } from '../ChatPane';
 import { useWindowStore } from '../../stores/windowStore';
 import { WindowStatus } from '../../types/window';
+import { notifyWorkspaceSettingsUpdated } from '../../utils/settingsEvents';
 import type {
   ChatStreamChunkPayload,
   ChatStreamDonePayload,
@@ -220,6 +221,7 @@ describe('ChatPane', () => {
         paneId: 'chat-pane-1',
         messageId: 'assistant-1',
         fullContent: '先看一下当前服务状态。',
+        isFinal: false,
         toolCalls: [
           {
             id: 'tool-1',
@@ -262,7 +264,7 @@ describe('ChatPane', () => {
       listeners.result.forEach((listener) => listener({}, {
         paneId: 'chat-pane-1',
         toolCallId: 'tool-1',
-        result: 'nginx.service is active (running)',
+        content: 'nginx.service is active (running)',
         isError: false,
       }));
     });
@@ -270,5 +272,106 @@ describe('ChatPane', () => {
     const toolResults = await screen.findAllByText('nginx.service is active (running)');
     expect(toolResults).toHaveLength(2);
     expect(screen.getByText('已完成')).toBeInTheDocument();
+  });
+
+  it('reloads provider options when chat settings are updated', async () => {
+    vi.mocked(window.electronAPI.getSettings)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          language: 'zh-CN',
+          ides: [],
+          chat: {
+            providers: [],
+            enableCommandSecurity: true,
+          },
+        } as any,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          language: 'zh-CN',
+          ides: [],
+          chat: {
+            providers: [
+              {
+                id: 'provider-1',
+                type: 'anthropic',
+                name: 'Claude API',
+                apiKey: 'sk-ant-test',
+                models: ['claude-sonnet-4-5'],
+                defaultModel: 'claude-sonnet-4-5',
+              },
+            ],
+            activeProviderId: 'provider-1',
+            enableCommandSecurity: true,
+          },
+        } as any,
+      });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByText('尚未配置 Chat Provider')).toBeInTheDocument();
+
+    await act(async () => {
+      notifyWorkspaceSettingsUpdated({
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+        } as any,
+      });
+    });
+
+    expect(await screen.findByRole('option', { name: 'Claude API' })).toBeInTheDocument();
   });
 });

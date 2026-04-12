@@ -11,6 +11,7 @@ import { ChatService } from '../services/chat/ChatService';
 import { ToolExecutor } from '../services/chat/ToolExecutor';
 import { resolveToolApprovalDecision } from '../services/chat/ToolApprovalPolicy';
 import type {
+  ChatMessage,
   ChatSendRequest,
   ChatExecuteToolRequest,
   ChatToolApprovalResponse,
@@ -41,11 +42,23 @@ function getToolExecutor(ctx: HandlerContext): ToolExecutor | null {
   return new ToolExecutor(ctx.processManager);
 }
 
+const MAX_TOOL_LOOP_ROUNDS = 4;
+
 /** 从 workspace settings 中查找 provider 配置 */
-function resolveProvider(ctx: HandlerContext, providerId: string): LLMProviderConfig | null {
+async function resolveProvider(ctx: HandlerContext, providerId: string): Promise<LLMProviderConfig | null> {
   const workspace = ctx.getCurrentWorkspace?.();
   const providers = workspace?.settings?.chat?.providers ?? [];
-  return providers.find((p) => p.id === providerId) ?? null;
+  const provider = providers.find((p) => p.id === providerId) ?? null;
+
+  if (!provider) {
+    return null;
+  }
+
+  const vaultApiKey = await ctx.chatProviderVaultService?.getApiKey(provider.id);
+  return {
+    ...provider,
+    apiKey: vaultApiKey ?? provider.apiKey,
+  };
 }
 
 /** 获取当前 BrowserWindow */
@@ -79,7 +92,7 @@ export function registerChatHandlers(ctx: HandlerContext) {
         activeStreams.delete(paneId);
       }
 
-      const provider = resolveProvider(ctx, request.providerId);
+      const provider = await resolveProvider(ctx, request.providerId);
       if (!provider) {
         return errorResponse(new Error(`Provider not found: ${request.providerId}`));
       }
@@ -167,99 +180,206 @@ async function runChatStream(
   const service = getChatService();
   const commandSecurityEnabled = isCommandSecurityEnabled(ctx);
 
-  let toolCalls: ToolCall[] | undefined;
+  let roundMessageId = messageId;
+  const conversationMessages = [...request.messages];
 
-  await service.streamChat(
-    request,
-    {
-      onChunk: (chunk) => {
-        win?.webContents.send('chat-stream-chunk', { paneId, chunk, messageId });
+  for (let round = 0; round < MAX_TOOL_LOOP_ROUNDS && !abortController.signal.aborted; round += 1) {
+    let toolCalls: ToolCall[] | undefined;
+    let fullContent = '';
+    let streamFailed = false;
+
+    await service.streamChat(
+      {
+        ...request,
+        messages: conversationMessages,
       },
-      onDone: (fullContent, calls) => {
-        toolCalls = calls;
-        win?.webContents.send('chat-stream-done', {
-          paneId,
-          messageId,
-          fullContent,
-          toolCalls: calls,
-        });
-      },
-      onError: (error) => {
-        win?.webContents.send('chat-stream-error', { paneId, error });
-        activeStreams.delete(paneId);
-      },
-    },
-    abortController.signal,
-  );
-
-  // 处理工具调用
-  if (toolCalls && toolCalls.length > 0 && !abortController.signal.aborted && toolExecutor) {
-    for (const toolCall of toolCalls) {
-      if (abortController.signal.aborted) break;
-
-      // ask_followup_question 和 attempt_completion 由 renderer 处理，跳过
-      if (toolCall.name === 'ask_followup_question' || toolCall.name === 'attempt_completion') {
-        continue;
-      }
-
-      // 安全检查（仅对 execute_command）
-      if (toolCall.name === 'execute_command') {
-        const approvalDecision = resolveToolApprovalDecision(toolCall, {
-          commandSecurityEnabled,
-        });
-
-        if (approvalDecision.action === 'block') {
-          const result: ToolResult = {
-            toolCallId: toolCall.id,
-            content: `命令被安全策略阻止：${approvalDecision.reason ?? '匹配高危规则'}`,
-            isError: true,
-          };
-          win?.webContents.send('chat-tool-result', { paneId, ...result });
-          continue;
-        }
-
-        if (approvalDecision.action === 'ask') {
-          // 发送审批请求，等待用户决定
-          const approved = await requestToolApproval(
-            win,
+      {
+        onChunk: (chunk) => {
+          win?.webContents.send('chat-stream-chunk', { paneId, chunk, messageId: roundMessageId });
+        },
+        onDone: (nextFullContent, calls) => {
+          fullContent = nextFullContent;
+          toolCalls = calls;
+          win?.webContents.send('chat-stream-done', {
             paneId,
-            approvalDecision.reason
-              ? {
-                ...toolCall,
-                reason: approvalDecision.reason,
-              }
-              : toolCall,
-            abortController.signal,
-          );
-          if (!approved) {
-            const result: ToolResult = {
-              toolCallId: toolCall.id,
-              content: '用户拒绝了该命令的执行',
-              isError: true,
-            };
-            win?.webContents.send('chat-tool-result', { paneId, ...result });
-            continue;
-          }
-        }
-      }
+            messageId: roundMessageId,
+            fullContent: nextFullContent,
+            toolCalls: calls,
+            isFinal: !calls?.length,
+          });
+        },
+        onError: (error) => {
+          streamFailed = true;
+          win?.webContents.send('chat-stream-error', { paneId, error });
+          activeStreams.delete(paneId);
+        },
+      },
+      abortController.signal,
+    );
 
-      // 执行工具
-      if (!request.sshContext) {
-        const result: ToolResult = {
-          toolCallId: toolCall.id,
-          content: '无 SSH 上下文，工具执行需要 SSH 连接',
-          isError: true,
-        };
-        win?.webContents.send('chat-tool-result', { paneId, ...result });
-        continue;
-      }
-
-      const result = await toolExecutor.execute(toolCall, request.sshContext);
-      win?.webContents.send('chat-tool-result', { paneId, ...result });
+    if (streamFailed || abortController.signal.aborted) {
+      activeStreams.delete(paneId);
+      return;
     }
+
+    conversationMessages.push({
+      id: roundMessageId,
+      role: 'assistant',
+      content: fullContent,
+      timestamp: new Date().toISOString(),
+      toolCalls,
+    });
+
+    if (!toolCalls?.length) {
+      activeStreams.delete(paneId);
+      return;
+    }
+
+    const toolResultMessages = await executeToolCalls(
+      {
+        paneId,
+        toolCalls,
+        request,
+        win,
+        toolExecutor,
+        commandSecurityEnabled,
+        abortSignal: abortController.signal,
+      },
+    );
+
+    conversationMessages.push(...toolResultMessages);
+    roundMessageId = uuidv4();
+  }
+
+  if (!abortController.signal.aborted) {
+    win?.webContents.send('chat-stream-error', {
+      paneId,
+      error: '工具调用轮数超过限制，已停止继续执行',
+    });
   }
 
   activeStreams.delete(paneId);
+}
+
+async function executeToolCalls({
+  paneId,
+  toolCalls,
+  request,
+  win,
+  toolExecutor,
+  commandSecurityEnabled,
+  abortSignal,
+}: {
+  paneId: string;
+  toolCalls: ToolCall[];
+  request: ChatSendRequest & { _provider: LLMProviderConfig };
+  win: BrowserWindow | null;
+  toolExecutor: ToolExecutor | null;
+  commandSecurityEnabled: boolean;
+  abortSignal: AbortSignal;
+}): Promise<ChatMessage[]> {
+  const toolResultMessages: ChatMessage[] = [];
+
+  for (const toolCall of toolCalls) {
+    if (abortSignal.aborted) {
+      break;
+    }
+
+    const result = await executeToolCall({
+      paneId,
+      toolCall,
+      request,
+      win,
+      toolExecutor,
+      commandSecurityEnabled,
+      abortSignal,
+    });
+
+    toolResultMessages.push({
+      id: `tool-result-${toolCall.id}`,
+      role: 'user',
+      content: '',
+      timestamp: new Date().toISOString(),
+      toolResult: {
+        toolCallId: result.toolCallId,
+        content: result.content,
+        isError: result.isError,
+      },
+    });
+  }
+
+  return toolResultMessages;
+}
+
+async function executeToolCall({
+  paneId,
+  toolCall,
+  request,
+  win,
+  toolExecutor,
+  commandSecurityEnabled,
+  abortSignal,
+}: {
+  paneId: string;
+  toolCall: ToolCall;
+  request: ChatSendRequest;
+  win: BrowserWindow | null;
+  toolExecutor: ToolExecutor | null;
+  commandSecurityEnabled: boolean;
+  abortSignal: AbortSignal;
+}): Promise<ToolResult> {
+  if (toolCall.name === 'execute_command') {
+    const approvalDecision = resolveToolApprovalDecision(toolCall, {
+      commandSecurityEnabled,
+    });
+
+    if (approvalDecision.action === 'block') {
+      const result: ToolResult = {
+        toolCallId: toolCall.id,
+        content: `命令被安全策略阻止：${approvalDecision.reason ?? '匹配高危规则'}`,
+        isError: true,
+      };
+      win?.webContents.send('chat-tool-result', { paneId, ...result });
+      return result;
+    }
+
+    if (approvalDecision.action === 'ask') {
+      const approved = await requestToolApproval(
+        win,
+        paneId,
+        approvalDecision.reason
+          ? {
+            ...toolCall,
+            reason: approvalDecision.reason,
+          }
+          : toolCall,
+        abortSignal,
+      );
+      if (!approved) {
+        const result: ToolResult = {
+          toolCallId: toolCall.id,
+          content: '用户拒绝了该命令的执行',
+          isError: true,
+        };
+        win?.webContents.send('chat-tool-result', { paneId, ...result });
+        return result;
+      }
+    }
+  }
+
+  if (!request.sshContext || !toolExecutor) {
+    const result: ToolResult = {
+      toolCallId: toolCall.id,
+      content: '无 SSH 上下文，工具执行需要 SSH 连接',
+      isError: true,
+    };
+    win?.webContents.send('chat-tool-result', { paneId, ...result });
+    return result;
+  }
+
+  const result = await toolExecutor.execute(toolCall, request.sshContext);
+  win?.webContents.send('chat-tool-result', { paneId, ...result });
+  return result;
 }
 
 /**

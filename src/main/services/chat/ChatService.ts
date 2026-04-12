@@ -75,29 +75,6 @@ const TOOL_DEFINITIONS_ANTHROPIC: Anthropic.Tool[] = [
       required: ['pattern'],
     },
   },
-  {
-    name: 'ask_followup_question',
-    description: '向用户提问，获取执行任务所需的额外信息。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        question: { type: 'string', description: '要问用户的问题' },
-        options: { type: 'array', items: { type: 'string' }, description: '可选的选项列表（2-5个）' },
-      },
-      required: ['question'],
-    },
-  },
-  {
-    name: 'attempt_completion',
-    description: '当任务完成时，向用户展示最终结果。',
-    input_schema: {
-      type: 'object',
-      properties: {
-        result: { type: 'string', description: '任务完成的总结描述' },
-      },
-      required: ['result'],
-    },
-  },
 ];
 
 /** 将 Anthropic 工具定义转换为 OpenAI function_calling 格式 */
@@ -229,10 +206,6 @@ export class ChatService {
     callbacks: StreamCallbacks,
     signal?: AbortSignal,
   ): Promise<void> {
-    const { providers, providerId } = request as ChatSendRequest & {
-      providers: import('../../../shared/types/chat').LLMProviderConfig[];
-    };
-
     // providers 由 chatHandlers 从 settings 读取后注入到 request
     const provider = (request as any)._provider as import('../../../shared/types/chat').LLMProviderConfig;
     if (!provider) {

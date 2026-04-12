@@ -8,6 +8,8 @@ import { successResponse, errorResponse } from './HandlerResponse';
 import { scanInstalledIDEsAsync, scanSpecificIDE, getSupportedIDENames, isImageFile } from '../utils/ideScanner';
 import { IDEConfig } from '../types/workspace';
 import { scanAvailableShellPrograms } from '../utils/shell';
+import type { ChatSettings, LLMProviderConfig } from '../../shared/types/chat';
+import type { Settings, Workspace } from '../types/workspace';
 
 /**
  * 从 macOS .app bundle 的 Info.plist 中提取 .icns 图标路径
@@ -41,7 +43,13 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
       if (!workspace) {
         throw new Error('Workspace not loaded');
       }
-      return successResponse(workspace.settings);
+
+      const migratedWorkspace = await migrateInlineChatProviderApiKeys(ctx, workspace);
+      if (migratedWorkspace !== workspace) {
+        setCurrentWorkspace(migratedWorkspace);
+      }
+
+      return successResponse(await hydrateSettingsForResponse(ctx, migratedWorkspace.settings));
     } catch (error) {
       return errorResponse(error);
     }
@@ -76,12 +84,17 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           }
         : workspace.settings.features;
 
-      const chatSettings = settings?.chat
+      const mergedChatSettings = settings?.chat
         ? {
             ...workspace.settings.chat,
             ...settings.chat,
           }
         : workspace.settings.chat;
+      const chatSettings = await sanitizeChatSettingsForPersistence(
+        ctx,
+        mergedChatSettings,
+        workspace.settings.chat,
+      );
 
       const updatedWorkspace = {
         ...workspace,
@@ -98,7 +111,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
       await workspaceManager.saveWorkspace(updatedWorkspace);
       setCurrentWorkspace(updatedWorkspace);
 
-      return successResponse(updatedWorkspace.settings);
+      return successResponse(await hydrateSettingsForResponse(ctx, updatedWorkspace.settings));
     } catch (error) {
       return errorResponse(error);
     }
@@ -285,4 +298,102 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
       return errorResponse(error);
     }
   });
+}
+
+async function hydrateSettingsForResponse(ctx: HandlerContext, settings: Settings): Promise<Settings> {
+  return {
+    ...settings,
+    chat: await hydrateChatSettings(ctx, settings.chat),
+  };
+}
+
+async function hydrateChatSettings(ctx: HandlerContext, chatSettings: ChatSettings | undefined): Promise<ChatSettings | undefined> {
+  if (!chatSettings) {
+    return chatSettings;
+  }
+
+  const providers = ctx.chatProviderVaultService
+    ? await ctx.chatProviderVaultService.hydrateProviders(chatSettings.providers ?? [])
+    : chatSettings.providers ?? [];
+
+  return {
+    ...chatSettings,
+    providers,
+  };
+}
+
+async function sanitizeChatSettingsForPersistence(
+  ctx: HandlerContext,
+  chatSettings: ChatSettings | undefined,
+  previousChatSettings: ChatSettings | undefined,
+): Promise<ChatSettings | undefined> {
+  if (!chatSettings) {
+    return chatSettings;
+  }
+
+  const providers = chatSettings.providers ?? [];
+
+  if (ctx.chatProviderVaultService) {
+    const previousProviderIds = new Set((previousChatSettings?.providers ?? []).map((provider) => provider.id));
+    const nextProviderIds = new Set(providers.map((provider) => provider.id));
+
+    await Promise.all(providers.map(async (provider) => {
+      const apiKey = provider.apiKey.trim();
+      if (!apiKey) {
+        return;
+      }
+
+      await ctx.chatProviderVaultService?.setApiKey(provider.id, apiKey);
+    }));
+
+    await Promise.all(
+      Array.from(previousProviderIds)
+        .filter((providerId) => !nextProviderIds.has(providerId))
+        .map((providerId) => ctx.chatProviderVaultService?.remove(providerId)),
+    );
+  }
+
+  return {
+    ...chatSettings,
+    providers: providers.map(sanitizeProviderForPersistence),
+  };
+}
+
+async function migrateInlineChatProviderApiKeys(
+  ctx: HandlerContext,
+  workspace: Workspace,
+): Promise<Workspace> {
+  const providers = workspace.settings.chat?.providers ?? [];
+  const hasInlineApiKeys = providers.some((provider) => provider.apiKey.trim().length > 0);
+
+  if (!hasInlineApiKeys) {
+    return workspace;
+  }
+
+  const sanitizedChatSettings = await sanitizeChatSettingsForPersistence(
+    ctx,
+    workspace.settings.chat,
+    workspace.settings.chat,
+  );
+
+  const nextWorkspace: Workspace = {
+    ...workspace,
+    settings: {
+      ...workspace.settings,
+      chat: sanitizedChatSettings,
+    },
+  };
+
+  if (ctx.workspaceManager) {
+    await ctx.workspaceManager.saveWorkspace(nextWorkspace);
+  }
+
+  return nextWorkspace;
+}
+
+function sanitizeProviderForPersistence(provider: LLMProviderConfig): LLMProviderConfig {
+  return {
+    ...provider,
+    apiKey: '',
+  };
 }

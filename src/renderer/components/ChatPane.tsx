@@ -18,6 +18,7 @@ import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { getPaneBackend, isTerminalPane } from '../../shared/utils/terminalCapabilities';
+import { WORKSPACE_SETTINGS_UPDATED_EVENT } from '../utils/settingsEvents';
 
 export interface ChatPaneProps {
   windowId: string;
@@ -296,7 +297,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const selectedProviderId = chatState.activeProviderId ?? settings.activeProviderId ?? providers[0]?.id ?? '';
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? null;
   const selectedModel = chatState.activeModel ?? selectedProvider?.defaultModel ?? selectedProvider?.models[0] ?? '';
-  const canSend = Boolean(selectedProvider && selectedModel && !streamingMessage);
+  const isBusy = Boolean(chatState.isStreaming || streamingMessage);
+  const canSend = Boolean(selectedProvider && selectedModel && !isBusy);
 
   const persistChatState = useCallback((
     updater: (currentChat: NonNullable<Pane['chat']>) => NonNullable<Pane['chat']>,
@@ -374,6 +376,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   }, [loadSettings]);
 
   useEffect(() => {
+    const handleSettingsUpdated = () => {
+      void loadSettings();
+    };
+
+    window.addEventListener(WORKSPACE_SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
+    return () => {
+      window.removeEventListener(WORKSPACE_SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
+    };
+  }, [loadSettings]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: 'end' });
   }, [chatState.messages, streamingMessage]);
 
@@ -404,14 +417,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         return;
       }
 
+      const isFinal = payload.isFinal !== false;
       const requestMeta = currentRequestRef.current;
-      currentRequestRef.current = null;
+      if (isFinal) {
+        currentRequestRef.current = null;
+      }
       setStreamingMessage(null);
       setErrorMessage(null);
 
       persistChatState((currentChat) => ({
         ...currentChat,
-        isStreaming: false,
+        isStreaming: !isFinal,
         messages: [
           ...currentChat.messages,
           {
@@ -485,8 +501,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         payload.toolCallId,
         (toolCall) => ({
           ...toolCall,
-          status: inferToolStatus(payload.result, payload.isError),
-          result: payload.result,
+          status: inferToolStatus(payload.content, payload.isError),
+          result: payload.content,
         }),
         {
           id: `tool-result-${payload.toolCallId}`,
@@ -495,7 +511,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           timestamp: new Date().toISOString(),
           toolResult: {
             toolCallId: payload.toolCallId,
-            content: payload.result,
+            content: payload.content,
             isError: payload.isError,
           },
         },
@@ -557,7 +573,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
   const handleSend = useCallback(async () => {
     const trimmed = composerValue.trim();
-    if (!trimmed || !selectedProvider || !selectedModel || streamingMessage) {
+    if (!trimmed || !selectedProvider || !selectedModel || isBusy) {
       return;
     }
 
@@ -639,7 +655,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     selectedModel,
     selectedProvider,
     settings.defaultSystemPrompt,
-    streamingMessage,
+    isBusy,
     t,
     windowId,
   ]);
@@ -865,7 +881,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             onChange={(event) => setComposerValue(event.target.value)}
             onKeyDown={handleComposerKeyDown}
             placeholder={providers.length === 0 ? t('chatPane.disabledPlaceholder') : t('chatPane.inputPlaceholder')}
-            disabled={!providers.length || Boolean(streamingMessage)}
+            disabled={!providers.length || isBusy}
             className="min-h-[92px] w-full resize-none bg-transparent text-sm leading-6 text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
           />
 
@@ -877,7 +893,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              {streamingMessage ? (
+              {isBusy ? (
                 <button
                   type="button"
                   onClick={() => {

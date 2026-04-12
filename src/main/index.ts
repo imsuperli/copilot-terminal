@@ -18,6 +18,7 @@ import { SSHProfileStore } from './services/ssh/SSHProfileStore';
 import { SSHVaultService } from './services/ssh/SSHVaultService';
 import { SSHKnownHostsStore } from './services/ssh/SSHKnownHostsStore';
 import { ElectronSSHHostKeyPromptService } from './services/ssh/SSHHostKeyPromptService';
+import { ChatProviderVaultService } from './services/chat/ChatProviderVaultService';
 import { CodeFileService } from './services/code/CodeFileService';
 import { CodeGitService } from './services/code/CodeGitService';
 import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
@@ -46,6 +47,7 @@ let tmuxCompatService: TmuxCompatService | null = null;
 let sshProfileStore: SSHProfileStore | null = null;
 let sshVaultService: SSHVaultService | null = null;
 let sshKnownHostsStore: SSHKnownHostsStore | null = null;
+let chatProviderVaultService: ChatProviderVaultService | null = null;
 let sshHostKeyPromptService: ElectronSSHHostKeyPromptService | null = null;
 let codeFileService: CodeFileService | null = null;
 let codeGitService: CodeGitService | null = null;
@@ -416,6 +418,7 @@ app.whenReady().then(async () => {
   sshProfileStore = new SSHProfileStore();
   sshVaultService = new SSHVaultService();
   sshKnownHostsStore = new SSHKnownHostsStore();
+  chatProviderVaultService = new ChatProviderVaultService();
   sshHostKeyPromptService = new ElectronSSHHostKeyPromptService({
     getMainWindow: () => mainWindow,
   });
@@ -588,6 +591,7 @@ app.whenReady().then(async () => {
     sshProfileStore,
     sshVaultService,
     sshKnownHostsStore,
+    chatProviderVaultService,
     codeFileService,
     codeGitService,
     codePaneWatcherService,
