@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodePane } from '../CodePane';
+import type { CodePaneFsChangedPayload } from '../../../shared/types/electron-api';
 import type { Pane } from '../../types/window';
 import { WindowStatus } from '../../types/window';
 
@@ -254,9 +255,21 @@ function renderCodePane(initialPane: Pane) {
 }
 
 async function openFileFromTree(fileName: string) {
-  const treeButton = await screen.findByRole('button', { name: fileName });
+  const treeButton = await screen.findByRole('button', { name: fileName }, { timeout: 3000 });
   await act(async () => {
     fireEvent.click(treeButton);
+  });
+}
+
+async function emitFsChanged(payload: CodePaneFsChangedPayload) {
+  const callback = vi.mocked(window.electronAPI.onCodePaneFsChanged).mock.calls.at(-1)?.[0];
+  if (!callback) {
+    throw new Error('expected file system change listener to be registered');
+  }
+
+  await act(async () => {
+    callback({}, payload);
+    await Promise.resolve();
   });
 }
 
@@ -616,6 +629,110 @@ describe('CodePane', () => {
         expectedMtimeMs: 100,
       });
     });
+  });
+
+  it('does not reload the tree for watcher file change events', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+    vi.mocked(window.electronAPI.codePaneReadFile).mockClear();
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockClear();
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'change',
+          path: '/workspace/project/src/index.ts',
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    expect(window.electronAPI.codePaneListDirectory).not.toHaveBeenCalled();
+    expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads only the affected directory for watcher structural changes', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return {
+        success: true,
+        data: [
+          {
+            path: '/workspace/project/src',
+            name: 'src',
+            type: 'directory',
+          },
+        ],
+      };
+    });
+
+    renderCodePane(createPane());
+
+    const directoryButton = await screen.findByRole('button', { name: 'src' });
+    await act(async () => {
+      fireEvent.click(directoryButton);
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        targetPath: '/workspace/project/src',
+      });
+    });
+
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockClear();
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'add',
+          path: '/workspace/project/src/new.ts',
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledTimes(1);
+    });
+
+    expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      targetPath: '/workspace/project/src',
+    });
+    expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
   });
 
   it('pins tabs from the context menu and keeps them first', async () => {

@@ -75,6 +75,8 @@ type FileRuntimeMeta = {
   lastSavedAt?: number;
 };
 
+type CodePaneFsChange = CodePaneFsChangedPayload['changes'][number];
+
 export interface CodePaneProps {
   windowId: string;
   pane: Pane;
@@ -116,6 +118,48 @@ function isPathInside(parentPath: string, candidatePath: string): boolean {
   const normalizedCandidatePath = normalizePath(candidatePath);
   return normalizedCandidatePath === normalizedParentPath
     || normalizedCandidatePath.startsWith(`${normalizedParentPath}/`);
+}
+
+function isPathAffectedByRemovedDirectory(removedDirectoryPaths: string[], candidatePath: string): boolean {
+  return removedDirectoryPaths.some((removedDirectoryPath) => isPathInside(removedDirectoryPath, candidatePath));
+}
+
+function getDirectoryRefreshPath(rootPath: string, change: CodePaneFsChange): string | null {
+  if (change.type === 'change') {
+    return null;
+  }
+
+  const normalizedRootPath = normalizePath(rootPath);
+  const normalizedChangedPath = normalizePath(change.path);
+  if (normalizedChangedPath === normalizedRootPath) {
+    return normalizedRootPath;
+  }
+
+  const parentDirectoryPath = getParentDirectory(normalizedChangedPath);
+  return isPathInside(normalizedRootPath, parentDirectoryPath) ? parentDirectoryPath : null;
+}
+
+function collectDirectoryRefreshPaths(
+  rootPath: string,
+  changes: CodePaneFsChange[],
+  loadedDirectories: Set<string>,
+): string[] {
+  const loadedDirectoryPaths = new Set(Array.from(loadedDirectories, (directoryPath) => normalizePath(directoryPath)));
+  const normalizedRootPath = normalizePath(rootPath);
+  const directoryPathsToRefresh = new Set<string>();
+
+  for (const change of changes) {
+    const directoryPath = getDirectoryRefreshPath(rootPath, change);
+    if (!directoryPath) {
+      continue;
+    }
+
+    if (directoryPath === normalizedRootPath || loadedDirectoryPaths.has(directoryPath)) {
+      directoryPathsToRefresh.add(directoryPath);
+    }
+  }
+
+  return Array.from(directoryPathsToRefresh);
 }
 
 function createEmptySet(): Set<string> {
@@ -498,12 +542,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [rootPath]);
 
-  const loadDirectory = useCallback(async (directoryPath: string) => {
-    setLoadingDirectories((currentLoadingDirectories) => {
-      const nextLoadingDirectories = new Set(currentLoadingDirectories);
-      nextLoadingDirectories.add(directoryPath);
-      return nextLoadingDirectories;
-    });
+  const loadDirectory = useCallback(async (
+    directoryPath: string,
+    options?: { showLoadingIndicator?: boolean },
+  ) => {
+    const showLoadingIndicator = options?.showLoadingIndicator ?? true;
+
+    if (showLoadingIndicator) {
+      setLoadingDirectories((currentLoadingDirectories) => {
+        const nextLoadingDirectories = new Set(currentLoadingDirectories);
+        nextLoadingDirectories.add(directoryPath);
+        return nextLoadingDirectories;
+      });
+    }
 
     const response = await window.electronAPI.codePaneListDirectory({
       rootPath,
@@ -535,11 +586,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     }
 
-    setLoadingDirectories((currentLoadingDirectories) => {
-      const nextLoadingDirectories = new Set(currentLoadingDirectories);
-      nextLoadingDirectories.delete(directoryPath);
-      return nextLoadingDirectories;
-    });
+    if (showLoadingIndicator) {
+      setLoadingDirectories((currentLoadingDirectories) => {
+        const nextLoadingDirectories = new Set(currentLoadingDirectories);
+        nextLoadingDirectories.delete(directoryPath);
+        return nextLoadingDirectories;
+      });
+    }
   }, [rootPath, t]);
 
   const createOrUpdateModel = useCallback((filePath: string, readResult: CodePaneReadFileResult) => {
@@ -1046,11 +1099,57 @@ export const CodePane: React.FC<CodePaneProps> = ({
     await openDiffForFile(filePath, { preserveTabs: true });
   }, [openDiffForFile]);
 
+  const refreshDirectoryPaths = useCallback(async (
+    directoryPaths: Iterable<string>,
+    options?: {
+      showLoadingIndicator?: boolean;
+      refreshGitStatus?: boolean;
+    },
+  ) => {
+    const uniqueDirectoryPaths = Array.from(new Set(directoryPaths));
+    if (uniqueDirectoryPaths.length > 0) {
+      await Promise.all(uniqueDirectoryPaths.map((directoryPath) => loadDirectory(directoryPath, {
+        showLoadingIndicator: options?.showLoadingIndicator,
+      })));
+    }
+
+    if (options?.refreshGitStatus !== false) {
+      await refreshGitStatus();
+    }
+  }, [loadDirectory, refreshGitStatus]);
+
   const refreshLoadedDirectories = useCallback(async () => {
     const directoriesToRefresh = Array.from(new Set([rootPath, ...loadedDirectoriesRef.current]));
-    await Promise.all(directoriesToRefresh.map((directoryPath) => loadDirectory(directoryPath)));
-    await refreshGitStatus();
-  }, [loadDirectory, refreshGitStatus, rootPath]);
+    await refreshDirectoryPaths(directoriesToRefresh);
+  }, [refreshDirectoryPaths, rootPath]);
+
+  const pruneRemovedDirectories = useCallback((changes: CodePaneFsChange[]) => {
+    const removedDirectoryPaths = changes
+      .filter((change) => change.type === 'unlinkDir' && isPathInside(rootPath, change.path))
+      .map((change) => normalizePath(change.path));
+
+    if (removedDirectoryPaths.length === 0) {
+      return;
+    }
+
+    const nextLoadedDirectories = new Set(
+      Array.from(loadedDirectoriesRef.current).filter((directoryPath) => (
+        !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
+      )),
+    );
+    loadedDirectoriesRef.current = nextLoadedDirectories;
+
+    startTransition(() => {
+      setLoadedDirectories(new Set(nextLoadedDirectories));
+      setTreeEntriesByDirectory((currentTreeEntries) => (
+        Object.fromEntries(
+          Object.entries(currentTreeEntries).filter(([directoryPath]) => (
+            !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
+          )),
+        )
+      ));
+    });
+  }, [rootPath]);
 
   const revealPath = useCallback(async (targetPath: string, entryType: CodePaneTreeEntry['type']) => {
     try {
@@ -1204,7 +1303,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
       }
 
-      void refreshLoadedDirectories();
+      pruneRemovedDirectories(payload.changes);
+
+      const directoriesToRefresh = collectDirectoryRefreshPaths(
+        rootPath,
+        payload.changes,
+        loadedDirectoriesRef.current,
+      );
+
+      void refreshDirectoryPaths(directoriesToRefresh, {
+        showLoadingIndicator: false,
+      });
     };
 
     window.electronAPI.onCodePaneFsChanged(handleFsChanged);
@@ -1220,7 +1329,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         disposeAllModels();
       });
     };
-  }, [disposeAllModels, disposeEditors, ensureMarkerListener, flushDirtyFiles, loadDirectory, pane.id, refreshGitStatus, refreshLoadedDirectories, reloadFileFromDisk, rootPath, supportsMonaco, t]);
+  }, [disposeAllModels, disposeEditors, ensureMarkerListener, flushDirtyFiles, loadDirectory, pane.id, pruneRemovedDirectories, refreshDirectoryPaths, refreshGitStatus, refreshLoadedDirectories, reloadFileFromDisk, rootPath, supportsMonaco, t]);
 
   useEffect(() => {
     if (!activeFilePath) {
