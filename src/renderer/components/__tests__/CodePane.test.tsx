@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodePane } from '../CodePane';
 import type { CodePaneFsChangedPayload } from '../../../shared/types/electron-api';
+import { resetMonacoLanguageBridgeForTests } from '../../services/code/MonacoLanguageBridge';
 import type { Pane } from '../../types/window';
 import { WindowStatus } from '../../types/window';
 
@@ -115,28 +116,49 @@ function createFakeDiffEditor() {
 const fakeMonacoState = {
   lastDiffModel: null as { original: FakeModel; modified: FakeModel } | null,
   lastEditorModel: null as FakeModel | null,
+  definitionProviders: new Map<string, { provideDefinition: (...args: any[]) => Promise<unknown> }>(),
+  hoverProviders: new Map<string, { provideHover: (...args: any[]) => Promise<unknown> }>(),
+  referenceProviders: new Map<string, { provideReferences: (...args: any[]) => Promise<unknown> }>(),
+  documentSymbolProviders: new Map<string, { provideDocumentSymbols: (...args: any[]) => Promise<unknown> }>(),
   markerListeners: new Set<() => void>(),
-  markersByPath: new Map<string, Array<{
+  markersByPath: new Map<string, Map<string, Array<{
     severity: number;
     message: string;
     startLineNumber: number;
     startColumn: number;
-  }>>(),
+    endLineNumber?: number;
+    endColumn?: number;
+  }>>>(),
   models: new Map<string, FakeModel>(),
-  setMarkers(path: string, markers: Array<{
-    severity: number;
-    message: string;
-    startLineNumber: number;
-    startColumn: number;
-  }>) {
-    this.markersByPath.set(path, markers);
+  setMarkers(
+    path: string,
+    markers: Array<{
+      severity: number;
+      message: string;
+      startLineNumber: number;
+      startColumn: number;
+      endLineNumber?: number;
+      endColumn?: number;
+    }>,
+    owner = '__test__',
+  ) {
+    const markersByOwner = this.markersByPath.get(path) ?? new Map();
+    markersByOwner.set(owner, markers);
+    this.markersByPath.set(path, markersByOwner);
     for (const listener of Array.from(this.markerListeners)) {
       listener();
     }
   },
+  getMarkers(path: string) {
+    return Array.from(this.markersByPath.get(path)?.values() ?? []).flat();
+  },
   reset() {
     this.lastDiffModel = null;
     this.lastEditorModel = null;
+    this.definitionProviders.clear();
+    this.hoverProviders.clear();
+    this.referenceProviders.clear();
+    this.documentSymbolProviders.clear();
     this.markerListeners.clear();
     this.markersByPath.clear();
     this.models.clear();
@@ -162,6 +184,24 @@ const fakeMonaco = {
       path: decodeURIComponent(value.split('://')[1] ?? value),
     }),
   },
+  languages: {
+    registerDefinitionProvider: vi.fn((language: string, provider: { provideDefinition: (...args: any[]) => Promise<unknown> }) => {
+      fakeMonacoState.definitionProviders.set(language, provider);
+      return { dispose: vi.fn() };
+    }),
+    registerHoverProvider: vi.fn((language: string, provider: { provideHover: (...args: any[]) => Promise<unknown> }) => {
+      fakeMonacoState.hoverProviders.set(language, provider);
+      return { dispose: vi.fn() };
+    }),
+    registerReferenceProvider: vi.fn((language: string, provider: { provideReferences: (...args: any[]) => Promise<unknown> }) => {
+      fakeMonacoState.referenceProviders.set(language, provider);
+      return { dispose: vi.fn() };
+    }),
+    registerDocumentSymbolProvider: vi.fn((language: string, provider: { provideDocumentSymbols: (...args: any[]) => Promise<unknown> }) => {
+      fakeMonacoState.documentSymbolProviders.set(language, provider);
+      return { dispose: vi.fn() };
+    }),
+  },
   editor: {
     create: vi.fn(() => createFakeEditor()),
     createDiffEditor: vi.fn(() => createFakeDiffEditor()),
@@ -173,8 +213,18 @@ const fakeMonaco = {
     setModelLanguage: vi.fn((model: FakeModel, language: string) => {
       model.setLanguage(language);
     }),
+    setModelMarkers: vi.fn((model: FakeModel, owner: string, markers: Array<{
+      severity: number;
+      message: string;
+      startLineNumber: number;
+      startColumn: number;
+      endLineNumber?: number;
+      endColumn?: number;
+    }>) => {
+      fakeMonacoState.setMarkers(model.uri.path, markers, owner);
+    }),
     getModelMarkers: vi.fn(({ resource }: { resource: { path: string } }) => (
-      fakeMonacoState.markersByPath.get(resource.path) ?? []
+      fakeMonacoState.getMarkers(resource.path)
     )),
     onDidChangeMarkers: vi.fn((listener: () => void) => {
       fakeMonacoState.markerListeners.add(listener);
@@ -273,6 +323,33 @@ async function emitFsChanged(payload: CodePaneFsChangedPayload) {
   });
 }
 
+async function emitDiagnosticsChanged(payload: {
+  rootPath: string;
+  filePath: string;
+  diagnostics: Array<{
+    filePath: string;
+    owner: string;
+    severity: 'hint' | 'info' | 'warning' | 'error';
+    message: string;
+    startLineNumber: number;
+    startColumn: number;
+    endLineNumber: number;
+    endColumn: number;
+    source?: string;
+    code?: string;
+  }>;
+}) {
+  const callback = vi.mocked(window.electronAPI.onCodePaneDiagnosticsChanged).mock.calls.at(-1)?.[0];
+  if (!callback) {
+    throw new Error('expected diagnostics listener to be registered');
+  }
+
+  await act(async () => {
+    callback({}, payload);
+    await Promise.resolve();
+  });
+}
+
 describe('CodePane', () => {
   beforeAll(() => {
     vi.stubGlobal('Worker', class WorkerMock {});
@@ -283,6 +360,7 @@ describe('CodePane', () => {
   });
 
   beforeEach(() => {
+    resetMonacoLanguageBridgeForTests();
     fakeMonacoState.reset();
     updatePaneImpl = null;
     hoisted.updatePaneSpy.mockReset();
@@ -301,8 +379,18 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneUnwatchRoot).mockReset();
     vi.mocked(window.electronAPI.codePaneSearchFiles).mockReset();
     vi.mocked(window.electronAPI.codePaneSearchContents).mockReset();
+    vi.mocked(window.electronAPI.codePaneDidOpenDocument).mockReset();
+    vi.mocked(window.electronAPI.codePaneDidChangeDocument).mockReset();
+    vi.mocked(window.electronAPI.codePaneDidSaveDocument).mockReset();
+    vi.mocked(window.electronAPI.codePaneDidCloseDocument).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetDefinition).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetHover).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetReferences).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockReset();
     vi.mocked(window.electronAPI.onCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneFsChanged).mockReset();
+    vi.mocked(window.electronAPI.onCodePaneDiagnosticsChanged).mockReset();
+    vi.mocked(window.electronAPI.offCodePaneDiagnosticsChanged).mockReset();
     vi.mocked(window.electronAPI.openFolder).mockReset();
     vi.mocked(window.electronAPI.writeClipboardText).mockReset();
 
@@ -347,6 +435,14 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneUnwatchRoot).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneSearchFiles).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneSearchContents).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneDidOpenDocument).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDidChangeDocument).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDidSaveDocument).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDidCloseDocument).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetHover).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneGetReferences).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.openFolder).mockResolvedValue(undefined);
     vi.mocked(window.electronAPI.writeClipboardText).mockResolvedValue(undefined);
   });
@@ -608,6 +704,166 @@ describe('CodePane', () => {
     });
 
     expect(await screen.findByText('Missing semicolon')).toBeInTheDocument();
+  });
+
+  it('syncs language documents on open, change, save, and unmount', async () => {
+    const view = renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneDidOpenDocument).toHaveBeenCalledWith({
+        paneId: 'pane-code-1',
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        content: 'export const value = 1;\n',
+      });
+    });
+
+    vi.useFakeTimers();
+
+    await act(async () => {
+      fakeMonacoState.models.get('/workspace/project/src/index.ts')?.setValue('export const value = 2;\n');
+      vi.advanceTimersByTime(149);
+      await Promise.resolve();
+    });
+    expect(window.electronAPI.codePaneDidChangeDocument).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneDidChangeDocument).toHaveBeenCalledWith({
+      paneId: 'pane-code-1',
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      language: 'typescript',
+      content: 'export const value = 2;\n',
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(650);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneDidSaveDocument).toHaveBeenCalledWith({
+      paneId: 'pane-code-1',
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      language: 'typescript',
+      content: 'export const value = 2;\n',
+    });
+
+    await act(async () => {
+      view.unmount();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneDidCloseDocument).toHaveBeenCalledWith({
+      paneId: 'pane-code-1',
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+    });
+
+    vi.useRealTimers();
+  });
+
+  it('registers Monaco definition providers that proxy to the language IPC bridge', async () => {
+    vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/index.ts',
+          range: {
+            startLineNumber: 1,
+            startColumn: 8,
+            endLineNumber: 1,
+            endColumn: 13,
+          },
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    await waitFor(() => {
+      expect(fakeMonacoState.definitionProviders.get('typescript')).toBeDefined();
+    });
+
+    const provider = fakeMonacoState.definitionProviders.get('typescript');
+
+    const result = await provider?.provideDefinition(
+      fakeMonacoState.lastEditorModel,
+      { lineNumber: 1, column: 8 },
+    ) as Array<{ uri: { path: string }; range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number } }>;
+
+    expect(window.electronAPI.codePaneGetDefinition).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      language: 'typescript',
+      position: {
+        lineNumber: 1,
+        column: 8,
+      },
+    });
+    expect(result).toEqual([
+      {
+        uri: { path: '/workspace/project/src/index.ts' },
+        range: {
+          startLineNumber: 1,
+          startColumn: 8,
+          endLineNumber: 1,
+          endColumn: 13,
+        },
+      },
+    ]);
+  });
+
+  it('applies plugin diagnostics to Monaco markers and the problems panel', async () => {
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+    await waitFor(() => {
+      expect(window.electronAPI.onCodePaneDiagnosticsChanged).toHaveBeenCalled();
+    });
+
+    await emitDiagnosticsChanged({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      diagnostics: [
+        {
+          filePath: '/workspace/project/src/index.ts',
+          owner: 'language-plugin',
+          severity: 'warning',
+          message: 'Plugin warning',
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 7,
+          source: 'mock-lsp',
+          code: 'MOCK001',
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(fakeMonaco.editor.setModelMarkers).toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.problemsTab' }));
+    });
+
+    expect(await screen.findByText('Plugin warning')).toBeInTheDocument();
+    expect(fakeMonaco.editor.setModelMarkers).toHaveBeenCalled();
   });
 
   it('auto-saves dirty files after the debounce delay', async () => {

@@ -121,6 +121,33 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     void loadPluginState();
   }, [loadPluginState]);
 
+  useEffect(() => {
+    const handleRuntimeStateChanged = (_event: unknown, payload: {
+      pluginId: string;
+      state: PluginListItem['runtimeState'];
+    }) => {
+      setInstalledPlugins((currentPlugins) => currentPlugins.map((plugin) => (
+        plugin.id === payload.pluginId
+          ? {
+              ...plugin,
+              runtimeState: payload.state,
+              health: payload.state === 'error'
+                ? 'error'
+                : payload.state === 'running' && plugin.health === 'error'
+                  ? 'ok'
+                  : plugin.health,
+            }
+          : plugin
+      )));
+    };
+
+    window.electronAPI.onPluginRuntimeStateChanged(handleRuntimeStateChanged);
+
+    return () => {
+      window.electronAPI.offPluginRuntimeStateChanged(handleRuntimeStateChanged);
+    };
+  }, []);
+
   const availableCatalogEntries = useMemo(() => {
     const installedPluginIds = new Set(installedPlugins.map((plugin) => plugin.id));
     return catalogEntries.filter((entry) => !installedPluginIds.has(entry.id));
@@ -712,9 +739,10 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                     </div>
                   </div>
 
-                  <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                  <div className="mt-5 grid gap-4 lg:grid-cols-4">
                     <InfoTile label={t('settings.plugins.labels.version')} value={plugin.version ?? '--'} />
                     <InfoTile label={t('settings.plugins.labels.latestVersion')} value={plugin.latestVersion ?? '--'} />
+                    <InfoTile label={t('settings.plugins.labels.runtime')} value={formatRuntimeState(plugin, t)} />
                     <InfoTile label={t('settings.plugins.labels.installPath')} value={plugin.installPath ?? '--'} mono />
                   </div>
 
@@ -1131,6 +1159,25 @@ function formatInstallStatus(
   }
 
   return t('settings.plugins.status.unknown');
+}
+
+function formatRuntimeState(
+  plugin: PluginListItem,
+  t: TranslateFn,
+): string {
+  switch (plugin.runtimeState) {
+    case 'starting':
+      return t('settings.plugins.runtime.starting');
+    case 'running':
+      return t('settings.plugins.runtime.running');
+    case 'stopped':
+      return t('settings.plugins.runtime.stopped');
+    case 'error':
+      return t('settings.plugins.runtime.error');
+    case 'idle':
+    default:
+      return t('settings.plugins.runtime.idle');
+  }
 }
 
 function formatRequirement(

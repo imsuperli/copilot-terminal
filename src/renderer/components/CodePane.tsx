@@ -43,6 +43,10 @@ import { useI18n } from '../i18n';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { useWindowStore } from '../stores/windowStore';
 import { ensureMonacoEnvironment } from '../utils/monacoEnvironment';
+import {
+  ensureMonacoLanguageBridge,
+  type MonacoLanguageBridge,
+} from '../services/code/MonacoLanguageBridge';
 import { getPathLeafLabel } from '../utils/pathDisplay';
 
 type MonacoModule = typeof import('monaco-editor');
@@ -246,6 +250,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const diffTargetPath = pane.code?.diffTargetPath ?? null;
 
   const monacoRef = useRef<MonacoModule | null>(null);
+  const languageBridgeRef = useRef<MonacoLanguageBridge | null>(null);
   const editorHostRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<MonacoEditor | null>(null);
   const diffEditorRef = useRef<MonacoDiffEditor | null>(null);
@@ -255,6 +260,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const fileMetaRef = useRef(new Map<string, FileRuntimeMeta>());
   const viewStatesRef = useRef(new Map<string, MonacoViewState>());
   const autoSaveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const documentSyncTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const suppressModelEventsRef = useRef(new Set<string>());
   const markerListenerRef = useRef<MonacoDisposable | null>(null);
 
@@ -447,6 +453,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     try {
       const monaco = monacoRef.current ?? await ensureMonacoEnvironment();
       monacoRef.current = monaco;
+      languageBridgeRef.current = ensureMonacoLanguageBridge(monaco);
       ensureMarkerListener(monaco);
       return monaco;
     } catch (error) {
@@ -459,6 +466,84 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
   }, [ensureMarkerListener, supportsMonaco, t]);
+
+  const buildLanguageDocumentContext = useCallback((filePath: string) => {
+    const model = fileModelsRef.current.get(filePath);
+    if (!model) {
+      return null;
+    }
+
+    return {
+      paneId: pane.id,
+      rootPath,
+      filePath,
+      language: fileMetaRef.current.get(filePath)?.language ?? model.getLanguageId(),
+      model,
+    };
+  }, [pane.id, rootPath]);
+
+  const syncLanguageDocument = useCallback(async (
+    filePath: string,
+    reason: 'open' | 'change' | 'save',
+  ) => {
+    const bridge = languageBridgeRef.current ?? (
+      monacoRef.current ? ensureMonacoLanguageBridge(monacoRef.current) : null
+    );
+    languageBridgeRef.current = bridge;
+    const context = buildLanguageDocumentContext(filePath);
+    if (!bridge || !context) {
+      return;
+    }
+
+    if (reason === 'open') {
+      bridge.openDocument(context);
+      return;
+    }
+
+    if (reason === 'change') {
+      await bridge.changeDocument(context);
+      return;
+    }
+
+    await bridge.saveDocument(context);
+  }, [buildLanguageDocumentContext]);
+
+  const flushPendingLanguageSync = useCallback(async (filePath: string) => {
+    const timer = documentSyncTimersRef.current.get(filePath);
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    documentSyncTimersRef.current.delete(filePath);
+    await syncLanguageDocument(filePath, 'change');
+  }, [syncLanguageDocument]);
+
+  const closeLanguageDocument = useCallback(async (filePath: string) => {
+    const bridge = languageBridgeRef.current ?? (
+      monacoRef.current ? ensureMonacoLanguageBridge(monacoRef.current) : null
+    );
+    languageBridgeRef.current = bridge;
+    const context = buildLanguageDocumentContext(filePath);
+    const timer = documentSyncTimersRef.current.get(filePath);
+    if (timer) {
+      clearTimeout(timer);
+      documentSyncTimersRef.current.delete(filePath);
+    }
+
+    if (!bridge || !context) {
+      return;
+    }
+
+    await bridge.closeDocument(context);
+  }, [buildLanguageDocumentContext]);
+
+  const closeAllLanguageDocuments = useCallback(async () => {
+    const filePaths = Array.from(fileModelsRef.current.keys());
+    for (const filePath of filePaths) {
+      await closeLanguageDocument(filePath);
+    }
+  }, [closeLanguageDocument]);
 
   const applyPendingNavigation = useCallback((editorInstance: MonacoEditor | null, filePath: string) => {
     const pendingNavigation = pendingNavigationRef.current;
@@ -508,6 +593,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       clearTimeout(timer);
     }
     autoSaveTimersRef.current.clear();
+
+    for (const timer of documentSyncTimersRef.current.values()) {
+      clearTimeout(timer);
+    }
+    documentSyncTimersRef.current.clear();
 
     for (const disposable of modelDisposersRef.current.values()) {
       disposable.dispose();
@@ -615,6 +705,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
           clearTimeout(existingTimer);
         }
 
+        const existingDocumentSyncTimer = documentSyncTimersRef.current.get(filePath);
+        if (existingDocumentSyncTimer) {
+          clearTimeout(existingDocumentSyncTimer);
+        }
+
+        documentSyncTimersRef.current.set(filePath, setTimeout(() => {
+          documentSyncTimersRef.current.delete(filePath);
+          void syncLanguageDocument(filePath, 'change');
+        }, 150));
+
         autoSaveTimersRef.current.set(filePath, setTimeout(() => {
           autoSaveTimersRef.current.delete(filePath);
           void saveFile(filePath);
@@ -645,8 +745,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     markDirty(filePath, false);
     clearBannerForFile(filePath);
     refreshProblems();
+    void syncLanguageDocument(filePath, 'open');
     return model;
-  }, [clearBannerForFile, markDirty, refreshProblems]);
+  }, [clearBannerForFile, markDirty, refreshProblems, syncLanguageDocument]);
 
   const loadFileIntoModel = useCallback(async (filePath: string) => {
     if (!monacoRef.current && supportsMonaco) {
@@ -833,6 +934,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return true;
     }
 
+    await flushPendingLanguageSync(filePath);
     markSaving(filePath, true);
 
     const response = await window.electronAPI.codePaneWriteFile({
@@ -870,9 +972,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
     markDirty(filePath, false);
     clearBannerForFile(filePath);
+    await syncLanguageDocument(filePath, 'save');
     void refreshGitStatus();
     return true;
-  }, [clearBannerForFile, markDirty, markSaving, refreshGitStatus, rootPath, t]);
+  }, [clearBannerForFile, flushPendingLanguageSync, markDirty, markSaving, refreshGitStatus, rootPath, syncLanguageDocument, t]);
 
   const flushDirtyFiles = useCallback(async (targetFilePaths?: string[]) => {
     const pathsToFlush = targetFilePaths ?? Array.from(dirtyPathsRef.current);
@@ -1042,6 +1145,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       autoSaveTimersRef.current.delete(filePath);
     }
 
+    await closeLanguageDocument(filePath);
     modelDisposersRef.current.get(filePath)?.dispose();
     modelDisposersRef.current.delete(filePath);
     fileModelsRef.current.get(filePath)?.dispose();
@@ -1068,7 +1172,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       viewMode: 'editor',
       diffTargetPath: null,
     });
-  }, [activeFilePath, clearBannerForFile, flushDirtyFiles, markDirty, openFiles, persistCodeState, selectedPath]);
+  }, [activeFilePath, clearBannerForFile, closeLanguageDocument, flushDirtyFiles, markDirty, openFiles, persistCodeState, selectedPath]);
 
   const toggleDirectory = useCallback((directoryPath: string) => {
     setExpandedDirectories((currentExpandedDirectories) => {
@@ -1193,6 +1297,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const disposeEditorsRef = useRef(disposeEditors);
   const disposeAllModelsRef = useRef(disposeAllModels);
   const flushDirtyFilesRef = useRef(flushDirtyFiles);
+  const closeAllLanguageDocumentsRef = useRef(closeAllLanguageDocuments);
   const refreshDirectoryPathsRef = useRef(refreshDirectoryPaths);
   const pruneRemovedDirectoriesRef = useRef(pruneRemovedDirectories);
   const reloadFileFromDiskRef = useRef(reloadFileFromDisk);
@@ -1212,6 +1317,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     flushDirtyFilesRef.current = flushDirtyFiles;
   }, [flushDirtyFiles]);
+
+  useEffect(() => {
+    closeAllLanguageDocumentsRef.current = closeAllLanguageDocuments;
+  }, [closeAllLanguageDocuments]);
 
   useEffect(() => {
     refreshDirectoryPathsRef.current = refreshDirectoryPaths;
@@ -1313,6 +1422,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               }
 
               monacoRef.current = monaco;
+              languageBridgeRef.current = ensureMonacoLanguageBridge(monaco);
               ensureMarkerListenerRef.current(monaco);
             })
             .catch(() => {});
@@ -1399,8 +1509,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       markerListenerRef.current?.dispose();
       markerListenerRef.current = null;
       void flushDirtyFilesRef.current().finally(() => {
-        disposeEditorsRef.current();
-        disposeAllModelsRef.current();
+        void closeAllLanguageDocumentsRef.current().finally(() => {
+          disposeEditorsRef.current();
+          disposeAllModelsRef.current();
+        });
       });
     };
   }, [loadDirectory, pane.id, refreshGitStatus, rootPath, supportsMonaco, t]);
