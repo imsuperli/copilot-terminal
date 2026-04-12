@@ -397,6 +397,59 @@ describe('CodePane', () => {
     });
   });
 
+  it('does not bootstrap the project tree again when only isActive changes', async () => {
+    const pane = createPane();
+    const onActivate = vi.fn();
+    const onClose = vi.fn();
+
+    const { rerender } = render(
+      <CodePane
+        windowId="win-code-1"
+        pane={pane}
+        isActive
+        onActivate={onActivate}
+        onClose={onClose}
+      />,
+    );
+
+    await screen.findByRole('button', { name: 'index.ts' }, { timeout: 3000 });
+
+    expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.codePaneWatchRoot).toHaveBeenCalledTimes(1);
+
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+    vi.mocked(window.electronAPI.codePaneWatchRoot).mockClear();
+
+    await act(async () => {
+      rerender(
+        <CodePane
+          windowId="win-code-1"
+          pane={pane}
+          isActive={false}
+          onActivate={onActivate}
+          onClose={onClose}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      rerender(
+        <CodePane
+          windowId="win-code-1"
+          pane={pane}
+          isActive
+          onActivate={onActivate}
+          onClose={onClose}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneListDirectory).not.toHaveBeenCalled();
+    expect(window.electronAPI.codePaneWatchRoot).not.toHaveBeenCalled();
+  });
+
   it('persists expanded directories in pane state', async () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
       if (targetPath === '/workspace/project/src') {

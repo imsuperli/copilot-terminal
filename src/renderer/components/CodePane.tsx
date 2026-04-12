@@ -1151,6 +1151,42 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [rootPath]);
 
+  const ensureMarkerListenerRef = useRef(ensureMarkerListener);
+  const disposeEditorsRef = useRef(disposeEditors);
+  const disposeAllModelsRef = useRef(disposeAllModels);
+  const flushDirtyFilesRef = useRef(flushDirtyFiles);
+  const refreshDirectoryPathsRef = useRef(refreshDirectoryPaths);
+  const pruneRemovedDirectoriesRef = useRef(pruneRemovedDirectories);
+  const reloadFileFromDiskRef = useRef(reloadFileFromDisk);
+
+  useEffect(() => {
+    ensureMarkerListenerRef.current = ensureMarkerListener;
+  }, [ensureMarkerListener]);
+
+  useEffect(() => {
+    disposeEditorsRef.current = disposeEditors;
+  }, [disposeEditors]);
+
+  useEffect(() => {
+    disposeAllModelsRef.current = disposeAllModels;
+  }, [disposeAllModels]);
+
+  useEffect(() => {
+    flushDirtyFilesRef.current = flushDirtyFiles;
+  }, [flushDirtyFiles]);
+
+  useEffect(() => {
+    refreshDirectoryPathsRef.current = refreshDirectoryPaths;
+  }, [refreshDirectoryPaths]);
+
+  useEffect(() => {
+    pruneRemovedDirectoriesRef.current = pruneRemovedDirectories;
+  }, [pruneRemovedDirectories]);
+
+  useEffect(() => {
+    reloadFileFromDiskRef.current = reloadFileFromDisk;
+  }, [reloadFileFromDisk]);
+
   const revealPath = useCallback(async (targetPath: string, entryType: CodePaneTreeEntry['type']) => {
     try {
       const response = await window.electronAPI.openFolder(
@@ -1227,8 +1263,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setLoadingDirectories(new Set([rootPath]));
       setSearchResults([]);
       setContentSearchResults([]);
-      disposeEditors();
-      disposeAllModels();
+      disposeEditorsRef.current();
+      disposeAllModelsRef.current();
 
       try {
         if (supportsMonaco) {
@@ -1239,7 +1275,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               }
 
               monacoRef.current = monaco;
-              ensureMarkerListener(monaco);
+              ensureMarkerListenerRef.current(monaco);
             })
             .catch(() => {});
         }
@@ -1299,11 +1335,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
             showOverwrite: true,
           });
         } else {
-          void reloadFileFromDisk(change.path);
+          void reloadFileFromDiskRef.current(change.path);
         }
       }
 
-      pruneRemovedDirectories(payload.changes);
+      pruneRemovedDirectoriesRef.current(payload.changes);
 
       const directoriesToRefresh = collectDirectoryRefreshPaths(
         rootPath,
@@ -1311,7 +1347,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         loadedDirectoriesRef.current,
       );
 
-      void refreshDirectoryPaths(directoriesToRefresh, {
+      void refreshDirectoryPathsRef.current(directoriesToRefresh, {
         showLoadingIndicator: false,
       });
     };
@@ -1324,12 +1360,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       void window.electronAPI.codePaneUnwatchRoot(pane.id);
       markerListenerRef.current?.dispose();
       markerListenerRef.current = null;
-      void flushDirtyFiles().finally(() => {
-        disposeEditors();
-        disposeAllModels();
+      void flushDirtyFilesRef.current().finally(() => {
+        disposeEditorsRef.current();
+        disposeAllModelsRef.current();
       });
     };
-  }, [disposeAllModels, disposeEditors, ensureMarkerListener, flushDirtyFiles, loadDirectory, pane.id, pruneRemovedDirectories, refreshDirectoryPaths, refreshGitStatus, refreshLoadedDirectories, reloadFileFromDisk, rootPath, supportsMonaco, t]);
+  }, [loadDirectory, pane.id, refreshGitStatus, rootPath, supportsMonaco, t]);
 
   useEffect(() => {
     if (!activeFilePath) {
