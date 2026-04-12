@@ -84,6 +84,25 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           }
         : workspace.settings.features;
 
+      const pluginSettings = settings?.plugins
+        ? {
+            ...workspace.settings.plugins,
+            ...settings.plugins,
+            languageBindings: settings.plugins.languageBindings
+              ? {
+                  ...workspace.settings.plugins?.languageBindings,
+                  ...settings.plugins.languageBindings,
+                }
+              : workspace.settings.plugins?.languageBindings,
+            pluginSettings: settings.plugins.pluginSettings
+              ? {
+                  ...workspace.settings.plugins?.pluginSettings,
+                  ...settings.plugins.pluginSettings,
+                }
+              : workspace.settings.plugins?.pluginSettings,
+          }
+        : workspace.settings.plugins;
+
       const mergedChatSettings = settings?.chat
         ? {
             ...workspace.settings.chat,
@@ -104,6 +123,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           terminal: terminalSettings,
           tmux: tmuxSettings,
           features: featureSettings,
+          plugins: pluginSettings,
           chat: chatSettings,
         },
       };

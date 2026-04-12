@@ -60,6 +60,7 @@ const electronAPI: ElectronAPI = {
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
   selectExecutableFile: () => ipcRenderer.invoke('select-executable-file'),
   selectImageFile: (defaultPath?: string) => ipcRenderer.invoke('select-image-file', defaultPath),
+  selectPluginPackage: () => ipcRenderer.invoke('select-plugin-package'),
   selectAndScanFolder: () => ipcRenderer.invoke('select-and-scan-folder'),
   openFolder: (path: string) => ipcRenderer.invoke('open-folder', { path }),
   openInIDE: (ide: string, path: string) => ipcRenderer.invoke('open-in-ide', { ide, path }),
@@ -75,6 +76,15 @@ const electronAPI: ElectronAPI = {
   updateIDEConfig: (ideConfig: unknown) => ipcRenderer.invoke('update-ide-config', ideConfig),
   deleteIDEConfig: (ideId: string) => ipcRenderer.invoke('delete-ide-config', ideId),
   getIDEIcon: (iconPath: string) => ipcRenderer.invoke('get-ide-icon', iconPath),
+  listPlugins: () => ipcRenderer.invoke('list-plugins'),
+  listPluginCatalog: (query) => ipcRenderer.invoke('list-plugin-catalog', query),
+  installMarketplacePlugin: (config) => ipcRenderer.invoke('install-marketplace-plugin', config),
+  installLocalPlugin: (config) => ipcRenderer.invoke('install-local-plugin', config),
+  updatePlugin: (config) => ipcRenderer.invoke('update-plugin', config),
+  uninstallPlugin: (config) => ipcRenderer.invoke('uninstall-plugin', config),
+  setPluginEnabled: (config) => ipcRenderer.invoke('set-plugin-enabled', config),
+  setPluginLanguageBinding: (config) => ipcRenderer.invoke('set-plugin-language-binding', config),
+  setPluginSettings: (config) => ipcRenderer.invoke('set-plugin-settings', config),
   listSSHProfiles: () => ipcRenderer.invoke('list-ssh-profiles'),
   getSSHAlgorithmCatalog: () => ipcRenderer.invoke('get-ssh-algorithm-catalog'),
   getSSHProfile: (profileId: string) => ipcRenderer.invoke('get-ssh-profile', profileId),
@@ -145,11 +155,29 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-search-files', config),
   codePaneSearchContents: (config) =>
     ipcRenderer.invoke('code-pane-search-contents', config),
+  codePaneGetDefinition: (config) =>
+    ipcRenderer.invoke('code-pane-get-definition', config),
+  codePaneGetHover: (config) =>
+    ipcRenderer.invoke('code-pane-get-hover', config),
+  codePaneGetReferences: (config) =>
+    ipcRenderer.invoke('code-pane-get-references', config),
+  codePaneGetDocumentSymbols: (config) =>
+    ipcRenderer.invoke('code-pane-get-document-symbols', config),
   onCodePaneFsChanged: (callback) => {
     ipcRenderer.on('code-pane-fs-changed', callback);
   },
   offCodePaneFsChanged: (callback) =>
     ipcRenderer.removeListener('code-pane-fs-changed', callback),
+  onCodePaneDiagnosticsChanged: (callback) => {
+    ipcRenderer.on('code-pane-diagnostics-changed', callback);
+  },
+  offCodePaneDiagnosticsChanged: (callback) =>
+    ipcRenderer.removeListener('code-pane-diagnostics-changed', callback),
+  onPluginRuntimeStateChanged: (callback) => {
+    ipcRenderer.on('plugin-runtime-state-changed', callback);
+  },
+  offPluginRuntimeStateChanged: (callback) =>
+    ipcRenderer.removeListener('plugin-runtime-state-changed', callback),
 
   // Tmux pane metadata events
   onTmuxPaneTitleChanged: (callback) => {

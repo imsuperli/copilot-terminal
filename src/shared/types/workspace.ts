@@ -4,6 +4,7 @@ import { Window } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
 import type { ChatSettings } from './chat';
+import type { WorkspacePluginSettings } from './plugin';
 
 export interface IDEConfig {
   id: string;
@@ -67,6 +68,7 @@ export interface Settings {
   customCategories?: CustomCategory[];
   defaultSidebarTab?: 'all' | 'active' | 'local' | 'ssh' | 'archived' | string; // string 也可能是自定义分类或状态筛选 ID
   chat?: ChatSettings;
+  plugins?: WorkspacePluginSettings;
 }
 
 export interface Workspace {

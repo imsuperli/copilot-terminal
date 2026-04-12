@@ -38,6 +38,13 @@ import {
   TmuxSettings,
   Workspace,
 } from './workspace';
+import type {
+  PluginBindingScope,
+  PluginCatalogEntry,
+  PluginListItem,
+  PluginRuntimeState,
+  WorkspacePluginSettings,
+} from './plugin';
 
 export interface IpcResponse<T = void> {
   success: boolean;
@@ -322,6 +329,141 @@ export interface CodePaneFsChangedPayload {
   }>;
 }
 
+export interface CodePanePosition {
+  lineNumber: number;
+  column: number;
+}
+
+export interface CodePaneRange {
+  startLineNumber: number;
+  startColumn: number;
+  endLineNumber: number;
+  endColumn: number;
+}
+
+export interface CodePaneLocation {
+  filePath: string;
+  range: CodePaneRange;
+  originSelectionRange?: CodePaneRange;
+}
+
+export interface CodePaneGetDefinitionConfig {
+  rootPath: string;
+  filePath: string;
+  position: CodePanePosition;
+}
+
+export interface CodePaneHoverContent {
+  kind: 'markdown' | 'plaintext';
+  value: string;
+}
+
+export interface CodePaneHoverResult {
+  contents: CodePaneHoverContent[];
+  range?: CodePaneRange;
+}
+
+export interface CodePaneGetHoverConfig {
+  rootPath: string;
+  filePath: string;
+  position: CodePanePosition;
+}
+
+export interface CodePaneReference {
+  filePath: string;
+  range: CodePaneRange;
+  previewText?: string;
+}
+
+export interface CodePaneGetReferencesConfig {
+  rootPath: string;
+  filePath: string;
+  position: CodePanePosition;
+}
+
+export interface CodePaneDocumentSymbol {
+  name: string;
+  detail?: string;
+  kind: number;
+  range: CodePaneRange;
+  selectionRange: CodePaneRange;
+  children?: CodePaneDocumentSymbol[];
+}
+
+export interface CodePaneGetDocumentSymbolsConfig {
+  rootPath: string;
+  filePath: string;
+}
+
+export interface CodePaneDiagnostic {
+  filePath: string;
+  owner: string;
+  severity: 'hint' | 'info' | 'warning' | 'error';
+  message: string;
+  source?: string;
+  code?: string;
+  startLineNumber: number;
+  startColumn: number;
+  endLineNumber: number;
+  endColumn: number;
+}
+
+export interface CodePaneDiagnosticsChangedPayload {
+  rootPath: string;
+  filePath: string;
+  diagnostics: CodePaneDiagnostic[];
+}
+
+export interface PluginCatalogQuery {
+  refresh?: boolean;
+}
+
+export interface InstallMarketplacePluginConfig {
+  pluginId: string;
+  version?: string;
+  enableByDefault?: boolean;
+}
+
+export interface InstallLocalPluginConfig {
+  filePath: string;
+  enableByDefault?: boolean;
+}
+
+export interface UpdatePluginConfig {
+  pluginId: string;
+  version?: string;
+}
+
+export interface UninstallPluginConfig {
+  pluginId: string;
+}
+
+export interface SetPluginEnabledConfig {
+  pluginId: string;
+  enabled: boolean;
+  scope?: PluginBindingScope;
+}
+
+export interface SetPluginLanguageBindingConfig {
+  language: string;
+  pluginId: string | null;
+  scope?: PluginBindingScope;
+}
+
+export interface SetPluginSettingsConfig {
+  pluginId: string;
+  values: Record<string, unknown>;
+  scope?: PluginBindingScope;
+}
+
+export interface PluginRuntimeStateChangedPayload {
+  pluginId: string;
+  projectRoot: string;
+  state: PluginRuntimeState;
+  message?: string;
+  timestamp: string;
+}
+
 export interface TmuxPaneTitleChangedPayload {
   tmuxPaneId: string;
   windowId: string;
@@ -402,7 +544,7 @@ export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
 export type SettingsPatch =
-  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'features' | 'customCategories' | 'chat'>>
+  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'features' | 'customCategories' | 'chat' | 'plugins'>>
   & {
     ides?: IDEConfig[];
     quickNav?: QuickNavConfig;
@@ -412,6 +554,7 @@ export type SettingsPatch =
     features?: Partial<FeatureSettings>;
     customCategories?: CustomCategory[];
     chat?: Partial<ChatSettings>;
+    plugins?: Partial<WorkspacePluginSettings>;
   };
 
 export interface ElectronAPI {
@@ -450,6 +593,7 @@ export interface ElectronAPI {
   selectDirectory: () => Promise<IpcResponse<string | null>>;
   selectExecutableFile: () => Promise<IpcResponse<string | null>>;
   selectImageFile: (defaultPath?: string) => Promise<IpcResponse<string | null>>;
+  selectPluginPackage: () => Promise<IpcResponse<string | null>>;
   selectAndScanFolder: () => Promise<IpcResponse<SelectAndScanFolderResult>>;
   openFolder: (path: string) => Promise<IpcResponse<void>>;
   openInIDE: (ide: string, path: string) => Promise<IpcResponse<void>>;
@@ -464,6 +608,15 @@ export interface ElectronAPI {
   updateIDEConfig: (ideConfig: IDEConfig) => Promise<IpcResponse<IDEConfig[]>>;
   deleteIDEConfig: (ideId: string) => Promise<IpcResponse<IDEConfig[]>>;
   getIDEIcon: (iconPath: string) => Promise<IpcResponse<string>>;
+  listPlugins: () => Promise<IpcResponse<PluginListItem[]>>;
+  listPluginCatalog: (query?: PluginCatalogQuery) => Promise<IpcResponse<PluginCatalogEntry[]>>;
+  installMarketplacePlugin: (config: InstallMarketplacePluginConfig) => Promise<IpcResponse<PluginListItem>>;
+  installLocalPlugin: (config: InstallLocalPluginConfig) => Promise<IpcResponse<PluginListItem>>;
+  updatePlugin: (config: UpdatePluginConfig) => Promise<IpcResponse<PluginListItem>>;
+  uninstallPlugin: (config: UninstallPluginConfig) => Promise<IpcResponse<void>>;
+  setPluginEnabled: (config: SetPluginEnabledConfig) => Promise<IpcResponse<Settings>>;
+  setPluginLanguageBinding: (config: SetPluginLanguageBindingConfig) => Promise<IpcResponse<Settings>>;
+  setPluginSettings: (config: SetPluginSettingsConfig) => Promise<IpcResponse<Settings>>;
   listSSHProfiles: () => Promise<IpcResponse<SSHProfile[]>>;
   getSSHAlgorithmCatalog: () => Promise<IpcResponse<SSHAlgorithmCatalog>>;
   getSSHProfile: (profileId: string) => Promise<IpcResponse<SSHProfile>>;
@@ -505,8 +658,16 @@ export interface ElectronAPI {
   codePaneUnwatchRoot: (paneId: string) => Promise<IpcResponse<void>>;
   codePaneSearchFiles: (config: CodePaneSearchFilesConfig) => Promise<IpcResponse<string[]>>;
   codePaneSearchContents: (config: CodePaneSearchContentsConfig) => Promise<IpcResponse<CodePaneContentMatch[]>>;
+  codePaneGetDefinition: (config: CodePaneGetDefinitionConfig) => Promise<IpcResponse<CodePaneLocation[]>>;
+  codePaneGetHover: (config: CodePaneGetHoverConfig) => Promise<IpcResponse<CodePaneHoverResult | null>>;
+  codePaneGetReferences: (config: CodePaneGetReferencesConfig) => Promise<IpcResponse<CodePaneReference[]>>;
+  codePaneGetDocumentSymbols: (config: CodePaneGetDocumentSymbolsConfig) => Promise<IpcResponse<CodePaneDocumentSymbol[]>>;
   onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
+  onCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
+  offCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
+  onPluginRuntimeStateChanged: (callback: ElectronEventHandler<PluginRuntimeStateChangedPayload>) => void;
+  offPluginRuntimeStateChanged: (callback: ElectronEventHandler<PluginRuntimeStateChangedPayload>) => void;
   onTmuxPaneTitleChanged: (callback: ElectronEventHandler<TmuxPaneTitleChangedPayload>) => void;
   offTmuxPaneTitleChanged: (callback: ElectronEventHandler<TmuxPaneTitleChangedPayload>) => void;
   onTmuxPaneStyleChanged: (callback: ElectronEventHandler<TmuxPaneStyleChangedPayload>) => void;

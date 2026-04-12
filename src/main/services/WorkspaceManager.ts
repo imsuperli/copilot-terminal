@@ -942,6 +942,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       features: {
         sshEnabled: settings?.features?.sshEnabled ?? defaults.features?.sshEnabled ?? true,
       },
+      plugins: normalizeWorkspacePluginSettings(settings?.plugins),
       customCategories: settings?.customCategories ?? defaults.customCategories,
       defaultSidebarTab: settings?.defaultSidebarTab ?? defaults.defaultSidebarTab,
     };
@@ -1040,4 +1041,31 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
 
     return Number.NEGATIVE_INFINITY;
   }
+}
+
+function normalizeWorkspacePluginSettings(settings?: Settings['plugins']): Settings['plugins'] {
+  if (!settings) {
+    return undefined;
+  }
+
+  return {
+    enabledPluginIds: Array.isArray(settings.enabledPluginIds)
+      ? settings.enabledPluginIds.filter((value): value is string => typeof value === 'string' && value.length > 0)
+      : undefined,
+    disabledPluginIds: Array.isArray(settings.disabledPluginIds)
+      ? settings.disabledPluginIds.filter((value): value is string => typeof value === 'string' && value.length > 0)
+      : undefined,
+    languageBindings: settings.languageBindings && typeof settings.languageBindings === 'object'
+      ? Object.fromEntries(
+          Object.entries(settings.languageBindings)
+            .filter(([, value]) => typeof value === 'string' && value.length > 0),
+        )
+      : undefined,
+    pluginSettings: settings.pluginSettings && typeof settings.pluginSettings === 'object'
+      ? Object.fromEntries(
+          Object.entries(settings.pluginSettings)
+            .filter(([, value]) => value && typeof value === 'object' && !Array.isArray(value)),
+        )
+      : undefined,
+  };
 }
