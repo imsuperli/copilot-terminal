@@ -1,6 +1,6 @@
 import { StartSSHPaneResult, StartWindowResult } from '../../shared/types/electron-api';
 import { SSHProfile } from '../../shared/types/ssh';
-import { getPaneBackend, getPaneCapabilities, isBrowserPane } from '../../shared/utils/terminalCapabilities';
+import { getPaneBackend, getPaneCapabilities, isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { Pane, Window, WindowStatus } from '../types/window';
 import { dispatchAppError } from './appNotice';
 import { getAllPanes } from './layoutHelpers';
@@ -90,8 +90,8 @@ async function resolveSSHPromptRequest(options: {
 }
 
 export function createPaneDraftFromSource(sourcePane: Pane, paneId: string): Pane {
-  if (isBrowserPane(sourcePane)) {
-    throw new Error(`Cannot clone browser pane into terminal session draft: ${sourcePane.id}`);
+  if (isSessionlessPane(sourcePane)) {
+    throw new Error(`Cannot clone sessionless pane into terminal session draft: ${sourcePane.id}`);
   }
 
   const backend = getPaneBackend(sourcePane);
@@ -124,8 +124,8 @@ function resolveCloneSourceRemoteCwd(pane: Pane): string | undefined {
 }
 
 export async function startPaneForWindow(targetWindow: Window, pane: Pane): Promise<PaneStartResult> {
-  if (isBrowserPane(pane)) {
-    throw new Error(`Cannot start browser pane as PTY session: ${targetWindow.id}/${pane.id}`);
+  if (isSessionlessPane(pane)) {
+    throw new Error(`Cannot start sessionless pane as PTY session: ${targetWindow.id}/${pane.id}`);
   }
 
   const { cols: initialCols, rows: initialRows } = estimateInitialTerminalSize();
@@ -180,9 +180,9 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
 export async function startWindowPanes(
   targetWindow: Window,
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void,
-  panesToStart: Pane[] = getAllPanes(targetWindow.layout).filter((pane) => !isBrowserPane(pane)),
+  panesToStart: Pane[] = getAllPanes(targetWindow.layout).filter((pane) => !isSessionlessPane(pane)),
 ): Promise<void> {
-  const terminalPanes = panesToStart.filter((pane) => !isBrowserPane(pane));
+  const terminalPanes = panesToStart.filter((pane) => !isSessionlessPane(pane));
   if (terminalPanes.length === 0) {
     return;
   }
@@ -223,8 +223,8 @@ export async function startSplitPaneFromSource(options: {
   status: WindowStatus;
 }> {
   const { sourceWindowId, sourcePane, targetWindowId, targetPaneId, remoteCwdOverride } = options;
-  if (isBrowserPane(sourcePane)) {
-    throw new Error(`Cannot split browser pane into PTY session: ${sourceWindowId}/${sourcePane.id}`);
+  if (isSessionlessPane(sourcePane)) {
+    throw new Error(`Cannot split sessionless pane into PTY session: ${sourceWindowId}/${sourcePane.id}`);
   }
 
   const { cols: initialCols, rows: initialRows } = estimateInitialTerminalSize();

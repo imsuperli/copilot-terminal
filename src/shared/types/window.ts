@@ -15,10 +15,24 @@ export enum WindowStatus {
 }
 
 export type PaneBackend = 'local' | 'ssh';
-export type PaneKind = 'terminal' | 'browser';
+export type PaneKind = 'terminal' | 'browser' | 'code';
 
 export interface BrowserPaneState {
   url: string;
+}
+
+export interface CodePaneOpenFile {
+  path: string;
+  pinned?: boolean;
+}
+
+export interface CodePaneState {
+  rootPath: string;
+  openFiles: CodePaneOpenFile[];
+  activeFilePath: string | null;
+  selectedPath?: string | null;
+  viewMode?: 'editor' | 'diff';
+  diffTargetPath?: string | null;
 }
 
 export interface PaneCapabilities {
@@ -61,6 +75,7 @@ export interface Pane {
   capabilities?: PaneCapabilities; // pane 能力描述，用于 UI/主进程按能力分流
   ssh?: SshPaneBinding;          // SSH pane 绑定信息
   browser?: BrowserPaneState;    // 浏览器 pane 元数据
+  code?: CodePaneState;          // Monaco code pane 元数据
   lastOutput?: string;           // 最新输出摘要（前 100 字符）
 
   // tmux 兼容层扩展字段（用于 Claude Code Agent Teams）

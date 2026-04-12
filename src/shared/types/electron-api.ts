@@ -214,6 +214,85 @@ export interface WindowGitBranchChangedPayload {
   timestamp: string;
 }
 
+export interface CodePaneTreeEntry {
+  path: string;
+  name: string;
+  type: 'file' | 'directory';
+  size?: number;
+  mtimeMs?: number;
+  hasChildren?: boolean;
+}
+
+export interface CodePaneListDirectoryConfig {
+  rootPath: string;
+  targetPath?: string;
+  includeHidden?: boolean;
+}
+
+export interface CodePaneReadFileConfig {
+  rootPath: string;
+  filePath: string;
+}
+
+export interface CodePaneReadFileResult {
+  content: string;
+  mtimeMs: number;
+  size: number;
+  language: string;
+  isBinary: boolean;
+}
+
+export interface CodePaneWriteFileConfig {
+  rootPath: string;
+  filePath: string;
+  content: string;
+  expectedMtimeMs?: number;
+}
+
+export interface CodePaneWriteFileResult {
+  mtimeMs: number;
+}
+
+export interface CodePaneGitStatusConfig {
+  rootPath: string;
+}
+
+export interface CodePaneGitStatusEntry {
+  path: string;
+  status: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
+  staged?: boolean;
+  originalPath?: string;
+}
+
+export interface CodePaneReadGitBaseFileConfig {
+  rootPath: string;
+  filePath: string;
+}
+
+export interface CodePaneReadGitBaseFileResult {
+  content: string;
+  existsInHead: boolean;
+}
+
+export interface CodePaneWatchRootConfig {
+  paneId: string;
+  rootPath: string;
+}
+
+export interface CodePaneSearchFilesConfig {
+  rootPath: string;
+  query: string;
+  limit?: number;
+}
+
+export interface CodePaneFsChangedPayload {
+  rootPath: string;
+  changes: Array<{
+    type: 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
+    path: string;
+  }>;
+}
+
 export interface TmuxPaneTitleChangedPayload {
   tmuxPaneId: string;
   windowId: string;
@@ -387,6 +466,16 @@ export interface ElectronAPI {
   offPaneStatusChanged: (callback: ElectronEventHandler<PaneStatusChangedPayload>) => void;
   onWindowGitBranchChanged: (callback: ElectronEventHandler<WindowGitBranchChangedPayload>) => void;
   offWindowGitBranchChanged: (callback: ElectronEventHandler<WindowGitBranchChangedPayload>) => void;
+  codePaneListDirectory: (config: CodePaneListDirectoryConfig) => Promise<IpcResponse<CodePaneTreeEntry[]>>;
+  codePaneReadFile: (config: CodePaneReadFileConfig) => Promise<IpcResponse<CodePaneReadFileResult>>;
+  codePaneWriteFile: (config: CodePaneWriteFileConfig) => Promise<IpcResponse<CodePaneWriteFileResult>>;
+  codePaneGetGitStatus: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitStatusEntry[]>>;
+  codePaneReadGitBaseFile: (config: CodePaneReadGitBaseFileConfig) => Promise<IpcResponse<CodePaneReadGitBaseFileResult>>;
+  codePaneWatchRoot: (config: CodePaneWatchRootConfig) => Promise<IpcResponse<void>>;
+  codePaneUnwatchRoot: (paneId: string) => Promise<IpcResponse<void>>;
+  codePaneSearchFiles: (config: CodePaneSearchFilesConfig) => Promise<IpcResponse<string[]>>;
+  onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
+  offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   onTmuxPaneTitleChanged: (callback: ElectronEventHandler<TmuxPaneTitleChangedPayload>) => void;
   offTmuxPaneTitleChanged: (callback: ElectronEventHandler<TmuxPaneTitleChangedPayload>) => void;
   onTmuxPaneStyleChanged: (callback: ElectronEventHandler<TmuxPaneStyleChangedPayload>) => void;

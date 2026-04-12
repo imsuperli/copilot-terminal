@@ -10,7 +10,7 @@ import { readProjectConfig } from '../utils/project-config';
 import { PathValidator } from '../utils/pathValidator';
 import { normalizeShellProgram } from '../utils/shell';
 import { getSupportedIDEIds } from '../utils/ideScanner';
-import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
+import { isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 
 type PersistedPane = Omit<PaneNode['pane'], 'status' | 'pid'> & {
   status?: PaneNode['pane']['status'];
@@ -312,6 +312,13 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       };
     }
 
+    if (persistedPane.kind === 'code') {
+      return {
+        ...persistedPane,
+        command: '',
+      };
+    }
+
     if (persistedPane.backend !== 'ssh' || !persistedPane.ssh) {
       return persistedPane;
     }
@@ -329,7 +336,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
    */
   private getFirstPane(layout: LayoutNode): PaneNode['pane'] | null {
     if (layout.type === 'pane') {
-      return isBrowserPane(layout.pane) ? null : layout.pane;
+      return isSessionlessPane(layout.pane) ? null : layout.pane;
     } else {
       if (layout.children.length > 0) {
         for (const child of layout.children) {
@@ -348,7 +355,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
    */
   private resetLayoutPaneStates(layout: LayoutNode): LayoutNode {
     if (layout.type === 'pane') {
-      if (isBrowserPane(layout.pane)) {
+      if (isSessionlessPane(layout.pane)) {
         return layout;
       }
 
@@ -838,7 +845,7 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
     const collapsedLayout = this.collapseRedundantLayoutSplits(layout);
 
     if (collapsedLayout.type === 'pane') {
-      if (isBrowserPane(collapsedLayout.pane) || collapsedLayout.pane.backend === 'ssh') {
+      if (isSessionlessPane(collapsedLayout.pane) || collapsedLayout.pane.backend === 'ssh') {
         return collapsedLayout;
       }
 

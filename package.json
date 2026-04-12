@@ -89,6 +89,7 @@
     "fs-extra": "^11.3.3",
     "immer": "^11.1.4",
     "lucide-react": "^0.575.0",
+    "monaco-editor": "^0.55.1",
     "node-pty": "^1.1.0",
     "pidusage": "^4.0.1",
     "react": "^19.2.5",

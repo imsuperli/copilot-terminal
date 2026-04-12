@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { LayoutNode, SplitNode, Pane } from '../types/window';
 import { TerminalPane } from './TerminalPane';
 import { BrowserPane } from './BrowserPane';
+import { CodePane } from './CodePane';
 import { getPaneCount } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
-import { isBrowserPane } from '../../shared/utils/terminalCapabilities';
+import { isBrowserPane, isCodePane } from '../../shared/utils/terminalCapabilities';
 import { DEFAULT_BROWSER_URL } from '../utils/browserPane';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import { logBrowserDnd } from '../utils/browserDndDebug';
@@ -504,6 +505,16 @@ const LayoutNodeRenderer: React.FC<LayoutNodeRendererProps> = ({
           onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
         />
       )
+      : isCodePane(layout.pane)
+        ? (
+          <CodePane
+            windowId={windowId}
+            pane={layout.pane}
+            isActive={isActive}
+            onActivate={() => onPaneActivate(layout.id)}
+            onClose={totalPaneCount > 1 ? () => onPaneClose(layout.id) : undefined}
+          />
+        )
       : (
         <TerminalPane
           windowId={windowId}

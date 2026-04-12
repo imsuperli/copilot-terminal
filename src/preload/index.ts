@@ -127,6 +127,27 @@ const electronAPI: ElectronAPI = {
   },
   offWindowGitBranchChanged: (callback) =>
     ipcRenderer.removeListener('window-git-branch-changed', callback),
+  codePaneListDirectory: (config) =>
+    ipcRenderer.invoke('code-pane-list-directory', config),
+  codePaneReadFile: (config) =>
+    ipcRenderer.invoke('code-pane-read-file', config),
+  codePaneWriteFile: (config) =>
+    ipcRenderer.invoke('code-pane-write-file', config),
+  codePaneGetGitStatus: (config) =>
+    ipcRenderer.invoke('code-pane-git-status', config),
+  codePaneReadGitBaseFile: (config) =>
+    ipcRenderer.invoke('code-pane-read-git-base-file', config),
+  codePaneWatchRoot: (config) =>
+    ipcRenderer.invoke('code-pane-watch-root', config),
+  codePaneUnwatchRoot: (paneId: string) =>
+    ipcRenderer.invoke('code-pane-unwatch-root', { paneId }),
+  codePaneSearchFiles: (config) =>
+    ipcRenderer.invoke('code-pane-search-files', config),
+  onCodePaneFsChanged: (callback) => {
+    ipcRenderer.on('code-pane-fs-changed', callback);
+  },
+  offCodePaneFsChanged: (callback) =>
+    ipcRenderer.removeListener('code-pane-fs-changed', callback),
 
   // Tmux pane metadata events
   onTmuxPaneTitleChanged: (callback) => {

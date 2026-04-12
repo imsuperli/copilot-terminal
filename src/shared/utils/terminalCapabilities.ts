@@ -8,12 +8,20 @@ export function isBrowserPane(pane: Pane): boolean {
   return getPaneKind(pane) === 'browser';
 }
 
+export function isCodePane(pane: Pane): boolean {
+  return getPaneKind(pane) === 'code';
+}
+
+export function isSessionlessPane(pane: Pane): boolean {
+  return isBrowserPane(pane) || isCodePane(pane);
+}
+
 export function isTerminalPane(pane: Pane): boolean {
-  return !isBrowserPane(pane);
+  return !isSessionlessPane(pane);
 }
 
 export function getPaneBackend(pane: Pane): NonNullable<Pane['backend']> {
-  if (isBrowserPane(pane)) {
+  if (isSessionlessPane(pane)) {
     return 'local';
   }
 
@@ -21,7 +29,7 @@ export function getPaneBackend(pane: Pane): NonNullable<Pane['backend']> {
 }
 
 export function getPaneCapabilities(pane: Pane): NonNullable<Pane['capabilities']> {
-  if (isBrowserPane(pane)) {
+  if (isSessionlessPane(pane)) {
     return {
       canOpenLocalFolder: false,
       canOpenInIDE: false,
@@ -81,7 +89,7 @@ export function getWindowKind(window: Window): NonNullable<Window['kind']> {
 
   const collect = (node: Window['layout']) => {
     if (node.type === 'pane') {
-      if (isBrowserPane(node.pane)) {
+      if (isSessionlessPane(node.pane)) {
         return;
       }
       backends.add(getPaneBackend(node.pane));

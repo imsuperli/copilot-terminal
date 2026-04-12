@@ -1,9 +1,9 @@
 import { Pane, Window } from '../types/window';
-import { getWindowKind, isBrowserPane, isTerminalPane } from '../../shared/utils/terminalCapabilities';
+import { getWindowKind, isSessionlessPane, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { getAllPanes } from './layoutHelpers';
 
 function getPaneSSHTargetKey(pane: Pane): string | null {
-  if (isBrowserPane(pane)) {
+  if (isSessionlessPane(pane)) {
     return null;
   }
 

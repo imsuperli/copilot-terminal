@@ -2,7 +2,7 @@
 import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { v4 as uuidv4 } from 'uuid';
-import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, FileCode2 } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -31,6 +31,8 @@ import {
   getPaneCapabilities,
   getWindowKind,
   isBrowserPane,
+  isCodePane,
+  isSessionlessPane,
   isTerminalPane,
 } from '../../shared/utils/terminalCapabilities';
 import {
@@ -43,6 +45,7 @@ import {
   DEFAULT_BROWSER_URL,
   getSmartBrowserSplitDirection,
 } from '../utils/browserPane';
+import { createCodePaneDraft } from '../utils/codePane';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import { resolveBrowserDropAction } from '../utils/browserDrop';
 import {
@@ -108,6 +111,10 @@ function SplitBrowserIcon() {
       </span>
     </span>
   );
+}
+
+function SplitCodeIcon() {
+  return <FileCode2 size={15} strokeWidth={1.8} />;
 }
 
 function isArchiveSwitchCandidate(window: Window): boolean {
@@ -215,7 +222,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [embedded, isStandaloneSshWindow],
   );
   const showToolbarWindowIdentity = useMemo(
-    () => Boolean(activePane && isBrowserPane(activePane) && !showRemoteWindowTabs),
+    () => Boolean(activePane && isSessionlessPane(activePane) && !showRemoteWindowTabs),
     [activePane, showRemoteWindowTabs],
   );
 
@@ -332,7 +339,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       }
 
       const remainingPanes = panes.filter((pane) => pane.id !== paneId);
-      if (remainingPanes.length > 0 && remainingPanes.every((pane) => isBrowserPane(pane))) {
+      if (remainingPanes.length > 0 && remainingPanes.every((pane) => !isTerminalPane(pane))) {
         return;
       }
 
@@ -440,6 +447,23 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
 
+      if (isCodePane(sourcePane)) {
+        const newPaneId = uuidv4();
+        const newPane = createCodePaneDraft(
+          newPaneId,
+          sourcePane.code?.rootPath ?? sourcePane.cwd,
+          {
+            openFiles: sourcePane.code?.openFiles ?? [],
+            activeFilePath: sourcePane.code?.activeFilePath ?? null,
+            selectedPath: sourcePane.code?.selectedPath ?? null,
+            viewMode: sourcePane.code?.viewMode ?? 'editor',
+            diffTargetPath: sourcePane.code?.diffTargetPath ?? null,
+          },
+        );
+        splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+        return;
+      }
+
       const newPaneId = uuidv4();
       const newPane: Pane = createPaneDraftFromSource(sourcePane, newPaneId);
 
@@ -495,6 +519,57 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
     setActivePane(terminalWindow.id, newPaneId);
   }, [setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
+
+  const resolveCodePaneRootPath = useCallback((): string | null => {
+    if (activePane && isCodePane(activePane) && activePane.code?.rootPath) {
+      return activePane.code.rootPath;
+    }
+
+    if (activeTerminalPane && activeTerminalPane.backend !== 'ssh' && activeTerminalPane.cwd) {
+      return activeTerminalPane.cwd;
+    }
+
+    const fallbackLocalTerminalPane = panes.find((pane) => (
+      isTerminalPane(pane)
+      && pane.backend !== 'ssh'
+      && Boolean(pane.cwd)
+    ));
+
+    return fallbackLocalTerminalPane?.cwd ?? null;
+  }, [activePane, activeTerminalPane, panes]);
+
+  const handleSplitCodePane = useCallback(() => {
+    const activePaneId = terminalWindow.activePaneId;
+    if (!activePaneId) {
+      return;
+    }
+
+    const rootPath = resolveCodePaneRootPath();
+    if (!rootPath) {
+      return;
+    }
+
+    const { getPaneById } = useWindowStore.getState();
+    const sourcePane = getPaneById(terminalWindow.id, activePaneId);
+    const newPaneId = uuidv4();
+    const newPane = createCodePaneDraft(
+      newPaneId,
+      rootPath,
+      sourcePane && isCodePane(sourcePane)
+        ? {
+          openFiles: sourcePane.code?.openFiles ?? [],
+          activeFilePath: sourcePane.code?.activeFilePath ?? null,
+          selectedPath: sourcePane.code?.selectedPath ?? null,
+          viewMode: sourcePane.code?.viewMode ?? 'editor',
+          diffTargetPath: sourcePane.code?.diffTargetPath ?? null,
+        }
+        : undefined,
+    );
+    const direction = getSmartBrowserSplitDirection(terminalWindow.layout, activePaneId);
+
+    splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+    setActivePane(terminalWindow.id, newPaneId);
+  }, [resolveCodePaneRootPath, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
 
   const activeBrowserDragUrl = useMemo(() => (
     activePane && isBrowserPane(activePane)
@@ -1105,6 +1180,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 className={`flex h-6 w-6 items-center justify-center rounded text-zinc-100 transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]' : 'cursor-grab hover:bg-zinc-800/80 active:cursor-grabbing'}`}
               >
                 <SplitBrowserIcon />
+              </button>
+            </AppTooltip>
+
+            <AppTooltip content={t('terminalView.splitCode')} placement="toolbar-trailing">
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={t('terminalView.splitCode')}
+                onMouseDown={preventMouseButtonFocus}
+                onClick={handleSplitCodePane}
+                disabled={!resolveCodePaneRootPath()}
+                className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <SplitCodeIcon />
               </button>
             </AppTooltip>
 
