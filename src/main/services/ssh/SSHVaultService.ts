@@ -202,7 +202,7 @@ export class SSHVaultService implements ISSHVaultService {
       version: 1,
       storageMode: this.secureStorage.mode,
       entries: [],
-    });
+    }, { privateFile: true });
 
     if (!Array.isArray(persisted.entries)) {
       throw new Error('SSH vault store is corrupted: entries must be an array');
@@ -297,7 +297,7 @@ export class SSHVaultService implements ISSHVaultService {
       version: 1,
       storageMode: this.secureStorage.mode,
       entries: [],
-    });
+    }, { privateFile: true });
 
     if (!Array.isArray(data.entries)) {
       throw new Error('SSH vault store is corrupted: entries must be an array');

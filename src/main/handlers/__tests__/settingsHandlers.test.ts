@@ -119,4 +119,58 @@ describe('registerSettingsHandlers', () => {
       },
     });
   });
+
+  it('returns provider settings even when chat provider vault hydration fails', async () => {
+    const workspace = createWorkspace();
+    workspace.settings.chat!.providers[0].apiKey = '';
+
+    let currentWorkspace: Workspace | null = workspace;
+    const setCurrentWorkspace = vi.fn((nextWorkspace: Workspace | null) => {
+      currentWorkspace = nextWorkspace;
+    });
+    const workspaceManager = {
+      loadWorkspace: vi.fn(),
+      saveWorkspace: vi.fn(),
+    };
+    const chatProviderVaultService = {
+      hydrateProviders: vi.fn().mockRejectedValue(new SyntaxError('Unexpected non-whitespace character after JSON')),
+    };
+
+    const ctx = {
+      mainWindow: null,
+      processManager: null,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      chatProviderVaultService,
+      currentWorkspace,
+      getCurrentWorkspace: () => currentWorkspace,
+      setCurrentWorkspace,
+    } as unknown as HandlerContext;
+
+    registerSettingsHandlers(ctx);
+    const getSettingsHandler = getRegisteredHandler('get-settings');
+
+    const response = await getSettingsHandler({});
+
+    expect(chatProviderVaultService.hydrateProviders).toHaveBeenCalledWith(workspace.settings.chat!.providers);
+    expect(response).toEqual({
+      success: true,
+      data: {
+        ...workspace.settings,
+        chat: {
+          ...workspace.settings.chat,
+          providers: [
+            {
+              ...workspace.settings.chat!.providers[0],
+              apiKey: '',
+            },
+          ],
+        },
+      },
+    });
+  });
 });

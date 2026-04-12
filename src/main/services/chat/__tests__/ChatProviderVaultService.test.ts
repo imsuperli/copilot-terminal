@@ -100,4 +100,47 @@ describe('ChatProviderVaultService', () => {
 
     expect(await encryptedVault.getApiKey('provider-1')).toBe('sk-ant-test');
   });
+
+  it('recovers a vault file when multiple JSON payloads were accidentally concatenated', async () => {
+    const storage = new MockSecureStorage();
+    const olderPayload = {
+      version: 1,
+      storageMode: storage.mode,
+      entries: [
+        {
+          providerId: 'provider-1',
+          secret: storage.encryptString('old-secret'),
+          updatedAt: '2026-04-12T00:00:00.000Z',
+        },
+      ],
+    };
+    const newerPayload = {
+      version: 1,
+      storageMode: storage.mode,
+      entries: [
+        {
+          providerId: 'provider-1',
+          secret: storage.encryptString('new-secret'),
+          updatedAt: '2026-04-12T01:00:00.000Z',
+        },
+      ],
+    };
+
+    await fs.writeFile(filePath, `${JSON.stringify(olderPayload, null, 2)}\n${JSON.stringify(newerPayload, null, 2)}\n`, 'utf8');
+
+    const vault = new ChatProviderVaultService({
+      filePath,
+      secureStorage: storage,
+      now: () => '2026-04-12T02:00:00.000Z',
+    });
+
+    expect(await vault.getApiKey('provider-1')).toBe('new-secret');
+
+    const repaired = await fs.readJson(filePath);
+    expect(repaired).toEqual(newerPayload);
+
+    const backupFiles = (await fs.readdir(tempDir))
+      .filter((entry) => entry.startsWith('chat-provider-vault.json.corrupt.'));
+    expect(backupFiles.length).toBe(1);
+  });
 });

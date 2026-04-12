@@ -344,9 +344,19 @@ async function hydrateChatSettings(ctx: HandlerContext, chatSettings: ChatSettin
     return chatSettings;
   }
 
-  const providers = ctx.chatProviderVaultService
-    ? await ctx.chatProviderVaultService.hydrateProviders(chatSettings.providers ?? [])
-    : chatSettings.providers ?? [];
+  let providers = chatSettings.providers ?? [];
+
+  if (ctx.chatProviderVaultService) {
+    try {
+      providers = await ctx.chatProviderVaultService.hydrateProviders(chatSettings.providers ?? []);
+    } catch (error) {
+      console.error('[SettingsHandlers] Failed to hydrate chat provider secrets from vault:', error);
+      providers = (chatSettings.providers ?? []).map((provider) => ({
+        ...provider,
+        apiKey: '',
+      }));
+    }
+  }
 
   return {
     ...chatSettings,

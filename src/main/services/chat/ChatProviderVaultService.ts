@@ -127,7 +127,7 @@ export class ChatProviderVaultService {
       version: 1,
       storageMode: this.secureStorage.mode,
       entries: [],
-    });
+    }, { privateFile: true });
 
     if (!Array.isArray(data.entries)) {
       throw new Error('Chat provider vault is corrupted: entries must be an array');
