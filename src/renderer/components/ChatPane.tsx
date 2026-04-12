@@ -275,14 +275,16 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     paneRef.current = pane;
   }, [pane]);
 
-  const terminalPanes = useWindowStore(useCallback((state) => {
-    const terminalWindow = state.windows.find((window) => window.id === windowId);
-    if (!terminalWindow) {
-      return [] as Pane[];
-    }
-
-    return getAllPanes(terminalWindow.layout).filter((candidate) => isTerminalPane(candidate));
-  }, [windowId]));
+  const terminalWindow = useWindowStore(useCallback(
+    (state) => state.windows.find((window) => window.id === windowId) ?? null,
+    [windowId],
+  ));
+  const terminalPanes = useMemo(
+    () => terminalWindow
+      ? getAllPanes(terminalWindow.layout).filter((candidate) => isTerminalPane(candidate))
+      : [],
+    [terminalWindow],
+  );
 
   const chatState = pane.chat ?? { messages: [] };
   const resolvedLinkedPaneId = chatState.linkedPaneId ?? terminalPanes[0]?.id;
