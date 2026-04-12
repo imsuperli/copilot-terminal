@@ -27,7 +27,21 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "npm": ">=11 <12"
+  },
+  "packageManager": "npm@11.11.1",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=22.0.0",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": ">=11 <12",
+      "onFail": "error"
+    }
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
