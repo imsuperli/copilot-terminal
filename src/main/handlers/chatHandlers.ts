@@ -17,6 +17,7 @@ import {
   getChatDebugLogFilePath,
   previewText,
 } from '../utils/chatDebugLog';
+import { resolveLLMProviderWireApi } from '../../shared/utils/chatProvider';
 import type {
   ChatMessage,
   ChatSendRequest,
@@ -87,6 +88,7 @@ function summarizeProvider(provider: LLMProviderConfig): Record<string, unknown>
     type: provider.type,
     name: provider.name,
     baseUrl: provider.baseUrl ?? null,
+    wireApi: resolveLLMProviderWireApi(provider),
     hasApiKey: provider.apiKey.trim().length > 0,
     defaultModel: provider.defaultModel,
   };

@@ -1,11 +1,12 @@
 /**
  * Chat 功能相关类型定义
- * 支持 Anthropic Claude API 和 OpenAI 兼容协议
+ * 支持 Anthropic Claude API、OpenAI-Compatible Chat Completions 与 Responses 协议
  */
 
 // ─── LLM Provider ────────────────────────────────────────────────────────────
 
 export type LLMProviderType = 'anthropic' | 'openai-compatible';
+export type LLMProviderWireApi = 'chat-completions' | 'responses';
 
 export interface LLMProviderConfig {
   id: string;
@@ -13,6 +14,8 @@ export interface LLMProviderConfig {
   name: string;
   /** OpenAI-compatible 协议的 base URL，Anthropic 可留空使用默认值 */
   baseUrl?: string;
+  /** OpenAI-compatible provider 使用的协议类型，默认 chat-completions */
+  wireApi?: LLMProviderWireApi;
   apiKey: string;
   /** 该 provider 支持的模型列表 */
   models: string[];

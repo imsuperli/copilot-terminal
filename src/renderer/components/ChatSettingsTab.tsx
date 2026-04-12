@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Switch from '@radix-ui/react-switch';
 import { v4 as uuidv4 } from 'uuid';
-import type { ChatSettings, LLMProviderConfig, LLMProviderType } from '../../shared/types/chat';
+import type {
+  ChatSettings,
+  LLMProviderConfig,
+  LLMProviderType,
+  LLMProviderWireApi,
+} from '../../shared/types/chat';
+import { resolveLLMProviderWireApi } from '../../shared/utils/chatProvider';
 import { useI18n } from '../i18n';
 import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
 
@@ -10,6 +16,7 @@ interface ProviderFormState {
   name: string;
   type: LLMProviderType;
   baseUrl: string;
+  wireApi: LLMProviderWireApi;
   apiKey: string;
   modelsText: string;
   defaultModel: string;
@@ -29,6 +36,7 @@ function createEmptyProviderForm(): ProviderFormState {
     name: '',
     type: 'anthropic',
     baseUrl: '',
+    wireApi: 'chat-completions',
     apiKey: '',
     modelsText: '',
     defaultModel: '',
@@ -41,6 +49,7 @@ function createProviderForm(provider: LLMProviderConfig): ProviderFormState {
     name: provider.name,
     type: provider.type,
     baseUrl: provider.baseUrl ?? '',
+    wireApi: resolveLLMProviderWireApi(provider) ?? 'chat-completions',
     apiKey: provider.apiKey,
     modelsText: provider.models.join('\n'),
     defaultModel: provider.defaultModel,
@@ -161,6 +170,9 @@ export const ChatSettingsTab: React.FC = () => {
       name: providerName,
       baseUrl: providerForm.type === 'openai-compatible' && providerForm.baseUrl.trim()
         ? providerForm.baseUrl.trim()
+        : undefined,
+      wireApi: providerForm.type === 'openai-compatible'
+        ? providerForm.wireApi
         : undefined,
       apiKey,
       models: normalizedModels,
@@ -349,6 +361,20 @@ export const ChatSettingsTab: React.FC = () => {
                   disabled={providerForm.type !== 'openai-compatible'}
                   className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50"
                 />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.protocolLabel')}</span>
+                <select
+                  value={providerForm.wireApi}
+                  onChange={(event) => handleProviderFieldChange('wireApi', event.target.value as LLMProviderWireApi)}
+                  disabled={providerForm.type !== 'openai-compatible'}
+                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="chat-completions">{t('settings.chat.protocolChatCompletions')}</option>
+                  <option value="responses">{t('settings.chat.protocolResponses')}</option>
+                </select>
+                <span className="text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.chat.protocolHint')}</span>
               </label>
 
               <label className="flex flex-col gap-2 md:col-span-2">

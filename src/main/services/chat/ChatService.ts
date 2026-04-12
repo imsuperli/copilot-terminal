@@ -1,11 +1,12 @@
 /**
  * ChatService — LLM 流式调用核心服务
- * 支持 Anthropic Claude API 和 OpenAI 兼容协议
+ * 支持 Anthropic Claude API、OpenAI-Compatible Chat Completions 与 Responses 协议
  */
 
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { v4 as uuidv4 } from 'uuid';
+import type * as ResponsesAPI from 'openai/resources/responses/responses';
 import type {
   ChatMessage,
   ChatSendRequest,
@@ -13,6 +14,7 @@ import type {
   ToolCall,
   ToolName,
 } from '../../../shared/types/chat';
+import { resolveLLMProviderWireApi } from '../../../shared/utils/chatProvider';
 import {
   chatDebugError,
   chatDebugInfo,
@@ -97,6 +99,16 @@ const TOOL_DEFINITIONS_OPENAI: OpenAI.ChatCompletionTool[] = TOOL_DEFINITIONS_AN
   }),
 );
 
+const TOOL_DEFINITIONS_RESPONSES: ResponsesAPI.FunctionTool[] = TOOL_DEFINITIONS_ANTHROPIC.map(
+  (tool) => ({
+    type: 'function' as const,
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.input_schema,
+    strict: false,
+  }),
+);
+
 type OpenAIFunctionCallLike = {
   name?: string;
   arguments?: string;
@@ -121,12 +133,19 @@ type OpenAIChoiceLike = {
   finish_reason?: unknown;
 };
 
+type OpenAIToolCallRaw = {
+  id: string;
+  name: string;
+  args: string;
+};
+
 function summarizeProvider(provider: LLMProviderConfig): Record<string, unknown> {
   return {
     id: provider.id,
     type: provider.type,
     name: provider.name,
     baseUrl: provider.baseUrl ?? null,
+    wireApi: resolveLLMProviderWireApi(provider),
     hasApiKey: provider.apiKey.trim().length > 0,
     models: provider.models,
     defaultModel: provider.defaultModel,
@@ -202,7 +221,7 @@ function extractOpenAITextParts(content: unknown): string[] {
 
 function appendOpenAIToolCalls(
   payload: OpenAIMessageLike | undefined,
-  toolCallsRaw: Map<number, { id: string; name: string; args: string }>,
+  toolCallsRaw: Map<number, OpenAIToolCallRaw>,
 ): void {
   if (!payload) {
     return;
@@ -250,6 +269,138 @@ function appendOpenAIToolCalls(
       existing.name = payload.function_call.name;
     }
   }
+}
+
+function toResponsesInput(messages: ChatMessage[]): ResponsesAPI.ResponseInput {
+  const result: ResponsesAPI.ResponseInput = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      continue;
+    }
+
+    if (msg.role === 'user') {
+      if (msg.toolResult) {
+        result.push({
+          type: 'function_call_output',
+          call_id: msg.toolResult.toolCallId,
+          output: msg.toolResult.content,
+        } as ResponsesAPI.ResponseInputItem.FunctionCallOutput);
+      } else {
+        result.push({
+          type: 'message',
+          role: 'user',
+          content: msg.content,
+        } as ResponsesAPI.EasyInputMessage);
+      }
+      continue;
+    }
+
+    if (msg.content) {
+      result.push({
+        type: 'message',
+        role: 'assistant',
+        content: msg.content,
+      } as ResponsesAPI.EasyInputMessage);
+    }
+
+    if (msg.toolCalls?.length) {
+      for (const toolCall of msg.toolCalls) {
+        result.push({
+          type: 'function_call',
+          call_id: toolCall.id,
+          name: toolCall.name,
+          arguments: JSON.stringify(toolCall.params),
+        } as ResponsesAPI.ResponseFunctionToolCall);
+      }
+    }
+  }
+
+  return result;
+}
+
+function extractResponsesOutputText(response: ResponsesAPI.Response | null | undefined): string {
+  if (!response) {
+    return '';
+  }
+
+  if (response.output_text) {
+    return response.output_text;
+  }
+
+  const textParts: string[] = [];
+  for (const item of response.output) {
+    if (item.type !== 'message') {
+      continue;
+    }
+
+    for (const part of item.content) {
+      if (part.type === 'output_text') {
+        textParts.push(part.text);
+      }
+    }
+  }
+
+  return textParts.join('');
+}
+
+function extractResponsesToolCalls(response: ResponsesAPI.Response | null | undefined): OpenAIToolCallRaw[] {
+  if (!response) {
+    return [];
+  }
+
+  return response.output.flatMap((item) => (
+    item.type === 'function_call'
+      ? [{
+          id: item.call_id || item.id || uuidv4(),
+          name: item.name,
+          args: item.arguments,
+        }]
+      : []
+  ));
+}
+
+function parseToolCallParams(rawArgs: string): Record<string, unknown> {
+  if (!rawArgs) {
+    return {};
+  }
+
+  return JSON.parse(rawArgs);
+}
+
+function buildToolCallsFromRaw(
+  rawCalls: Iterable<OpenAIToolCallRaw>,
+  logScope: string,
+  paneId: string,
+): ToolCall[] {
+  const toolCalls: ToolCall[] = [];
+
+  for (const raw of rawCalls) {
+    let params: Record<string, unknown> = {};
+    if (raw.args) {
+      try {
+        params = parseToolCallParams(raw.args);
+      } catch (error) {
+        params = {};
+        chatDebugWarn(logScope, 'Failed to parse tool call arguments', {
+          paneId,
+          toolCallId: raw.id,
+          toolName: raw.name,
+          argsPreview: previewText(raw.args, 240),
+          error,
+        });
+      }
+    }
+
+    toolCalls.push({
+      id: raw.id,
+      name: raw.name as ToolName,
+      params,
+      status: 'pending',
+    });
+  }
+
+  return toolCalls;
 }
 
 /** 构建系统提示词 */
@@ -404,7 +555,18 @@ export class ChatService {
     if (provider.type === 'anthropic') {
       await this.streamAnthropic(request, provider, callbacks, signal);
     } else {
-      await this.streamOpenAI(request, provider, callbacks, signal);
+      const wireApi = resolveLLMProviderWireApi(provider);
+      chatDebugInfo('ChatService', 'Resolved OpenAI-compatible wire API', {
+        paneId: request.paneId,
+        providerId: provider.id,
+        wireApi,
+      });
+
+      if (wireApi === 'responses') {
+        await this.streamResponses(request, provider, callbacks, signal);
+      } else {
+        await this.streamOpenAIChatCompletions(request, provider, callbacks, signal);
+      }
     }
   }
 
@@ -566,7 +728,209 @@ export class ChatService {
     }
   }
 
-  private async streamOpenAI(
+  private async streamResponses(
+    request: ChatSendRequest,
+    provider: LLMProviderConfig,
+    callbacks: StreamCallbacks,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const client = new OpenAI({
+      apiKey: provider.apiKey,
+      baseURL: provider.baseUrl || undefined,
+    });
+
+    const systemPrompt = buildSystemPrompt(request);
+    const input = toResponsesInput(request.messages);
+    const tools = request.enableTools ? TOOL_DEFINITIONS_RESPONSES : undefined;
+
+    let fullContent = '';
+    const toolCallsRaw: Map<number, OpenAIToolCallRaw> = new Map();
+    let chunkCount = 0;
+    let textPartCount = 0;
+    let toolCallCount = 0;
+    let completedResponse: ResponsesAPI.Response | null = null;
+    let streamEventError: string | null = null;
+
+    chatDebugInfo('ChatService/Responses', 'Creating Responses API stream', {
+      paneId: request.paneId,
+      provider: summarizeProvider(provider),
+      model: request.model,
+      systemPromptPreview: previewText(systemPrompt, 240),
+      inputCount: input.length,
+      toolCount: tools?.length ?? 0,
+    });
+
+    try {
+      const stream = await client.responses.create({
+        model: request.model,
+        input,
+        instructions: systemPrompt,
+        tools,
+        stream: true,
+      }, { signal: signal as AbortSignal });
+
+      chatDebugInfo('ChatService/Responses', 'Responses API stream established', {
+        paneId: request.paneId,
+        model: request.model,
+      });
+
+      for await (const event of stream) {
+        chunkCount += 1;
+
+        if (signal?.aborted) {
+          break;
+        }
+
+        const eventSummary: Record<string, unknown> = {
+          paneId: request.paneId,
+          chunkCount,
+          type: event.type,
+        };
+
+        switch (event.type) {
+          case 'response.output_text.delta':
+            fullContent += event.delta;
+            textPartCount += 1;
+            eventSummary.deltaLength = event.delta.length;
+            eventSummary.deltaPreview = previewText(event.delta, 160);
+            callbacks.onChunk(event.delta);
+            break;
+          case 'response.output_item.added':
+          case 'response.output_item.done':
+            eventSummary.outputIndex = event.output_index;
+            eventSummary.itemType = event.item.type;
+
+            if (event.item.type === 'function_call') {
+              const existing = toolCallsRaw.get(event.output_index);
+              if (!existing) {
+                toolCallCount += 1;
+              }
+              toolCallsRaw.set(event.output_index, {
+                id: event.item.call_id || event.item.id || uuidv4(),
+                name: event.item.name,
+                args: event.item.arguments || existing?.args || '',
+              });
+              eventSummary.toolCallId = event.item.call_id || event.item.id || null;
+              eventSummary.toolName = event.item.name;
+            }
+            break;
+          case 'response.function_call_arguments.delta': {
+            const existing = toolCallsRaw.get(event.output_index) ?? {
+              id: event.item_id || uuidv4(),
+              name: '',
+              args: '',
+            };
+            existing.args += event.delta;
+            toolCallsRaw.set(event.output_index, existing);
+            eventSummary.outputIndex = event.output_index;
+            eventSummary.itemId = event.item_id;
+            eventSummary.deltaLength = event.delta.length;
+            eventSummary.deltaPreview = previewText(event.delta, 160);
+            break;
+          }
+          case 'response.function_call_arguments.done': {
+            const existing = toolCallsRaw.get(event.output_index) ?? {
+              id: event.item_id || uuidv4(),
+              name: event.name,
+              args: '',
+            };
+            existing.id = existing.id || event.item_id || uuidv4();
+            existing.name = event.name;
+            existing.args = event.arguments;
+            toolCallsRaw.set(event.output_index, existing);
+            eventSummary.outputIndex = event.output_index;
+            eventSummary.itemId = event.item_id;
+            eventSummary.toolName = event.name;
+            eventSummary.argumentsPreview = previewText(event.arguments, 160);
+            break;
+          }
+          case 'response.completed':
+            completedResponse = event.response;
+            eventSummary.responseId = event.response.id;
+            eventSummary.outputCount = event.response.output.length;
+            eventSummary.outputTextPreview = previewText(event.response.output_text || '', 160);
+            break;
+          case 'response.failed':
+            completedResponse = event.response;
+            streamEventError = event.response.error?.message || 'Responses API request failed';
+            eventSummary.responseId = event.response.id;
+            eventSummary.error = streamEventError;
+            break;
+          case 'error':
+            streamEventError = event.message || 'Responses API stream error';
+            eventSummary.error = streamEventError;
+            eventSummary.code = event.code;
+            break;
+          default:
+            break;
+        }
+
+        chatDebugInfo('ChatService/Responses', 'Received stream event', eventSummary);
+      }
+
+      if (streamEventError) {
+        chatDebugError('ChatService/Responses', 'Responses API stream reported an error event', {
+          paneId: request.paneId,
+          model: request.model,
+          provider: summarizeProvider(provider),
+          error: streamEventError,
+        });
+        callbacks.onError(streamEventError);
+        return;
+      }
+
+      if (!fullContent) {
+        fullContent = extractResponsesOutputText(completedResponse);
+      }
+
+      if (toolCallsRaw.size === 0 && completedResponse) {
+        for (const [index, rawCall] of extractResponsesToolCalls(completedResponse).entries()) {
+          toolCallsRaw.set(index, rawCall);
+        }
+      }
+
+      const toolCalls = buildToolCallsFromRaw(toolCallsRaw.values(), 'ChatService/Responses', request.paneId);
+      const emptyResponse = fullContent.trim().length === 0 && toolCalls.length === 0;
+      if (emptyResponse) {
+        chatDebugWarn('ChatService/Responses', 'Stream completed with empty response', {
+          paneId: request.paneId,
+          model: request.model,
+          provider: summarizeProvider(provider),
+          chunkCount,
+          textPartCount,
+          toolCallCount,
+        });
+        callbacks.onError(`LLM 返回空响应，请检查 Base URL、模型名或兼容接口格式。调试日志：${getChatDebugLogFilePath()}`);
+        return;
+      }
+
+      chatDebugInfo('ChatService/Responses', 'Responses API stream completed', {
+        paneId: request.paneId,
+        model: request.model,
+        chunkCount,
+        textPartCount,
+        toolCallCount,
+        fullContentLength: fullContent.length,
+        fullContentPreview: previewText(fullContent, 240),
+        toolCalls: summarizeToolCalls(toolCalls),
+        emptyResponse,
+      });
+
+      callbacks.onDone(fullContent, toolCalls.length > 0 ? toolCalls : undefined);
+    } catch (err) {
+      if (signal?.aborted) return;
+      const message = err instanceof Error ? err.message : String(err);
+      chatDebugError('ChatService/Responses', 'Responses API stream failed', {
+        paneId: request.paneId,
+        model: request.model,
+        provider: summarizeProvider(provider),
+        error: err,
+      });
+      callbacks.onError(message);
+    }
+  }
+
+  private async streamOpenAIChatCompletions(
     request: ChatSendRequest,
     provider: LLMProviderConfig,
     callbacks: StreamCallbacks,
@@ -587,7 +951,7 @@ export class ChatService {
     let chunkCount = 0;
     let textPartCount = 0;
 
-    chatDebugInfo('ChatService/OpenAI', 'Creating OpenAI-compatible stream', {
+    chatDebugInfo('ChatService/OpenAIChatCompletions', 'Creating OpenAI-compatible stream', {
       paneId: request.paneId,
       provider: summarizeProvider(provider),
       model: request.model,
@@ -604,7 +968,7 @@ export class ChatService {
         stream: true,
       }, { signal: signal as AbortSignal });
 
-      chatDebugInfo('ChatService/OpenAI', 'OpenAI-compatible stream established', {
+      chatDebugInfo('ChatService/OpenAIChatCompletions', 'OpenAI-compatible stream established', {
         paneId: request.paneId,
         model: request.model,
       });
@@ -616,7 +980,7 @@ export class ChatService {
 
         const choice = chunk.choices[0] as OpenAIChoiceLike | undefined;
         if (!choice) {
-          chatDebugWarn('ChatService/OpenAI', 'Received stream chunk without choices', {
+          chatDebugWarn('ChatService/OpenAIChatCompletions', 'Received stream chunk without choices', {
             paneId: request.paneId,
             chunkCount,
             rawChoiceCount: chunk.choices.length,
@@ -644,7 +1008,7 @@ export class ChatService {
           appendOpenAIToolCalls(choice.message, toolCallsRaw);
         }
 
-        chatDebugInfo('ChatService/OpenAI', 'Received stream chunk', {
+        chatDebugInfo('ChatService/OpenAIChatCompletions', 'Received stream chunk', {
           paneId: request.paneId,
           chunkCount,
           choiceCount: chunk.choices.length,
@@ -663,34 +1027,15 @@ export class ChatService {
       }
 
       // 构建 ToolCall 对象
-      const toolCalls: ToolCall[] = [];
-      for (const raw of toolCallsRaw.values()) {
-        let params: Record<string, unknown> = {};
-        if (raw.args) {
-          try {
-            params = JSON.parse(raw.args || '{}');
-          } catch (error) {
-            params = {};
-            chatDebugWarn('ChatService/OpenAI', 'Failed to parse tool call arguments', {
-              paneId: request.paneId,
-              toolCallId: raw.id,
-              toolName: raw.name,
-              argsPreview: previewText(raw.args, 240),
-              error,
-            });
-          }
-        }
-        toolCalls.push({
-          id: raw.id,
-          name: raw.name as ToolName,
-          params,
-          status: 'pending',
-        });
-      }
+      const toolCalls = buildToolCallsFromRaw(
+        toolCallsRaw.values(),
+        'ChatService/OpenAIChatCompletions',
+        request.paneId,
+      );
 
       const emptyResponse = fullContent.trim().length === 0 && toolCalls.length === 0;
       if (emptyResponse) {
-        chatDebugWarn('ChatService/OpenAI', 'Stream completed with empty response', {
+        chatDebugWarn('ChatService/OpenAIChatCompletions', 'Stream completed with empty response', {
           paneId: request.paneId,
           model: request.model,
           provider: summarizeProvider(provider),
@@ -701,7 +1046,7 @@ export class ChatService {
         return;
       }
 
-      chatDebugInfo('ChatService/OpenAI', 'OpenAI-compatible stream completed', {
+      chatDebugInfo('ChatService/OpenAIChatCompletions', 'OpenAI-compatible stream completed', {
         paneId: request.paneId,
         model: request.model,
         chunkCount,
@@ -716,7 +1061,7 @@ export class ChatService {
     } catch (err) {
       if (signal?.aborted) return;
       const message = err instanceof Error ? err.message : String(err);
-      chatDebugError('ChatService/OpenAI', 'OpenAI-compatible stream failed', {
+      chatDebugError('ChatService/OpenAIChatCompletions', 'OpenAI-compatible stream failed', {
         paneId: request.paneId,
         model: request.model,
         provider: summarizeProvider(provider),
