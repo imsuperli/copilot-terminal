@@ -165,6 +165,184 @@ describe('ChatService', () => {
     expect(onDone).toHaveBeenCalledWith('hello from the compatibility gateway', undefined);
   });
 
+  it('keeps structured multi-turn messages for xunfei maas style chat completions', async () => {
+    hoisted.openAICreateMock.mockResolvedValue(createAsyncIterable([
+      {
+        choices: [
+          {
+            message: {
+              content: 'kiwi',
+            },
+          },
+        ],
+      },
+    ]));
+
+    const request = createRequest();
+    request._provider.baseUrl = 'https://maas-api.cn-huabei-1.xf-yun.com/v2/';
+    request.messages = [
+      {
+        id: 'msg-1',
+        role: 'user',
+        content: 'Call execute_command and then answer with the result.',
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: 'msg-2',
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        toolCalls: [
+          {
+            id: 'call_1',
+            name: 'execute_command',
+            params: {
+              command: 'printf kiwi',
+              requires_approval: false,
+            },
+            status: 'completed',
+          },
+        ],
+      },
+      {
+        id: 'msg-3',
+        role: 'user',
+        content: '',
+        timestamp: new Date().toISOString(),
+        toolResult: {
+          toolCallId: 'call_1',
+          content: 'kiwi',
+        },
+      },
+    ];
+
+    const service = new ChatService();
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await service.streamChat(request, { onChunk, onDone, onError });
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledWith('kiwi', undefined);
+
+    const [payload] = hoisted.openAICreateMock.mock.calls.at(-1) ?? [];
+    expect(payload.messages).toEqual([
+      expect.objectContaining({
+        role: 'system',
+      }),
+      expect.objectContaining({
+        role: 'user',
+        content: 'Call execute_command and then answer with the result.',
+      }),
+      expect.objectContaining({
+        role: 'assistant',
+        content: null,
+        tool_calls: [
+          {
+            id: 'call_1',
+            type: 'function',
+            function: {
+              name: 'execute_command',
+              arguments: '{"command":"printf kiwi","requires_approval":false}',
+            },
+          },
+        ],
+      }),
+      expect.objectContaining({
+        role: 'tool',
+        tool_call_id: 'call_1',
+        content: 'kiwi',
+      }),
+    ]);
+  });
+
+  it('parses xunfei maas style streaming tool call chunks', async () => {
+    hoisted.openAICreateMock.mockResolvedValue(createAsyncIterable([
+      {
+        choices: [
+          {
+            delta: {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'call_952e9716b735452891b3a6',
+                  type: 'function',
+                  function: {
+                    name: 'execute_command',
+                    arguments: '{"command":"p',
+                  },
+                },
+              ],
+              reasoning_content: '',
+              plugins_content: null,
+            },
+          },
+        ],
+      },
+      {
+        choices: [
+          {
+            delta: {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  index: 0,
+                  type: 'function',
+                  function: {
+                    arguments: 'wd","requires_approval":false}',
+                  },
+                },
+              ],
+              reasoning_content: '',
+              plugins_content: null,
+            },
+          },
+        ],
+      },
+      {
+        choices: [
+          {
+            delta: {
+              role: 'assistant',
+              content: '',
+              reasoning_content: '',
+              plugins_content: null,
+            },
+            finish_reason: 'tool_calls',
+          },
+        ],
+      },
+    ]));
+
+    const request = createRequest();
+    request._provider.baseUrl = 'https://maas-api.cn-huabei-1.xf-yun.com/v2/';
+
+    const service = new ChatService();
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await service.streamChat(request, { onChunk, onDone, onError });
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onChunk).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledWith('', [
+      expect.objectContaining({
+        id: 'call_952e9716b735452891b3a6',
+        name: 'execute_command',
+        params: {
+          command: 'pwd',
+          requires_approval: false,
+        },
+        status: 'pending',
+      }),
+    ]);
+  });
+
   it('streams text from the responses API when the provider uses responses wire format', async () => {
     hoisted.openAIResponsesCreateMock.mockResolvedValue(createAsyncIterable([
       {
