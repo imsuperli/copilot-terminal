@@ -185,8 +185,8 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   }, [isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
-  const dividerActiveClassName = 'bg-[rgb(var(--primary))] shadow-[0_0_0_1px_rgba(168,170,88,0.28)]';
-  const dividerIdleClassName = 'bg-zinc-500/90 shadow-[0_0_0_1px_rgba(24,24,27,0.65)] group-hover:bg-[rgb(var(--primary))] group-hover:shadow-[0_0_0_1px_rgba(168,170,88,0.28)]';
+  const dividerActiveClassName = 'bg-[rgb(var(--primary))] shadow-[0_0_0_1px_rgba(168,170,88,0.18)]';
+  const dividerIdleClassName = 'bg-zinc-600/80 shadow-[0_0_0_1px_rgba(24,24,27,0.45)] group-hover:bg-[rgb(var(--primary))]/75 group-hover:shadow-[0_0_0_1px_rgba(168,170,88,0.18)]';
 
   return (
     <div
@@ -228,7 +228,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
               className={`
                 ${isHorizontal ? 'w-2 cursor-col-resize' : 'h-2 cursor-row-resize'}
                 group relative flex-shrink-0 select-none
-                bg-zinc-950/70 hover:bg-[rgb(var(--primary))]/10 transition-colors
+                bg-transparent transition-colors
               `}
               onMouseDown={handleMouseDown(index)}
             >
@@ -236,11 +236,11 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
                 className={`
                   absolute rounded-full transition-all duration-150
                   ${isHorizontal
-                    ? 'inset-y-0 left-1/2 w-[2px] -translate-x-1/2'
-                    : 'inset-x-0 top-1/2 h-[2px] -translate-y-1/2'
+                    ? 'inset-y-0 left-1/2 w-px -translate-x-1/2'
+                    : 'inset-x-0 top-1/2 h-px -translate-y-1/2'
                   }
                   ${isResizing && resizingIndex === index
-                    ? `${dividerActiveClassName} ${isHorizontal ? 'w-[3px]' : 'h-[3px]'}`
+                    ? `${dividerActiveClassName} ${isHorizontal ? 'w-[2px]' : 'h-[2px]'}`
                     : dividerIdleClassName
                   }
                 `}
