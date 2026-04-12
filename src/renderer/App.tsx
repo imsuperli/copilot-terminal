@@ -258,7 +258,7 @@ function AppContent() {
   const [sshProfiles, setSSHProfiles] = useState<SSHProfile[]>([]);
   const [sshCredentialStates, setSSHCredentialStates] = useState<Record<string, SSHCredentialState>>({});
   const [connectingSSHProfileId, setConnectingSSHProfileId] = useState<string | null>(null);
-  const [sshEnabled, setSSHEnabled] = useState(false);
+  const [sshEnabled, setSSHEnabled] = useState(true);
   const [currentTab, setCurrentTab] = useState<'all' | 'active' | 'archived' | string>('active');
   const [searchQuery, setSearchQuery] = useState(''); // 搜索状态
   const [isQuickNavOpen, setIsQuickNavOpen] = useState(false); // 快捷导航面板状态
@@ -300,7 +300,10 @@ function AppContent() {
           setCurrentTab(response.data.defaultSidebarTab);
         }
         setSSHEnabled(response.data.features?.sshEnabled ?? true);
+        return;
       }
+
+      console.error('Failed to load workspace settings:', response.error);
     } catch (error) {
       console.error('Failed to load workspace settings:', error);
     }

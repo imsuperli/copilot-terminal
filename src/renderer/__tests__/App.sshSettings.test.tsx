@@ -129,4 +129,17 @@ describe('App SSH settings updates', () => {
       expect(screen.getByTestId('ssh-enabled')).toHaveTextContent('false');
     });
   });
+
+  it('keeps SSH enabled by default when the initial settings request fails', async () => {
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValueOnce({
+      success: false,
+      error: 'Workspace not loaded',
+    } as any);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ssh-enabled')).toHaveTextContent('true');
+    });
+  });
 });

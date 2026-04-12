@@ -39,10 +39,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
   // 获取设置
   ipcMain.handle('get-settings', async () => {
     try {
-      const workspace = getCurrentWorkspace();
-      if (!workspace) {
-        throw new Error('Workspace not loaded');
-      }
+      const workspace = await ensureWorkspaceLoaded(ctx);
 
       const migratedWorkspace = await migrateInlineChatProviderApiKeys(ctx, workspace);
       if (migratedWorkspace !== workspace) {
@@ -58,9 +55,9 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
   // 更新设置
   ipcMain.handle('update-settings', async (_event, settings: any) => {
     try {
-      const workspace = getCurrentWorkspace();
-      if (!workspace || !workspaceManager) {
-        throw new Error('Workspace not loaded');
+      const workspace = await ensureWorkspaceLoaded(ctx);
+      if (!workspaceManager) {
+        throw new Error('WorkspaceManager not initialized');
       }
 
       const terminalSettings = settings?.terminal
@@ -186,9 +183,9 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
   // 更新 IDE 配置
   ipcMain.handle('update-ide-config', async (_event, ideConfig: IDEConfig) => {
     try {
-      const workspace = getCurrentWorkspace();
-      if (!workspace || !workspaceManager) {
-        throw new Error('Workspace not loaded');
+      const workspace = await ensureWorkspaceLoaded(ctx);
+      if (!workspaceManager) {
+        throw new Error('WorkspaceManager not initialized');
       }
 
       const existingIndex = workspace.settings.ides.findIndex(ide => ide.id === ideConfig.id);
@@ -223,9 +220,9 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
   // 删除 IDE 配置
   ipcMain.handle('delete-ide-config', async (_event, ideId: string) => {
     try {
-      const workspace = getCurrentWorkspace();
-      if (!workspace || !workspaceManager) {
-        throw new Error('Workspace not loaded');
+      const workspace = await ensureWorkspaceLoaded(ctx);
+      if (!workspaceManager) {
+        throw new Error('WorkspaceManager not initialized');
       }
 
       const updatedIDEs = workspace.settings.ides.filter(ide => ide.id !== ideId);
@@ -318,6 +315,21 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
       return errorResponse(error);
     }
   });
+}
+
+async function ensureWorkspaceLoaded(ctx: HandlerContext): Promise<Workspace> {
+  const existingWorkspace = ctx.getCurrentWorkspace();
+  if (existingWorkspace) {
+    return existingWorkspace;
+  }
+
+  if (!ctx.workspaceManager) {
+    throw new Error('Workspace not loaded');
+  }
+
+  const loadedWorkspace = await ctx.workspaceManager.loadWorkspace();
+  ctx.setCurrentWorkspace(loadedWorkspace);
+  return loadedWorkspace;
 }
 
 async function hydrateSettingsForResponse(ctx: HandlerContext, settings: Settings): Promise<Settings> {
