@@ -153,6 +153,10 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     return catalogEntries.filter((entry) => !installedPluginIds.has(entry.id));
   }, [catalogEntries, installedPlugins]);
 
+  const availableLanguageCatalogEntries = useMemo(() => availableCatalogEntries
+    .filter((entry) => (entry.languages?.length ?? 0) > 0)
+    .sort((left, right) => left.name.localeCompare(right.name)), [availableCatalogEntries]);
+
   const languageBindingOptions = useMemo(() => {
     const languages = new Set<string>();
 
@@ -434,6 +438,29 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
             <div className="mt-5 rounded-[20px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-5 py-10 text-center">
               <p className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.emptyBindingsTitle')}</p>
               <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.emptyBindingsDescription')}</p>
+              {availableLanguageCatalogEntries.length > 0 && (
+                <div className="mt-5">
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+                    {t('settings.plugins.emptyBindingsQuickInstall')}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                    {availableLanguageCatalogEntries.map((entry) => (
+                      <button
+                        key={`empty-binding-install:${entry.id}`}
+                        type="button"
+                        onClick={() => void handleInstallMarketplacePlugin(entry.id)}
+                        disabled={activeActionKey === `install:${entry.id}`}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {activeActionKey === `install:${entry.id}`
+                          ? <LoaderCircle size={16} className="animate-spin" />
+                          : <Download size={16} />}
+                        {entry.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="mt-5 space-y-4">
