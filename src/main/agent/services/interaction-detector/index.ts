@@ -59,6 +59,7 @@ export class InteractionDetector {
       }
 
       this.lastFingerprint = fingerprint;
+      this.buffer = '';
       return {
         interactionId: uuidv4(),
         commandId,
@@ -74,5 +75,6 @@ export class InteractionDetector {
 
   clearPromptCache(): void {
     this.lastFingerprint = '';
+    this.buffer = '';
   }
 }
