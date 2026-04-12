@@ -1,3 +1,5 @@
+import type { AgentTaskSnapshot } from './agent';
+
 /**
  * Chat 功能相关类型定义
  * 支持 Anthropic Claude API、OpenAI-Compatible Chat Completions 与 Responses 协议
@@ -97,6 +99,8 @@ export interface ChatPaneState {
   isStreaming?: boolean;
   /** 关联的终端 pane id，用于获取 SSH 上下文 */
   linkedPaneId?: string;
+  /** 新 agent 子系统快照 */
+  agent?: AgentTaskSnapshot;
 }
 
 // ─── SSH 上下文 ───────────────────────────────────────────────────────────────

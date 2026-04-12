@@ -366,6 +366,36 @@ const electronAPI: ElectronAPI = {
     return () => ipcRenderer.removeListener('window-startup-reveal', listener);
   },
 
+  // Agent runtime
+  agentSend: (request) =>
+    ipcRenderer.invoke('agent-send', request),
+  agentCancel: (request) =>
+    ipcRenderer.invoke('agent-cancel', request),
+  agentRespondApproval: (request) =>
+    ipcRenderer.invoke('agent-respond-approval', request),
+  agentSubmitInteraction: (request) =>
+    ipcRenderer.invoke('agent-submit-interaction', request),
+  agentGetTask: (request) =>
+    ipcRenderer.invoke('agent-get-task', request),
+  onAgentTimelineEvent: (callback) => {
+    ipcRenderer.on('agent-timeline-event', callback);
+  },
+  offAgentTimelineEvent: (callback) => {
+    ipcRenderer.removeListener('agent-timeline-event', callback);
+  },
+  onAgentTaskState: (callback) => {
+    ipcRenderer.on('agent-task-state', callback);
+  },
+  offAgentTaskState: (callback) => {
+    ipcRenderer.removeListener('agent-task-state', callback);
+  },
+  onAgentTaskError: (callback) => {
+    ipcRenderer.on('agent-task-error', callback);
+  },
+  offAgentTaskError: (callback) => {
+    ipcRenderer.removeListener('agent-task-error', callback);
+  },
+
   // Chat AI
   chatSend: (request: unknown) =>
     ipcRenderer.invoke('chat-send', request),

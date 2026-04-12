@@ -39,8 +39,9 @@ const TOOL_DEFINITIONS_ANTHROPIC: Anthropic.Tool[] = [
       properties: {
         command: { type: 'string', description: '要在远程服务器上执行的命令' },
         requires_approval: { type: 'boolean', description: '该命令是否需要用户确认才能执行（删除、重启等危险操作设为 true）' },
+        interactive: { type: 'boolean', description: '该命令是否可能需要用户输入、确认、密码或分页器交互' },
       },
-      required: ['command', 'requires_approval'],
+      required: ['command', 'requires_approval', 'interactive'],
     },
   },
   {

@@ -2,6 +2,17 @@ import { ViewChangedPayload } from './ipc';
 import { ProjectConfig } from './project-config';
 import { QuickNavConfig } from './quick-nav';
 import type {
+  AgentCancelRequest,
+  AgentGetTaskRequest,
+  AgentRespondApprovalRequest,
+  AgentSendRequest,
+  AgentSendResponse,
+  AgentSubmitInteractionRequest,
+  AgentTaskErrorPayload,
+  AgentTaskEventPayload,
+  AgentTaskStatePayload,
+} from './agent';
+import type {
   ChatSendRequest,
   ChatStreamChunkPayload,
   ChatStreamDonePayload,
@@ -769,6 +780,17 @@ export interface ElectronAPI {
   onStartupReveal?: (callback: () => void) => () => void;
 
   // Chat pane
+  agentSend: (request: AgentSendRequest) => Promise<IpcResponse<AgentSendResponse>>;
+  agentCancel: (request: AgentCancelRequest) => Promise<IpcResponse<void>>;
+  agentRespondApproval: (request: AgentRespondApprovalRequest) => Promise<IpcResponse<void>>;
+  agentSubmitInteraction: (request: AgentSubmitInteractionRequest) => Promise<IpcResponse<void>>;
+  agentGetTask: (request: AgentGetTaskRequest) => Promise<IpcResponse<AgentTaskStatePayload['task'] | null>>;
+  onAgentTimelineEvent: (callback: ElectronEventHandler<AgentTaskEventPayload>) => void;
+  offAgentTimelineEvent: (callback: ElectronEventHandler<AgentTaskEventPayload>) => void;
+  onAgentTaskState: (callback: ElectronEventHandler<AgentTaskStatePayload>) => void;
+  offAgentTaskState: (callback: ElectronEventHandler<AgentTaskStatePayload>) => void;
+  onAgentTaskError: (callback: ElectronEventHandler<AgentTaskErrorPayload>) => void;
+  offAgentTaskError: (callback: ElectronEventHandler<AgentTaskErrorPayload>) => void;
   chatSend: (request: ChatSendRequest) => Promise<IpcResponse<{ messageId: string }>>;
   chatCancel: (config: { paneId: string }) => Promise<IpcResponse<void>>;
   chatExecuteTool: (request: ChatExecuteToolRequest) => Promise<IpcResponse<ToolResult>>;

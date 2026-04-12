@@ -14,6 +14,7 @@ import { registerSSHProfileHandlers } from './sshProfileHandlers';
 import { registerSSHSessionHandlers } from './sshSessionHandlers';
 import { registerCodePaneHandlers } from './codePaneHandlers';
 import { registerChatHandlers } from './chatHandlers';
+import { registerAgentHandlers } from './agentHandlers';
 import { registerLanguageHandlers } from './languageHandlers';
 import { registerPluginHandlers } from './pluginHandlers';
 
@@ -70,6 +71,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // Chat AI 对话 (chat-send, chat-cancel, chat-execute-tool)
   registerChatHandlers(ctx);
+
+  // Structured agent runtime
+  registerAgentHandlers(ctx);
 
   // 其他 (ping)
   registerMiscHandlers(ctx);
