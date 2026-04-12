@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import * as ContextMenu from '@radix-ui/react-context-menu';
 import {
   ChevronDown,
   ChevronRight,
@@ -16,6 +17,7 @@ import {
   FolderOpen,
   GitCompareArrows,
   Loader2,
+  Pin,
   RefreshCw,
   Save,
   Search,
@@ -89,6 +91,15 @@ function getRelativePath(rootPath: string, targetPath: string): string {
   return normalizedTargetPath;
 }
 
+function getParentDirectory(targetPath: string): string {
+  const normalizedTargetPath = normalizePath(targetPath);
+  const lastSeparatorIndex = normalizedTargetPath.lastIndexOf('/');
+  if (lastSeparatorIndex <= 0) {
+    return normalizedTargetPath;
+  }
+  return normalizedTargetPath.slice(0, lastSeparatorIndex);
+}
+
 function isPathInside(parentPath: string, candidatePath: string): boolean {
   const normalizedParentPath = normalizePath(parentPath);
   const normalizedCandidatePath = normalizePath(candidatePath);
@@ -110,13 +121,19 @@ function createExpandedDirectorySet(rootPath: string, expandedPaths?: string[] |
   return nextExpandedDirectories;
 }
 
+function sortOpenFilesByPinned<T extends { pinned?: boolean }>(openFiles: T[]): T[] {
+  const pinnedOpenFiles = openFiles.filter((tab) => tab.pinned);
+  const regularOpenFiles = openFiles.filter((tab) => !tab.pinned);
+  return [...pinnedOpenFiles, ...regularOpenFiles];
+}
+
 function createTabList(existingTabs: Array<{ path: string; pinned?: boolean }>, filePath: string) {
   const existingTab = existingTabs.find((tab) => tab.path === filePath);
   if (existingTab) {
-    return existingTabs;
+    return sortOpenFilesByPinned(existingTabs);
   }
 
-  return [...existingTabs, { path: filePath }];
+  return sortOpenFilesByPinned([...existingTabs, { path: filePath }]);
 }
 
 function getStatusTone(status?: CodePaneGitStatusEntry['status']): {
@@ -698,9 +715,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
     const nextTabs = options?.preserveTabs
-      ? openFiles
-      : createTabList(openFiles, filePath);
+      ? sortOpenFilesByPinned(currentOpenFiles)
+      : createTabList(currentOpenFiles, filePath);
 
     persistCodeState({
       openFiles: nextTabs,
@@ -839,15 +857,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
     markDirty(filePath, false);
     clearBannerForFile(filePath);
 
-    const nextOpenFiles = openFiles.filter((tab) => tab.path !== filePath);
-    const nextActiveFilePath = activeFilePath === filePath
+    const currentOpenFiles = sortOpenFilesByPinned(paneRef.current.code?.openFiles ?? openFiles);
+    const currentActiveFilePath = paneRef.current.code?.activeFilePath ?? activeFilePath;
+    const currentSelectedPath = paneRef.current.code?.selectedPath ?? selectedPath;
+    const nextOpenFiles = currentOpenFiles.filter((tab) => tab.path !== filePath);
+    const nextActiveFilePath = currentActiveFilePath === filePath
       ? nextOpenFiles[nextOpenFiles.length - 1]?.path ?? null
-      : activeFilePath;
+      : currentActiveFilePath;
 
     persistCodeState({
       openFiles: nextOpenFiles,
       activeFilePath: nextActiveFilePath,
-      selectedPath: nextActiveFilePath ?? selectedPath,
+      selectedPath: nextActiveFilePath ?? currentSelectedPath,
       viewMode: 'editor',
       diffTargetPath: null,
     });
@@ -887,6 +908,62 @@ export const CodePane: React.FC<CodePaneProps> = ({
     await Promise.all(directoriesToRefresh.map((directoryPath) => loadDirectory(directoryPath)));
     await refreshGitStatus();
   }, [loadDirectory, refreshGitStatus, rootPath]);
+
+  const revealPath = useCallback(async (targetPath: string, entryType: CodePaneTreeEntry['type']) => {
+    try {
+      const response = await window.electronAPI.openFolder(
+        entryType === 'directory' ? targetPath : getParentDirectory(targetPath),
+      );
+      if (response && response.success === false) {
+        setBanner({
+          tone: 'error',
+          message: response.error || t('common.retry'),
+        });
+      }
+    } catch (error) {
+      setBanner({
+        tone: 'error',
+        message: error instanceof Error ? error.message : t('common.retry'),
+      });
+    }
+  }, [t]);
+
+  const copyPath = useCallback(async (targetPath: string) => {
+    try {
+      const response = await window.electronAPI.writeClipboardText(targetPath);
+      if (response && response.success === false) {
+        setBanner({
+          tone: 'error',
+          message: response.error || t('common.retry'),
+        });
+        return;
+      }
+
+      setBanner({
+        tone: 'info',
+        message: t('codePane.pathCopied'),
+        filePath: targetPath,
+      });
+    } catch (error) {
+      setBanner({
+        tone: 'error',
+        message: error instanceof Error ? error.message : t('common.retry'),
+      });
+    }
+  }, [t]);
+
+  const togglePinnedTab = useCallback((filePath: string) => {
+    const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
+    const nextOpenFiles = sortOpenFilesByPinned(currentOpenFiles.map((tab) => (
+      tab.path === filePath
+        ? { ...tab, pinned: !tab.pinned }
+        : tab
+    )));
+
+    persistCodeState({
+      openFiles: nextOpenFiles,
+    });
+  }, [openFiles, persistCodeState]);
 
   useEffect(() => {
     let mounted = true;
@@ -1081,6 +1158,62 @@ export const CodePane: React.FC<CodePaneProps> = ({
     : t('codePane.autoSave');
   const statusTone = getStatusTone(activeTabStatus);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
+  const orderedOpenFiles = useMemo(() => sortOpenFilesByPinned(openFiles), [openFiles]);
+  const contextMenuContentClassName = 'z-50 min-w-[180px] rounded border border-zinc-800 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur';
+  const contextMenuItemClassName = 'flex items-center gap-2 rounded px-3 py-2 text-xs text-zinc-200 outline-none transition-colors focus:bg-zinc-800 data-[highlighted]:bg-zinc-800';
+
+  const renderFileContextMenu = useCallback((
+    filePath: string,
+    entryType: CodePaneTreeEntry['type'],
+    options?: {
+      pinned?: boolean;
+      showPinToggle?: boolean;
+    },
+  ) => (
+    <ContextMenu.Portal>
+      <ContextMenu.Content className={contextMenuContentClassName}>
+        <ContextMenu.Item
+          className={contextMenuItemClassName}
+          onSelect={() => {
+            void revealPath(filePath, entryType);
+          }}
+        >
+          {t('codePane.revealInFolder')}
+        </ContextMenu.Item>
+        <ContextMenu.Item
+          className={contextMenuItemClassName}
+          onSelect={() => {
+            void copyPath(filePath);
+          }}
+        >
+          {t('codePane.copyPath')}
+        </ContextMenu.Item>
+        {entryType === 'file' && (
+          <ContextMenu.Item
+            className={contextMenuItemClassName}
+            onSelect={() => {
+              void openDiffForFile(filePath);
+            }}
+          >
+            {t('codePane.openDiff')}
+          </ContextMenu.Item>
+        )}
+        {entryType === 'file' && options?.showPinToggle && (
+          <>
+            <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+            <ContextMenu.Item
+              className={contextMenuItemClassName}
+              onSelect={() => {
+                togglePinnedTab(filePath);
+              }}
+            >
+              {options.pinned ? t('codePane.unpinTab') : t('codePane.pinTab')}
+            </ContextMenu.Item>
+          </>
+        )}
+      </ContextMenu.Content>
+    </ContextMenu.Portal>
+  ), [contextMenuContentClassName, contextMenuItemClassName, copyPath, openDiffForFile, revealPath, t, togglePinnedTab]);
 
   const renderTree = useCallback((directoryPath: string, depth: number): React.ReactNode => {
     const entries = treeEntriesByDirectory[directoryPath] ?? [];
@@ -1093,69 +1226,78 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       return (
         <React.Fragment key={entry.path}>
+          <ContextMenu.Root>
+            <ContextMenu.Trigger asChild>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isDirectory) {
+                    toggleDirectory(entry.path);
+                  } else {
+                    void activateFile(entry.path);
+                  }
+                }}
+                className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+                style={{ paddingLeft: `${10 + depth * 14}px` }}
+              >
+                {isDirectory ? (
+                  isExpanded ? <ChevronDown size={14} className="shrink-0 text-zinc-500" /> : <ChevronRight size={14} className="shrink-0 text-zinc-500" />
+                ) : (
+                  <span className="w-[14px] shrink-0" />
+                )}
+                {isDirectory ? (
+                  isExpanded ? <FolderOpen size={14} className="shrink-0 text-amber-300" /> : <Folder size={14} className="shrink-0 text-amber-300" />
+                ) : (
+                  <FileIcon size={14} className="shrink-0 text-zinc-500" />
+                )}
+                <span className="min-w-0 flex-1 truncate">{entry.name}</span>
+                {loadingDirectories.has(entry.path) && (
+                  <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
+                )}
+                {badge && (
+                  <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
+                    {badge.badge}
+                  </span>
+                )}
+              </button>
+            </ContextMenu.Trigger>
+            {renderFileContextMenu(entry.path, entry.type)}
+          </ContextMenu.Root>
+          {isDirectory && isExpanded && renderTree(entry.path, depth + 1)}
+        </React.Fragment>
+      );
+    });
+  }, [activateFile, expandedDirectories, getEntryStatus, loadingDirectories, renderFileContextMenu, selectedPath, toggleDirectory, treeEntriesByDirectory]);
+
+  const renderedSearchResults = useMemo(() => searchResults.map((filePath) => {
+    const entryStatus = getEntryStatus(filePath, 'file');
+    const badge = getStatusTone(entryStatus);
+    return (
+      <ContextMenu.Root key={filePath}>
+        <ContextMenu.Trigger asChild>
           <button
             type="button"
             onClick={() => {
-              if (isDirectory) {
-                toggleDirectory(entry.path);
-              } else {
-                void activateFile(entry.path);
-              }
+              void activateFile(filePath);
             }}
-            className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
-            style={{ paddingLeft: `${10 + depth * 14}px` }}
+            className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${selectedPath === filePath ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
           >
-            {isDirectory ? (
-              isExpanded ? <ChevronDown size={14} className="shrink-0 text-zinc-500" /> : <ChevronRight size={14} className="shrink-0 text-zinc-500" />
-            ) : (
-              <span className="w-[14px] shrink-0" />
-            )}
-            {isDirectory ? (
-              isExpanded ? <FolderOpen size={14} className="shrink-0 text-amber-300" /> : <Folder size={14} className="shrink-0 text-amber-300" />
-            ) : (
-              <FileIcon size={14} className="shrink-0 text-zinc-500" />
-            )}
-            <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-            {loadingDirectories.has(entry.path) && (
-              <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
-            )}
+            <FileIcon size={14} className="shrink-0 text-zinc-500" />
+            <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(filePath)}</span>
+            <span className="max-w-[160px] truncate text-[10px] text-zinc-500">
+              {getRelativePath(rootPath, filePath)}
+            </span>
             {badge && (
               <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
                 {badge.badge}
               </span>
             )}
           </button>
-          {isDirectory && isExpanded && renderTree(entry.path, depth + 1)}
-        </React.Fragment>
-      );
-    });
-  }, [activateFile, expandedDirectories, getEntryStatus, loadingDirectories, selectedPath, toggleDirectory, treeEntriesByDirectory]);
-
-  const renderedSearchResults = useMemo(() => searchResults.map((filePath) => {
-    const entryStatus = getEntryStatus(filePath, 'file');
-    const badge = getStatusTone(entryStatus);
-    return (
-      <button
-        key={filePath}
-        type="button"
-        onClick={() => {
-          void activateFile(filePath);
-        }}
-        className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${selectedPath === filePath ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
-      >
-        <FileIcon size={14} className="shrink-0 text-zinc-500" />
-        <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(filePath)}</span>
-        <span className="max-w-[160px] truncate text-[10px] text-zinc-500">
-          {getRelativePath(rootPath, filePath)}
-        </span>
-        {badge && (
-          <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
-            {badge.badge}
-          </span>
-        )}
-      </button>
+        </ContextMenu.Trigger>
+        {renderFileContextMenu(filePath, 'file')}
+      </ContextMenu.Root>
     );
-  }), [activateFile, getEntryStatus, rootPath, searchResults, selectedPath]);
+  }), [activateFile, getEntryStatus, renderFileContextMenu, rootPath, searchResults, selectedPath]);
 
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
@@ -1349,43 +1491,52 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-[34px] items-stretch overflow-x-auto border-b border-zinc-800 bg-zinc-950/70">
-            {openFiles.length > 0 ? openFiles.map((tab) => {
+            {orderedOpenFiles.length > 0 ? orderedOpenFiles.map((tab) => {
               const isTabActive = tab.path === activeFilePath;
               const isTabDirty = dirtyPaths.has(tab.path);
               const tabStatus = getEntryStatus(tab.path, 'file');
               const badge = getStatusTone(tabStatus);
+              const isTabPinned = Boolean(tab.pinned);
 
               return (
-                <div
-                  key={tab.path}
-                  className={`group flex min-w-0 max-w-[220px] items-center gap-2 border-r border-zinc-800 px-3 py-2 text-xs ${isTabActive ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-100'}`}
-                >
-                  <button
-                    type="button"
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                    onClick={() => {
-                      void activateFile(tab.path, { preserveTabs: true });
-                    }}
-                  >
-                    <FileIcon size={12} className="shrink-0" />
-                    <span className="truncate">{getPathLeafLabel(tab.path)}</span>
-                    {isTabDirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />}
-                    {badge && (
-                      <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                        {badge.badge}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void closeFileTab(tab.path);
-                    }}
-                    className="rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-                  >
-                    <X size={11} />
-                  </button>
-                </div>
+                <ContextMenu.Root key={tab.path}>
+                  <ContextMenu.Trigger asChild>
+                    <div
+                      className={`group flex min-w-0 max-w-[220px] items-center gap-2 border-r border-zinc-800 px-3 py-2 text-xs ${isTabActive ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-100'}`}
+                    >
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        onClick={() => {
+                          void activateFile(tab.path, { preserveTabs: true });
+                        }}
+                      >
+                        <FileIcon size={12} className="shrink-0" />
+                        {isTabPinned && <Pin size={10} className="shrink-0 text-zinc-500" />}
+                        <span className="truncate">{getPathLeafLabel(tab.path)}</span>
+                        {isTabDirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />}
+                        {badge && (
+                          <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
+                            {badge.badge}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void closeFileTab(tab.path);
+                        }}
+                        className="rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+                      >
+                        <X size={11} />
+                      </button>
+                    </div>
+                  </ContextMenu.Trigger>
+                  {renderFileContextMenu(tab.path, 'file', {
+                    pinned: isTabPinned,
+                    showPinToggle: true,
+                  })}
+                </ContextMenu.Root>
               );
             }) : (
               <div className="flex items-center px-3 text-xs text-zinc-500">

@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodePane } from '../CodePane';
 import type { Pane } from '../../types/window';
@@ -248,6 +249,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneSearchFiles).mockReset();
     vi.mocked(window.electronAPI.onCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneFsChanged).mockReset();
+    vi.mocked(window.electronAPI.openFolder).mockReset();
+    vi.mocked(window.electronAPI.writeClipboardText).mockReset();
 
     vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
       success: true,
@@ -289,6 +292,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneWatchRoot).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneUnwatchRoot).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneSearchFiles).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.openFolder).mockResolvedValue(undefined);
+    vi.mocked(window.electronAPI.writeClipboardText).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -355,6 +360,22 @@ describe('CodePane', () => {
       '/workspace/project',
       '/workspace/project/src',
     ]);
+  });
+
+  it('runs file context menu actions', async () => {
+    const user = userEvent.setup();
+    renderCodePane(createPane());
+
+    const treeButton = await screen.findByRole('button', { name: 'index.ts' });
+
+    await user.pointer({ keys: '[MouseRight]', target: treeButton });
+    await user.click(await screen.findByText('codePane.copyPath'));
+    expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('/workspace/project/src/index.ts');
+    expect(screen.getByText('codePane.pathCopied')).toBeInTheDocument();
+
+    await user.pointer({ keys: '[MouseRight]', target: treeButton });
+    await user.click(await screen.findByText('codePane.revealInFolder'));
+    expect(window.electronAPI.openFolder).toHaveBeenCalledWith('/workspace/project/src');
   });
 
   it('auto-saves dirty files after the debounce delay', async () => {
@@ -429,5 +450,58 @@ describe('CodePane', () => {
         expectedMtimeMs: 100,
       });
     });
+  });
+
+  it('pins tabs from the context menu and keeps them first', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          name: 'index.ts',
+          type: 'file',
+        },
+        {
+          path: '/workspace/project/src/app.ts',
+          name: 'app.ts',
+          type: 'file',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockImplementation(async ({ filePath }) => ({
+      success: true,
+      data: {
+        content: `// ${filePath}\n`,
+        mtimeMs: filePath.endsWith('app.ts') ? 101 : 100,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    }));
+
+    const view = renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+    await openFileFromTree('app.ts');
+
+    const appTabLabels = screen.getAllByText('app.ts');
+    const appTabLabel = appTabLabels[appTabLabels.length - 1];
+    if (!appTabLabel) {
+      throw new Error('expected app.ts tab label');
+    }
+
+    await user.pointer({ keys: '[MouseRight]', target: appTabLabel });
+    await user.click(await screen.findByText('codePane.pinTab'));
+
+    expect(view.getPane().code?.openFiles).toEqual([
+      {
+        path: '/workspace/project/src/app.ts',
+        pinned: true,
+      },
+      {
+        path: '/workspace/project/src/index.ts',
+      },
+    ]);
   });
 });
