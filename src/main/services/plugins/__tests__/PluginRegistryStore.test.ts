@@ -76,4 +76,34 @@ describe('PluginRegistryStore', () => {
     expect(registry.globalLanguageBindings).toEqual({});
     expect(registry.globalPluginSettings).toEqual({});
   });
+
+  it('replaces global plugin settings snapshots and clears them when empty', async () => {
+    const store = new PluginRegistryStore({ filePath });
+
+    await store.upsert('acme.java-language', {
+      source: 'marketplace',
+      installedVersion: '1.0.0',
+      installPath: '/tmp/acme-java-language',
+      enabledByDefault: true,
+      status: 'installed',
+    });
+    await store.setGlobalPluginSettings('acme.java-language', {
+      'java.home': '/opt/jdk-21',
+      'trace.server': 'verbose',
+    });
+    await store.setGlobalPluginSettings('acme.java-language', {
+      'java.home': '/opt/jdk-22',
+    });
+
+    let registry = await store.readRegistry();
+    expect(registry.globalPluginSettings).toEqual({
+      'acme.java-language': {
+        'java.home': '/opt/jdk-22',
+      },
+    });
+
+    await store.setGlobalPluginSettings('acme.java-language', {});
+    registry = await store.readRegistry();
+    expect(registry.globalPluginSettings).toEqual({});
+  });
 });

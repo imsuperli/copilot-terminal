@@ -173,6 +173,15 @@ Object.defineProperty(window, 'electronAPI', {
     updateIDEConfig: vi.fn().mockResolvedValue({ success: true, data: [] }),
     scanSpecificIDE: vi.fn().mockResolvedValue({ success: true, data: '' }),
     listPlugins: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    getPluginRegistry: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        schemaVersion: 1,
+        plugins: {},
+        globalLanguageBindings: {},
+        globalPluginSettings: {},
+      },
+    }),
     listPluginCatalog: vi.fn().mockResolvedValue({ success: true, data: [] }),
     installMarketplacePlugin: vi.fn().mockResolvedValue({ success: false, error: 'not implemented' }),
     installLocalPlugin: vi.fn().mockResolvedValue({ success: false, error: 'not implemented' }),

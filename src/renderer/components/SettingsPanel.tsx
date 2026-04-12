@@ -14,6 +14,7 @@ import { KnownHostEntry } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
 import { ChatSettingsTab } from './ChatSettingsTab';
+import { PluginCenter } from './settings/PluginCenter';
 
 interface ShellProgramOption {
   command: string;
@@ -26,9 +27,8 @@ interface SettingsPanelProps {
   onClose: () => void;
 }
 
-type SettingsTab = 'general' | 'quicknav' | 'chat' | 'statusline' | 'advanced';
+type SettingsTab = 'general' | 'quicknav' | 'chat' | 'plugins' | 'advanced';
 type QuickNavSubTab = 'ide' | 'custom';
-type StatusLineDisplayFormat = 'full' | 'compact';
 const AUTO_SHELL_OPTION_VALUE = '__auto__';
 const DEFAULT_STATUSLINE_CONFIG: StatusLineConfig = {
   enabled: false,
@@ -611,7 +611,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       icon: Compass,
     },
     {
-      value: 'statusline' as SettingsTab,
+      value: 'plugins' as SettingsTab,
       label: t('settings.tab.statusLine'),
       icon: Plug,
     },
@@ -650,16 +650,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const selectedShellValue = !effectiveSelectedShell || effectiveSelectedShell === autoShellTarget
     ? AUTO_SHELL_OPTION_VALUE
     : effectiveSelectedShell;
-  const statusLineDisplayFormat: StatusLineDisplayFormat = (
-    statusLineConfig.cliFormat === 'compact' && statusLineConfig.cardFormat === 'compact'
-  ) ? 'compact' : 'full';
-  const handleStatusLineFormatChange = (format: StatusLineDisplayFormat) => {
-    void handleStatusLineConfigChange({
-      cliFormat: format,
-      cardFormat: format,
-    });
-  };
-
   return (
     <Dialog.Root open={open} onOpenChange={handleSettingsOpenChange}>
       <Dialog.Portal>
@@ -1155,150 +1145,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                 </div>
               </Tabs.Content>
 
-              <Tabs.Content value="statusline" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
-                <div className="mx-auto max-w-5xl space-y-6">
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
-                    <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                          <Plug size={22} />
-                        </div>
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-base font-semibold text-white">{t('settings.statusLine.pluginName')}</h3>
-                            <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
-                              {t('settings.statusLine.builtInBadge')}
-                            </span>
-                          </div>
-                          <p className="mt-2 max-w-2xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.pageDescription')}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-4 rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-5 py-4 xl:min-w-[296px]">
-                        <div>
-                          <div className="text-sm font-medium text-white">{t('settings.statusLine.enableTitle')}</div>
-                          <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.enableDescription')}</div>
-                        </div>
-                        <Switch.Root
-                          checked={statusLineConfig.enabled}
-                          onCheckedChange={handleToggleStatusLine}
-                          className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
-                        >
-                          <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
-                        </Switch.Root>
-                      </div>
-                    </div>
-                  </section>
-
-                  {statusLineConfig.enabled ? (
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
-                        <h3 className="text-base font-semibold text-white">{t('settings.statusLine.displayFormat')}</h3>
-                        <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.enableDescription')}</p>
-
-                        <div className="mt-5 space-y-3">
-                          <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4 transition-colors hover:bg-[rgb(var(--accent))]">
-                            <input
-                              type="radio"
-                              name="format"
-                              value="full"
-                              checked={statusLineDisplayFormat === 'full'}
-                              onChange={() => handleStatusLineFormatChange('full')}
-                              className="mt-1 h-4 w-4 text-[rgb(var(--primary))]"
-                            />
-                            <div className="flex-1">
-                              <div className="text-sm font-medium text-white">{t('settings.statusLine.full')}</div>
-                              <div className="mt-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-3 py-2 font-mono text-xs text-[rgb(var(--muted-foreground))]">
-                                Model: Sonnet 4.6 | Context: 45% | Cost: $0.25
-                              </div>
-                            </div>
-                          </label>
-
-                          <label className="flex cursor-pointer items-start gap-4 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4 transition-colors hover:bg-[rgb(var(--accent))]">
-                            <input
-                              type="radio"
-                              name="format"
-                              value="compact"
-                              checked={statusLineDisplayFormat === 'compact'}
-                              onChange={() => handleStatusLineFormatChange('compact')}
-                              className="mt-1 h-4 w-4 text-[rgb(var(--primary))]"
-                            />
-                            <div className="flex-1">
-                              <div className="text-sm font-medium text-white">{t('settings.statusLine.compact')}</div>
-                              <div className="mt-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-3 py-2 font-mono text-xs text-[rgb(var(--muted-foreground))]">
-                                Sonnet 4.6 • 45% • $0.25
-                              </div>
-                            </div>
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
-                          <h3 className="text-base font-semibold text-white">{t('settings.statusLine.displayContent')}</h3>
-                          <div className="mt-5 space-y-3">
-                            <label className="flex items-center gap-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
-                              <input
-                                type="checkbox"
-                                checked={statusLineConfig.showModel}
-                                className="h-4 w-4 text-[rgb(var(--primary))]"
-                                disabled
-                              />
-                              <div>
-                                <div className="text-sm font-medium text-white">{t('settings.statusLine.modelName')}</div>
-                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.required')}</div>
-                              </div>
-                            </label>
-
-                            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4 transition-colors hover:bg-[rgb(var(--accent))]">
-                              <input
-                                type="checkbox"
-                                checked={statusLineConfig.showContext}
-                                onChange={(event) => handleStatusLineConfigChange({ showContext: event.target.checked })}
-                                className="h-4 w-4 text-[rgb(var(--primary))]"
-                              />
-                              <div>
-                                <div className="text-sm font-medium text-white">{t('settings.statusLine.contextPercentage')}</div>
-                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.contextExample')}</div>
-                              </div>
-                            </label>
-
-                            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4 transition-colors hover:bg-[rgb(var(--accent))]">
-                              <input
-                                type="checkbox"
-                                checked={statusLineConfig.showCost}
-                                onChange={(event) => handleStatusLineConfigChange({ showCost: event.target.checked })}
-                                className="h-4 w-4 text-[rgb(var(--primary))]"
-                              />
-                              <div>
-                                <div className="text-sm font-medium text-white">{t('settings.statusLine.cost')}</div>
-                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.costExample')}</div>
-                              </div>
-                            </label>
-                          </div>
-                        </div>
-
-                        <div className="rounded-[28px] border border-[rgba(168,170,88,0.24)] bg-[rgba(168,170,88,0.10)] p-5">
-                          <div className="flex items-start gap-3">
-                            <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
-                              <Check size={14} />
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-[rgb(var(--primary))]">{t('settings.statusLine.savedTitle')}</div>
-                              <div className="mt-1 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.savedDescription')}</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-14 text-center">
-                      <Plug size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
-                      <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.statusLine.enableTitle')}</p>
-                      <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.enableDescription')}</p>
-                    </div>
-                  )}
-                </div>
+              <Tabs.Content value="plugins" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
+                {currentTab === 'plugins' ? (
+                  <PluginCenter
+                    statusLineConfig={statusLineConfig}
+                    onToggleStatusLine={handleToggleStatusLine}
+                    onStatusLineConfigChange={handleStatusLineConfigChange}
+                  />
+                ) : null}
               </Tabs.Content>
 
               <Tabs.Content value="chat" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">

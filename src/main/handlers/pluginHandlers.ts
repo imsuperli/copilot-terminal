@@ -24,6 +24,18 @@ export function registerPluginHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('get-plugin-registry', async () => {
+    try {
+      if (!pluginManager) {
+        throw new Error('PluginManager not initialized');
+      }
+
+      return successResponse(await pluginManager.getRegistrySnapshot());
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('list-plugin-catalog', async (_event, query) => {
     try {
       if (!pluginManager) {
@@ -97,6 +109,10 @@ export function registerPluginHandlers(ctx: HandlerContext) {
       }
 
       if ((config.scope ?? 'workspace') === 'global') {
+        if (config.enabled === null) {
+          throw new Error('Global plugin enable state cannot be inherited');
+        }
+
         await pluginManager.setEnabledByDefault(config.pluginId, config.enabled);
         const workspace = getCurrentWorkspace();
         if (!workspace) {
@@ -109,7 +125,10 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         const enabledPluginIds = new Set(currentSettings.enabledPluginIds ?? []);
         const disabledPluginIds = new Set(currentSettings.disabledPluginIds ?? []);
 
-        if (config.enabled) {
+        if (config.enabled === null) {
+          enabledPluginIds.delete(config.pluginId);
+          disabledPluginIds.delete(config.pluginId);
+        } else if (config.enabled) {
           enabledPluginIds.add(config.pluginId);
           disabledPluginIds.delete(config.pluginId);
         } else {
@@ -181,13 +200,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
 
       return successResponse(await updateWorkspacePluginSettings(ctx, (currentSettings) => ({
         ...currentSettings,
-        pluginSettings: {
-          ...(currentSettings.pluginSettings ?? {}),
-          [config.pluginId]: {
-            ...(currentSettings.pluginSettings?.[config.pluginId] ?? {}),
-            ...config.values,
-          },
-        },
+        pluginSettings: buildWorkspacePluginSettingsSnapshot(currentSettings.pluginSettings, config.pluginId, config.values),
       })));
     } catch (error) {
       return errorResponse(error);
@@ -232,4 +245,25 @@ function isPluginReferencedByWorkspace(settings: Settings, pluginId: string): bo
     || (workspacePluginSettings.disabledPluginIds ?? []).includes(pluginId)
     || Object.values(workspacePluginSettings.languageBindings ?? {}).includes(pluginId)
     || Object.prototype.hasOwnProperty.call(workspacePluginSettings.pluginSettings ?? {}, pluginId);
+}
+
+function buildWorkspacePluginSettingsSnapshot(
+  currentSettings: Record<string, Record<string, unknown>> | undefined,
+  pluginId: string,
+  values: Record<string, unknown>,
+): Record<string, Record<string, unknown>> {
+  const nextSettings = {
+    ...(currentSettings ?? {}),
+  };
+  const normalizedValues = Object.fromEntries(
+    Object.entries(values).filter(([, value]) => value !== undefined),
+  );
+
+  if (Object.keys(normalizedValues).length === 0) {
+    delete nextSettings[pluginId];
+  } else {
+    nextSettings[pluginId] = normalizedValues;
+  }
+
+  return nextSettings;
 }

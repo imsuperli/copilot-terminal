@@ -42,6 +42,7 @@ import type {
   PluginBindingScope,
   PluginCatalogEntry,
   PluginListItem,
+  PluginRegistry,
   PluginRuntimeState,
   WorkspacePluginSettings,
 } from './plugin';
@@ -440,7 +441,7 @@ export interface UninstallPluginConfig {
 
 export interface SetPluginEnabledConfig {
   pluginId: string;
-  enabled: boolean;
+  enabled: boolean | null;
   scope?: PluginBindingScope;
 }
 
@@ -609,6 +610,7 @@ export interface ElectronAPI {
   deleteIDEConfig: (ideId: string) => Promise<IpcResponse<IDEConfig[]>>;
   getIDEIcon: (iconPath: string) => Promise<IpcResponse<string>>;
   listPlugins: () => Promise<IpcResponse<PluginListItem[]>>;
+  getPluginRegistry: () => Promise<IpcResponse<PluginRegistry>>;
   listPluginCatalog: (query?: PluginCatalogQuery) => Promise<IpcResponse<PluginCatalogEntry[]>>;
   installMarketplacePlugin: (config: InstallMarketplacePluginConfig) => Promise<IpcResponse<PluginListItem>>;
   installLocalPlugin: (config: InstallLocalPluginConfig) => Promise<IpcResponse<PluginListItem>>;

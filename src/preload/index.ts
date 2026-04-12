@@ -77,6 +77,7 @@ const electronAPI: ElectronAPI = {
   deleteIDEConfig: (ideId: string) => ipcRenderer.invoke('delete-ide-config', ideId),
   getIDEIcon: (iconPath: string) => ipcRenderer.invoke('get-ide-icon', iconPath),
   listPlugins: () => ipcRenderer.invoke('list-plugins'),
+  getPluginRegistry: () => ipcRenderer.invoke('get-plugin-registry'),
   listPluginCatalog: (query) => ipcRenderer.invoke('list-plugin-catalog', query),
   installMarketplacePlugin: (config) => ipcRenderer.invoke('install-marketplace-plugin', config),
   installLocalPlugin: (config) => ipcRenderer.invoke('install-local-plugin', config),

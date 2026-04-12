@@ -114,10 +114,7 @@ export class PluginRegistryStore {
     if (Object.keys(nextValues).length === 0) {
       delete nextSettings[normalizedPluginId];
     } else {
-      nextSettings[normalizedPluginId] = {
-        ...(nextSettings[normalizedPluginId] ?? {}),
-        ...nextValues,
-      };
+      nextSettings[normalizedPluginId] = nextValues;
     }
 
     data.globalPluginSettings = nextSettings;

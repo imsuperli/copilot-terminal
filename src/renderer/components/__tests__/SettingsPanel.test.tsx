@@ -189,4 +189,244 @@ describe('SettingsPanel', () => {
     expect(await screen.findByText('LLM Providers')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '添加 Provider' })).toBeInTheDocument();
   });
+
+  it('renders the plugin center and supports workspace overrides plus local installs', async () => {
+    const user = userEvent.setup();
+    const workspaceSettings = {
+      language: 'zh-CN',
+      ides: [],
+      quickNav: { items: [] },
+      terminal: {
+        useBundledConptyDll: false,
+        defaultShellProgram: '',
+      },
+      statusLine: {
+        enabled: true,
+        displayLocation: 'both',
+        cliFormat: 'full',
+        cardFormat: 'full',
+        showModel: true,
+        showContext: true,
+        showCost: true,
+        showTime: false,
+        showTokens: false,
+      },
+      plugins: {
+        enabledPluginIds: ['acme.java-language'],
+        languageBindings: {
+          java: 'acme.java-language',
+        },
+        pluginSettings: {
+          'acme.java-language': {
+            'trace.server': 'verbose',
+          },
+        },
+      },
+    } as any;
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: workspaceSettings,
+    });
+    vi.mocked(window.electronAPI.listPlugins).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'acme.java-language',
+          name: 'Java Language Support',
+          publisher: 'Acme',
+          version: '1.0.0',
+          latestVersion: '1.2.0',
+          summary: 'Java language tooling',
+          source: 'marketplace',
+          languages: ['java'],
+          installStatus: 'installed',
+          runtimeState: 'idle',
+          health: 'unknown',
+          enabledByDefault: true,
+          updateAvailable: true,
+          installPath: '/plugins/acme.java-language/1.0.0',
+          manifest: {
+            schemaVersion: 1,
+            id: 'acme.java-language',
+            name: 'Java Language Support',
+            publisher: 'Acme',
+            version: '1.0.0',
+            engines: {
+              app: '>=3.0.0',
+            },
+            capabilities: [
+              {
+                type: 'language-server',
+                languages: ['java'],
+                runtime: {
+                  type: 'java',
+                  entry: 'server/jdtls.jar',
+                },
+                requirements: [
+                  {
+                    type: 'java',
+                    version: '>=17',
+                  },
+                ],
+              },
+            ],
+            settingsSchema: {
+              'java.home': {
+                type: 'string',
+                title: 'JDK Home',
+                scope: 'global',
+              },
+              'trace.server': {
+                type: 'enum',
+                title: 'Trace Level',
+                scope: 'workspace',
+                defaultValue: 'off',
+                options: [
+                  { label: 'Off', value: 'off' },
+                  { label: 'Verbose', value: 'verbose' },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.getPluginRegistry).mockResolvedValue({
+      success: true,
+      data: {
+        schemaVersion: 1,
+        plugins: {
+          'acme.java-language': {
+            source: 'marketplace',
+            installedVersion: '1.0.0',
+            installPath: '/plugins/acme.java-language/1.0.0',
+            enabledByDefault: true,
+            status: 'installed',
+          },
+        },
+        globalLanguageBindings: {
+          java: 'acme.java-language',
+        },
+        globalPluginSettings: {
+          'acme.java-language': {
+            'java.home': '/Library/Java/JavaVirtualMachines/jdk-21',
+          },
+        },
+      },
+    });
+    vi.mocked(window.electronAPI.listPluginCatalog).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'acme.java-language',
+          name: 'Java Language Support',
+          publisher: 'Acme',
+          latestVersion: '1.2.0',
+          summary: 'Java language tooling',
+          languages: ['java'],
+          platforms: [
+            {
+              os: 'win32',
+              arch: 'x64',
+              downloadUrl: 'https://example.com/java.zip',
+              sha256: 'abc',
+            },
+          ],
+        },
+        {
+          id: 'acme.python-language',
+          name: 'Python Language Support',
+          publisher: 'Acme',
+          latestVersion: '1.0.0',
+          summary: 'Python language tooling',
+          languages: ['python'],
+          platforms: [
+            {
+              os: 'win32',
+              arch: 'x64',
+              downloadUrl: 'https://example.com/python.zip',
+              sha256: 'def',
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.setPluginEnabled).mockResolvedValue({
+      success: true,
+      data: {
+        ...workspaceSettings,
+        plugins: {
+          ...workspaceSettings.plugins,
+          enabledPluginIds: [],
+          disabledPluginIds: ['acme.java-language'],
+        },
+      },
+    });
+    vi.mocked(window.electronAPI.setPluginLanguageBinding).mockResolvedValue({
+      success: true,
+      data: {
+        ...workspaceSettings,
+        plugins: {
+          ...workspaceSettings.plugins,
+          languageBindings: {},
+        },
+      },
+    });
+    vi.mocked(window.electronAPI.selectPluginPackage).mockResolvedValue({
+      success: true,
+      data: '/tmp/acme-python-language.zip',
+    });
+    vi.mocked(window.electronAPI.installLocalPlugin).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'acme.python-language',
+        name: 'Python Language Support',
+        publisher: 'Acme',
+        source: 'sideload',
+        installStatus: 'installed',
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    expect(window.electronAPI.listPluginCatalog).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('tab', { name: '插件' }));
+
+    expect(await screen.findByRole('heading', { name: 'Java Language Support' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Python Language Support' })).toBeInTheDocument();
+    expect(screen.getByText('Claude StatusLine')).toBeInTheDocument();
+    expect(window.electronAPI.listPluginCatalog).toHaveBeenCalled();
+
+    await user.selectOptions(
+      screen.getByLabelText('Java Language Support 工作区启用模式'),
+      'disabled',
+    );
+    expect(window.electronAPI.setPluginEnabled).toHaveBeenCalledWith({
+      pluginId: 'acme.java-language',
+      enabled: false,
+      scope: 'workspace',
+    });
+
+    await user.selectOptions(
+      screen.getByLabelText('java 工作区语言绑定'),
+      '__inherit__',
+    );
+    expect(window.electronAPI.setPluginLanguageBinding).toHaveBeenCalledWith({
+      scope: 'workspace',
+      language: 'java',
+      pluginId: null,
+    });
+
+    await user.click(screen.getByRole('button', { name: '本地安装插件' }));
+    expect(window.electronAPI.selectPluginPackage).toHaveBeenCalledOnce();
+    expect(window.electronAPI.installLocalPlugin).toHaveBeenCalledWith({
+      filePath: '/tmp/acme-python-language.zip',
+    });
+  });
 });
