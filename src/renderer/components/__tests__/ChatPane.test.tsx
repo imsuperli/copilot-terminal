@@ -374,4 +374,71 @@ describe('ChatPane', () => {
 
     expect(await screen.findByRole('option', { name: 'Claude API' })).toBeInTheDocument();
   });
+
+  it('does not render an outer active border', async () => {
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    const view = render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await screen.findByText('尚未配置 Chat Provider');
+
+    const root = view.container.firstElementChild;
+    expect(root).not.toBeNull();
+    expect(root).not.toHaveClass('border-t-2');
+    expect(root).not.toHaveClass('ring-1');
+    expect((root as HTMLElement).className).not.toContain('border-t-sky-400');
+    expect((root as HTMLElement).className).not.toContain('border-t-sky-700/60');
+  });
 });

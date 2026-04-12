@@ -358,6 +358,16 @@ describe('CodePane', () => {
     expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
   });
 
+  it('does not render an outer active border', () => {
+    const view = renderCodePane(createPane());
+    const root = view.container.firstElementChild;
+
+    expect(root).not.toBeNull();
+    expect(root).not.toHaveClass('border');
+    expect((root as HTMLElement).className).not.toContain('border-[rgb(var(--primary))]/45');
+    expect((root as HTMLElement).className).not.toContain('border-zinc-800');
+  });
+
   it('loads the file tree before Monaco finishes bootstrapping', async () => {
     let resolveMonaco: ((value: typeof fakeMonaco) => void) | null = null;
     hoisted.ensureMonacoEnvironmentMock.mockImplementation(() => new Promise((resolve) => {

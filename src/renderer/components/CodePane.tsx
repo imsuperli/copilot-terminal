@@ -1576,7 +1576,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   return (
     <div
-      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border ${isActive ? 'border-[rgb(var(--primary))]/45' : 'border-zinc-800'} bg-zinc-950`}
+      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
       onMouseDown={onActivate}
     >
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">

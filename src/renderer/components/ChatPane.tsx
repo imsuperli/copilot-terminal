@@ -255,7 +255,6 @@ function ToolCallCard({
 export const ChatPane: React.FC<ChatPaneProps> = ({
   windowId,
   pane,
-  isActive,
   onActivate,
   onClose,
 }) => {
@@ -708,9 +707,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
   return (
     <div
-      className={`flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-t-2 bg-zinc-950 ${
-        isActive ? 'border-t-sky-400 ring-1 ring-sky-500/40' : 'border-t-sky-700/60'
-      }`}
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
       onMouseDown={onActivate}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 px-3 py-3">
