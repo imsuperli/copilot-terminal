@@ -120,6 +120,8 @@ export interface IProcessManager {
   downloadSSHSftpDirectory(windowId: string, paneId: string, remotePath: string, localPath: string): Promise<void>;
   createSSHSftpDirectory(windowId: string, paneId: string, parentPath: string, name: string): Promise<string>;
   deleteSSHSftpEntry(windowId: string, paneId: string, remotePath: string): Promise<void>;
+  /** 通过已有 SSH 会话执行非交互式命令，返回 stdout */
+  execSSHCommand(windowId: string, paneId: string, command: string): Promise<string>;
   listProcesses(): ProcessInfo[];
   getPaneStatus(windowId: string, paneId: string): Promise<import('../../renderer/types/window').WindowStatus>;
   subscribeStatusChange(callback: (pid: number, status: import('../../renderer/types/window').WindowStatus) => void): void;

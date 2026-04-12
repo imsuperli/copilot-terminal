@@ -143,6 +143,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-unwatch-root', { paneId }),
   codePaneSearchFiles: (config) =>
     ipcRenderer.invoke('code-pane-search-files', config),
+  codePaneSearchContents: (config) =>
+    ipcRenderer.invoke('code-pane-search-contents', config),
   onCodePaneFsChanged: (callback) => {
     ipcRenderer.on('code-pane-fs-changed', callback);
   },
@@ -325,6 +327,46 @@ const electronAPI: ElectronAPI = {
     const listener = () => callback();
     ipcRenderer.on('window-startup-reveal', listener);
     return () => ipcRenderer.removeListener('window-startup-reveal', listener);
+  },
+
+  // Chat AI
+  chatSend: (request: unknown) =>
+    ipcRenderer.invoke('chat-send', request),
+  chatCancel: (config: { paneId: string }) =>
+    ipcRenderer.invoke('chat-cancel', config),
+  chatExecuteTool: (request: unknown) =>
+    ipcRenderer.invoke('chat-execute-tool', request),
+  chatRespondToolApproval: (response: unknown) =>
+    ipcRenderer.send('chat-respond-tool-approval', response),
+  onChatStreamChunk: (callback) => {
+    ipcRenderer.on('chat-stream-chunk', callback);
+  },
+  offChatStreamChunk: (callback) => {
+    ipcRenderer.removeListener('chat-stream-chunk', callback);
+  },
+  onChatStreamDone: (callback) => {
+    ipcRenderer.on('chat-stream-done', callback);
+  },
+  offChatStreamDone: (callback) => {
+    ipcRenderer.removeListener('chat-stream-done', callback);
+  },
+  onChatStreamError: (callback) => {
+    ipcRenderer.on('chat-stream-error', callback);
+  },
+  offChatStreamError: (callback) => {
+    ipcRenderer.removeListener('chat-stream-error', callback);
+  },
+  onChatToolApprovalRequest: (callback) => {
+    ipcRenderer.on('chat-tool-approval-request', callback);
+  },
+  offChatToolApprovalRequest: (callback) => {
+    ipcRenderer.removeListener('chat-tool-approval-request', callback);
+  },
+  onChatToolResult: (callback) => {
+    ipcRenderer.on('chat-tool-result', callback);
+  },
+  offChatToolResult: (callback) => {
+    ipcRenderer.removeListener('chat-tool-result', callback);
   },
 };
 

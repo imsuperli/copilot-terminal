@@ -493,6 +493,20 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
     await pty.deleteSftpEntry(remotePath);
   }
 
+  async execSSHCommand(windowId: string, paneId: string, command: string): Promise<string> {
+    const pid = this.getPidByPane(windowId, paneId);
+    if (pid === null) {
+      throw new Error(`Pane not found: ${windowId}/${paneId}`);
+    }
+
+    const ptySession = this.ptys.get(pid);
+    if (!ptySession || !isSSHExecSession(ptySession)) {
+      throw new Error(`SSH session not found for pane: ${windowId}/${paneId}`);
+    }
+
+    return ptySession.execCommand(command);
+  }
+
   /**
    * 鐢熸垚 paneIndex 鐨?key
    */
@@ -1602,5 +1616,15 @@ function isSSHSftpSession(value: unknown): value is {
     && typeof (value as { downloadSftpDirectory?: unknown }).downloadSftpDirectory === 'function'
     && typeof (value as { createSftpDirectory?: unknown }).createSftpDirectory === 'function'
     && typeof (value as { deleteSftpEntry?: unknown }).deleteSftpEntry === 'function'
+  );
+}
+
+function isSSHExecSession(value: unknown): value is {
+  execCommand(command: string): Promise<string>;
+} {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { execCommand?: unknown }).execCommand === 'function'
   );
 }

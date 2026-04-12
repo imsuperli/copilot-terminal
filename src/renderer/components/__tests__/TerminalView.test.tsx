@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalView } from '../TerminalView';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
+import { getAllPanes } from '../../utils/layoutHelpers';
 
 vi.mock('../Sidebar', () => ({
   Sidebar: () => <div data-testid="sidebar" />,
@@ -251,6 +252,7 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'terminalView.splitHorizontal' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.splitVertical' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.splitBrowser' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'terminalView.splitChat' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.stop' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.restart' })).toBeInTheDocument();
   });
@@ -336,6 +338,38 @@ describe('TerminalView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'close-active-pane' }));
 
     expect(window.electronAPI.closePane).not.toHaveBeenCalled();
+  });
+
+  it('creates a linked chat pane from the toolbar', () => {
+    const localWindow = createLocalWindow();
+    const linkedPaneId = localWindow.activePaneId;
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={localWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'terminalView.splitChat' }));
+
+    const updatedWindow = useWindowStore.getState().getWindowById(localWindow.id);
+    expect(updatedWindow).toBeDefined();
+
+    const panes = getAllPanes(updatedWindow!.layout);
+    const chatPane = panes.find((pane) => pane.kind === 'chat');
+    expect(chatPane).toBeDefined();
+    expect(chatPane?.chat?.linkedPaneId).toBe(linkedPaneId);
+    expect(updatedWindow?.activePaneId).toBe(chatPane?.id);
   });
 
   it('prevents mouse focus on toolbar action buttons', () => {

@@ -76,6 +76,13 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           }
         : workspace.settings.features;
 
+      const chatSettings = settings?.chat
+        ? {
+            ...workspace.settings.chat,
+            ...settings.chat,
+          }
+        : workspace.settings.chat;
+
       const updatedWorkspace = {
         ...workspace,
         settings: {
@@ -84,6 +91,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           terminal: terminalSettings,
           tmux: tmuxSettings,
           features: featureSettings,
+          chat: chatSettings,
         },
       };
 

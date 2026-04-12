@@ -33,6 +33,10 @@ vi.mock('../TerminalPane', () => ({
   },
 }));
 
+vi.mock('../ChatPane', () => ({
+  ChatPane: ({ pane }: { pane: Pane }) => <div data-testid={`chat-pane-${pane.id}`} />,
+}));
+
 function createPaneNode(paneId: string): LayoutNode {
   return {
     type: 'pane',
@@ -312,5 +316,37 @@ describe('SplitLayout', () => {
     const dividerIndicator = separator.firstElementChild;
     expect(dividerIndicator).not.toBeNull();
     expect(dividerIndicator?.className).toContain('bg-zinc-500/90');
+  });
+
+  it('renders chat panes through the shared layout renderer', () => {
+    const layout: LayoutNode = {
+      type: 'pane',
+      id: 'chat-pane-1',
+      pane: {
+        id: 'chat-pane-1',
+        cwd: '',
+        command: '',
+        kind: 'chat',
+        status: WindowStatus.Paused,
+        pid: null,
+        chat: {
+          messages: [],
+          linkedPaneId: 'pane-a',
+        },
+      },
+    };
+
+    render(
+      <SplitLayout
+        windowId="win-1"
+        layout={layout}
+        activePaneId="chat-pane-1"
+        isWindowActive
+        onPaneActivate={vi.fn()}
+        onPaneClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('chat-pane-chat-pane-1')).toBeInTheDocument();
   });
 });

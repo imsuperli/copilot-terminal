@@ -13,6 +13,7 @@ import { registerGroupHandlers } from './groupHandlers';
 import { registerSSHProfileHandlers } from './sshProfileHandlers';
 import { registerSSHSessionHandlers } from './sshSessionHandlers';
 import { registerCodePaneHandlers } from './codePaneHandlers';
+import { registerChatHandlers } from './chatHandlers';
 
 /**
  * 注册所有 IPC handlers
@@ -58,6 +59,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // 窗口组管理 (create-group, delete-group, archive-group, etc.)
   registerGroupHandlers(ctx);
+
+  // Chat AI 对话 (chat-send, chat-cancel, chat-execute-tool)
+  registerChatHandlers(ctx);
 
   // 其他 (ping)
   registerMiscHandlers(ctx);

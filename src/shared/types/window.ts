@@ -1,5 +1,6 @@
 import { ProjectConfig } from './project-config';
 import type { SSHAuthType } from './ssh';
+import type { ChatPaneState } from './chat';
 
 /**
  * 窗口状态枚举
@@ -15,7 +16,7 @@ export enum WindowStatus {
 }
 
 export type PaneBackend = 'local' | 'ssh';
-export type PaneKind = 'terminal' | 'browser' | 'code';
+export type PaneKind = 'terminal' | 'browser' | 'code' | 'chat';
 
 export interface BrowserPaneState {
   url: string;
@@ -77,6 +78,7 @@ export interface Pane {
   ssh?: SshPaneBinding;          // SSH pane 绑定信息
   browser?: BrowserPaneState;    // 浏览器 pane 元数据
   code?: CodePaneState;          // Monaco code pane 元数据
+  chat?: ChatPaneState;          // Chat pane 元数据
   lastOutput?: string;           // 最新输出摘要（前 100 字符）
 
   // tmux 兼容层扩展字段（用于 Claude Code Agent Teams）

@@ -233,6 +233,14 @@ export class SSHPtySession implements IPty {
     await this.connectionLease.connection.deleteSftpEntry(remotePath);
   }
 
+  async execCommand(command: string): Promise<string> {
+    if (!this.connectionLease) {
+      throw new Error(`SSH connection is not active for ${this.process}`);
+    }
+
+    return this.connectionLease.connection.execCommand(command);
+  }
+
   private async connect(): Promise<void> {
     await this.acquireConnectionLease(this.ssh);
 

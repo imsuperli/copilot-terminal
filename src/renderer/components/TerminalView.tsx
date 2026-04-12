@@ -2,7 +2,7 @@
 import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { v4 as uuidv4 } from 'uuid';
-import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, FileCode2 } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, FileCode2, MessageSquare } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -31,6 +31,7 @@ import {
   getPaneCapabilities,
   getWindowKind,
   isBrowserPane,
+  isChatPane,
   isCodePane,
   isSessionlessPane,
   isTerminalPane,
@@ -46,6 +47,7 @@ import {
   getSmartBrowserSplitDirection,
 } from '../utils/browserPane';
 import { createCodePaneDraft } from '../utils/codePane';
+import { createChatPaneDraft } from '../utils/chatPane';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import { resolveBrowserDropAction } from '../utils/browserDrop';
 import {
@@ -115,6 +117,10 @@ function SplitBrowserIcon() {
 
 function SplitCodeIcon() {
   return <FileCode2 size={15} strokeWidth={1.8} />;
+}
+
+function SplitChatIcon() {
+  return <MessageSquare size={15} strokeWidth={1.8} />;
 }
 
 function isArchiveSwitchCandidate(window: Window): boolean {
@@ -465,6 +471,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
 
+      if (isChatPane(sourcePane)) {
+        const newPaneId = uuidv4();
+        const newPane = createChatPaneDraft(newPaneId, {
+          linkedPaneId: sourcePane.chat?.linkedPaneId ?? activeTerminalPane?.id,
+          activeProviderId: sourcePane.chat?.activeProviderId,
+          activeModel: sourcePane.chat?.activeModel,
+        });
+        splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+        return;
+      }
+
       const newPaneId = uuidv4();
       const newPane: Pane = createPaneDraftFromSource(sourcePane, newPaneId);
 
@@ -495,7 +512,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
     },
-    [t, terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow, updatePane, closePaneInWindow]
+    [activeTerminalPane?.id, t, terminalWindow.id, terminalWindow.activePaneId, splitPaneInWindow, updatePane, closePaneInWindow]
   );
 
   const handleSplitBrowserPane = useCallback(() => {
@@ -572,6 +589,31 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
     setActivePane(terminalWindow.id, newPaneId);
   }, [resolveCodePaneRootPath, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
+
+  const handleSplitChatPane = useCallback(() => {
+    const activePaneId = terminalWindow.activePaneId;
+    if (!activePaneId) {
+      return;
+    }
+
+    const { getPaneById } = useWindowStore.getState();
+    const sourcePane = getPaneById(terminalWindow.id, activePaneId);
+    const newPaneId = uuidv4();
+    const linkedPaneId = sourcePane && isChatPane(sourcePane)
+      ? sourcePane.chat?.linkedPaneId ?? activeTerminalPane?.id
+      : isTerminalPane(sourcePane ?? ({} as Pane))
+        ? sourcePane?.id
+        : activeTerminalPane?.id;
+    const newPane = createChatPaneDraft(newPaneId, {
+      linkedPaneId,
+      activeProviderId: sourcePane && isChatPane(sourcePane) ? sourcePane.chat?.activeProviderId : undefined,
+      activeModel: sourcePane && isChatPane(sourcePane) ? sourcePane.chat?.activeModel : undefined,
+    });
+    const direction = getSmartBrowserSplitDirection(terminalWindow.layout, activePaneId);
+
+    splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+    setActivePane(terminalWindow.id, newPaneId);
+  }, [activeTerminalPane?.id, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
 
   const activeBrowserDragUrl = useMemo(() => (
     activePane && isBrowserPane(activePane)
@@ -1196,6 +1238,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <SplitCodeIcon />
+              </button>
+            </AppTooltip>
+
+            <AppTooltip content={t('terminalView.splitChat')} placement="toolbar-trailing">
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={t('terminalView.splitChat')}
+                onMouseDown={preventMouseButtonFocus}
+                onClick={handleSplitChatPane}
+                className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700"
+              >
+                <SplitChatIcon />
               </button>
             </AppTooltip>
 

@@ -1,6 +1,18 @@
 import { ViewChangedPayload } from './ipc';
 import { ProjectConfig } from './project-config';
 import { QuickNavConfig } from './quick-nav';
+import type {
+  ChatSendRequest,
+  ChatStreamChunkPayload,
+  ChatStreamDonePayload,
+  ChatStreamErrorPayload,
+  ChatToolResultPayload,
+  ChatToolApprovalRequestPayload,
+  ChatToolApprovalResponse,
+  ChatExecuteToolRequest,
+  ToolResult,
+  ChatSettings,
+} from './chat';
 import {
   ActiveSSHPortForward,
   ForwardedPortConfig,
@@ -288,6 +300,20 @@ export interface CodePaneSearchFilesConfig {
   limit?: number;
 }
 
+export interface CodePaneSearchContentsConfig {
+  rootPath: string;
+  query: string;
+  limit?: number;
+  maxMatchesPerFile?: number;
+}
+
+export interface CodePaneContentMatch {
+  filePath: string;
+  lineNumber: number;
+  column: number;
+  lineText: string;
+}
+
 export interface CodePaneFsChangedPayload {
   rootPath: string;
   changes: Array<{
@@ -376,7 +402,7 @@ export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
 export type SettingsPatch =
-  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'features' | 'customCategories'>>
+  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'features' | 'customCategories' | 'chat'>>
   & {
     ides?: IDEConfig[];
     quickNav?: QuickNavConfig;
@@ -385,6 +411,7 @@ export type SettingsPatch =
     tmux?: Partial<TmuxSettings>;
     features?: Partial<FeatureSettings>;
     customCategories?: CustomCategory[];
+    chat?: Partial<ChatSettings>;
   };
 
 export interface ElectronAPI {
@@ -477,6 +504,7 @@ export interface ElectronAPI {
   codePaneWatchRoot: (config: CodePaneWatchRootConfig) => Promise<IpcResponse<void>>;
   codePaneUnwatchRoot: (paneId: string) => Promise<IpcResponse<void>>;
   codePaneSearchFiles: (config: CodePaneSearchFilesConfig) => Promise<IpcResponse<string[]>>;
+  codePaneSearchContents: (config: CodePaneSearchContentsConfig) => Promise<IpcResponse<CodePaneContentMatch[]>>;
   onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   onTmuxPaneTitleChanged: (callback: ElectronEventHandler<TmuxPaneTitleChangedPayload>) => void;
@@ -554,4 +582,20 @@ export interface ElectronAPI {
   onWindowMaximized: (callback: (isMaximized: boolean) => void) => () => void;
   onWindowFullScreen: (callback: (isFullScreen: boolean) => void) => () => void;
   onStartupReveal?: (callback: () => void) => () => void;
+
+  // Chat pane
+  chatSend: (request: ChatSendRequest) => Promise<IpcResponse<{ messageId: string }>>;
+  chatCancel: (config: { paneId: string }) => Promise<IpcResponse<void>>;
+  chatExecuteTool: (request: ChatExecuteToolRequest) => Promise<IpcResponse<ToolResult>>;
+  chatRespondToolApproval: (response: ChatToolApprovalResponse) => void;
+  onChatStreamChunk: (callback: ElectronEventHandler<ChatStreamChunkPayload>) => void;
+  offChatStreamChunk: (callback: ElectronEventHandler<ChatStreamChunkPayload>) => void;
+  onChatStreamDone: (callback: ElectronEventHandler<ChatStreamDonePayload>) => void;
+  offChatStreamDone: (callback: ElectronEventHandler<ChatStreamDonePayload>) => void;
+  onChatStreamError: (callback: ElectronEventHandler<ChatStreamErrorPayload>) => void;
+  offChatStreamError: (callback: ElectronEventHandler<ChatStreamErrorPayload>) => void;
+  onChatToolApprovalRequest: (callback: ElectronEventHandler<ChatToolApprovalRequestPayload>) => void;
+  offChatToolApprovalRequest: (callback: ElectronEventHandler<ChatToolApprovalRequestPayload>) => void;
+  onChatToolResult: (callback: ElectronEventHandler<ChatToolResultPayload>) => void;
+  offChatToolResult: (callback: ElectronEventHandler<ChatToolResultPayload>) => void;
 }

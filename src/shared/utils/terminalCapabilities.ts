@@ -12,8 +12,12 @@ export function isCodePane(pane: Pane): boolean {
   return getPaneKind(pane) === 'code';
 }
 
+export function isChatPane(pane: Pane): boolean {
+  return getPaneKind(pane) === 'chat';
+}
+
 export function isSessionlessPane(pane: Pane): boolean {
-  return isBrowserPane(pane) || isCodePane(pane);
+  return isBrowserPane(pane) || isCodePane(pane) || isChatPane(pane);
 }
 
 export function isTerminalPane(pane: Pane): boolean {

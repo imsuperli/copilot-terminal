@@ -65,6 +65,8 @@ export interface ISSHConnection {
   downloadSftpDirectory(remotePath: string, localPath: string): Promise<void>;
   createSftpDirectory(parentPath: string, name: string): Promise<string>;
   deleteSftpEntry(remotePath: string): Promise<void>;
+  /** 在远程执行非交互式命令，返回 stdout；非零退出码会 reject */
+  execCommand(command: string): Promise<string>;
   close(): Promise<void>;
   isClosed(): boolean;
 }
@@ -603,7 +605,7 @@ export class SSHClientConnection implements ISSHConnection {
     return this.sftpWrapperPromise;
   }
 
-  private async execCommand(command: string): Promise<string> {
+  async execCommand(command: string): Promise<string> {
     await this.connect();
 
     return new Promise<string>((resolve, reject) => {

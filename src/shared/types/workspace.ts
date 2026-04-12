@@ -3,6 +3,7 @@ import { QuickNavConfig } from './quick-nav';
 import { Window } from './window';
 import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
+import type { ChatSettings } from './chat';
 
 export interface IDEConfig {
   id: string;
@@ -65,6 +66,7 @@ export interface Settings {
   features?: FeatureSettings;
   customCategories?: CustomCategory[];
   defaultSidebarTab?: 'all' | 'active' | 'local' | 'ssh' | 'archived' | string; // string 也可能是自定义分类或状态筛选 ID
+  chat?: ChatSettings;
 }
 
 export interface Workspace {
