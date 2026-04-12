@@ -18,6 +18,9 @@ import { SSHProfileStore } from './services/ssh/SSHProfileStore';
 import { SSHVaultService } from './services/ssh/SSHVaultService';
 import { SSHKnownHostsStore } from './services/ssh/SSHKnownHostsStore';
 import { ElectronSSHHostKeyPromptService } from './services/ssh/SSHHostKeyPromptService';
+import { CodeFileService } from './services/code/CodeFileService';
+import { CodeGitService } from './services/code/CodeGitService';
+import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
 import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 import { isTerminalPane } from '../shared/utils/terminalCapabilities';
@@ -44,6 +47,9 @@ let sshProfileStore: SSHProfileStore | null = null;
 let sshVaultService: SSHVaultService | null = null;
 let sshKnownHostsStore: SSHKnownHostsStore | null = null;
 let sshHostKeyPromptService: ElectronSSHHostKeyPromptService | null = null;
+let codeFileService: CodeFileService | null = null;
+let codeGitService: CodeGitService | null = null;
+let codePaneWatcherService: CodePaneWatcherService | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
@@ -512,6 +518,9 @@ app.whenReady().then(async () => {
 
   // 初始化 FileWatcherService（通用文件监听服务）
   fileWatcherService = new FileWatcherService();
+  codeFileService = new CodeFileService();
+  codeGitService = new CodeGitService();
+  codePaneWatcherService = new CodePaneWatcherService(() => mainWindow);
 
   // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
   initProjectConfigWatcher(fileWatcherService);
@@ -579,7 +588,11 @@ app.whenReady().then(async () => {
     sshProfileStore,
     sshVaultService,
     sshKnownHostsStore,
+    codeFileService,
+    codeGitService,
+    codePaneWatcherService,
     currentWorkspace,
+    getMainWindow: () => mainWindow,
     getCurrentWorkspace: () => currentWorkspace,
     setCurrentWorkspace: (workspace) => { currentWorkspace = workspace; },
     syncProjectConfigWatchers,

@@ -12,6 +12,7 @@ import { registerStatusLineHandlers } from './statusLineHandlers';
 import { registerGroupHandlers } from './groupHandlers';
 import { registerSSHProfileHandlers } from './sshProfileHandlers';
 import { registerSSHSessionHandlers } from './sshSessionHandlers';
+import { registerCodePaneHandlers } from './codePaneHandlers';
 
 /**
  * 注册所有 IPC handlers
@@ -36,6 +37,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // 文件系统 (validate-path, select-directory, open-folder)
   registerFileHandlers(ctx);
+
+  // Code pane 文件与 Git 能力
+  registerCodePaneHandlers(ctx);
 
   // 进程管理 (create-terminal, kill-terminal, get-terminal-status, list-terminals)
   registerProcessHandlers(ctx);

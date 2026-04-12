@@ -35,6 +35,9 @@ export interface IpcResponse<T = void> {
 }
 
 export const SSH_AUTH_FAILED_ERROR_CODE = 'SSH_AUTH_FAILED';
+export const CODE_PANE_SAVE_CONFLICT_ERROR_CODE = 'CODE_PANE_SAVE_CONFLICT';
+export const CODE_PANE_BINARY_FILE_ERROR_CODE = 'CODE_PANE_BINARY_FILE';
+export const CODE_PANE_FILE_TOO_LARGE_ERROR_CODE = 'CODE_PANE_FILE_TOO_LARGE';
 
 export interface CreateWindowConfig {
   name?: string;

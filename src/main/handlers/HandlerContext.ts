@@ -10,6 +10,9 @@ import { TmuxCompatService } from '../services/TmuxCompatService';
 import { SSHProfileStore } from '../services/ssh/SSHProfileStore';
 import { SSHVaultService } from '../services/ssh/SSHVaultService';
 import { SSHKnownHostsStore } from '../services/ssh/SSHKnownHostsStore';
+import { CodeFileService } from '../services/code/CodeFileService';
+import { CodeGitService } from '../services/code/CodeGitService';
+import { CodePaneWatcherService } from '../services/code/CodePaneWatcherService';
 import { Workspace } from '../types/workspace';
 
 /**
@@ -29,7 +32,11 @@ export interface HandlerContext {
   sshProfileStore?: SSHProfileStore | null;
   sshVaultService?: SSHVaultService | null;
   sshKnownHostsStore?: SSHKnownHostsStore | null;
+  codeFileService?: CodeFileService | null;
+  codeGitService?: CodeGitService | null;
+  codePaneWatcherService?: CodePaneWatcherService | null;
   currentWorkspace: Workspace | null;
+  getMainWindow?: () => BrowserWindow | null;
   getCurrentWorkspace: () => Workspace | null;
   setCurrentWorkspace: (workspace: Workspace | null) => void;
   syncProjectConfigWatchers?: () => Promise<void>;
