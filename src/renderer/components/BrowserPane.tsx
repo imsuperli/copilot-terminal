@@ -482,11 +482,11 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               paneId: pane.id,
             });
           }}
-          className="flex h-6 w-5 shrink-0 cursor-grab items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:cursor-grabbing"
+          className="flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:cursor-grabbing"
           aria-label={t('browserPane.move')}
           title={t('browserPane.move')}
         >
-          <GripVertical size={12} />
+          <GripVertical size={16} />
         </div>
 
         <div className="flex items-center gap-1 text-zinc-400">
