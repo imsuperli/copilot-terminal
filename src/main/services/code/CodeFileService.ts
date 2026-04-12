@@ -1,9 +1,11 @@
 import path from 'path';
 import { promises as fsPromises } from 'fs';
 import type {
+  CodePaneContentMatch,
   CodePaneListDirectoryConfig,
   CodePaneReadFileConfig,
   CodePaneReadFileResult,
+  CodePaneSearchContentsConfig,
   CodePaneSearchFilesConfig,
   CodePaneTreeEntry,
   CodePaneWriteFileConfig,
@@ -19,6 +21,8 @@ import { PathValidator } from '../../utils/pathValidator';
 const DEFAULT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_SEARCH_LIMIT = 100;
 const MAX_SEARCH_LIMIT = 500;
+const DEFAULT_CONTENT_MATCH_LIMIT = 200;
+const DEFAULT_CONTENT_MATCHES_PER_FILE = 20;
 const IGNORED_DIRECTORY_NAMES = new Set([
   '.git',
   'node_modules',
@@ -165,6 +169,15 @@ function compareSearchResults(rootPath: string, leftPath: string, rightPath: str
   );
 }
 
+function getClampedLimit(limit: number | undefined, fallbackLimit: number): number {
+  return Math.max(1, Math.min(limit ?? fallbackLimit, MAX_SEARCH_LIMIT));
+}
+
+function trimSearchLine(lineText: string): string {
+  const collapsed = lineText.replace(/\s+/g, ' ').trim();
+  return collapsed.length > 240 ? `${collapsed.slice(0, 237)}...` : collapsed;
+}
+
 export class CodeFileService {
   async listDirectory(config: CodePaneListDirectoryConfig): Promise<CodePaneTreeEntry[]> {
     const rootInfo = await this.resolveRoot(config.rootPath);
@@ -264,7 +277,7 @@ export class CodeFileService {
 
   async searchFiles(config: CodePaneSearchFilesConfig): Promise<string[]> {
     const rootInfo = await this.resolveRoot(config.rootPath);
-    const limit = Math.max(1, Math.min(config.limit ?? DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT));
+    const limit = getClampedLimit(config.limit, DEFAULT_SEARCH_LIMIT);
     const query = config.query.trim().toLowerCase();
     if (!query) {
       return [];
@@ -313,6 +326,109 @@ export class CodeFileService {
     }
 
     return results.sort((left, right) => compareSearchResults(rootInfo.rootPath, left, right, query));
+  }
+
+  async searchContents(config: CodePaneSearchContentsConfig): Promise<CodePaneContentMatch[]> {
+    const rootInfo = await this.resolveRoot(config.rootPath);
+    const limit = getClampedLimit(config.limit, DEFAULT_CONTENT_MATCH_LIMIT);
+    const maxMatchesPerFile = getClampedLimit(
+      config.maxMatchesPerFile,
+      DEFAULT_CONTENT_MATCHES_PER_FILE,
+    );
+    const query = config.query.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+
+    const matches: CodePaneContentMatch[] = [];
+    const stack: string[] = [rootInfo.rootPath];
+
+    while (stack.length > 0 && matches.length < limit) {
+      const directoryPath = stack.pop();
+      if (!directoryPath) {
+        continue;
+      }
+
+      const entries = await fsPromises.readdir(directoryPath, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) {
+          continue;
+        }
+
+        const entryPath = path.join(directoryPath, entry.name);
+        const stats = await fsPromises.lstat(entryPath);
+        if (stats.isSymbolicLink()) {
+          continue;
+        }
+
+        if (stats.isDirectory()) {
+          if (!IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+            stack.push(entryPath);
+          }
+          continue;
+        }
+
+        if (!stats.isFile() || stats.size > DEFAULT_MAX_FILE_SIZE_BYTES) {
+          continue;
+        }
+
+        const buffer = await fsPromises.readFile(entryPath);
+        if (looksBinary(buffer)) {
+          continue;
+        }
+
+        const lines = buffer.toString('utf-8').split(/\r?\n/);
+        let fileMatchCount = 0;
+
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+          const lineText = lines[lineIndex] ?? '';
+          let searchOffset = 0;
+          const lowerLineText = lineText.toLowerCase();
+
+          while (searchOffset < lowerLineText.length) {
+            const matchIndex = lowerLineText.indexOf(query, searchOffset);
+            if (matchIndex === -1) {
+              break;
+            }
+
+            matches.push({
+              filePath: entryPath,
+              lineNumber: lineIndex + 1,
+              column: matchIndex + 1,
+              lineText: trimSearchLine(lineText),
+            });
+
+            fileMatchCount += 1;
+            if (matches.length >= limit || fileMatchCount >= maxMatchesPerFile) {
+              break;
+            }
+
+            searchOffset = matchIndex + Math.max(query.length, 1);
+          }
+
+          if (matches.length >= limit || fileMatchCount >= maxMatchesPerFile) {
+            break;
+          }
+        }
+
+        if (matches.length >= limit) {
+          break;
+        }
+      }
+    }
+
+    return matches.sort((left, right) => {
+      const pathComparison = compareSearchResults(rootInfo.rootPath, left.filePath, right.filePath, query);
+      if (pathComparison !== 0) {
+        return pathComparison;
+      }
+
+      if (left.lineNumber !== right.lineNumber) {
+        return left.lineNumber - right.lineNumber;
+      }
+
+      return left.column - right.column;
+    });
   }
 
   private async resolveRoot(rootPath: string): Promise<RootInfo> {

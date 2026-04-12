@@ -85,8 +85,11 @@ function createFakeEditor() {
     addCommand: vi.fn(),
     dispose: vi.fn(),
     focus: vi.fn(),
+    revealLineInCenter: vi.fn(),
     restoreViewState: vi.fn(),
     saveViewState: vi.fn(() => null),
+    setPosition: vi.fn(),
+    setSelection: vi.fn(),
     setModel: vi.fn((nextModel: FakeModel | null) => {
       model = nextModel;
       fakeMonacoState.lastEditorModel = nextModel;
@@ -247,6 +250,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneWatchRoot).mockReset();
     vi.mocked(window.electronAPI.codePaneUnwatchRoot).mockReset();
     vi.mocked(window.electronAPI.codePaneSearchFiles).mockReset();
+    vi.mocked(window.electronAPI.codePaneSearchContents).mockReset();
     vi.mocked(window.electronAPI.onCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.openFolder).mockReset();
@@ -292,6 +296,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneWatchRoot).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneUnwatchRoot).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneSearchFiles).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneSearchContents).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.openFolder).mockResolvedValue(undefined);
     vi.mocked(window.electronAPI.writeClipboardText).mockResolvedValue(undefined);
   });
@@ -376,6 +381,50 @@ describe('CodePane', () => {
     await user.pointer({ keys: '[MouseRight]', target: treeButton });
     await user.click(await screen.findByText('codePane.revealInFolder'));
     expect(window.electronAPI.openFolder).toHaveBeenCalledWith('/workspace/project/src');
+  });
+
+  it('searches project contents and opens a selected match', async () => {
+    vi.mocked(window.electronAPI.codePaneSearchContents).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/index.ts',
+          lineNumber: 1,
+          column: 14,
+          lineText: 'export const value = 1;',
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.searchTab' }));
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('codePane.searchContentsPlaceholder'), {
+      target: { value: 'value' },
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneSearchContents).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        query: 'value',
+        limit: 120,
+        maxMatchesPerFile: 6,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByText('export const value = 1;'));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
   });
 
   it('auto-saves dirty files after the debounce delay', async () => {

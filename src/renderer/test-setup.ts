@@ -127,6 +127,7 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneWatchRoot: vi.fn().mockResolvedValue({ success: true }),
     codePaneUnwatchRoot: vi.fn().mockResolvedValue({ success: true }),
     codePaneSearchFiles: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    codePaneSearchContents: vi.fn().mockResolvedValue({ success: true, data: [] }),
     onCodePaneFsChanged: vi.fn(),
     offCodePaneFsChanged: vi.fn(),
     onTmuxPaneTitleChanged: vi.fn(),

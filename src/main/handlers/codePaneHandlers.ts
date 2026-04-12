@@ -6,6 +6,7 @@ import type {
   CodePaneListDirectoryConfig,
   CodePaneReadFileConfig,
   CodePaneReadGitBaseFileConfig,
+  CodePaneSearchContentsConfig,
   CodePaneSearchFilesConfig,
   CodePaneWatchRootConfig,
   CodePaneWriteFileConfig,
@@ -107,6 +108,18 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await codeFileService.searchFiles(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-search-contents', async (_event, config: CodePaneSearchContentsConfig) => {
+    try {
+      if (!codeFileService) {
+        throw new Error('CodeFileService not initialized');
+      }
+
+      return successResponse(await codeFileService.searchContents(config));
     } catch (error) {
       return errorResponse(error);
     }

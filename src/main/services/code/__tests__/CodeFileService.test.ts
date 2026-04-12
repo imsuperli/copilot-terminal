@@ -24,7 +24,7 @@ describe('CodeFileService', () => {
     const nestedDirectoryPath = path.join(tempRootPath, 'src');
     const filePath = path.join(nestedDirectoryPath, 'index.ts');
     await fsPromises.mkdir(nestedDirectoryPath, { recursive: true });
-    await fsPromises.writeFile(filePath, 'export const value = 1;\n', 'utf-8');
+    await fsPromises.writeFile(filePath, 'export const value = 1;\nconsole.log(value);\n', 'utf-8');
 
     const rootEntries = await service.listDirectory({ rootPath: tempRootPath });
     expect(rootEntries).toHaveLength(1);
@@ -40,13 +40,27 @@ describe('CodeFileService', () => {
     const writeResult = await service.writeFile({
       rootPath: tempRootPath,
       filePath,
-      content: 'export const value = 2;\n',
+      content: 'export const value = 2;\nconsole.log(value);\n',
       expectedMtimeMs: fileResult.mtimeMs,
     });
     expect(writeResult.mtimeMs).toBeGreaterThanOrEqual(fileResult.mtimeMs);
 
     const searchResults = await service.searchFiles({ rootPath: tempRootPath, query: 'index' });
     expect(searchResults).toEqual([filePath]);
+
+    const contentResults = await service.searchContents({ rootPath: tempRootPath, query: 'value' });
+    expect(contentResults).toEqual([
+      expect.objectContaining({
+        filePath,
+        lineNumber: 1,
+        column: 14,
+      }),
+      expect.objectContaining({
+        filePath,
+        lineNumber: 2,
+        column: 13,
+      }),
+    ]);
   });
 
   it('rejects binary files and detects save conflicts', async () => {
@@ -96,5 +110,22 @@ describe('CodeFileService', () => {
       prefixPath,
       containsPath,
     ]);
+  });
+
+  it('limits per-file content matches and skips binary files', async () => {
+    const textFilePath = path.join(tempRootPath, 'notes.txt');
+    const binaryFilePath = path.join(tempRootPath, 'image.bin');
+
+    await fsPromises.writeFile(textFilePath, 'match match match\nsecond match\n', 'utf-8');
+    await fsPromises.writeFile(binaryFilePath, Buffer.from([0x00, 0x01, 0x02]));
+
+    const results = await service.searchContents({
+      rootPath: tempRootPath,
+      query: 'match',
+      maxMatchesPerFile: 2,
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results.every((result) => result.filePath === textFilePath)).toBe(true);
   });
 });

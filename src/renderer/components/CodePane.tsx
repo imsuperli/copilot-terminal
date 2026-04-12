@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import type { Pane } from '../types/window';
 import type {
+  CodePaneContentMatch,
   CodePaneFsChangedPayload,
   CodePaneGitStatusEntry,
   CodePaneReadFileResult,
@@ -48,6 +49,7 @@ type MonacoDiffEditor = import('monaco-editor').editor.IStandaloneDiffEditor;
 type MonacoModel = import('monaco-editor').editor.ITextModel;
 type MonacoDisposable = import('monaco-editor').IDisposable;
 type MonacoViewState = import('monaco-editor').editor.ICodeEditorViewState | null;
+type SidebarMode = 'files' | 'search';
 
 type BannerState = {
   tone: 'warning' | 'error' | 'info';
@@ -196,6 +198,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>('files');
+  const [contentSearchQuery, setContentSearchQuery] = useState('');
+  const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
+  const [contentSearchResults, setContentSearchResults] = useState<CodePaneContentMatch[]>([]);
+  const [isContentSearching, setIsContentSearching] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(createEmptySet);
@@ -204,12 +211,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [treeLoadError, setTreeLoadError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [contentSearchError, setContentSearchError] = useState<string | null>(null);
 
   const expandedDirectoriesRef = useRef(expandedDirectories);
   const loadedDirectoriesRef = useRef(loadedDirectories);
   const dirtyPathsRef = useRef(dirtyPaths);
   const savingPathsRef = useRef(savingPaths);
   const activeFilePathRef = useRef(activeFilePath);
+  const pendingNavigationRef = useRef<CodePaneContentMatch | null>(null);
 
   useEffect(() => {
     paneRef.current = pane;
@@ -315,6 +324,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     return undefined;
   }, [gitStatusByPath]);
+
+  const applyPendingNavigation = useCallback((editorInstance: MonacoEditor | null, filePath: string) => {
+    const pendingNavigation = pendingNavigationRef.current;
+    if (!editorInstance || !pendingNavigation || pendingNavigation.filePath !== filePath) {
+      return;
+    }
+
+    editorInstance.setPosition?.({
+      lineNumber: pendingNavigation.lineNumber,
+      column: pendingNavigation.column,
+    });
+    editorInstance.setSelection?.({
+      startLineNumber: pendingNavigation.lineNumber,
+      startColumn: pendingNavigation.column,
+      endLineNumber: pendingNavigation.lineNumber,
+      endColumn: pendingNavigation.column + 1,
+    });
+    editorInstance.revealLineInCenter?.(pendingNavigation.lineNumber);
+    pendingNavigationRef.current = null;
+  }, []);
 
   const saveCurrentViewState = useCallback(() => {
     const currentFilePath = activeFilePathRef.current;
@@ -575,6 +604,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         diffEditorRef.current.getModifiedEditor().restoreViewState(savedViewState);
       }
 
+      applyPendingNavigation(diffEditorRef.current.getModifiedEditor(), currentActiveFilePath);
+
       if (isActive) {
         diffEditorRef.current.getModifiedEditor().focus();
       }
@@ -611,10 +642,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       editorRef.current.restoreViewState(savedViewState);
     }
 
+    applyPendingNavigation(editorRef.current, currentActiveFilePath);
+
     if (isActive) {
       editorRef.current.focus();
     }
-  }, [disposeEditors, isActive, saveCurrentViewState, viewMode]);
+  }, [applyPendingNavigation, disposeEditors, isActive, saveCurrentViewState, viewMode]);
 
   const reloadFileFromDisk = useCallback(async (filePath: string) => {
     const response = await window.electronAPI.codePaneReadFile({
@@ -978,11 +1011,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setBanner(null);
       setTreeLoadError(null);
       setSearchError(null);
+      setContentSearchError(null);
       setTreeEntriesByDirectory({});
       setExpandedDirectories(initialExpandedDirectories);
       setLoadedDirectories(new Set());
       setLoadingDirectories(new Set([rootPath]));
       setSearchResults([]);
+      setContentSearchResults([]);
       disposeEditors();
       disposeAllModels();
 
@@ -1148,6 +1183,44 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
   }, [deferredSearchQuery, rootPath, t]);
 
+  useEffect(() => {
+    const trimmedQuery = deferredContentSearchQuery.trim();
+    if (!trimmedQuery) {
+      setContentSearchResults([]);
+      setIsContentSearching(false);
+      setContentSearchError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsContentSearching(true);
+    setContentSearchError(null);
+
+    const timer = setTimeout(async () => {
+      const response = await window.electronAPI.codePaneSearchContents({
+        rootPath,
+        query: trimmedQuery,
+        limit: 120,
+        maxMatchesPerFile: 6,
+      });
+
+      if (cancelled) {
+        return;
+      }
+
+      startTransition(() => {
+        setContentSearchResults(response.success ? (response.data ?? []) : []);
+      });
+      setContentSearchError(response.success ? null : (response.error || t('common.retry')));
+      setIsContentSearching(false);
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [deferredContentSearchQuery, rootPath, t]);
+
   const activeTabStatus = activeFilePath ? getEntryStatus(activeFilePath, 'file') : undefined;
   const activeStatusText = activeFilePath
     ? savingPaths.has(activeFilePath)
@@ -1299,6 +1372,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }), [activateFile, getEntryStatus, renderFileContextMenu, rootPath, searchResults, selectedPath]);
 
+  const contentSearchGroups = useMemo(() => {
+    const groups = new Map<string, CodePaneContentMatch[]>();
+    for (const match of contentSearchResults) {
+      const matches = groups.get(match.filePath) ?? [];
+      matches.push(match);
+      groups.set(match.filePath, matches);
+    }
+
+    return Array.from(groups.entries()).map(([filePath, matches]) => ({
+      filePath,
+      matches,
+    }));
+  }, [contentSearchResults]);
+
+  const openContentSearchMatch = useCallback(async (match: CodePaneContentMatch) => {
+    pendingNavigationRef.current = match;
+    await activateFile(match.filePath);
+  }, [activateFile]);
+
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
       return;
@@ -1446,47 +1538,138 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/70">
-          <div className="border-b border-zinc-800 px-2 py-2">
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-              <Search size={12} />
-              {t('codePane.searchFiles')}
-            </div>
-            <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
-              <Search size={12} className="shrink-0 text-zinc-500" />
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={t('codePane.searchFilesPlaceholder')}
-                className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
-              />
-              {isSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
-            </div>
+          <div className="grid grid-cols-2 gap-px border-b border-zinc-800 bg-zinc-900/80 p-1">
+            <button
+              type="button"
+              onClick={() => setSidebarMode('files')}
+              className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'files' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
+            >
+              {t('codePane.filesTab')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarMode('search')}
+              className={`rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'search' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
+            >
+              {t('codePane.searchTab')}
+            </button>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-              {t('codePane.explorer')}
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto px-1 py-2">
-              {isBootstrapping ? (
-                <div className="flex items-center gap-2 px-2 text-xs text-zinc-500">
-                  <Loader2 size={12} className="animate-spin" />
-                  {t('codePane.loading')}
+
+          {sidebarMode === 'files' ? (
+            <>
+              <div className="border-b border-zinc-800 px-2 py-2">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  <Search size={12} />
+                  {t('codePane.searchFiles')}
                 </div>
-              ) : deferredSearchQuery.trim() && searchError ? (
-                <div className="px-2 text-xs text-red-300">{searchError}</div>
-              ) : deferredSearchQuery.trim() ? (
-                renderedSearchResults.length > 0 ? renderedSearchResults : (
-                  <div className="px-2 text-xs text-zinc-500">{t('common.noMatchingWindows')}</div>
-                )
-              ) : treeLoadError ? (
-                <div className="px-2 text-xs text-red-300">{treeLoadError}</div>
-              ) : sidebarEntries.length > 0 ? (
-                renderTree(rootPath, 0)
-              ) : (
-                <div className="px-2 text-xs text-zinc-500">{t('codePane.emptyFolder')}</div>
-              )}
-            </div>
-          </div>
+                <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
+                  <Search size={12} className="shrink-0 text-zinc-500" />
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder={t('codePane.searchFilesPlaceholder')}
+                    className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+                  />
+                  {isSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+                </div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  {t('codePane.explorer')}
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto px-1 py-2">
+                  {isBootstrapping ? (
+                    <div className="flex items-center gap-2 px-2 text-xs text-zinc-500">
+                      <Loader2 size={12} className="animate-spin" />
+                      {t('codePane.loading')}
+                    </div>
+                  ) : deferredSearchQuery.trim() && searchError ? (
+                    <div className="px-2 text-xs text-red-300">{searchError}</div>
+                  ) : deferredSearchQuery.trim() ? (
+                    renderedSearchResults.length > 0 ? renderedSearchResults : (
+                      <div className="px-2 text-xs text-zinc-500">{t('common.noMatchingWindows')}</div>
+                    )
+                  ) : treeLoadError ? (
+                    <div className="px-2 text-xs text-red-300">{treeLoadError}</div>
+                  ) : sidebarEntries.length > 0 ? (
+                    renderTree(rootPath, 0)
+                  ) : (
+                    <div className="px-2 text-xs text-zinc-500">{t('codePane.emptyFolder')}</div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="border-b border-zinc-800 px-2 py-2">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  <Search size={12} />
+                  {t('codePane.searchContents')}
+                </div>
+                <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
+                  <Search size={12} className="shrink-0 text-zinc-500" />
+                  <input
+                    value={contentSearchQuery}
+                    onChange={(event) => setContentSearchQuery(event.target.value)}
+                    placeholder={t('codePane.searchContentsPlaceholder')}
+                    className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+                  />
+                  {isContentSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+                </div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  {t('codePane.searchTab')}
+                </div>
+                <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+                  {deferredContentSearchQuery.trim() && contentSearchError ? (
+                    <div className="text-xs text-red-300">{contentSearchError}</div>
+                  ) : deferredContentSearchQuery.trim() ? (
+                    contentSearchGroups.length > 0 ? (
+                      <div className="space-y-3">
+                        {contentSearchGroups.map((group) => (
+                          <div key={group.filePath} className="space-y-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void activateFile(group.filePath);
+                              }}
+                              className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                            >
+                              <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                              <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
+                              <span className="truncate text-[10px] text-zinc-500">
+                                {getRelativePath(rootPath, group.filePath)}
+                              </span>
+                            </button>
+                            {group.matches.map((match) => (
+                              <button
+                                key={`${group.filePath}:${match.lineNumber}:${match.column}`}
+                                type="button"
+                                onClick={() => {
+                                  void openContentSearchMatch(match);
+                                }}
+                                className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
+                              >
+                                <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
+                                  {match.lineNumber}:{match.column}
+                                </span>
+                                <span className="min-w-0 flex-1 break-words">{match.lineText}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-zinc-500">{t('codePane.searchContentsEmpty')}</div>
+                    )
+                  ) : (
+                    <div className="text-xs text-zinc-500">{t('codePane.searchContentsHint')}</div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
