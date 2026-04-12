@@ -3,7 +3,7 @@
 这个目录承载 CodePane 语言插件市场的官方落地内容，分三部分：
 
 - `plugins/`: 可打包的插件源目录，每个插件目录都必须包含 `plugin.json`
-- `packages/`: 轻量级 zip 包，适合本地调试和 fallback catalog
+- `packages/`: 本地执行构建后生成的轻量 zip 产物，默认不提交仓库
 - `catalog.json`: 插件市场目录文件，应用默认会从 GitHub 上的这个路径拉取
 
 发布级、自带依赖的完整插件包会输出到：
@@ -24,7 +24,7 @@
 - 远端读取时，相对路径会自动解析成相对于远端 `catalog.json` 的 URL
 - 本地 fallback 读取时，相对路径会自动解析成相对于本地 `catalog.json` 的 `file://` 路径
 
-因此，仓库内保留的是便于开发的轻量内容；真正对外发布时，建议使用 `release/plugin-marketplace/` 下生成的完整产物。
+因此，仓库内保留的是插件源码和目录文件；真正对外发布时，建议使用 `release/plugin-marketplace/` 下生成的完整产物。
 
 ## 是否需要自己准备插件
 
@@ -43,9 +43,14 @@ Java 插件目标是支持 Java 8 及以上项目，但运行 JDTLS 本身仍需
 ## 更新市场内容
 
 1. 在 `plugin-marketplace/plugins/<plugin-id>/` 下准备插件目录
-2. 本地调试或更新 fallback catalog 时，运行 `npm run build:plugin-marketplace`
+2. 本地调试或需要本地 fallback 安装包时，运行 `npm run build:plugin-marketplace`
 3. 生成可发布的完整插件包时，运行 `npm run build:plugin-marketplace:release`
 4. 上传 `release/plugin-marketplace/packages/*.zip` 和 `release/plugin-marketplace/catalog.json`
+
+说明：
+
+- `npm run build:plugin-marketplace` 会在 `plugin-marketplace/packages/` 生成轻量 zip
+- 这些轻量 zip 默认被忽略，不再提交到仓库
 
 如果要让发布产物直接写入线上下载地址，可以在生成时设置：
 
