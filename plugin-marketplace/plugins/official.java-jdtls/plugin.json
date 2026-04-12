@@ -3,8 +3,8 @@
   "id": "official.java-jdtls",
   "name": "Java (JDTLS)",
   "publisher": "Copilot Terminal",
-  "version": "0.1.0",
-  "description": "Java language support powered by Eclipse JDT Language Server.",
+  "version": "0.2.1",
+  "description": "Java language support powered by Eclipse JDT Language Server for Java 8+ projects.",
   "homepage": "https://github.com/imsuperli/copilot-terminal",
   "license": "MIT",
   "categories": [
@@ -51,14 +51,8 @@
       "requirements": [
         {
           "type": "java",
-          "version": ">=17",
-          "message": "Install JDK 17+ and ensure java is available."
-        },
-        {
-          "type": "binary",
-          "command": "jdtls",
-          "envVar": "JDTLS_COMMAND",
-          "message": "Install a jdtls wrapper, or set jdtls.command in plugin settings."
+          "version": ">=21",
+          "message": "Set java.home to a local Java 21+ runtime directory, or provide Java 21+ via JAVA_HOME / PATH. JDTLS still supports Java 8+ projects."
         }
       ]
     }
@@ -67,23 +61,30 @@
     "jdtls.command": {
       "type": "string",
       "title": "Language server command",
-      "description": "Absolute path, command name, or a JDTLS jar path.",
+      "description": "Optional override for the bundled JDTLS. Accepts a wrapper command, executable path, or JDTLS launcher jar path.",
       "scope": "global",
       "placeholder": "jdtls"
+    },
+    "jdtls.jvmArgs": {
+      "type": "string",
+      "title": "JVM args",
+      "description": "Optional extra JVM arguments used when the plugin launches bundled or jar-based JDTLS with your local Java 21+ runtime.",
+      "scope": "global",
+      "placeholder": "-Xmx2G"
     },
     "jdtls.args": {
       "type": "string",
       "title": "Extra server args",
-      "description": "Optional extra command line arguments passed to the JDTLS process.",
+      "description": "Optional extra command line arguments passed to JDTLS after the default launch arguments.",
       "scope": "global",
       "placeholder": "-configuration /path/to/config"
     },
     "java.home": {
       "type": "string",
-      "title": "JAVA_HOME",
-      "description": "Optional JDK home path used when starting the Java runtime.",
+      "title": "Java 21+ Runtime Home",
+      "description": "Path to a local Java 21+ runtime directory used to start bundled JDTLS. Example: C:\\Program Files\\Java\\jdk-21 or /Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home.",
       "scope": "global",
-      "placeholder": "/path/to/jdk"
+      "placeholder": "/path/to/java-21-home"
     },
     "java.configuration.updateBuildConfiguration": {
       "type": "enum",

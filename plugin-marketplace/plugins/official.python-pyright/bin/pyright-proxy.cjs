@@ -5,29 +5,55 @@ const fs = require('fs');
 const path = require('path');
 
 const settings = readPluginSettings();
-const executablePath = resolveCommand([
-  settingString('python.command'),
-  process.env.PYRIGHT_LANGSERVER_PATH,
-  ...(process.platform === 'win32'
-    ? ['pyright-langserver.cmd', 'basedpyright-langserver.cmd']
-    : ['pyright-langserver', 'basedpyright-langserver']),
-]);
-
-if (!executablePath) {
-  process.stderr.write([
-    '[official.python-pyright] Unable to locate a Python language server.',
-    'Install pyright or basedpyright globally, or set python.command / PYRIGHT_LANGSERVER_PATH.',
-    '',
-  ].join('\n'));
-  process.exit(1);
-}
-
 const args = splitCommandArgs(settingString('python.serverArgs'));
 if (!args.includes('--stdio')) {
   args.push('--stdio');
 }
 
-const child = spawn(executablePath, args, {
+const pluginRoot = path.resolve(__dirname, '..');
+const configuredCommand = settingString('python.command') || process.env.PYRIGHT_LANGSERVER_PATH;
+const bundledEntryPath = path.join(pluginRoot, 'vendor', 'pyright', 'package', 'langserver.index.js');
+let command;
+let commandArgs;
+
+if (configuredCommand) {
+  const configuredExecutablePath = resolveCommand([configuredCommand]);
+  if (!configuredExecutablePath) {
+    process.stderr.write(`[official.python-pyright] Unable to resolve configured server command: ${configuredCommand}\n`);
+    process.exit(1);
+  }
+
+  if (/\.(?:cjs|mjs|js)$/i.test(configuredExecutablePath)) {
+    command = process.execPath;
+    commandArgs = [configuredExecutablePath, ...args];
+  } else {
+    command = configuredExecutablePath;
+    commandArgs = args;
+  }
+} else if (fs.existsSync(bundledEntryPath)) {
+  command = process.execPath;
+  commandArgs = [bundledEntryPath, ...args];
+} else {
+  const fallbackExecutablePath = resolveCommand(
+    process.platform === 'win32'
+      ? ['pyright-langserver.cmd', 'basedpyright-langserver.cmd']
+      : ['pyright-langserver', 'basedpyright-langserver'],
+  );
+
+  if (!fallbackExecutablePath) {
+    process.stderr.write([
+      '[official.python-pyright] Unable to locate a Python language server.',
+      'Install pyright or basedpyright globally, set python.command / PYRIGHT_LANGSERVER_PATH, or use a bundled release package.',
+      '',
+    ].join('\n'));
+    process.exit(1);
+  }
+
+  command = fallbackExecutablePath;
+  commandArgs = args;
+}
+
+const child = spawn(command, commandArgs, {
   cwd: process.env.COPILOT_TERMINAL_PROJECT_ROOT || process.cwd(),
   env: process.env,
   stdio: ['pipe', 'pipe', 'pipe'],
@@ -38,7 +64,7 @@ child.stdout.pipe(process.stdout);
 child.stderr.pipe(process.stderr);
 
 child.on('error', (error) => {
-  process.stderr.write(`[official.python-pyright] Failed to start ${executablePath}: ${error.message}\n`);
+  process.stderr.write(`[official.python-pyright] Failed to start ${command}: ${error.message}\n`);
   process.exit(1);
 });
 

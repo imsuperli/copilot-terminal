@@ -3,8 +3,8 @@
   "id": "official.python-pyright",
   "name": "Python (Pyright)",
   "publisher": "Copilot Terminal",
-  "version": "0.1.0",
-  "description": "Python language support powered by Pyright or BasedPyright.",
+  "version": "0.2.0",
+  "description": "Python language support powered by bundled Pyright release packages or external Pyright/BasedPyright binaries.",
   "homepage": "https://github.com/imsuperli/copilot-terminal",
   "license": "MIT",
   "categories": [
@@ -52,7 +52,8 @@
           "type": "binary",
           "command": "pyright-langserver",
           "envVar": "PYRIGHT_LANGSERVER_PATH",
-          "message": "Install pyright or basedpyright globally, or set python.command in plugin settings."
+          "optional": true,
+          "message": "Release packages include Pyright. Lightweight packages can install pyright or set python.command."
         }
       ]
     }
@@ -61,7 +62,7 @@
     "python.command": {
       "type": "string",
       "title": "Language server command",
-      "description": "Absolute path or command name. Defaults to pyright-langserver / basedpyright-langserver.",
+      "description": "Optional override for the bundled server. Accepts an absolute path or command name.",
       "scope": "global",
       "placeholder": "pyright-langserver"
     },

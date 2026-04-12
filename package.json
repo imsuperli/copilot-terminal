@@ -11,6 +11,7 @@
     "build": "npm run build:main && npm run build:renderer:typecheck && npm run build:statusline && vite build",
     "build:main": "tsc -p tsconfig.json",
     "build:plugin-marketplace": "node scripts/build-plugin-marketplace.mjs",
+    "build:plugin-marketplace:release": "node scripts/build-plugin-marketplace-release.mjs",
     "build:renderer:typecheck": "tsc -p tsconfig.renderer.json --noEmit",
     "build:statusline": "tsc -p src/statusline/tsconfig.json",
     "pack": "npm run build && electron-builder --dir",
