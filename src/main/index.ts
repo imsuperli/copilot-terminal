@@ -22,6 +22,10 @@ import { ChatProviderVaultService } from './services/chat/ChatProviderVaultServi
 import { CodeFileService } from './services/code/CodeFileService';
 import { CodeGitService } from './services/code/CodeGitService';
 import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
+import { PluginCatalogService } from './services/plugins/PluginCatalogService';
+import { PluginInstallerService } from './services/plugins/PluginInstallerService';
+import { PluginManager } from './services/plugins/PluginManager';
+import { PluginRegistryStore } from './services/plugins/PluginRegistryStore';
 import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 import { isTerminalPane } from '../shared/utils/terminalCapabilities';
@@ -52,6 +56,7 @@ let sshHostKeyPromptService: ElectronSSHHostKeyPromptService | null = null;
 let codeFileService: CodeFileService | null = null;
 let codeGitService: CodeGitService | null = null;
 let codePaneWatcherService: CodePaneWatcherService | null = null;
+let pluginManager: PluginManager | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 const forwardPtyData = createPtyDataForwarder(() => mainWindow);
 
@@ -524,6 +529,23 @@ app.whenReady().then(async () => {
   codeFileService = new CodeFileService();
   codeGitService = new CodeGitService();
   codePaneWatcherService = new CodePaneWatcherService(() => mainWindow);
+  const pluginDataPath = path.join(app.getPath('userData'), 'plugins');
+  const pluginRegistryStore = new PluginRegistryStore({
+    filePath: path.join(pluginDataPath, 'registry.json'),
+  });
+  const pluginCatalogService = new PluginCatalogService({
+    cachePath: path.join(pluginDataPath, 'catalog-cache.json'),
+    fallbackCatalogPath: path.join(process.cwd(), 'plugin-marketplace', 'catalog.json'),
+  });
+  const pluginInstallerService = new PluginInstallerService({
+    baseDir: pluginDataPath,
+    registryStore: pluginRegistryStore,
+  });
+  pluginManager = new PluginManager({
+    registryStore: pluginRegistryStore,
+    catalogService: pluginCatalogService,
+    installerService: pluginInstallerService,
+  });
 
   // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
   initProjectConfigWatcher(fileWatcherService);
@@ -595,6 +617,7 @@ app.whenReady().then(async () => {
     codeFileService,
     codeGitService,
     codePaneWatcherService,
+    pluginManager,
     currentWorkspace,
     getMainWindow: () => mainWindow,
     getCurrentWorkspace: () => currentWorkspace,

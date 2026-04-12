@@ -119,6 +119,29 @@ export function registerFileHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('select-plugin-package', async () => {
+    try {
+      if (!mainWindow) throw new Error('Main window not available');
+
+      const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openFile', 'openDirectory'],
+        title: '选择插件包',
+        filters: [
+          { name: 'Plugin Packages', extensions: ['zip'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return successResponse(null);
+      }
+
+      return successResponse(result.filePaths[0]);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('open-folder', async (_event, { path }: { path: string }) => {
     try {
       await shell.openPath(path);

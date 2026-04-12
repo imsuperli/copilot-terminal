@@ -14,6 +14,7 @@ import { ChatProviderVaultService } from '../services/chat/ChatProviderVaultServ
 import { CodeFileService } from '../services/code/CodeFileService';
 import { CodeGitService } from '../services/code/CodeGitService';
 import { CodePaneWatcherService } from '../services/code/CodePaneWatcherService';
+import { PluginManager } from '../services/plugins/PluginManager';
 import { Workspace } from '../types/workspace';
 
 /**
@@ -37,6 +38,7 @@ export interface HandlerContext {
   codeFileService?: CodeFileService | null;
   codeGitService?: CodeGitService | null;
   codePaneWatcherService?: CodePaneWatcherService | null;
+  pluginManager?: PluginManager | null;
   currentWorkspace: Workspace | null;
   getMainWindow?: () => BrowserWindow | null;
   getCurrentWorkspace: () => Workspace | null;

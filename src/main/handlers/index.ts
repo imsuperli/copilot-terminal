@@ -14,6 +14,7 @@ import { registerSSHProfileHandlers } from './sshProfileHandlers';
 import { registerSSHSessionHandlers } from './sshSessionHandlers';
 import { registerCodePaneHandlers } from './codePaneHandlers';
 import { registerChatHandlers } from './chatHandlers';
+import { registerPluginHandlers } from './pluginHandlers';
 
 /**
  * 注册所有 IPC handlers
@@ -47,6 +48,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // 设置管理 (get-settings, update-settings, scan-ides, etc.)
   registerSettingsHandlers(ctx);
+
+  // 插件管理
+  registerPluginHandlers(ctx);
 
   // SSH 资产与凭据管理
   registerSSHProfileHandlers(ctx);
