@@ -248,10 +248,22 @@ describe('AgentTask', () => {
       status: 'pending',
     };
     const runCommand = vi.fn();
-    const runSilentCommand = vi.fn().mockResolvedValue({
-      stdout: 'Linux localhost 5.15.0\n',
-      stderr: '',
-      exitCode: 1,
+    const cancel = vi.fn();
+    const runSilentCommand = vi.fn().mockImplementation(async (request: {
+      callbacks?: {
+        onStdout?: (chunk: string) => void;
+        onStderr?: (chunk: string) => void;
+      };
+    }) => {
+      request.callbacks?.onStdout?.('Linux localhost 5.15.0\n');
+      return {
+        cancel,
+        result: Promise.resolve({
+          stdout: 'Linux localhost 5.15.0\n',
+          stderr: '',
+          exitCode: 1,
+        }),
+      };
     });
     const deps = createDeps({
       remoteTerminalManager: {
@@ -277,11 +289,12 @@ describe('AgentTask', () => {
     await flush();
 
     expect(runCommand).not.toHaveBeenCalled();
-    expect(runSilentCommand).toHaveBeenCalledWith({
+    expect(runSilentCommand).toHaveBeenCalledWith(expect.objectContaining({
       windowId: 'win-1',
       paneId: 'ssh-pane-1',
       command: 'uname -a && cat /etc/os-release',
-    });
+      callbacks: expect.any(Object),
+    }));
     expect(task.getSnapshot().status).toBe('completed');
     expect(task.getSnapshot().timeline.some((event) => (
       event.kind === 'command'
@@ -289,10 +302,15 @@ describe('AgentTask', () => {
       && event.exitCode === 1
     ))).toBe(true);
     expect(task.getSnapshot().timeline.some((event) => (
+      event.kind === 'command-output'
+      && event.content.includes('Linux localhost 5.15.0')
+    ))).toBe(true);
+    expect(task.getSnapshot().timeline.some((event) => (
       event.kind === 'tool-call'
       && event.toolCall.id === 'tool-silent'
       && event.toolCall.status === 'completed'
     ))).toBe(true);
+    expect(cancel).not.toHaveBeenCalled();
   });
 
   it('sanitizes in-flight restored snapshots into a cancelled, non-interactive state', () => {

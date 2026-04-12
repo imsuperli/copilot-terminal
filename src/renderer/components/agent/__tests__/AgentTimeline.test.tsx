@@ -139,5 +139,6 @@ describe('AgentTimeline', () => {
     expect(screen.getByText('Linux localhost')).toBeInTheDocument();
     expect(screen.getByText('192.168.3.25')).toBeInTheDocument();
     expect(screen.getByText('exit 0')).toBeInTheDocument();
+    expect(screen.getAllByText('uname -a')).toHaveLength(1);
   });
 });

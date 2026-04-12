@@ -109,6 +109,16 @@ export interface SSHExecCommandResult {
   exitCode: number;
 }
 
+export interface SSHExecCommandCallbacks {
+  onStdout?: (chunk: string) => void;
+  onStderr?: (chunk: string) => void;
+}
+
+export interface SSHExecCommandHandle {
+  result: Promise<SSHExecCommandResult>;
+  cancel: () => void;
+}
+
 // ProcessManager 接口
 export interface IProcessManager {
   spawnTerminal(config: TerminalConfig): Promise<ProcessHandle>;
@@ -128,6 +138,12 @@ export interface IProcessManager {
   deleteSSHSftpEntry(windowId: string, paneId: string, remotePath: string): Promise<void>;
   /** 通过已有 SSH 会话执行非交互式命令，返回 stdout */
   execSSHCommand(windowId: string, paneId: string, command: string): Promise<string>;
+  execSSHCommandDetailedStreaming(
+    windowId: string,
+    paneId: string,
+    command: string,
+    callbacks?: SSHExecCommandCallbacks,
+  ): Promise<SSHExecCommandHandle>;
   listProcesses(): ProcessInfo[];
   getPaneStatus(windowId: string, paneId: string): Promise<import('../../renderer/types/window').WindowStatus>;
   subscribeStatusChange(callback: (pid: number, status: import('../../renderer/types/window').WindowStatus) => void): void;

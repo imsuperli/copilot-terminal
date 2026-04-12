@@ -13,7 +13,12 @@ import type {
   SSHSessionMetrics,
 } from '../../../shared/types/ssh';
 import { SSH_AUTH_FAILED_ERROR_CODE } from '../../../shared/types/electron-api';
-import type { SSHExecCommandResult, SSHSessionConfig } from '../../types/process';
+import type {
+  SSHExecCommandCallbacks,
+  SSHExecCommandHandle,
+  SSHExecCommandResult,
+  SSHSessionConfig,
+} from '../../types/process';
 import type { ISSHKnownHostsStore } from './SSHKnownHostsStore';
 import type {
   ISSHHostKeyPromptService,
@@ -68,6 +73,10 @@ export interface ISSHConnection {
   /** 在远程执行非交互式命令，返回 stdout；非零退出码会 reject */
   execCommand(command: string): Promise<string>;
   execCommandResult(command: string): Promise<SSHExecCommandResult>;
+  execCommandStream(
+    command: string,
+    callbacks?: SSHExecCommandCallbacks,
+  ): Promise<SSHExecCommandHandle>;
   close(): Promise<void>;
   isClosed(): boolean;
 }
@@ -616,9 +625,17 @@ export class SSHClientConnection implements ISSHConnection {
   }
 
   async execCommandResult(command: string): Promise<SSHExecCommandResult> {
+    const handle = await this.execCommandStream(command);
+    return handle.result;
+  }
+
+  async execCommandStream(
+    command: string,
+    callbacks?: SSHExecCommandCallbacks,
+  ): Promise<SSHExecCommandHandle> {
     await this.connect();
 
-    return new Promise<SSHExecCommandResult>((resolve, reject) => {
+    return new Promise<SSHExecCommandHandle>((resolve, reject) => {
       this.client.exec(command, (error, channel) => {
         if (error) {
           reject(error);
@@ -628,25 +645,72 @@ export class SSHClientConnection implements ISSHConnection {
         let stdout = '';
         let stderr = '';
         let exitCode: number | null = null;
+        let settled = false;
+        let cancelled = false;
 
-        channel.on('data', (chunk: Buffer | string) => {
-          stdout += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-        });
-        channel.stderr?.on('data', (chunk: Buffer | string) => {
-          stderr += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-        });
-        channel.on('exit', (code?: number) => {
-          exitCode = typeof code === 'number' ? code : 0;
-        });
-        channel.on('close', () => {
-          resolve({
-            stdout,
-            stderr,
-            exitCode: exitCode ?? 0,
+        const result = new Promise<SSHExecCommandResult>((resolveResult, rejectResult) => {
+          channel.on('data', (chunk: Buffer | string) => {
+            const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+            stdout += text;
+            callbacks?.onStdout?.(text);
+          });
+          channel.stderr?.on('data', (chunk: Buffer | string) => {
+            const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8');
+            stderr += text;
+            callbacks?.onStderr?.(text);
+          });
+          channel.on('exit', (code?: number) => {
+            exitCode = typeof code === 'number' ? code : (cancelled ? 130 : 0);
+          });
+          channel.on('close', () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            resolveResult({
+              stdout,
+              stderr,
+              exitCode: exitCode ?? (cancelled ? 130 : 0),
+            });
+          });
+          channel.on('error', (channelError: Error) => {
+            if (settled) {
+              return;
+            }
+            if (cancelled) {
+              return;
+            }
+            settled = true;
+            rejectResult(channelError);
           });
         });
-        channel.on('error', (channelError: Error) => {
-          reject(channelError);
+
+        resolve({
+          result,
+          cancel: () => {
+            if (settled) {
+              return;
+            }
+
+            cancelled = true;
+            try {
+              if (typeof channel.signal === 'function') {
+                channel.signal('TERM');
+              }
+            } catch {
+              // Ignore remote signal delivery failures during cancellation.
+            }
+            try {
+              channel.end();
+            } catch {
+              // Ignore close failures during cancellation.
+            }
+            try {
+              (channel as ClientChannel & { close?: () => void }).close?.();
+            } catch {
+              // Ignore close failures during cancellation.
+            }
+          },
         });
       });
     });

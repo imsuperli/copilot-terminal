@@ -6,6 +6,8 @@ import * as path from 'path';
 import { randomUUID } from 'crypto';
 import {
   IProcessManager,
+  SSHExecCommandCallbacks,
+  SSHExecCommandHandle,
   SSHSessionConfig,
   TerminalConfig,
   ProcessHandle,
@@ -559,6 +561,51 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
       stderrPreview: previewText(result.stderr, 240),
     });
     return result;
+  }
+
+  async execSSHCommandDetailedStreaming(
+    windowId: string,
+    paneId: string,
+    command: string,
+    callbacks?: SSHExecCommandCallbacks,
+  ): Promise<SSHExecCommandHandle> {
+    chatDebugInfo('ProcessManager.execSSHCommandDetailedStreaming', 'Executing SSH command', {
+      windowId,
+      paneId,
+      commandPreview: previewText(command, 240),
+    });
+
+    const pid = this.getPidByPane(windowId, paneId);
+    if (pid === null) {
+      throw new Error(`Pane not found: ${windowId}/${paneId}`);
+    }
+
+    const ptySession = this.ptys.get(pid);
+    if (!ptySession || !isSSHExecStreamSession(ptySession)) {
+      throw new Error(`SSH session not found for pane: ${windowId}/${paneId}`);
+    }
+
+    const handle = await ptySession.execCommandStream(command, callbacks);
+    void handle.result.then((result) => {
+      chatDebugInfo('ProcessManager.execSSHCommandDetailedStreaming', 'SSH command completed', {
+        windowId,
+        paneId,
+        exitCode: result.exitCode,
+        stdoutLength: result.stdout.length,
+        stderrLength: result.stderr.length,
+        stdoutPreview: previewText(result.stdout, 240),
+        stderrPreview: previewText(result.stderr, 240),
+      });
+    }).catch((error) => {
+      chatDebugError('ProcessManager.execSSHCommandDetailedStreaming', 'SSH command failed', {
+        windowId,
+        paneId,
+        commandPreview: previewText(command, 240),
+        error,
+      });
+    });
+
+    return handle;
   }
 
   /**
@@ -1690,5 +1737,18 @@ function isSSHExecDetailedSession(value: unknown): value is {
     value
     && typeof value === 'object'
     && typeof (value as { execCommandResult?: unknown }).execCommandResult === 'function'
+  );
+}
+
+function isSSHExecStreamSession(value: unknown): value is {
+  execCommandStream(
+    command: string,
+    callbacks?: import('../types/process').SSHExecCommandCallbacks,
+  ): Promise<import('../types/process').SSHExecCommandHandle>;
+} {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && typeof (value as { execCommandStream?: unknown }).execCommandStream === 'function'
   );
 }

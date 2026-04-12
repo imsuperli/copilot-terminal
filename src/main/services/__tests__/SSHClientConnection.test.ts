@@ -162,6 +162,47 @@ describe('SSHClientConnection', () => {
       ipcErrorCode: SSH_AUTH_FAILED_ERROR_CODE,
     });
   });
+
+  it('streams exec stdout and stderr before resolving the final result', async () => {
+    const channel = new EventEmitter() as EventEmitter & {
+      stderr?: EventEmitter;
+      end: ReturnType<typeof vi.fn>;
+      signal: ReturnType<typeof vi.fn>;
+      close?: ReturnType<typeof vi.fn>;
+    };
+    channel.stderr = new EventEmitter();
+    channel.end = vi.fn();
+    channel.signal = vi.fn();
+    channel.close = vi.fn();
+
+    const exec = vi.fn((command: string, callback: (error?: Error, channel?: unknown) => void) => {
+      expect(command).toBe('uname -a');
+      callback(undefined, channel);
+    });
+    const connection = new SSHClientConnection(createSSHConfig());
+    (connection as any).ready = true;
+    (connection as any).client = { exec };
+
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+    const handle = await connection.execCommandStream('uname -a', {
+      onStdout: (chunk) => stdoutChunks.push(chunk),
+      onStderr: (chunk) => stderrChunks.push(chunk),
+    });
+
+    channel.emit('data', Buffer.from('Linux'));
+    channel.stderr?.emit('data', Buffer.from(' warning'));
+    channel.emit('exit', 3);
+    channel.emit('close');
+
+    await expect(handle.result).resolves.toEqual({
+      stdout: 'Linux',
+      stderr: ' warning',
+      exitCode: 3,
+    });
+    expect(stdoutChunks).toEqual(['Linux']);
+    expect(stderrChunks).toEqual([' warning']);
+  });
 });
 
 class FakeSSHClient extends EventEmitter {

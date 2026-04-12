@@ -1,6 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { ProcessManager } from '../../../services/ProcessManager';
-import type { SSHExecCommandResult } from '../../../types/process';
+import type {
+  SSHExecCommandCallbacks,
+  SSHExecCommandHandle,
+} from '../../../types/process';
 import { InteractionDetector, type InteractionRequest } from '../../services/interaction-detector';
 import {
   runMarkerBasedCommand,
@@ -34,6 +37,7 @@ export interface SilentRemoteCommandRequest {
   windowId: string;
   paneId: string;
   command: string;
+  callbacks?: SSHExecCommandCallbacks;
 }
 
 export class RemoteTerminalManager {
@@ -87,7 +91,12 @@ export class RemoteTerminalManager {
     };
   }
 
-  async runSilentCommand(request: SilentRemoteCommandRequest): Promise<SSHExecCommandResult> {
-    return this.processManager.execSSHCommandDetailed(request.windowId, request.paneId, request.command);
+  async runSilentCommand(request: SilentRemoteCommandRequest): Promise<SSHExecCommandHandle> {
+    return this.processManager.execSSHCommandDetailedStreaming(
+      request.windowId,
+      request.paneId,
+      request.command,
+      request.callbacks,
+    );
   }
 }

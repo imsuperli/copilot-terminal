@@ -108,6 +108,7 @@ export class AgentTask {
   private runPromise: Promise<void> | null = null;
   private abortController: AbortController | null = null;
   private activeRemoteCommand: RemoteCommandHandle | null = null;
+  private activeSilentCommandCancel: (() => void) | null = null;
   private activeToolCall: ToolCall | null = null;
   private pendingApprovalResolver: ((resolution: ApprovalResolution) => void) | null = null;
   private pendingInteractionBridge:
@@ -270,6 +271,7 @@ export class AgentTask {
     this.isCancelled = true;
     this.abortController?.abort();
     this.activeRemoteCommand?.cancel();
+    this.activeSilentCommandCancel?.();
     this.clearPendingApproval('Task cancelled while awaiting approval.', 'cancelled');
     this.clearPendingInteraction(true);
     this.markToolCallCancelled(this.activeToolCall, 'Task cancelled before the tool call completed.');
@@ -728,13 +730,54 @@ export class AgentTask {
     };
     this.appendEvent(commandEvent);
 
-    let result;
+    let handle;
     try {
-      result = await this.deps.remoteTerminalManager.runSilentCommand({
+      handle = await this.deps.remoteTerminalManager.runSilentCommand({
         windowId: this.snapshot.sshContext.windowId,
         paneId: this.snapshot.sshContext.paneId,
         command,
+        callbacks: {
+          onStdout: (chunk) => {
+            const sanitized = stripTerminalControlSequences(chunk);
+            if (!sanitized) {
+              return;
+            }
+
+            this.commandOutputSeq += 1;
+            this.appendEvent({
+              id: `command-output-${toolCall.id}-${this.commandOutputSeq}`,
+              taskId: this.snapshot.taskId,
+              paneId: this.snapshot.paneId,
+              timestamp: new Date().toISOString(),
+              kind: 'command-output',
+              status: 'completed',
+              commandId: commandEventId,
+              stream: 'stdout',
+              content: sanitized,
+            });
+          },
+          onStderr: (chunk) => {
+            const sanitized = stripTerminalControlSequences(chunk);
+            if (!sanitized) {
+              return;
+            }
+
+            this.commandOutputSeq += 1;
+            this.appendEvent({
+              id: `command-output-${toolCall.id}-${this.commandOutputSeq}`,
+              taskId: this.snapshot.taskId,
+              paneId: this.snapshot.paneId,
+              timestamp: new Date().toISOString(),
+              kind: 'command-output',
+              status: 'completed',
+              commandId: commandEventId,
+              stream: 'stderr',
+              content: sanitized,
+            });
+          },
+        },
       });
+      this.activeSilentCommandCancel = handle.cancel;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.appendEvent({
@@ -748,6 +791,15 @@ export class AgentTask {
       };
     }
 
+    let result;
+    try {
+      result = await handle.result;
+    } finally {
+      if (this.activeSilentCommandCancel === handle.cancel) {
+        this.activeSilentCommandCancel = null;
+      }
+    }
+
     const stdout = stripTerminalControlSequences(result.stdout).trimEnd();
     const stderr = stripTerminalControlSequences(result.stderr).trimEnd();
     const sections = [
@@ -756,21 +808,6 @@ export class AgentTask {
       result.exitCode !== 0 ? `[exit code: ${result.exitCode}]` : '',
     ].filter(Boolean);
     const mergedOutput = sections.join('\n\n');
-
-    if (mergedOutput) {
-      this.commandOutputSeq += 1;
-      this.appendEvent({
-        id: `command-output-${toolCall.id}-${this.commandOutputSeq}`,
-        taskId: this.snapshot.taskId,
-        paneId: this.snapshot.paneId,
-        timestamp: new Date().toISOString(),
-        kind: 'command-output',
-        status: 'completed',
-        commandId: commandEventId,
-        stream: stderr ? 'stderr' : 'stdout',
-        content: mergedOutput,
-      });
-    }
 
     this.appendEvent({
       ...commandEvent,
@@ -838,6 +875,7 @@ export class AgentTask {
     this.isCancelled = false;
     this.abortController = null;
     this.activeRemoteCommand = null;
+    this.activeSilentCommandCancel = null;
     this.activeToolCall = null;
     this.pendingApprovalResolver = null;
     this.pendingInteractionBridge = null;
