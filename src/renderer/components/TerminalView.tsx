@@ -555,6 +555,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     return fallbackLocalTerminalPane?.cwd ?? null;
   }, [activePane, activeTerminalPane, panes]);
+  const codePaneRootPath = resolveCodePaneRootPath();
+  const codePaneTerminalPanes = panes.filter((pane) => isTerminalPane(pane));
+  const isSshOnlyWindow = codePaneTerminalPanes.length > 0
+    && codePaneTerminalPanes.every((pane) => pane.backend === 'ssh');
 
   const handleSplitCodePane = useCallback(() => {
     const activePaneId = terminalWindow.activePaneId;
@@ -562,8 +566,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-    const rootPath = resolveCodePaneRootPath();
-    if (!rootPath) {
+    if (!codePaneRootPath) {
       return;
     }
 
@@ -572,13 +575,13 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const newPaneId = uuidv4();
     const newPane = createCodePaneDraft(
       newPaneId,
-      rootPath,
+      codePaneRootPath,
       sourcePane && isCodePane(sourcePane)
         ? {
           openFiles: sourcePane.code?.openFiles ?? [],
           activeFilePath: sourcePane.code?.activeFilePath ?? null,
           selectedPath: sourcePane.code?.selectedPath ?? null,
-          expandedPaths: sourcePane.code?.expandedPaths ?? [sourcePane.code?.rootPath ?? rootPath],
+          expandedPaths: sourcePane.code?.expandedPaths ?? [sourcePane.code?.rootPath ?? codePaneRootPath],
           viewMode: sourcePane.code?.viewMode ?? 'editor',
           diffTargetPath: sourcePane.code?.diffTargetPath ?? null,
         }
@@ -588,7 +591,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
     setActivePane(terminalWindow.id, newPaneId);
-  }, [resolveCodePaneRootPath, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
+  }, [codePaneRootPath, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
 
   const handleSplitChatPane = useCallback(() => {
     const activePaneId = terminalWindow.activePaneId;
@@ -1227,19 +1230,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </button>
             </AppTooltip>
 
-            <AppTooltip content={t('terminalView.splitCode')} placement="toolbar-trailing">
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label={t('terminalView.splitCode')}
-                onMouseDown={preventMouseButtonFocus}
-                onClick={handleSplitCodePane}
-                disabled={!resolveCodePaneRootPath()}
-                className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <SplitCodeIcon />
-              </button>
-            </AppTooltip>
+            {!isSshOnlyWindow && (
+              <AppTooltip content={t('terminalView.splitCode')} placement="toolbar-trailing">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={t('terminalView.splitCode')}
+                  onMouseDown={preventMouseButtonFocus}
+                  onClick={handleSplitCodePane}
+                  disabled={!codePaneRootPath}
+                  className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <SplitCodeIcon />
+                </button>
+              </AppTooltip>
+            )}
 
             <AppTooltip content={t('terminalView.splitChat')} placement="toolbar-trailing">
               <button

@@ -395,6 +395,27 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [refreshProblems]);
 
+  const ensureMonacoReady = useCallback(async (): Promise<MonacoModule | null> => {
+    if (!supportsMonaco) {
+      return null;
+    }
+
+    try {
+      const monaco = monacoRef.current ?? await ensureMonacoEnvironment();
+      monacoRef.current = monaco;
+      ensureMarkerListener(monaco);
+      return monaco;
+    } catch (error) {
+      setBanner((currentBanner) => (
+        currentBanner ?? {
+          tone: 'error',
+          message: error instanceof Error ? error.message : t('common.retry'),
+        }
+      ));
+      return null;
+    }
+  }, [ensureMarkerListener, supportsMonaco, t]);
+
   const applyPendingNavigation = useCallback((editorInstance: MonacoEditor | null, filePath: string) => {
     const pendingNavigation = pendingNavigationRef.current;
     if (!editorInstance || !pendingNavigation || pendingNavigation.filePath !== filePath) {
@@ -576,7 +597,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const loadFileIntoModel = useCallback(async (filePath: string) => {
     if (!monacoRef.current && supportsMonaco) {
-      monacoRef.current = await ensureMonacoEnvironment();
+      const monaco = await ensureMonacoReady();
+      if (!monaco) {
+        return null;
+      }
     }
 
     const response = await window.electronAPI.codePaneReadFile({
@@ -608,7 +632,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     return createOrUpdateModel(filePath, response.data);
-  }, [createOrUpdateModel, rootPath, supportsMonaco, t]);
+  }, [createOrUpdateModel, ensureMonacoReady, rootPath, supportsMonaco, t]);
 
   const refreshEditorSurface = useCallback(async () => {
     const hostElement = editorHostRef.current;
@@ -616,8 +640,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    const monaco = await ensureMonacoEnvironment();
-    monacoRef.current = monaco;
+    const monaco = await ensureMonacoReady();
+    if (!monaco) {
+      disposeEditors();
+      return;
+    }
+
     const currentActiveFilePath = activeFilePathRef.current;
     const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
 
@@ -719,7 +747,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isActive) {
       editorRef.current.focus();
     }
-  }, [applyPendingNavigation, disposeEditors, isActive, saveCurrentViewState, viewMode]);
+  }, [applyPendingNavigation, disposeEditors, ensureMonacoReady, isActive, saveCurrentViewState, viewMode]);
 
   const reloadFileFromDisk = useCallback(async (filePath: string) => {
     const response = await window.electronAPI.codePaneReadFile({
@@ -843,7 +871,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     },
   ) => {
     if (!monacoRef.current && supportsMonaco) {
-      monacoRef.current = await ensureMonacoEnvironment();
+      const monaco = await ensureMonacoReady();
+      if (!monaco) {
+        if (options?.showBanner !== false) {
+          setBanner({
+            tone: 'info',
+            message: t('codePane.gitUnavailable'),
+            filePath,
+          });
+        }
+        return false;
+      }
     }
 
     const baseFilePath = options?.baseFilePath ?? filePath;
@@ -907,7 +945,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     clearBannerForFile(filePath);
     return true;
-  }, [clearBannerForFile, gitStatusByPath, rootPath, supportsMonaco, t]);
+  }, [clearBannerForFile, ensureMonacoReady, gitStatusByPath, rootPath, supportsMonaco, t]);
 
   const openDiffForFile = useCallback(async (filePath: string, options?: { preserveTabs?: boolean }) => {
     const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
@@ -1095,13 +1133,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       try {
         if (supportsMonaco) {
-          monacoRef.current = await ensureMonacoEnvironment();
-          if (monacoRef.current) {
-            ensureMarkerListener(monacoRef.current);
-          }
-          if (!mounted) {
-            return;
-          }
+          void ensureMonacoEnvironment()
+            .then((monaco) => {
+              if (!mounted) {
+                return;
+              }
+
+              monacoRef.current = monaco;
+              ensureMarkerListener(monaco);
+            })
+            .catch(() => {});
         }
 
         await Promise.all([

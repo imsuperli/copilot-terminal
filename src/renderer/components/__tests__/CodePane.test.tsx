@@ -358,6 +358,22 @@ describe('CodePane', () => {
     expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
   });
 
+  it('loads the file tree before Monaco finishes bootstrapping', async () => {
+    let resolveMonaco: ((value: typeof fakeMonaco) => void) | null = null;
+    hoisted.ensureMonacoEnvironmentMock.mockImplementation(() => new Promise((resolve) => {
+      resolveMonaco = resolve as (value: typeof fakeMonaco) => void;
+    }));
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByRole('button', { name: 'index.ts' })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveMonaco?.(fakeMonaco);
+      await Promise.resolve();
+    });
+  });
+
   it('persists expanded directories in pane state', async () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
       if (targetPath === '/workspace/project/src') {

@@ -223,6 +223,54 @@ function createTerminalWithTwoBrowsersWindow(): Window {
   };
 }
 
+function createTerminalWithCodePaneWindow(): Window {
+  return {
+    id: 'win-mixed-code-only-after-close',
+    name: 'Terminal With Code Pane',
+    activePaneId: 'pane-local-1',
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    layout: {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.5, 0.5],
+      children: [
+        {
+          type: 'pane',
+          id: 'pane-local-1',
+          pane: {
+            id: 'pane-local-1',
+            cwd: '/workspace/project',
+            command: 'bash',
+            status: WindowStatus.Running,
+            pid: 101,
+          },
+        },
+        {
+          type: 'pane',
+          id: 'code-1',
+          pane: {
+            id: 'code-1',
+            kind: 'code',
+            cwd: '/workspace/project',
+            command: '',
+            status: WindowStatus.Paused,
+            pid: null,
+            code: {
+              rootPath: '/workspace/project',
+              openFiles: [],
+              activeFilePath: null,
+              selectedPath: null,
+              viewMode: 'editor',
+              diffTargetPath: null,
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
 describe('TerminalView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -301,6 +349,7 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'terminalView.showSshMonitor' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.managePortForwards' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'terminalView.openFolder' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'terminalView.splitCode' })).not.toBeInTheDocument();
   });
 
   it('shows the window identity logo when the active pane is a browser pane', () => {
@@ -316,6 +365,19 @@ describe('TerminalView', () => {
     expect(screen.getByTestId('toolbar-window-identity')).toBeInTheDocument();
   });
 
+  it('keeps the code pane action disabled when no local project root is available', () => {
+    render(
+      <TerminalView
+        window={createBrowserOnlyWindow('local')}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'terminalView.splitCode' })).toBeDisabled();
+  });
+
   it('does not close a terminal pane when that would leave only browser panes', () => {
     const windowWithBrowsers = createTerminalWithTwoBrowsersWindow();
     useWindowStore.setState({
@@ -329,6 +391,30 @@ describe('TerminalView', () => {
     render(
       <TerminalView
         window={windowWithBrowsers}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'close-active-pane' }));
+
+    expect(window.electronAPI.closePane).not.toHaveBeenCalled();
+  });
+
+  it('does not close a terminal pane when that would leave only code panes', () => {
+    const windowWithCodePane = createTerminalWithCodePaneWindow();
+    useWindowStore.setState({
+      windows: [windowWithCodePane],
+      activeWindowId: windowWithCodePane.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={windowWithCodePane}
         onReturn={vi.fn()}
         onWindowSwitch={vi.fn()}
         isActive
@@ -370,6 +456,37 @@ describe('TerminalView', () => {
     expect(chatPane).toBeDefined();
     expect(chatPane?.chat?.linkedPaneId).toBe(linkedPaneId);
     expect(updatedWindow?.activePaneId).toBe(chatPane?.id);
+  });
+
+  it('creates a code pane from the active local terminal cwd', () => {
+    const localWindow = createLocalWindow();
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={localWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'terminalView.splitCode' }));
+
+    const updatedWindow = useWindowStore.getState().getWindowById(localWindow.id);
+    expect(updatedWindow).toBeDefined();
+
+    const panes = getAllPanes(updatedWindow!.layout);
+    const codePane = panes.find((pane) => pane.kind === 'code');
+    expect(codePane).toBeDefined();
+    expect(codePane?.code?.rootPath).toBe('/workspace/project');
+    expect(updatedWindow?.activePaneId).toBe(codePane?.id);
   });
 
   it('prevents mouse focus on toolbar action buttons', () => {
