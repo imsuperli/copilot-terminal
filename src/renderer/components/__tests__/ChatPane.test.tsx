@@ -7,26 +7,42 @@ import { ChatPane } from '../ChatPane';
 import { useWindowStore } from '../../stores/windowStore';
 import { WindowStatus } from '../../types/window';
 import { notifyWorkspaceSettingsUpdated } from '../../utils/settingsEvents';
-import type {
-  ChatStreamChunkPayload,
-  ChatStreamDonePayload,
-  ChatToolApprovalRequestPayload,
-  ChatToolResultPayload,
-} from '../../../shared/types/chat';
+import type { AgentTaskSnapshot, AgentTaskStatePayload } from '../../../shared/types/agent';
 
-type ListenerMap = {
-  chunk: Set<(event: unknown, payload: ChatStreamChunkPayload) => void>;
-  done: Set<(event: unknown, payload: ChatStreamDonePayload) => void>;
-  approval: Set<(event: unknown, payload: ChatToolApprovalRequestPayload) => void>;
-  result: Set<(event: unknown, payload: ChatToolResultPayload) => void>;
+type AgentListenerMap = {
+  state: Set<(event: unknown, payload: AgentTaskStatePayload) => void>;
+  error: Set<(event: unknown, payload: { paneId: string; error: string }) => void>;
 };
 
-function createListenerMap(): ListenerMap {
+function createListenerMap(): AgentListenerMap {
   return {
-    chunk: new Set(),
-    done: new Set(),
-    approval: new Set(),
-    result: new Set(),
+    state: new Set(),
+    error: new Set(),
+  };
+}
+
+function createAgentSnapshot(overrides?: Partial<AgentTaskSnapshot>): AgentTaskSnapshot {
+  return {
+    taskId: 'task-1',
+    paneId: 'chat-pane-1',
+    windowId: 'win-1',
+    status: 'running',
+    providerId: 'provider-1',
+    model: 'claude-sonnet-4-5',
+    linkedPaneId: 'ssh-pane-1',
+    sshContext: {
+      host: '10.0.0.20',
+      user: 'root',
+      cwd: '/srv/app',
+      windowId: 'win-1',
+      paneId: 'ssh-pane-1',
+    },
+    timeline: [],
+    messages: [],
+    offloadRefs: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides,
   };
 }
 
@@ -69,7 +85,7 @@ describe('ChatPane', () => {
     });
   });
 
-  it('sends messages with linked SSH context and completes tool approval flow', async () => {
+  it('sends messages with linked SSH context and handles approval/interactions through the agent timeline', async () => {
     const user = userEvent.setup();
     const listeners = createListenerMap();
 
@@ -94,35 +110,28 @@ describe('ChatPane', () => {
         },
       } as any,
     });
-    vi.mocked(window.electronAPI.chatSend).mockResolvedValue({
+    vi.mocked(window.electronAPI.agentSend).mockResolvedValue({
       success: true,
       data: {
-        messageId: 'assistant-1',
+        taskId: 'task-1',
+        status: 'running',
       },
     });
-    vi.mocked(window.electronAPI.onChatStreamChunk).mockImplementation((callback) => {
-      listeners.chunk.add(callback as (event: unknown, payload: ChatStreamChunkPayload) => void);
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
     });
-    vi.mocked(window.electronAPI.offChatStreamChunk).mockImplementation((callback) => {
-      listeners.chunk.delete(callback as (event: unknown, payload: ChatStreamChunkPayload) => void);
+    vi.mocked(window.electronAPI.onAgentTaskState).mockImplementation((callback) => {
+      listeners.state.add(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
     });
-    vi.mocked(window.electronAPI.onChatStreamDone).mockImplementation((callback) => {
-      listeners.done.add(callback as (event: unknown, payload: ChatStreamDonePayload) => void);
+    vi.mocked(window.electronAPI.offAgentTaskState).mockImplementation((callback) => {
+      listeners.state.delete(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
     });
-    vi.mocked(window.electronAPI.offChatStreamDone).mockImplementation((callback) => {
-      listeners.done.delete(callback as (event: unknown, payload: ChatStreamDonePayload) => void);
+    vi.mocked(window.electronAPI.onAgentTaskError).mockImplementation((callback) => {
+      listeners.error.add(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
     });
-    vi.mocked(window.electronAPI.onChatToolApprovalRequest).mockImplementation((callback) => {
-      listeners.approval.add(callback as (event: unknown, payload: ChatToolApprovalRequestPayload) => void);
-    });
-    vi.mocked(window.electronAPI.offChatToolApprovalRequest).mockImplementation((callback) => {
-      listeners.approval.delete(callback as (event: unknown, payload: ChatToolApprovalRequestPayload) => void);
-    });
-    vi.mocked(window.electronAPI.onChatToolResult).mockImplementation((callback) => {
-      listeners.result.add(callback as (event: unknown, payload: ChatToolResultPayload) => void);
-    });
-    vi.mocked(window.electronAPI.offChatToolResult).mockImplementation((callback) => {
-      listeners.result.delete(callback as (event: unknown, payload: ChatToolResultPayload) => void);
+    vi.mocked(window.electronAPI.offAgentTaskError).mockImplementation((callback) => {
+      listeners.error.delete(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
     });
 
     const chatPane = {
@@ -194,12 +203,13 @@ describe('ChatPane', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
 
     await waitFor(() => {
-      expect(window.electronAPI.chatSend).toHaveBeenCalledWith(expect.objectContaining({
+      expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
         paneId: 'chat-pane-1',
         windowId: 'win-1',
         providerId: 'provider-1',
         model: 'claude-sonnet-4-5',
         enableTools: true,
+        linkedPaneId: 'ssh-pane-1',
         sshContext: {
           host: '10.0.0.20',
           user: 'root',
@@ -211,19 +221,75 @@ describe('ChatPane', () => {
     });
 
     await act(async () => {
-      listeners.chunk.forEach((listener) => listener({}, {
-        paneId: 'chat-pane-1',
-        messageId: 'assistant-1',
-        chunk: '先看一下当前服务状态。',
-      }));
-
-      listeners.done.forEach((listener) => listener({}, {
-        paneId: 'chat-pane-1',
-        messageId: 'assistant-1',
-        fullContent: '先看一下当前服务状态。',
-        isFinal: false,
-        toolCalls: [
+      const snapshot = createAgentSnapshot({
+        timeline: [
           {
+            id: 'user-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'user-message',
+            status: 'completed',
+            content: '帮我检查 nginx 状态',
+          },
+          {
+            id: 'reasoning-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'reasoning',
+            status: 'completed',
+            content: '先确认服务状态，再看命令输出。',
+          },
+          {
+            id: 'assistant-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'assistant-message',
+            status: 'completed',
+            content: '先看一下当前服务状态。',
+          },
+          {
+            id: 'tool-tool-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'tool-call',
+            status: 'pending',
+            toolCall: {
+              id: 'tool-1',
+              name: 'execute_command',
+              params: {
+                command: 'systemctl status nginx --no-pager',
+              },
+              status: 'pending',
+            },
+          },
+          {
+            id: 'approval-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'approval-request',
+            status: 'pending',
+            approvalId: 'approval-1',
+            reason: '模型将该命令标记为需要确认',
+            toolCall: {
+              id: 'tool-1',
+              name: 'execute_command',
+              params: {
+                command: 'systemctl status nginx --no-pager',
+              },
+              status: 'pending',
+            },
+          },
+        ],
+        pendingApproval: {
+          approvalId: 'approval-1',
+          createdAt: new Date().toISOString(),
+          reason: '模型将该命令标记为需要确认',
+          toolCall: {
             id: 'tool-1',
             name: 'execute_command',
             params: {
@@ -231,47 +297,110 @@ describe('ChatPane', () => {
             },
             status: 'pending',
           },
+        },
+        messages: [
+          {
+            id: 'assistant-1',
+            role: 'assistant',
+            content: '先看一下当前服务状态。',
+            timestamp: new Date().toISOString(),
+            model: 'claude-sonnet-4-5',
+          },
         ],
+        status: 'waiting_approval',
+      });
+
+      listeners.state.forEach((listener) => listener({}, {
+        paneId: 'chat-pane-1',
+        task: snapshot,
       }));
     });
 
     expect(await screen.findByText('先看一下当前服务状态。')).toBeInTheDocument();
-    expect(screen.getByText('执行远程命令')).toBeInTheDocument();
+    expect(screen.getAllByText('systemctl status nginx --no-pager').length).toBeGreaterThan(0);
+    expect(screen.getByText('Thinking')).toBeInTheDocument();
 
-    await act(async () => {
-      listeners.approval.forEach((listener) => listener({}, {
-        paneId: 'chat-pane-1',
-        toolCall: {
-          id: 'tool-1',
-          name: 'execute_command',
-          params: {
-            command: 'systemctl status nginx --no-pager',
-          },
-          status: 'pending',
-        },
-      }));
-    });
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
 
-    await user.click(await screen.findByRole('button', { name: '批准执行' }));
-
-    expect(window.electronAPI.chatRespondToolApproval).toHaveBeenCalledWith({
+    expect(window.electronAPI.agentRespondApproval).toHaveBeenCalledWith({
       paneId: 'chat-pane-1',
-      toolCallId: 'tool-1',
+      taskId: 'task-1',
+      approvalId: 'approval-1',
       approved: true,
     });
 
     await act(async () => {
-      listeners.result.forEach((listener) => listener({}, {
+      const snapshot = createAgentSnapshot({
+        timeline: [
+          {
+            id: 'assistant-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'assistant-message',
+            status: 'completed',
+            content: '先看一下当前服务状态。',
+          },
+          {
+            id: 'command-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'command',
+            status: 'completed',
+            commandId: 'command-1',
+            host: '10.0.0.20',
+            command: 'systemctl status nginx --no-pager',
+            interactive: false,
+            exitCode: 0,
+          },
+          {
+            id: 'command-output-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'command-output',
+            status: 'completed',
+            commandId: 'command-1',
+            stream: 'pty',
+            content: 'nginx.service is active (running)',
+          },
+          {
+            id: 'tool-result-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'tool-result',
+            status: 'completed',
+            toolCallId: 'tool-1',
+            toolName: 'execute_command',
+            content: 'nginx.service is active (running)',
+          },
+        ],
+        messages: [
+          {
+            id: 'tool-result-message-1',
+            role: 'user',
+            content: '',
+            timestamp: new Date().toISOString(),
+            toolResult: {
+              toolCallId: 'tool-1',
+              content: 'nginx.service is active (running)',
+            },
+          },
+        ],
+        pendingApproval: undefined,
+        status: 'completed',
+      });
+
+      listeners.state.forEach((listener) => listener({}, {
         paneId: 'chat-pane-1',
-        toolCallId: 'tool-1',
-        content: 'nginx.service is active (running)',
-        isError: false,
+        task: snapshot,
       }));
     });
 
-    const toolResults = await screen.findAllByText('nginx.service is active (running)');
-    expect(toolResults).toHaveLength(2);
-    expect(screen.getByText('已完成')).toBeInTheDocument();
+    expect(await screen.findAllByText('nginx.service is active (running)')).not.toHaveLength(0);
+    expect(screen.getAllByText('completed').length).toBeGreaterThan(0);
   });
 
   it('reloads provider options when chat settings are updated', async () => {
@@ -401,12 +530,6 @@ describe('ChatPane', () => {
         },
       } as any,
     });
-    vi.mocked(window.electronAPI.chatSend).mockResolvedValue({
-      success: true,
-      data: {
-        messageId: 'assistant-ssh-default',
-      },
-    });
 
     useWindowStore.setState({
       windows: [
@@ -485,7 +608,7 @@ describe('ChatPane', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
 
     await waitFor(() => {
-      expect(window.electronAPI.chatSend).toHaveBeenCalledWith(expect.objectContaining({
+      expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
         sshContext: {
           host: '10.0.0.20',
           user: 'root',
@@ -528,12 +651,6 @@ describe('ChatPane', () => {
           enableCommandSecurity: true,
         },
       } as any,
-    });
-    vi.mocked(window.electronAPI.chatSend).mockResolvedValue({
-      success: true,
-      data: {
-        messageId: 'assistant-provider-switch',
-      },
     });
 
     useWindowStore.setState({
@@ -590,7 +707,7 @@ describe('ChatPane', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
 
     await waitFor(() => {
-      expect(window.electronAPI.chatSend).toHaveBeenCalledWith(expect.objectContaining({
+      expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
         providerId: 'provider-2',
         model: 'gpt-4.1',
       }));
@@ -682,13 +799,13 @@ describe('ChatPane', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('这是上一轮对话')).not.toBeInTheDocument();
-      expect(screen.getByText('开始一段新对话')).toBeInTheDocument();
+      expect(screen.getByText('Remote Agent Ready')).toBeInTheDocument();
     });
     expect((input as HTMLTextAreaElement).value).toBe('');
   });
 
-  it('rolls back later rounds from the per-round undo button', async () => {
-    const user = userEvent.setup();
+  it('renders reasoning and command output blocks from the structured agent timeline', async () => {
+    const listeners = createListenerMap();
 
     vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
       success: true,
@@ -710,6 +827,12 @@ describe('ChatPane', () => {
           enableCommandSecurity: true,
         },
       } as any,
+    });
+    vi.mocked(window.electronAPI.onAgentTaskState).mockImplementation((callback) => {
+      listeners.state.add(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+    });
+    vi.mocked(window.electronAPI.offAgentTaskState).mockImplementation((callback) => {
+      listeners.state.delete(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
     });
 
     useWindowStore.setState({
@@ -736,47 +859,7 @@ describe('ChatPane', () => {
                   status: WindowStatus.Paused,
                   pid: null,
                   chat: {
-                    messages: [
-                      {
-                        id: 'user-1',
-                        role: 'user',
-                        content: '第一轮提问',
-                        timestamp: new Date().toISOString(),
-                      },
-                      {
-                        id: 'assistant-1',
-                        role: 'assistant',
-                        content: '第一轮回答',
-                        timestamp: new Date().toISOString(),
-                        model: 'claude-sonnet-4-5',
-                      },
-                      {
-                        id: 'user-2',
-                        role: 'user',
-                        content: '第二轮提问',
-                        timestamp: new Date().toISOString(),
-                      },
-                      {
-                        id: 'assistant-2',
-                        role: 'assistant',
-                        content: '第二轮回答',
-                        timestamp: new Date().toISOString(),
-                        model: 'claude-sonnet-4-5',
-                      },
-                      {
-                        id: 'user-3',
-                        role: 'user',
-                        content: '第三轮提问',
-                        timestamp: new Date().toISOString(),
-                      },
-                      {
-                        id: 'assistant-3',
-                        role: 'assistant',
-                        content: '第三轮回答',
-                        timestamp: new Date().toISOString(),
-                        model: 'claude-sonnet-4-5',
-                      },
-                    ],
+                    messages: [],
                   },
                 },
               },
@@ -796,16 +879,54 @@ describe('ChatPane', () => {
       </I18nProvider>,
     );
 
-    expect(await screen.findByText('第三轮回答')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '回退到第 2 轮对话' }));
-
-    await waitFor(() => {
-      expect(screen.queryByText('第三轮提问')).not.toBeInTheDocument();
-      expect(screen.queryByText('第三轮回答')).not.toBeInTheDocument();
+    await act(async () => {
+      listeners.state.forEach((listener) => listener({}, {
+        paneId: 'chat-pane-1',
+        task: createAgentSnapshot({
+          timeline: [
+            {
+              id: 'reasoning-1',
+              taskId: 'task-1',
+              paneId: 'chat-pane-1',
+              timestamp: new Date().toISOString(),
+              kind: 'reasoning',
+              status: 'completed',
+              content: '先确定服务是否真的在线。',
+            },
+            {
+              id: 'command-1',
+              taskId: 'task-1',
+              paneId: 'chat-pane-1',
+              timestamp: new Date().toISOString(),
+              kind: 'command',
+              status: 'completed',
+              commandId: 'command-1',
+              host: '10.0.0.20',
+              command: 'systemctl status nginx --no-pager',
+              interactive: false,
+              exitCode: 0,
+            },
+            {
+              id: 'command-output-1',
+              taskId: 'task-1',
+              paneId: 'chat-pane-1',
+              timestamp: new Date().toISOString(),
+              kind: 'command-output',
+              status: 'completed',
+              commandId: 'command-1',
+              stream: 'pty',
+              content: 'Active: active (running)',
+            },
+          ],
+          status: 'completed',
+        }),
+      }));
     });
-    expect(screen.getByText('第一轮回答')).toBeInTheDocument();
-    expect(screen.getByText('第二轮回答')).toBeInTheDocument();
+
+    expect(await screen.findByText('Thinking')).toBeInTheDocument();
+    expect(screen.getByText('先确定服务是否真的在线。')).toBeInTheDocument();
+    expect(screen.getByText('Remote command · 10.0.0.20')).toBeInTheDocument();
+    expect(screen.getByText('Active: active (running)')).toBeInTheDocument();
   });
 
   it('does not render an outer active border', async () => {

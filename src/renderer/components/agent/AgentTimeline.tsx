@@ -1,0 +1,168 @@
+import React from 'react';
+import { Sparkles, TerminalSquare, User2 } from 'lucide-react';
+import type { AgentTaskSnapshot } from '../../../shared/types/agent';
+import type { AgentTimelineEvent } from '../../../shared/types/agentTimeline';
+import { ApprovalCard } from './ApprovalCard';
+import { CommandOutputBlock } from './CommandOutputBlock';
+import { InteractionPrompt } from './InteractionPrompt';
+import { ReasoningBlock } from './ReasoningBlock';
+import { renderMarkdownLike } from './RichText';
+import { ToolCallBlock } from './ToolCallBlock';
+
+function EventShell({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1 pt-1">
+        <div className="mb-3 text-sm font-medium text-zinc-100">{title}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function AgentTimeline({
+  task,
+  assistantLabel,
+  onApprove,
+  onReject,
+  onSubmitInteraction,
+  onCancelInteraction,
+}: {
+  task: AgentTaskSnapshot;
+  assistantLabel: string;
+  onApprove: (approvalId: string) => void;
+  onReject: (approvalId: string) => void;
+  onSubmitInteraction: (interactionId: string, value: string) => void;
+  onCancelInteraction: (interactionId: string) => void;
+}) {
+  const renderEvent = (event: AgentTimelineEvent) => {
+    switch (event.kind) {
+      case 'user-message':
+        return (
+          <div className="flex justify-end">
+            <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
+              <div className="space-y-3 text-[15px] leading-7 text-zinc-100">
+                {renderMarkdownLike(event.content)}
+              </div>
+            </div>
+          </div>
+        );
+      case 'reasoning':
+        return (
+          <EventShell icon={<Sparkles size={15} />} title={`${assistantLabel} · Thinking`}>
+            <ReasoningBlock content={event.content} />
+          </EventShell>
+        );
+      case 'assistant-message':
+        return (
+          <EventShell icon={<Sparkles size={15} />} title={assistantLabel}>
+            <div className="space-y-3 text-[15px] leading-7 text-zinc-200">
+              {renderMarkdownLike(event.content)}
+            </div>
+          </EventShell>
+        );
+      case 'tool-call':
+        return (
+          <EventShell icon={<TerminalSquare size={15} />} title="Tool call">
+            <ToolCallBlock toolCall={event.toolCall} />
+          </EventShell>
+        );
+      case 'tool-result':
+        return (
+          <EventShell icon={<TerminalSquare size={15} />} title="Tool result">
+            <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/75 px-4 py-3 text-zinc-200">
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
+                {event.content}
+              </pre>
+            </div>
+          </EventShell>
+        );
+      case 'command':
+        return (
+          <EventShell icon={<TerminalSquare size={15} />} title={`Remote command · ${event.host}`}>
+            <div className="rounded-[18px] border border-zinc-800/80 bg-zinc-900/70 px-4 py-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{event.status}</div>
+              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
+                {event.command}
+              </pre>
+              {typeof event.exitCode === 'number' && (
+                <div className="mt-3 text-xs text-zinc-400">exit code: {event.exitCode}</div>
+              )}
+            </div>
+          </EventShell>
+        );
+      case 'command-output':
+        return (
+          <div className="pl-[52px]">
+            <CommandOutputBlock content={event.content} stream={event.stream} />
+          </div>
+        );
+      case 'approval-request':
+        return task.pendingApproval?.approvalId === event.approvalId ? (
+          <EventShell icon={<User2 size={15} />} title="Approval">
+            <ApprovalCard
+              approval={task.pendingApproval}
+              onApprove={() => onApprove(event.approvalId)}
+              onReject={() => onReject(event.approvalId)}
+            />
+          </EventShell>
+        ) : null;
+      case 'interaction-request':
+        return task.pendingInteraction?.interactionId === event.interactionId ? (
+          <EventShell icon={<User2 size={15} />} title="Interaction needed">
+            <InteractionPrompt
+              interaction={task.pendingInteraction}
+              onSubmit={(value) => onSubmitInteraction(event.interactionId, value)}
+              onCancel={() => onCancelInteraction(event.interactionId)}
+            />
+          </EventShell>
+        ) : null;
+      case 'system-notice':
+        return (
+          <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/60 px-4 py-3 text-sm leading-7 text-zinc-300">
+            {event.content}
+          </div>
+        );
+      case 'context-summary':
+        return (
+          <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/60 px-4 py-3 text-sm leading-7 text-zinc-300">
+            {event.summary}
+          </div>
+        );
+      case 'approval-result':
+      case 'interaction-result':
+        return (
+          <div className="rounded-[18px] border border-zinc-800/70 bg-zinc-900/50 px-4 py-2 text-xs text-zinc-400">
+            {event.kind === 'approval-result'
+              ? `Approval ${event.approved ? 'granted' : 'rejected'}`
+              : event.cancelled
+                ? 'Interaction cancelled'
+                : 'Interaction submitted'}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="space-y-6 pt-4">
+      {task.timeline.map((event) => (
+        <div key={event.id}>
+          {renderEvent(event)}
+        </div>
+      ))}
+    </div>
+  );
+}
