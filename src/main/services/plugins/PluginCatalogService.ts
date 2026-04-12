@@ -17,7 +17,7 @@ export interface PluginCatalogServiceOptions {
   fetchImpl?: typeof fetch;
 }
 
-const DEFAULT_OFFICIAL_PLUGIN_CATALOG_URL = 'https://raw.githubusercontent.com/imsuperli/copilot-terminal/main/plugin-marketplace/catalog.json';
+const DEFAULT_OFFICIAL_PLUGIN_CATALOG_URL = 'https://plugin.notta.top/catalog.json';
 
 export class PluginCatalogService {
   private readonly cachePath: string;
@@ -46,7 +46,10 @@ export class PluginCatalogService {
       }
     } catch (error) {
       if (process.env.NODE_ENV === 'development') {
-        console.warn('[PluginCatalogService] Failed to fetch remote plugin catalog:', error);
+        console.warn(
+          `[PluginCatalogService] Failed to fetch remote plugin catalog from ${this.catalogUrl ?? '<disabled>'}:`,
+          error,
+        );
       }
     }
 

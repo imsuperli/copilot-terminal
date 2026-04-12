@@ -4,7 +4,7 @@
 
 - `plugins/`: 可打包的插件源目录，每个插件目录都必须包含 `plugin.json`
 - `packages/`: 本地执行构建后生成的轻量 zip 产物，默认不提交仓库
-- `catalog.json`: 插件市场目录文件，应用默认会从 GitHub 上的这个路径拉取
+- `catalog.json`: 插件市场目录文件，应用默认会从官方下载域名拉取
 
 发布级、自带依赖的完整插件包会输出到：
 
@@ -15,7 +15,7 @@
 
 应用默认会先请求：
 
-`https://raw.githubusercontent.com/imsuperli/copilot-terminal/main/plugin-marketplace/catalog.json`
+`https://plugin.notta.top/catalog.json`
 
 如果远端不可用，开发环境会回退到当前仓库里的本地 `plugin-marketplace/catalog.json`。
 
