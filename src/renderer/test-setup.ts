@@ -266,6 +266,7 @@ Object.defineProperty(window, 'electronAPI', {
     triggerAutoSave: vi.fn(),
     agentSend: vi.fn().mockResolvedValue({ success: true, data: { taskId: 'agent-task-1', status: 'running' } }),
     agentCancel: vi.fn().mockResolvedValue({ success: true }),
+    agentResetTask: vi.fn().mockResolvedValue({ success: true }),
     agentRespondApproval: vi.fn().mockResolvedValue({ success: true }),
     agentSubmitInteraction: vi.fn().mockResolvedValue({ success: true }),
     agentGetTask: vi.fn().mockResolvedValue({ success: true, data: null }),

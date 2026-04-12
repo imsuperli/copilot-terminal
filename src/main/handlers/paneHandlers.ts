@@ -3,6 +3,7 @@ import { HandlerContext } from './HandlerContext';
 import { TerminalConfig } from '../types/process';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { createPtyDataForwarder } from '../utils/ptyDataForwarder';
+import { disposeAgentTaskForPane } from './agentHandlers';
 
 /**
  * 注册窗格管理相关的 IPC handlers
@@ -67,6 +68,7 @@ export function registerPaneHandlers(ctx: HandlerContext) {
       }
 
       statusPoller?.removePane(paneId);
+      disposeAgentTaskForPane(paneId);
 
       const processes = processManager.listProcesses();
       const found = processes.find(p => p.windowId === windowId && p.paneId === paneId);

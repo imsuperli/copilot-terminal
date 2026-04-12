@@ -1037,6 +1037,255 @@ describe('ChatPane', () => {
     expect(await screen.findByText('这是恢复出来的 agent 历史')).toBeInTheDocument();
   });
 
+  it('resets the main-side agent task when starting a new conversation', async () => {
+    const user = userEvent.setup();
+    const restoredAgent = createAgentSnapshot({
+      taskId: 'task-reset',
+      status: 'completed',
+      timeline: [
+        {
+          id: 'assistant-reset',
+          taskId: 'task-reset',
+          paneId: 'chat-pane-1',
+          timestamp: new Date().toISOString(),
+          kind: 'assistant-message',
+          status: 'completed',
+          content: '旧会话内容',
+        },
+      ],
+      messages: [
+        {
+          id: 'assistant-reset',
+          role: 'assistant',
+          content: '旧会话内容',
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    });
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.agentRestoreTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.agentResetTask).mockResolvedValue({
+      success: true,
+      data: undefined,
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: restoredAgent.messages,
+                    agent: restoredAgent,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByText('旧会话内容')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '新建对话' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentResetTask).toHaveBeenCalledWith({
+        paneId: 'chat-pane-1',
+        taskId: 'task-reset',
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('旧会话内容')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hydrates SSH host/user from the linked profile before sending agent requests', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentSend).mockResolvedValue({
+      success: true,
+      data: {
+        taskId: 'task-1',
+        status: 'running',
+      },
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.getSSHProfile).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'profile-1',
+        name: 'Prod',
+        host: '10.0.0.20',
+        port: 22,
+        user: 'root',
+        authType: 'password',
+      } as any,
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'SSH Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [0.5, 0.5],
+            children: [
+              {
+                type: 'pane',
+                id: 'ssh-pane-1',
+                pane: {
+                  id: 'ssh-pane-1',
+                  cwd: '/srv/app',
+                  command: '',
+                  status: WindowStatus.Running,
+                  pid: 101,
+                  backend: 'ssh',
+                  ssh: {
+                    profileId: 'profile-1',
+                    remoteCwd: '/srv/app',
+                  },
+                },
+              },
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByText('Remote Agent Ready')).toBeInTheDocument();
+    expect(screen.getByText('This pane is bound to an SSH session. The agent will show reasoning, tool calls, command output, approvals, and interactive prompts here.')).toBeInTheDocument();
+
+    await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '帮我看下系统的版本号是什么？');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.getSSHProfile).toHaveBeenCalledWith('profile-1');
+      expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
+        enableTools: true,
+        linkedPaneId: 'ssh-pane-1',
+        sshContext: {
+          host: '10.0.0.20',
+          user: 'root',
+          cwd: '/srv/app',
+          windowId: 'win-1',
+          paneId: 'ssh-pane-1',
+        },
+      }));
+    });
+  });
+
   it('does not render an outer active border', async () => {
     vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
       success: true,

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, SendHorizonal, Sparkles, Square, X } from 'lucide-react';
-import type { ChatMessage, ChatSettings, LLMProviderConfig } from '../../shared/types/chat';
+import type { ChatMessage, ChatSettings, ChatSshContext, LLMProviderConfig } from '../../shared/types/chat';
 import type { Pane } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { useI18n } from '../i18n';
@@ -159,6 +159,17 @@ function renderLegacyMessage(message: ChatMessage) {
   );
 }
 
+function hasExecutableSshBinding(pane: Pane | null | undefined): boolean {
+  if (!pane || getPaneBackend(pane) !== 'ssh') {
+    return false;
+  }
+
+  return Boolean(
+    pane.ssh?.profileId?.trim()
+      || (pane.ssh?.host?.trim() && pane.ssh?.user?.trim()),
+  );
+}
+
 export const ChatPane: React.FC<ChatPaneProps> = ({
   windowId,
   pane,
@@ -198,6 +209,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     () => terminalPanes.find((candidate) => candidate.id === resolvedLinkedPaneId) ?? null,
     [resolvedLinkedPaneId, terminalPanes],
   );
+  const hasExecutableLinkedSsh = hasExecutableSshBinding(linkedPane);
   const providers = settings.providers;
   const selectedProviderId = agentState?.providerId ?? chatState.activeProviderId ?? settings.activeProviderId ?? providers[0]?.id ?? '';
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? null;
@@ -349,16 +361,31 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       return;
     }
 
-    setComposerValue('');
-    setErrorMessage(null);
-    hasLiveTaskRef.current = false;
-    persistChatState((currentChat) => ({
-      ...currentChat,
-      messages: [],
-      agent: undefined,
-      isStreaming: false,
-    }));
-  }, [isBusy, persistChatState]);
+    void (async () => {
+      try {
+        const response = await window.electronAPI.agentResetTask({
+          paneId: pane.id,
+          taskId: agentState?.taskId,
+        });
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to reset agent task');
+        }
+
+        setComposerValue('');
+        setErrorMessage(null);
+        hasLiveTaskRef.current = false;
+        persistChatState((currentChat) => ({
+          ...currentChat,
+          messages: [],
+          agent: undefined,
+          isStreaming: false,
+        }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setErrorMessage(message);
+      }
+    })();
+  }, [agentState?.taskId, isBusy, pane.id, persistChatState]);
 
   const handleCancelStreaming = useCallback(async () => {
     try {
@@ -375,21 +402,57 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     }
   }, [agentState, pane.id]);
 
+  const resolveSshContext = useCallback(async (): Promise<ChatSshContext | undefined> => {
+    if (!linkedPane || getPaneBackend(linkedPane) !== 'ssh' || !linkedPane.ssh) {
+      return undefined;
+    }
+
+    const cwd = linkedPane.cwd || linkedPane.ssh.remoteCwd;
+    const host = linkedPane.ssh.host?.trim();
+    const user = linkedPane.ssh.user?.trim();
+    if (host && user) {
+      return {
+        host,
+        user,
+        cwd,
+        windowId,
+        paneId: linkedPane.id,
+      };
+    }
+
+    const profileId = linkedPane.ssh.profileId?.trim();
+    if (!profileId) {
+      return undefined;
+    }
+
+    const profileResponse = await window.electronAPI.getSSHProfile(profileId);
+    if (!profileResponse.success || !profileResponse.data) {
+      throw new Error(profileResponse.error || 'Linked SSH profile could not be loaded.');
+    }
+
+    return {
+      host: profileResponse.data.host,
+      user: profileResponse.data.user,
+      cwd,
+      windowId,
+      paneId: linkedPane.id,
+    };
+  }, [linkedPane, windowId]);
+
   const handleSend = useCallback(async () => {
     const trimmed = composerValue.trim();
     if (!trimmed || !selectedProvider || !selectedModel || isBusy) {
       return;
     }
 
-    const sshContext = linkedPane && getPaneBackend(linkedPane) === 'ssh' && linkedPane.ssh?.host && linkedPane.ssh?.user
-      ? {
-          host: linkedPane.ssh.host,
-          user: linkedPane.ssh.user,
-          cwd: linkedPane.cwd || linkedPane.ssh.remoteCwd,
-          windowId,
-          paneId: linkedPane.id,
-        }
-      : undefined;
+    let sshContext: ChatSshContext | undefined;
+    try {
+      sshContext = await resolveSshContext();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setErrorMessage(message);
+      return;
+    }
 
     setComposerValue('');
     setErrorMessage(null);
@@ -435,6 +498,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     pane.id,
     persistChatState,
     resolvedLinkedPaneId,
+    resolveSshContext,
     selectedModel,
     selectedProvider,
     settings.defaultSystemPrompt,
@@ -599,7 +663,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 </div>
                 <div className="mt-4 text-[15px] leading-7 text-zinc-100">Remote Agent Ready</div>
                 <p className="mt-2 text-sm leading-7 text-zinc-500">
-                  {linkedPane && getPaneBackend(linkedPane) === 'ssh'
+                  {hasExecutableLinkedSsh
                     ? 'This pane is bound to an SSH session. The agent will show reasoning, tool calls, command output, approvals, and interactive prompts here.'
                     : 'Bind this chat to an SSH pane so the agent can execute real remote diagnostics instead of plain conversation.'}
                 </p>

@@ -4,6 +4,7 @@ import { QuickNavConfig } from './quick-nav';
 import type {
   AgentCancelRequest,
   AgentGetTaskRequest,
+  AgentResetRequest,
   AgentRespondApprovalRequest,
   AgentRestoreTaskRequest,
   AgentSendRequest,
@@ -783,6 +784,7 @@ export interface ElectronAPI {
   // Chat pane
   agentSend: (request: AgentSendRequest) => Promise<IpcResponse<AgentSendResponse>>;
   agentCancel: (request: AgentCancelRequest) => Promise<IpcResponse<void>>;
+  agentResetTask: (request: AgentResetRequest) => Promise<IpcResponse<void>>;
   agentRespondApproval: (request: AgentRespondApprovalRequest) => Promise<IpcResponse<void>>;
   agentSubmitInteraction: (request: AgentSubmitInteractionRequest) => Promise<IpcResponse<void>>;
   agentGetTask: (request: AgentGetTaskRequest) => Promise<IpcResponse<AgentTaskStatePayload['task'] | null>>;

@@ -82,6 +82,11 @@ export interface AgentCancelRequest {
   taskId?: string;
 }
 
+export interface AgentResetRequest {
+  paneId: string;
+  taskId?: string;
+}
+
 export interface AgentRespondApprovalRequest {
   paneId: string;
   taskId: string;

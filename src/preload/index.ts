@@ -371,6 +371,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('agent-send', request),
   agentCancel: (request) =>
     ipcRenderer.invoke('agent-cancel', request),
+  agentResetTask: (request) =>
+    ipcRenderer.invoke('agent-reset-task', request),
   agentRespondApproval: (request) =>
     ipcRenderer.invoke('agent-respond-approval', request),
   agentSubmitInteraction: (request) =>

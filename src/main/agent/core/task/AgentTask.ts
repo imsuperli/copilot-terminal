@@ -2,10 +2,10 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { BrowserWindow } from 'electron';
 import type {
   AgentPendingApproval,
   AgentPendingInteraction,
+  AgentRespondApprovalRequest,
   AgentSendRequest,
   AgentSubmitInteractionRequest,
   AgentTaskSnapshot,
@@ -47,6 +47,7 @@ const OFFLOAD_THRESHOLD = 14_000;
 const OFFLOAD_PREVIEW_HEAD = 6_000;
 const OFFLOAD_PREVIEW_TAIL = 3_000;
 const AGENT_OFFLOAD_DIR = path.join(os.tmpdir(), 'copilot-terminal-agent-offload');
+type ApprovalResolution = 'approved' | 'rejected' | 'cancelled';
 
 interface AgentTaskDependencies {
   chatService: ChatService;
@@ -99,7 +100,8 @@ export class AgentTask {
   private runPromise: Promise<void> | null = null;
   private abortController: AbortController | null = null;
   private activeRemoteCommand: RemoteCommandHandle | null = null;
-  private pendingApprovalResolver: ((approved: boolean) => void) | null = null;
+  private activeToolCall: ToolCall | null = null;
+  private pendingApprovalResolver: ((resolution: ApprovalResolution) => void) | null = null;
   private pendingInteractionBridge:
     | {
         interactionId: string;
@@ -117,11 +119,97 @@ export class AgentTask {
     this.contextManager = new ContextManager(snapshot.messages);
   }
 
+  static prepareSnapshotForRestore(snapshot: AgentTaskSnapshot): AgentTaskSnapshot {
+    const restored = cloneSnapshot(snapshot);
+    const now = new Date().toISOString();
+    const hadInFlightStatus = ['running', 'waiting_approval', 'waiting_interaction'].includes(restored.status);
+    const hadPendingApproval = Boolean(restored.pendingApproval);
+    const hadPendingInteraction = Boolean(restored.pendingInteraction);
+
+    if (!hadInFlightStatus && !hadPendingApproval && !hadPendingInteraction) {
+      return restored;
+    }
+
+    restored.timeline = restored.timeline.map((event) => {
+      if (!event.status || !['pending', 'running', 'streaming'].includes(event.status)) {
+        return event;
+      }
+
+      if (event.kind === 'tool-call') {
+        return {
+          ...event,
+          status: 'cancelled',
+          toolCall: {
+            ...event.toolCall,
+            status: 'error',
+            reason: event.toolCall.reason ?? 'Execution was interrupted while restoring the agent runtime.',
+          },
+        };
+      }
+
+      return {
+        ...event,
+        status: 'cancelled',
+      };
+    });
+
+    if (restored.pendingApproval) {
+      restored.timeline.push({
+        id: `approval-result-${restored.pendingApproval.approvalId}`,
+        taskId: restored.taskId,
+        paneId: restored.paneId,
+        timestamp: now,
+        kind: 'approval-result',
+        status: 'completed',
+        approvalId: restored.pendingApproval.approvalId,
+        approved: false,
+        reason: 'Pending approval expired after the agent runtime was restored.',
+      });
+    }
+
+    if (restored.pendingInteraction) {
+      restored.timeline.push({
+        id: `interaction-result-${restored.pendingInteraction.interactionId}`,
+        taskId: restored.taskId,
+        paneId: restored.paneId,
+        timestamp: now,
+        kind: 'interaction-result',
+        status: 'completed',
+        interactionId: restored.pendingInteraction.interactionId,
+        commandId: restored.pendingInteraction.commandId,
+        cancelled: true,
+      });
+    }
+
+    restored.pendingApproval = undefined;
+    restored.pendingInteraction = undefined;
+    restored.status = 'cancelled';
+    restored.error = undefined;
+    restored.updatedAt = now;
+    restored.timeline.push({
+      id: `notice-${uuidv4()}`,
+      taskId: restored.taskId,
+      paneId: restored.paneId,
+      timestamp: now,
+      kind: 'system-notice',
+      status: 'completed',
+      level: 'warning',
+      content: 'Recovered persisted agent history. Live execution could not be resumed and was cancelled.',
+    });
+
+    return restored;
+  }
+
   getSnapshot(): AgentTaskSnapshot {
     return cloneSnapshot(this.snapshot);
   }
 
   start(request: AgentSendRequest, provider: LLMProviderConfig): void {
+    if (this.runPromise) {
+      throw new Error('Agent task is still busy.');
+    }
+
+    this.resetTransientStateForNewRun();
     this.currentProvider = provider;
     this.latestRequest = request;
     this.snapshot.providerId = request.providerId;
@@ -155,33 +243,38 @@ export class AgentTask {
     });
 
     this.setStatus('running');
-    if (!this.runPromise) {
-      this.runPromise = this.runLoop().catch((error) => {
-        const message = error instanceof Error ? error.message : String(error);
-        this.snapshot.error = message;
-        this.setStatus(this.isCancelled ? 'cancelled' : 'failed');
-        this.deps.postError({
-          paneId: this.snapshot.paneId,
-          taskId: this.snapshot.taskId,
-          error: message,
-        });
-      }).finally(() => {
-        this.runPromise = null;
-        this.syncState();
+    this.runPromise = this.runLoop().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.snapshot.error = message;
+      this.setStatus(this.isCancelled ? 'cancelled' : 'failed');
+      this.deps.postError({
+        paneId: this.snapshot.paneId,
+        taskId: this.snapshot.taskId,
+        error: message,
       });
-    }
+    }).finally(() => {
+      this.runPromise = null;
+      this.syncState();
+    });
   }
 
   cancel(): void {
     this.isCancelled = true;
     this.abortController?.abort();
     this.activeRemoteCommand?.cancel();
+    this.clearPendingApproval('Task cancelled while awaiting approval.', 'cancelled');
+    this.clearPendingInteraction(true);
+    this.markToolCallCancelled(this.activeToolCall, 'Task cancelled before the tool call completed.');
     this.setStatus('cancelled');
   }
 
-  respondApproval(approved: boolean): void {
+  respondApproval(request: AgentRespondApprovalRequest): void {
     if (!this.snapshot.pendingApproval || !this.pendingApprovalResolver) {
-      return;
+      throw new Error('No pending approval for this task.');
+    }
+
+    if (this.snapshot.pendingApproval.approvalId !== request.approvalId) {
+      throw new Error(`Stale approval response: ${request.approvalId}`);
     }
 
     const pendingApproval = this.snapshot.pendingApproval;
@@ -193,20 +286,26 @@ export class AgentTask {
       kind: 'approval-result',
       status: 'completed',
       approvalId: pendingApproval.approvalId,
-      approved,
-      reason: approved ? undefined : 'Rejected by user',
+      approved: request.approved,
+      reason: request.approved ? undefined : 'Rejected by user',
     };
     this.appendEvent(approvalResult);
     this.snapshot.pendingApproval = undefined;
     const resolve = this.pendingApprovalResolver;
     this.pendingApprovalResolver = null;
-    this.setStatus('running');
-    resolve(approved);
+    if (!this.isCancelled) {
+      this.setStatus('running');
+    }
+    resolve(request.approved ? 'approved' : 'rejected');
   }
 
   submitInteraction(request: AgentSubmitInteractionRequest): void {
     if (!this.snapshot.pendingInteraction || !this.pendingInteractionBridge) {
-      return;
+      throw new Error('No pending interaction for this task.');
+    }
+
+    if (this.snapshot.pendingInteraction.interactionId !== request.interactionId) {
+      throw new Error(`Stale interaction response: ${request.interactionId}`);
     }
 
     const pendingInteraction = this.snapshot.pendingInteraction;
@@ -237,7 +336,9 @@ export class AgentTask {
     this.appendEvent(interactionResult);
     this.snapshot.pendingInteraction = undefined;
     this.pendingInteractionBridge = null;
-    this.setStatus('running');
+    if (!this.isCancelled) {
+      this.setStatus('running');
+    }
   }
 
   private async runLoop(): Promise<void> {
@@ -411,69 +512,89 @@ export class AgentTask {
   }
 
   private async executeToolCall(toolCall: ToolCall): Promise<void> {
+    this.activeToolCall = toolCall;
     const toolEventId = `tool-${toolCall.id}`;
-    this.appendEvent({
-      id: toolEventId,
-      taskId: this.snapshot.taskId,
-      paneId: this.snapshot.paneId,
-      timestamp: new Date().toISOString(),
-      kind: 'tool-call',
-      status: 'running',
-      toolCall: {
-        ...toolCall,
-        status: 'executing',
-      },
-    });
-
-    let result: ToolResult;
-
-    if (toolCall.name === 'execute_command') {
-      const approvalDecision = resolveToolApprovalDecision(toolCall, {
-        commandSecurityEnabled: this.deps.commandSecurityEnabled,
+    try {
+      this.appendEvent({
+        id: toolEventId,
+        taskId: this.snapshot.taskId,
+        paneId: this.snapshot.paneId,
+        timestamp: new Date().toISOString(),
+        kind: 'tool-call',
+        status: 'running',
+        toolCall: {
+          ...toolCall,
+          status: 'executing',
+        },
       });
 
-      if (approvalDecision.action === 'block') {
+      let result: ToolResult;
+
+      if (toolCall.name === 'execute_command') {
+        const approvalDecision = resolveToolApprovalDecision(toolCall, {
+          commandSecurityEnabled: this.deps.commandSecurityEnabled,
+        });
+
+        if (approvalDecision.action === 'block') {
+          result = {
+            toolCallId: toolCall.id,
+            content: `命令被安全策略阻止：${approvalDecision.reason ?? 'blocked'}`,
+            isError: true,
+          };
+          await this.finishToolCall(toolCall, result, 'blocked');
+          return;
+        }
+
+        if (approvalDecision.action === 'ask') {
+          const approval = await this.waitForApproval(toolCall, approvalDecision.reason);
+          if (approval === 'cancelled' || this.isCancelled) {
+            this.markToolCallCancelled(toolCall, 'Task cancelled while awaiting approval.');
+            return;
+          }
+
+          if (approval === 'rejected') {
+            result = {
+              toolCallId: toolCall.id,
+              content: '用户拒绝了该命令的执行',
+              isError: true,
+            };
+            await this.finishToolCall(toolCall, result, 'rejected');
+            return;
+          }
+        }
+      }
+
+      if (!this.snapshot.sshContext || !this.deps.toolExecutor) {
         result = {
           toolCallId: toolCall.id,
-          content: `命令被安全策略阻止：${approvalDecision.reason ?? 'blocked'}`,
+          content: '缺少 SSH 上下文或工具执行器，无法继续执行远端工具。',
           isError: true,
         };
-        await this.finishToolCall(toolCall, result, 'blocked');
+        await this.finishToolCall(toolCall, result, 'error');
         return;
       }
 
-      if (approvalDecision.action === 'ask') {
-        const approved = await this.waitForApproval(toolCall, approvalDecision.reason);
-        if (!approved) {
-          result = {
-            toolCallId: toolCall.id,
-            content: '用户拒绝了该命令的执行',
-            isError: true,
-          };
-          await this.finishToolCall(toolCall, result, 'rejected');
+      if (toolCall.name === 'execute_command' && this.deps.remoteTerminalManager) {
+        result = await this.executeRemoteCommand(toolCall);
+        if (this.isCancelled) {
+          this.markToolCallCancelled(toolCall, 'Task cancelled during remote command execution.');
           return;
         }
+        await this.finishToolCall(toolCall, result, result.isError ? 'error' : 'completed');
+        return;
+      }
+
+      result = await this.deps.toolExecutor.execute(toolCall, this.snapshot.sshContext);
+      if (this.isCancelled) {
+        this.markToolCallCancelled(toolCall, 'Task cancelled during tool execution.');
+        return;
+      }
+      await this.finishToolCall(toolCall, result, result.isError ? 'error' : 'completed');
+    } finally {
+      if (this.activeToolCall?.id === toolCall.id) {
+        this.activeToolCall = null;
       }
     }
-
-    if (!this.snapshot.sshContext || !this.deps.toolExecutor) {
-      result = {
-        toolCallId: toolCall.id,
-        content: '缺少 SSH 上下文或工具执行器，无法继续执行远端工具。',
-        isError: true,
-      };
-      await this.finishToolCall(toolCall, result, 'error');
-      return;
-    }
-
-    if (toolCall.name === 'execute_command' && this.deps.remoteTerminalManager) {
-      result = await this.executeRemoteCommand(toolCall);
-      await this.finishToolCall(toolCall, result, result.isError ? 'error' : 'completed');
-      return;
-    }
-
-    result = await this.deps.toolExecutor.execute(toolCall, this.snapshot.sshContext);
-    await this.finishToolCall(toolCall, result, result.isError ? 'error' : 'completed');
   }
 
   private async executeRemoteCommand(toolCall: ToolCall): Promise<ToolResult> {
@@ -537,7 +658,11 @@ export class AgentTask {
 
     this.appendEvent({
       ...commandEvent,
-      status: commandResult.exitCode === 0 && !commandResult.timedOut ? 'completed' : 'error',
+      status: this.isCancelled
+        ? 'cancelled'
+        : commandResult.exitCode === 0 && !commandResult.timedOut
+          ? 'completed'
+          : 'error',
       exitCode: commandResult.exitCode,
     });
 
@@ -598,7 +723,84 @@ export class AgentTask {
     this.appendEvent(event);
   }
 
-  private async waitForApproval(toolCall: ToolCall, reason?: string): Promise<boolean> {
+  private resetTransientStateForNewRun(): void {
+    this.isCancelled = false;
+    this.abortController = null;
+    this.activeRemoteCommand = null;
+    this.activeToolCall = null;
+    this.pendingApprovalResolver = null;
+    this.pendingInteractionBridge = null;
+    this.snapshot.pendingApproval = undefined;
+    this.snapshot.pendingInteraction = undefined;
+  }
+
+  private clearPendingApproval(reason: string, resolution: ApprovalResolution): void {
+    if (!this.snapshot.pendingApproval) {
+      this.pendingApprovalResolver = null;
+      return;
+    }
+
+    const pendingApproval = this.snapshot.pendingApproval;
+    this.appendEvent({
+      id: `approval-result-${pendingApproval.approvalId}`,
+      taskId: this.snapshot.taskId,
+      paneId: this.snapshot.paneId,
+      timestamp: new Date().toISOString(),
+      kind: 'approval-result',
+      status: 'completed',
+      approvalId: pendingApproval.approvalId,
+      approved: false,
+      reason,
+    });
+    this.snapshot.pendingApproval = undefined;
+    const resolve = this.pendingApprovalResolver;
+    this.pendingApprovalResolver = null;
+    resolve?.(resolution);
+  }
+
+  private clearPendingInteraction(cancelled: boolean): void {
+    if (!this.snapshot.pendingInteraction) {
+      this.pendingInteractionBridge = null;
+      return;
+    }
+
+    const pendingInteraction = this.snapshot.pendingInteraction;
+    this.appendEvent({
+      id: `interaction-result-${pendingInteraction.interactionId}`,
+      taskId: this.snapshot.taskId,
+      paneId: this.snapshot.paneId,
+      timestamp: new Date().toISOString(),
+      kind: 'interaction-result',
+      status: 'completed',
+      interactionId: pendingInteraction.interactionId,
+      commandId: pendingInteraction.commandId,
+      cancelled,
+    });
+    this.snapshot.pendingInteraction = undefined;
+    this.pendingInteractionBridge = null;
+  }
+
+  private markToolCallCancelled(toolCall: ToolCall | null, reason: string): void {
+    if (!toolCall) {
+      return;
+    }
+
+    this.appendEvent({
+      id: `tool-${toolCall.id}`,
+      taskId: this.snapshot.taskId,
+      paneId: this.snapshot.paneId,
+      timestamp: new Date().toISOString(),
+      kind: 'tool-call',
+      status: 'cancelled',
+      toolCall: {
+        ...toolCall,
+        status: 'error',
+        reason,
+      },
+    });
+  }
+
+  private async waitForApproval(toolCall: ToolCall, reason?: string): Promise<ApprovalResolution> {
     const pendingApproval: AgentPendingApproval = {
       approvalId: uuidv4(),
       toolCall,
@@ -621,7 +823,7 @@ export class AgentTask {
     this.setStatus('waiting_approval');
     this.appendEvent(event);
 
-    return await new Promise<boolean>((resolve) => {
+    return await new Promise<ApprovalResolution>((resolve) => {
       this.pendingApprovalResolver = resolve;
       this.syncState();
     });

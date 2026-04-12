@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   AgentCancelRequest,
   AgentGetTaskRequest,
+  AgentResetRequest,
   AgentRespondApprovalRequest,
   AgentRestoreTaskRequest,
   AgentSendRequest,
@@ -113,6 +114,10 @@ function getController(ctx: HandlerContext): AgentController {
   return controller;
 }
 
+export function disposeAgentTaskForPane(paneId: string): void {
+  controller?.disposePane(paneId);
+}
+
 export function registerAgentHandlers(ctx: HandlerContext) {
   ipcMain.handle('agent-send', async (_event, request: AgentSendRequest) => {
     try {
@@ -130,6 +135,15 @@ export function registerAgentHandlers(ctx: HandlerContext) {
   ipcMain.handle('agent-cancel', async (_event, request: AgentCancelRequest) => {
     try {
       getController(ctx).cancel(request);
+      return successResponse(undefined);
+    } catch (error) {
+      return errorResponse(new Error(error instanceof Error ? error.message : String(error)));
+    }
+  });
+
+  ipcMain.handle('agent-reset-task', async (_event, request: AgentResetRequest) => {
+    try {
+      getController(ctx).reset(request);
       return successResponse(undefined);
     } catch (error) {
       return errorResponse(new Error(error instanceof Error ? error.message : String(error)));

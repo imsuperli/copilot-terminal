@@ -46,8 +46,10 @@ export function selectPreferredChatLinkedPaneId(
 
   const sshPane = terminalPanes.find((pane) => (
     getPaneBackend(pane) === 'ssh'
-    && Boolean(pane.ssh?.host)
-    && Boolean(pane.ssh?.user)
+    && Boolean(
+      pane.ssh?.profileId
+      || (pane.ssh?.host && pane.ssh?.user),
+    )
   ));
 
   return sshPane?.id ?? terminalPanes[0]?.id;

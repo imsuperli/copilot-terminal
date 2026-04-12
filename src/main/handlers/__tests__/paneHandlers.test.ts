@@ -13,6 +13,14 @@ vi.mock('electron', () => ({
   },
 }));
 
+const { disposeAgentTaskForPaneMock } = vi.hoisted(() => ({
+  disposeAgentTaskForPaneMock: vi.fn(),
+}));
+
+vi.mock('../agentHandlers', () => ({
+  disposeAgentTaskForPane: disposeAgentTaskForPaneMock,
+}));
+
 function getRegisteredHandler(channel: string) {
   const call = mockIpcHandle.mock.calls.find(([name]) => name === channel);
   expect(call, `IPC handler ${channel} should be registered`).toBeTruthy();
@@ -22,6 +30,7 @@ function getRegisteredHandler(channel: string) {
 describe('registerPaneHandlers', () => {
   beforeEach(() => {
     mockIpcHandle.mockReset();
+    disposeAgentTaskForPaneMock.mockReset();
   });
 
   it('registers split-pane created PTY with StatusPoller', async () => {
@@ -125,6 +134,7 @@ describe('registerPaneHandlers', () => {
 
     expect(ptySubscriptionManager.remove).toHaveBeenCalledWith('pane-2');
     expect(statusPoller.removePane).toHaveBeenCalledWith('pane-2');
+    expect(disposeAgentTaskForPaneMock).toHaveBeenCalledWith('pane-2');
     expect(processManager.killProcess).toHaveBeenCalledWith(321);
     expect(response).toEqual({ success: true, data: undefined });
   });

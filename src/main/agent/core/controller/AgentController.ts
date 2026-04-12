@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   AgentCancelRequest,
   AgentGetTaskRequest,
+  AgentResetRequest,
   AgentRespondApprovalRequest,
   AgentRestoreTaskRequest,
   AgentSendRequest,
@@ -54,8 +55,7 @@ export class AgentController {
     let task = this.tasksByPaneId.get(request.paneId);
     if (!task) {
       task = this.createTask(request);
-      this.tasksByPaneId.set(request.paneId, task);
-      this.tasksByTaskId.set(task.getSnapshot().taskId, task);
+      this.attachTask(task);
     }
 
     task.start(request, provider);
@@ -74,18 +74,34 @@ export class AgentController {
   }
 
   cancel(request: AgentCancelRequest): void {
-    const task = request.taskId
-      ? this.tasksByTaskId.get(request.taskId)
-      : this.tasksByPaneId.get(request.paneId);
+    const task = this.resolveTask(request);
     task?.cancel();
   }
 
+  reset(request: AgentResetRequest): void {
+    const task = this.resolveTask(request);
+    if (!task) {
+      return;
+    }
+
+    task.cancel();
+    this.detachTask(task);
+  }
+
   respondApproval(request: AgentRespondApprovalRequest): void {
-    this.tasksByTaskId.get(request.taskId)?.respondApproval(request.approved);
+    const task = this.tasksByTaskId.get(request.taskId);
+    if (!task) {
+      throw new Error(`Task not found: ${request.taskId}`);
+    }
+    task.respondApproval(request);
   }
 
   submitInteraction(request: AgentSubmitInteractionRequest): void {
-    this.tasksByTaskId.get(request.taskId)?.submitInteraction(request);
+    const task = this.tasksByTaskId.get(request.taskId);
+    if (!task) {
+      throw new Error(`Task not found: ${request.taskId}`);
+    }
+    task.submitInteraction(request);
   }
 
   restore(request: AgentRestoreTaskRequest): AgentTaskSnapshot {
@@ -94,7 +110,8 @@ export class AgentController {
       return existingByTaskId.getSnapshot();
     }
 
-    const task = new AgentTask(request.task, {
+    const restoredSnapshot = AgentTask.prepareSnapshotForRestore(request.task);
+    const task = new AgentTask(restoredSnapshot, {
       chatService: this.chatService,
       toolExecutor: this.toolExecutor,
       remoteTerminalManager: this.remoteTerminalManager,
@@ -105,10 +122,19 @@ export class AgentController {
       postEvent: this.options.postEvent,
       postError: this.options.postError,
     });
-    this.tasksByPaneId.set(request.task.paneId, task);
-    this.tasksByTaskId.set(request.task.taskId, task);
+    this.attachTask(task);
     this.options.postState(task.getSnapshot());
     return task.getSnapshot();
+  }
+
+  disposePane(paneId: string): void {
+    const task = this.tasksByPaneId.get(paneId);
+    if (!task) {
+      return;
+    }
+
+    task.cancel();
+    this.detachTask(task);
   }
 
   private createTask(request: AgentSendRequest): AgentTask {
@@ -139,5 +165,31 @@ export class AgentController {
       postEvent: this.options.postEvent,
       postError: this.options.postError,
     });
+  }
+
+  private resolveTask(request: Pick<AgentCancelRequest, 'paneId' | 'taskId'>): AgentTask | null {
+    return request.taskId
+      ? this.tasksByTaskId.get(request.taskId) ?? null
+      : this.tasksByPaneId.get(request.paneId) ?? null;
+  }
+
+  private attachTask(task: AgentTask): void {
+    const snapshot = task.getSnapshot();
+    const existingTask = this.tasksByPaneId.get(snapshot.paneId);
+    if (existingTask && existingTask.getSnapshot().taskId !== snapshot.taskId) {
+      this.detachTask(existingTask);
+    }
+
+    this.tasksByPaneId.set(snapshot.paneId, task);
+    this.tasksByTaskId.set(snapshot.taskId, task);
+  }
+
+  private detachTask(task: AgentTask): void {
+    const snapshot = task.getSnapshot();
+    const currentByPane = this.tasksByPaneId.get(snapshot.paneId);
+    if (currentByPane?.getSnapshot().taskId === snapshot.taskId) {
+      this.tasksByPaneId.delete(snapshot.paneId);
+    }
+    this.tasksByTaskId.delete(snapshot.taskId);
   }
 }
