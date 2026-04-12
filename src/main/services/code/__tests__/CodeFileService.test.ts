@@ -74,4 +74,27 @@ describe('CodeFileService', () => {
     expect(conflictResult).toBeInstanceOf(Error);
     expect((conflictResult as Error & { ipcErrorCode?: string }).ipcErrorCode).toBe(CODE_PANE_SAVE_CONFLICT_ERROR_CODE);
   });
+
+  it('prioritizes exact and shorter path matches in search results', async () => {
+    const exactRootPath = path.join(tempRootPath, 'index.ts');
+    const nestedExactPath = path.join(tempRootPath, 'src', 'index.ts');
+    const prefixPath = path.join(tempRootPath, 'src', 'indexer.ts');
+    const containsPath = path.join(tempRootPath, 'src', 'app-index.ts');
+
+    await fsPromises.mkdir(path.join(tempRootPath, 'src'), { recursive: true });
+    await Promise.all([
+      fsPromises.writeFile(exactRootPath, 'export const root = true;\n', 'utf-8'),
+      fsPromises.writeFile(nestedExactPath, 'export const nested = true;\n', 'utf-8'),
+      fsPromises.writeFile(prefixPath, 'export const prefix = true;\n', 'utf-8'),
+      fsPromises.writeFile(containsPath, 'export const contains = true;\n', 'utf-8'),
+    ]);
+
+    const searchResults = await service.searchFiles({ rootPath: tempRootPath, query: 'index' });
+    expect(searchResults.slice(0, 4)).toEqual([
+      exactRootPath,
+      nestedExactPath,
+      prefixPath,
+      containsPath,
+    ]);
+  });
 });

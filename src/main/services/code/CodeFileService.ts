@@ -120,6 +120,51 @@ function looksBinary(buffer: Buffer): boolean {
   return false;
 }
 
+function compareSearchResults(rootPath: string, leftPath: string, rightPath: string, query: string): number {
+  const getSearchTuple = (filePath: string) => {
+    const relativePath = path.relative(rootPath, filePath).toLowerCase();
+    const baseName = path.basename(filePath).toLowerCase();
+    const extension = path.extname(baseName);
+    const stem = extension ? baseName.slice(0, -extension.length) : baseName;
+    const baseIndex = baseName.indexOf(query);
+    const relativeIndex = relativePath.indexOf(query);
+    const depth = relativePath.split(path.sep).length - 1;
+
+    const tuple = [
+      baseName === query ? 0 : 1,
+      stem === query ? 0 : 1,
+      stem.startsWith(query) ? 0 : 1,
+      baseName.startsWith(query) ? 0 : 1,
+      baseIndex === -1 ? Number.MAX_SAFE_INTEGER : baseIndex,
+      relativeIndex === -1 ? Number.MAX_SAFE_INTEGER : relativeIndex,
+      depth,
+      baseName.length,
+      relativePath.length,
+    ] as const;
+
+    return {
+      relativePath,
+      tuple,
+    };
+  };
+
+  const leftSearchData = getSearchTuple(leftPath);
+  const rightSearchData = getSearchTuple(rightPath);
+  const leftTuple = leftSearchData.tuple;
+  const rightTuple = rightSearchData.tuple;
+  for (let index = 0; index < leftTuple.length - 1; index += 1) {
+    if (leftTuple[index] !== rightTuple[index]) {
+      return Number(leftTuple[index]) - Number(rightTuple[index]);
+    }
+  }
+
+  return leftSearchData.relativePath.localeCompare(
+    rightSearchData.relativePath,
+    undefined,
+    { sensitivity: 'base' },
+  );
+}
+
 export class CodeFileService {
   async listDirectory(config: CodePaneListDirectoryConfig): Promise<CodePaneTreeEntry[]> {
     const rootInfo = await this.resolveRoot(config.rootPath);
@@ -267,9 +312,7 @@ export class CodeFileService {
       }
     }
 
-    return results.sort((left, right) => (
-      path.basename(left).localeCompare(path.basename(right), undefined, { sensitivity: 'base' })
-    ));
+    return results.sort((left, right) => compareSearchResults(rootInfo.rootPath, left, right, query));
   }
 
   private async resolveRoot(rootPath: string): Promise<RootInfo> {
