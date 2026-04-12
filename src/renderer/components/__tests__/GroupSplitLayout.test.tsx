@@ -106,6 +106,7 @@ describe('GroupSplitLayout', () => {
     expect(dividerIndicator).not.toBeNull();
     expect(dividerIndicator?.className).toContain('w-px');
     expect(dividerIndicator?.className).toContain('bg-zinc-600/80');
+    expect(dividerIndicator?.className).not.toContain('shadow-');
   });
 
   it('highlights the active group window without adding an outer border', () => {

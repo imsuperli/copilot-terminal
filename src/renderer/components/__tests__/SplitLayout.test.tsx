@@ -317,6 +317,7 @@ describe('SplitLayout', () => {
     expect(dividerIndicator).not.toBeNull();
     expect(dividerIndicator?.className).toContain('w-px');
     expect(dividerIndicator?.className).toContain('bg-zinc-600/80');
+    expect(dividerIndicator?.className).not.toContain('shadow-');
   });
 
   it('renders chat panes through the shared layout renderer', () => {

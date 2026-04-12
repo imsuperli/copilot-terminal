@@ -185,8 +185,8 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   }, [isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
-  const dividerActiveClassName = 'bg-[rgb(var(--primary))] shadow-[0_0_0_1px_rgba(168,170,88,0.18)]';
-  const dividerIdleClassName = 'bg-zinc-600/80 shadow-[0_0_0_1px_rgba(24,24,27,0.45)] group-hover:bg-[rgb(var(--primary))]/75 group-hover:shadow-[0_0_0_1px_rgba(168,170,88,0.18)]';
+  const dividerActiveClassName = 'bg-[rgb(var(--primary))]';
+  const dividerIdleClassName = 'bg-zinc-600/80 group-hover:bg-[rgb(var(--primary))]/75';
 
   return (
     <div
