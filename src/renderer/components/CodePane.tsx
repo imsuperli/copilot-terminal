@@ -145,6 +145,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const activeFilePath = pane.code?.activeFilePath ?? null;
   const selectedPath = pane.code?.selectedPath ?? null;
   const viewMode = pane.code?.viewMode ?? 'editor';
+  const diffTargetPath = pane.code?.diffTargetPath ?? null;
 
   const monacoRef = useRef<MonacoModule | null>(null);
   const editorHostRef = useRef<HTMLDivElement | null>(null);
@@ -172,6 +173,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [savingPaths, setSavingPaths] = useState<Set<string>>(createEmptySet);
   const [gitStatusByPath, setGitStatusByPath] = useState<Record<string, CodePaneGitStatusEntry>>({});
   const [banner, setBanner] = useState<BannerState | null>(null);
+  const [treeLoadError, setTreeLoadError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const expandedDirectoriesRef = useRef(expandedDirectories);
   const loadedDirectoriesRef = useRef(loadedDirectories);
@@ -212,12 +215,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
       viewMode: 'editor' as const,
       diffTargetPath: null,
     };
+    const nextCodeState = {
+      ...currentCodeState,
+      ...updates,
+    };
+
+    paneRef.current = {
+      ...paneRef.current,
+      code: nextCodeState,
+    };
+
+    if (updates.activeFilePath !== undefined) {
+      activeFilePathRef.current = updates.activeFilePath;
+    }
 
     updatePane(windowId, pane.id, {
-      code: {
-        ...currentCodeState,
-        ...updates,
-      },
+      code: nextCodeState,
     });
   }, [pane.id, rootPath, updatePane, windowId]);
 
@@ -278,7 +291,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    if (viewMode === 'diff') {
+    const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
+    if (currentViewMode === 'diff') {
       viewStatesRef.current.set(currentFilePath, diffEditorRef.current?.getModifiedEditor().saveViewState() ?? null);
       return;
     }
@@ -345,6 +359,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
 
     if (response.success) {
+      if (directoryPath === rootPath) {
+        setTreeLoadError(null);
+      }
+
       startTransition(() => {
         setTreeEntriesByDirectory((currentTreeEntries) => ({
           ...currentTreeEntries,
@@ -356,6 +374,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
           return nextLoadedDirectories;
         });
       });
+    } else if (directoryPath === rootPath) {
+      setTreeLoadError(response.error || t('common.retry'));
+    } else {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
     }
 
     setLoadingDirectories((currentLoadingDirectories) => {
@@ -363,7 +388,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       nextLoadingDirectories.delete(directoryPath);
       return nextLoadingDirectories;
     });
-  }, [rootPath]);
+  }, [rootPath, t]);
 
   const createOrUpdateModel = useCallback((filePath: string, readResult: CodePaneReadFileResult) => {
     const monaco = monacoRef.current;
@@ -462,6 +487,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const monaco = await ensureMonacoEnvironment();
     monacoRef.current = monaco;
     const currentActiveFilePath = activeFilePathRef.current;
+    const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
 
     if (!currentActiveFilePath) {
       disposeEditors();
@@ -475,7 +501,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     saveCurrentViewState();
 
-    if (viewMode === 'diff') {
+    if (currentViewMode === 'diff') {
       const diffModel = diffModelsRef.current.get(currentActiveFilePath);
       if (!diffModel) {
         disposeEditors();
@@ -672,6 +698,110 @@ export const CodePane: React.FC<CodePaneProps> = ({
     await refreshEditorSurface();
   }, [loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface]);
 
+  const ensureDiffModel = useCallback(async (
+    filePath: string,
+    options?: {
+      baseFilePath?: string;
+      showBanner?: boolean;
+    },
+  ) => {
+    if (!monacoRef.current && supportsMonaco) {
+      monacoRef.current = await ensureMonacoEnvironment();
+    }
+
+    const baseFilePath = options?.baseFilePath ?? filePath;
+    if (!monacoRef.current) {
+      if (options?.showBanner !== false) {
+        setBanner({
+          tone: 'info',
+          message: t('codePane.gitUnavailable'),
+          filePath,
+        });
+      }
+      return false;
+    }
+
+    const response = await window.electronAPI.codePaneReadGitBaseFile({
+      rootPath,
+      filePath: baseFilePath,
+    });
+
+    if (!response.success) {
+      if (options?.showBanner !== false) {
+        setBanner({
+          tone: 'info',
+          message: response.error || t('codePane.gitUnavailable'),
+          filePath,
+        });
+      }
+      return false;
+    }
+
+    const statusEntry = gitStatusByPath[baseFilePath] ?? gitStatusByPath[filePath];
+    if (!response.data?.existsInHead && !statusEntry) {
+      if (options?.showBanner !== false) {
+        setBanner({
+          tone: 'info',
+          message: t('codePane.gitUnavailable'),
+          filePath,
+        });
+      }
+      return false;
+    }
+
+    const meta = fileMetaRef.current.get(filePath) ?? fileMetaRef.current.get(baseFilePath);
+    const language = meta?.language ?? fileModelsRef.current.get(filePath)?.getLanguageId() ?? 'plaintext';
+    let diffModel = diffModelsRef.current.get(filePath);
+    if (!diffModel) {
+      diffModel = monacoRef.current.editor.createModel(
+        response.data?.content ?? '',
+        language,
+        monacoRef.current.Uri.parse(`code-pane-head://${encodeURIComponent(filePath)}`),
+      );
+      diffModelsRef.current.set(filePath, diffModel);
+    } else {
+      if (diffModel.getLanguageId() !== language) {
+        monacoRef.current.editor.setModelLanguage(diffModel, language);
+      }
+      if (diffModel.getValue() !== (response.data?.content ?? '')) {
+        diffModel.setValue(response.data?.content ?? '');
+      }
+    }
+
+    clearBannerForFile(filePath);
+    return true;
+  }, [clearBannerForFile, gitStatusByPath, rootPath, supportsMonaco, t]);
+
+  const openDiffForFile = useCallback(async (filePath: string, options?: { preserveTabs?: boolean }) => {
+    const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
+    if (!loadedModel) {
+      persistCodeState({
+        selectedPath: filePath,
+      });
+      return;
+    }
+
+    const didEnsureDiffModel = await ensureDiffModel(filePath);
+    if (!didEnsureDiffModel) {
+      return;
+    }
+
+    const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
+    const nextTabs = options?.preserveTabs
+      ? currentOpenFiles
+      : createTabList(currentOpenFiles, filePath);
+
+    setBanner(null);
+    persistCodeState({
+      openFiles: nextTabs,
+      activeFilePath: filePath,
+      selectedPath: filePath,
+      viewMode: 'diff',
+      diffTargetPath: filePath,
+    });
+    await refreshEditorSurface();
+  }, [ensureDiffModel, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface]);
+
   const closeFileTab = useCallback(async (filePath: string) => {
     const didFlush = await flushDirtyFiles([filePath]);
     if (!didFlush) {
@@ -733,58 +863,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (!filePath) {
       return;
     }
-
-    const response = await window.electronAPI.codePaneReadGitBaseFile({
-      rootPath,
-      filePath,
-    });
-
-    if (!response.success || !monacoRef.current) {
-      setBanner({
-        tone: 'info',
-        message: t('codePane.gitUnavailable'),
-        filePath,
-      });
-      return;
-    }
-
-    const statusEntry = gitStatusByPath[filePath];
-    if (!response.data?.existsInHead && !statusEntry) {
-      setBanner({
-        tone: 'info',
-        message: t('codePane.gitUnavailable'),
-        filePath,
-      });
-      return;
-    }
-
-    const meta = fileMetaRef.current.get(filePath);
-    const language = meta?.language ?? 'plaintext';
-    let diffModel = diffModelsRef.current.get(filePath);
-    if (!diffModel) {
-      diffModel = monacoRef.current.editor.createModel(
-        response.data?.content ?? '',
-        language,
-        monacoRef.current.Uri.parse(`code-pane-head://${encodeURIComponent(filePath)}`),
-      );
-      diffModelsRef.current.set(filePath, diffModel);
-    } else {
-      if (diffModel.getLanguageId() !== language) {
-        monacoRef.current.editor.setModelLanguage(diffModel, language);
-      }
-      if (diffModel.getValue() !== (response.data?.content ?? '')) {
-        diffModel.setValue(response.data?.content ?? '');
-      }
-    }
-
-    setBanner(null);
-
-    persistCodeState({
-      viewMode: 'diff',
-      diffTargetPath: filePath,
-    });
-    await refreshEditorSurface();
-  }, [gitStatusByPath, refreshEditorSurface, rootPath, t, persistCodeState]);
+    await openDiffForFile(filePath, { preserveTabs: true });
+  }, [openDiffForFile]);
 
   const refreshLoadedDirectories = useCallback(async () => {
     const directoriesToRefresh = Array.from(new Set([rootPath, ...loadedDirectoriesRef.current]));
@@ -798,6 +878,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const bootstrap = async () => {
       setIsBootstrapping(true);
       setBanner(null);
+      setTreeLoadError(null);
+      setSearchError(null);
       setTreeEntriesByDirectory({});
       setExpandedDirectories(new Set([rootPath]));
       setLoadedDirectories(new Set());
@@ -889,13 +971,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    if (!fileModelsRef.current.has(activeFilePath)) {
-      void activateFile(activeFilePath, { preserveTabs: true });
-      return;
-    }
+    const syncActiveSurface = async () => {
+      const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
+      const currentDiffTargetPath = paneRef.current.code?.diffTargetPath ?? diffTargetPath ?? activeFilePath;
+      const loadedModel = fileModelsRef.current.get(activeFilePath) ?? await loadFileIntoModel(activeFilePath);
+      if (!loadedModel) {
+        return;
+      }
 
-    void refreshEditorSurface();
-  }, [activateFile, activeFilePath, refreshEditorSurface, viewMode]);
+      if (currentViewMode === 'diff') {
+        const didEnsureDiffModel = await ensureDiffModel(activeFilePath, {
+          baseFilePath: currentDiffTargetPath,
+          showBanner: false,
+        });
+        if (!didEnsureDiffModel) {
+          persistCodeState({
+            viewMode: 'editor',
+            diffTargetPath: null,
+          });
+        }
+      }
+
+      await refreshEditorSurface();
+    };
+
+    void syncActiveSurface();
+  }, [activeFilePath, diffTargetPath, ensureDiffModel, loadFileIntoModel, persistCodeState, refreshEditorSurface, viewMode]);
 
   useEffect(() => {
     if (!isActive) {
@@ -911,11 +1012,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (!trimmedQuery) {
       setSearchResults([]);
       setIsSearching(false);
+      setSearchError(null);
       return;
     }
 
     let cancelled = false;
     setIsSearching(true);
+    setSearchError(null);
 
     const timer = setTimeout(async () => {
       const response = await window.electronAPI.codePaneSearchFiles({
@@ -931,6 +1034,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       startTransition(() => {
         setSearchResults(response.success ? (response.data ?? []) : []);
       });
+      setSearchError(response.success ? null : (response.error || t('common.retry')));
       setIsSearching(false);
     }, 180);
 
@@ -938,7 +1042,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [deferredSearchQuery, rootPath]);
+  }, [deferredSearchQuery, rootPath, t]);
 
   const activeTabStatus = activeFilePath ? getEntryStatus(activeFilePath, 'file') : undefined;
   const activeStatusText = activeFilePath
@@ -1199,10 +1303,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <Loader2 size={12} className="animate-spin" />
                   {t('codePane.loading')}
                 </div>
+              ) : deferredSearchQuery.trim() && searchError ? (
+                <div className="px-2 text-xs text-red-300">{searchError}</div>
               ) : deferredSearchQuery.trim() ? (
                 renderedSearchResults.length > 0 ? renderedSearchResults : (
                   <div className="px-2 text-xs text-zinc-500">{t('common.noMatchingWindows')}</div>
                 )
+              ) : treeLoadError ? (
+                <div className="px-2 text-xs text-red-300">{treeLoadError}</div>
               ) : sidebarEntries.length > 0 ? (
                 renderTree(rootPath, 0)
               ) : (
