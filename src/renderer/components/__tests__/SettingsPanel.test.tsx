@@ -56,6 +56,8 @@ describe('SettingsPanel', () => {
       terminal: {
         useBundledConptyDll: false,
         defaultShellProgram: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+        fontFamily: '',
+        fontSize: 14,
       },
     });
 
@@ -66,6 +68,8 @@ describe('SettingsPanel', () => {
       terminal: {
         useBundledConptyDll: false,
         defaultShellProgram: 'C:\\Shells\\custom-shell.exe',
+        fontFamily: '',
+        fontSize: 14,
       },
     });
   });
@@ -169,5 +173,20 @@ describe('SettingsPanel', () => {
     await waitFor(() => {
       expect(screen.queryByText('ssh.example.com:22')).not.toBeInTheDocument();
     });
+  });
+
+  it('renders the chat settings tab inside the settings panel', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'Chat' }));
+
+    expect(await screen.findByText('LLM Providers')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '添加 Provider' })).toBeInTheDocument();
   });
 });

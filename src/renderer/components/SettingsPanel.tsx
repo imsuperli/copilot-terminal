@@ -13,6 +13,7 @@ import { FeatureSettings, IDEConfig, StatusLineConfig } from '../../shared/types
 import { KnownHostEntry } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
+import { ChatSettingsTab } from './ChatSettingsTab';
 
 interface ShellProgramOption {
   command: string;
@@ -25,7 +26,7 @@ interface SettingsPanelProps {
   onClose: () => void;
 }
 
-type SettingsTab = 'general' | 'quicknav' | 'statusline' | 'advanced';
+type SettingsTab = 'general' | 'quicknav' | 'chat' | 'statusline' | 'advanced';
 type QuickNavSubTab = 'ide' | 'custom';
 type StatusLineDisplayFormat = 'full' | 'compact';
 const AUTO_SHELL_OPTION_VALUE = '__auto__';
@@ -613,6 +614,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       value: 'statusline' as SettingsTab,
       label: t('settings.tab.statusLine'),
       icon: Plug,
+    },
+    {
+      value: 'chat' as SettingsTab,
+      label: t('settings.tab.chat'),
+      icon: Command,
     },
     {
       value: 'advanced' as SettingsTab,
@@ -1293,6 +1299,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
                   )}
                 </div>
+              </Tabs.Content>
+
+              <Tabs.Content value="chat" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
+                <ChatSettingsTab />
               </Tabs.Content>
 
               <Tabs.Content value="advanced" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
