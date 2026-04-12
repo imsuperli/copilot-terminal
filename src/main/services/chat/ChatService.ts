@@ -89,6 +89,121 @@ const TOOL_DEFINITIONS_OPENAI: OpenAI.ChatCompletionTool[] = TOOL_DEFINITIONS_AN
   }),
 );
 
+type OpenAIFunctionCallLike = {
+  name?: string;
+  arguments?: string;
+};
+
+type OpenAIToolCallLike = {
+  index?: number;
+  id?: string;
+  function?: OpenAIFunctionCallLike;
+};
+
+type OpenAIMessageLike = {
+  content?: unknown;
+  tool_calls?: OpenAIToolCallLike[];
+  function_call?: OpenAIFunctionCallLike;
+};
+
+type OpenAIChoiceLike = {
+  delta?: OpenAIMessageLike;
+  message?: OpenAIMessageLike;
+  text?: unknown;
+};
+
+function extractOpenAITextParts(content: unknown): string[] {
+  if (typeof content === 'string') {
+    return content ? [content] : [];
+  }
+
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  const textParts: string[] = [];
+  for (const part of content) {
+    if (typeof part === 'string') {
+      if (part) {
+        textParts.push(part);
+      }
+      continue;
+    }
+
+    if (!part || typeof part !== 'object') {
+      continue;
+    }
+
+    const candidate = part as {
+      text?: unknown;
+      content?: unknown;
+    };
+
+    if (typeof candidate.text === 'string' && candidate.text) {
+      textParts.push(candidate.text);
+      continue;
+    }
+
+    if (typeof candidate.content === 'string' && candidate.content) {
+      textParts.push(candidate.content);
+    }
+  }
+
+  return textParts;
+}
+
+function appendOpenAIToolCalls(
+  payload: OpenAIMessageLike | undefined,
+  toolCallsRaw: Map<number, { id: string; name: string; args: string }>,
+): void {
+  if (!payload) {
+    return;
+  }
+
+  if (Array.isArray(payload.tool_calls)) {
+    for (const tc of payload.tool_calls) {
+      const idx = tc.index ?? 0;
+      if (!toolCallsRaw.has(idx)) {
+        toolCallsRaw.set(idx, {
+          id: tc.id || uuidv4(),
+          name: tc.function?.name || '',
+          args: '',
+        });
+      }
+
+      const existing = toolCallsRaw.get(idx)!;
+      if (tc.function?.arguments) {
+        existing.args += tc.function.arguments;
+      }
+      if (tc.function?.name) {
+        existing.name = tc.function.name;
+      }
+      if (tc.id) {
+        existing.id = tc.id;
+      }
+    }
+    return;
+  }
+
+  if (payload.function_call) {
+    if (!toolCallsRaw.has(0)) {
+      toolCallsRaw.set(0, {
+        id: uuidv4(),
+        name: payload.function_call.name || '',
+        args: '',
+      });
+    }
+
+    const existing = toolCallsRaw.get(0)!;
+    if (payload.function_call.arguments) {
+      existing.args += payload.function_call.arguments;
+    }
+    if (payload.function_call.name) {
+      existing.name = payload.function_call.name;
+    }
+  }
+}
+
 /** 构建系统提示词 */
 function buildSystemPrompt(request: ChatSendRequest): string {
   const { sshContext, systemPrompt } = request;
@@ -328,26 +443,28 @@ export class ChatService {
       for await (const chunk of stream) {
         if (signal?.aborted) break;
 
-        const delta = chunk.choices[0]?.delta;
-        if (!delta) continue;
-
-        if (delta.content) {
-          fullContent += delta.content;
-          callbacks.onChunk(delta.content);
+        const choice = chunk.choices[0] as OpenAIChoiceLike | undefined;
+        if (!choice) {
+          continue;
         }
 
-        // 累积工具调用
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const idx = tc.index ?? 0;
-            if (!toolCallsRaw.has(idx)) {
-              toolCallsRaw.set(idx, { id: tc.id || uuidv4(), name: tc.function?.name || '', args: '' });
-            }
-            const existing = toolCallsRaw.get(idx)!;
-            if (tc.function?.arguments) existing.args += tc.function.arguments;
-            if (tc.function?.name) existing.name = tc.function.name;
-            if (tc.id) existing.id = tc.id;
-          }
+        const delta = choice.delta;
+        const deltaTextParts = extractOpenAITextParts(delta?.content);
+        const textParts = deltaTextParts.length > 0
+          ? deltaTextParts
+          : [
+              ...extractOpenAITextParts(choice.message?.content),
+              ...(typeof choice.text === 'string' && choice.text ? [choice.text] : []),
+            ];
+
+        for (const textPart of textParts) {
+          fullContent += textPart;
+          callbacks.onChunk(textPart);
+        }
+
+        appendOpenAIToolCalls(delta, toolCallsRaw);
+        if (!delta?.tool_calls && !delta?.function_call) {
+          appendOpenAIToolCalls(choice.message, toolCallsRaw);
         }
       }
 
