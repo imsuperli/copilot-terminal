@@ -5,6 +5,11 @@
 
 import type { ToolCall, ToolResult, ChatSshContext } from '../../../shared/types/chat';
 import type { IProcessManager } from '../../types/process';
+import {
+  chatDebugError,
+  chatDebugInfo,
+  previewText,
+} from '../../utils/chatDebugLog';
 
 /** 命令输出最大字符数，超出时截断 */
 const MAX_OUTPUT_CHARS = 12000;
@@ -26,33 +31,86 @@ export class ToolExecutor {
 
   async execute(tool: ToolCall, sshContext: ChatSshContext): Promise<ToolResult> {
     try {
+      chatDebugInfo('ToolExecutor', 'Starting tool execution', {
+        toolCallId: tool.id,
+        toolName: tool.name,
+        params: tool.params,
+        sshContext: {
+          host: sshContext.host,
+          user: sshContext.user,
+          cwd: sshContext.cwd ?? null,
+          windowId: sshContext.windowId,
+          paneId: sshContext.paneId,
+        },
+      });
+
+      let result: ToolResult;
       switch (tool.name) {
         case 'execute_command':
-          return await this.executeCommand(tool, sshContext);
+          result = await this.executeCommand(tool, sshContext);
+          break;
         case 'read_file':
-          return await this.readFile(tool, sshContext);
+          result = await this.readFile(tool, sshContext);
+          break;
         case 'glob_search':
-          return await this.globSearch(tool, sshContext);
+          result = await this.globSearch(tool, sshContext);
+          break;
         case 'grep_search':
-          return await this.grepSearch(tool, sshContext);
+          result = await this.grepSearch(tool, sshContext);
+          break;
         case 'ask_followup_question':
         case 'attempt_completion':
           // 这两个工具由 Renderer 处理，主进程不执行
-          return { toolCallId: tool.id, content: '', isError: false };
+          result = { toolCallId: tool.id, content: '', isError: false };
+          break;
         default:
-          return {
+          result = {
             toolCallId: tool.id,
             content: `未知工具: ${tool.name}`,
             isError: true,
           };
+          break;
       }
+
+      chatDebugInfo('ToolExecutor', 'Finished tool execution', {
+        toolCallId: tool.id,
+        toolName: tool.name,
+        isError: result.isError ?? false,
+        contentLength: result.content.length,
+        contentPreview: previewText(result.content, 240),
+      });
+
+      return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      chatDebugError('ToolExecutor', 'Tool execution failed', {
+        toolCallId: tool.id,
+        toolName: tool.name,
+        params: tool.params,
+        sshContext: {
+          host: sshContext.host,
+          user: sshContext.user,
+          cwd: sshContext.cwd ?? null,
+          windowId: sshContext.windowId,
+          paneId: sshContext.paneId,
+        },
+        error: err,
+      });
       return { toolCallId: tool.id, content: `执行错误: ${message}`, isError: true };
     }
   }
 
   private async execRemote(command: string, sshContext: ChatSshContext): Promise<string> {
+    chatDebugInfo('ToolExecutor', 'Dispatching remote SSH command', {
+      commandPreview: previewText(command, 240),
+      sshContext: {
+        host: sshContext.host,
+        user: sshContext.user,
+        cwd: sshContext.cwd ?? null,
+        windowId: sshContext.windowId,
+        paneId: sshContext.paneId,
+      },
+    });
     return this.processManager.execSSHCommand(sshContext.windowId, sshContext.paneId, command);
   }
 

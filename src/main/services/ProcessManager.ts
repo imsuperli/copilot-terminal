@@ -22,6 +22,7 @@ import { ITmuxCompatService, TmuxPaneId } from '../../shared/types/tmux';
 import { getTmuxShimDir } from '../utils/tmux-shim-path';
 import { resolveNodePath } from '../utils/node-path';
 import { resolveShellProgram } from '../utils/shell';
+import { chatDebugError, chatDebugInfo, previewText } from '../utils/chatDebugLog';
 import { ISSHConnectionPool, SSHConnectionPool } from './ssh/SSHConnectionPool';
 import { ISSHKnownHostsStore } from './ssh/SSHKnownHostsStore';
 import { SSHPtySession } from './ssh/SSHPtySession';
@@ -494,17 +495,40 @@ export class ProcessManager extends EventEmitter implements IProcessManager {
   }
 
   async execSSHCommand(windowId: string, paneId: string, command: string): Promise<string> {
-    const pid = this.getPidByPane(windowId, paneId);
-    if (pid === null) {
-      throw new Error(`Pane not found: ${windowId}/${paneId}`);
-    }
+    chatDebugInfo('ProcessManager.execSSHCommand', 'Executing SSH command', {
+      windowId,
+      paneId,
+      commandPreview: previewText(command, 240),
+    });
 
-    const ptySession = this.ptys.get(pid);
-    if (!ptySession || !isSSHExecSession(ptySession)) {
-      throw new Error(`SSH session not found for pane: ${windowId}/${paneId}`);
-    }
+    try {
+      const pid = this.getPidByPane(windowId, paneId);
+      if (pid === null) {
+        throw new Error(`Pane not found: ${windowId}/${paneId}`);
+      }
 
-    return ptySession.execCommand(command);
+      const ptySession = this.ptys.get(pid);
+      if (!ptySession || !isSSHExecSession(ptySession)) {
+        throw new Error(`SSH session not found for pane: ${windowId}/${paneId}`);
+      }
+
+      const output = await ptySession.execCommand(command);
+      chatDebugInfo('ProcessManager.execSSHCommand', 'SSH command completed', {
+        windowId,
+        paneId,
+        outputLength: output.length,
+        outputPreview: previewText(output, 240),
+      });
+      return output;
+    } catch (error) {
+      chatDebugError('ProcessManager.execSSHCommand', 'SSH command failed', {
+        windowId,
+        paneId,
+        commandPreview: previewText(command, 240),
+        error,
+      });
+      throw error;
+    }
   }
 
   /**
