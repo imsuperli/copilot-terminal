@@ -22,6 +22,9 @@ import { ChatProviderVaultService } from './services/chat/ChatProviderVaultServi
 import { CodeFileService } from './services/code/CodeFileService';
 import { CodeGitService } from './services/code/CodeGitService';
 import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
+import { LanguageFeatureService } from './services/language/LanguageFeatureService';
+import { LanguagePluginResolver } from './services/language/LanguagePluginResolver';
+import { LanguageServerSupervisor } from './services/language/LanguageServerSupervisor';
 import { PluginCatalogService } from './services/plugins/PluginCatalogService';
 import { PluginInstallerService } from './services/plugins/PluginInstallerService';
 import { PluginManager } from './services/plugins/PluginManager';
@@ -56,6 +59,7 @@ let sshHostKeyPromptService: ElectronSSHHostKeyPromptService | null = null;
 let codeFileService: CodeFileService | null = null;
 let codeGitService: CodeGitService | null = null;
 let codePaneWatcherService: CodePaneWatcherService | null = null;
+let languageFeatureService: LanguageFeatureService | null = null;
 let pluginManager: PluginManager | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 const forwardPtyData = createPtyDataForwarder(() => mainWindow);
@@ -391,6 +395,7 @@ function createWindow() {
           fileWatcherService,
           gitBranchWatcher,
           tmuxCompatService,
+          languageFeatureService,
           currentWorkspace,
         };
 
@@ -546,6 +551,27 @@ app.whenReady().then(async () => {
     catalogService: pluginCatalogService,
     installerService: pluginInstallerService,
   });
+  const languagePluginResolver = new LanguagePluginResolver({
+    registryStore: pluginRegistryStore,
+  });
+  const languageServerSupervisor = new LanguageServerSupervisor({
+    runtimeRootPath: path.join(pluginDataPath, 'runtime'),
+    emitDiagnostics: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('code-pane-diagnostics-changed', payload);
+      }
+    },
+    emitRuntimeState: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('plugin-runtime-state-changed', payload);
+      }
+    },
+  });
+  languageFeatureService = new LanguageFeatureService({
+    codeFileService,
+    resolver: languagePluginResolver,
+    supervisor: languageServerSupervisor,
+  });
 
   // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
   initProjectConfigWatcher(fileWatcherService);
@@ -617,6 +643,7 @@ app.whenReady().then(async () => {
     codeFileService,
     codeGitService,
     codePaneWatcherService,
+    languageFeatureService,
     pluginManager,
     currentWorkspace,
     getMainWindow: () => mainWindow,
@@ -696,6 +723,7 @@ app.on('window-all-closed', () => {
         fileWatcherService,
         gitBranchWatcher,
         tmuxCompatService,
+        languageFeatureService,
         currentWorkspace,
       }).catch(error => {
         console.error('[Main] Shutdown failed:', error);

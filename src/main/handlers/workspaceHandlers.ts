@@ -48,7 +48,14 @@ function haveWatchTargetsChanged(previousWindows: Window[], nextWindows: Window[
 }
 
 export function registerWorkspaceHandlers(ctx: HandlerContext) {
-  const { workspaceManager, autoSaveManager, getCurrentWorkspace, setCurrentWorkspace, syncProjectConfigWatchers } = ctx;
+  const {
+    workspaceManager,
+    autoSaveManager,
+    getCurrentWorkspace,
+    setCurrentWorkspace,
+    syncProjectConfigWatchers,
+    languageFeatureService,
+  } = ctx;
 
   // 监听自动保存触发事件
   ipcMain.on('trigger-auto-save', async (_event, windows: Window[], groups?: WindowGroup[]) => {
@@ -117,6 +124,7 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       const workspace = await workspaceManager.loadWorkspace();
       setCurrentWorkspace(workspace);
       await syncProjectConfigWatchers?.();
+      await languageFeatureService?.resetSessions();
       return successResponse(workspace);
     } catch (error) {
       return errorResponse(error);
@@ -129,6 +137,7 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       const workspace = await workspaceManager.loadWorkspace();
       setCurrentWorkspace(workspace);
       await syncProjectConfigWatchers?.();
+      await languageFeatureService?.resetSessions();
       return successResponse(workspace);
     } catch (error) {
       return errorResponse(error);

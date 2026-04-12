@@ -156,6 +156,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-search-files', config),
   codePaneSearchContents: (config) =>
     ipcRenderer.invoke('code-pane-search-contents', config),
+  codePaneDidOpenDocument: (config) =>
+    ipcRenderer.invoke('code-pane-did-open-document', config),
+  codePaneDidChangeDocument: (config) =>
+    ipcRenderer.invoke('code-pane-did-change-document', config),
+  codePaneDidSaveDocument: (config) =>
+    ipcRenderer.invoke('code-pane-did-save-document', config),
+  codePaneDidCloseDocument: (config) =>
+    ipcRenderer.invoke('code-pane-did-close-document', config),
   codePaneGetDefinition: (config) =>
     ipcRenderer.invoke('code-pane-get-definition', config),
   codePaneGetHover: (config) =>

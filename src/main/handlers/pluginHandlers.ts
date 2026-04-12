@@ -10,7 +10,13 @@ import { HandlerContext } from './HandlerContext';
 import { errorResponse, successResponse } from './HandlerResponse';
 
 export function registerPluginHandlers(ctx: HandlerContext) {
-  const { pluginManager, workspaceManager, getCurrentWorkspace, setCurrentWorkspace } = ctx;
+  const {
+    pluginManager,
+    workspaceManager,
+    getCurrentWorkspace,
+    setCurrentWorkspace,
+    languageFeatureService,
+  } = ctx;
 
   ipcMain.handle('list-plugins', async () => {
     try {
@@ -54,7 +60,9 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
-      return successResponse(await pluginManager.installMarketplacePlugin(config));
+      const item = await pluginManager.installMarketplacePlugin(config);
+      await languageFeatureService?.resetSessions();
+      return successResponse(item);
     } catch (error) {
       return errorResponse(error);
     }
@@ -66,7 +74,9 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
-      return successResponse(await pluginManager.installLocalPlugin(config));
+      const item = await pluginManager.installLocalPlugin(config);
+      await languageFeatureService?.resetSessions();
+      return successResponse(item);
     } catch (error) {
       return errorResponse(error);
     }
@@ -78,7 +88,9 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
-      return successResponse(await pluginManager.updatePlugin(config));
+      const item = await pluginManager.updatePlugin(config);
+      await languageFeatureService?.resetSessions();
+      return successResponse(item);
     } catch (error) {
       return errorResponse(error);
     }
@@ -96,6 +108,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
       }
 
       await pluginManager.uninstallPlugin(config.pluginId);
+      await languageFeatureService?.resetSessions();
       return successResponse();
     } catch (error) {
       return errorResponse(error);
@@ -114,6 +127,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         }
 
         await pluginManager.setEnabledByDefault(config.pluginId, config.enabled);
+        await languageFeatureService?.resetSessions();
         const workspace = getCurrentWorkspace();
         if (!workspace) {
           throw new Error('Workspace not loaded');
@@ -121,7 +135,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         return successResponse(workspace.settings);
       }
 
-      return successResponse(await updateWorkspacePluginSettings(ctx, (currentSettings) => {
+      const settings = await updateWorkspacePluginSettings(ctx, (currentSettings) => {
         const enabledPluginIds = new Set(currentSettings.enabledPluginIds ?? []);
         const disabledPluginIds = new Set(currentSettings.disabledPluginIds ?? []);
 
@@ -141,7 +155,10 @@ export function registerPluginHandlers(ctx: HandlerContext) {
           enabledPluginIds: Array.from(enabledPluginIds).sort((left, right) => left.localeCompare(right)),
           disabledPluginIds: Array.from(disabledPluginIds).sort((left, right) => left.localeCompare(right)),
         };
-      }));
+      });
+
+      await languageFeatureService?.resetSessions();
+      return successResponse(settings);
     } catch (error) {
       return errorResponse(error);
     }
@@ -155,6 +172,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
 
       if ((config.scope ?? 'workspace') === 'global') {
         await pluginManager.setGlobalLanguageBinding(config.language, config.pluginId);
+        await languageFeatureService?.resetSessions();
         const workspace = getCurrentWorkspace();
         if (!workspace) {
           throw new Error('Workspace not loaded');
@@ -162,7 +180,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         return successResponse(workspace.settings);
       }
 
-      return successResponse(await updateWorkspacePluginSettings(ctx, (currentSettings) => {
+      const settings = await updateWorkspacePluginSettings(ctx, (currentSettings) => {
         const languageBindings = {
           ...(currentSettings.languageBindings ?? {}),
         };
@@ -177,7 +195,10 @@ export function registerPluginHandlers(ctx: HandlerContext) {
           ...currentSettings,
           languageBindings,
         };
-      }));
+      });
+
+      await languageFeatureService?.resetSessions();
+      return successResponse(settings);
     } catch (error) {
       return errorResponse(error);
     }
@@ -191,6 +212,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
 
       if ((config.scope ?? 'workspace') === 'global') {
         await pluginManager.setGlobalPluginSettings(config.pluginId, config.values);
+        await languageFeatureService?.resetSessions(config.pluginId);
         const workspace = getCurrentWorkspace();
         if (!workspace) {
           throw new Error('Workspace not loaded');
@@ -198,10 +220,13 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         return successResponse(workspace.settings);
       }
 
-      return successResponse(await updateWorkspacePluginSettings(ctx, (currentSettings) => ({
+      const settings = await updateWorkspacePluginSettings(ctx, (currentSettings) => ({
         ...currentSettings,
         pluginSettings: buildWorkspacePluginSettingsSnapshot(currentSettings.pluginSettings, config.pluginId, config.values),
-      })));
+      }));
+
+      await languageFeatureService?.resetSessions(config.pluginId);
+      return successResponse(settings);
     } catch (error) {
       return errorResponse(error);
     }

@@ -322,6 +322,20 @@ export interface CodePaneContentMatch {
   lineText: string;
 }
 
+export interface CodePaneDocumentSyncConfig {
+  paneId: string;
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  content: string;
+}
+
+export interface CodePaneDocumentCloseConfig {
+  paneId: string;
+  rootPath: string;
+  filePath: string;
+}
+
 export interface CodePaneFsChangedPayload {
   rootPath: string;
   changes: Array<{
@@ -351,6 +365,7 @@ export interface CodePaneLocation {
 export interface CodePaneGetDefinitionConfig {
   rootPath: string;
   filePath: string;
+  language?: string;
   position: CodePanePosition;
 }
 
@@ -367,6 +382,7 @@ export interface CodePaneHoverResult {
 export interface CodePaneGetHoverConfig {
   rootPath: string;
   filePath: string;
+  language?: string;
   position: CodePanePosition;
 }
 
@@ -379,6 +395,7 @@ export interface CodePaneReference {
 export interface CodePaneGetReferencesConfig {
   rootPath: string;
   filePath: string;
+  language?: string;
   position: CodePanePosition;
 }
 
@@ -394,6 +411,7 @@ export interface CodePaneDocumentSymbol {
 export interface CodePaneGetDocumentSymbolsConfig {
   rootPath: string;
   filePath: string;
+  language?: string;
 }
 
 export interface CodePaneDiagnostic {
@@ -660,6 +678,10 @@ export interface ElectronAPI {
   codePaneUnwatchRoot: (paneId: string) => Promise<IpcResponse<void>>;
   codePaneSearchFiles: (config: CodePaneSearchFilesConfig) => Promise<IpcResponse<string[]>>;
   codePaneSearchContents: (config: CodePaneSearchContentsConfig) => Promise<IpcResponse<CodePaneContentMatch[]>>;
+  codePaneDidOpenDocument: (config: CodePaneDocumentSyncConfig) => Promise<IpcResponse<void>>;
+  codePaneDidChangeDocument: (config: CodePaneDocumentSyncConfig) => Promise<IpcResponse<void>>;
+  codePaneDidSaveDocument: (config: CodePaneDocumentSyncConfig) => Promise<IpcResponse<void>>;
+  codePaneDidCloseDocument: (config: CodePaneDocumentCloseConfig) => Promise<IpcResponse<void>>;
   codePaneGetDefinition: (config: CodePaneGetDefinitionConfig) => Promise<IpcResponse<CodePaneLocation[]>>;
   codePaneGetHover: (config: CodePaneGetHoverConfig) => Promise<IpcResponse<CodePaneHoverResult | null>>;
   codePaneGetReferences: (config: CodePaneGetReferencesConfig) => Promise<IpcResponse<CodePaneReference[]>>;

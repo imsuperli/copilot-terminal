@@ -14,6 +14,7 @@ import { registerSSHProfileHandlers } from './sshProfileHandlers';
 import { registerSSHSessionHandlers } from './sshSessionHandlers';
 import { registerCodePaneHandlers } from './codePaneHandlers';
 import { registerChatHandlers } from './chatHandlers';
+import { registerLanguageHandlers } from './languageHandlers';
 import { registerPluginHandlers } from './pluginHandlers';
 
 /**
@@ -42,6 +43,9 @@ export function registerAllHandlers(ctx: HandlerContext) {
 
   // Code pane 文件与 Git 能力
   registerCodePaneHandlers(ctx);
+
+  // Code pane 语言服务
+  registerLanguageHandlers(ctx);
 
   // 进程管理 (create-terminal, kill-terminal, get-terminal-status, list-terminals)
   registerProcessHandlers(ctx);
