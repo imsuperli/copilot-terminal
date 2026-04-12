@@ -46,7 +46,8 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
   onStatusLineConfigChange,
 }) => {
   const { t } = useI18n();
-  const [loading, setLoading] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [installedPlugins, setInstalledPlugins] = useState<PluginListItem[]>([]);
   const [catalogEntries, setCatalogEntries] = useState<PluginCatalogEntry[]>([]);
@@ -60,7 +61,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
   const [pluginSettingDrafts, setPluginSettingDrafts] = useState<PluginSettingDrafts>({});
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [activeActionKey, setActiveActionKey] = useState<string | null>(null);
+  const [activeActionKeys, setActiveActionKeys] = useState<string[]>([]);
 
   const loadPluginState = useCallback(async (options: { refreshCatalog?: boolean } = {}) => {
     const refreshCatalog = options.refreshCatalog === true;
@@ -68,7 +69,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     if (refreshCatalog) {
       setCatalogRefreshing(true);
     } else {
-      setLoading(true);
+      setIsHydrating(true);
     }
 
     setErrorMessage(null);
@@ -112,7 +113,8 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
       console.error('Failed to load plugin center state:', error);
       setErrorMessage(error instanceof Error ? error.message : t('settings.plugins.errors.loadInstalled'));
     } finally {
-      setLoading(false);
+      setHasLoadedOnce(true);
+      setIsHydrating(false);
       setCatalogRefreshing(false);
     }
   }, [t]);
@@ -176,12 +178,127 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
       }));
   }, [installedPlugins]);
 
-  const performGlobalAction = useCallback(async (
+  const isInitialLoad = isHydrating && !hasLoadedOnce;
+  const hasPluginMutationInFlight = activeActionKeys.some((actionKey) => (
+    actionKey.startsWith('install:')
+    || actionKey.startsWith('install-local:')
+    || actionKey.startsWith('update:')
+    || actionKey.startsWith('uninstall:')
+  ));
+  const isLocalInstallInFlight = activeActionKeys.some((actionKey) => actionKey.startsWith('install-local:'));
+
+  const isActionActive = useCallback((actionKey: string) => activeActionKeys.includes(actionKey), [activeActionKeys]);
+
+  const beginAction = useCallback((actionKey: string) => {
+    setActiveActionKeys((currentKeys) => (
+      currentKeys.includes(actionKey) ? currentKeys : [...currentKeys, actionKey]
+    ));
+  }, []);
+
+  const finishAction = useCallback((actionKey: string) => {
+    setActiveActionKeys((currentKeys) => currentKeys.filter((currentKey) => currentKey !== actionKey));
+  }, []);
+
+  const applyWorkspaceSettings = useCallback((settings?: Settings) => {
+    if (!settings) {
+      return;
+    }
+
+    setWorkspacePluginSettings(settings.plugins ?? {});
+    notifyWorkspaceSettingsUpdated({
+      plugins: settings.plugins ?? {},
+    });
+  }, []);
+
+  const upsertInstalledPlugin = useCallback((item?: PluginListItem) => {
+    if (!item) {
+      return;
+    }
+
+    setInstalledPlugins((currentPlugins) => sortPluginListItems([
+      ...currentPlugins.filter((plugin) => plugin.id !== item.id),
+      item,
+    ]));
+  }, []);
+
+  const updateInstalledPluginEnabledByDefault = useCallback((pluginId: string, enabled: boolean) => {
+    setInstalledPlugins((currentPlugins) => currentPlugins.map((plugin) => (
+      plugin.id === pluginId
+        ? {
+            ...plugin,
+            enabledByDefault: enabled,
+          }
+        : plugin
+    )));
+  }, []);
+
+  const removeInstalledPlugin = useCallback((pluginId: string) => {
+    setInstalledPlugins((currentPlugins) => currentPlugins.filter((plugin) => plugin.id !== pluginId));
+  }, []);
+
+  const applyGlobalLanguageBinding = useCallback((language: string, pluginId: string | null) => {
+    setPluginRegistry((currentRegistry) => {
+      const nextBindings = {
+        ...(currentRegistry.globalLanguageBindings ?? {}),
+      };
+
+      if (pluginId) {
+        nextBindings[language] = pluginId;
+      } else {
+        delete nextBindings[language];
+      }
+
+      return {
+        ...currentRegistry,
+        globalLanguageBindings: nextBindings,
+      };
+    });
+  }, []);
+
+  const applyGlobalPluginSettings = useCallback((pluginId: string, values: Record<string, unknown>) => {
+    setPluginRegistry((currentRegistry) => {
+      const nextSettings = {
+        ...(currentRegistry.globalPluginSettings ?? {}),
+      };
+
+      if (Object.keys(values).length > 0) {
+        nextSettings[pluginId] = values;
+      } else {
+        delete nextSettings[pluginId];
+      }
+
+      return {
+        ...currentRegistry,
+        globalPluginSettings: nextSettings,
+      };
+    });
+  }, []);
+
+  const statusText = useMemo(() => {
+    if (catalogRefreshing) {
+      return t('settings.plugins.status.refreshingCatalog');
+    }
+
+    if (hasPluginMutationInFlight) {
+      return t('settings.plugins.status.applyingChanges');
+    }
+
+    if (isHydrating) {
+      return t(hasLoadedOnce ? 'settings.plugins.status.syncing' : 'settings.plugins.loading');
+    }
+
+    return null;
+  }, [catalogRefreshing, hasLoadedOnce, hasPluginMutationInFlight, isHydrating, t]);
+
+  const performAction = useCallback(async <TData,>(
     actionKey: string,
-    action: () => Promise<{ success: boolean; error?: string }>,
-    successMessage?: string,
+    action: () => Promise<{ success: boolean; data?: TData; error?: string }>,
+    options: {
+      successMessage?: string;
+      onSuccess?: (data?: TData) => void;
+    } = {},
   ) => {
-    setActiveActionKey(actionKey);
+    beginAction(actionKey);
     setFeedbackMessage(null);
     setErrorMessage(null);
 
@@ -191,61 +308,33 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
         throw new Error(response.error || t('settings.plugins.errors.actionFailed'));
       }
 
-      if (successMessage) {
-        setFeedbackMessage(successMessage);
+      options.onSuccess?.(response.data);
+
+      if (options.successMessage) {
+        setFeedbackMessage(options.successMessage);
       }
 
-      await loadPluginState();
+      void loadPluginState();
     } catch (error) {
       console.error('Plugin action failed:', error);
       setErrorMessage(error instanceof Error ? error.message : t('settings.plugins.errors.actionFailed'));
     } finally {
-      setActiveActionKey(null);
+      finishAction(actionKey);
     }
-  }, [loadPluginState, t]);
-
-  const performWorkspaceAction = useCallback(async (
-    actionKey: string,
-    action: () => Promise<{ success: boolean; data?: Settings; error?: string }>,
-    successMessage?: string,
-  ) => {
-    setActiveActionKey(actionKey);
-    setFeedbackMessage(null);
-    setErrorMessage(null);
-
-    try {
-      const response = await action();
-      if (!response.success) {
-        throw new Error(response.error || t('settings.plugins.errors.actionFailed'));
-      }
-
-      if (response.data) {
-        setWorkspacePluginSettings(response.data.plugins ?? {});
-        notifyWorkspaceSettingsUpdated({
-          plugins: response.data.plugins ?? {},
-        });
-      }
-
-      if (successMessage) {
-        setFeedbackMessage(successMessage);
-      }
-
-      await loadPluginState();
-    } catch (error) {
-      console.error('Workspace plugin action failed:', error);
-      setErrorMessage(error instanceof Error ? error.message : t('settings.plugins.errors.actionFailed'));
-    } finally {
-      setActiveActionKey(null);
-    }
-  }, [loadPluginState, t]);
+  }, [beginAction, finishAction, loadPluginState, t]);
 
   const handleInstallMarketplacePlugin = useCallback(async (pluginId: string) => {
-    await performGlobalAction(
+    await performAction(
       `install:${pluginId}`,
       () => window.electronAPI.installMarketplacePlugin({ pluginId }),
-      t('settings.plugins.messages.installSuccess'),
+      {
+        successMessage: t('settings.plugins.messages.installSuccess'),
+        onSuccess: (item?: PluginListItem) => {
+          upsertInstalledPlugin(item);
+        },
+      },
     );
-  }, [performGlobalAction, t]);
+  }, [performAction, t, upsertInstalledPlugin]);
 
   const handleInstallLocalPlugin = useCallback(async () => {
     const fileSelection = await window.electronAPI.selectPluginPackage();
@@ -254,45 +343,70 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
       return;
     }
 
-    await performGlobalAction(
+    await performAction(
       `install-local:${selectedPath}`,
       () => window.electronAPI.installLocalPlugin({ filePath: selectedPath }),
-      t('settings.plugins.messages.installSuccess'),
+      {
+        successMessage: t('settings.plugins.messages.installSuccess'),
+        onSuccess: (item?: PluginListItem) => {
+          upsertInstalledPlugin(item);
+        },
+      },
     );
-  }, [performGlobalAction, t]);
+  }, [performAction, t, upsertInstalledPlugin]);
 
   const handleUpdatePlugin = useCallback(async (pluginId: string) => {
-    await performGlobalAction(
+    await performAction(
       `update:${pluginId}`,
       () => window.electronAPI.updatePlugin({ pluginId }),
-      t('settings.plugins.messages.updateSuccess'),
+      {
+        successMessage: t('settings.plugins.messages.updateSuccess'),
+        onSuccess: (item?: PluginListItem) => {
+          upsertInstalledPlugin(item);
+        },
+      },
     );
-  }, [performGlobalAction, t]);
+  }, [performAction, t, upsertInstalledPlugin]);
 
   const handleUninstallPlugin = useCallback(async (pluginId: string) => {
-    await performGlobalAction(
+    await performAction(
       `uninstall:${pluginId}`,
       () => window.electronAPI.uninstallPlugin({ pluginId }),
-      t('settings.plugins.messages.uninstallSuccess'),
+      {
+        successMessage: t('settings.plugins.messages.uninstallSuccess'),
+        onSuccess: () => {
+          removeInstalledPlugin(pluginId);
+        },
+      },
     );
-  }, [performGlobalAction, t]);
+  }, [performAction, removeInstalledPlugin, t]);
 
   const handleSetGlobalEnabled = useCallback(async (pluginId: string, enabled: boolean) => {
-    await performGlobalAction(
+    await performAction(
       `global-enabled:${pluginId}`,
       () => window.electronAPI.setPluginEnabled({ pluginId, enabled, scope: 'global' }),
-      t('settings.plugins.messages.globalDefaultSaved'),
+      {
+        successMessage: t('settings.plugins.messages.globalDefaultSaved'),
+        onSuccess: () => {
+          updateInstalledPluginEnabledByDefault(pluginId, enabled);
+        },
+      },
     );
-  }, [performGlobalAction, t]);
+  }, [performAction, t, updateInstalledPluginEnabledByDefault]);
 
   const handleSetWorkspaceMode = useCallback(async (pluginId: string, mode: WorkspaceEnableMode) => {
     const enabled = mode === 'inherit' ? null : mode === 'enabled';
-    await performWorkspaceAction(
+    await performAction(
       `workspace-enabled:${pluginId}`,
       () => window.electronAPI.setPluginEnabled({ pluginId, enabled, scope: 'workspace' }),
-      t('settings.plugins.messages.workspaceOverrideSaved'),
+      {
+        successMessage: t('settings.plugins.messages.workspaceOverrideSaved'),
+        onSuccess: (settings?: Settings) => {
+          applyWorkspaceSettings(settings);
+        },
+      },
     );
-  }, [performWorkspaceAction, t]);
+  }, [applyWorkspaceSettings, performAction, t]);
 
   const handleSetLanguageBinding = useCallback(async (
     scope: PluginSettingScope,
@@ -300,20 +414,30 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     pluginId: string | null,
   ) => {
     if (scope === 'global') {
-      await performGlobalAction(
+      await performAction(
         `binding:${scope}:${language}`,
         () => window.electronAPI.setPluginLanguageBinding({ scope, language, pluginId }),
-        t('settings.plugins.messages.languageBindingSaved'),
+        {
+          successMessage: t('settings.plugins.messages.languageBindingSaved'),
+          onSuccess: () => {
+            applyGlobalLanguageBinding(language, pluginId);
+          },
+        },
       );
       return;
     }
 
-    await performWorkspaceAction(
+    await performAction(
       `binding:${scope}:${language}`,
       () => window.electronAPI.setPluginLanguageBinding({ scope, language, pluginId }),
-      t('settings.plugins.messages.languageBindingSaved'),
+      {
+        successMessage: t('settings.plugins.messages.languageBindingSaved'),
+        onSuccess: (settings?: Settings) => {
+          applyWorkspaceSettings(settings);
+        },
+      },
     );
-  }, [performGlobalAction, performWorkspaceAction, t]);
+  }, [applyGlobalLanguageBinding, applyWorkspaceSettings, performAction, t]);
 
   const handlePluginSettingDraftChange = useCallback((
     pluginId: string,
@@ -350,30 +474,30 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     const values = pluginSettingDrafts[pluginId]?.[scope] ?? {};
 
     if (scope === 'global') {
-      await performGlobalAction(
+      await performAction(
         `settings:${scope}:${pluginId}`,
         () => window.electronAPI.setPluginSettings({ pluginId, scope, values }),
-        t('settings.plugins.messages.pluginSettingsSaved'),
+        {
+          successMessage: t('settings.plugins.messages.pluginSettingsSaved'),
+          onSuccess: () => {
+            applyGlobalPluginSettings(pluginId, values);
+          },
+        },
       );
       return;
     }
 
-    await performWorkspaceAction(
+    await performAction(
       `settings:${scope}:${pluginId}`,
       () => window.electronAPI.setPluginSettings({ pluginId, scope, values }),
-      t('settings.plugins.messages.pluginSettingsSaved'),
+      {
+        successMessage: t('settings.plugins.messages.pluginSettingsSaved'),
+        onSuccess: (settings?: Settings) => {
+          applyWorkspaceSettings(settings);
+        },
+      },
     );
-  }, [performGlobalAction, performWorkspaceAction, pluginSettingDrafts, t]);
-
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-6 py-5 text-sm text-[rgb(var(--muted-foreground))]">
-          {t('settings.plugins.loading')}
-        </div>
-      </div>
-    );
-  }
+  }, [applyGlobalPluginSettings, applyWorkspaceSettings, performAction, pluginSettingDrafts, t]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -388,6 +512,12 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">
                 {t('settings.plugins.pageDescription')}
               </p>
+              {statusText && (
+                <div className="mt-3 inline-flex items-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
+                  <LoaderCircle size={14} className="animate-spin" />
+                  <span>{statusText}</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -395,7 +525,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
             <button
               type="button"
               onClick={() => void loadPluginState({ refreshCatalog: true })}
-              disabled={catalogRefreshing}
+              disabled={catalogRefreshing || hasPluginMutationInFlight}
               className="inline-flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {catalogRefreshing ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
@@ -404,10 +534,10 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
             <button
               type="button"
               onClick={() => void handleInstallLocalPlugin()}
-              disabled={activeActionKey === 'install-local'}
+              disabled={hasPluginMutationInFlight}
               className="inline-flex items-center gap-2 rounded-2xl bg-[rgb(var(--primary))] px-4 py-3 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <FolderUp size={16} />
+              {isLocalInstallInFlight ? <LoaderCircle size={16} className="animate-spin" /> : <FolderUp size={16} />}
               {t('settings.plugins.actions.installLocal')}
             </button>
           </div>
@@ -434,7 +564,9 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
             {t('settings.plugins.languageBindingsDescription')}
           </p>
 
-          {languageBindingOptions.length === 0 ? (
+          {isInitialLoad ? (
+            <SectionLoadingState label={t('settings.plugins.loadingSection')} />
+          ) : languageBindingOptions.length === 0 ? (
             <div className="mt-5 rounded-[20px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-5 py-10 text-center">
               <p className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.emptyBindingsTitle')}</p>
               <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.emptyBindingsDescription')}</p>
@@ -449,10 +581,10 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         key={`empty-binding-install:${entry.id}`}
                         type="button"
                         onClick={() => void handleInstallMarketplacePlugin(entry.id)}
-                        disabled={activeActionKey === `install:${entry.id}`}
+                        disabled={hasPluginMutationInFlight}
                         className="inline-flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
                       >
-                        {activeActionKey === `install:${entry.id}`
+                        {isActionActive(`install:${entry.id}`)
                           ? <LoaderCircle size={16} className="animate-spin" />
                           : <Download size={16} />}
                         {entry.name}
@@ -489,6 +621,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                           <select
                             aria-label={t('settings.plugins.aria.globalLanguageBinding', { language })}
                             value={globalBinding}
+                            disabled={isActionActive(`binding:global:${language}`)}
                             onChange={(event) => void handleSetLanguageBinding(
                               'global',
                               language,
@@ -510,6 +643,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                           <select
                             aria-label={t('settings.plugins.aria.workspaceLanguageBinding', { language })}
                             value={workspaceBinding || '__inherit__'}
+                            disabled={isActionActive(`binding:workspace:${language}`)}
                             onChange={(event) => void handleSetLanguageBinding(
                               'workspace',
                               language,
@@ -646,7 +780,9 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
           <h3 className="text-base font-semibold text-white">{t('settings.plugins.sections.installed')}</h3>
         </div>
 
-        {installedPlugins.length === 0 ? (
+        {isInitialLoad ? (
+          <SectionLoadingState label={t('settings.plugins.loadingSection')} />
+        ) : installedPlugins.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
             <Plug size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
             <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.emptyInstalledTitle')}</p>
@@ -712,6 +848,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                             </div>
                             <Switch.Root
                               checked={plugin.enabledByDefault === true}
+                              disabled={isActionActive(`global-enabled:${plugin.id}`)}
                               onCheckedChange={(checked) => void handleSetGlobalEnabled(plugin.id, checked)}
                               className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
                             >
@@ -728,6 +865,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                           <select
                             aria-label={t('settings.plugins.aria.workspaceMode', { plugin: plugin.name })}
                             value={workspaceMode}
+                            disabled={isActionActive(`workspace-enabled:${plugin.id}`)}
                             onChange={(event) => void handleSetWorkspaceMode(
                               plugin.id,
                               event.target.value as WorkspaceEnableMode,
@@ -747,20 +885,20 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         <button
                           type="button"
                           onClick={() => void handleUpdatePlugin(plugin.id)}
-                          disabled={activeActionKey === `update:${plugin.id}`}
+                          disabled={hasPluginMutationInFlight}
                           className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
                         >
-                          <Download size={16} />
+                          {isActionActive(`update:${plugin.id}`) ? <LoaderCircle size={16} className="animate-spin" /> : <Download size={16} />}
                           {t('settings.plugins.actions.update')}
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => void handleUninstallPlugin(plugin.id)}
-                        disabled={activeActionKey === `uninstall:${plugin.id}`}
+                        disabled={hasPluginMutationInFlight}
                         className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(255,214,214)] disabled:cursor-not-allowed disabled:opacity-70"
                       >
-                        <Trash2 size={16} />
+                        {isActionActive(`uninstall:${plugin.id}`) ? <LoaderCircle size={16} className="animate-spin" /> : <Trash2 size={16} />}
                         {t('settings.plugins.actions.uninstall')}
                       </button>
                     </div>
@@ -801,7 +939,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                             scope: 'global',
                             entries: globalSettingsSchema,
                             drafts: pluginSettingDrafts[plugin.id]?.global ?? {},
-                            activeActionKey,
+                            isActionActive,
                             onChange: handlePluginSettingDraftChange,
                             onSave: handleSavePluginSettings,
                           })}
@@ -811,7 +949,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                             scope: 'workspace',
                             entries: workspaceSettingsSchema,
                             drafts: pluginSettingDrafts[plugin.id]?.workspace ?? {},
-                            activeActionKey,
+                            isActionActive,
                             onChange: handlePluginSettingDraftChange,
                             onSave: handleSavePluginSettings,
                           })}
@@ -832,7 +970,9 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
           <h3 className="text-base font-semibold text-white">{t('settings.plugins.sections.available')}</h3>
         </div>
 
-        {availableCatalogEntries.length === 0 ? (
+        {isInitialLoad ? (
+          <SectionLoadingState label={t('settings.plugins.loadingSection')} />
+        ) : availableCatalogEntries.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
             <Plug size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
             <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.emptyAvailableTitle')}</p>
@@ -877,10 +1017,10 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                     <button
                       type="button"
                       onClick={() => void handleInstallMarketplacePlugin(entry.id)}
-                      disabled={activeActionKey === `install:${entry.id}`}
+                      disabled={hasPluginMutationInFlight}
                       className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[rgb(var(--primary))] px-4 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                     >
-                      <Download size={16} />
+                      {isActionActive(`install:${entry.id}`) ? <LoaderCircle size={16} className="animate-spin" /> : <Download size={16} />}
                       {t('settings.plugins.actions.install')}
                     </button>
                   </div>
@@ -917,13 +1057,24 @@ function InfoTile({
   );
 }
 
+function SectionLoadingState({ label }: { label: string }) {
+  return (
+    <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-12">
+      <div className="inline-flex items-center gap-2 text-sm text-[rgb(var(--muted-foreground))]">
+        <LoaderCircle size={16} className="animate-spin" />
+        <span>{label}</span>
+      </div>
+    </div>
+  );
+}
+
 function renderSettingsScopeCard({
   t,
   plugin,
   scope,
   entries,
   drafts,
-  activeActionKey,
+  isActionActive,
   onChange,
   onSave,
 }: {
@@ -932,7 +1083,7 @@ function renderSettingsScopeCard({
   scope: PluginSettingScope;
   entries: Array<[string, PluginSettingSchemaEntry]>;
   drafts: Record<string, unknown>;
-  activeActionKey: string | null;
+  isActionActive: (actionKey: string) => boolean;
   onChange: (pluginId: string, scope: PluginSettingScope, key: string, value: unknown) => void;
   onSave: (pluginId: string, scope: PluginSettingScope) => Promise<void>;
 }) {
@@ -961,10 +1112,10 @@ function renderSettingsScopeCard({
         <button
           type="button"
           onClick={() => void onSave(plugin.id, scope)}
-          disabled={activeActionKey === `settings:${scope}:${plugin.id}`}
+          disabled={isActionActive(`settings:${scope}:${plugin.id}`)}
           className="inline-flex h-10 items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          <Check size={16} />
+          {isActionActive(`settings:${scope}:${plugin.id}`) ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={16} />}
           {t('common.save')}
         </button>
       </div>
@@ -1205,6 +1356,10 @@ function formatRuntimeState(
     default:
       return t('settings.plugins.runtime.idle');
   }
+}
+
+function sortPluginListItems(items: PluginListItem[]): PluginListItem[] {
+  return [...items].sort((left, right) => left.name.localeCompare(right.name) || left.publisher.localeCompare(right.publisher));
 }
 
 function formatRequirement(
