@@ -456,6 +456,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             openFiles: sourcePane.code?.openFiles ?? [],
             activeFilePath: sourcePane.code?.activeFilePath ?? null,
             selectedPath: sourcePane.code?.selectedPath ?? null,
+            expandedPaths: sourcePane.code?.expandedPaths ?? [sourcePane.code?.rootPath ?? sourcePane.cwd],
             viewMode: sourcePane.code?.viewMode ?? 'editor',
             diffTargetPath: sourcePane.code?.diffTargetPath ?? null,
           },
@@ -560,6 +561,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           openFiles: sourcePane.code?.openFiles ?? [],
           activeFilePath: sourcePane.code?.activeFilePath ?? null,
           selectedPath: sourcePane.code?.selectedPath ?? null,
+          expandedPaths: sourcePane.code?.expandedPaths ?? [sourcePane.code?.rootPath ?? rootPath],
           viewMode: sourcePane.code?.viewMode ?? 'editor',
           diffTargetPath: sourcePane.code?.diffTargetPath ?? null,
         }

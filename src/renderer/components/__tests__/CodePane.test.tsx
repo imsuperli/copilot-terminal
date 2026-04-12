@@ -311,6 +311,52 @@ describe('CodePane', () => {
     expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
   });
 
+  it('persists expanded directories in pane state', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return {
+        success: true,
+        data: [
+          {
+            path: '/workspace/project/src',
+            name: 'src',
+            type: 'directory',
+          },
+        ],
+      };
+    });
+
+    const view = renderCodePane(createPane());
+
+    const directoryButton = await screen.findByRole('button', { name: 'src' });
+    await act(async () => {
+      fireEvent.click(directoryButton);
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        targetPath: '/workspace/project/src',
+      });
+    });
+    expect(view.getPane().code?.expandedPaths).toEqual([
+      '/workspace/project',
+      '/workspace/project/src',
+    ]);
+  });
+
   it('auto-saves dirty files after the debounce delay', async () => {
     renderCodePane(createPane());
 

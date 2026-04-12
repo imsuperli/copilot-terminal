@@ -31,6 +31,7 @@ export interface CodePaneState {
   openFiles: CodePaneOpenFile[];
   activeFilePath: string | null;
   selectedPath?: string | null;
+  expandedPaths?: string[];
   viewMode?: 'editor' | 'diff';
   diffTargetPath?: string | null;
 }

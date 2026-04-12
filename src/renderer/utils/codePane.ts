@@ -8,6 +8,7 @@ export function createCodePaneDraft(
     openFiles?: Array<{ path: string; pinned?: boolean }>;
     activeFilePath?: string | null;
     selectedPath?: string | null;
+    expandedPaths?: string[];
     viewMode?: 'editor' | 'diff';
     diffTargetPath?: string | null;
   },
@@ -26,6 +27,7 @@ export function createCodePaneDraft(
       openFiles,
       activeFilePath: options?.activeFilePath ?? openFiles[0]?.path ?? null,
       selectedPath: options?.selectedPath ?? openFiles[0]?.path ?? null,
+      expandedPaths: options?.expandedPaths ?? [rootPath],
       viewMode: options?.viewMode ?? 'editor',
       diffTargetPath: options?.diffTargetPath ?? null,
     },

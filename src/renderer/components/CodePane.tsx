@@ -100,6 +100,16 @@ function createEmptySet(): Set<string> {
   return new Set<string>();
 }
 
+function createExpandedDirectorySet(rootPath: string, expandedPaths?: string[] | null): Set<string> {
+  const nextExpandedDirectories = new Set<string>([rootPath]);
+  for (const expandedPath of expandedPaths ?? []) {
+    if (expandedPath && isPathInside(rootPath, expandedPath)) {
+      nextExpandedDirectories.add(expandedPath);
+    }
+  }
+  return nextExpandedDirectories;
+}
+
 function createTabList(existingTabs: Array<{ path: string; pinned?: boolean }>, filePath: string) {
   const existingTab = existingTabs.find((tab) => tab.path === filePath);
   if (existingTab) {
@@ -160,7 +170,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const suppressModelEventsRef = useRef(new Set<string>());
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
-  const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => new Set([rootPath]));
+  const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => (
+    createExpandedDirectorySet(rootPath, pane.code?.expandedPaths)
+  ));
   const [loadedDirectories, setLoadedDirectories] = useState<Set<string>>(() => new Set());
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(() => new Set([rootPath]));
   const [searchQuery, setSearchQuery] = useState('');
@@ -207,13 +219,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [activeFilePath]);
 
   const persistCodeState = useCallback((updates: Partial<NonNullable<Pane['code']>>) => {
-    const currentCodeState = paneRef.current.code ?? {
+    const currentCodeState = {
       rootPath,
       openFiles: [],
       activeFilePath: null,
       selectedPath: null,
+      expandedPaths: [rootPath],
       viewMode: 'editor' as const,
       diffTargetPath: null,
+      ...(paneRef.current.code ?? {}),
     };
     const nextCodeState = {
       ...currentCodeState,
@@ -840,10 +854,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [activeFilePath, clearBannerForFile, flushDirtyFiles, markDirty, openFiles, persistCodeState, selectedPath]);
 
   const toggleDirectory = useCallback((directoryPath: string) => {
-    persistCodeState({
-      selectedPath: directoryPath,
-    });
-
     setExpandedDirectories((currentExpandedDirectories) => {
       const nextExpandedDirectories = new Set(currentExpandedDirectories);
       if (nextExpandedDirectories.has(directoryPath)) {
@@ -854,6 +864,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
           void loadDirectory(directoryPath);
         }
       }
+
+      persistCodeState({
+        selectedPath: directoryPath,
+        expandedPaths: Array.from(nextExpandedDirectories),
+      });
+
       return nextExpandedDirectories;
     });
   }, [loadDirectory, persistCodeState]);
@@ -876,12 +892,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     let mounted = true;
 
     const bootstrap = async () => {
+      const initialExpandedDirectories = createExpandedDirectorySet(
+        rootPath,
+        paneRef.current.code?.expandedPaths,
+      );
+
       setIsBootstrapping(true);
       setBanner(null);
       setTreeLoadError(null);
       setSearchError(null);
       setTreeEntriesByDirectory({});
-      setExpandedDirectories(new Set([rootPath]));
+      setExpandedDirectories(initialExpandedDirectories);
       setLoadedDirectories(new Set());
       setLoadingDirectories(new Set([rootPath]));
       setSearchResults([]);
@@ -904,6 +925,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
             rootPath,
           }),
         ]);
+
+        const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
+          .filter((directoryPath) => directoryPath !== rootPath);
+        if (nestedExpandedDirectories.length > 0) {
+          await Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectory(directoryPath)));
+        }
       } catch (error) {
         if (mounted) {
           setBanner({
