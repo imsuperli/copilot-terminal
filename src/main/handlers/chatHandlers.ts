@@ -9,7 +9,7 @@ import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { ChatService } from '../services/chat/ChatService';
 import { ToolExecutor } from '../services/chat/ToolExecutor';
-import { checkCommandSecurity } from '../services/chat/CommandSecurityCheck';
+import { resolveToolApprovalDecision } from '../services/chat/ToolApprovalPolicy';
 import type {
   ChatSendRequest,
   ChatExecuteToolRequest,
@@ -22,7 +22,7 @@ import type {
 /** 每个 paneId 的流取消控制器 */
 const activeStreams = new Map<string, AbortController>();
 
-/** 等待工具审批的 resolver，key = toolCallId */
+/** 等待工具审批的 resolver，key = paneId:toolCallId */
 const pendingApprovals = new Map<string, (approved: boolean) => void>();
 
 let chatService: ChatService | null = null;
@@ -51,6 +51,14 @@ function resolveProvider(ctx: HandlerContext, providerId: string): LLMProviderCo
 /** 获取当前 BrowserWindow */
 function getWindow(ctx: HandlerContext): BrowserWindow | null {
   return ctx.getMainWindow?.() ?? ctx.mainWindow ?? null;
+}
+
+function getApprovalKey(paneId: string, toolCallId: string): string {
+  return `${paneId}:${toolCallId}`;
+}
+
+function isCommandSecurityEnabled(ctx: HandlerContext): boolean {
+  return ctx.getCurrentWorkspace?.()?.settings?.chat?.enableCommandSecurity ?? true;
 }
 
 export function registerChatHandlers(ctx: HandlerContext) {
@@ -135,9 +143,10 @@ export function registerChatHandlers(ctx: HandlerContext) {
    * chat-respond-tool-approval: 用户审批危险命令的响应
    */
   ipcMain.on('chat-respond-tool-approval', (_event, response: ChatToolApprovalResponse) => {
-    const resolver = pendingApprovals.get(response.toolCallId);
+    const approvalKey = getApprovalKey(response.paneId, response.toolCallId);
+    const resolver = pendingApprovals.get(approvalKey);
     if (resolver) {
-      pendingApprovals.delete(response.toolCallId);
+      pendingApprovals.delete(approvalKey);
       resolver(response.approved);
     }
   });
@@ -156,6 +165,7 @@ async function runChatStream(
 ): Promise<void> {
   const { paneId } = request;
   const service = getChatService();
+  const commandSecurityEnabled = isCommandSecurityEnabled(ctx);
 
   let toolCalls: ToolCall[] | undefined;
 
@@ -194,22 +204,33 @@ async function runChatStream(
 
       // 安全检查（仅对 execute_command）
       if (toolCall.name === 'execute_command') {
-        const command = String(toolCall.params.command ?? '');
-        const securityResult = checkCommandSecurity(command);
+        const approvalDecision = resolveToolApprovalDecision(toolCall, {
+          commandSecurityEnabled,
+        });
 
-        if (securityResult.action === 'block') {
+        if (approvalDecision.action === 'block') {
           const result: ToolResult = {
             toolCallId: toolCall.id,
-            content: `命令被安全策略阻止：${securityResult.reason ?? '匹配高危规则'}`,
+            content: `命令被安全策略阻止：${approvalDecision.reason ?? '匹配高危规则'}`,
             isError: true,
           };
           win?.webContents.send('chat-tool-result', { paneId, ...result });
           continue;
         }
 
-        if (securityResult.action === 'ask') {
+        if (approvalDecision.action === 'ask') {
           // 发送审批请求，等待用户决定
-          const approved = await requestToolApproval(win, paneId, toolCall);
+          const approved = await requestToolApproval(
+            win,
+            paneId,
+            approvalDecision.reason
+              ? {
+                ...toolCall,
+                reason: approvalDecision.reason,
+              }
+              : toolCall,
+            abortController.signal,
+          );
           if (!approved) {
             const result: ToolResult = {
               toolCallId: toolCall.id,
@@ -248,24 +269,46 @@ function requestToolApproval(
   win: BrowserWindow | null,
   paneId: string,
   toolCall: ToolCall,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    pendingApprovals.set(toolCall.id, resolve);
+    const approvalKey = getApprovalKey(paneId, toolCall.id);
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      pendingApprovals.delete(approvalKey);
+      signal?.removeEventListener('abort', handleAbort);
+    };
+
+    const finish = (approved: boolean) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      resolve(approved);
+    };
+
+    const handleAbort = () => {
+      finish(false);
+    };
+
+    pendingApprovals.set(approvalKey, finish);
     win?.webContents.send('chat-tool-approval-request', { paneId, toolCall });
 
     // 超时 5 分钟自动拒绝
-    const timeout = setTimeout(() => {
-      if (pendingApprovals.has(toolCall.id)) {
-        pendingApprovals.delete(toolCall.id);
-        resolve(false);
-      }
+    timeout = setTimeout(() => {
+      finish(false);
     }, 5 * 60 * 1000);
 
-    // 确保 Promise resolve 后清除 timeout
-    const originalResolve = resolve;
-    pendingApprovals.set(toolCall.id, (approved) => {
-      clearTimeout(timeout);
-      originalResolve(approved);
-    });
+    signal?.addEventListener('abort', handleAbort, { once: true });
+    if (signal?.aborted) {
+      handleAbort();
+    }
   });
 }

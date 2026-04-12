@@ -12,8 +12,8 @@ export interface SecurityCheckResult {
 
 /** 直接阻止的危险命令模式 */
 const BLOCK_PATTERNS: RegExp[] = [
-  /\brm\s+-[a-z]*r[a-z]*f\s+\/\b/i,   // rm -rf /
-  /\brm\s+-[a-z]*f[a-z]*r\s+\/\b/i,
+  /\brm\s+-[a-z]*r[a-z]*f\s+\/(?:\s|$)/i,   // rm -rf /
+  /\brm\s+-[a-z]*f[a-z]*r\s+\/(?:\s|$)/i,
   /\bdd\s+.*of=\/dev\/(sd|hd|nvme|vd)/i, // dd 写磁盘设备
   /\bmkfs\b/i,                           // 格式化文件系统
   /\bfdisk\b.*-l/i,
