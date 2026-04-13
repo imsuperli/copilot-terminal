@@ -158,4 +158,61 @@ describe('ChatSettingsTab', () => {
       });
     });
   });
+
+  it('does not re-add a deleted model when the previous default model was removed', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5', 'claude-sonnet-4-5-typo'],
+              defaultModel: 'claude-sonnet-4-5-typo',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '编辑' }));
+    await user.clear(screen.getByPlaceholderText(/每行一个模型/));
+    await user.type(screen.getByPlaceholderText(/每行一个模型/), 'claude-sonnet-4-5');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+        chat: {
+          providers: [
+            expect.objectContaining({
+              id: 'provider-1',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            }),
+          ],
+          activeProviderId: 'provider-1',
+          defaultSystemPrompt: '',
+          enableCommandSecurity: true,
+        },
+      });
+    });
+
+    await user.click(screen.getByRole('button', { name: '编辑' }));
+    expect(screen.getByPlaceholderText(/每行一个模型/)).toHaveValue('claude-sonnet-4-5');
+    expect(screen.getByPlaceholderText('留空时默认使用模型列表中的第一项')).toHaveValue('claude-sonnet-4-5');
+  });
 });

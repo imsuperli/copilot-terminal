@@ -148,20 +148,16 @@ export const ChatSettingsTab: React.FC = () => {
     const models = parseModels(providerForm.modelsText);
     const providerName = providerForm.name.trim();
     const apiKey = providerForm.apiKey.trim();
-    let defaultModel = providerForm.defaultModel.trim();
+    const requestedDefaultModel = providerForm.defaultModel.trim();
 
     if (!providerName || !apiKey || models.length === 0) {
       setFormError(t('settings.chat.formValidationError'));
       return;
     }
 
-    if (!defaultModel) {
-      defaultModel = models[0];
-    }
-
-    const normalizedModels = models.includes(defaultModel)
-      ? models
-      : [defaultModel, ...models];
+    const defaultModel = requestedDefaultModel && models.includes(requestedDefaultModel)
+      ? requestedDefaultModel
+      : models[0];
 
     const providerId = providerForm.id ?? uuidv4();
     const nextProvider: LLMProviderConfig = {
@@ -175,7 +171,7 @@ export const ChatSettingsTab: React.FC = () => {
         ? providerForm.wireApi
         : undefined,
       apiKey,
-      models: normalizedModels,
+      models,
       defaultModel,
     };
 
