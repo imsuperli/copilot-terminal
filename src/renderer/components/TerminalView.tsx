@@ -65,6 +65,8 @@ import {
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
+const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.65, 0.35];
+
 const LazyQuickSwitcher = lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
 }));
@@ -627,7 +629,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     });
     const direction = getSmartBrowserSplitDirection(terminalWindow.layout, activePaneId);
 
-    splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+    splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane, CHAT_PANE_DEFAULT_SPLIT_SIZES);
     setActivePane(terminalWindow.id, newPaneId);
   }, [panes, preferredChatLinkedPaneId, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
 

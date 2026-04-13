@@ -497,6 +497,10 @@ describe('TerminalView', () => {
 
     const updatedWindow = useWindowStore.getState().getWindowById(localWindow.id);
     expect(updatedWindow).toBeDefined();
+    expect(updatedWindow?.layout.type).toBe('split');
+    if (updatedWindow?.layout.type === 'split') {
+      expect(updatedWindow.layout.sizes).toEqual([0.65, 0.35]);
+    }
 
     const panes = getAllPanes(updatedWindow!.layout);
     const chatPane = panes.find((pane) => pane.kind === 'chat');

@@ -214,7 +214,13 @@ interface WindowStore {
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
   updatePaneRuntime: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
   pauseWindowState: (windowId: string) => void;
-  splitPaneInWindow: (windowId: string, targetPaneId: string, direction: 'horizontal' | 'vertical', newPane: Pane) => void;
+  splitPaneInWindow: (
+    windowId: string,
+    targetPaneId: string,
+    direction: 'horizontal' | 'vertical',
+    newPane: Pane,
+    sizes?: [number, number],
+  ) => void;
   placePaneInWindow: (
     windowId: string,
     targetPaneId: string,
@@ -561,11 +567,11 @@ export const useWindowStore = create<WindowStore>()(
     },
 
     // 拆分窗格
-    splitPaneInWindow: (windowId, targetPaneId, direction, newPane) => {
+    splitPaneInWindow: (windowId, targetPaneId, direction, newPane, sizes) => {
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
         if (window) {
-          const newLayout = splitPaneInLayout(window.layout, targetPaneId, direction, newPane);
+          const newLayout = splitPaneInLayout(window.layout, targetPaneId, direction, newPane, false, sizes);
           if (newLayout) {
             window.layout = newLayout;
             // 保持当前激活的窗格不变，不自动切换到新窗格

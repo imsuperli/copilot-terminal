@@ -161,6 +161,7 @@ export function splitPane(
   direction: 'horizontal' | 'vertical',
   newPane: Pane,
   insertBefore: boolean = false,
+  sizes?: [number, number],
 ): LayoutNode | null {
   if (layout.type === 'pane') {
     if (layout.id === targetPaneId) {
@@ -174,7 +175,7 @@ export function splitPane(
       const splitNode: SplitNode = {
         type: 'split',
         direction,
-        sizes: [0.5, 0.5], // 默认均分
+        sizes: sizes ?? [0.5, 0.5],
         children: insertBefore ? [newPaneNode, layout] : [layout, newPaneNode],
       };
 
@@ -185,7 +186,7 @@ export function splitPane(
 
   // SplitNode: 递归处理子节点
   const newChildren = layout.children.map(child =>
-    splitPane(child, targetPaneId, direction, newPane, insertBefore)
+    splitPane(child, targetPaneId, direction, newPane, insertBefore, sizes)
   );
 
   // 检查是否有子节点被修改
