@@ -141,6 +141,59 @@ function createSshWindow(): Window {
   };
 }
 
+function createSshWindowWithChatPane(activePaneId: string = 'pane-ssh-1'): Window {
+  return {
+    id: 'win-ssh-with-chat-1',
+    name: 'SSH Window With Chat',
+    activePaneId,
+    kind: 'ssh',
+    createdAt: new Date().toISOString(),
+    lastActiveAt: new Date().toISOString(),
+    layout: {
+      type: 'split',
+      direction: 'horizontal',
+      sizes: [0.65, 0.35],
+      children: [
+        {
+          type: 'pane',
+          id: 'pane-ssh-1',
+          pane: {
+            id: 'pane-ssh-1',
+            cwd: '/srv/app',
+            command: '',
+            status: WindowStatus.Running,
+            pid: 202,
+            backend: 'ssh',
+            ssh: {
+              profileId: 'profile-1',
+              host: '10.0.0.20',
+              user: 'root',
+              remoteCwd: '/srv/app',
+              reuseSession: true,
+            },
+          },
+        },
+        {
+          type: 'pane',
+          id: 'pane-chat-1',
+          pane: {
+            id: 'pane-chat-1',
+            cwd: '',
+            command: '',
+            kind: 'chat',
+            status: WindowStatus.Paused,
+            pid: null,
+            chat: {
+              messages: [],
+              linkedPaneId: 'pane-ssh-1',
+            },
+          },
+        },
+      ],
+    },
+  };
+}
+
 function createMixedLocalAndSshWindow(): Window {
   return {
     id: 'win-mixed-1',
@@ -539,6 +592,57 @@ describe('TerminalView', () => {
     const chatPane = panes.find((pane) => pane.kind === 'chat');
 
     expect(chatPane?.chat?.linkedPaneId).toBe('pane-ssh-1');
+  });
+
+  it('does not offer a second chat pane when the window already has one', () => {
+    const sshWindow = createSshWindowWithChatPane('pane-ssh-1');
+    useWindowStore.setState({
+      windows: [sshWindow],
+      activeWindowId: sshWindow.id,
+      mruList: [sshWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={sshWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'terminalView.splitChat' })).not.toBeInTheDocument();
+  });
+
+  it('does not split a chat pane into another chat pane', () => {
+    const sshWindow = createSshWindowWithChatPane('pane-chat-1');
+    useWindowStore.setState({
+      windows: [sshWindow],
+      activeWindowId: sshWindow.id,
+      mruList: [sshWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={sshWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    const splitHorizontalButton = screen.getByRole('button', { name: 'terminalView.splitHorizontal' });
+    expect(splitHorizontalButton).toBeDisabled();
+
+    fireEvent.click(splitHorizontalButton);
+
+    const updatedWindow = useWindowStore.getState().getWindowById(sshWindow.id);
+    const panes = getAllPanes(updatedWindow!.layout);
+    expect(panes.filter((pane) => pane.kind === 'chat')).toHaveLength(1);
   });
 
   it('creates a code pane from the active local terminal cwd', () => {

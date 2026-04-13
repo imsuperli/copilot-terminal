@@ -184,6 +184,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => panes.filter((pane) => isTerminalPane(pane)),
     [panes]
   );
+  const hasChatPaneInWindow = useMemo(
+    () => panes.some((pane) => isChatPane(pane)),
+    [panes],
+  );
   const terminalPaneCount = terminalPanes.length;
   const activePane = useMemo(
     () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
@@ -236,6 +240,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const showToolbarWindowIdentity = useMemo(
     () => Boolean(activePane && isSessionlessPane(activePane) && !showRemoteWindowTabs),
     [activePane, showRemoteWindowTabs],
+  );
+  const canSplitActivePane = useMemo(
+    () => Boolean(activePane && !isChatPane(activePane)),
+    [activePane],
   );
 
   // 鍒囨崲闈㈡澘鐘舵€?
@@ -478,16 +486,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       }
 
       if (isChatPane(sourcePane)) {
-        const newPaneId = uuidv4();
-        const newPane = createChatPaneDraft(newPaneId, {
-          linkedPaneId: selectPreferredChatLinkedPaneId(
-            panes,
-            sourcePane.chat?.linkedPaneId ?? preferredChatLinkedPaneId,
-          ),
-          activeProviderId: sourcePane.chat?.activeProviderId,
-          activeModel: sourcePane.chat?.activeModel,
-        });
-        splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
         return;
       }
 
@@ -604,7 +602,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   const handleSplitChatPane = useCallback(() => {
     const activePaneId = terminalWindow.activePaneId;
-    if (!activePaneId) {
+    if (!activePaneId || hasChatPaneInWindow) {
       return;
     }
 
@@ -631,7 +629,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane, CHAT_PANE_DEFAULT_SPLIT_SIZES);
     setActivePane(terminalWindow.id, newPaneId);
-  }, [panes, preferredChatLinkedPaneId, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
+  }, [hasChatPaneInWindow, panes, preferredChatLinkedPaneId, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
 
   const activeBrowserDragUrl = useMemo(() => (
     activePane && isBrowserPane(activePane)
@@ -1212,7 +1210,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 aria-label={t('terminalView.splitHorizontal')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={() => handleSplitPane('horizontal')}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                disabled={!canSplitActivePane}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <SplitSquareHorizontal size={14} />
               </button>
@@ -1226,7 +1225,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 aria-label={t('terminalView.splitVertical')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={() => handleSplitPane('vertical')}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                disabled={!canSplitActivePane}
+                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <SplitSquareVertical size={14} />
               </button>
@@ -1261,7 +1261,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </AppTooltip>
             )}
 
-            {activePaneCapabilities?.canOpenSFTP && (
+            {activePaneCapabilities?.canOpenSFTP && !hasChatPaneInWindow && (
               <AppTooltip content={t('terminalView.splitChat')} placement="toolbar-trailing">
                 <button
                   type="button"
