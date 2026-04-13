@@ -322,9 +322,12 @@ export function AgentTimeline({
         >
           {item.kind === 'tool-call-group' ? (
             <EventShell
-              icon={<TerminalSquare size={15} />}
-              title={item.events.length > 1 ? 'Tool calls' : 'Tool call'}
+              icon={<Sparkles size={15} />}
+              title={assistantLabel}
             >
+              <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                {item.events.length > 1 ? 'Tool calls' : 'Tool call'}
+              </div>
               <ToolCallBlock items={item.events} />
             </EventShell>
           ) : (

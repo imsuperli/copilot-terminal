@@ -662,6 +662,100 @@ describe('ChatPane', () => {
     expect(screen.queryByText('历史上下文摘要：旧消息被压缩。')).not.toBeInTheDocument();
   });
 
+  it('does not restore a purely optimistic task while the real agent task has not been created yet', async () => {
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+
+    const optimisticPane = {
+      id: 'chat-pane-1',
+      cwd: '',
+      command: '',
+      kind: 'chat' as const,
+      status: WindowStatus.Paused,
+      pid: null,
+      chat: {
+        messages: [
+          {
+            id: 'optimistic-user-1',
+            role: 'user' as const,
+            content: '继续处理',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        agent: createAgentSnapshot({
+          taskId: 'optimistic-task-1',
+          timeline: [
+            {
+              id: 'optimistic-user-1',
+              taskId: 'optimistic-task-1',
+              paneId: 'chat-pane-1',
+              timestamp: new Date().toISOString(),
+              kind: 'user-message',
+              status: 'completed',
+              content: '继续处理',
+            },
+            {
+              id: 'reasoning-optimistic-1',
+              taskId: 'optimistic-task-1',
+              paneId: 'chat-pane-1',
+              timestamp: new Date().toISOString(),
+              kind: 'reasoning',
+              status: 'streaming',
+              content: '',
+            },
+          ],
+          messages: [
+            {
+              id: 'optimistic-user-1',
+              role: 'user',
+              content: '继续处理',
+              timestamp: new Date().toISOString(),
+            },
+          ],
+          status: 'running',
+        }),
+      },
+    };
+
+    render(
+      <I18nProvider>
+        <ChatPane
+          windowId="win-1"
+          pane={optimisticPane}
+          isActive
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByText('Agent · Thinking')).toBeInTheDocument();
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    expect(window.electronAPI.agentRestoreTask).not.toHaveBeenCalled();
+  });
+
   it('reloads provider options when chat settings are updated', async () => {
     vi.mocked(window.electronAPI.getSettings)
       .mockResolvedValueOnce({

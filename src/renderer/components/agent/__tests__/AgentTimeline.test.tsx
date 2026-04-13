@@ -159,6 +159,7 @@ describe('AgentTimeline', () => {
     );
 
     expect(screen.getByText('Tool calls')).toBeInTheDocument();
+    expect(screen.getByText('codex')).toBeInTheDocument();
     expect(screen.getByText('uname -a')).toBeInTheDocument();
     expect(screen.getByText('cat /etc/os-release')).toBeInTheDocument();
     expect(screen.queryByText('execute_command')).not.toBeInTheDocument();

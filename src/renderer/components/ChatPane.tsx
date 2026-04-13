@@ -320,6 +320,15 @@ function hasVisibleAgentProgress(events: AgentTimelineEvent[]): boolean {
   return events.some((event) => !isInternalBootstrapEvent(event));
 }
 
+function isOptimisticAgentTask(task: AgentTaskSnapshot | null | undefined): boolean {
+  if (!task) {
+    return false;
+  }
+
+  return task.taskId.startsWith('optimistic-task-')
+    || task.timeline.some(isOptimisticReasoningEvent);
+}
+
 function mergeAgentTaskWithOptimisticReasoning(
   task: AgentTaskSnapshot,
   optimisticTask?: AgentTaskSnapshot | null,
@@ -527,7 +536,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     void window.electronAPI.agentGetTask({ paneId: pane.id }).then((response) => {
       if (response.success && response.data) {
         syncAgentTask(response.data);
-      } else if (paneRef.current.chat?.agent) {
+      } else if (paneRef.current.chat?.agent && !isOptimisticAgentTask(paneRef.current.chat.agent)) {
         return window.electronAPI.agentRestoreTask({
           task: paneRef.current.chat.agent,
         }).then((restoreResponse) => {
