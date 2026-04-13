@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, SendHorizonal, Sparkles, Square, X } from 'lucide-react';
+import type { AgentTaskSnapshot } from '../../shared/types/agent';
+import type { AgentTimelineEvent } from '../../shared/types/agentTimeline';
 import type { ChatMessage, ChatSettings, ChatSshContext, LLMProviderConfig } from '../../shared/types/chat';
 import type { Pane } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
@@ -170,6 +172,140 @@ function hasExecutableSshBinding(pane: Pane | null | undefined): boolean {
   );
 }
 
+function createOptimisticId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createLegacyTimeline(messages: ChatMessage[]): AgentTimelineEvent[] {
+  return messages.flatMap((message): AgentTimelineEvent[] => {
+    if (message.toolResult) {
+      return [{
+        id: `legacy-tool-result-${message.id}`,
+        taskId: 'legacy',
+        paneId: 'legacy',
+        timestamp: message.timestamp,
+        kind: 'tool-result',
+        status: message.toolResult.isError ? 'error' : 'completed',
+        toolCallId: message.toolResult.toolCallId,
+        content: message.toolResult.content,
+        isError: message.toolResult.isError,
+      }];
+    }
+
+    if (message.role === 'assistant') {
+      return [{
+        id: `legacy-assistant-${message.id}`,
+        taskId: 'legacy',
+        paneId: 'legacy',
+        timestamp: message.timestamp,
+        kind: 'assistant-message',
+        status: 'completed',
+        content: message.content,
+      }];
+    }
+
+    if (message.role === 'system') {
+      return [{
+        id: `legacy-system-${message.id}`,
+        taskId: 'legacy',
+        paneId: 'legacy',
+        timestamp: message.timestamp,
+        kind: 'system-notice',
+        status: 'completed',
+        level: 'info',
+        content: message.content,
+      }];
+    }
+
+    return [{
+      id: `legacy-user-${message.id}`,
+      taskId: 'legacy',
+      paneId: 'legacy',
+      timestamp: message.timestamp,
+      kind: 'user-message',
+      status: 'completed',
+      content: message.content,
+    }];
+  });
+}
+
+function buildOptimisticAgentTask({
+  windowId,
+  paneId,
+  providerId,
+  model,
+  text,
+  linkedPaneId,
+  sshContext,
+  previousMessages,
+  previousTask,
+}: {
+  windowId: string;
+  paneId: string;
+  providerId: string;
+  model: string;
+  text: string;
+  linkedPaneId?: string;
+  sshContext?: ChatSshContext;
+  previousMessages: ChatMessage[];
+  previousTask?: AgentTaskSnapshot;
+}): AgentTaskSnapshot {
+  const timestamp = new Date().toISOString();
+  const taskId = previousTask?.taskId ?? createOptimisticId('optimistic-task');
+  const userMessageId = createOptimisticId('optimistic-user');
+  const reasoningEventId = createOptimisticId('reasoning-optimistic');
+  const baseTimeline = previousTask?.timeline ?? createLegacyTimeline(previousMessages);
+  const userMessage: ChatMessage = {
+    id: userMessageId,
+    role: 'user',
+    content: text,
+    timestamp,
+  };
+
+  return {
+    taskId,
+    paneId,
+    windowId,
+    status: 'running',
+    providerId,
+    model,
+    linkedPaneId,
+    sshContext,
+    timeline: [
+      ...baseTimeline,
+      {
+        id: userMessageId,
+        taskId,
+        paneId,
+        timestamp,
+        kind: 'user-message',
+        status: 'completed',
+        content: text,
+      },
+      {
+        id: reasoningEventId,
+        taskId,
+        paneId,
+        timestamp,
+        kind: 'reasoning',
+        status: 'streaming',
+        content: '',
+      },
+    ],
+    messages: [
+      ...(previousTask?.messages ?? previousMessages),
+      userMessage,
+    ],
+    offloadRefs: [...(previousTask?.offloadRefs ?? [])],
+    pendingApproval: undefined,
+    pendingInteraction: undefined,
+    error: undefined,
+    createdAt: previousTask?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+    usage: previousTask?.usage,
+  };
+}
+
 export const ChatPane: React.FC<ChatPaneProps> = ({
   windowId,
   pane,
@@ -246,7 +382,23 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     const runtimeOnly = task.status === 'running';
     persistChatState((currentChat) => ({
       ...currentChat,
-      agent: task,
+      agent: {
+        ...task,
+        timeline: task.status === 'running'
+          && !task.timeline.some((event) => event.kind !== 'user-message')
+          && currentChat.agent?.timeline.some((event) => event.id.startsWith('reasoning-optimistic-'))
+          ? [
+              ...task.timeline,
+              ...currentChat.agent.timeline
+                .filter((event) => event.id.startsWith('reasoning-optimistic-'))
+                .map((event) => ({
+                  ...event,
+                  taskId: task.taskId,
+                  paneId: task.paneId,
+                })),
+            ]
+          : task.timeline,
+      },
       messages: task.messages,
       activeProviderId: task.providerId,
       activeModel: task.model,
@@ -454,10 +606,31 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       return;
     }
 
+    const previousHasLiveTask = hasLiveTaskRef.current;
+    const previousChat = {
+      ...chatState,
+      messages: [...chatState.messages],
+      agent: agentState,
+    };
+    const seedMessages = hasLiveTaskRef.current ? undefined : chatState.messages;
+    const optimisticTask = buildOptimisticAgentTask({
+      windowId,
+      paneId: pane.id,
+      providerId: selectedProvider.id,
+      model: selectedModel,
+      text: trimmed,
+      linkedPaneId: resolvedLinkedPaneId,
+      sshContext,
+      previousMessages: chatState.messages,
+      previousTask: agentState,
+    });
+
     setComposerValue('');
     setErrorMessage(null);
     persistChatState((currentChat) => ({
       ...currentChat,
+      messages: optimisticTask.messages,
+      agent: optimisticTask,
       activeProviderId: selectedProvider.id,
       activeModel: selectedModel,
       linkedPaneId: resolvedLinkedPaneId,
@@ -475,17 +648,37 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         enableTools: Boolean(sshContext),
         linkedPaneId: resolvedLinkedPaneId,
         sshContext,
-        seedMessages: hasLiveTaskRef.current ? undefined : chatState.messages,
+        seedMessages,
       });
 
       if (!response.success) {
         throw new Error(response.error || t('chatPane.sendFailed'));
       }
+
+      hasLiveTaskRef.current = true;
+      const responseData = response.data;
+      if (responseData?.taskId) {
+        persistChatState((currentChat) => {
+          if (!currentChat.agent) {
+            return currentChat;
+          }
+
+          return {
+            ...currentChat,
+            agent: {
+              ...currentChat.agent,
+              taskId: responseData.taskId,
+              status: responseData.status ?? currentChat.agent.status,
+            },
+          };
+        }, true);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setErrorMessage(message);
-      persistChatState((currentChat) => ({
-        ...currentChat,
+      hasLiveTaskRef.current = previousHasLiveTask;
+      persistChatState(() => ({
+        ...previousChat,
         isStreaming: false,
       }), true);
     }

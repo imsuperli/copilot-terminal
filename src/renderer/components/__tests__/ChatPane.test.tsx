@@ -202,6 +202,10 @@ describe('ChatPane', () => {
     await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '帮我检查 nginx 状态');
     await user.click(screen.getByRole('button', { name: '发送' }));
 
+    expect(await screen.findByText('帮我检查 nginx 状态')).toBeInTheDocument();
+    expect(screen.getByText('Agent · Thinking')).toBeInTheDocument();
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+
     await waitFor(() => {
       expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
         paneId: 'chat-pane-1',

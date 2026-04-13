@@ -4,6 +4,7 @@ import type { AgentTaskSnapshot } from '../../../shared/types/agent';
 import type {
   AgentCommandEvent,
   AgentCommandOutputEvent,
+  AgentToolCallEvent,
   AgentTimelineEvent,
   AgentToolResultEvent,
 } from '../../../shared/types/agentTimeline';
@@ -12,7 +13,7 @@ import { CommandOutputBlock } from './CommandOutputBlock';
 import { InteractionPrompt } from './InteractionPrompt';
 import { ReasoningBlock } from './ReasoningBlock';
 import { renderMarkdownLike } from './RichText';
-import { ToolCallBlock } from './ToolCallBlock';
+import { ToolCallBlock, type HydratedToolCallItem } from './ToolCallBlock';
 
 function getAssistantTurnKey(event: AgentTimelineEvent): string | null {
   if (event.kind === 'reasoning' && event.id.startsWith('reasoning-')) {
@@ -61,6 +62,10 @@ interface HydratedToolCallEvent {
   commandOutputs: AgentCommandOutputEvent[];
   toolResultEvent?: AgentToolResultEvent;
 }
+
+type TimelineDisplayItem =
+  | { kind: 'event'; event: AgentTimelineEvent }
+  | { kind: 'tool-call-group'; events: HydratedToolCallItem[] };
 
 function EventShell({
   icon,
@@ -169,6 +174,43 @@ export function AgentTimeline({
     () => orderedTimeline.filter((event) => !hiddenEventIds.has(event.id)),
     [hiddenEventIds, orderedTimeline],
   );
+  const displayTimeline = React.useMemo<TimelineDisplayItem[]>(() => {
+    const items: TimelineDisplayItem[] = [];
+
+    for (let index = 0; index < visibleTimeline.length; index += 1) {
+      const event = visibleTimeline[index];
+      if (event.kind === 'tool-call') {
+        const groupedEvents: HydratedToolCallItem[] = [];
+        let cursor = index;
+
+        while (cursor < visibleTimeline.length && visibleTimeline[cursor]?.kind === 'tool-call') {
+          const toolEvent = visibleTimeline[cursor] as AgentToolCallEvent;
+          const hydrated = hydratedToolCalls.get(toolEvent.id);
+          groupedEvents.push({
+            event: toolEvent,
+            commandEvent: hydrated?.commandEvent,
+            commandOutputs: hydrated?.commandOutputs ?? [],
+            toolResultEvent: hydrated?.toolResultEvent,
+          });
+          cursor += 1;
+        }
+
+        items.push({
+          kind: 'tool-call-group',
+          events: groupedEvents,
+        });
+        index = cursor - 1;
+        continue;
+      }
+
+      items.push({
+        kind: 'event',
+        event,
+      });
+    }
+
+    return items;
+  }, [hydratedToolCalls, visibleTimeline]);
 
   const renderEvent = (event: AgentTimelineEvent) => {
     switch (event.kind) {
@@ -185,7 +227,7 @@ export function AgentTimeline({
       case 'reasoning':
         return (
           <EventShell icon={<Sparkles size={15} />} title={`${assistantLabel} · Thinking`}>
-            <ReasoningBlock content={event.content} />
+            <ReasoningBlock content={event.content} status={event.status} />
           </EventShell>
         );
       case 'assistant-message':
@@ -196,19 +238,6 @@ export function AgentTimeline({
             </div>
           </EventShell>
         );
-      case 'tool-call': {
-        const hydrated = hydratedToolCalls.get(event.id);
-        return (
-          <EventShell icon={<TerminalSquare size={15} />} title="Tool call">
-            <ToolCallBlock
-              toolCall={event.toolCall}
-              commandEvent={hydrated?.commandEvent}
-              commandOutputs={hydrated?.commandOutputs}
-              toolResult={hydrated?.toolResultEvent}
-            />
-          </EventShell>
-        );
-      }
       case 'tool-result':
         return (
           <EventShell icon={<TerminalSquare size={15} />} title="Tool result">
@@ -289,9 +318,24 @@ export function AgentTimeline({
 
   return (
     <div className="space-y-6 pt-4">
-      {visibleTimeline.map((event) => (
-        <div key={event.id}>
-          {renderEvent(event)}
+      {displayTimeline.map((item, index) => (
+        <div
+          key={
+            item.kind === 'tool-call-group'
+              ? `tool-group-${item.events.map((event) => event.event.id).join('-')}`
+              : item.event.id
+          }
+        >
+          {item.kind === 'tool-call-group' ? (
+            <EventShell
+              icon={<TerminalSquare size={15} />}
+              title={item.events.length > 1 ? 'Tool calls' : 'Tool call'}
+            >
+              <ToolCallBlock items={item.events} />
+            </EventShell>
+          ) : (
+            renderEvent(item.event)
+          )}
         </div>
       ))}
     </div>

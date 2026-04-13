@@ -61,7 +61,7 @@ describe('AgentTimeline', () => {
     expect(thinkingLabel.compareDocumentPosition(assistantLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('keeps completed tool calls collapsed by default and expands on demand', async () => {
+  it('groups consecutive tool calls into one compact block and expands command details on demand', async () => {
     const user = userEvent.setup();
 
     render(
@@ -83,6 +83,22 @@ describe('AgentTimeline', () => {
                 },
                 status: 'completed',
                 result: 'Linux localhost',
+              },
+            },
+            {
+              id: 'tool-tool-2',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:01.500Z',
+              kind: 'tool-call',
+              status: 'executing',
+              toolCall: {
+                id: 'tool-2',
+                name: 'execute_command',
+                params: {
+                  command: 'cat /etc/os-release',
+                },
+                status: 'executing',
               },
             },
             {
@@ -110,6 +126,18 @@ describe('AgentTimeline', () => {
               content: 'Linux localhost',
             },
             {
+              id: 'command-tool-2',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:03.500Z',
+              kind: 'command',
+              status: 'running',
+              commandId: 'command-tool-2',
+              host: '192.168.3.25',
+              command: 'cat /etc/os-release',
+              interactive: false,
+            },
+            {
               id: 'tool-result-tool-1',
               taskId: 'task-1',
               paneId: 'pane-1',
@@ -130,15 +158,20 @@ describe('AgentTimeline', () => {
       />,
     );
 
+    expect(screen.getByText('Tool calls')).toBeInTheDocument();
+    expect(screen.getByText('uname -a')).toBeInTheDocument();
+    expect(screen.getByText('cat /etc/os-release')).toBeInTheDocument();
+    expect(screen.queryByText('execute_command')).not.toBeInTheDocument();
+    expect(screen.queryByText('192.168.3.25')).not.toBeInTheDocument();
+    expect(screen.queryByText(/exit 0/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Linux localhost')).not.toBeInTheDocument();
-    expect(screen.queryByText('Remote command · 192.168.3.25')).not.toBeInTheDocument();
     expect(screen.queryByText('Tool result')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /show/i }));
+    await user.click(screen.getByRole('button', { name: 'Show details for uname -a' }));
 
     expect(screen.getByText('Linux localhost')).toBeInTheDocument();
-    expect(screen.getByText('192.168.3.25')).toBeInTheDocument();
-    expect(screen.getByText('exit 0')).toBeInTheDocument();
-    expect(screen.getAllByText('uname -a')).toHaveLength(1);
+    expect(screen.queryByText('192.168.3.25')).not.toBeInTheDocument();
+
+    expect(screen.getByText('Running')).toBeInTheDocument();
   });
 });

@@ -1,26 +1,24 @@
 import React from 'react';
-import { LoaderCircle } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  LoaderCircle,
+} from 'lucide-react';
 import type {
   AgentCommandEvent,
   AgentCommandOutputEvent,
+  AgentToolCallEvent,
   AgentToolResultEvent,
 } from '../../../shared/types/agentTimeline';
 import type { ToolCall } from '../../../shared/types/chat';
 
-function getToolStatusTone(status: ToolCall['status']) {
-  switch (status) {
-    case 'completed':
-      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
-    case 'approved':
-    case 'executing':
-      return 'border-sky-500/30 bg-sky-500/10 text-sky-200';
-    case 'rejected':
-    case 'blocked':
-    case 'error':
-      return 'border-red-500/30 bg-red-500/10 text-red-200';
-    default:
-      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
-  }
+export interface HydratedToolCallItem {
+  event: AgentToolCallEvent;
+  commandEvent?: AgentCommandEvent;
+  commandOutputs: AgentCommandOutputEvent[];
+  toolResultEvent?: AgentToolResultEvent;
 }
 
 function formatCommandOutput(outputs: AgentCommandOutputEvent[]): string {
@@ -51,108 +49,168 @@ function formatCommandOutput(outputs: AgentCommandOutputEvent[]): string {
     .join('\n\n');
 }
 
+function formatToolSummary(toolCall: ToolCall): string {
+  if ('command' in toolCall.params && typeof toolCall.params.command === 'string' && toolCall.params.command.trim()) {
+    return toolCall.params.command.trim();
+  }
+
+  if ('path' in toolCall.params && typeof toolCall.params.path === 'string' && toolCall.params.path.trim()) {
+    return toolCall.params.path.trim();
+  }
+
+  return toolCall.name
+    .split('_')
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+}
+
+function formatStatusLabel(status: ToolCall['status']): string {
+  switch (status) {
+    case 'approved':
+      return 'Approved';
+    case 'executing':
+      return 'Running';
+    case 'completed':
+      return 'Completed';
+    case 'rejected':
+      return 'Rejected';
+    case 'blocked':
+      return 'Blocked';
+    case 'error':
+      return 'Failed';
+    default:
+      return 'Pending';
+  }
+}
+
+function getStatusPresentation(status: ToolCall['status']) {
+  switch (status) {
+    case 'approved':
+    case 'executing':
+      return {
+        tone: 'text-sky-300',
+        icon: <LoaderCircle size={14} className="animate-spin" />,
+      };
+    case 'completed':
+      return {
+        tone: 'text-emerald-300',
+        icon: <Check size={14} />,
+      };
+    case 'rejected':
+    case 'blocked':
+    case 'error':
+      return {
+        tone: 'text-red-300',
+        icon: <CircleAlert size={14} />,
+      };
+    default:
+      return {
+        tone: 'text-amber-300',
+        icon: <span className="inline-block h-2 w-2 rounded-full bg-current" />,
+      };
+  }
+}
+
+function buildDetailContent(item: HydratedToolCallItem): string {
+  const commandOutput = formatCommandOutput(item.commandOutputs);
+  return commandOutput || item.event.toolCall.result || item.toolResultEvent?.content || '';
+}
+
 export function ToolCallBlock({
-  toolCall,
-  commandEvent,
-  commandOutputs = [],
-  toolResult,
+  items,
 }: {
-  toolCall: ToolCall;
-  commandEvent?: AgentCommandEvent;
-  commandOutputs?: AgentCommandOutputEvent[];
-  toolResult?: AgentToolResultEvent;
+  items: HydratedToolCallItem[];
 }) {
-  const shouldAutoExpand = ['error', 'blocked', 'rejected'].includes(toolCall.status);
-  const [expanded, setExpanded] = React.useState(shouldAutoExpand);
-  const commandOutput = React.useMemo(() => formatCommandOutput(commandOutputs), [commandOutputs]);
-  const detailContent = commandOutput || toolCall.result || toolResult?.content || '';
-  const isRunning = ['pending', 'approved', 'executing'].includes(toolCall.status);
-  const commandPreview = 'command' in toolCall.params && typeof toolCall.params.command === 'string'
-    ? toolCall.params.command
-    : null;
+  const errorIds = React.useMemo(
+    () => items
+      .filter((item) => ['error', 'blocked', 'rejected'].includes(item.event.toolCall.status))
+      .map((item) => item.event.toolCall.id),
+    [items],
+  );
+  const [expandedIds, setExpandedIds] = React.useState<Set<string>>(() => new Set(errorIds));
 
   React.useEffect(() => {
-    if (shouldAutoExpand) {
-      setExpanded(true);
+    if (errorIds.length === 0) {
+      return;
     }
-  }, [shouldAutoExpand]);
+
+    setExpandedIds((current) => {
+      const next = new Set(current);
+      errorIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [errorIds]);
 
   return (
-    <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/70 p-4 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
-      <button
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        className="flex w-full flex-wrap items-center justify-between gap-2 text-left"
-      >
-        <div className="min-w-0">
-          {commandPreview ? (
-            <>
-              <div className="truncate font-mono text-[13px] text-zinc-200">
-                {commandPreview}
-              </div>
-              <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                {toolCall.name}
-              </div>
-            </>
-          ) : (
-            <div className="text-sm font-medium text-zinc-100">{toolCall.name}</div>
-          )}
-          {isRunning && (
-            <div className="mt-2 inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-sky-300">
-              <LoaderCircle size={12} className="animate-spin" />
-              <span>{commandOutputs.length > 0 ? 'Streaming output' : 'Running'}</span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {commandEvent?.host && (
-            <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-              {commandEvent.host}
-            </span>
-          )}
-          {typeof commandEvent?.exitCode === 'number' && (
-            <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-              exit {commandEvent.exitCode}
-            </span>
-          )}
-          <span
-            className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${getToolStatusTone(toolCall.status)} ${isRunning ? 'animate-pulse' : ''}`}
-          >
-            {toolCall.status}
-          </span>
-          <span className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-            {expanded ? 'Hide' : 'Show'}
-          </span>
-        </div>
-      </button>
+    <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/70 p-3 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
+      <div className="space-y-2">
+        {items.map((item) => {
+          const summary = formatToolSummary(item.event.toolCall);
+          const detailContent = buildDetailContent(item);
+          const isExpanded = expandedIds.has(item.event.toolCall.id);
+          const isRunning = ['approved', 'executing'].includes(item.event.toolCall.status);
+          const status = getStatusPresentation(item.event.toolCall.status);
 
-      {expanded && (
-        <>
-          {detailContent && (
-            <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/80 px-3 py-2.5">
-              <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                {isRunning ? 'Live output' : commandEvent ? 'Output' : 'Result'}
-              </div>
-              <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-400">
-                {detailContent}
-              </pre>
-            </div>
-          )}
+          return (
+            <div
+              key={item.event.toolCall.id}
+              className="rounded-2xl border border-zinc-800/80 bg-zinc-950/55"
+            >
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                <div className="min-w-0 flex-1 truncate font-mono text-[12px] leading-6 text-zinc-200">
+                  {summary}
+                </div>
 
-          {isRunning && !detailContent && (
-            <div className="mt-3 rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/55 px-3 py-2.5">
-              <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                <LoaderCircle size={12} className="animate-spin" />
-                <span>Waiting for remote output</span>
-              </div>
-            </div>
-          )}
+                <div className={`inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] ${status.tone}`}>
+                  {status.icon}
+                  <span>{formatStatusLabel(item.event.toolCall.status)}</span>
+                </div>
 
-          {toolCall.reason && (
-            <p className="mt-3 text-xs leading-5 text-zinc-400">{toolCall.reason}</p>
-          )}
-        </>
-      )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpandedIds((current) => {
+                      const next = new Set(current);
+                      if (next.has(item.event.toolCall.id)) {
+                        next.delete(item.event.toolCall.id);
+                      } else {
+                        next.add(item.event.toolCall.id);
+                      }
+                      return next;
+                    });
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.18em] text-zinc-400 transition-colors hover:text-zinc-100"
+                  aria-label={`${isExpanded ? 'Hide' : 'Show'} details for ${summary}`}
+                >
+                  {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  <span>{isExpanded ? 'Hide' : 'Show'}</span>
+                </button>
+              </div>
+
+              {isExpanded && (
+                <div className="border-t border-zinc-800/80 px-3 py-3">
+                  {detailContent ? (
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-300">
+                      {detailContent}
+                    </pre>
+                  ) : isRunning ? (
+                    <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-sky-300">
+                      <LoaderCircle size={12} className="animate-spin" />
+                      <span>Waiting for output</span>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-zinc-500">No output</div>
+                  )}
+
+                  {item.event.toolCall.reason && (
+                    <p className="mt-3 text-xs leading-5 text-zinc-400">{item.event.toolCall.reason}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
