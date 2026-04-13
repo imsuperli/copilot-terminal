@@ -120,7 +120,6 @@ function createBrowserPane(url: string = DEFAULT_BROWSER_URL): Pane {
 
 describe('BrowserPane', () => {
   let createElementSpy: ReturnType<typeof vi.spyOn>;
-  const OriginalResizeObserver = global.ResizeObserver;
 
   beforeAll(() => {
     const originalCreateElement = document.createElement.bind(document);
@@ -147,7 +146,6 @@ describe('BrowserPane', () => {
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
-    global.ResizeObserver = OriginalResizeObserver;
   });
 
   it('does not call ready-only webview APIs before dom-ready', () => {
@@ -364,18 +362,7 @@ describe('BrowserPane', () => {
     expect(loadURLSpy).toHaveBeenCalledWith('https://example.com/two');
   });
 
-  it('sizes the webview to the host bounds when the pane becomes measurable', () => {
-    let resizeCallback: ResizeObserverCallback | null = null;
-    global.ResizeObserver = class ResizeObserver {
-      constructor(callback: ResizeObserverCallback) {
-        resizeCallback = callback;
-      }
-
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    };
-
+  it('renders the webview as the flexing browser surface', () => {
     const { container } = render(
       <I18nProvider>
         <BrowserPane
@@ -392,32 +379,9 @@ describe('BrowserPane', () => {
       throw new Error('expected webview element');
     }
 
-    const host = container.querySelector('[data-browser-webview-host="true"]') as HTMLDivElement | null;
-    if (!host) {
-      throw new Error('expected webview host element');
-    }
-
-    vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({
-      x: 0,
-      y: 0,
-      top: 0,
-      left: 0,
-      bottom: 420,
-      right: 720,
-      width: 720,
-      height: 420,
-      toJSON: () => ({}),
-    } as DOMRect);
-
-    act(() => {
-      resizeCallback?.([] as ResizeObserverEntry[], {} as ResizeObserver);
-    });
-
-    expect(webview.style.display).toBe('block');
-    expect(webview.style.position).toBe('absolute');
-    expect(webview.style.inset).toBe('0px');
-    expect(webview.style.width).toBe('720px');
-    expect(webview.style.height).toBe('420px');
+    expect(webview.className).toContain('flex-1');
+    expect(webview.className).toContain('min-h-0');
+    expect(webview.className).toContain('min-w-0');
   });
 
   it('prevents mouse focus on browser toolbar buttons', () => {

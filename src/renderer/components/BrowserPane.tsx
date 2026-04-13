@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ExternalLink, Globe, GripVertical, RefreshCw, X } from 'lucide-react';
 import type { Pane } from '../types/window';
 import { AppTooltip } from './ui/AppTooltip';
@@ -10,7 +10,7 @@ import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/brow
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
-const BROWSER_WEBVIEW_CLASSNAME = 'block min-h-0 min-w-0 bg-zinc-950';
+const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-zinc-950';
 const BLANK_PAGE_THEME_CSS = `
   :root { color-scheme: dark; }
   html, body {
@@ -53,7 +53,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const { t } = useI18n();
   const updatePane = useWindowStore((state) => state.updatePane);
   const webviewRef = useRef<HTMLWebViewElement | null>(null);
-  const webviewHostRef = useRef<HTMLDivElement | null>(null);
   const restoreReadyTimerRef = useRef<number | null>(null);
   const webviewReadyRef = useRef(false);
   const pendingNavigationUrlRef = useRef<string | null>(null);
@@ -82,33 +81,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     webviewReadyRef.current = ready;
     setIsWebviewReady((currentReady) => (currentReady === ready ? currentReady : ready));
   }, []);
-
-  const applyWebviewBounds = useCallback((webview: HTMLWebViewElement, host: HTMLDivElement) => {
-    const rect = host.getBoundingClientRect();
-    const nextWidth = Math.max(0, Math.round(rect.width));
-    const nextHeight = Math.max(0, Math.round(rect.height));
-    if (nextWidth === 0 || nextHeight === 0) {
-      return;
-    }
-
-    Object.assign(webview.style, {
-      display: 'block',
-      position: 'absolute',
-      inset: '0px',
-      width: `${nextWidth}px`,
-      height: `${nextHeight}px`,
-    });
-  }, []);
-
-  const syncWebviewBounds = useCallback(() => {
-    const webview = webviewRef.current;
-    const host = webviewHostRef.current;
-    if (!webview || !host || webview.parentElement !== host) {
-      return;
-    }
-
-    applyWebviewBounds(webview, host);
-  }, [applyWebviewBounds]);
 
   const resetNavigationState = useCallback(() => {
     setCanGoBack(false);
@@ -259,62 +231,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     setInputValue(nextUrl);
     setCurrentUrl(nextUrl);
   }, [persistedUrl, pane.id]);
-
-  useLayoutEffect(() => {
-    const host = webviewHostRef.current;
-    if (!host) {
-      return undefined;
-    }
-
-    const webview = document.createElement('webview') as HTMLWebViewElement;
-    webviewRef.current = webview;
-
-    webview.className = BROWSER_WEBVIEW_CLASSNAME;
-    applyWebviewBounds(webview, host);
-    webview.setAttribute('partition', BROWSER_PARTITION);
-    webview.setAttribute('src', persistedUrl);
-    host.replaceChildren(webview);
-    syncWebviewBounds();
-
-    return () => {
-      clearRestoreReadyTimer();
-      setWebviewReady(false);
-      resetNavigationState();
-      webview.remove();
-      webviewRef.current = null;
-    };
-  }, [applyWebviewBounds, clearRestoreReadyTimer, pane.id, resetNavigationState, setWebviewReady, syncWebviewBounds]);
-
-  useEffect(() => {
-    const host = webviewHostRef.current;
-    if (!host) {
-      return undefined;
-    }
-
-    const handleWindowResize = () => {
-      syncWebviewBounds();
-    };
-    const resizeObserver = new ResizeObserver(() => {
-      syncWebviewBounds();
-    });
-
-    resizeObserver.observe(host);
-    window.addEventListener('resize', handleWindowResize);
-
-    const animationFrameId = window.requestAnimationFrame(() => {
-      syncWebviewBounds();
-    });
-    const delayedSyncTimer = window.setTimeout(() => {
-      syncWebviewBounds();
-    }, 80);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', handleWindowResize);
-      window.cancelAnimationFrame(animationFrameId);
-      window.clearTimeout(delayedSyncTimer);
-    };
-  }, [pane.id, syncWebviewBounds]);
 
   useEffect(() => {
     if (!isActive) {
@@ -598,10 +514,13 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         </div>
       </div>
 
-      <div
-        ref={webviewHostRef}
-        data-browser-webview-host="true"
-        className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-zinc-950"
+      <webview
+        ref={(element) => {
+          webviewRef.current = element;
+        }}
+        src={persistedUrl}
+        partition={BROWSER_PARTITION}
+        className={BROWSER_WEBVIEW_CLASSNAME}
       />
     </div>
   );
