@@ -233,15 +233,12 @@ describe('SettingsPanel', () => {
           name: 'Java Language Support',
           publisher: 'Acme',
           version: '1.0.0',
-          latestVersion: '1.2.0',
-          summary: 'Java language tooling',
           source: 'marketplace',
           languages: ['java'],
           installStatus: 'installed',
           runtimeState: 'idle',
           health: 'unknown',
           enabledByDefault: false,
-          updateAvailable: true,
           installPath: '/plugins/acme.java-language/1.0.0',
           manifest: {
             schemaVersion: 1,
@@ -390,11 +387,19 @@ describe('SettingsPanel', () => {
     expect(await screen.findByRole('heading', { name: 'Java Language Support' })).toBeInTheDocument();
     expect(screen.getByText('Claude StatusLine')).toBeInTheDocument();
     expect(window.electronAPI.listPluginCatalog).not.toHaveBeenCalled();
+    expect(window.electronAPI.listPlugins).toHaveBeenCalledWith({
+      includeCatalog: false,
+      refreshCatalog: false,
+    });
 
     await user.click(screen.getAllByRole('button', { name: '加载目录' })[0]);
 
     expect(await screen.findByRole('heading', { name: 'Python Language Support' })).toBeInTheDocument();
     expect(window.electronAPI.listPluginCatalog).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.listPlugins).toHaveBeenLastCalledWith({
+      includeCatalog: true,
+      refreshCatalog: true,
+    });
 
     await user.selectOptions(
       screen.getByLabelText('Java Language Support 工作区启用模式'),

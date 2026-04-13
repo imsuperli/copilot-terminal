@@ -11,17 +11,17 @@ import { errorResponse, successResponse } from './HandlerResponse';
 export function registerPluginHandlers(ctx: HandlerContext) {
   const {
     pluginManager,
-    getCurrentWorkspace,
     languageFeatureService,
   } = ctx;
 
-  ipcMain.handle('list-plugins', async () => {
+  ipcMain.handle('list-plugins', async (_event, config) => {
     try {
       if (!pluginManager) {
         throw new Error('PluginManager not initialized');
       }
 
-      return successResponse(await pluginManager.listPlugins());
+      await reconcileConflictingPlugins(ctx);
+      return successResponse(await pluginManager.listPlugins(config ?? {}));
     } catch (error) {
       return errorResponse(error);
     }
@@ -33,6 +33,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
+      await reconcileConflictingPlugins(ctx);
       return successResponse(await pluginManager.getRegistrySnapshot());
     } catch (error) {
       return errorResponse(error);
@@ -102,8 +103,14 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
+      const previousPluginSettings = ctx.getCurrentWorkspace()?.settings.plugins;
       await clearWorkspacePluginReferences(ctx, [config.pluginId]);
-      await pluginManager.uninstallPlugin(config.pluginId);
+      try {
+        await pluginManager.uninstallPlugin(config.pluginId);
+      } catch (error) {
+        await restoreWorkspacePluginSettings(ctx, previousPluginSettings);
+        throw error;
+      }
       await languageFeatureService?.resetSessions();
       return successResponse();
     } catch (error) {
@@ -124,7 +131,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
 
         await pluginManager.setEnabledByDefault(config.pluginId, config.enabled);
         await languageFeatureService?.resetSessions();
-        const workspace = getCurrentWorkspace();
+        const workspace = ctx.getCurrentWorkspace();
         if (!workspace) {
           throw new Error('Workspace not loaded');
         }
@@ -169,7 +176,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
       if ((config.scope ?? 'workspace') === 'global') {
         await pluginManager.setGlobalPluginSettings(config.pluginId, config.values);
         await languageFeatureService?.resetSessions(config.pluginId);
-        const workspace = getCurrentWorkspace();
+        const workspace = ctx.getCurrentWorkspace();
         if (!workspace) {
           throw new Error('Workspace not loaded');
         }
@@ -193,9 +200,8 @@ async function updateWorkspacePluginSettings(
   ctx: HandlerContext,
   update: (currentSettings: NonNullable<Settings['plugins']>) => NonNullable<Settings['plugins']>,
 ): Promise<Settings> {
-  const { workspaceManager, getCurrentWorkspace, setCurrentWorkspace } = ctx;
-  const workspace = getCurrentWorkspace();
-  if (!workspace || !workspaceManager) {
+  const workspace = ctx.getCurrentWorkspace();
+  if (!workspace || !ctx.workspaceManager) {
     throw new Error('Workspace not loaded');
   }
 
@@ -203,17 +209,7 @@ async function updateWorkspacePluginSettings(
     ...(workspace.settings.plugins ?? {}),
   };
   const nextPluginSettings = update(currentPluginSettings);
-  const updatedWorkspace = {
-    ...workspace,
-    settings: {
-      ...workspace.settings,
-      plugins: nextPluginSettings,
-    },
-  };
-
-  await workspaceManager.saveWorkspace(updatedWorkspace);
-  setCurrentWorkspace(updatedWorkspace);
-  return updatedWorkspace.settings;
+  return await persistWorkspacePluginSettings(ctx, nextPluginSettings);
 }
 
 async function clearWorkspacePluginReferences(ctx: HandlerContext, pluginIds: string[]): Promise<Settings | null> {
@@ -234,11 +230,46 @@ async function clearWorkspacePluginReferences(ctx: HandlerContext, pluginIds: st
     return workspace.settings;
   }
 
+  return await persistWorkspacePluginSettings(ctx, nextPluginSettings);
+}
+
+async function reconcileConflictingPlugins(ctx: HandlerContext): Promise<void> {
+  if (!ctx.pluginManager) {
+    throw new Error('PluginManager not initialized');
+  }
+
+  const removedPluginIds = await ctx.pluginManager.reconcileConflictingPlugins();
+  if (removedPluginIds.length === 0) {
+    return;
+  }
+
+  await clearWorkspacePluginReferences(ctx, removedPluginIds);
+  await ctx.languageFeatureService?.resetSessions();
+}
+
+async function restoreWorkspacePluginSettings(ctx: HandlerContext, pluginSettings: Settings['plugins']): Promise<void> {
+  if (!ctx.getCurrentWorkspace() || !ctx.workspaceManager) {
+    return;
+  }
+
+  try {
+    await persistWorkspacePluginSettings(ctx, pluginSettings);
+  } catch (restoreError) {
+    console.error('Failed to restore workspace plugin settings after uninstall failure:', restoreError);
+  }
+}
+
+async function persistWorkspacePluginSettings(ctx: HandlerContext, pluginSettings: Settings['plugins']): Promise<Settings> {
+  const workspace = ctx.getCurrentWorkspace();
+  if (!workspace || !ctx.workspaceManager) {
+    throw new Error('Workspace not loaded');
+  }
+
   const updatedWorkspace = {
     ...workspace,
     settings: {
       ...workspace.settings,
-      plugins: nextPluginSettings,
+      plugins: pluginSettings,
     },
   };
 

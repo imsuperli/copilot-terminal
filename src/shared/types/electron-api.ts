@@ -461,6 +461,11 @@ export interface PluginCatalogQuery {
   refresh?: boolean;
 }
 
+export interface ListPluginsConfig {
+  includeCatalog?: boolean;
+  refreshCatalog?: boolean;
+}
+
 export interface InstallMarketplacePluginConfig {
   pluginId: string;
   version?: string;
@@ -645,7 +650,7 @@ export interface ElectronAPI {
   updateIDEConfig: (ideConfig: IDEConfig) => Promise<IpcResponse<IDEConfig[]>>;
   deleteIDEConfig: (ideId: string) => Promise<IpcResponse<IDEConfig[]>>;
   getIDEIcon: (iconPath: string) => Promise<IpcResponse<string>>;
-  listPlugins: () => Promise<IpcResponse<PluginListItem[]>>;
+  listPlugins: (config?: ListPluginsConfig) => Promise<IpcResponse<PluginListItem[]>>;
   getPluginRegistry: () => Promise<IpcResponse<PluginRegistry>>;
   listPluginCatalog: (query?: PluginCatalogQuery) => Promise<IpcResponse<PluginCatalogEntry[]>>;
   installMarketplacePlugin: (config: InstallMarketplacePluginConfig) => Promise<IpcResponse<PluginListItem>>;

@@ -143,7 +143,7 @@ describe('LanguagePluginResolver', () => {
     expect(resolution?.capability.takesOverBuiltinLanguageService).toBe(true);
   });
 
-  it('returns null when multiple enabled plugins share the same top priority', async () => {
+  it('prefers the most recently installed plugin when multiple enabled plugins share the same top priority', async () => {
     const workspaceRoot = path.join(tempDir, 'workspace');
     const filePath = path.join(workspaceRoot, 'app.py');
     await fs.ensureDir(workspaceRoot);
@@ -160,6 +160,7 @@ describe('LanguagePluginResolver', () => {
           entry: 'server/a.py',
         },
       },
+      lastCheckedAt: '2026-04-11T00:00:00.000Z',
     });
 
     await writePlugin(tempDir, registryStore, {
@@ -173,6 +174,7 @@ describe('LanguagePluginResolver', () => {
           entry: 'server/b.py',
         },
       },
+      lastCheckedAt: '2026-04-12T00:00:00.000Z',
     });
 
     const resolution = await resolver.resolve({
@@ -180,7 +182,7 @@ describe('LanguagePluginResolver', () => {
       filePath,
     });
 
-    expect(resolution).toBeNull();
+    expect(resolution?.pluginId).toBe('acme.python-b');
   });
 });
 
@@ -190,6 +192,7 @@ async function writePlugin(
   config: {
     id: string;
     enabledByDefault: boolean;
+    lastCheckedAt?: string;
     capability?: Partial<LanguageServerPluginCapability> & Pick<LanguageServerPluginCapability, 'languages' | 'runtime'>;
     capabilities?: LanguageServerPluginCapability[];
   },
@@ -221,5 +224,6 @@ async function writePlugin(
     installPath,
     enabledByDefault: config.enabledByDefault,
     status: 'installed',
+    ...(config.lastCheckedAt ? { lastCheckedAt: config.lastCheckedAt } : {}),
   });
 }

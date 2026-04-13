@@ -107,13 +107,9 @@ export class LanguagePluginResolver {
       }))
       .sort((left, right) => (
         (right.capability.priority ?? 0) - (left.capability.priority ?? 0)
+        || compareInstalledPluginRecency(left.plugin.record, right.plugin.record)
         || left.plugin.pluginId.localeCompare(right.plugin.pluginId)
       ));
-
-    const topPriority = rankedCandidates[0].capability.priority ?? 0;
-    if (rankedCandidates.filter((entry) => (entry.capability.priority ?? 0) === topPriority).length > 1) {
-      return null;
-    }
 
     return await this.createResolution({
       plugin: rankedCandidates[0].plugin,
@@ -257,6 +253,15 @@ function isPluginEnabled(
   }
 
   return record.enabledByDefault === true;
+}
+
+function compareInstalledPluginRecency(left: InstalledPluginRecord, right: InstalledPluginRecord): number {
+  return getInstalledPluginTimestamp(right) - getInstalledPluginTimestamp(left);
+}
+
+function getInstalledPluginTimestamp(record: InstalledPluginRecord): number {
+  const timestamp = Date.parse(record.lastCheckedAt ?? '');
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
 }
 
 function isBuiltinProtectedLanguage(languageId: string): boolean {

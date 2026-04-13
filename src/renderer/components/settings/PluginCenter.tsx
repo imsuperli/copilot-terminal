@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Switch from '@radix-ui/react-switch';
 import {
   Check,
@@ -61,9 +61,15 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeActionKeys, setActiveActionKeys] = useState<string[]>([]);
+  const hasLoadedCatalogRef = useRef(hasLoadedCatalog);
+
+  useEffect(() => {
+    hasLoadedCatalogRef.current = hasLoadedCatalog;
+  }, [hasLoadedCatalog]);
 
   const loadPluginState = useCallback(async (options: { refreshCatalog?: boolean } = {}) => {
     const refreshCatalog = options.refreshCatalog === true;
+    const includeCatalog = refreshCatalog || hasLoadedCatalogRef.current;
 
     if (refreshCatalog) {
       setCatalogRefreshing(true);
@@ -76,7 +82,10 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     try {
       const [settingsResponse, installedResponse, registryResponse, catalogResponse] = await Promise.all([
         window.electronAPI.getSettings(),
-        window.electronAPI.listPlugins(),
+        window.electronAPI.listPlugins({
+          includeCatalog,
+          refreshCatalog,
+        }),
         window.electronAPI.getPluginRegistry(),
         refreshCatalog
           ? window.electronAPI.listPluginCatalog({ refresh: true })

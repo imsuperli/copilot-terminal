@@ -11,6 +11,7 @@ import type {
 import type {
   InstallLocalPluginConfig,
   InstallMarketplacePluginConfig,
+  ListPluginsConfig,
   PluginCatalogQuery,
   UpdatePluginConfig,
 } from '../../../shared/types/electron-api';
@@ -45,9 +46,11 @@ export class PluginManager {
     this.manifestValidator = options.manifestValidator ?? new PluginManifestValidator();
   }
 
-  async listPlugins(): Promise<PluginListItem[]> {
+  async listPlugins(config: ListPluginsConfig = {}): Promise<PluginListItem[]> {
     const registry = await this.registryStore.readRegistry();
-    const catalogEntries = await this.safeListCatalog();
+    const catalogEntries = config.includeCatalog === true
+      ? await this.safeListCatalog({ refresh: config.refreshCatalog === true })
+      : [];
     const catalogByPluginId = new Map(catalogEntries.map((entry) => [entry.id, entry]));
 
     const items = await Promise.all(
@@ -128,6 +131,29 @@ export class PluginManager {
     return await this.registryStore.readRegistry();
   }
 
+  async reconcileConflictingPlugins(): Promise<string[]> {
+    const registry = await this.registryStore.readRegistry();
+    const installedPlugins = (await this.readInstalledPlugins(registry))
+      .sort((left, right) => comparePluginRecency(right, left));
+    const keptPlugins: InstalledPluginWithManifest[] = [];
+    const pluginIdsToRemove = new Set<string>();
+
+    for (const plugin of installedPlugins) {
+      if (keptPlugins.some((keptPlugin) => manifestsConflict(keptPlugin.manifest, plugin.manifest))) {
+        pluginIdsToRemove.add(plugin.pluginId);
+        continue;
+      }
+
+      keptPlugins.push(plugin);
+    }
+
+    const removedPluginIds = Array.from(pluginIdsToRemove).sort((left, right) => left.localeCompare(right));
+    await Promise.all(removedPluginIds.map(async (pluginId) => {
+      await this.installerService.uninstall(pluginId);
+    }));
+    return removedPluginIds;
+  }
+
   private async installPluginAndResolveConflicts(
     install: () => Promise<InstalledPluginResult>,
     catalogEntry?: PluginCatalogEntry,
@@ -195,9 +221,9 @@ export class PluginManager {
     return record.status;
   }
 
-  private async safeListCatalog(): Promise<PluginCatalogEntry[]> {
+  private async safeListCatalog(query: PluginCatalogQuery = {}): Promise<PluginCatalogEntry[]> {
     try {
-      return await this.catalogService.list();
+      return await this.catalogService.list(query);
     } catch {
       return [];
     }
@@ -224,6 +250,33 @@ export class PluginManager {
 
     return conflicts.sort((left, right) => left.localeCompare(right));
   }
+
+  private async readInstalledPlugins(registry: Awaited<ReturnType<PluginRegistryStore['readRegistry']>>): Promise<InstalledPluginWithManifest[]> {
+    const plugins = await Promise.all(Object.entries(registry.plugins).map(async ([pluginId, record]) => {
+      if (record.status !== 'installed') {
+        return null;
+      }
+
+      const manifest = await this.readInstalledManifest(record.installPath);
+      if (!manifest) {
+        return null;
+      }
+
+      return {
+        pluginId,
+        record,
+        manifest,
+      };
+    }));
+
+    return plugins.filter((plugin): plugin is InstalledPluginWithManifest => Boolean(plugin));
+  }
+}
+
+interface InstalledPluginWithManifest {
+  pluginId: string;
+  record: InstalledPluginRecord;
+  manifest: PluginManifest;
 }
 
 function manifestsConflict(left: PluginManifest, right: PluginManifest): boolean {
@@ -248,6 +301,20 @@ function hasIntersection(left: string[], right: string[]): boolean {
 
   const rightValues = new Set(right.map((value) => value.toLowerCase()));
   return left.some((value) => rightValues.has(value.toLowerCase()));
+}
+
+function comparePluginRecency(left: InstalledPluginWithManifest, right: InstalledPluginWithManifest): number {
+  const timestampDifference = getPluginTimestamp(left.record) - getPluginTimestamp(right.record);
+  if (timestampDifference !== 0) {
+    return timestampDifference;
+  }
+
+  return right.pluginId.localeCompare(left.pluginId);
+}
+
+function getPluginTimestamp(record: InstalledPluginRecord): number {
+  const timestamp = Date.parse(record.lastCheckedAt ?? '');
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
 }
 
 function shouldMarkUpdateAvailable(installedVersion: string | undefined, latestVersion: string | undefined): boolean {

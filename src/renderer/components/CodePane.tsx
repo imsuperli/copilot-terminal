@@ -420,10 +420,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    const nextProblems = Array.from(fileModelsRef.current.values())
+      const nextProblems = Array.from(fileModelsRef.current.values())
       .flatMap((model) => monaco.editor.getModelMarkers({ resource: model.uri }).map((marker) => ({
         ...marker,
-        filePath: model.uri.path,
+        filePath: model.uri.fsPath || model.uri.path,
       })))
       .sort((left, right) => {
         if (left.severity !== right.severity) {
@@ -805,7 +805,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const handleDefinitionClick = useCallback(async (editorInstance: MonacoEditor | null, lineNumber: number, column: number) => {
     const model = editorInstance?.getModel();
-    const filePath = model?.uri.path;
+    const filePath = model?.uri.fsPath || model?.uri.path;
     if (!model || !filePath) {
       return;
     }

@@ -28,7 +28,7 @@ describe('PluginManager', () => {
     await fs.remove(tempDir);
   });
 
-  it('installs a wrapped local plugin package and surfaces catalog metadata on list', async () => {
+  it('lists installed plugins without fetching the remote catalog by default', async () => {
     const packageRoot = path.join(tempDir, 'packages-src');
     const wrappedPluginRoot = path.join(packageRoot, 'java-language-plugin');
     await fs.ensureDir(wrappedPluginRoot);
@@ -101,12 +101,21 @@ describe('PluginManager', () => {
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       id: 'acme.java-language',
-      latestVersion: '1.2.0',
       languages: ['java'],
-      summary: 'Marketplace summary',
-      updateAvailable: true,
+      updateAvailable: false,
       enabledByDefault: true,
     });
+    expect(catalogService.list).not.toHaveBeenCalled();
+
+    const listedWithCatalog = await manager.listPlugins({ includeCatalog: true });
+    expect(listedWithCatalog).toHaveLength(1);
+    expect(listedWithCatalog[0]).toMatchObject({
+      id: 'acme.java-language',
+      latestVersion: '1.2.0',
+      summary: 'Marketplace summary',
+      updateAvailable: true,
+    });
+    expect(catalogService.list).toHaveBeenCalledTimes(1);
   });
 
   it('replaces installed plugins that provide the same language-server capability', async () => {
@@ -193,5 +202,181 @@ describe('PluginManager', () => {
     expect(Object.keys(registry.plugins)).toEqual(['acme.alt-java-language']);
     expect(registry.globalPluginSettings).toEqual({});
     expect(await fs.pathExists(existingPluginPath)).toBe(false);
+  });
+
+  it('reconciles legacy duplicate plugins by keeping the most recently installed plugin for each language key', async () => {
+    const olderPluginPath = path.join(tempDir, 'plugin-data', 'packages', 'acme.java-old', '1.0.0');
+    await fs.ensureDir(path.join(olderPluginPath, 'server'));
+    await fs.writeJson(path.join(olderPluginPath, 'plugin.json'), {
+      schemaVersion: 1,
+      id: 'acme.java-old',
+      name: 'Old Java Support',
+      publisher: 'Acme',
+      version: '1.0.0',
+      engines: {
+        app: '>=3.0.0',
+      },
+      capabilities: [
+        {
+          type: 'language-server',
+          languages: ['java'],
+          runtime: {
+            type: 'java',
+            entry: 'server/old.jar',
+          },
+        },
+      ],
+    });
+    await registryStore.upsert('acme.java-old', {
+      source: 'marketplace',
+      installedVersion: '1.0.0',
+      installPath: olderPluginPath,
+      enabledByDefault: true,
+      status: 'installed',
+      lastCheckedAt: '2026-04-11T00:00:00.000Z',
+    });
+
+    const newerPluginPath = path.join(tempDir, 'plugin-data', 'packages', 'acme.java-new', '1.0.0');
+    await fs.ensureDir(path.join(newerPluginPath, 'server'));
+    await fs.writeJson(path.join(newerPluginPath, 'plugin.json'), {
+      schemaVersion: 1,
+      id: 'acme.java-new',
+      name: 'New Java Support',
+      publisher: 'Acme',
+      version: '1.0.0',
+      engines: {
+        app: '>=3.0.0',
+      },
+      capabilities: [
+        {
+          type: 'language-server',
+          languages: ['java'],
+          runtime: {
+            type: 'java',
+            entry: 'server/new.jar',
+          },
+        },
+      ],
+    });
+    await registryStore.upsert('acme.java-new', {
+      source: 'marketplace',
+      installedVersion: '1.0.0',
+      installPath: newerPluginPath,
+      enabledByDefault: true,
+      status: 'installed',
+      lastCheckedAt: '2026-04-12T00:00:00.000Z',
+    });
+
+    const manager = new PluginManager({
+      registryStore,
+      installerService,
+      catalogService: {
+        list: vi.fn(async () => []),
+      } as unknown as PluginCatalogService,
+    });
+
+    const removedPluginIds = await manager.reconcileConflictingPlugins();
+
+    expect(removedPluginIds).toEqual(['acme.java-old']);
+    expect(await fs.pathExists(olderPluginPath)).toBe(false);
+    expect(await fs.pathExists(newerPluginPath)).toBe(true);
+
+    const registry = await registryStore.readRegistry();
+    expect(Object.keys(registry.plugins)).toEqual(['acme.java-new']);
+  });
+
+  it('keeps the newest non-conflicting set when a legacy plugin spans multiple languages', async () => {
+    const javaOnlyPath = path.join(tempDir, 'plugin-data', 'packages', 'acme.java-only', '1.0.0');
+    await fs.ensureDir(path.join(javaOnlyPath, 'server'));
+    await fs.writeJson(path.join(javaOnlyPath, 'plugin.json'), {
+      schemaVersion: 1,
+      id: 'acme.java-only',
+      name: 'Java Only',
+      publisher: 'Acme',
+      version: '1.0.0',
+      engines: { app: '>=3.0.0' },
+      capabilities: [
+        {
+          type: 'language-server',
+          languages: ['java'],
+          runtime: { type: 'java', entry: 'server/java.jar' },
+        },
+      ],
+    });
+    await registryStore.upsert('acme.java-only', {
+      source: 'marketplace',
+      installedVersion: '1.0.0',
+      installPath: javaOnlyPath,
+      enabledByDefault: true,
+      status: 'installed',
+      lastCheckedAt: '2026-04-10T00:00:00.000Z',
+    });
+
+    const bridgePath = path.join(tempDir, 'plugin-data', 'packages', 'acme.java-python', '1.0.0');
+    await fs.ensureDir(path.join(bridgePath, 'server'));
+    await fs.writeJson(path.join(bridgePath, 'plugin.json'), {
+      schemaVersion: 1,
+      id: 'acme.java-python',
+      name: 'Java Python',
+      publisher: 'Acme',
+      version: '1.0.0',
+      engines: { app: '>=3.0.0' },
+      capabilities: [
+        {
+          type: 'language-server',
+          languages: ['java', 'python'],
+          runtime: { type: 'node', entry: 'server/bridge.js' },
+        },
+      ],
+    });
+    await registryStore.upsert('acme.java-python', {
+      source: 'marketplace',
+      installedVersion: '1.0.0',
+      installPath: bridgePath,
+      enabledByDefault: true,
+      status: 'installed',
+      lastCheckedAt: '2026-04-11T00:00:00.000Z',
+    });
+
+    const pythonOnlyPath = path.join(tempDir, 'plugin-data', 'packages', 'acme.python-only', '1.0.0');
+    await fs.ensureDir(path.join(pythonOnlyPath, 'server'));
+    await fs.writeJson(path.join(pythonOnlyPath, 'plugin.json'), {
+      schemaVersion: 1,
+      id: 'acme.python-only',
+      name: 'Python Only',
+      publisher: 'Acme',
+      version: '1.0.0',
+      engines: { app: '>=3.0.0' },
+      capabilities: [
+        {
+          type: 'language-server',
+          languages: ['python'],
+          runtime: { type: 'python', entry: 'server/python.py' },
+        },
+      ],
+    });
+    await registryStore.upsert('acme.python-only', {
+      source: 'marketplace',
+      installedVersion: '1.0.0',
+      installPath: pythonOnlyPath,
+      enabledByDefault: true,
+      status: 'installed',
+      lastCheckedAt: '2026-04-12T00:00:00.000Z',
+    });
+
+    const manager = new PluginManager({
+      registryStore,
+      installerService,
+      catalogService: {
+        list: vi.fn(async () => []),
+      } as unknown as PluginCatalogService,
+    });
+
+    const removedPluginIds = await manager.reconcileConflictingPlugins();
+
+    expect(removedPluginIds).toEqual(['acme.java-python']);
+
+    const registry = await registryStore.readRegistry();
+    expect(Object.keys(registry.plugins).sort()).toEqual(['acme.java-only', 'acme.python-only']);
   });
 });

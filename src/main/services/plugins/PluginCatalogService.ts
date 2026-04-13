@@ -18,6 +18,8 @@ const DEFAULT_OFFICIAL_PLUGIN_CATALOG_URL = 'https://plugin.notta.top/catalog.js
 export class PluginCatalogService {
   private readonly catalogUrl: string | null;
   private readonly fetchImpl: typeof fetch;
+  private cachedCatalog: PluginCatalog | null = null;
+  private inflightCatalog: Promise<PluginCatalog | null> | null = null;
 
   constructor(options: PluginCatalogServiceOptions) {
     this.catalogUrl = normalizeOptionalString(options.catalogUrl ?? process.env.CODE_PLUGIN_CATALOG_URL ?? DEFAULT_OFFICIAL_PLUGIN_CATALOG_URL) ?? null;
@@ -25,14 +27,12 @@ export class PluginCatalogService {
   }
 
   async list(query: PluginCatalogQuery = {}): Promise<PluginCatalogEntry[]> {
-    void query;
-
     if (!this.catalogUrl) {
       return [];
     }
 
     try {
-      const remoteCatalog = await this.fetchRemoteCatalog();
+      const remoteCatalog = await this.loadCatalog(query);
       if (remoteCatalog) {
         return this.filterCatalogEntriesForCurrentPlatform(remoteCatalog.plugins);
       }
@@ -48,6 +48,30 @@ export class PluginCatalogService {
     }
 
     return [];
+  }
+
+  private async loadCatalog(query: PluginCatalogQuery = {}): Promise<PluginCatalog | null> {
+    const refresh = query.refresh === true;
+
+    if (!refresh && this.cachedCatalog) {
+      return this.cachedCatalog;
+    }
+
+    if (this.inflightCatalog) {
+      return await this.inflightCatalog;
+    }
+
+    const fetchPromise = this.fetchRemoteCatalog()
+      .then((catalog) => {
+        this.cachedCatalog = catalog;
+        return catalog;
+      })
+      .finally(() => {
+        this.inflightCatalog = null;
+      });
+
+    this.inflightCatalog = fetchPromise;
+    return await fetchPromise;
   }
 
   private async fetchRemoteCatalog(): Promise<PluginCatalog | null> {
