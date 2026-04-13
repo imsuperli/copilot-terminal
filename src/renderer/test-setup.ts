@@ -143,6 +143,8 @@ Object.defineProperty(window, 'electronAPI', {
     offCodePaneIndexProgress: vi.fn(),
     onCodePaneDiagnosticsChanged: vi.fn(),
     offCodePaneDiagnosticsChanged: vi.fn(),
+    onCodePaneLanguageWorkspaceChanged: vi.fn(),
+    offCodePaneLanguageWorkspaceChanged: vi.fn(),
     onPluginRuntimeStateChanged: vi.fn(),
     offPluginRuntimeStateChanged: vi.fn(),
     onTmuxPaneTitleChanged: vi.fn(),

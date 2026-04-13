@@ -33,6 +33,8 @@ import type {
   CodePaneFsChangedPayload,
   CodePaneGitStatusEntry,
   CodePaneIndexProgressPayload,
+  CodePaneLanguageWorkspaceChangedPayload,
+  CodePaneLanguageWorkspaceState,
   CodePaneLocation,
   CodePaneReadFileResult,
   CodePaneTreeEntry,
@@ -201,6 +203,33 @@ function isPathInside(parentPath: string, candidatePath: string): boolean {
   const normalizedCandidatePath = normalizePath(candidatePath);
   return normalizedCandidatePath === normalizedParentPath
     || normalizedCandidatePath.startsWith(`${normalizedParentPath}/`);
+}
+
+function matchesLanguageWorkspaceRoot(
+  rootPath: string,
+  state: CodePaneLanguageWorkspaceState,
+): boolean {
+  return state.workspaceRoot === rootPath
+    || state.projectRoot === rootPath
+    || isPathInside(rootPath, state.projectRoot)
+    || isPathInside(state.projectRoot, rootPath);
+}
+
+function formatLanguageLabel(languageId: string): string {
+  switch (languageId) {
+    case 'java':
+      return 'Java';
+    case 'python':
+      return 'Python';
+    case 'typescript':
+      return 'TypeScript';
+    case 'javascript':
+      return 'JavaScript';
+    case 'go':
+      return 'Go';
+    default:
+      return languageId ? `${languageId.slice(0, 1).toUpperCase()}${languageId.slice(1)}` : 'Language';
+  }
 }
 
 function isPathAffectedByRemovedDirectory(removedDirectoryPaths: string[], candidatePath: string): boolean {
@@ -393,6 +422,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [searchError, setSearchError] = useState<string | null>(null);
   const [contentSearchError, setContentSearchError] = useState<string | null>(null);
   const [indexStatus, setIndexStatus] = useState<CodePaneIndexStatus | null>(null);
+  const [languageWorkspaceState, setLanguageWorkspaceState] = useState<CodePaneLanguageWorkspaceState | null>(null);
 
   const expandedDirectoriesRef = useRef(expandedDirectories);
   const loadedDirectoriesRef = useRef(loadedDirectories);
@@ -2024,8 +2054,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     };
 
+    const handleLanguageWorkspaceChanged = (
+      _event: unknown,
+      payload: CodePaneLanguageWorkspaceChangedPayload,
+    ) => {
+      if (!matchesLanguageWorkspaceRoot(rootPath, payload.state)) {
+        return;
+      }
+
+      startTransition(() => {
+        setLanguageWorkspaceState(payload.state);
+      });
+    };
+
     window.electronAPI.onCodePaneFsChanged(handleFsChanged);
     window.electronAPI.onCodePaneIndexProgress(handleIndexProgress);
+    window.electronAPI.onCodePaneLanguageWorkspaceChanged(handleLanguageWorkspaceChanged);
 
     const bootstrap = async () => {
       const initialExpandedDirectories = createExpandedDirectorySet(
@@ -2040,6 +2084,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setContentSearchError(null);
       setTreeEntriesByDirectory({});
       setIndexStatus(null);
+      setLanguageWorkspaceState(null);
       setExpandedDirectories(initialExpandedDirectories);
       setLoadedDirectories(new Set());
       setLoadingDirectories(new Set([rootPath]));
@@ -2128,6 +2173,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       mounted = false;
       window.electronAPI.offCodePaneFsChanged(handleFsChanged);
       window.electronAPI.offCodePaneIndexProgress(handleIndexProgress);
+      window.electronAPI.offCodePaneLanguageWorkspaceChanged(handleLanguageWorkspaceChanged);
       void window.electronAPI.codePaneUnwatchRoot(pane.id);
       markerListenerRef.current?.dispose();
       markerListenerRef.current = null;
@@ -2281,6 +2327,56 @@ export const CodePane: React.FC<CodePaneProps> = ({
       files: indexStatus.indexedFileCount,
     })
     : (indexStatus?.error || t('codePane.indexingFailed'));
+  const languageStatusText = useMemo(() => {
+    if (!languageWorkspaceState) {
+      return null;
+    }
+
+    const languageLabel = formatLanguageLabel(languageWorkspaceState.languageId);
+    const progressText = languageWorkspaceState.progressText || languageWorkspaceState.message;
+
+    switch (languageWorkspaceState.phase) {
+      case 'ready':
+        return `${languageLabel}: ready`;
+      case 'error':
+        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: error`;
+      case 'importing-project':
+        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: importing project`;
+      case 'indexing-workspace':
+        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: indexing workspace`;
+      case 'detecting-project':
+        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: detecting project`;
+      case 'starting':
+      case 'degraded':
+      case 'idle':
+      default:
+        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: starting`;
+    }
+  }, [languageWorkspaceState]);
+  const languageStatusTone = useMemo(() => {
+    if (!languageWorkspaceState) {
+      return null;
+    }
+
+    if (languageWorkspaceState.phase === 'error') {
+      return {
+        className: 'bg-red-500/15 text-red-300',
+        showSpinner: false,
+      };
+    }
+
+    if (languageWorkspaceState.phase === 'ready') {
+      return {
+        className: 'bg-emerald-500/15 text-emerald-300',
+        showSpinner: false,
+      };
+    }
+
+    return {
+      className: 'bg-amber-500/15 text-amber-300',
+      showSpinner: true,
+    };
+  }, [languageWorkspaceState]);
   const statusTone = getStatusTone(activeTabStatus);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
   const rootLabel = useMemo(() => getPathLeafLabel(rootPath) || rootPath, [rootPath]);
@@ -3205,6 +3301,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     <Loader2 size={11} className="shrink-0 animate-spin" />
                   )}
                   <span>{indexStatusText}</span>
+                </span>
+              )}
+              {languageStatusText && languageStatusTone && (
+                <span className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 ${languageStatusTone.className}`}>
+                  {languageStatusTone.showSpinner && (
+                    <Loader2 size={11} className="shrink-0 animate-spin" />
+                  )}
+                  <span>{languageStatusText}</span>
                 </span>
               )}
               <span>{activeStatusText}</span>

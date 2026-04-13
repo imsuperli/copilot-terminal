@@ -6,6 +6,7 @@ import { CodePane } from '../CodePane';
 import type {
   CodePaneFsChangedPayload,
   CodePaneIndexProgressPayload,
+  CodePaneLanguageWorkspaceChangedPayload,
 } from '../../../shared/types/electron-api';
 import { resetMonacoLanguageBridgeForTests } from '../../services/code/MonacoLanguageBridge';
 import type { Pane } from '../../types/window';
@@ -442,6 +443,18 @@ async function emitIndexProgress(payload: CodePaneIndexProgressPayload) {
   });
 }
 
+async function emitLanguageWorkspaceChanged(payload: CodePaneLanguageWorkspaceChangedPayload) {
+  const callback = vi.mocked(window.electronAPI.onCodePaneLanguageWorkspaceChanged).mock.calls.at(-1)?.[0];
+  if (!callback) {
+    throw new Error('expected language workspace listener to be registered');
+  }
+
+  await act(async () => {
+    callback({}, payload);
+    await Promise.resolve();
+  });
+}
+
 describe('CodePane', () => {
   beforeAll(() => {
     vi.stubGlobal('Worker', class WorkerMock {});
@@ -485,6 +498,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.offCodePaneIndexProgress).mockReset();
     vi.mocked(window.electronAPI.onCodePaneDiagnosticsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneDiagnosticsChanged).mockReset();
+    vi.mocked(window.electronAPI.onCodePaneLanguageWorkspaceChanged).mockReset();
+    vi.mocked(window.electronAPI.offCodePaneLanguageWorkspaceChanged).mockReset();
     vi.mocked(window.electronAPI.openFolder).mockReset();
     vi.mocked(window.electronAPI.writeClipboardText).mockReset();
 
@@ -601,6 +616,27 @@ describe('CodePane', () => {
     });
 
     expect(await screen.findByText('codePane.indexingProgress')).toBeInTheDocument();
+  });
+
+  it('shows language workspace progress in the bottom status bar', async () => {
+    renderCodePane(createPane());
+
+    await emitLanguageWorkspaceChanged({
+      state: {
+        pluginId: 'official.java-jdtls',
+        workspaceRoot: '/workspace/project',
+        projectRoot: '/workspace/project',
+        languageId: 'java',
+        runtimeState: 'running',
+        phase: 'importing-project',
+        message: 'Importing Maven project',
+        progressText: 'Resolving classpath',
+        readyFeatures: ['definition', 'hover'],
+        timestamp: '2026-04-13T00:00:00.000Z',
+      },
+    });
+
+    expect(await screen.findByText('Java: Resolving classpath')).toBeInTheDocument();
   });
 
   it('toggles the workbench sidebar from the activity rail and persists the selected view', async () => {

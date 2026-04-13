@@ -4,11 +4,13 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type {
   CodePaneDiagnosticsChangedPayload,
+  CodePaneLanguageWorkspaceChangedPayload,
   PluginRuntimeStateChangedPayload,
 } from '../../../../shared/types/electron-api';
 import type { PluginManifest } from '../../../../shared/types/plugin';
 import type { ResolvedLanguagePlugin } from '../LanguagePluginResolver';
 import { LanguageServerSupervisor } from '../LanguageServerSupervisor';
+import { LanguageWorkspaceService } from '../LanguageWorkspaceService';
 import { spawnRuntimeProcess, type LanguageRuntimeAdapter } from '../runtime/shared';
 
 describe('LanguageServerSupervisor', () => {
@@ -34,6 +36,13 @@ describe('LanguageServerSupervisor', () => {
 
     const diagnosticsEvents: CodePaneDiagnosticsChangedPayload[] = [];
     const runtimeEvents: PluginRuntimeStateChangedPayload[] = [];
+    const workspaceEvents: CodePaneLanguageWorkspaceChangedPayload[] = [];
+    const workspaceService = new LanguageWorkspaceService({
+      emitState: (payload) => {
+        workspaceEvents.push(payload);
+      },
+      now: () => '2026-04-12T00:00:00.000Z',
+    });
 
     supervisor = new LanguageServerSupervisor({
       runtimeRootPath: path.join(tempDir, 'runtime'),
@@ -44,6 +53,7 @@ describe('LanguageServerSupervisor', () => {
       emitRuntimeState: (payload) => {
         runtimeEvents.push(payload);
       },
+      workspaceService,
       now: () => '2026-04-12T00:00:00.000Z',
       requestTimeoutMs: 5000,
     });
@@ -60,6 +70,12 @@ describe('LanguageServerSupervisor', () => {
 
     await waitForCondition(() => diagnosticsEvents.length > 0);
     expect(runtimeEvents.map((event) => event.state)).toEqual(expect.arrayContaining(['starting', 'running']));
+    await waitForCondition(() => workspaceEvents.some((event) => event.state.phase === 'ready'));
+    expect(workspaceEvents.map((event) => event.state.phase)).toEqual(expect.arrayContaining([
+      'starting',
+      'importing-project',
+      'ready',
+    ]));
     expect(diagnosticsEvents[0]).toMatchObject({
       rootPath: workspaceRoot,
       filePath,

@@ -26,6 +26,7 @@ import {
   ensureWorkspaceStoragePath,
 } from './runtime/shared';
 import type { ResolvedLanguagePlugin } from './LanguagePluginResolver';
+import { LanguageWorkspaceService } from './LanguageWorkspaceService';
 
 type TextSyncKind = 0 | 1 | 2;
 
@@ -64,6 +65,7 @@ interface LanguageServerSessionOptions {
   adapters: LanguageRuntimeAdapter[];
   emitDiagnostics: (event: SessionDiagnosticsEvent) => void;
   emitRuntimeState: (payload: PluginRuntimeStateChangedPayload) => void;
+  workspaceService?: LanguageWorkspaceService;
   now?: () => string;
   requestTimeoutMs?: number;
   restartBackoffMs?: number;
@@ -138,6 +140,7 @@ export interface LanguageServerSupervisorOptions {
   adapters?: LanguageRuntimeAdapter[];
   emitDiagnostics: (payload: CodePaneDiagnosticsChangedPayload) => void;
   emitRuntimeState: (payload: PluginRuntimeStateChangedPayload) => void;
+  workspaceService?: LanguageWorkspaceService;
   now?: () => string;
   requestTimeoutMs?: number;
   restartBackoffMs?: number;
@@ -156,6 +159,7 @@ export class LanguageServerSupervisor {
   private readonly adapters: LanguageRuntimeAdapter[];
   private readonly emitDiagnostics: (payload: CodePaneDiagnosticsChangedPayload) => void;
   private readonly emitRuntimeState: (payload: PluginRuntimeStateChangedPayload) => void;
+  private readonly workspaceService?: LanguageWorkspaceService;
   private readonly now: () => string;
   private readonly requestTimeoutMs: number;
   private readonly restartBackoffMs: number;
@@ -171,6 +175,7 @@ export class LanguageServerSupervisor {
     ];
     this.emitDiagnostics = options.emitDiagnostics;
     this.emitRuntimeState = options.emitRuntimeState;
+    this.workspaceService = options.workspaceService;
     this.now = options.now ?? (() => new Date().toISOString());
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15000;
     this.restartBackoffMs = options.restartBackoffMs ?? 10_000;
@@ -229,6 +234,7 @@ export class LanguageServerSupervisor {
 
     if (!pluginId) {
       this.sessions.clear();
+      this.workspaceService?.reset();
       return;
     }
 
@@ -237,6 +243,8 @@ export class LanguageServerSupervisor {
         this.sessions.delete(key);
       }
     }
+
+    this.workspaceService?.reset(pluginId);
   }
 
   private getOrCreateSession(resolution: ResolvedLanguagePlugin): LanguageServerSession {
@@ -260,6 +268,7 @@ export class LanguageServerSupervisor {
         }
       },
       emitRuntimeState: this.emitRuntimeState,
+      workspaceService: this.workspaceService,
       now: this.now,
       requestTimeoutMs: this.requestTimeoutMs,
       restartBackoffMs: this.restartBackoffMs,
@@ -289,6 +298,7 @@ class LanguageServerSession {
   private readonly adapters: LanguageRuntimeAdapter[];
   private readonly emitDiagnostics: (event: SessionDiagnosticsEvent) => void;
   private readonly emitRuntimeState: (payload: PluginRuntimeStateChangedPayload) => void;
+  private readonly workspaceService?: LanguageWorkspaceService;
   private readonly now: () => string;
   private readonly requestTimeoutMs: number;
   private readonly restartBackoffMs: number;
@@ -313,6 +323,7 @@ class LanguageServerSession {
     this.adapters = options.adapters;
     this.emitDiagnostics = options.emitDiagnostics;
     this.emitRuntimeState = options.emitRuntimeState;
+    this.workspaceService = options.workspaceService;
     this.now = options.now ?? (() => new Date().toISOString());
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15000;
     this.restartBackoffMs = options.restartBackoffMs ?? 10_000;
@@ -774,6 +785,8 @@ class LanguageServerSession {
           name: path.basename(this.resolution.projectRoot),
         },
       ];
+    } else if (method === 'window/workDoneProgress/create') {
+      result = null;
     }
 
     this.sendMessage({
@@ -784,6 +797,11 @@ class LanguageServerSession {
   }
 
   private handleServerNotification(method: string, params: any): void {
+    if (method === '$/progress') {
+      this.handleWorkDoneProgress(params);
+      return;
+    }
+
     if (method !== 'textDocument/publishDiagnostics') {
       return;
     }
@@ -809,6 +827,46 @@ class LanguageServerSession {
       filePath,
       diagnostics,
     });
+  }
+
+  private handleWorkDoneProgress(params: any): void {
+    const token = typeof params?.token === 'string' || typeof params?.token === 'number'
+      ? String(params.token)
+      : null;
+    const value = params?.value;
+
+    if (!token || !value || typeof value.kind !== 'string' || !this.workspaceService) {
+      return;
+    }
+
+    if (value.kind === 'begin') {
+      this.workspaceService.beginProgress(
+        this.resolution,
+        token,
+        typeof value.title === 'string' ? value.title : undefined,
+        typeof value.message === 'string' ? value.message : undefined,
+        typeof value.percentage === 'number' ? value.percentage : undefined,
+      );
+      return;
+    }
+
+    if (value.kind === 'report') {
+      this.workspaceService.reportProgress(
+        this.resolution,
+        token,
+        typeof value.message === 'string' ? value.message : undefined,
+        typeof value.percentage === 'number' ? value.percentage : undefined,
+      );
+      return;
+    }
+
+    if (value.kind === 'end') {
+      this.workspaceService.endProgress(
+        this.resolution,
+        token,
+        typeof value.message === 'string' ? value.message : undefined,
+      );
+    }
   }
 
   private async normalizeLocationLikeResult(
@@ -980,6 +1038,7 @@ class LanguageServerSession {
     state: PluginRuntimeStateChangedPayload['state'],
     message?: string,
   ): void {
+    this.workspaceService?.updateRuntimeState(this.resolution, state, message);
     this.emitRuntimeState({
       pluginId: this.resolution.pluginId,
       projectRoot: this.resolution.projectRoot,

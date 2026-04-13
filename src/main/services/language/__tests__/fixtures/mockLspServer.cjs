@@ -54,6 +54,43 @@ function handleMessage(message) {
         },
       });
       return;
+    case 'initialized':
+      send({
+        jsonrpc: '2.0',
+        id: 9001,
+        method: 'window/workDoneProgress/create',
+        params: {
+          token: 'mock-import',
+        },
+      });
+      setTimeout(() => {
+        send({
+          jsonrpc: '2.0',
+          method: '$/progress',
+          params: {
+            token: 'mock-import',
+            value: {
+              kind: 'begin',
+              title: 'Importing Maven project',
+              message: 'Resolving classpath',
+            },
+          },
+        });
+      }, 5);
+      setTimeout(() => {
+        send({
+          jsonrpc: '2.0',
+          method: '$/progress',
+          params: {
+            token: 'mock-import',
+            value: {
+              kind: 'end',
+              message: 'Workspace ready',
+            },
+          },
+        });
+      }, 25);
+      return;
     case 'textDocument/didOpen': {
       const { uri, text } = message.params.textDocument;
       documents.set(uri, text);

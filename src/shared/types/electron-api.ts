@@ -455,6 +455,33 @@ export interface CodePaneDiagnosticsChangedPayload {
   diagnostics: CodePaneDiagnostic[];
 }
 
+export type CodePaneLanguageWorkspacePhase =
+  | 'idle'
+  | 'starting'
+  | 'detecting-project'
+  | 'importing-project'
+  | 'indexing-workspace'
+  | 'ready'
+  | 'degraded'
+  | 'error';
+
+export interface CodePaneLanguageWorkspaceState {
+  pluginId: string;
+  workspaceRoot: string;
+  projectRoot: string;
+  languageId: string;
+  runtimeState: PluginRuntimeState;
+  phase: CodePaneLanguageWorkspacePhase;
+  message?: string;
+  progressText?: string;
+  readyFeatures: string[];
+  timestamp: string;
+}
+
+export interface CodePaneLanguageWorkspaceChangedPayload {
+  state: CodePaneLanguageWorkspaceState;
+}
+
 export interface CodePaneIndexProgressPayload {
   paneId: string;
   rootPath: string;
@@ -723,6 +750,8 @@ export interface ElectronAPI {
   offCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;
   onCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
   offCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
+  onCodePaneLanguageWorkspaceChanged: (callback: ElectronEventHandler<CodePaneLanguageWorkspaceChangedPayload>) => void;
+  offCodePaneLanguageWorkspaceChanged: (callback: ElectronEventHandler<CodePaneLanguageWorkspaceChangedPayload>) => void;
   onPluginRuntimeStateChanged: (callback: ElectronEventHandler<PluginRuntimeStateChangedPayload>) => void;
   offPluginRuntimeStateChanged: (callback: ElectronEventHandler<PluginRuntimeStateChangedPayload>) => void;
   onTmuxPaneTitleChanged: (callback: ElectronEventHandler<TmuxPaneTitleChangedPayload>) => void;

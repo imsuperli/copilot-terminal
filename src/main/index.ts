@@ -26,6 +26,7 @@ import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
 import { LanguageFeatureService } from './services/language/LanguageFeatureService';
 import { LanguagePluginResolver } from './services/language/LanguagePluginResolver';
 import { LanguageServerSupervisor } from './services/language/LanguageServerSupervisor';
+import { LanguageWorkspaceService } from './services/language/LanguageWorkspaceService';
 import { PluginCatalogService } from './services/plugins/PluginCatalogService';
 import { PluginInstallerService } from './services/plugins/PluginInstallerService';
 import { PluginManager } from './services/plugins/PluginManager';
@@ -577,6 +578,13 @@ app.whenReady().then(async () => {
   const languagePluginResolver = new LanguagePluginResolver({
     registryStore: pluginRegistryStore,
   });
+  const languageWorkspaceService = new LanguageWorkspaceService({
+    emitState: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('code-pane-language-workspace-changed', payload);
+      }
+    },
+  });
   const languageServerSupervisor = new LanguageServerSupervisor({
     runtimeRootPath: path.join(pluginDataPath, 'runtime'),
     emitDiagnostics: (payload) => {
@@ -589,6 +597,7 @@ app.whenReady().then(async () => {
         mainWindow.webContents.send('plugin-runtime-state-changed', payload);
       }
     },
+    workspaceService: languageWorkspaceService,
   });
   languageFeatureService = new LanguageFeatureService({
     codeFileService,

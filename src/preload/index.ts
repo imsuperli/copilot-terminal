@@ -186,6 +186,11 @@ const electronAPI: ElectronAPI = {
   },
   offCodePaneDiagnosticsChanged: (callback) =>
     ipcRenderer.removeListener('code-pane-diagnostics-changed', callback),
+  onCodePaneLanguageWorkspaceChanged: (callback) => {
+    ipcRenderer.on('code-pane-language-workspace-changed', callback);
+  },
+  offCodePaneLanguageWorkspaceChanged: (callback) =>
+    ipcRenderer.removeListener('code-pane-language-workspace-changed', callback),
   onPluginRuntimeStateChanged: (callback) => {
     ipcRenderer.on('plugin-runtime-state-changed', callback);
   },
