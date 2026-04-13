@@ -30,6 +30,7 @@ import type {
   CodePaneContentMatch,
   CodePaneFsChangedPayload,
   CodePaneGitStatusEntry,
+  CodePaneIndexProgressPayload,
   CodePaneReadFileResult,
   CodePaneTreeEntry,
 } from '../../shared/types/electron-api';
@@ -80,6 +81,7 @@ type FileRuntimeMeta = {
 };
 
 type CodePaneFsChange = CodePaneFsChangedPayload['changes'][number];
+type CodePaneIndexStatus = CodePaneIndexProgressPayload;
 
 export interface CodePaneProps {
   windowId: string;
@@ -293,6 +295,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [treeLoadError, setTreeLoadError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [contentSearchError, setContentSearchError] = useState<string | null>(null);
+  const [indexStatus, setIndexStatus] = useState<CodePaneIndexStatus | null>(null);
 
   const expandedDirectoriesRef = useRef(expandedDirectories);
   const loadedDirectoriesRef = useRef(loadedDirectories);
@@ -1397,71 +1400,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     let mounted = true;
 
-    const bootstrap = async () => {
-      const initialExpandedDirectories = createExpandedDirectorySet(
-        rootPath,
-        paneRef.current.code?.expandedPaths,
-      );
-
-      setIsBootstrapping(true);
-      setBanner(null);
-      setTreeLoadError(null);
-      setSearchError(null);
-      setContentSearchError(null);
-      setTreeEntriesByDirectory({});
-      setExpandedDirectories(initialExpandedDirectories);
-      setLoadedDirectories(new Set());
-      setLoadingDirectories(new Set([rootPath]));
-      setSearchResults([]);
-      setContentSearchResults([]);
-      disposeEditorsRef.current();
-      disposeAllModelsRef.current();
-
-      try {
-        if (supportsMonaco) {
-          void ensureMonacoEnvironment()
-            .then((monaco) => {
-              if (!mounted) {
-                return;
-              }
-
-              monacoRef.current = monaco;
-              languageBridgeRef.current = ensureMonacoLanguageBridge(monaco);
-              ensureMarkerListenerRef.current(monaco);
-            })
-            .catch(() => {});
-        }
-
-        await Promise.all([
-          loadDirectory(rootPath),
-          refreshGitStatus(),
-          window.electronAPI.codePaneWatchRoot({
-            paneId: pane.id,
-            rootPath,
-          }),
-        ]);
-
-        const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
-          .filter((directoryPath) => directoryPath !== rootPath);
-        if (nestedExpandedDirectories.length > 0) {
-          await Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectory(directoryPath)));
-        }
-      } catch (error) {
-        if (mounted) {
-          setBanner({
-            tone: 'error',
-            message: error instanceof Error ? error.message : t('common.retry'),
-          });
-        }
-      }
-
-      if (mounted) {
-        setIsBootstrapping(false);
-      }
-    };
-
-    void bootstrap();
-
     const handleFsChanged = (_event: unknown, payload: CodePaneFsChangedPayload) => {
       if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
         return;
@@ -1504,11 +1442,125 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     };
 
+    const handleIndexProgress = (_event: unknown, payload: CodePaneIndexProgressPayload) => {
+      if (payload.paneId !== pane.id) {
+        return;
+      }
+
+      startTransition(() => {
+        if (payload.state === 'ready') {
+          setIndexStatus(null);
+          return;
+        }
+
+        setIndexStatus(payload);
+      });
+    };
+
     window.electronAPI.onCodePaneFsChanged(handleFsChanged);
+    window.electronAPI.onCodePaneIndexProgress(handleIndexProgress);
+
+    const bootstrap = async () => {
+      const initialExpandedDirectories = createExpandedDirectorySet(
+        rootPath,
+        paneRef.current.code?.expandedPaths,
+      );
+
+      setIsBootstrapping(true);
+      setBanner(null);
+      setTreeLoadError(null);
+      setSearchError(null);
+      setContentSearchError(null);
+      setTreeEntriesByDirectory({});
+      setIndexStatus(null);
+      setExpandedDirectories(initialExpandedDirectories);
+      setLoadedDirectories(new Set());
+      setLoadingDirectories(new Set([rootPath]));
+      setSearchResults([]);
+      setContentSearchResults([]);
+      disposeEditorsRef.current();
+      disposeAllModelsRef.current();
+
+      try {
+        if (supportsMonaco) {
+          void ensureMonacoEnvironment()
+            .then((monaco) => {
+              if (!mounted) {
+                return;
+              }
+
+              monacoRef.current = monaco;
+              languageBridgeRef.current = ensureMonacoLanguageBridge(monaco);
+              ensureMarkerListenerRef.current(monaco);
+            })
+            .catch(() => {});
+        }
+
+        void window.electronAPI.codePaneWatchRoot({
+          paneId: pane.id,
+          rootPath,
+        }).then((response) => {
+          if (!mounted || response.success) {
+            return;
+          }
+
+          setIndexStatus({
+            paneId: pane.id,
+            rootPath,
+            state: 'error',
+            processedDirectoryCount: 0,
+            totalDirectoryCount: 0,
+            indexedFileCount: 0,
+            reusedPersistedIndex: false,
+            error: response.error || t('codePane.indexingFailed'),
+          });
+        }).catch((error) => {
+          if (!mounted) {
+            return;
+          }
+
+          setIndexStatus({
+            paneId: pane.id,
+            rootPath,
+            state: 'error',
+            processedDirectoryCount: 0,
+            totalDirectoryCount: 0,
+            indexedFileCount: 0,
+            reusedPersistedIndex: false,
+            error: error instanceof Error ? error.message : t('codePane.indexingFailed'),
+          });
+        });
+
+        await Promise.all([
+          loadDirectory(rootPath),
+          refreshGitStatus(),
+        ]);
+
+        const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
+          .filter((directoryPath) => directoryPath !== rootPath);
+        if (nestedExpandedDirectories.length > 0) {
+          await Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectory(directoryPath)));
+        }
+      } catch (error) {
+        if (mounted) {
+          setBanner({
+            tone: 'error',
+            message: error instanceof Error ? error.message : t('common.retry'),
+          });
+        }
+      }
+
+      if (mounted) {
+        setIsBootstrapping(false);
+      }
+    };
+
+    void bootstrap();
 
     return () => {
       mounted = false;
       window.electronAPI.offCodePaneFsChanged(handleFsChanged);
+      window.electronAPI.offCodePaneIndexProgress(handleIndexProgress);
       void window.electronAPI.codePaneUnwatchRoot(pane.id);
       markerListenerRef.current?.dispose();
       markerListenerRef.current = null;
@@ -1646,6 +1698,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ? t('codePane.unsaved')
         : t('codePane.saved')
     : t('codePane.autoSave');
+  const indexStatusText = indexStatus?.state === 'building'
+    ? t('codePane.indexingProgress', {
+      processed: indexStatus.processedDirectoryCount,
+      total: indexStatus.totalDirectoryCount,
+      files: indexStatus.indexedFileCount,
+    })
+    : (indexStatus?.error || t('codePane.indexingFailed'));
   const statusTone = getStatusTone(activeTabStatus);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
   const rootLabel = useMemo(() => getPathLeafLabel(rootPath) || rootPath, [rootPath]);
@@ -2413,6 +2472,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
               )}
             </div>
             <div className="flex items-center gap-3">
+              {indexStatus && (
+                <span className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 ${indexStatus.state === 'error' ? 'bg-red-500/15 text-red-300' : 'bg-sky-500/15 text-sky-300'}`}>
+                  {indexStatus.state === 'building' && (
+                    <Loader2 size={11} className="shrink-0 animate-spin" />
+                  )}
+                  <span>{indexStatusText}</span>
+                </span>
+              )}
               <span>{activeStatusText}</span>
               <span>{viewMode === 'diff' ? t('codePane.diffView') : t('codePane.editorView')}</span>
               <span>{t('codePane.autoSave')}</span>

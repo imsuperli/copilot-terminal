@@ -139,6 +139,8 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneGetDocumentSymbols: vi.fn().mockResolvedValue({ success: true, data: [] }),
     onCodePaneFsChanged: vi.fn(),
     offCodePaneFsChanged: vi.fn(),
+    onCodePaneIndexProgress: vi.fn(),
+    offCodePaneIndexProgress: vi.fn(),
     onCodePaneDiagnosticsChanged: vi.fn(),
     offCodePaneDiagnosticsChanged: vi.fn(),
     onPluginRuntimeStateChanged: vi.fn(),

@@ -5,7 +5,6 @@ import { WindowGroup } from '../../shared/types/window-group';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { LayoutNode } from '../../shared/types/window';
 import { isSessionlessPane } from '../../shared/utils/terminalCapabilities';
-import { collectWorkspaceProjectRoots } from '../utils/workspaceProjectRoots';
 
 function getWindowWorkingDirectory(layout: LayoutNode): string | null {
   if (layout.type === 'pane') {
@@ -55,7 +54,6 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
     getCurrentWorkspace,
     setCurrentWorkspace,
     syncProjectConfigWatchers,
-    codeProjectIndexService,
     languageFeatureService,
   } = ctx;
 
@@ -100,10 +98,6 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
         await syncProjectConfigWatchers?.();
       }
 
-      await codeProjectIndexService?.syncWorkspaceProjects(
-        collectWorkspaceProjectRoots(currentWorkspace),
-      );
-
       // 触发自动保存（带防抖）
       autoSaveManager.triggerSave();
     } catch (error) {
@@ -118,9 +112,6 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       workspace.windows = windows;
       await workspaceManager.saveWorkspace(workspace);
       setCurrentWorkspace(workspace);
-      await codeProjectIndexService?.syncWorkspaceProjects(
-        collectWorkspaceProjectRoots(workspace),
-      );
       return successResponse();
     } catch (error) {
       return errorResponse(error);
@@ -133,9 +124,6 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       const workspace = await workspaceManager.loadWorkspace();
       setCurrentWorkspace(workspace);
       await syncProjectConfigWatchers?.();
-      await codeProjectIndexService?.syncWorkspaceProjects(
-        collectWorkspaceProjectRoots(workspace),
-      );
       await languageFeatureService?.resetSessions();
       return successResponse(workspace);
     } catch (error) {
@@ -149,9 +137,6 @@ export function registerWorkspaceHandlers(ctx: HandlerContext) {
       const workspace = await workspaceManager.loadWorkspace();
       setCurrentWorkspace(workspace);
       await syncProjectConfigWatchers?.();
-      await codeProjectIndexService?.syncWorkspaceProjects(
-        collectWorkspaceProjectRoots(workspace),
-      );
       await languageFeatureService?.resetSessions();
       return successResponse(workspace);
     } catch (error) {

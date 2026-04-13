@@ -3,7 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodePane } from '../CodePane';
-import type { CodePaneFsChangedPayload } from '../../../shared/types/electron-api';
+import type {
+  CodePaneFsChangedPayload,
+  CodePaneIndexProgressPayload,
+} from '../../../shared/types/electron-api';
 import { resetMonacoLanguageBridgeForTests } from '../../services/code/MonacoLanguageBridge';
 import type { Pane } from '../../types/window';
 import { WindowStatus } from '../../types/window';
@@ -350,6 +353,18 @@ async function emitDiagnosticsChanged(payload: {
   });
 }
 
+async function emitIndexProgress(payload: CodePaneIndexProgressPayload) {
+  const callback = vi.mocked(window.electronAPI.onCodePaneIndexProgress).mock.calls.at(-1)?.[0];
+  if (!callback) {
+    throw new Error('expected index progress listener to be registered');
+  }
+
+  await act(async () => {
+    callback({}, payload);
+    await Promise.resolve();
+  });
+}
+
 describe('CodePane', () => {
   beforeAll(() => {
     vi.stubGlobal('Worker', class WorkerMock {});
@@ -389,6 +404,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockReset();
     vi.mocked(window.electronAPI.onCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneFsChanged).mockReset();
+    vi.mocked(window.electronAPI.onCodePaneIndexProgress).mockReset();
+    vi.mocked(window.electronAPI.offCodePaneIndexProgress).mockReset();
     vi.mocked(window.electronAPI.onCodePaneDiagnosticsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneDiagnosticsChanged).mockReset();
     vi.mocked(window.electronAPI.openFolder).mockReset();
@@ -491,6 +508,22 @@ describe('CodePane', () => {
       resolveMonaco?.(fakeMonaco);
       await Promise.resolve();
     });
+  });
+
+  it('shows index progress in the bottom status bar while building', async () => {
+    renderCodePane(createPane());
+
+    await emitIndexProgress({
+      paneId: 'pane-code-1',
+      rootPath: '/workspace/project',
+      state: 'building',
+      processedDirectoryCount: 3,
+      totalDirectoryCount: 12,
+      indexedFileCount: 41,
+      reusedPersistedIndex: false,
+    });
+
+    expect(await screen.findByText('codePane.indexingProgress')).toBeInTheDocument();
   });
 
   it('does not bootstrap the project tree again when only isActive changes', async () => {

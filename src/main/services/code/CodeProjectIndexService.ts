@@ -4,6 +4,7 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 import type {
+  CodePaneIndexProgressPayload,
   CodePaneListDirectoryConfig,
   CodePaneSearchFilesConfig,
   CodePaneTreeEntry,
@@ -79,12 +80,16 @@ type ProjectIndexState = ProjectIdentity & {
   warmupPromise: Promise<void> | null;
   queue: Promise<void>;
   lastWarmupFinishedAt: string | null;
+  progress: ProjectIndexProgressState | null;
+  lastProgressEventAt: number;
 };
 
 type LoadedPersistedProjectState = {
   data: PersistedProjectIndex;
   lastWarmupFinishedAt: string | null;
 };
+
+type ProjectIndexProgressState = Omit<CodePaneIndexProgressPayload, 'paneId' | 'rootPath'>;
 
 type ScanProjectTreeResult = {
   directories: Record<string, PersistedDirectoryRecord>;
@@ -208,18 +213,21 @@ export class CodeProjectIndexService {
 
   constructor(
     private readonly indexRootPath: string,
+    private readonly emitProgressEvent?: (payload: CodePaneIndexProgressPayload) => void,
+    private readonly options: {
+      enableWatcher?: boolean;
+    } = {},
   ) {}
 
   async syncWorkspaceProjects(projectRoots: string[]): Promise<void> {
     const desiredProjectIds = new Set<string>();
+    const uniqueProjectRoots = Array.from(new Set(projectRoots));
 
-    for (const projectRoot of projectRoots) {
+    for (const projectRoot of uniqueProjectRoots) {
       try {
         const state = await this.ensureProjectState(projectRoot);
         desiredProjectIds.add(state.projectId);
         state.workspaceTracked = true;
-        await this.ensureWatcher(state);
-        this.scheduleWarmup(state);
       } catch {
         // Ignore invalid workspace roots and continue indexing other projects.
       }
@@ -244,7 +252,18 @@ export class CodeProjectIndexService {
     const state = await this.ensureProjectState(rootPath);
     state.paneConsumers.add(paneId);
     this.paneToProjectId.set(paneId, state.projectId);
-    await this.ensureWatcher(state);
+    if (state.progress) {
+      this.emitProgressToPanes(state, [paneId], state.progress);
+    }
+    if (this.options.enableWatcher !== false) {
+      await this.ensureWatcher(state);
+    }
+
+    if (state.lastWarmupFinishedAt) {
+      this.publishProgress(state, this.createReadyProgress(state, true), [paneId], true);
+      return;
+    }
+
     this.scheduleWarmup(state);
   }
 
@@ -272,7 +291,6 @@ export class CodeProjectIndexService {
     const directoryRelativePath = toProjectRelativePath(state.projectRootPath, absoluteTargetPath);
     const directorySignature = await this.readDirectorySignature(absoluteTargetPath);
     const cachedDirectory = state.data.directories[directoryRelativePath];
-    this.scheduleWarmup(state);
 
     if (
       cachedDirectory
@@ -307,8 +325,6 @@ export class CodeProjectIndexService {
     if (!query) {
       return [];
     }
-
-    this.scheduleWarmup(state);
 
     const rootRelativePrefix = toProjectRelativePath(state.projectRootPath, paneRootInfo.rootPath);
     const normalizedPrefix = rootRelativePrefix ? `${rootRelativePrefix}/` : '';
@@ -455,6 +471,16 @@ export class CodeProjectIndexService {
       warmupPromise: null,
       queue: Promise.resolve(),
       lastWarmupFinishedAt: loadedState?.lastWarmupFinishedAt ?? null,
+      progress: loadedState?.lastWarmupFinishedAt
+        ? {
+          state: 'ready',
+          processedDirectoryCount: Object.keys(loadedState.data.directories).length,
+          totalDirectoryCount: Object.keys(loadedState.data.directories).length,
+          indexedFileCount: loadedState.data.files.length,
+          reusedPersistedIndex: true,
+        }
+        : null,
+      lastProgressEventAt: 0,
     };
 
     this.projectStates.set(state.projectId, state);
@@ -543,18 +569,47 @@ export class CodeProjectIndexService {
       return;
     }
 
+    this.publishProgress(state, {
+      state: 'building',
+      processedDirectoryCount: 0,
+      totalDirectoryCount: 1,
+      indexedFileCount: state.data.files.length,
+      reusedPersistedIndex: false,
+    }, undefined, true);
+
     state.warmupPromise = this.enqueueStateTask(state, async () => {
-      const scannedProject = await this.scanProjectTree(state.projectRootPath);
-      state.data = {
-        schemaVersion: CODE_PANE_INDEX_SCHEMA_VERSION,
-        ignoreSignature: CODE_PANE_INDEX_IGNORE_SIGNATURE,
-        files: scannedProject.files.sort((left, right) => (
-          left.localeCompare(right, undefined, { sensitivity: 'base' })
-        )),
-        directories: scannedProject.directories,
-      };
-      state.lastWarmupFinishedAt = new Date().toISOString();
-      this.schedulePersist(state);
+      try {
+        const scannedProject = await this.scanProjectTree(state.projectRootPath, '', (progress) => {
+          this.publishProgress(state, {
+            state: 'building',
+            processedDirectoryCount: progress.processedDirectoryCount,
+            totalDirectoryCount: progress.totalDirectoryCount,
+            indexedFileCount: progress.indexedFileCount,
+            reusedPersistedIndex: false,
+          }, undefined, progress.done);
+        });
+        state.data = {
+          schemaVersion: CODE_PANE_INDEX_SCHEMA_VERSION,
+          ignoreSignature: CODE_PANE_INDEX_IGNORE_SIGNATURE,
+          files: scannedProject.files.sort((left, right) => (
+            left.localeCompare(right, undefined, { sensitivity: 'base' })
+          )),
+          directories: scannedProject.directories,
+        };
+        state.lastWarmupFinishedAt = new Date().toISOString();
+        this.publishProgress(state, this.createReadyProgress(state, false), undefined, true);
+        this.schedulePersist(state);
+      } catch (error) {
+        this.publishProgress(state, {
+          state: 'error',
+          processedDirectoryCount: 0,
+          totalDirectoryCount: 0,
+          indexedFileCount: state.data.files.length,
+          reusedPersistedIndex: false,
+          error: error instanceof Error ? error.message : String(error),
+        }, undefined, true);
+        throw error;
+      }
     }).finally(() => {
       state.warmupPromise = null;
     });
@@ -740,10 +795,21 @@ export class CodeProjectIndexService {
     ]);
   }
 
-  private async scanProjectTree(projectRootPath: string, startRelativePath = ''): Promise<ScanProjectTreeResult> {
+  private async scanProjectTree(
+    projectRootPath: string,
+    startRelativePath = '',
+    onProgress?: (progress: {
+      processedDirectoryCount: number;
+      totalDirectoryCount: number;
+      indexedFileCount: number;
+      done: boolean;
+    }) => void,
+  ): Promise<ScanProjectTreeResult> {
     const directories: Record<string, PersistedDirectoryRecord> = {};
     const files: string[] = [];
     const directoriesToScan = [startRelativePath];
+    let processedDirectoryCount = 0;
+    let lastProgressReportedAt = 0;
 
     while (directoriesToScan.length > 0) {
       const directoryRelativePath = directoriesToScan.pop() ?? '';
@@ -757,12 +823,26 @@ export class CodeProjectIndexService {
         throw error;
       }
       directories[directoryRelativePath] = directoryRecord;
+      processedDirectoryCount += 1;
 
       for (const entry of directoryRecord.entries) {
         if (entry.type === 'directory') {
           directoriesToScan.push(entry.relativePath);
         } else {
           files.push(entry.relativePath);
+        }
+      }
+
+      if (onProgress) {
+        const now = Date.now();
+        if (now - lastProgressReportedAt >= 120 || directoriesToScan.length === 0) {
+          onProgress({
+            processedDirectoryCount,
+            totalDirectoryCount: processedDirectoryCount + directoriesToScan.length,
+            indexedFileCount: files.length,
+            done: directoriesToScan.length === 0,
+          });
+          lastProgressReportedAt = now;
         }
       }
     }
@@ -946,6 +1026,59 @@ export class CodeProjectIndexService {
 
   private getIndexPath(projectId: string): string {
     return path.join(this.getProjectDirectoryPath(projectId), 'index.json');
+  }
+
+  private createReadyProgress(
+    state: ProjectIndexState,
+    reusedPersistedIndex: boolean,
+  ): ProjectIndexProgressState {
+    const directoryCount = Object.keys(state.data.directories).length;
+    return {
+      state: 'ready',
+      processedDirectoryCount: directoryCount,
+      totalDirectoryCount: directoryCount,
+      indexedFileCount: state.data.files.length,
+      reusedPersistedIndex,
+    };
+  }
+
+  private publishProgress(
+    state: ProjectIndexState,
+    progress: ProjectIndexProgressState,
+    paneIds?: Iterable<string>,
+    force = false,
+  ): void {
+    state.progress = progress;
+
+    if (!this.emitProgressEvent) {
+      return;
+    }
+
+    const now = Date.now();
+    if (!force && now - state.lastProgressEventAt < 120) {
+      return;
+    }
+
+    state.lastProgressEventAt = now;
+    this.emitProgressToPanes(state, paneIds, progress);
+  }
+
+  private emitProgressToPanes(
+    state: ProjectIndexState,
+    paneIds: Iterable<string> | undefined,
+    progress: ProjectIndexProgressState,
+  ): void {
+    if (!this.emitProgressEvent) {
+      return;
+    }
+
+    for (const paneId of paneIds ?? state.paneConsumers) {
+      this.emitProgressEvent({
+        paneId,
+        rootPath: state.projectRootPath,
+        ...progress,
+      });
+    }
   }
 
   private enqueueStateTask<T>(state: ProjectIndexState, task: () => Promise<T>): Promise<T> {

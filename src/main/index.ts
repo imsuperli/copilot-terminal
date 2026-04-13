@@ -34,7 +34,6 @@ import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 import { isTerminalPane } from '../shared/utils/terminalCapabilities';
 import { isAllowedBrowserUrl } from '../shared/utils/browserUrls';
-import { collectWorkspaceProjectRoots } from './utils/workspaceProjectRoots';
 
 const APP_DISPLAY_NAME = 'Copilot-Terminal';
 const USER_DATA_DIR_NAME = 'copilot-terminal';
@@ -534,7 +533,16 @@ app.whenReady().then(async () => {
 
   // 初始化 FileWatcherService（通用文件监听服务）
   fileWatcherService = new FileWatcherService();
-  codeProjectIndexService = new CodeProjectIndexService(path.join(app.getPath('userData'), 'code-index'));
+  codeProjectIndexService = new CodeProjectIndexService(
+    path.join(app.getPath('userData'), 'code-index'),
+    (payload) => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+      }
+
+      mainWindow.webContents.send('code-pane-index-progress', payload);
+    },
+  );
   codeFileService = new CodeFileService(codeProjectIndexService);
   codeGitService = new CodeGitService();
   codePaneWatcherService = new CodePaneWatcherService(() => mainWindow);
@@ -660,10 +668,6 @@ app.whenReady().then(async () => {
     const workspace = await workspaceManager.loadWorkspace();
     currentWorkspace = workspace;
     await syncProjectConfigWatchers();
-    await codeProjectIndexService?.syncWorkspaceProjects(
-      collectWorkspaceProjectRoots(workspace),
-    );
-
     // 启动自动保存
     if (autoSaveManager && workspaceManager) {
       autoSaveManager.startAutoSave(workspaceManager, () => {

@@ -446,6 +446,17 @@ export interface CodePaneDiagnosticsChangedPayload {
   diagnostics: CodePaneDiagnostic[];
 }
 
+export interface CodePaneIndexProgressPayload {
+  paneId: string;
+  rootPath: string;
+  state: 'building' | 'ready' | 'error';
+  processedDirectoryCount: number;
+  totalDirectoryCount: number;
+  indexedFileCount: number;
+  reusedPersistedIndex: boolean;
+  error?: string;
+}
+
 export interface PluginCatalogQuery {
   refresh?: boolean;
 }
@@ -701,6 +712,8 @@ export interface ElectronAPI {
   codePaneGetDocumentSymbols: (config: CodePaneGetDocumentSymbolsConfig) => Promise<IpcResponse<CodePaneDocumentSymbol[]>>;
   onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
+  onCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;
+  offCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;
   onCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
   offCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
   onPluginRuntimeStateChanged: (callback: ElectronEventHandler<PluginRuntimeStateChangedPayload>) => void;

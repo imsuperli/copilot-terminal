@@ -30,7 +30,8 @@ describe('CodeProjectIndexService', () => {
       fsPromises.writeFile(path.join(tempProjectRoot, 'node_modules', 'pkg', 'index.js'), 'module.exports = {};\n', 'utf-8'),
     ]);
 
-    const service = new CodeProjectIndexService(tempIndexRoot);
+    const service = new CodeProjectIndexService(tempIndexRoot, undefined, { enableWatcher: false });
+    await service.watchProjectForPane('pane-1', tempProjectRoot);
     await service.listDirectory({ rootPath: tempProjectRoot });
     await service.waitForIdle(tempProjectRoot);
 
@@ -57,7 +58,8 @@ describe('CodeProjectIndexService', () => {
 
     await service.destroy();
 
-    const restartedService = new CodeProjectIndexService(tempIndexRoot);
+    const restartedService = new CodeProjectIndexService(tempIndexRoot, undefined, { enableWatcher: false });
+    await restartedService.watchProjectForPane('pane-2', tempProjectRoot);
     const restartedEntries = await restartedService.listDirectory({ rootPath: tempProjectRoot });
     expect(restartedEntries).toEqual([
       expect.objectContaining({
@@ -75,7 +77,8 @@ describe('CodeProjectIndexService', () => {
     await fsPromises.mkdir(srcDirectoryPath, { recursive: true });
     await fsPromises.writeFile(initialFilePath, 'export const value = 1;\n', 'utf-8');
 
-    const service = new CodeProjectIndexService(tempIndexRoot);
+    const service = new CodeProjectIndexService(tempIndexRoot, undefined, { enableWatcher: false });
+    await service.watchProjectForPane('pane-1', tempProjectRoot);
     await service.listDirectory({ rootPath: tempProjectRoot });
     await service.waitForIdle(tempProjectRoot);
 
@@ -115,5 +118,40 @@ describe('CodeProjectIndexService', () => {
     expect(srcEntries.map((entry) => entry.path)).toEqual([initialFilePath]);
 
     await service.destroy();
+  });
+
+  it('reuses a persisted index when reopening the same project', async () => {
+    const sourceFilePath = path.join(tempProjectRoot, 'src', 'index.ts');
+    await fsPromises.mkdir(path.dirname(sourceFilePath), { recursive: true });
+    await fsPromises.writeFile(sourceFilePath, 'export const value = 1;\n', 'utf-8');
+
+    const initialService = new CodeProjectIndexService(tempIndexRoot, undefined, { enableWatcher: false });
+    await initialService.watchProjectForPane('pane-1', tempProjectRoot);
+    await initialService.waitForIdle(tempProjectRoot);
+    await initialService.destroy();
+
+    const progressEvents: Array<{ paneId: string; state: string }> = [];
+    const reopenedService = new CodeProjectIndexService(tempIndexRoot, (payload) => {
+      progressEvents.push({
+        paneId: payload.paneId,
+        state: payload.state,
+      });
+    }, { enableWatcher: false });
+
+    await reopenedService.watchProjectForPane('pane-2', tempProjectRoot);
+
+    expect(progressEvents).toContainEqual({
+      paneId: 'pane-2',
+      state: 'ready',
+    });
+    expect(progressEvents).not.toContainEqual({
+      paneId: 'pane-2',
+      state: 'building',
+    });
+
+    const results = await reopenedService.searchFiles({ rootPath: tempProjectRoot, query: 'index' });
+    expect(results).toEqual([sourceFilePath]);
+
+    await reopenedService.destroy();
   });
 });

@@ -177,6 +177,11 @@ const electronAPI: ElectronAPI = {
   },
   offCodePaneFsChanged: (callback) =>
     ipcRenderer.removeListener('code-pane-fs-changed', callback),
+  onCodePaneIndexProgress: (callback) => {
+    ipcRenderer.on('code-pane-index-progress', callback);
+  },
+  offCodePaneIndexProgress: (callback) =>
+    ipcRenderer.removeListener('code-pane-index-progress', callback),
   onCodePaneDiagnosticsChanged: (callback) => {
     ipcRenderer.on('code-pane-diagnostics-changed', callback);
   },

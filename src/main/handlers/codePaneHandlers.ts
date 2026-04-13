@@ -18,6 +18,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     codeGitService,
     codePaneWatcherService,
     codeProjectIndexService,
+    getMainWindow,
   } = ctx;
 
   ipcMain.handle('code-pane-list-directory', async (_event, config: CodePaneListDirectoryConfig) => {
@@ -89,10 +90,25 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
         throw new Error('CodeProjectIndexService not initialized');
       }
 
-      await Promise.all([
-        codePaneWatcherService.watchRoot(config.paneId, config.rootPath),
-        codeProjectIndexService.watchProjectForPane(config.paneId, config.rootPath),
-      ]);
+      await codePaneWatcherService.watchRoot(config.paneId, config.rootPath);
+      void codeProjectIndexService.watchProjectForPane(config.paneId, config.rootPath).catch((error) => {
+        console.error('[CodePaneHandlers] Failed to initialize project index:', error);
+        const mainWindow = getMainWindow?.();
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          return;
+        }
+
+        mainWindow.webContents.send('code-pane-index-progress', {
+          paneId: config.paneId,
+          rootPath: config.rootPath,
+          state: 'error',
+          processedDirectoryCount: 0,
+          totalDirectoryCount: 0,
+          indexedFileCount: 0,
+          reusedPersistedIndex: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
       return successResponse();
     } catch (error) {
       return errorResponse(error);
