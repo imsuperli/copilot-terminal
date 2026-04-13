@@ -225,7 +225,9 @@ export class AgentTask {
     this.snapshot.model = request.model;
     this.snapshot.linkedPaneId = request.linkedPaneId;
     this.snapshot.sshContext = request.sshContext;
+    this.snapshot.status = 'running';
     this.snapshot.error = undefined;
+    this.snapshot.updatedAt = new Date().toISOString();
 
     if (this.snapshot.messages.length === 0 && request.seedMessages?.length) {
       this.snapshot.messages = [...request.seedMessages];
@@ -251,7 +253,6 @@ export class AgentTask {
       content: request.text,
     });
 
-    this.setStatus('running');
     this.runPromise = this.runLoop().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       this.snapshot.error = message;

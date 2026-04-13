@@ -236,6 +236,25 @@ describe('AgentTask', () => {
     await flush();
   });
 
+  it('posts the first start state as running before any assistant output arrives', () => {
+    const deps = createDeps({
+      chatService: {
+        streamChat: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    const task = new AgentTask(createSnapshot(), deps);
+    task.start(createRequest('first request'), createProvider());
+
+    const firstPostedState = vi.mocked(deps.postState).mock.calls[0]?.[0] as AgentTaskSnapshot | undefined;
+    expect(firstPostedState).toBeTruthy();
+    expect(firstPostedState?.status).toBe('running');
+    expect(firstPostedState?.timeline.at(-1)).toMatchObject({
+      kind: 'user-message',
+      content: 'first request',
+    });
+  });
+
   it('runs non-interactive execute_command calls through the silent SSH path', async () => {
     const commandToolCall: ToolCall = {
       id: 'tool-silent',
