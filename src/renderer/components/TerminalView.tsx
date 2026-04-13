@@ -66,6 +66,7 @@ import {
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.65, 0.35];
+const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.65, 0.35];
 
 const LazyQuickSwitcher = lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -569,7 +570,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     const newPaneId = uuidv4();
     const newPane = createCodePaneDraft(newPaneId, codePaneRootPath);
 
-    placePaneInWindow(terminalWindow.id, targetPaneId, 'horizontal', newPane, true);
+    placePaneInWindow(
+      terminalWindow.id,
+      targetPaneId,
+      'horizontal',
+      newPane,
+      true,
+      CODE_PANE_DEFAULT_SPLIT_SIZES,
+    );
     setActivePane(terminalWindow.id, newPaneId);
   }, [codePaneRootPath, existingCodePane, panes, placePaneInWindow, setActivePane, terminalWindow.activePaneId, terminalWindow.id]);
 
