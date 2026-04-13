@@ -472,6 +472,88 @@ export interface CodePaneGetDocumentSymbolsConfig {
   language?: string;
 }
 
+export interface CodePaneCompletionItem {
+  label: string;
+  detail?: string;
+  documentation?: string;
+  kind?: number;
+  insertText?: string;
+  filterText?: string;
+  sortText?: string;
+  range?: CodePaneRange;
+}
+
+export interface CodePaneGetCompletionItemsConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  position: CodePanePosition;
+  triggerCharacter?: string;
+  triggerKind?: number;
+}
+
+export interface CodePaneSignatureHelpParameter {
+  label: string;
+  documentation?: string;
+}
+
+export interface CodePaneSignatureHelpSignature {
+  label: string;
+  documentation?: string;
+  parameters?: CodePaneSignatureHelpParameter[];
+}
+
+export interface CodePaneSignatureHelpResult {
+  signatures: CodePaneSignatureHelpSignature[];
+  activeSignature?: number;
+  activeParameter?: number;
+}
+
+export interface CodePaneGetSignatureHelpConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  position: CodePanePosition;
+  triggerCharacter?: string;
+}
+
+export interface CodePaneTextEdit {
+  filePath: string;
+  range: CodePaneRange;
+  newText: string;
+}
+
+export interface CodePaneRenameSymbolConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  position: CodePanePosition;
+  newName: string;
+}
+
+export interface CodePaneFormatDocumentConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  tabSize?: number;
+  insertSpaces?: boolean;
+}
+
+export interface CodePaneWorkspaceSymbol {
+  name: string;
+  kind: number;
+  filePath: string;
+  range: CodePaneRange;
+  containerName?: string;
+  detail?: string;
+}
+
+export interface CodePaneGetWorkspaceSymbolsConfig {
+  rootPath: string;
+  query: string;
+  limit?: number;
+}
+
 export interface CodePaneDiagnostic {
   filePath: string;
   owner: string;
@@ -782,6 +864,11 @@ export interface ElectronAPI {
   codePaneGetHover: (config: CodePaneGetHoverConfig) => Promise<IpcResponse<CodePaneHoverResult | null>>;
   codePaneGetReferences: (config: CodePaneGetReferencesConfig) => Promise<IpcResponse<CodePaneReference[]>>;
   codePaneGetDocumentSymbols: (config: CodePaneGetDocumentSymbolsConfig) => Promise<IpcResponse<CodePaneDocumentSymbol[]>>;
+  codePaneGetCompletionItems: (config: CodePaneGetCompletionItemsConfig) => Promise<IpcResponse<CodePaneCompletionItem[]>>;
+  codePaneGetSignatureHelp: (config: CodePaneGetSignatureHelpConfig) => Promise<IpcResponse<CodePaneSignatureHelpResult | null>>;
+  codePaneRenameSymbol: (config: CodePaneRenameSymbolConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
+  codePaneFormatDocument: (config: CodePaneFormatDocumentConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
+  codePaneGetWorkspaceSymbols: (config: CodePaneGetWorkspaceSymbolsConfig) => Promise<IpcResponse<CodePaneWorkspaceSymbol[]>>;
   onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   onCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;

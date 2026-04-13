@@ -1,6 +1,7 @@
 import { pathToFileURL, fileURLToPath } from 'url';
 import path from 'path';
 import type {
+  CodePaneCompletionItem,
   CodePaneDiagnostic,
   CodePaneDiagnosticsChangedPayload,
   CodePaneDocumentSymbol,
@@ -9,6 +10,9 @@ import type {
   CodePanePosition,
   CodePaneReadFileResult,
   CodePaneReference,
+  CodePaneSignatureHelpResult,
+  CodePaneTextEdit,
+  CodePaneWorkspaceSymbol,
   PluginRuntimeStateChangedPayload,
 } from '../../../shared/types/electron-api';
 import type { PluginRequirement, PluginRuntime } from '../../../shared/types/plugin';
@@ -38,6 +42,11 @@ const JAVA_SLOW_REQUEST_METHODS = new Set([
   'textDocument/hover',
   'textDocument/references',
   'textDocument/documentSymbol',
+  'textDocument/completion',
+  'textDocument/signatureHelp',
+  'textDocument/rename',
+  'textDocument/formatting',
+  'workspace/symbol',
 ]);
 
 interface PendingRequest {
@@ -135,6 +144,57 @@ interface LspSymbolInformation {
   containerName?: string;
 }
 
+interface LspCompletionItem {
+  label: string;
+  detail?: string;
+  documentation?: string | LspMarkupContent;
+  kind?: number;
+  insertText?: string;
+  filterText?: string;
+  sortText?: string;
+  textEdit?: {
+    range: LspRange;
+    newText: string;
+  };
+}
+
+interface LspCompletionList {
+  isIncomplete?: boolean;
+  items: LspCompletionItem[];
+}
+
+interface LspParameterInformation {
+  label: string | [number, number];
+  documentation?: string | LspMarkupContent;
+}
+
+interface LspSignatureInformation {
+  label: string;
+  documentation?: string | LspMarkupContent;
+  parameters?: LspParameterInformation[];
+}
+
+interface LspSignatureHelp {
+  signatures: LspSignatureInformation[];
+  activeSignature?: number;
+  activeParameter?: number;
+}
+
+interface LspTextEdit {
+  range: LspRange;
+  newText: string;
+}
+
+interface LspWorkspaceEdit {
+  changes?: Record<string, LspTextEdit[]>;
+  documentChanges?: Array<{
+    textDocument?: {
+      uri?: string;
+    };
+    edits?: LspTextEdit[];
+  }>;
+}
+
 export interface LanguageServerSupervisorOptions {
   runtimeRootPath: string;
   adapters?: LanguageRuntimeAdapter[];
@@ -217,6 +277,57 @@ export class LanguageServerSupervisor {
 
   async getDocumentSymbols(resolution: ResolvedLanguagePlugin, filePath: string): Promise<CodePaneDocumentSymbol[]> {
     return await this.getOrCreateSession(resolution).getDocumentSymbols(filePath);
+  }
+
+  async getCompletionItems(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    position: CodePanePosition,
+    options?: {
+      triggerCharacter?: string;
+      triggerKind?: number;
+    },
+  ): Promise<CodePaneCompletionItem[]> {
+    return await this.getOrCreateSession(resolution).getCompletionItems(filePath, position, options);
+  }
+
+  async getSignatureHelp(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    position: CodePanePosition,
+    options?: {
+      triggerCharacter?: string;
+    },
+  ): Promise<CodePaneSignatureHelpResult | null> {
+    return await this.getOrCreateSession(resolution).getSignatureHelp(filePath, position, options);
+  }
+
+  async renameSymbol(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    position: CodePanePosition,
+    newName: string,
+  ): Promise<CodePaneTextEdit[]> {
+    return await this.getOrCreateSession(resolution).renameSymbol(filePath, position, newName);
+  }
+
+  async formatDocument(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    options?: {
+      tabSize?: number;
+      insertSpaces?: boolean;
+    },
+  ): Promise<CodePaneTextEdit[]> {
+    return await this.getOrCreateSession(resolution).formatDocument(filePath, options);
+  }
+
+  async getWorkspaceSymbols(
+    resolution: ResolvedLanguagePlugin,
+    query: string,
+    limit?: number,
+  ): Promise<CodePaneWorkspaceSymbol[]> {
+    return await this.getOrCreateSession(resolution).getWorkspaceSymbols(query, limit);
   }
 
   async readVirtualDocument(
@@ -501,6 +612,133 @@ class LanguageServerSession {
     return (result ?? []).map(normalizeDocumentSymbol).filter((symbol): symbol is CodePaneDocumentSymbol => Boolean(symbol));
   }
 
+  async getCompletionItems(
+    filePath: string,
+    position: CodePanePosition,
+    options?: {
+      triggerCharacter?: string;
+      triggerKind?: number;
+    },
+  ): Promise<CodePaneCompletionItem[]> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('textDocument/completion', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      position: toLspPosition(position),
+      context: {
+        triggerKind: options?.triggerKind ?? 1,
+        ...(options?.triggerCharacter ? { triggerCharacter: options.triggerCharacter } : {}),
+      },
+    }) as LspCompletionItem[] | LspCompletionList | null;
+
+    const items = Array.isArray(result)
+      ? result
+      : result?.items ?? [];
+
+    return items.map(normalizeCompletionItem).filter((item): item is CodePaneCompletionItem => Boolean(item));
+  }
+
+  async getSignatureHelp(
+    filePath: string,
+    position: CodePanePosition,
+    options?: {
+      triggerCharacter?: string;
+    },
+  ): Promise<CodePaneSignatureHelpResult | null> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('textDocument/signatureHelp', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      position: toLspPosition(position),
+      ...(options?.triggerCharacter
+        ? {
+            context: {
+              triggerKind: 2,
+              triggerCharacter: options.triggerCharacter,
+              isRetrigger: false,
+            },
+          }
+        : {}),
+    }) as LspSignatureHelp | null;
+
+    if (!result?.signatures) {
+      return null;
+    }
+
+    return {
+      signatures: result.signatures.map((signature) => ({
+        label: signature.label,
+        ...(signature.documentation ? { documentation: normalizeMarkupContent(signature.documentation) } : {}),
+        ...(Array.isArray(signature.parameters)
+          ? {
+              parameters: signature.parameters.map((parameter) => ({
+                label: normalizeParameterLabel(parameter.label, signature.label),
+                ...(parameter.documentation ? { documentation: normalizeMarkupContent(parameter.documentation) } : {}),
+              })),
+            }
+          : {}),
+      })),
+      ...(typeof result.activeSignature === 'number' ? { activeSignature: result.activeSignature } : {}),
+      ...(typeof result.activeParameter === 'number' ? { activeParameter: result.activeParameter } : {}),
+    };
+  }
+
+  async renameSymbol(
+    filePath: string,
+    position: CodePanePosition,
+    newName: string,
+  ): Promise<CodePaneTextEdit[]> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('textDocument/rename', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      position: toLspPosition(position),
+      newName,
+    }) as LspWorkspaceEdit | null;
+
+    return normalizeWorkspaceEdit(result);
+  }
+
+  async formatDocument(
+    filePath: string,
+    options?: {
+      tabSize?: number;
+      insertSpaces?: boolean;
+    },
+  ): Promise<CodePaneTextEdit[]> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('textDocument/formatting', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      options: {
+        tabSize: options?.tabSize ?? 2,
+        insertSpaces: options?.insertSpaces ?? true,
+        trimTrailingWhitespace: true,
+        insertFinalNewline: true,
+        trimFinalNewlines: true,
+      },
+    }) as LspTextEdit[] | null;
+
+    return normalizeStandaloneTextEdits(filePath, result ?? []);
+  }
+
+  async getWorkspaceSymbols(query: string, limit?: number): Promise<CodePaneWorkspaceSymbol[]> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('workspace/symbol', {
+      query,
+      limit: limit ?? 100,
+    }) as Array<LspSymbolInformation> | null;
+
+    return (result ?? [])
+      .map(normalizeWorkspaceSymbol)
+      .filter((symbol): symbol is CodePaneWorkspaceSymbol => Boolean(symbol))
+      .slice(0, Math.max(limit ?? 100, 0));
+  }
+
   async readVirtualDocument(documentUri: string): Promise<CodePaneReadFileResult | null> {
     await this.ensureInitialized();
 
@@ -614,13 +852,29 @@ class LanguageServerSession {
           workspace: {
             configuration: true,
             workspaceFolders: true,
+            symbol: {},
           },
           textDocument: {
             definition: {},
+            completion: {
+              completionItem: {
+                documentationFormat: ['markdown', 'plaintext'],
+              },
+            },
             hover: {
               contentFormat: ['markdown', 'plaintext'],
             },
             references: {},
+            signatureHelp: {
+              signatureInformation: {
+                documentationFormat: ['markdown', 'plaintext'],
+                parameterInformation: {
+                  labelOffsetSupport: true,
+                },
+              },
+            },
+            rename: {},
+            formatting: {},
             documentSymbol: {
               hierarchicalDocumentSymbolSupport: true,
             },
@@ -1165,6 +1419,90 @@ function normalizeDocumentSymbol(
         }
       : {}),
   };
+}
+
+function normalizeCompletionItem(value: LspCompletionItem): CodePaneCompletionItem | null {
+  if (!value?.label) {
+    return null;
+  }
+
+  return {
+    label: value.label,
+    ...(value.detail ? { detail: value.detail } : {}),
+    ...(value.documentation ? { documentation: normalizeMarkupContent(value.documentation) } : {}),
+    ...(typeof value.kind === 'number' ? { kind: value.kind } : {}),
+    ...(value.insertText ? { insertText: value.insertText } : {}),
+    ...(value.filterText ? { filterText: value.filterText } : {}),
+    ...(value.sortText ? { sortText: value.sortText } : {}),
+    ...(value.textEdit?.range ? { range: fromLspRange(value.textEdit.range) } : {}),
+  };
+}
+
+function normalizeStandaloneTextEdits(filePath: string, edits: LspTextEdit[]): CodePaneTextEdit[] {
+  return edits
+    .filter((edit) => Boolean(edit?.range))
+    .map((edit) => ({
+      filePath,
+      range: fromLspRange(edit.range),
+      newText: edit.newText ?? '',
+    }));
+}
+
+function normalizeWorkspaceEdit(edit: LspWorkspaceEdit | null | undefined): CodePaneTextEdit[] {
+  if (!edit) {
+    return [];
+  }
+
+  const normalizedEdits: CodePaneTextEdit[] = [];
+
+  for (const [uri, edits] of Object.entries(edit.changes ?? {})) {
+    const filePath = uriToFilePath(uri);
+    if (!filePath) {
+      continue;
+    }
+    normalizedEdits.push(...normalizeStandaloneTextEdits(filePath, edits ?? []));
+  }
+
+  for (const change of edit.documentChanges ?? []) {
+    const filePath = uriToFilePath(change.textDocument?.uri);
+    if (!filePath) {
+      continue;
+    }
+    normalizedEdits.push(...normalizeStandaloneTextEdits(filePath, change.edits ?? []));
+  }
+
+  return normalizedEdits;
+}
+
+function normalizeWorkspaceSymbol(value: LspSymbolInformation): CodePaneWorkspaceSymbol | null {
+  if (!value?.location?.uri || !value.location.range) {
+    return null;
+  }
+
+  const filePath = uriToFilePath(value.location.uri);
+  if (!filePath) {
+    return null;
+  }
+
+  return {
+    name: value.name,
+    kind: value.kind,
+    filePath,
+    range: fromLspRange(value.location.range),
+    ...(value.containerName ? { containerName: value.containerName } : {}),
+  };
+}
+
+function normalizeMarkupContent(value: string | LspMarkupContent): string {
+  return typeof value === 'string' ? value : value.value;
+}
+
+function normalizeParameterLabel(label: string | [number, number], signatureLabel: string): string {
+  if (Array.isArray(label)) {
+    return signatureLabel.slice(label[0] ?? 0, label[1] ?? signatureLabel.length);
+  }
+
+  return label;
 }
 
 function extractLastRuntimeErrorLine(rawMessage: string): string | null {

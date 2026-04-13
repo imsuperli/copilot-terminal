@@ -39,7 +39,10 @@ import type {
   CodePaneLanguageWorkspaceState,
   CodePaneLocation,
   CodePaneReadFileResult,
+  CodePaneReference,
+  CodePaneTextEdit,
   CodePaneTreeEntry,
+  CodePaneWorkspaceSymbol,
 } from '../../shared/types/electron-api';
 import {
   CODE_PANE_BINARY_FILE_ERROR_CODE,
@@ -360,6 +363,50 @@ function getProblemTone(severity: number): {
   return { label: 'hint', className: 'bg-emerald-500/15 text-emerald-300' };
 }
 
+function compareTextEditsDescending(left: CodePaneTextEdit, right: CodePaneTextEdit): number {
+  if (left.range.startLineNumber !== right.range.startLineNumber) {
+    return right.range.startLineNumber - left.range.startLineNumber;
+  }
+  if (left.range.startColumn !== right.range.startColumn) {
+    return right.range.startColumn - left.range.startColumn;
+  }
+  if (left.range.endLineNumber !== right.range.endLineNumber) {
+    return right.range.endLineNumber - left.range.endLineNumber;
+  }
+  return right.range.endColumn - left.range.endColumn;
+}
+
+function getTextOffset(content: string, lineNumber: number, column: number): number {
+  const normalizedLineNumber = Math.max(lineNumber, 1);
+  const lines = content.split('\n');
+  let offset = 0;
+
+  for (let index = 0; index < normalizedLineNumber - 1; index += 1) {
+    offset += (lines[index] ?? '').length + 1;
+  }
+
+  const lineContent = lines[normalizedLineNumber - 1] ?? '';
+  return offset + Math.min(Math.max(column - 1, 0), lineContent.length);
+}
+
+function applyTextEditsToContent(content: string, edits: CodePaneTextEdit[]): string {
+  return [...edits]
+    .sort(compareTextEditsDescending)
+    .reduce((currentContent, edit) => {
+      const startOffset = getTextOffset(
+        currentContent,
+        edit.range.startLineNumber,
+        edit.range.startColumn,
+      );
+      const endOffset = getTextOffset(
+        currentContent,
+        edit.range.endLineNumber,
+        edit.range.endColumn,
+      );
+      return `${currentContent.slice(0, startOffset)}${edit.newText}${currentContent.slice(endOffset)}`;
+    }, content);
+}
+
 function getGitEntrySections(entry: CodePaneGitStatusEntry): GitChangeSection[] {
   if (entry.conflicted || entry.section === 'conflicted') {
     return ['conflicted'];
@@ -553,10 +600,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [sidebarWidth, setSidebarWidth] = useState(initialSidebarLayout.width);
   const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(initialSidebarLayout.lastExpandedWidth);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
+  const [searchPanelMode, setSearchPanelMode] = useState<'contents' | 'symbols' | 'usages'>('contents');
   const [contentSearchQuery, setContentSearchQuery] = useState('');
   const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
   const [contentSearchResults, setContentSearchResults] = useState<CodePaneContentMatch[]>([]);
   const [isContentSearching, setIsContentSearching] = useState(false);
+  const [workspaceSymbolQuery, setWorkspaceSymbolQuery] = useState('');
+  const deferredWorkspaceSymbolQuery = useDeferredValue(workspaceSymbolQuery);
+  const [workspaceSymbolResults, setWorkspaceSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
+  const [isWorkspaceSymbolSearching, setIsWorkspaceSymbolSearching] = useState(false);
+  const [workspaceSymbolError, setWorkspaceSymbolError] = useState<string | null>(null);
+  const [usageResults, setUsageResults] = useState<CodePaneReference[]>([]);
+  const [isFindingUsages, setIsFindingUsages] = useState(false);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const [usagesTargetLabel, setUsagesTargetLabel] = useState<string | null>(null);
   const [problems, setProblems] = useState<Array<MonacoMarker & { filePath: string }>>([]);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1670,6 +1727,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
           void saveFile(filePath);
         }
       });
+      editorRef.current.addCommand(monaco.KeyCode.F2, () => {
+        void renameSymbolAtCursor();
+      });
+      editorRef.current.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => {
+        void findUsagesAtCursor();
+      });
+      editorRef.current.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
+        void formatActiveDocument();
+      });
       attachDefinitionClickNavigation(editorRef.current, 'editor');
     }
 
@@ -1793,6 +1859,188 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     return true;
   }, [saveFile]);
+
+  const getActiveEditorContext = useCallback(() => {
+    const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
+    const editorInstance = currentViewMode === 'diff'
+      ? diffEditorRef.current?.getModifiedEditor() ?? null
+      : editorRef.current;
+    const model = editorInstance?.getModel();
+    const filePath = activeFilePathRef.current;
+    const position = editorInstance?.getPosition?.();
+
+    if (!editorInstance || !model || !filePath || !position) {
+      return null;
+    }
+
+    return {
+      editorInstance,
+      model,
+      filePath,
+      position,
+      language: fileMetaRef.current.get(filePath)?.language ?? model.getLanguageId(),
+      readOnly: Boolean(fileMetaRef.current.get(filePath)?.readOnly),
+    };
+  }, [viewMode]);
+
+  const applyLanguageTextEdits = useCallback(async (edits: CodePaneTextEdit[]) => {
+    if (edits.length === 0) {
+      return true;
+    }
+
+    const editsByFilePath = new Map<string, CodePaneTextEdit[]>();
+    for (const edit of edits) {
+      const fileEdits = editsByFilePath.get(edit.filePath) ?? [];
+      fileEdits.push(edit);
+      editsByFilePath.set(edit.filePath, fileEdits);
+    }
+
+    for (const [filePath, fileEdits] of editsByFilePath.entries()) {
+      const existingModel = fileModelsRef.current.get(filePath);
+      if (existingModel) {
+        const nextContent = applyTextEditsToContent(existingModel.getValue(), fileEdits);
+        suppressModelEventsRef.current.add(filePath);
+        existingModel.setValue(nextContent);
+        suppressModelEventsRef.current.delete(filePath);
+        clearDefinitionLookupCache();
+        markDirty(filePath, true);
+        await syncLanguageDocument(filePath, 'change');
+        const didSave = await saveFile(filePath);
+        if (!didSave) {
+          return false;
+        }
+        continue;
+      }
+
+      const readResponse = await window.electronAPI.codePaneReadFile({
+        rootPath,
+        filePath,
+      });
+      if (!readResponse.success || !readResponse.data || readResponse.data.isBinary) {
+        setBanner({
+          tone: 'error',
+          message: readResponse.error || t('common.retry'),
+          filePath,
+        });
+        return false;
+      }
+
+      const nextContent = applyTextEditsToContent(readResponse.data.content, fileEdits);
+      const writeResponse = await window.electronAPI.codePaneWriteFile({
+        rootPath,
+        filePath,
+        content: nextContent,
+        expectedMtimeMs: readResponse.data.mtimeMs,
+      });
+      if (!writeResponse.success) {
+        setBanner({
+          tone: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE ? 'warning' : 'error',
+          message: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE
+            ? t('codePane.saveConflict')
+            : (writeResponse.error || t('common.retry')),
+          filePath,
+          showReload: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
+          showOverwrite: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
+        });
+        return false;
+      }
+    }
+
+    void refreshGitSnapshot();
+    return true;
+  }, [clearDefinitionLookupCache, markDirty, refreshGitSnapshot, rootPath, saveFile, syncLanguageDocument, t]);
+
+  const findUsagesAtCursor = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      return;
+    }
+
+    const targetWord = context.model.getWordAtPosition(context.position)?.word ?? getPathLeafLabel(context.filePath);
+    setSearchPanelMode('usages');
+    setUsageResults([]);
+    setUsagesTargetLabel(targetWord);
+    setUsageError(null);
+    setIsFindingUsages(true);
+    handleSidebarModeSelect('search');
+
+    const response = await window.electronAPI.codePaneGetReferences({
+      rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      position: {
+        lineNumber: context.position.lineNumber,
+        column: context.position.column,
+      },
+    });
+
+    startTransition(() => {
+      setUsageResults(response.success ? (response.data ?? []) : []);
+    });
+    setUsageError(response.success ? null : (response.error || t('common.retry')));
+    setIsFindingUsages(false);
+  }, [getActiveEditorContext, handleSidebarModeSelect, rootPath, t]);
+
+  const renameSymbolAtCursor = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context || context.readOnly) {
+      return;
+    }
+
+    const currentWord = context.model.getWordAtPosition(context.position)?.word ?? '';
+    const nextName = window.prompt(t('codePane.renamePrompt'), currentWord)?.trim();
+    if (!nextName || nextName === currentWord) {
+      return;
+    }
+
+    const response = await window.electronAPI.codePaneRenameSymbol({
+      rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      position: {
+        lineNumber: context.position.lineNumber,
+        column: context.position.column,
+      },
+      newName: nextName,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+        filePath: context.filePath,
+      });
+      return;
+    }
+
+    await applyLanguageTextEdits(response.data ?? []);
+  }, [applyLanguageTextEdits, getActiveEditorContext, rootPath, t]);
+
+  const formatActiveDocument = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context || context.readOnly) {
+      return;
+    }
+
+    const response = await window.electronAPI.codePaneFormatDocument({
+      rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      tabSize: 2,
+      insertSpaces: true,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+        filePath: context.filePath,
+      });
+      return;
+    }
+
+    await applyLanguageTextEdits(response.data ?? []);
+  }, [applyLanguageTextEdits, getActiveEditorContext, rootPath, t]);
 
   const activateFile = useCallback(async (filePath: string, options?: { preserveTabs?: boolean }) => {
     const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
@@ -2518,6 +2766,43 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
   }, [deferredContentSearchQuery, rootPath, t]);
 
+  useEffect(() => {
+    const trimmedQuery = deferredWorkspaceSymbolQuery.trim();
+    if (!trimmedQuery) {
+      setWorkspaceSymbolResults([]);
+      setIsWorkspaceSymbolSearching(false);
+      setWorkspaceSymbolError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsWorkspaceSymbolSearching(true);
+    setWorkspaceSymbolError(null);
+
+    const timer = setTimeout(async () => {
+      const response = await window.electronAPI.codePaneGetWorkspaceSymbols({
+        rootPath,
+        query: trimmedQuery,
+        limit: 120,
+      });
+
+      if (cancelled) {
+        return;
+      }
+
+      startTransition(() => {
+        setWorkspaceSymbolResults(response.success ? (response.data ?? []) : []);
+      });
+      setWorkspaceSymbolError(response.success ? null : (response.error || t('common.retry')));
+      setIsWorkspaceSymbolSearching(false);
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [deferredWorkspaceSymbolQuery, rootPath, t]);
+
   const getDisplayPath = useCallback((filePath: string) => (
     fileMetaRef.current.get(filePath)?.displayPath ?? filePath
   ), []);
@@ -2527,6 +2812,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ), [getDisplayPath]);
 
   const activeTabStatus = activeFilePath ? getEntryStatus(activeFilePath, 'file') : undefined;
+  const activeFileReadOnly = activeFilePath ? Boolean(fileMetaRef.current.get(activeFilePath)?.readOnly) : false;
   const activeStatusText = activeFilePath
     ? savingPaths.has(activeFilePath)
       ? t('codePane.saving')
@@ -2847,6 +3133,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
       matches,
     }));
   }, [contentSearchResults]);
+
+  const usageGroups = useMemo(() => {
+    const groups = new Map<string, CodePaneReference[]>();
+    for (const reference of usageResults) {
+      const references = groups.get(reference.filePath) ?? [];
+      references.push(reference);
+      groups.set(reference.filePath, references);
+    }
+
+    return Array.from(groups.entries()).map(([filePath, references]) => ({
+      filePath,
+      references,
+    }));
+  }, [usageResults]);
 
   const scmEntries = useMemo(() => (
     Object.values(gitStatusByPath).sort((left, right) => {
@@ -3172,6 +3472,51 @@ export const CodePane: React.FC<CodePaneProps> = ({
               <GitCompareArrows size={13} />
             </button>
           </AppTooltip>
+          <AppTooltip content={t('codePane.findUsages')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.findUsages')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void findUsagesAtCursor();
+              }}
+              disabled={!activeFilePath}
+              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Use
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.renameSymbol')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.renameSymbol')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void renameSymbolAtCursor();
+              }}
+              disabled={!activeFilePath || activeFileReadOnly}
+              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Ren
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.formatDocument')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.formatDocument')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void formatActiveDocument();
+              }}
+              disabled={!activeFilePath || activeFileReadOnly}
+              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Fmt
+            </button>
+          </AppTooltip>
           <AppTooltip content={t('common.save')} placement="pane-corner">
             <button
               type="button"
@@ -3381,30 +3726,175 @@ export const CodePane: React.FC<CodePaneProps> = ({
               <div className="border-b border-zinc-800 px-2 py-2">
                 <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
                   <Search size={12} />
-                  {t('codePane.searchContents')}
+                  {searchPanelMode === 'contents'
+                    ? t('codePane.searchContents')
+                    : searchPanelMode === 'symbols'
+                      ? t('codePane.workspaceSymbols')
+                      : t('codePane.findUsages')}
                 </div>
-                <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
-                  <Search size={12} className="shrink-0 text-zinc-500" />
-                  <input
-                    value={contentSearchQuery}
-                    onChange={(event) => setContentSearchQuery(event.target.value)}
-                    placeholder={t('codePane.searchContentsPlaceholder')}
-                    className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
-                  />
-                  {isContentSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+                <div className="mb-2 flex gap-1 rounded bg-zinc-900/60 p-1">
+                  {([
+                    ['contents', t('codePane.searchModeContents')],
+                    ['symbols', t('codePane.searchModeSymbols')],
+                    ['usages', t('codePane.searchModeUsages')],
+                  ] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setSearchPanelMode(mode)}
+                      className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                        searchPanelMode === mode
+                          ? 'bg-zinc-800 text-zinc-100'
+                          : 'text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
+                {searchPanelMode === 'contents' ? (
+                  <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
+                    <Search size={12} className="shrink-0 text-zinc-500" />
+                    <input
+                      value={contentSearchQuery}
+                      onChange={(event) => setContentSearchQuery(event.target.value)}
+                      placeholder={t('codePane.searchContentsPlaceholder')}
+                      className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+                    />
+                    {isContentSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+                  </div>
+                ) : searchPanelMode === 'symbols' ? (
+                  <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
+                    <Search size={12} className="shrink-0 text-zinc-500" />
+                    <input
+                      value={workspaceSymbolQuery}
+                      onChange={(event) => setWorkspaceSymbolQuery(event.target.value)}
+                      placeholder={t('codePane.workspaceSymbolsPlaceholder')}
+                      className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+                    />
+                    {isWorkspaceSymbolSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-400">
+                    <span className="truncate">
+                      {usagesTargetLabel
+                        ? t('codePane.findUsagesFor', { symbol: usagesTargetLabel })
+                        : t('codePane.findUsagesHint')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void findUsagesAtCursor();
+                      }}
+                      className="shrink-0 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                    >
+                      {t('codePane.findUsages')}
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                  {t('codePane.searchTab')}
+                  {searchPanelMode === 'contents'
+                    ? t('codePane.searchTab')
+                    : searchPanelMode === 'symbols'
+                      ? t('codePane.workspaceSymbols')
+                      : t('codePane.findUsages')}
                 </div>
                 <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-                  {deferredContentSearchQuery.trim() && contentSearchError ? (
-                    <div className="text-xs text-red-300">{contentSearchError}</div>
-                  ) : deferredContentSearchQuery.trim() ? (
-                    contentSearchGroups.length > 0 ? (
+                  {searchPanelMode === 'contents' ? (
+                    deferredContentSearchQuery.trim() && contentSearchError ? (
+                      <div className="text-xs text-red-300">{contentSearchError}</div>
+                    ) : deferredContentSearchQuery.trim() ? (
+                      contentSearchGroups.length > 0 ? (
+                        <div className="space-y-3">
+                          {contentSearchGroups.map((group) => (
+                            <div key={group.filePath} className="space-y-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void activateFile(group.filePath);
+                                }}
+                                className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                              >
+                                <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                                <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
+                                <span className="truncate text-[10px] text-zinc-500">
+                                  {getRelativePath(rootPath, group.filePath)}
+                                </span>
+                              </button>
+                              {group.matches.map((match) => (
+                                <button
+                                  key={`${group.filePath}:${match.lineNumber}:${match.column}`}
+                                  type="button"
+                                  onClick={() => {
+                                    void openContentSearchMatch(match);
+                                  }}
+                                  className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
+                                >
+                                  <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
+                                    {match.lineNumber}:{match.column}
+                                  </span>
+                                  <span className="min-w-0 flex-1 break-words">{match.lineText}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">{t('codePane.searchContentsEmpty')}</div>
+                      )
+                    ) : (
+                      <div className="text-xs text-zinc-500">{t('codePane.searchContentsHint')}</div>
+                    )
+                  ) : searchPanelMode === 'symbols' ? (
+                    deferredWorkspaceSymbolQuery.trim() && workspaceSymbolError ? (
+                      <div className="text-xs text-red-300">{workspaceSymbolError}</div>
+                    ) : deferredWorkspaceSymbolQuery.trim() ? (
+                      workspaceSymbolResults.length > 0 ? (
+                        <div className="space-y-1">
+                          {workspaceSymbolResults.map((symbol) => (
+                            <button
+                              key={`${symbol.filePath}:${symbol.name}:${symbol.range.startLineNumber}:${symbol.range.startColumn}`}
+                              type="button"
+                              onClick={() => {
+                                void openFileLocation({
+                                  filePath: symbol.filePath,
+                                  lineNumber: symbol.range.startLineNumber,
+                                  column: symbol.range.startColumn,
+                                });
+                              }}
+                              className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                            >
+                              <FileCode2 size={13} className="mt-0.5 shrink-0 text-zinc-500" />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-zinc-100">{symbol.name}</div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                                  {symbol.containerName && <span>{symbol.containerName}</span>}
+                                  <span>{getRelativePath(rootPath, symbol.filePath)}</span>
+                                  <span>{symbol.range.startLineNumber}:{symbol.range.startColumn}</span>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsEmpty')}</div>
+                      )
+                    ) : (
+                      <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsHint')}</div>
+                    )
+                  ) : usageError ? (
+                    <div className="text-xs text-red-300">{usageError}</div>
+                  ) : isFindingUsages ? (
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <Loader2 size={12} className="animate-spin" />
+                      {t('codePane.findUsages')}
+                    </div>
+                  ) : usagesTargetLabel ? (
+                    usageGroups.length > 0 ? (
                       <div className="space-y-3">
-                        {contentSearchGroups.map((group) => (
+                        {usageGroups.map((group) => (
                           <div key={group.filePath} className="space-y-1">
                             <button
                               type="button"
@@ -3419,29 +3909,35 @@ export const CodePane: React.FC<CodePaneProps> = ({
                                 {getRelativePath(rootPath, group.filePath)}
                               </span>
                             </button>
-                            {group.matches.map((match) => (
+                            {group.references.map((reference) => (
                               <button
-                                key={`${group.filePath}:${match.lineNumber}:${match.column}`}
+                                key={`${group.filePath}:${reference.range.startLineNumber}:${reference.range.startColumn}`}
                                 type="button"
                                 onClick={() => {
-                                  void openContentSearchMatch(match);
+                                  void openFileLocation({
+                                    filePath: group.filePath,
+                                    lineNumber: reference.range.startLineNumber,
+                                    column: reference.range.startColumn,
+                                  });
                                 }}
                                 className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
                               >
                                 <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
-                                  {match.lineNumber}:{match.column}
+                                  {reference.range.startLineNumber}:{reference.range.startColumn}
                                 </span>
-                                <span className="min-w-0 flex-1 break-words">{match.lineText}</span>
+                                <span className="min-w-0 flex-1 break-words">
+                                  {reference.previewText ?? getRelativePath(rootPath, group.filePath)}
+                                </span>
                               </button>
                             ))}
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-xs text-zinc-500">{t('codePane.searchContentsEmpty')}</div>
+                      <div className="text-xs text-zinc-500">{t('codePane.findUsagesEmpty')}</div>
                     )
                   ) : (
-                    <div className="text-xs text-zinc-500">{t('codePane.searchContentsHint')}</div>
+                    <div className="text-xs text-zinc-500">{t('codePane.findUsagesHint')}</div>
                   )}
                 </div>
               </div>

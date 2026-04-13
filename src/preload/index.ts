@@ -175,6 +175,16 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-get-references', config),
   codePaneGetDocumentSymbols: (config) =>
     ipcRenderer.invoke('code-pane-get-document-symbols', config),
+  codePaneGetCompletionItems: (config) =>
+    ipcRenderer.invoke('code-pane-get-completion-items', config),
+  codePaneGetSignatureHelp: (config) =>
+    ipcRenderer.invoke('code-pane-get-signature-help', config),
+  codePaneRenameSymbol: (config) =>
+    ipcRenderer.invoke('code-pane-rename-symbol', config),
+  codePaneFormatDocument: (config) =>
+    ipcRenderer.invoke('code-pane-format-document', config),
+  codePaneGetWorkspaceSymbols: (config) =>
+    ipcRenderer.invoke('code-pane-get-workspace-symbols', config),
   onCodePaneFsChanged: (callback) => {
     ipcRenderer.on('code-pane-fs-changed', callback);
   },

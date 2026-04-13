@@ -1,17 +1,26 @@
 import path from 'path';
 import type {
+  CodePaneCompletionItem,
   CodePaneDocumentCloseConfig,
   CodePaneDocumentSyncConfig,
   CodePaneDocumentSymbol,
+  CodePaneFormatDocumentConfig,
+  CodePaneGetCompletionItemsConfig,
   CodePaneGetDefinitionConfig,
   CodePaneGetDocumentSymbolsConfig,
   CodePaneGetHoverConfig,
   CodePaneGetReferencesConfig,
+  CodePaneGetSignatureHelpConfig,
+  CodePaneGetWorkspaceSymbolsConfig,
   CodePaneHoverResult,
   CodePaneLocation,
   CodePaneReadFileConfig,
   CodePaneReadFileResult,
   CodePaneReference,
+  CodePaneRenameSymbolConfig,
+  CodePaneSignatureHelpResult,
+  CodePaneTextEdit,
+  CodePaneWorkspaceSymbol,
 } from '../../../shared/types/electron-api';
 import type { Workspace } from '../../types/workspace';
 import { CodeFileService } from '../code/CodeFileService';
@@ -119,6 +128,47 @@ export class LanguageFeatureService {
     ));
   }
 
+  async getCompletionItems(config: CodePaneGetCompletionItemsConfig, workspace: Workspace | null): Promise<CodePaneCompletionItem[]> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
+      await this.supervisor.getCompletionItems(resolution, config.filePath, config.position, {
+        triggerCharacter: config.triggerCharacter,
+        triggerKind: config.triggerKind,
+      })
+    ));
+  }
+
+  async getSignatureHelp(config: CodePaneGetSignatureHelpConfig, workspace: Workspace | null): Promise<CodePaneSignatureHelpResult | null> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, null, async (resolution) => (
+      await this.supervisor.getSignatureHelp(resolution, config.filePath, config.position, {
+        triggerCharacter: config.triggerCharacter,
+      })
+    ));
+  }
+
+  async renameSymbol(config: CodePaneRenameSymbolConfig, workspace: Workspace | null): Promise<CodePaneTextEdit[]> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
+      await this.supervisor.renameSymbol(resolution, config.filePath, config.position, config.newName)
+    ));
+  }
+
+  async formatDocument(config: CodePaneFormatDocumentConfig, workspace: Workspace | null): Promise<CodePaneTextEdit[]> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
+      await this.supervisor.formatDocument(resolution, config.filePath, {
+        tabSize: config.tabSize,
+        insertSpaces: config.insertSpaces,
+      })
+    ));
+  }
+
+  async getWorkspaceSymbols(config: CodePaneGetWorkspaceSymbolsConfig, workspace: Workspace | null): Promise<CodePaneWorkspaceSymbol[]> {
+    const resolution = await this.resolveWorkspace(config.rootPath, workspace);
+    if (!resolution) {
+      return [];
+    }
+
+    return await this.supervisor.getWorkspaceSymbols(resolution, config.query, config.limit);
+  }
+
   async readDocument(config: CodePaneReadFileConfig, workspace: Workspace | null): Promise<CodePaneReadFileResult | null> {
     if (!config.documentUri) {
       return await this.codeFileService.readFile(config);
@@ -200,6 +250,17 @@ export class LanguageFeatureService {
       rootPath,
       filePath: path.join(rootPath, '__virtual__.java'),
       language: 'java',
+      workspacePluginSettings: workspace?.settings.plugins,
+    });
+  }
+
+  private async resolveWorkspace(
+    rootPath: string,
+    workspace: Workspace | null,
+  ): Promise<ResolvedLanguagePlugin | null> {
+    return await this.resolver.resolve({
+      rootPath,
+      filePath: path.join(rootPath, '__workspace__.txt'),
       workspacePluginSettings: workspace?.settings.plugins,
     });
   }

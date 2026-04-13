@@ -47,9 +47,18 @@ function handleMessage(message) {
           capabilities: {
             textDocumentSync: 1,
             definitionProvider: true,
+            completionProvider: {
+              triggerCharacters: ['.'],
+            },
             hoverProvider: true,
             referencesProvider: true,
+            signatureHelpProvider: {
+              triggerCharacters: ['(', ','],
+            },
+            renameProvider: true,
+            documentFormattingProvider: true,
             documentSymbolProvider: true,
+            workspaceSymbolProvider: true,
           },
         },
       });
@@ -159,6 +168,49 @@ function handleMessage(message) {
         },
       });
       return;
+    case 'textDocument/completion':
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          items: [{
+            label: 'mockCompletion',
+            detail: 'Mock detail',
+            documentation: {
+              kind: 'markdown',
+              value: '**Mock Completion**',
+            },
+            kind: 3,
+            insertText: 'mockCompletion()',
+            textEdit: {
+              range: createRange(0, 0, 0, 4),
+              newText: 'mockCompletion()',
+            },
+          }],
+        },
+      });
+      return;
+    case 'textDocument/signatureHelp':
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          signatures: [{
+            label: 'mockCompletion(value: string)',
+            documentation: {
+              kind: 'markdown',
+              value: '**Mock Signature**',
+            },
+            parameters: [{
+              label: [15, 28],
+              documentation: 'value parameter',
+            }],
+          }],
+          activeSignature: 0,
+          activeParameter: 0,
+        },
+      });
+      return;
     case 'textDocument/references': {
       const uri = message.params.textDocument.uri;
       send({
@@ -167,6 +219,34 @@ function handleMessage(message) {
         result: [{
           uri,
           range: createRange(0, 0, 0, 4),
+        }],
+      });
+      return;
+    }
+    case 'textDocument/rename': {
+      const uri = message.params.textDocument.uri;
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          changes: {
+            [uri]: [{
+              range: createRange(0, 0, 0, 4),
+              newText: message.params.newName,
+            }],
+          },
+        },
+      });
+      return;
+    }
+    case 'textDocument/formatting': {
+      const uri = message.params.textDocument.uri;
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: [{
+          range: createRange(0, 0, 0, 4),
+          newText: 'Main',
         }],
       });
       return;
@@ -184,6 +264,25 @@ function handleMessage(message) {
         }],
       });
       return;
+    case 'workspace/symbol': {
+      const firstDocumentUri = Array.from(documents.keys())[0];
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: firstDocumentUri
+          ? [{
+              name: message.params.query || 'Main',
+              kind: 5,
+              location: {
+                uri: firstDocumentUri,
+                range: createRange(0, 0, 0, 4),
+              },
+              containerName: 'mock',
+            }]
+          : [],
+      });
+      return;
+    }
     case 'shutdown':
       send({
         jsonrpc: '2.0',

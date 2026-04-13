@@ -1,9 +1,11 @@
 import type {
+  CodePaneCompletionItem,
   CodePaneDiagnostic,
   CodePaneDocumentSymbol,
   CodePaneHoverResult,
   CodePaneLocation,
   CodePaneReference,
+  CodePaneSignatureHelpResult,
 } from '../../../shared/types/electron-api';
 
 type MonacoModule = typeof import('monaco-editor');
@@ -14,6 +16,8 @@ type MonacoLocation = import('monaco-editor').languages.Location;
 type MonacoHover = import('monaco-editor').languages.Hover;
 type MonacoProviderResult<T> = import('monaco-editor').languages.ProviderResult<T>;
 type MonacoDocumentSymbol = import('monaco-editor').languages.DocumentSymbol;
+type MonacoCompletionItem = import('monaco-editor').languages.CompletionItem;
+type MonacoSignatureHelp = import('monaco-editor').languages.SignatureHelp;
 type MonacoDocumentContext = {
   paneId: string;
   rootPath: string;
@@ -153,6 +157,26 @@ export class MonacoLanguageBridge {
         ),
       }),
     );
+
+    this.providerDisposables.push(
+      this.monaco.languages.registerCompletionItemProvider(normalizedLanguage, {
+        triggerCharacters: ['.', ':', '>', '"', '\'', '/', '@'],
+        provideCompletionItems: async (model, position, _context) => ({
+          suggestions: await this.provideCompletionItems(model, position.lineNumber, position.column),
+        }),
+      }),
+    );
+
+    this.providerDisposables.push(
+      this.monaco.languages.registerSignatureHelpProvider(normalizedLanguage, {
+        signatureHelpTriggerCharacters: ['(', ','],
+        signatureHelpRetriggerCharacters: [','],
+        provideSignatureHelp: async (model, position) => {
+          const value = await this.provideSignatureHelp(model, position.lineNumber, position.column);
+          return value ? { value, dispose: () => {} } : null;
+        },
+      }),
+    );
   }
 
   private async provideDefinitions(
@@ -255,6 +279,62 @@ export class MonacoLanguageBridge {
     }
 
     return (response.data ?? []).map((symbol) => toMonacoDocumentSymbol(symbol));
+  }
+
+  private async provideCompletionItems(
+    model: MonacoModel,
+    lineNumber: number,
+    column: number,
+  ): Promise<MonacoCompletionItem[]> {
+    const context = this.contextsByModel.get(model);
+    if (!context) {
+      return [];
+    }
+
+    const response = await window.electronAPI.codePaneGetCompletionItems({
+      rootPath: context.rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      position: {
+        lineNumber,
+        column,
+      },
+      triggerKind: 1,
+    });
+
+    if (!response.success) {
+      return [];
+    }
+
+    const defaultRange = createInlineRange(model, lineNumber, column);
+    return (response.data ?? []).map((item) => toMonacoCompletionItem(item, defaultRange));
+  }
+
+  private async provideSignatureHelp(
+    model: MonacoModel,
+    lineNumber: number,
+    column: number,
+  ): Promise<MonacoSignatureHelp | null> {
+    const context = this.contextsByModel.get(model);
+    if (!context) {
+      return null;
+    }
+
+    const response = await window.electronAPI.codePaneGetSignatureHelp({
+      rootPath: context.rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      position: {
+        lineNumber,
+        column,
+      },
+    });
+
+    if (!response.success || !response.data) {
+      return null;
+    }
+
+    return toMonacoSignatureHelp(response.data);
   }
 
   private async sendDocumentSync(
@@ -381,12 +461,83 @@ function toMonacoDocumentSymbol(symbol: CodePaneDocumentSymbol): MonacoDocumentS
   };
 }
 
+function toMonacoCompletionItem(item: CodePaneCompletionItem, defaultRange: MonacoRange): MonacoCompletionItem {
+  const completionItem: MonacoCompletionItem = {
+    label: item.label,
+    kind: item.kind as MonacoCompletionItem['kind'],
+    insertText: item.insertText ?? item.label,
+    range: item.range ? toMonacoRange(item.range) : defaultRange,
+  };
+
+  if (item.detail) {
+    completionItem.detail = item.detail;
+  }
+  if (item.documentation) {
+    completionItem.documentation = item.documentation;
+  }
+  if (item.filterText) {
+    completionItem.filterText = item.filterText;
+  }
+  if (item.sortText) {
+    completionItem.sortText = item.sortText;
+  }
+  if (item.range) {
+    completionItem.range = toMonacoRange(item.range);
+  }
+
+  return completionItem;
+}
+
+function toMonacoSignatureHelp(result: CodePaneSignatureHelpResult): MonacoSignatureHelp {
+  return {
+    signatures: result.signatures.map((signature) => ({
+      label: signature.label,
+      documentation: signature.documentation,
+      parameters: (signature.parameters ?? []).map((parameter) => ({
+        label: parameter.label,
+        documentation: parameter.documentation,
+      })),
+    })),
+    activeSignature: result.activeSignature ?? 0,
+    activeParameter: result.activeParameter ?? 0,
+  };
+}
+
 function toMonacoRange(range: MonacoRange): MonacoRange {
   return {
     startLineNumber: range.startLineNumber,
     startColumn: range.startColumn,
     endLineNumber: range.endLineNumber,
     endColumn: range.endColumn,
+  };
+}
+
+function createInlineRange(model: MonacoModel, lineNumber: number, column: number): MonacoRange {
+  const wordUntilPosition = model.getWordUntilPosition?.({ lineNumber, column });
+  if (wordUntilPosition) {
+    return {
+      startLineNumber: lineNumber,
+      startColumn: wordUntilPosition.startColumn,
+      endLineNumber: lineNumber,
+      endColumn: wordUntilPosition.endColumn,
+    };
+  }
+
+  const word = model.getWordAtPosition({ lineNumber, column });
+  if (word) {
+    return {
+      startLineNumber: lineNumber,
+      startColumn: word.startColumn,
+      endLineNumber: lineNumber,
+      endColumn: word.endColumn,
+    };
+  }
+
+  return {
+    startLineNumber: lineNumber,
+    startColumn: column,
+    endLineNumber: lineNumber,
+    endColumn: column,
   };
 }
 

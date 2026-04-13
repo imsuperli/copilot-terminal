@@ -115,6 +115,7 @@ class FakeModel {
 
 function createFakeEditor() {
   let model: FakeModel | null = null;
+  let position = { lineNumber: 1, column: 1 };
   const mouseDownListeners = new Set<(event: any) => void>();
   const mouseMoveListeners = new Set<(event: any) => void>();
   const mouseLeaveListeners = new Set<() => void>();
@@ -128,6 +129,7 @@ function createFakeEditor() {
     }),
     dispose: vi.fn(),
     focus: vi.fn(),
+    getPosition: vi.fn(() => position),
     onMouseDown: vi.fn((listener: (event: any) => void) => {
       mouseDownListeners.add(listener);
       return {
@@ -155,7 +157,9 @@ function createFakeEditor() {
     revealLineInCenter: vi.fn(),
     restoreViewState: vi.fn(),
     saveViewState: vi.fn(() => null),
-    setPosition: vi.fn(),
+    setPosition: vi.fn((nextPosition: { lineNumber: number; column: number }) => {
+      position = nextPosition;
+    }),
     setSelection: vi.fn(),
     updateOptions: vi.fn(),
     setModel: vi.fn((nextModel: FakeModel | null) => {
@@ -201,6 +205,8 @@ const fakeMonacoState = {
   hoverProviders: new Map<string, { provideHover: (...args: any[]) => Promise<unknown> }>(),
   referenceProviders: new Map<string, { provideReferences: (...args: any[]) => Promise<unknown> }>(),
   documentSymbolProviders: new Map<string, { provideDocumentSymbols: (...args: any[]) => Promise<unknown> }>(),
+  completionProviders: new Map<string, { provideCompletionItems: (...args: any[]) => Promise<unknown> }>(),
+  signatureHelpProviders: new Map<string, { provideSignatureHelp: (...args: any[]) => Promise<unknown> }>(),
   markerListeners: new Set<() => void>(),
   markersByPath: new Map<string, Map<string, Array<{
     severity: number;
@@ -240,6 +246,8 @@ const fakeMonacoState = {
     this.hoverProviders.clear();
     this.referenceProviders.clear();
     this.documentSymbolProviders.clear();
+    this.completionProviders.clear();
+    this.signatureHelpProviders.clear();
     this.markerListeners.clear();
     this.markersByPath.clear();
     this.models.clear();
@@ -255,9 +263,14 @@ const fakeMonaco = {
   },
   KeyCode: {
     KeyS: 49,
+    KeyF: 33,
+    F2: 60,
+    F12: 70,
   },
   KeyMod: {
     CtrlCmd: 2048,
+    Shift: 1024,
+    Alt: 512,
   },
   Uri: {
     file: (path: string) => ({ path }),
@@ -280,6 +293,14 @@ const fakeMonaco = {
     }),
     registerDocumentSymbolProvider: vi.fn((language: string, provider: { provideDocumentSymbols: (...args: any[]) => Promise<unknown> }) => {
       fakeMonacoState.documentSymbolProviders.set(language, provider);
+      return { dispose: vi.fn() };
+    }),
+    registerCompletionItemProvider: vi.fn((language: string, provider: { provideCompletionItems: (...args: any[]) => Promise<unknown> }) => {
+      fakeMonacoState.completionProviders.set(language, provider);
+      return { dispose: vi.fn() };
+    }),
+    registerSignatureHelpProvider: vi.fn((language: string, provider: { provideSignatureHelp: (...args: any[]) => Promise<unknown> }) => {
+      fakeMonacoState.signatureHelpProviders.set(language, provider);
       return { dispose: vi.fn() };
     }),
   },
@@ -494,6 +515,11 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetHover).mockReset();
     vi.mocked(window.electronAPI.codePaneGetReferences).mockReset();
     vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetCompletionItems).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockReset();
+    vi.mocked(window.electronAPI.codePaneRenameSymbol).mockReset();
+    vi.mocked(window.electronAPI.codePaneFormatDocument).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockReset();
     vi.mocked(window.electronAPI.onCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.onCodePaneIndexProgress).mockReset();
@@ -572,6 +598,11 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetHover).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneGetReferences).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetCompletionItems).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneRenameSymbol).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneFormatDocument).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.openFolder).mockResolvedValue(undefined);
     vi.mocked(window.electronAPI.writeClipboardText).mockResolvedValue(undefined);
   });
@@ -899,6 +930,68 @@ describe('CodePane', () => {
     });
   });
 
+  it('searches workspace symbols and opens the selected result', async () => {
+    vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'AppService',
+          kind: 5,
+          filePath: '/workspace/project/src/app.ts',
+          range: {
+            startLineNumber: 2,
+            startColumn: 3,
+            endLineNumber: 2,
+            endColumn: 13,
+          },
+          containerName: 'services',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockImplementation(async ({ filePath }) => ({
+      success: true,
+      data: {
+        content: filePath.endsWith('app.ts') ? 'export class AppService {}\n' : 'export const value = 1;\n',
+        mtimeMs: 100,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    }));
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.searchTab' }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.searchModeSymbols' }));
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('codePane.workspaceSymbolsPlaceholder'), {
+      target: { value: 'AppService' },
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetWorkspaceSymbols).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        query: 'AppService',
+        limit: 120,
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByText('AppService'));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/app.ts',
+      });
+    });
+  });
+
   it('shows repository summary, branch graph, and changed files in the SCM tab', async () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
       success: true,
@@ -1062,6 +1155,147 @@ describe('CodePane', () => {
     vi.useRealTimers();
   });
 
+  it('formats the active file with language edits', async () => {
+    vi.mocked(window.electronAPI.codePaneFormatDocument).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/index.ts',
+          range: {
+            startLineNumber: 1,
+            startColumn: 14,
+            endLineNumber: 1,
+            endColumn: 19,
+          },
+          newText: 'formattedValue',
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.formatDocument' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneFormatDocument).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        tabSize: 2,
+        insertSpaces: true,
+      });
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        content: 'export const formattedValue = 1;\n',
+        expectedMtimeMs: 100,
+      });
+    });
+  });
+
+  it('renames the symbol under the caret with workspace edits', async () => {
+    vi.mocked(window.electronAPI.codePaneRenameSymbol).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/index.ts',
+          range: {
+            startLineNumber: 1,
+            startColumn: 14,
+            endLineNumber: 1,
+            endColumn: 19,
+          },
+          newText: 'renamedValue',
+        },
+      ],
+    });
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('renamedValue');
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    await act(async () => {
+      activeEditor.setPosition({ lineNumber: 1, column: 15 });
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.renameSymbol' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneRenameSymbol).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        position: {
+          lineNumber: 1,
+          column: 15,
+        },
+        newName: 'renamedValue',
+      });
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        content: 'export const renamedValue = 1;\n',
+        expectedMtimeMs: 100,
+      });
+    });
+
+    promptSpy.mockRestore();
+  });
+
+  it('finds usages for the symbol under the caret and shows them in the search panel', async () => {
+    vi.mocked(window.electronAPI.codePaneGetReferences).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/util.ts',
+          range: {
+            startLineNumber: 3,
+            startColumn: 5,
+            endLineNumber: 3,
+            endColumn: 10,
+          },
+          previewText: 'return value + 1;',
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    await act(async () => {
+      activeEditor.setPosition({ lineNumber: 1, column: 15 });
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.findUsages' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetReferences).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        position: {
+          lineNumber: 1,
+          column: 15,
+        },
+      });
+    });
+
+    expect(await screen.findByText('util.ts')).toBeInTheDocument();
+    expect(screen.getByText('return value + 1;')).toBeInTheDocument();
+  });
+
   it('registers Monaco definition providers that proxy to the language IPC bridge', async () => {
     vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({
       success: true,
@@ -1113,6 +1347,89 @@ describe('CodePane', () => {
         },
       },
     ]);
+  });
+
+  it('registers Monaco completion and signature providers that proxy to the language IPC bridge', async () => {
+    vi.mocked(window.electronAPI.codePaneGetCompletionItems).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          label: 'formatValue',
+          detail: 'mock detail',
+          documentation: 'mock docs',
+          kind: 3,
+          insertText: 'formatValue()',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockResolvedValue({
+      success: true,
+      data: {
+        signatures: [
+          {
+            label: 'formatValue(value: string)',
+            documentation: 'signature docs',
+            parameters: [
+              {
+                label: 'value: string',
+              },
+            ],
+          },
+        ],
+        activeSignature: 0,
+        activeParameter: 0,
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    await waitFor(() => {
+      expect(fakeMonacoState.completionProviders.get('typescript')).toBeDefined();
+      expect(fakeMonacoState.signatureHelpProviders.get('typescript')).toBeDefined();
+    });
+
+    const completionProvider = fakeMonacoState.completionProviders.get('typescript');
+    const completionResult = await completionProvider?.provideCompletionItems(
+      fakeMonacoState.lastEditorModel,
+      { lineNumber: 1, column: 15 },
+      {},
+    ) as { suggestions: Array<{ label: string; insertText: string }> };
+
+    expect(window.electronAPI.codePaneGetCompletionItems).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      language: 'typescript',
+      position: {
+        lineNumber: 1,
+        column: 15,
+      },
+      triggerKind: 1,
+    });
+    expect(completionResult.suggestions[0]).toMatchObject({
+      label: 'formatValue',
+      insertText: 'formatValue()',
+    });
+
+    const signatureProvider = fakeMonacoState.signatureHelpProviders.get('typescript');
+    const signatureResult = await signatureProvider?.provideSignatureHelp(
+      fakeMonacoState.lastEditorModel,
+      { lineNumber: 1, column: 18 },
+    ) as { value: { signatures: Array<{ label: string }> } };
+
+    expect(window.electronAPI.codePaneGetSignatureHelp).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      language: 'typescript',
+      position: {
+        lineNumber: 1,
+        column: 18,
+      },
+    });
+    expect(signatureResult.value.signatures[0]).toMatchObject({
+      label: 'formatValue(value: string)',
+    });
   });
 
   it('opens the first definition target on Ctrl/Cmd-click', async () => {

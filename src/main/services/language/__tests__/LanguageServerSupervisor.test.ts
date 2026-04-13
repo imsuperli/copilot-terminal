@@ -163,6 +163,99 @@ describe('LanguageServerSupervisor', () => {
       },
     ]);
 
+    const completions = await supervisor.getCompletionItems(resolution, filePath, {
+      lineNumber: 1,
+      column: 1,
+    });
+    expect(completions).toEqual([
+      {
+        label: 'mockCompletion',
+        detail: 'Mock detail',
+        documentation: '**Mock Completion**',
+        kind: 3,
+        insertText: 'mockCompletion()',
+        range: {
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 5,
+        },
+      },
+    ]);
+
+    const signatureHelp = await supervisor.getSignatureHelp(resolution, filePath, {
+      lineNumber: 1,
+      column: 5,
+    }, {
+      triggerCharacter: '(',
+    });
+    expect(signatureHelp).toEqual({
+      signatures: [
+        {
+          label: 'mockCompletion(value: string)',
+          documentation: '**Mock Signature**',
+          parameters: [
+            {
+              label: 'value: string',
+              documentation: 'value parameter',
+            },
+          ],
+        },
+      ],
+      activeSignature: 0,
+      activeParameter: 0,
+    });
+
+    const renameEdits = await supervisor.renameSymbol(resolution, filePath, {
+      lineNumber: 1,
+      column: 1,
+    }, 'RenamedMain');
+    expect(renameEdits).toEqual([
+      {
+        filePath,
+        range: {
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 5,
+        },
+        newText: 'RenamedMain',
+      },
+    ]);
+
+    const formattingEdits = await supervisor.formatDocument(resolution, filePath, {
+      tabSize: 2,
+      insertSpaces: true,
+    });
+    expect(formattingEdits).toEqual([
+      {
+        filePath,
+        range: {
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 5,
+        },
+        newText: 'Main',
+      },
+    ]);
+
+    const workspaceSymbols = await supervisor.getWorkspaceSymbols(resolution, 'Main', 20);
+    expect(workspaceSymbols).toEqual([
+      {
+        name: 'Main',
+        kind: 5,
+        filePath,
+        range: {
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 5,
+        },
+        containerName: 'mock',
+      },
+    ]);
+
     await supervisor.closeDocument(resolution, 'pane-1:/workspace/src/Main.java', filePath);
 
     await waitForCondition(() => runtimeEvents.some((event) => event.state === 'stopped'));
