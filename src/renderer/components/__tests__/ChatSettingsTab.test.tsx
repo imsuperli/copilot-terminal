@@ -129,7 +129,7 @@ describe('ChatSettingsTab', () => {
     await user.type(screen.getByLabelText('Provider 名称'), 'Codex Gateway');
     await user.selectOptions(screen.getByLabelText('Provider 类型'), 'openai-compatible');
     await user.type(screen.getByLabelText('API Key'), 'sk-test');
-    await user.type(screen.getByLabelText('Base URL（可选）'), 'https://api.example.com/codex');
+    await user.type(screen.getByLabelText('Base URL'), 'https://api.example.com/codex');
     const protocolSelect = screen.getByText('协议类型').closest('label')?.querySelector('select');
     expect(protocolSelect).not.toBeNull();
     await user.selectOptions(protocolSelect as HTMLSelectElement, 'responses');
@@ -157,6 +157,97 @@ describe('ChatSettingsTab', () => {
         },
       });
     });
+  });
+
+  it('renders base url above api key in the provider form', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '添加 Provider' }));
+
+    const baseUrlInput = screen.getByLabelText('Base URL');
+    const apiKeyInput = screen.getByLabelText('API Key');
+    expect(baseUrlInput.compareDocumentPosition(apiKeyInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('rejects an openai-compatible provider when base url is not a valid http url', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '添加 Provider' }));
+    await user.type(screen.getByLabelText('Provider 名称'), 'Codex Gateway');
+    await user.selectOptions(screen.getByLabelText('Provider 类型'), 'openai-compatible');
+    await user.type(screen.getByLabelText('Base URL'), 'sk-test');
+    await user.type(screen.getByLabelText('API Key'), 'sk-valid');
+    await user.type(screen.getByPlaceholderText(/claude-sonnet-4-5/), 'gpt-5.4');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(window.electronAPI.updateSettings).not.toHaveBeenCalled();
+    expect(await screen.findByText('Base URL 必须是合法的 http:// 或 https:// 地址。')).toBeInTheDocument();
+  });
+
+  it('rejects an api key that looks like a url', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '添加 Provider' }));
+    await user.type(screen.getByLabelText('Provider 名称'), 'Codex Gateway');
+    await user.selectOptions(screen.getByLabelText('Provider 类型'), 'openai-compatible');
+    await user.type(screen.getByLabelText('Base URL'), 'https://api.example.com/v1');
+    await user.type(screen.getByLabelText('API Key'), 'https://api.example.com/v1');
+    await user.type(screen.getByPlaceholderText(/claude-sonnet-4-5/), 'gpt-5.4');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(window.electronAPI.updateSettings).not.toHaveBeenCalled();
+    expect(await screen.findByText('API Key 不能以 http:// 或 https:// 开头。')).toBeInTheDocument();
   });
 
   it('does not re-add a deleted model when the previous default model was removed', async () => {

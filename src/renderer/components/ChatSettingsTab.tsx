@@ -65,6 +65,19 @@ function parseModels(modelsText: string): string[] {
   ));
 }
 
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export const ChatSettingsTab: React.FC = () => {
   const { t } = useI18n();
   const [chatSettings, setChatSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
@@ -146,12 +159,28 @@ export const ChatSettingsTab: React.FC = () => {
 
   const handleSaveProvider = useCallback(async () => {
     const models = parseModels(providerForm.modelsText);
+    const baseUrl = providerForm.baseUrl.trim();
     const providerName = providerForm.name.trim();
     const apiKey = providerForm.apiKey.trim();
     const requestedDefaultModel = providerForm.defaultModel.trim();
 
     if (!providerName || !apiKey || models.length === 0) {
       setFormError(t('settings.chat.formValidationError'));
+      return;
+    }
+
+    if (providerForm.type === 'openai-compatible' && !baseUrl) {
+      setFormError(t('settings.chat.baseUrlRequiredError'));
+      return;
+    }
+
+    if (providerForm.type === 'openai-compatible' && !isValidHttpUrl(baseUrl)) {
+      setFormError(t('settings.chat.baseUrlInvalidError'));
+      return;
+    }
+
+    if (isHttpUrl(apiKey)) {
+      setFormError(t('settings.chat.apiKeyInvalidError'));
       return;
     }
 
@@ -164,8 +193,8 @@ export const ChatSettingsTab: React.FC = () => {
       id: providerId,
       type: providerForm.type,
       name: providerName,
-      baseUrl: providerForm.type === 'openai-compatible' && providerForm.baseUrl.trim()
-        ? providerForm.baseUrl.trim()
+      baseUrl: providerForm.type === 'openai-compatible' && baseUrl
+        ? baseUrl
         : undefined,
       wireApi: providerForm.type === 'openai-compatible'
         ? providerForm.wireApi
@@ -339,16 +368,6 @@ export const ChatSettingsTab: React.FC = () => {
               </label>
 
               <label className="flex flex-col gap-2 md:col-span-2">
-                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.apiKeyLabel')}</span>
-                <input
-                  value={providerForm.apiKey}
-                  onChange={(event) => handleProviderFieldChange('apiKey', event.target.value)}
-                  placeholder={t('settings.chat.apiKeyPlaceholder')}
-                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
-                />
-              </label>
-
-              <label className="flex flex-col gap-2 md:col-span-2">
                 <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.baseUrlLabel')}</span>
                 <input
                   value={providerForm.baseUrl}
@@ -356,6 +375,16 @@ export const ChatSettingsTab: React.FC = () => {
                   placeholder={t('settings.chat.baseUrlPlaceholder')}
                   disabled={providerForm.type !== 'openai-compatible'}
                   className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </label>
+
+              <label className="flex flex-col gap-2 md:col-span-2">
+                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.apiKeyLabel')}</span>
+                <input
+                  value={providerForm.apiKey}
+                  onChange={(event) => handleProviderFieldChange('apiKey', event.target.value)}
+                  placeholder={t('settings.chat.apiKeyPlaceholder')}
+                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
                 />
               </label>
 
