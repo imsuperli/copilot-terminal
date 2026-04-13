@@ -467,6 +467,25 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     () => terminalPanes.find((candidate) => candidate.id === resolvedLinkedPaneId) ?? null,
     [resolvedLinkedPaneId, terminalPanes],
   );
+  const optimisticSshContext = useMemo(() => {
+    if (!linkedPane || getPaneBackend(linkedPane) !== 'ssh' || !linkedPane.ssh) {
+      return undefined;
+    }
+
+    const host = linkedPane.ssh.host?.trim();
+    const user = linkedPane.ssh.user?.trim();
+    if (!host || !user) {
+      return undefined;
+    }
+
+    return {
+      host,
+      user,
+      cwd: linkedPane.cwd || linkedPane.ssh.remoteCwd,
+      windowId,
+      paneId: linkedPane.id,
+    };
+  }, [linkedPane, windowId]);
   const hasExecutableLinkedSsh = hasExecutableSshBinding(linkedPane);
   const providers = settings.providers;
   const selectedProviderId = agentState?.providerId ?? chatState.activeProviderId ?? settings.activeProviderId ?? providers[0]?.id ?? '';
@@ -798,15 +817,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       return;
     }
 
-    let sshContext: ChatSshContext | undefined;
-    try {
-      sshContext = await resolveSshContext();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setErrorMessage(message);
-      return;
-    }
-
     const previousHasLiveTask = hasLiveTaskRef.current;
     const previousChat = {
       ...chatState,
@@ -821,7 +831,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       model: selectedModel,
       text: trimmed,
       linkedPaneId: resolvedLinkedPaneId,
-      sshContext,
+      sshContext: optimisticSshContext,
       previousMessages: chatState.messages,
       previousTask: agentState,
     });
@@ -829,6 +839,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setComposerValue('');
     setErrorMessage(null);
     autoScrollPinnedRef.current = true;
+    setLiveAgentTask(optimisticTask);
     setOptimisticTask(optimisticTask);
     persistChatState((currentChat) => ({
       ...currentChat,
@@ -840,7 +851,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       isStreaming: true,
     }), true);
 
+    let sshContext: ChatSshContext | undefined;
     try {
+      sshContext = await resolveSshContext();
+
       const response = await window.electronAPI.agentSend({
         paneId: pane.id,
         windowId,
@@ -908,6 +922,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     selectedModel,
     selectedProvider,
     settings.defaultSystemPrompt,
+    optimisticSshContext,
     t,
     windowId,
   ]);

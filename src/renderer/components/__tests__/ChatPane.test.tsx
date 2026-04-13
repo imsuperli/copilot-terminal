@@ -502,6 +502,178 @@ describe('ChatPane', () => {
     expect(screen.getByText('Thinking...')).toBeInTheDocument();
   });
 
+  it('shows optimistic thinking immediately for follow-up messages before SSH preflight resolves', async () => {
+    const user = userEvent.setup();
+    let resolveProfile:
+      | ((value: { success: true; data: any }) => void)
+      | undefined;
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentSend).mockResolvedValue({
+      success: true,
+      data: {
+        taskId: 'task-1',
+        status: 'running',
+      },
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.getSSHProfile).mockImplementation(() => (
+      new Promise((resolve) => {
+        resolveProfile = resolve as (value: { success: true; data: any }) => void;
+      })
+    ));
+
+    const existingMessages = [
+      {
+        id: 'user-previous-1',
+        role: 'user' as const,
+        content: '先看下磁盘',
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: 'assistant-previous-1',
+        role: 'assistant' as const,
+        content: '磁盘主要被日志占用。',
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'SSH Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [0.5, 0.5],
+            children: [
+              {
+                type: 'pane',
+                id: 'ssh-pane-1',
+                pane: {
+                  id: 'ssh-pane-1',
+                  cwd: '/srv/app',
+                  command: '',
+                  status: WindowStatus.Running,
+                  pid: 101,
+                  backend: 'ssh',
+                  ssh: {
+                    profileId: 'profile-1',
+                    remoteCwd: '/srv/app',
+                  },
+                },
+              },
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: existingMessages,
+                    linkedPaneId: 'ssh-pane-1',
+                    agent: createAgentSnapshot({
+                      status: 'completed',
+                      timeline: [
+                        {
+                          id: 'user-previous-1',
+                          taskId: 'task-1',
+                          paneId: 'chat-pane-1',
+                          timestamp: new Date().toISOString(),
+                          kind: 'user-message',
+                          status: 'completed',
+                          content: '先看下磁盘',
+                        },
+                        {
+                          id: 'assistant-previous-1',
+                          taskId: 'task-1',
+                          paneId: 'chat-pane-1',
+                          timestamp: new Date().toISOString(),
+                          kind: 'assistant-message',
+                          status: 'completed',
+                          content: '磁盘主要被日志占用。',
+                        },
+                      ],
+                      messages: existingMessages,
+                    }),
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '继续看下 inode');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(await screen.findByText('继续看下 inode')).toBeInTheDocument();
+    expect(screen.getByText('Agent · Thinking')).toBeInTheDocument();
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    expect(window.electronAPI.agentSend).not.toHaveBeenCalled();
+
+    resolveProfile?.({
+      success: true,
+      data: {
+        id: 'profile-1',
+        name: 'Prod',
+        host: '10.0.0.20',
+        port: 22,
+        user: 'root',
+        authType: 'password',
+      },
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
+        text: '继续看下 inode',
+        linkedPaneId: 'ssh-pane-1',
+      }));
+    });
+  });
+
   it('keeps optimistic thinking visible while only internal bootstrap events have arrived', async () => {
     const user = userEvent.setup();
     const listeners = createListenerMap();
