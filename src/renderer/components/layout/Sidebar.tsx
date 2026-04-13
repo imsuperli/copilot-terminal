@@ -95,6 +95,7 @@ export function Sidebar({
   const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [hasMountedSettingsPanel, setHasMountedSettingsPanel] = useState(false);
   const [isQuickNavPanelOpen, setIsQuickNavPanelOpen] = useState(false);
   const [isAboutPanelOpen, setIsAboutPanelOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<CustomCategory | null>(null);
@@ -677,7 +678,10 @@ export function Sidebar({
           <div className="flex items-center gap-2">
             <button
               className="flex-1 flex items-center justify-start gap-2 px-3 py-2 rounded-lg text-sm text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--accent-foreground))] transition-colors"
-              onClick={() => setIsSettingsPanelOpen(true)}
+              onClick={() => {
+                setHasMountedSettingsPanel(true);
+                setIsSettingsPanelOpen(true);
+              }}
             >
               <Settings className="h-4 w-4" />
               <span>{t('settings.title')}</span>
@@ -836,7 +840,7 @@ export function Sidebar({
         variant="danger"
       />
 
-      {isSettingsPanelOpen && (
+      {hasMountedSettingsPanel && (
         <Suspense fallback={null}>
           <LazySettingsPanel
             open={isSettingsPanelOpen}

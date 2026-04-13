@@ -29,9 +29,6 @@ describe('PluginRegistryStore', () => {
           status: 'installed',
         },
       },
-      globalLanguageBindings: {
-        ' java ': ' acme.java-language ',
-      },
       globalPluginSettings: {
         ' acme.java-language ': {
           ' trace.server ': 'verbose',
@@ -44,9 +41,6 @@ describe('PluginRegistryStore', () => {
     const registry = await store.readRegistry();
 
     expect(Object.keys(registry.plugins)).toEqual(['acme.java-language']);
-    expect(registry.globalLanguageBindings).toEqual({
-      java: 'acme.java-language',
-    });
     expect(registry.globalPluginSettings).toEqual({
       'acme.java-language': {
         'trace.server': 'verbose',
@@ -54,7 +48,7 @@ describe('PluginRegistryStore', () => {
     });
   });
 
-  it('removes global bindings and settings when uninstalling a plugin', async () => {
+  it('removes global plugin settings when uninstalling a plugin', async () => {
     const store = new PluginRegistryStore({ filePath });
 
     await store.upsert('acme.java-language', {
@@ -64,7 +58,6 @@ describe('PluginRegistryStore', () => {
       enabledByDefault: true,
       status: 'installed',
     });
-    await store.setGlobalLanguageBinding('java', 'acme.java-language');
     await store.setGlobalPluginSettings('acme.java-language', {
       'trace.server': 'verbose',
     });
@@ -73,7 +66,6 @@ describe('PluginRegistryStore', () => {
 
     const registry = await store.readRegistry();
     expect(registry.plugins).toEqual({});
-    expect(registry.globalLanguageBindings).toEqual({});
     expect(registry.globalPluginSettings).toEqual({});
   });
 

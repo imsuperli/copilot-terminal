@@ -84,7 +84,6 @@ const electronAPI: ElectronAPI = {
   updatePlugin: (config) => ipcRenderer.invoke('update-plugin', config),
   uninstallPlugin: (config) => ipcRenderer.invoke('uninstall-plugin', config),
   setPluginEnabled: (config) => ipcRenderer.invoke('set-plugin-enabled', config),
-  setPluginLanguageBinding: (config) => ipcRenderer.invoke('set-plugin-language-binding', config),
   setPluginSettings: (config) => ipcRenderer.invoke('set-plugin-settings', config),
   listSSHProfiles: () => ipcRenderer.invoke('list-ssh-profiles'),
   getSSHAlgorithmCatalog: () => ipcRenderer.invoke('get-ssh-algorithm-catalog'),

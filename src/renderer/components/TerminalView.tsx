@@ -250,6 +250,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   // 鍒囨崲闈㈡澘鐘舵€?
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [hasMountedSettingsPanel, setHasMountedSettingsPanel] = useState(false);
   const [sshPortForwardTarget, setSSHPortForwardTarget] = useState<{ windowId: string; paneId: string } | null>(null);
   const [sshSftpOpen, setSSHSftpOpen] = useState(false);
   const [sshMetricsOpen, setSSHMetricsOpen] = useState(false);
@@ -1007,7 +1008,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           activeWindowId={sidebarActiveWindowId}
           onWindowSelect={onWindowSwitch}
           onGroupSelect={onGroupSwitch}
-          onSettingsClick={() => setIsSettingsPanelOpen(true)}
+          onSettingsClick={() => {
+            setHasMountedSettingsPanel(true);
+            setIsSettingsPanelOpen(true);
+          }}
           onOpenCodePane={handleOpenCodePane}
           showOpenCodePaneAction={!isSshOnlyWindow || hasCodePaneInWindow}
           canOpenCodePane={hasCodePaneInWindow || Boolean(codePaneRootPath)}
@@ -1396,7 +1400,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       )}
 
       {/* 设置面板 */}
-      {isSettingsPanelOpen && (
+      {hasMountedSettingsPanel && (
         <Suspense fallback={null}>
           <LazySettingsPanel
             open={isSettingsPanelOpen}

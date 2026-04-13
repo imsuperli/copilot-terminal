@@ -25,7 +25,6 @@ export class PluginRegistryStore {
     const data = await readJsonFileOrDefault<PluginRegistry>(this.filePath, {
       schemaVersion: 1,
       plugins: {},
-      globalLanguageBindings: {},
       globalPluginSettings: {},
     });
 
@@ -54,12 +53,6 @@ export class PluginRegistryStore {
     const data = await this.readRegistry();
     delete data.plugins[normalizedPluginId];
 
-    if (data.globalLanguageBindings) {
-      data.globalLanguageBindings = Object.fromEntries(
-        Object.entries(data.globalLanguageBindings).filter(([, value]) => value !== normalizedPluginId),
-      );
-    }
-
     if (data.globalPluginSettings) {
       delete data.globalPluginSettings[normalizedPluginId];
     }
@@ -82,25 +75,6 @@ export class PluginRegistryStore {
     data.plugins[normalizedPluginId] = nextRecord;
     await this.writeRegistry(data);
     return nextRecord;
-  }
-
-  async setGlobalLanguageBinding(language: string, pluginId: string | null): Promise<Record<string, string>> {
-    const normalizedLanguage = requireNonEmptyString(language, 'Language id');
-    const normalizedPluginId = normalizeOptionalString(pluginId);
-    const data = await this.readRegistry();
-    const nextBindings = {
-      ...(data.globalLanguageBindings ?? {}),
-    };
-
-    if (!normalizedPluginId) {
-      delete nextBindings[normalizedLanguage];
-    } else {
-      nextBindings[normalizedLanguage] = normalizedPluginId;
-    }
-
-    data.globalLanguageBindings = nextBindings;
-    await this.writeRegistry(data);
-    return nextBindings;
   }
 
   async setGlobalPluginSettings(pluginId: string, values: Record<string, unknown>): Promise<Record<string, Record<string, unknown>>> {
@@ -139,17 +113,6 @@ function normalizePluginRegistry(value: PluginRegistry): PluginRegistry {
       )
     : {};
 
-  const globalLanguageBindings = value.globalLanguageBindings && typeof value.globalLanguageBindings === 'object'
-    ? Object.fromEntries(
-        Object.entries(value.globalLanguageBindings)
-          .map(([language, pluginId]) => [
-            normalizeOptionalString(language),
-            normalizeOptionalString(pluginId),
-          ] as const)
-          .filter(([language, pluginId]) => Boolean(language) && Boolean(pluginId)),
-      )
-    : {};
-
   const globalPluginSettings = value.globalPluginSettings && typeof value.globalPluginSettings === 'object'
     ? Object.fromEntries(
         Object.entries(value.globalPluginSettings)
@@ -162,7 +125,6 @@ function normalizePluginRegistry(value: PluginRegistry): PluginRegistry {
   return {
     schemaVersion: 1,
     plugins,
-    globalLanguageBindings,
     globalPluginSettings,
   };
 }

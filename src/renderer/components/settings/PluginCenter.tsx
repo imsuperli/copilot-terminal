@@ -4,7 +4,6 @@ import {
   Check,
   Download,
   FolderUp,
-  Globe,
   LoaderCircle,
   Plug,
   RefreshCw,
@@ -47,6 +46,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
 }) => {
   const { t } = useI18n();
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [hasLoadedCatalog, setHasLoadedCatalog] = useState(false);
   const [isHydrating, setIsHydrating] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [installedPlugins, setInstalledPlugins] = useState<PluginListItem[]>([]);
@@ -54,7 +54,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
   const [pluginRegistry, setPluginRegistry] = useState<PluginRegistry>({
     schemaVersion: 1,
     plugins: {},
-    globalLanguageBindings: {},
     globalPluginSettings: {},
   });
   const [workspacePluginSettings, setWorkspacePluginSettings] = useState<WorkspacePluginSettings>({});
@@ -79,7 +78,9 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
         window.electronAPI.getSettings(),
         window.electronAPI.listPlugins(),
         window.electronAPI.getPluginRegistry(),
-        window.electronAPI.listPluginCatalog({ refresh: refreshCatalog }),
+        refreshCatalog
+          ? window.electronAPI.listPluginCatalog({ refresh: true })
+          : Promise.resolve(null),
       ]);
 
       if (!settingsResponse.success || !settingsResponse.data) {
@@ -103,11 +104,13 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
         settingsResponse.data.plugins ?? {},
       ));
 
-      if (catalogResponse.success && catalogResponse.data) {
-        setCatalogEntries(catalogResponse.data);
-      } else if (!catalogResponse.success) {
-        setCatalogEntries([]);
-        setErrorMessage(catalogResponse.error || t('settings.plugins.errors.loadCatalog'));
+      if (catalogResponse) {
+        if (catalogResponse.success && catalogResponse.data) {
+          setCatalogEntries(catalogResponse.data);
+          setHasLoadedCatalog(true);
+        } else if (!catalogResponse.success) {
+          setErrorMessage(catalogResponse.error || t('settings.plugins.errors.loadCatalog'));
+        }
       }
     } catch (error) {
       console.error('Failed to load plugin center state:', error);
@@ -154,34 +157,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     const installedPluginIds = new Set(installedPlugins.map((plugin) => plugin.id));
     return catalogEntries.filter((entry) => !installedPluginIds.has(entry.id));
   }, [catalogEntries, installedPlugins]);
-
-  const languageBindingOptions = useMemo(() => {
-    const languages = new Map<string, PluginListItem[]>();
-
-    for (const plugin of installedPlugins) {
-      for (const language of plugin.languages ?? []) {
-        const currentPlugins = languages.get(language) ?? [];
-        currentPlugins.push(plugin);
-        languages.set(language, currentPlugins);
-      }
-    }
-
-    return Array.from(languages.entries())
-      .map(([language, plugins]) => ({
-        language,
-        plugins: [...plugins].sort((left, right) => left.name.localeCompare(right.name)),
-      }))
-      .filter(({ language, plugins }) => (
-        plugins.length > 1
-        || Boolean(pluginRegistry.globalLanguageBindings?.[language])
-        || Boolean(workspacePluginSettings.languageBindings?.[language])
-      ))
-      .sort((left, right) => left.language.localeCompare(right.language));
-  }, [
-    installedPlugins,
-    pluginRegistry.globalLanguageBindings,
-    workspacePluginSettings.languageBindings,
-  ]);
 
   const isInitialLoad = isHydrating && !hasLoadedOnce;
   const hasPluginMutationInFlight = activeActionKeys.some((actionKey) => (
@@ -241,25 +216,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     setInstalledPlugins((currentPlugins) => currentPlugins.filter((plugin) => plugin.id !== pluginId));
   }, []);
 
-  const applyGlobalLanguageBinding = useCallback((language: string, pluginId: string | null) => {
-    setPluginRegistry((currentRegistry) => {
-      const nextBindings = {
-        ...(currentRegistry.globalLanguageBindings ?? {}),
-      };
-
-      if (pluginId) {
-        nextBindings[language] = pluginId;
-      } else {
-        delete nextBindings[language];
-      }
-
-      return {
-        ...currentRegistry,
-        globalLanguageBindings: nextBindings,
-      };
-    });
-  }, []);
-
   const applyGlobalPluginSettings = useCallback((pluginId: string, values: Record<string, unknown>) => {
     setPluginRegistry((currentRegistry) => {
       const nextSettings = {
@@ -294,6 +250,10 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
 
     return null;
   }, [catalogRefreshing, hasLoadedOnce, hasPluginMutationInFlight, isHydrating, t]);
+
+  const handleLoadCatalog = useCallback(() => {
+    void loadPluginState({ refreshCatalog: true });
+  }, [loadPluginState]);
 
   const performAction = useCallback(async <TData,>(
     actionKey: string,
@@ -412,37 +372,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
       },
     );
   }, [applyWorkspaceSettings, performAction, t]);
-
-  const handleSetLanguageBinding = useCallback(async (
-    scope: PluginSettingScope,
-    language: string,
-    pluginId: string | null,
-  ) => {
-    if (scope === 'global') {
-      await performAction(
-        `binding:${scope}:${language}`,
-        () => window.electronAPI.setPluginLanguageBinding({ scope, language, pluginId }),
-        {
-          successMessage: t('settings.plugins.messages.languageBindingSaved'),
-          onSuccess: () => {
-            applyGlobalLanguageBinding(language, pluginId);
-          },
-        },
-      );
-      return;
-    }
-
-    await performAction(
-      `binding:${scope}:${language}`,
-      () => window.electronAPI.setPluginLanguageBinding({ scope, language, pluginId }),
-      {
-        successMessage: t('settings.plugins.messages.languageBindingSaved'),
-        onSuccess: (settings?: Settings) => {
-          applyWorkspaceSettings(settings);
-        },
-      },
-    );
-  }, [applyGlobalLanguageBinding, applyWorkspaceSettings, performAction, t]);
 
   const handlePluginSettingDraftChange = useCallback((
     pluginId: string,
@@ -564,12 +493,12 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => void loadPluginState({ refreshCatalog: true })}
+              onClick={handleLoadCatalog}
               disabled={catalogRefreshing || hasPluginMutationInFlight}
               className="inline-flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {catalogRefreshing ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-              {t('settings.plugins.actions.refreshCatalog')}
+              {t(hasLoadedCatalog ? 'settings.plugins.actions.refreshCatalog' : 'settings.plugins.actions.loadCatalog')}
             </button>
             <button
               type="button"
@@ -593,93 +522,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
           </div>
         )}
       </section>
-
-      {languageBindingOptions.length > 0 && (
-        <section className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Globe size={18} className="text-[rgb(var(--primary))]" />
-          <h3 className="text-base font-semibold text-white">{t('settings.plugins.sections.languageBindings')}</h3>
-        </div>
-        <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
-          <p className="max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">
-            {t('settings.plugins.languageBindingsDescription')}
-          </p>
-
-          {isInitialLoad ? (
-            <SectionLoadingState label={t('settings.plugins.loadingSection')} />
-          ) : (
-            <div className="mt-5 space-y-4">
-              {languageBindingOptions.map(({ language, plugins }) => {
-                const globalBinding = pluginRegistry.globalLanguageBindings?.[language] ?? '';
-                const workspaceBinding = workspacePluginSettings.languageBindings?.[language] ?? '';
-
-                return (
-                  <div
-                    key={language}
-                    className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4"
-                  >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold text-white">{language}</div>
-                        <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
-                          {plugins.map((plugin) => plugin.name).join(' / ')}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-2 lg:min-w-[480px]">
-                        <label className="text-sm text-[rgb(var(--foreground))]">
-                          <span className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
-                            {t('settings.plugins.scope.global')}
-                          </span>
-                          <select
-                            aria-label={t('settings.plugins.aria.globalLanguageBinding', { language })}
-                            value={globalBinding}
-                            disabled={isActionActive(`binding:global:${language}`)}
-                            onChange={(event) => void handleSetLanguageBinding(
-                              'global',
-                              language,
-                              event.target.value || null,
-                            )}
-                            className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
-                          >
-                            <option value="">{t('settings.plugins.binding.none')}</option>
-                            {plugins.map((plugin) => (
-                              <option key={plugin.id} value={plugin.id}>{plugin.name}</option>
-                            ))}
-                          </select>
-                        </label>
-
-                        <label className="text-sm text-[rgb(var(--foreground))]">
-                          <span className="mb-2 block text-xs font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
-                            {t('settings.plugins.scope.workspace')}
-                          </span>
-                          <select
-                            aria-label={t('settings.plugins.aria.workspaceLanguageBinding', { language })}
-                            value={workspaceBinding || '__inherit__'}
-                            disabled={isActionActive(`binding:workspace:${language}`)}
-                            onChange={(event) => void handleSetLanguageBinding(
-                              'workspace',
-                              language,
-                              event.target.value === '__inherit__' ? null : event.target.value,
-                            )}
-                            className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
-                          >
-                            <option value="__inherit__">{t('settings.plugins.binding.useGlobal')}</option>
-                            {plugins.map((plugin) => (
-                              <option key={plugin.id} value={plugin.id}>{plugin.name}</option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        </section>
-      )}
 
       <section className="space-y-4">
         <div className="flex items-center gap-3">
@@ -834,12 +676,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         )}
                       </div>
 
-                      {(plugin.description || plugin.summary) && (
-                        <p className="mt-3 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">
-                          {plugin.description ?? plugin.summary}
-                        </p>
-                      )}
-
                       <div className="mt-4 flex flex-wrap gap-2">
                         {(plugin.languages ?? []).map((language) => (
                           <span
@@ -849,6 +685,9 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                             {language}
                           </span>
                         ))}
+                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-3 py-1 text-xs text-[rgb(var(--muted-foreground))]">
+                          {formatRuntimeState(plugin, t)}
+                        </span>
                       </div>
 
                       <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -918,13 +757,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                     </div>
                   </div>
 
-                  <div className="mt-5 grid gap-4 lg:grid-cols-4">
-                    <InfoTile label={t('settings.plugins.labels.version')} value={plugin.version ?? '--'} />
-                    <InfoTile label={t('settings.plugins.labels.latestVersion')} value={plugin.latestVersion ?? '--'} />
-                    <InfoTile label={t('settings.plugins.labels.runtime')} value={formatRuntimeState(plugin, t)} />
-                    <InfoTile label={t('settings.plugins.labels.installPath')} value={plugin.installPath ?? '--'} mono />
-                  </div>
-
                   {(plugin.manifest?.capabilities.some((capability) => (capability.requirements?.length ?? 0) > 0)
                     || globalSettingsSchema.length > 0
                     || workspaceSettingsSchema.length > 0) && (
@@ -986,6 +818,21 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
 
         {isInitialLoad ? (
           <SectionLoadingState label={t('settings.plugins.loadingSection')} />
+        ) : !hasLoadedCatalog ? (
+          <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
+            <Plug size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
+            <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.availableNotLoadedTitle')}</p>
+            <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.availableNotLoadedDescription')}</p>
+            <button
+              type="button"
+              onClick={handleLoadCatalog}
+              disabled={catalogRefreshing || hasPluginMutationInFlight}
+              className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[rgb(var(--primary))] px-4 py-3 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {catalogRefreshing ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+              {t('settings.plugins.actions.loadCatalog')}
+            </button>
+          </div>
         ) : availableCatalogEntries.length === 0 ? (
           <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
             <Plug size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />

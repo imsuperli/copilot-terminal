@@ -487,12 +487,6 @@ export interface SetPluginEnabledConfig {
   scope?: PluginBindingScope;
 }
 
-export interface SetPluginLanguageBindingConfig {
-  language: string;
-  pluginId: string | null;
-  scope?: PluginBindingScope;
-}
-
 export interface SetPluginSettingsConfig {
   pluginId: string;
   values: Record<string, unknown>;
@@ -659,7 +653,6 @@ export interface ElectronAPI {
   updatePlugin: (config: UpdatePluginConfig) => Promise<IpcResponse<PluginListItem>>;
   uninstallPlugin: (config: UninstallPluginConfig) => Promise<IpcResponse<void>>;
   setPluginEnabled: (config: SetPluginEnabledConfig) => Promise<IpcResponse<Settings>>;
-  setPluginLanguageBinding: (config: SetPluginLanguageBindingConfig) => Promise<IpcResponse<Settings>>;
   setPluginSettings: (config: SetPluginSettingsConfig) => Promise<IpcResponse<Settings>>;
   listSSHProfiles: () => Promise<IpcResponse<SSHProfile[]>>;
   getSSHAlgorithmCatalog: () => Promise<IpcResponse<SSHAlgorithmCatalog>>;

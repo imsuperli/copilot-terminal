@@ -3,6 +3,7 @@ import path from 'path';
 import semver from 'semver';
 import type {
   InstalledPluginRecord,
+  PluginCapability,
   PluginCatalogEntry,
   PluginListItem,
   PluginManifest,
@@ -15,7 +16,7 @@ import type {
 } from '../../../shared/types/electron-api';
 import { normalizeOptionalString } from '../ssh/storeUtils';
 import { PluginCatalogService } from './PluginCatalogService';
-import { PluginInstallerService } from './PluginInstallerService';
+import { InstalledPluginResult, PluginInstallerService } from './PluginInstallerService';
 import { PluginManifestValidator } from './PluginManifestValidator';
 import { PluginRegistryStore } from './PluginRegistryStore';
 
@@ -24,6 +25,11 @@ export interface PluginManagerOptions {
   catalogService: PluginCatalogService;
   installerService: PluginInstallerService;
   manifestValidator?: PluginManifestValidator;
+}
+
+export interface PluginInstallResult {
+  item: PluginListItem;
+  replacedPluginIds: string[];
 }
 
 export class PluginManager {
@@ -57,7 +63,7 @@ export class PluginManager {
     return await this.catalogService.list(query);
   }
 
-  async installMarketplacePlugin(config: InstallMarketplacePluginConfig): Promise<PluginListItem> {
+  async installMarketplacePlugin(config: InstallMarketplacePluginConfig): Promise<PluginInstallResult> {
     const pluginId = requireNonEmptyString(config.pluginId, 'Plugin id');
     const catalogEntries = await this.catalogService.list({ refresh: true });
     const catalogEntry = catalogEntries.find((entry) => entry.id === pluginId);
@@ -66,22 +72,25 @@ export class PluginManager {
       throw new Error(`Plugin ${pluginId} was not found in the marketplace catalog`);
     }
 
-    const { record } = await this.installerService.installFromMarketplace(catalogEntry, {
-      version: config.version,
-      enableByDefault: config.enableByDefault,
-    });
-    return await this.buildPluginListItem(pluginId, record, catalogEntry);
+    return await this.installPluginAndResolveConflicts(
+      async () => await this.installerService.installFromMarketplace(catalogEntry, {
+        version: config.version,
+        enableByDefault: config.enableByDefault,
+      }),
+      catalogEntry,
+    );
   }
 
-  async installLocalPlugin(config: InstallLocalPluginConfig): Promise<PluginListItem> {
+  async installLocalPlugin(config: InstallLocalPluginConfig): Promise<PluginInstallResult> {
     const filePath = requireNonEmptyString(config.filePath, 'Plugin file path');
-    const { manifest, record } = await this.installerService.installFromLocalPath(filePath, {
-      enableByDefault: config.enableByDefault,
-    });
-    return await this.buildPluginListItem(manifest.id, record);
+    return await this.installPluginAndResolveConflicts(
+      async () => await this.installerService.installFromLocalPath(filePath, {
+        enableByDefault: config.enableByDefault,
+      }),
+    );
   }
 
-  async updatePlugin(config: UpdatePluginConfig): Promise<PluginListItem> {
+  async updatePlugin(config: UpdatePluginConfig): Promise<PluginInstallResult> {
     const pluginId = requireNonEmptyString(config.pluginId, 'Plugin id');
     const currentRecord = await this.registryStore.get(pluginId);
     if (!currentRecord) {
@@ -94,11 +103,13 @@ export class PluginManager {
       throw new Error(`Plugin ${pluginId} does not have a marketplace entry`);
     }
 
-    const { record } = await this.installerService.installFromMarketplace(catalogEntry, {
-      version: config.version,
-      enableByDefault: currentRecord.enabledByDefault,
-    });
-    return await this.buildPluginListItem(pluginId, record, catalogEntry);
+    return await this.installPluginAndResolveConflicts(
+      async () => await this.installerService.installFromMarketplace(catalogEntry, {
+        version: config.version,
+        enableByDefault: currentRecord.enabledByDefault,
+      }),
+      catalogEntry,
+    );
   }
 
   async uninstallPlugin(pluginId: string): Promise<void> {
@@ -109,16 +120,29 @@ export class PluginManager {
     await this.registryStore.setEnabledByDefault(pluginId, enabled);
   }
 
-  async setGlobalLanguageBinding(language: string, pluginId: string | null): Promise<void> {
-    await this.registryStore.setGlobalLanguageBinding(language, pluginId);
-  }
-
   async setGlobalPluginSettings(pluginId: string, values: Record<string, unknown>): Promise<void> {
     await this.registryStore.setGlobalPluginSettings(pluginId, values);
   }
 
   async getRegistrySnapshot() {
     return await this.registryStore.readRegistry();
+  }
+
+  private async installPluginAndResolveConflicts(
+    install: () => Promise<InstalledPluginResult>,
+    catalogEntry?: PluginCatalogEntry,
+  ): Promise<PluginInstallResult> {
+    const { manifest, record } = await install();
+    const replacedPluginIds = await this.findConflictingInstalledPluginIds(manifest);
+
+    await Promise.all(replacedPluginIds.map(async (pluginId) => {
+      await this.installerService.uninstall(pluginId);
+    }));
+
+    return {
+      item: await this.buildPluginListItem(manifest.id, record, catalogEntry),
+      replacedPluginIds,
+    };
   }
 
   private async buildPluginListItem(
@@ -178,6 +202,52 @@ export class PluginManager {
       return [];
     }
   }
+
+  private async findConflictingInstalledPluginIds(manifest: PluginManifest): Promise<string[]> {
+    const registry = await this.registryStore.readRegistry();
+    const conflicts: string[] = [];
+
+    for (const [pluginId, record] of Object.entries(registry.plugins)) {
+      if (pluginId === manifest.id || record.status !== 'installed') {
+        continue;
+      }
+
+      const installedManifest = await this.readInstalledManifest(record.installPath);
+      if (!installedManifest) {
+        continue;
+      }
+
+      if (manifestsConflict(installedManifest, manifest)) {
+        conflicts.push(pluginId);
+      }
+    }
+
+    return conflicts.sort((left, right) => left.localeCompare(right));
+  }
+}
+
+function manifestsConflict(left: PluginManifest, right: PluginManifest): boolean {
+  return left.capabilities.some((leftCapability) => (
+    right.capabilities.some((rightCapability) => capabilitiesConflict(leftCapability, rightCapability))
+  ));
+}
+
+function capabilitiesConflict(left: PluginCapability, right: PluginCapability): boolean {
+  if (left.type !== right.type) {
+    return false;
+  }
+
+  return hasIntersection(left.languages ?? [], right.languages ?? [])
+    || hasIntersection(left.fileExtensions ?? [], right.fileExtensions ?? []);
+}
+
+function hasIntersection(left: string[], right: string[]): boolean {
+  if (left.length === 0 || right.length === 0) {
+    return false;
+  }
+
+  const rightValues = new Set(right.map((value) => value.toLowerCase()));
+  return left.some((value) => rightValues.has(value.toLowerCase()));
 }
 
 function shouldMarkUpdateAvailable(installedVersion: string | undefined, latestVersion: string | undefined): boolean {

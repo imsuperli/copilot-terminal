@@ -143,7 +143,6 @@ export interface InstalledPluginRecord {
 export interface PluginRegistry {
   schemaVersion: number;
   plugins: Record<string, InstalledPluginRecord>;
-  globalLanguageBindings?: Record<string, string>;
   globalPluginSettings?: Record<string, Record<string, unknown>>;
 }
 
@@ -172,6 +171,5 @@ export interface PluginListItem {
 export interface WorkspacePluginSettings {
   enabledPluginIds?: string[];
   disabledPluginIds?: string[];
-  languageBindings?: Record<string, string>;
   pluginSettings?: Record<string, Record<string, unknown>>;
 }

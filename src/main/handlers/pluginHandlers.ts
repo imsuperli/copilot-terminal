@@ -2,7 +2,6 @@ import { ipcMain } from 'electron';
 import type { Settings } from '../../shared/types/workspace';
 import {
   SetPluginEnabledConfig,
-  SetPluginLanguageBindingConfig,
   SetPluginSettingsConfig,
   UninstallPluginConfig,
 } from '../../shared/types/electron-api';
@@ -12,9 +11,7 @@ import { errorResponse, successResponse } from './HandlerResponse';
 export function registerPluginHandlers(ctx: HandlerContext) {
   const {
     pluginManager,
-    workspaceManager,
     getCurrentWorkspace,
-    setCurrentWorkspace,
     languageFeatureService,
   } = ctx;
 
@@ -60,9 +57,10 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
-      const item = await pluginManager.installMarketplacePlugin(config);
+      const result = await pluginManager.installMarketplacePlugin(config);
+      await clearWorkspacePluginReferences(ctx, result.replacedPluginIds);
       await languageFeatureService?.resetSessions();
-      return successResponse(item);
+      return successResponse(result.item);
     } catch (error) {
       return errorResponse(error);
     }
@@ -74,9 +72,10 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
-      const item = await pluginManager.installLocalPlugin(config);
+      const result = await pluginManager.installLocalPlugin(config);
+      await clearWorkspacePluginReferences(ctx, result.replacedPluginIds);
       await languageFeatureService?.resetSessions();
-      return successResponse(item);
+      return successResponse(result.item);
     } catch (error) {
       return errorResponse(error);
     }
@@ -88,9 +87,10 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
-      const item = await pluginManager.updatePlugin(config);
+      const result = await pluginManager.updatePlugin(config);
+      await clearWorkspacePluginReferences(ctx, result.replacedPluginIds);
       await languageFeatureService?.resetSessions();
-      return successResponse(item);
+      return successResponse(result.item);
     } catch (error) {
       return errorResponse(error);
     }
@@ -102,11 +102,7 @@ export function registerPluginHandlers(ctx: HandlerContext) {
         throw new Error('PluginManager not initialized');
       }
 
-      const workspace = getCurrentWorkspace();
-      if (workspace && isPluginReferencedByWorkspace(workspace.settings, config.pluginId)) {
-        throw new Error(`Plugin ${config.pluginId} is still referenced by the current workspace`);
-      }
-
+      await clearWorkspacePluginReferences(ctx, [config.pluginId]);
       await pluginManager.uninstallPlugin(config.pluginId);
       await languageFeatureService?.resetSessions();
       return successResponse();
@@ -154,46 +150,6 @@ export function registerPluginHandlers(ctx: HandlerContext) {
           ...currentSettings,
           enabledPluginIds: Array.from(enabledPluginIds).sort((left, right) => left.localeCompare(right)),
           disabledPluginIds: Array.from(disabledPluginIds).sort((left, right) => left.localeCompare(right)),
-        };
-      });
-
-      await languageFeatureService?.resetSessions();
-      return successResponse(settings);
-    } catch (error) {
-      return errorResponse(error);
-    }
-  });
-
-  ipcMain.handle('set-plugin-language-binding', async (_event, config: SetPluginLanguageBindingConfig) => {
-    try {
-      if (!pluginManager) {
-        throw new Error('PluginManager not initialized');
-      }
-
-      if ((config.scope ?? 'workspace') === 'global') {
-        await pluginManager.setGlobalLanguageBinding(config.language, config.pluginId);
-        await languageFeatureService?.resetSessions();
-        const workspace = getCurrentWorkspace();
-        if (!workspace) {
-          throw new Error('Workspace not loaded');
-        }
-        return successResponse(workspace.settings);
-      }
-
-      const settings = await updateWorkspacePluginSettings(ctx, (currentSettings) => {
-        const languageBindings = {
-          ...(currentSettings.languageBindings ?? {}),
-        };
-
-        if (!config.pluginId) {
-          delete languageBindings[config.language];
-        } else {
-          languageBindings[config.language] = config.pluginId;
-        }
-
-        return {
-          ...currentSettings,
-          languageBindings,
         };
       });
 
@@ -260,16 +216,67 @@ async function updateWorkspacePluginSettings(
   return updatedWorkspace.settings;
 }
 
-function isPluginReferencedByWorkspace(settings: Settings, pluginId: string): boolean {
-  const workspacePluginSettings = settings.plugins;
-  if (!workspacePluginSettings) {
-    return false;
+async function clearWorkspacePluginReferences(ctx: HandlerContext, pluginIds: string[]): Promise<Settings | null> {
+  const normalizedPluginIds = Array.from(new Set(pluginIds.filter((pluginId) => typeof pluginId === 'string' && pluginId.length > 0)));
+  if (normalizedPluginIds.length === 0) {
+    return null;
   }
 
-  return (workspacePluginSettings.enabledPluginIds ?? []).includes(pluginId)
-    || (workspacePluginSettings.disabledPluginIds ?? []).includes(pluginId)
-    || Object.values(workspacePluginSettings.languageBindings ?? {}).includes(pluginId)
-    || Object.prototype.hasOwnProperty.call(workspacePluginSettings.pluginSettings ?? {}, pluginId);
+  const workspace = ctx.getCurrentWorkspace();
+  if (!workspace || !ctx.workspaceManager) {
+    return null;
+  }
+
+  const currentPluginSettings = workspace.settings.plugins;
+  const nextPluginSettings = removePluginReferencesFromWorkspaceSettings(currentPluginSettings, normalizedPluginIds);
+
+  if (nextPluginSettings === currentPluginSettings) {
+    return workspace.settings;
+  }
+
+  const updatedWorkspace = {
+    ...workspace,
+    settings: {
+      ...workspace.settings,
+      plugins: nextPluginSettings,
+    },
+  };
+
+  await ctx.workspaceManager.saveWorkspace(updatedWorkspace);
+  ctx.setCurrentWorkspace(updatedWorkspace);
+  return updatedWorkspace.settings;
+}
+
+function removePluginReferencesFromWorkspaceSettings(
+  settings: Settings['plugins'],
+  pluginIds: string[],
+): Settings['plugins'] {
+  if (!settings) {
+    return settings;
+  }
+
+  const pluginIdSet = new Set(pluginIds);
+  const enabledPluginIds = (settings.enabledPluginIds ?? []).filter((pluginId) => !pluginIdSet.has(pluginId));
+  const disabledPluginIds = (settings.disabledPluginIds ?? []).filter((pluginId) => !pluginIdSet.has(pluginId));
+  const pluginSettings = Object.fromEntries(
+    Object.entries(settings.pluginSettings ?? {}).filter(([pluginId]) => !pluginIdSet.has(pluginId)),
+  );
+
+  const hasChanged = enabledPluginIds.length !== (settings.enabledPluginIds ?? []).length
+    || disabledPluginIds.length !== (settings.disabledPluginIds ?? []).length
+    || Object.keys(pluginSettings).length !== Object.keys(settings.pluginSettings ?? {}).length;
+
+  if (!hasChanged) {
+    return settings;
+  }
+
+  const nextSettings: NonNullable<Settings['plugins']> = {
+    ...(enabledPluginIds.length > 0 ? { enabledPluginIds } : {}),
+    ...(disabledPluginIds.length > 0 ? { disabledPluginIds } : {}),
+    ...(Object.keys(pluginSettings).length > 0 ? { pluginSettings } : {}),
+  };
+
+  return Object.keys(nextSettings).length > 0 ? nextSettings : undefined;
 }
 
 function buildWorkspacePluginSettingsSnapshot(

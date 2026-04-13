@@ -61,6 +61,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const [editingNavItem, setEditingNavItem] = useState<QuickNavItem | null>(null);
   const [showNavDialog, setShowNavDialog] = useState(false);
   const [currentTab, setCurrentTab] = useState<SettingsTab>('general');
+  const [hasVisitedPluginTab, setHasVisitedPluginTab] = useState(false);
   const [quickNavTab, setQuickNavTab] = useState<QuickNavSubTab>('ide');
 
   // StatusLine 配置状态
@@ -101,6 +102,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     void loadAvailableShells();
     void loadSupportedIDENames();
   }, [open]);
+
+  useEffect(() => {
+    if (currentTab === 'plugins') {
+      setHasVisitedPluginTab(true);
+    }
+  }, [currentTab]);
 
   const loadSettings = async () => {
     try {
@@ -1145,8 +1152,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                 </div>
               </Tabs.Content>
 
-              <Tabs.Content value="plugins" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
-                {currentTab === 'plugins' ? (
+              <Tabs.Content value="plugins" forceMount className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
+                {hasVisitedPluginTab ? (
                   <PluginCenter
                     statusLineConfig={statusLineConfig}
                     onToggleStatusLine={handleToggleStatusLine}

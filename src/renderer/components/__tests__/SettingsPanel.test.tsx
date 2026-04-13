@@ -213,9 +213,6 @@ describe('SettingsPanel', () => {
       },
       plugins: {
         enabledPluginIds: ['acme.java-language'],
-        languageBindings: {
-          java: 'acme.java-language',
-        },
         pluginSettings: {
           'acme.java-language': {
             'trace.server': 'verbose',
@@ -306,9 +303,6 @@ describe('SettingsPanel', () => {
             status: 'installed',
           },
         },
-        globalLanguageBindings: {
-          java: 'acme.java-language',
-        },
         globalPluginSettings: {
           'acme.java-language': {
             'java.home': '/Library/Java/JavaVirtualMachines/jdk-21',
@@ -364,16 +358,6 @@ describe('SettingsPanel', () => {
         },
       },
     });
-    vi.mocked(window.electronAPI.setPluginLanguageBinding).mockResolvedValue({
-      success: true,
-      data: {
-        ...workspaceSettings,
-        plugins: {
-          ...workspaceSettings.plugins,
-          languageBindings: {},
-        },
-      },
-    });
     vi.mocked(window.electronAPI.selectPluginPackage).mockResolvedValue({
       success: true,
       data: '/tmp/acme-python-language.zip',
@@ -404,9 +388,13 @@ describe('SettingsPanel', () => {
     await user.click(screen.getByRole('tab', { name: '插件' }));
 
     expect(await screen.findByRole('heading', { name: 'Java Language Support' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Python Language Support' })).toBeInTheDocument();
     expect(screen.getByText('Claude StatusLine')).toBeInTheDocument();
-    expect(window.electronAPI.listPluginCatalog).toHaveBeenCalled();
+    expect(window.electronAPI.listPluginCatalog).not.toHaveBeenCalled();
+
+    await user.click(screen.getAllByRole('button', { name: '加载目录' })[0]);
+
+    expect(await screen.findByRole('heading', { name: 'Python Language Support' })).toBeInTheDocument();
+    expect(window.electronAPI.listPluginCatalog).toHaveBeenCalledTimes(1);
 
     await user.selectOptions(
       screen.getByLabelText('Java Language Support 工作区启用模式'),
@@ -416,16 +404,6 @@ describe('SettingsPanel', () => {
       pluginId: 'acme.java-language',
       enabled: false,
       scope: 'workspace',
-    });
-
-    await user.selectOptions(
-      screen.getByLabelText('java 工作区语言绑定'),
-      '__inherit__',
-    );
-    expect(window.electronAPI.setPluginLanguageBinding).toHaveBeenCalledWith({
-      scope: 'workspace',
-      language: 'java',
-      pluginId: null,
     });
 
     await user.click(screen.getByRole('button', { name: '本地安装插件' }));
@@ -456,5 +434,73 @@ describe('SettingsPanel', () => {
       enabled: true,
       scope: 'global',
     });
+
+    await user.click(screen.getByRole('button', { name: '卸载' }));
+    expect(window.electronAPI.uninstallPlugin).toHaveBeenCalledWith({
+      pluginId: 'acme.java-language',
+    });
+  });
+
+  it('keeps the plugin center mounted across tab switches', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        ides: [],
+        plugins: {},
+      } as any,
+    });
+    vi.mocked(window.electronAPI.listPlugins).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'acme.java-language',
+          name: 'Java Language Support',
+          publisher: 'Acme',
+          source: 'marketplace',
+          installStatus: 'installed',
+          runtimeState: 'idle',
+          health: 'unknown',
+          enabledByDefault: true,
+          manifest: {
+            schemaVersion: 1,
+            id: 'acme.java-language',
+            name: 'Java Language Support',
+            publisher: 'Acme',
+            version: '1.0.0',
+            engines: {
+              app: '>=3.0.0',
+            },
+            capabilities: [],
+          },
+        },
+      ] as any,
+    });
+    vi.mocked(window.electronAPI.getPluginRegistry).mockResolvedValue({
+      success: true,
+      data: {
+        schemaVersion: 1,
+        plugins: {},
+        globalPluginSettings: {},
+      },
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: '插件' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.listPlugins).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(screen.getByRole('tab', { name: 'Chat' }));
+    await user.click(screen.getByRole('tab', { name: '插件' }));
+
+    expect(window.electronAPI.listPlugins).toHaveBeenCalledTimes(1);
   });
 });

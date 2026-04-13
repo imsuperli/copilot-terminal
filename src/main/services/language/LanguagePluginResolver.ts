@@ -78,32 +78,6 @@ export class LanguagePluginResolver {
       return null;
     }
 
-    const explicitBindingPluginId = resolveExplicitBinding(
-      normalizedLanguageId,
-      workspacePluginSettings,
-      registry,
-    );
-    if (explicitBindingPluginId) {
-      const explicitlyBoundPlugin = matchingPlugins.find((entry) => entry.plugin.pluginId === explicitBindingPluginId);
-      const usableCapabilities = explicitlyBoundPlugin
-        ? getUsableCapabilities(explicitlyBoundPlugin.capabilities, normalizedLanguageId)
-        : [];
-      if (
-        explicitlyBoundPlugin
-        && !isWorkspaceDisabled(explicitlyBoundPlugin.plugin.pluginId, workspacePluginSettings)
-        && usableCapabilities.length > 0
-      ) {
-        return await this.createResolution({
-          plugin: explicitlyBoundPlugin.plugin,
-          capability: chooseCapability(usableCapabilities),
-          languageId: normalizedLanguageId,
-          config,
-          registry,
-          workspacePluginSettings,
-        });
-      }
-    }
-
     const enabledPlugins = matchingPlugins.filter(({ plugin }) => (
       isPluginEnabled(plugin.record, plugin.pluginId, workspacePluginSettings)
     ));
@@ -263,16 +237,6 @@ function getUsableCapabilities(
   languageId: string,
 ): LanguageServerPluginCapability[] {
   return capabilities.filter((capability) => canUseCapabilityForLanguage(capability, languageId));
-}
-
-function resolveExplicitBinding(
-  languageId: string,
-  workspacePluginSettings: WorkspacePluginSettings,
-  registry: PluginRegistry,
-): string | null {
-  return workspacePluginSettings.languageBindings?.[languageId]
-    ?? registry.globalLanguageBindings?.[languageId]
-    ?? null;
 }
 
 function isWorkspaceDisabled(pluginId: string, workspacePluginSettings: WorkspacePluginSettings): boolean {

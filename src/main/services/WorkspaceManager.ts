@@ -1055,12 +1055,6 @@ function normalizeWorkspacePluginSettings(settings?: Settings['plugins']): Setti
     disabledPluginIds: Array.isArray(settings.disabledPluginIds)
       ? settings.disabledPluginIds.filter((value): value is string => typeof value === 'string' && value.length > 0)
       : undefined,
-    languageBindings: settings.languageBindings && typeof settings.languageBindings === 'object'
-      ? Object.fromEntries(
-          Object.entries(settings.languageBindings)
-            .filter(([, value]) => typeof value === 'string' && value.length > 0),
-        )
-      : undefined,
     pluginSettings: settings.pluginSettings && typeof settings.pluginSettings === 'object'
       ? Object.fromEntries(
           Object.entries(settings.pluginSettings)

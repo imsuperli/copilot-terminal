@@ -25,23 +25,10 @@ describe('LanguagePluginResolver', () => {
     await fs.remove(tempDir);
   });
 
-  it('prefers explicit bindings and merges global and workspace settings', async () => {
-    await writePlugin(tempDir, registryStore, {
-      id: 'acme.java-default',
-      enabledByDefault: true,
-      capability: {
-        languages: ['java'],
-        priority: 50,
-        runtime: {
-          type: 'java',
-          entry: 'server/default.jar',
-        },
-      },
-    });
-
+  it('merges global and workspace settings for the selected plugin', async () => {
     await writePlugin(tempDir, registryStore, {
       id: 'acme.java-workspace',
-      enabledByDefault: false,
+      enabledByDefault: true,
       capability: {
         languages: ['java'],
         priority: 10,
@@ -68,9 +55,6 @@ describe('LanguagePluginResolver', () => {
       rootPath: workspaceRoot,
       filePath,
       workspacePluginSettings: {
-        languageBindings: {
-          java: 'acme.java-workspace',
-        },
         pluginSettings: {
           'acme.java-workspace': {
             'java.home': '/opt/jdk-21',
@@ -117,11 +101,6 @@ describe('LanguagePluginResolver', () => {
     let resolution = await resolver.resolve({
       rootPath: workspaceRoot,
       filePath,
-      workspacePluginSettings: {
-        languageBindings: {
-          typescript: 'acme.ts-no-takeover',
-        },
-      },
     });
 
     expect(resolution).toBeNull();
@@ -156,9 +135,7 @@ describe('LanguagePluginResolver', () => {
       rootPath: workspaceRoot,
       filePath,
       workspacePluginSettings: {
-        languageBindings: {
-          typescript: 'acme.ts-takeover',
-        },
+        enabledPluginIds: ['acme.ts-takeover'],
       },
     });
 

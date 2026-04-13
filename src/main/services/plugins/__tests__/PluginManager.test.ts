@@ -82,9 +82,10 @@ describe('PluginManager', () => {
       filePath: packageRoot,
     });
 
-    expect(installed.id).toBe('acme.java-language');
-    expect(installed.enabledByDefault).toBe(true);
-    expect(installed.version).toBe('1.0.0');
+    expect(installed.replacedPluginIds).toEqual([]);
+    expect(installed.item.id).toBe('acme.java-language');
+    expect(installed.item.enabledByDefault).toBe(true);
+    expect(installed.item.version).toBe('1.0.0');
 
     const installedManifestPath = path.join(
       tempDir,
@@ -106,5 +107,91 @@ describe('PluginManager', () => {
       updateAvailable: true,
       enabledByDefault: true,
     });
+  });
+
+  it('replaces installed plugins that provide the same language-server capability', async () => {
+    const existingPluginPath = path.join(tempDir, 'plugin-data', 'packages', 'acme.java-language', '1.0.0');
+    await fs.ensureDir(existingPluginPath);
+    await fs.writeJson(path.join(existingPluginPath, 'plugin.json'), {
+      schemaVersion: 1,
+      id: 'acme.java-language',
+      name: 'Java Language Support',
+      publisher: 'Acme',
+      version: '1.0.0',
+      engines: {
+        app: '>=3.0.0',
+      },
+      capabilities: [
+        {
+          type: 'language-server',
+          languages: ['java'],
+          runtime: {
+            type: 'java',
+            entry: 'server/jdtls.jar',
+          },
+        },
+      ],
+    });
+    await registryStore.upsert('acme.java-language', {
+      source: 'marketplace',
+      installedVersion: '1.0.0',
+      installPath: existingPluginPath,
+      enabledByDefault: true,
+      status: 'installed',
+    });
+    await registryStore.setGlobalPluginSettings('acme.java-language', {
+      'trace.server': 'verbose',
+    });
+
+    const replacementRoot = path.join(tempDir, 'packages-src-replacement');
+    await fs.ensureDir(replacementRoot);
+    await fs.writeJson(path.join(replacementRoot, 'plugin.json'), {
+      schemaVersion: 1,
+      id: 'acme.alt-java-language',
+      name: 'Alternative Java Support',
+      publisher: 'Acme',
+      version: '2.0.0',
+      engines: {
+        app: '>=3.0.0',
+      },
+      capabilities: [
+        {
+          type: 'language-server',
+          languages: ['java'],
+          runtime: {
+            type: 'java',
+            entry: 'server/alt-jdtls.jar',
+          },
+        },
+      ],
+    });
+    await fs.ensureDir(path.join(replacementRoot, 'server'));
+    await fs.writeFile(path.join(replacementRoot, 'server', 'alt-jdtls.jar'), 'stub');
+
+    const manager = new PluginManager({
+      registryStore,
+      installerService,
+      catalogService: {
+        list: vi.fn(async () => []),
+      } as unknown as PluginCatalogService,
+    });
+
+    const installed = await manager.installLocalPlugin({
+      filePath: replacementRoot,
+    });
+
+    expect(installed.replacedPluginIds).toEqual(['acme.java-language']);
+
+    const listed = await manager.listPlugins();
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      id: 'acme.alt-java-language',
+      version: '2.0.0',
+    });
+
+    const registry = await registryStore.readRegistry();
+    expect(Object.keys(registry.plugins)).toEqual(['acme.alt-java-language']);
+    expect(registry.globalPluginSettings).toEqual({});
+    expect(await fs.pathExists(existingPluginPath)).toBe(false);
   });
 });

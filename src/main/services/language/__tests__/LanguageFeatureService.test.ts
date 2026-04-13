@@ -41,7 +41,6 @@ describe('LanguageFeatureService', () => {
     registry: {
       schemaVersion: 1,
       plugins: {},
-      globalLanguageBindings: {},
       globalPluginSettings: {},
     },
     globalSettings: {},

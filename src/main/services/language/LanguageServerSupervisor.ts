@@ -28,6 +28,15 @@ import type { ResolvedLanguagePlugin } from './LanguagePluginResolver';
 
 type TextSyncKind = 0 | 1 | 2;
 
+const JAVA_SLOW_REQUEST_TIMEOUT_MS = 60_000;
+const JAVA_SLOW_REQUEST_METHODS = new Set([
+  'initialize',
+  'textDocument/definition',
+  'textDocument/hover',
+  'textDocument/references',
+  'textDocument/documentSymbol',
+]);
+
 interface PendingRequest {
   resolve: (value: any) => void;
   reject: (error: Error) => void;
@@ -786,6 +795,8 @@ class LanguageServerSession {
   private async sendRequest(method: string, params: unknown, timeoutMs = this.requestTimeoutMs): Promise<any> {
     await this.ensureTransportReady();
 
+    const resolvedTimeoutMs = this.resolveRequestTimeoutMs(method, timeoutMs);
+
     const requestId = this.nextRequestId++;
     this.sendMessage({
       jsonrpc: '2.0',
@@ -798,7 +809,7 @@ class LanguageServerSession {
       const timer = setTimeout(() => {
         this.pendingRequests.delete(requestId);
         reject(new Error(`Timed out waiting for LSP response to ${method}`));
-      }, timeoutMs);
+      }, resolvedTimeoutMs);
 
       this.pendingRequests.set(requestId, {
         resolve,
@@ -857,6 +868,18 @@ class LanguageServerSession {
       message,
       timestampMs: Date.now(),
     };
+  }
+
+  private resolveRequestTimeoutMs(method: string, timeoutMs: number): number {
+    if (timeoutMs !== this.requestTimeoutMs) {
+      return timeoutMs;
+    }
+
+    if (this.pluginId === 'official.java-jdtls' && JAVA_SLOW_REQUEST_METHODS.has(method)) {
+      return Math.max(timeoutMs, JAVA_SLOW_REQUEST_TIMEOUT_MS);
+    }
+
+    return timeoutMs;
   }
 
   private getRecentStartFailureMessage(): string | null {

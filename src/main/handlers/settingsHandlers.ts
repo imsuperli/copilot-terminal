@@ -85,12 +85,6 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
         ? {
             ...workspace.settings.plugins,
             ...settings.plugins,
-            languageBindings: settings.plugins.languageBindings
-              ? {
-                  ...workspace.settings.plugins?.languageBindings,
-                  ...settings.plugins.languageBindings,
-                }
-              : workspace.settings.plugins?.languageBindings,
             pluginSettings: settings.plugins.pluginSettings
               ? {
                   ...workspace.settings.plugins?.pluginSettings,

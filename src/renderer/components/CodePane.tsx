@@ -247,6 +247,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const { t } = useI18n();
   const updatePane = useWindowStore((state) => state.updatePane);
   const supportsMonaco = typeof Worker !== 'undefined';
+  const isMac = window.electronAPI.platform === 'darwin';
   const paneRef = useRef(pane);
   const rootPath = pane.code?.rootPath ?? pane.cwd;
   const openFiles = pane.code?.openFiles ?? [];
@@ -269,6 +270,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const documentSyncTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const suppressModelEventsRef = useRef(new Set<string>());
   const markerListenerRef = useRef<MonacoDisposable | null>(null);
+  const editorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
+  const diffEditorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => (
@@ -303,6 +306,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const savingPathsRef = useRef(savingPaths);
   const activeFilePathRef = useRef(activeFilePath);
   const pendingNavigationRef = useRef<FileNavigationLocation | null>(null);
+  const openFileLocationRef = useRef<(location: FileNavigationLocation) => Promise<void>>(async () => {});
 
   useEffect(() => {
     paneRef.current = pane;
@@ -589,6 +593,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const disposeEditors = useCallback(() => {
     saveCurrentViewState();
+    editorMouseDownListenerRef.current?.dispose();
+    editorMouseDownListenerRef.current = null;
+    diffEditorMouseDownListenerRef.current?.dispose();
+    diffEditorMouseDownListenerRef.current = null;
     editorRef.current?.dispose();
     diffEditorRef.current?.dispose();
     editorRef.current = null;
@@ -795,6 +803,79 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return createOrUpdateModel(filePath, response.data);
   }, [createOrUpdateModel, ensureMonacoReady, rootPath, supportsMonaco, t]);
 
+  const handleDefinitionClick = useCallback(async (editorInstance: MonacoEditor | null, lineNumber: number, column: number) => {
+    const model = editorInstance?.getModel();
+    const filePath = model?.uri.path;
+    if (!model || !filePath) {
+      return;
+    }
+
+    const response = await window.electronAPI.codePaneGetDefinition({
+      rootPath,
+      filePath,
+      language: model.getLanguageId(),
+      position: {
+        lineNumber,
+        column,
+      },
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'warning',
+        message: response.error || t('common.retry'),
+        filePath,
+      });
+      return;
+    }
+
+    const nextLocation = response.data?.[0];
+    if (!nextLocation) {
+      return;
+    }
+
+    await openFileLocationRef.current({
+      filePath: nextLocation.filePath,
+      lineNumber: nextLocation.range.startLineNumber,
+      column: nextLocation.range.startColumn,
+    });
+  }, [rootPath, t]);
+
+  const attachDefinitionClickNavigation = useCallback((
+    editorInstance: MonacoEditor | null,
+    target: 'editor' | 'diff',
+  ) => {
+    const listenerRef = target === 'editor'
+      ? editorMouseDownListenerRef
+      : diffEditorMouseDownListenerRef;
+
+    listenerRef.current?.dispose();
+    listenerRef.current = null;
+
+    if (!editorInstance || typeof editorInstance.onMouseDown !== 'function') {
+      return;
+    }
+
+    listenerRef.current = editorInstance.onMouseDown((event: any) => {
+      const hasModifier = isMac
+        ? event.event?.metaKey === true && event.event?.ctrlKey !== true
+        : event.event?.ctrlKey === true && event.event?.metaKey !== true;
+
+      if (!hasModifier || event.event?.leftButton !== true || !event.target?.position) {
+        return;
+      }
+
+      event.event.preventDefault?.();
+      event.event.stopPropagation?.();
+
+      void handleDefinitionClick(
+        editorInstance,
+        event.target.position.lineNumber,
+        event.target.position.column,
+      );
+    });
+  }, [handleDefinitionClick, isMac]);
+
   const refreshEditorSurface = useCallback(async () => {
     const hostElement = editorHostRef.current;
     if (!hostElement) {
@@ -853,6 +934,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             }
           },
         );
+        attachDefinitionClickNavigation(diffEditorRef.current.getModifiedEditor(), 'diff');
       }
 
       diffEditorRef.current.setModel({
@@ -873,6 +955,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    diffEditorMouseDownListenerRef.current?.dispose();
+    diffEditorMouseDownListenerRef.current = null;
     diffEditorRef.current?.dispose();
     diffEditorRef.current = null;
 
@@ -894,6 +978,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           void saveFile(filePath);
         }
       });
+      attachDefinitionClickNavigation(editorRef.current, 'editor');
     }
 
     editorRef.current.setModel(model);
@@ -908,7 +993,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isActive) {
       editorRef.current.focus();
     }
-  }, [applyPendingNavigation, disposeEditors, ensureMonacoReady, isActive, saveCurrentViewState, viewMode]);
+  }, [
+    applyPendingNavigation,
+    attachDefinitionClickNavigation,
+    disposeEditors,
+    ensureMonacoReady,
+    isActive,
+    saveCurrentViewState,
+    viewMode,
+  ]);
 
   const reloadFileFromDisk = useCallback(async (filePath: string) => {
     const response = await window.electronAPI.codePaneReadFile({
@@ -1914,6 +2007,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     pendingNavigationRef.current = location;
     await activateFile(location.filePath);
   }, [activateFile]);
+
+  useEffect(() => {
+    openFileLocationRef.current = openFileLocation;
+  }, [openFileLocation]);
 
   const openContentSearchMatch = useCallback(async (match: CodePaneContentMatch) => {
     await openFileLocation({

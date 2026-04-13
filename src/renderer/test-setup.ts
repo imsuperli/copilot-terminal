@@ -184,7 +184,6 @@ Object.defineProperty(window, 'electronAPI', {
       data: {
         schemaVersion: 1,
         plugins: {},
-        globalLanguageBindings: {},
         globalPluginSettings: {},
       },
     }),
@@ -194,7 +193,6 @@ Object.defineProperty(window, 'electronAPI', {
     updatePlugin: vi.fn().mockResolvedValue({ success: false, error: 'not implemented' }),
     uninstallPlugin: vi.fn().mockResolvedValue({ success: true }),
     setPluginEnabled: vi.fn().mockResolvedValue({ success: true, data: {} }),
-    setPluginLanguageBinding: vi.fn().mockResolvedValue({ success: true, data: {} }),
     setPluginSettings: vi.fn().mockResolvedValue({ success: true, data: {} }),
     listSSHProfiles: vi.fn().mockResolvedValue({ success: true, data: [] }),
     getSSHAlgorithmCatalog: vi.fn().mockResolvedValue({

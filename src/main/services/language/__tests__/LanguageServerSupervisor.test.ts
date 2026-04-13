@@ -262,7 +262,6 @@ function createResolution(workspaceRoot: string, installPath: string): ResolvedL
     registry: {
       schemaVersion: 1,
       plugins: {},
-      globalLanguageBindings: {},
       globalPluginSettings: {},
     },
     globalSettings: {},

@@ -85,11 +85,20 @@ class FakeModel {
 
 function createFakeEditor() {
   let model: FakeModel | null = null;
+  const mouseDownListeners = new Set<(event: any) => void>();
 
   return {
     addCommand: vi.fn(),
     dispose: vi.fn(),
     focus: vi.fn(),
+    onMouseDown: vi.fn((listener: (event: any) => void) => {
+      mouseDownListeners.add(listener);
+      return {
+        dispose: () => {
+          mouseDownListeners.delete(listener);
+        },
+      };
+    }),
     revealLineInCenter: vi.fn(),
     restoreViewState: vi.fn(),
     saveViewState: vi.fn(() => null),
@@ -100,6 +109,11 @@ function createFakeEditor() {
       fakeMonacoState.lastEditorModel = nextModel;
     }),
     getModel: () => model,
+    fireMouseDown: (event: any) => {
+      for (const listener of Array.from(mouseDownListeners)) {
+        listener(event);
+      }
+    },
   };
 }
 
@@ -890,6 +904,69 @@ describe('CodePane', () => {
         },
       },
     ]);
+  });
+
+  it('opens the first definition target on Ctrl/Cmd-click', async () => {
+    vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/util.ts',
+          range: {
+            startLineNumber: 3,
+            startColumn: 5,
+            endLineNumber: 3,
+            endColumn: 9,
+          },
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockImplementation(async ({ filePath }) => ({
+      success: true,
+      data: {
+        content: filePath.endsWith('util.ts') ? 'export const util = 1;\n' : 'export const value = 1;\n',
+        mtimeMs: 100,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    }));
+
+    const view = renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    expect(activeEditor).toBeDefined();
+
+    await act(async () => {
+      activeEditor.fireMouseDown({
+        target: {
+          position: {
+            lineNumber: 1,
+            column: 8,
+          },
+        },
+        event: {
+          ctrlKey: true,
+          metaKey: false,
+          leftButton: true,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/util.ts',
+      });
+    });
+
+    expect(view.getPane().code?.activeFilePath).toBe('/workspace/project/src/util.ts');
   });
 
   it('applies plugin diagnostics to Monaco markers and the problems panel', async () => {

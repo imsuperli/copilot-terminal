@@ -45,6 +45,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
 }) => {
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
+  const [hasMountedSettingsPanel, setHasMountedSettingsPanel] = useState(false);
 
   const windows = useWindowStore((state) => state.windows);
   const setActiveWindowInGroup = useWindowStore((state) => state.setActiveWindowInGroup);
@@ -334,7 +335,10 @@ export const GroupView: React.FC<GroupViewProps> = ({
           // 切换到其他组（包括当前组，用于刷新）
           onGroupSwitch?.(groupId);
         }}
-        onSettingsClick={() => setIsSettingsPanelOpen(true)}
+        onSettingsClick={() => {
+          setHasMountedSettingsPanel(true);
+          setIsSettingsPanelOpen(true);
+        }}
       />
 
       {/* 主内容区 */}
@@ -421,7 +425,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
       )}
 
       {/* 设置面板 */}
-      {isSettingsPanelOpen && (
+      {hasMountedSettingsPanel && (
         <Suspense fallback={null}>
           <LazySettingsPanel
             open={isSettingsPanelOpen}
