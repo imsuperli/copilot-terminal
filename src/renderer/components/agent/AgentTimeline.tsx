@@ -171,7 +171,7 @@ export function AgentTimeline({
     };
   }, [orderedTimeline]);
   const visibleTimeline = React.useMemo(
-    () => orderedTimeline.filter((event) => !hiddenEventIds.has(event.id)),
+    () => orderedTimeline.filter((event) => !hiddenEventIds.has(event.id) && event.kind !== 'context-summary'),
     [hiddenEventIds, orderedTimeline],
   );
   const displayTimeline = React.useMemo<TimelineDisplayItem[]>(() => {
@@ -292,12 +292,6 @@ export function AgentTimeline({
         return (
           <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/60 px-4 py-3 text-sm leading-7 text-zinc-300">
             {event.content}
-          </div>
-        );
-      case 'context-summary':
-        return (
-          <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/60 px-4 py-3 text-sm leading-7 text-zinc-300">
-            {event.summary}
           </div>
         );
       case 'approval-result':

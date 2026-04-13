@@ -174,4 +174,41 @@ describe('AgentTimeline', () => {
 
     expect(screen.getByText('Running')).toBeInTheDocument();
   });
+
+  it('does not render internal context summary events', () => {
+    render(
+      <AgentTimeline
+        task={createTaskSnapshot({
+          timeline: [
+            {
+              id: 'context-summary-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:01.000Z',
+              kind: 'context-summary',
+              status: 'completed',
+              summary: '历史上下文摘要：旧消息被压缩。',
+            },
+            {
+              id: 'assistant-turn-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:02.000Z',
+              kind: 'assistant-message',
+              status: 'completed',
+              content: '新的回复',
+            },
+          ],
+        })}
+        assistantLabel="codex"
+        onApprove={() => {}}
+        onReject={() => {}}
+        onSubmitInteraction={() => {}}
+        onCancelInteraction={() => {}}
+      />,
+    );
+
+    expect(screen.queryByText('历史上下文摘要：旧消息被压缩。')).not.toBeInTheDocument();
+    expect(screen.getByText('新的回复')).toBeInTheDocument();
+  });
 });

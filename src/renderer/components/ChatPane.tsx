@@ -306,6 +306,41 @@ function buildOptimisticAgentTask({
   };
 }
 
+function isOptimisticReasoningEvent(event: AgentTimelineEvent): boolean {
+  return event.kind === 'reasoning' && event.id.startsWith('reasoning-optimistic-');
+}
+
+function mergeAgentTaskWithOptimisticReasoning(
+  task: AgentTaskSnapshot,
+  optimisticTask?: AgentTaskSnapshot | null,
+): AgentTaskSnapshot {
+  const optimisticReasoningEvents = optimisticTask?.timeline
+    .filter(isOptimisticReasoningEvent)
+    .map((event) => ({
+      ...event,
+      taskId: task.taskId,
+      paneId: task.paneId,
+    })) ?? [];
+
+  if (
+    task.status !== 'running'
+    || optimisticReasoningEvents.length === 0
+    || task.timeline.some((event) => event.kind !== 'user-message')
+  ) {
+    return task;
+  }
+
+  const existingEventIds = new Set(task.timeline.map((event) => event.id));
+
+  return {
+    ...task,
+    timeline: [
+      ...task.timeline,
+      ...optimisticReasoningEvents.filter((event) => !existingEventIds.has(event.id)),
+    ],
+  };
+}
+
 export const ChatPane: React.FC<ChatPaneProps> = ({
   windowId,
   pane,
@@ -322,10 +357,15 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [settings, setSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [optimisticTask, setOptimisticTask] = useState<AgentTaskSnapshot | null>(null);
 
   useEffect(() => {
     paneRef.current = pane;
   }, [pane]);
+
+  useEffect(() => {
+    setOptimisticTask(null);
+  }, [pane.id]);
 
   const terminalWindow = useWindowStore(useCallback(
     (state) => state.windows.find((window) => window.id === windowId) ?? null,
@@ -339,7 +379,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   );
 
   const chatState = pane.chat ?? { messages: [] };
-  const agentState = chatState.agent;
+  const agentState = useMemo(() => {
+    if (optimisticTask && (!chatState.agent || chatState.agent.updatedAt < optimisticTask.updatedAt)) {
+      return optimisticTask;
+    }
+
+    if (!chatState.agent) {
+      return optimisticTask ?? undefined;
+    }
+
+    return mergeAgentTaskWithOptimisticReasoning(chatState.agent, optimisticTask);
+  }, [chatState.agent, optimisticTask]);
   const resolvedLinkedPaneId = selectPreferredChatLinkedPaneId(terminalPanes, chatState.linkedPaneId);
   const linkedPane = useMemo(
     () => terminalPanes.find((candidate) => candidate.id === resolvedLinkedPaneId) ?? null,
@@ -382,23 +432,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     const runtimeOnly = task.status === 'running';
     persistChatState((currentChat) => ({
       ...currentChat,
-      agent: {
-        ...task,
-        timeline: task.status === 'running'
-          && !task.timeline.some((event) => event.kind !== 'user-message')
-          && currentChat.agent?.timeline.some((event) => event.id.startsWith('reasoning-optimistic-'))
-          ? [
-              ...task.timeline,
-              ...currentChat.agent.timeline
-                .filter((event) => event.id.startsWith('reasoning-optimistic-'))
-                .map((event) => ({
-                  ...event,
-                  taskId: task.taskId,
-                  paneId: task.paneId,
-                })),
-            ]
-          : task.timeline,
-      },
+      agent: mergeAgentTaskWithOptimisticReasoning(task, currentChat.agent),
       messages: task.messages,
       activeProviderId: task.providerId,
       activeModel: task.model,
@@ -447,6 +481,26 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
       setErrorMessage(payload.task.error ?? null);
       syncAgentTask(payload.task);
+      setOptimisticTask((currentTask) => {
+        if (!currentTask) {
+          return null;
+        }
+
+        const hasAssistantSideEvent = payload.task.timeline.some((event) => event.kind !== 'user-message');
+        if (payload.task.status !== 'running' || hasAssistantSideEvent) {
+          return null;
+        }
+
+        return {
+          ...currentTask,
+          taskId: payload.task.taskId,
+          updatedAt: payload.task.updatedAt,
+          providerId: payload.task.providerId,
+          model: payload.task.model,
+          linkedPaneId: payload.task.linkedPaneId,
+          sshContext: payload.task.sshContext,
+        };
+      });
     };
 
     const handleTaskError = (_event: unknown, payload: { paneId: string; error: string }) => {
@@ -526,6 +580,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         setComposerValue('');
         setErrorMessage(null);
         hasLiveTaskRef.current = false;
+        setOptimisticTask(null);
         persistChatState((currentChat) => ({
           ...currentChat,
           messages: [],
@@ -627,6 +682,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
     setComposerValue('');
     setErrorMessage(null);
+    setOptimisticTask(optimisticTask);
     persistChatState((currentChat) => ({
       ...currentChat,
       messages: optimisticTask.messages,
@@ -658,6 +714,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       hasLiveTaskRef.current = true;
       const responseData = response.data;
       if (responseData?.taskId) {
+        setOptimisticTask((currentTask) => (currentTask
+          ? {
+              ...currentTask,
+              taskId: responseData.taskId,
+              status: responseData.status ?? currentTask.status,
+              updatedAt: new Date().toISOString(),
+            }
+          : currentTask));
         persistChatState((currentChat) => {
           if (!currentChat.agent) {
             return currentChat;
@@ -677,6 +741,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       const message = error instanceof Error ? error.message : String(error);
       setErrorMessage(message);
       hasLiveTaskRef.current = previousHasLiveTask;
+      setOptimisticTask(null);
       persistChatState(() => ({
         ...previousChat,
         isStreaming: false,
