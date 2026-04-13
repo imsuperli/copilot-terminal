@@ -267,6 +267,44 @@ describe('BrowserPane', () => {
     expect(secondWebview?.partitionSetCount).toBe(1);
   });
 
+  it('keeps the same webview guest when the pane url changes without remounting', () => {
+    const pane = createBrowserPane('https://example.com/one');
+    const { container, rerender } = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={pane}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const firstWebview = container.querySelector('webview') as MockWebViewElement | null;
+    if (!firstWebview) {
+      throw new Error('expected first webview element');
+    }
+
+    rerender(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={{
+            ...pane,
+            browser: {
+              url: 'https://example.com/two',
+            },
+          }}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const secondWebview = container.querySelector('webview') as MockWebViewElement | null;
+    expect(secondWebview).toBe(firstWebview);
+  });
+
   it('sizes the webview to the host bounds when the pane becomes measurable', () => {
     let resizeCallback: ResizeObserverCallback | null = null;
     global.ResizeObserver = class ResizeObserver {

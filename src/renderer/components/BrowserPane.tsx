@@ -302,7 +302,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       webview.remove();
       webviewRef.current = null;
     };
-  }, [clearRestoreReadyTimer, pane.id, persistedUrl, resetNavigationState, setWebviewReady, syncWebviewBounds]);
+  }, [clearRestoreReadyTimer, pane.id, resetNavigationState, setWebviewReady, syncWebviewBounds]);
 
   useEffect(() => {
     const host = webviewHostRef.current;
