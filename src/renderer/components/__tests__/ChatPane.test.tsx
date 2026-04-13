@@ -502,7 +502,7 @@ describe('ChatPane', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText('Claude API').length).toBeGreaterThan(0);
+      expect(screen.getByRole('option', { name: 'Claude API / claude-sonnet-4-5' })).toBeInTheDocument();
     });
   });
 
@@ -799,8 +799,9 @@ describe('ChatPane', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('这是上一轮对话')).not.toBeInTheDocument();
-      expect(screen.getByText('Remote Agent Ready')).toBeInTheDocument();
+      expect(screen.getByText('开始一段新对话')).toBeInTheDocument();
     });
+    expect(screen.getByRole('status', { name: 'SSH 未连接' })).toBeInTheDocument();
     expect((input as HTMLTextAreaElement).value).toBe('');
   });
 
@@ -1264,8 +1265,8 @@ describe('ChatPane', () => {
       </I18nProvider>,
     );
 
-    expect(await screen.findByText('Remote Agent Ready')).toBeInTheDocument();
-    expect(screen.getByText('This pane is bound to an SSH session. The agent will show reasoning, tool calls, command output, approvals, and interactive prompts here.')).toBeInTheDocument();
+    expect(await screen.findByText('开始一段新对话')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'SSH 已连接' })).toBeInTheDocument();
 
     await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '帮我看下系统的版本号是什么？');
     await user.click(screen.getByRole('button', { name: '发送' }));

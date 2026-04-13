@@ -112,7 +112,7 @@ function ControlSelect({
   return (
     <label className={`relative inline-flex max-w-full items-center ${minWidthClass}`}>
       <span className="sr-only">{ariaLabel}</span>
-      <span className="pointer-events-none absolute left-3 text-zinc-500">
+      <span className="pointer-events-none absolute left-3 text-[rgb(var(--muted-foreground))]">
         {icon}
       </span>
       <select
@@ -120,11 +120,11 @@ function ControlSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        className="h-10 w-full appearance-none rounded-full border border-zinc-800/90 bg-zinc-900/75 pl-9 pr-9 text-sm text-zinc-100 outline-none transition-colors focus:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-10 w-full appearance-none rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/90 pl-9 pr-9 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]/70 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {children}
       </select>
-      <ChevronDown size={14} className="pointer-events-none absolute right-3 text-zinc-500" />
+      <ChevronDown size={14} className="pointer-events-none absolute right-3 text-[rgb(var(--muted-foreground))]" />
     </label>
   );
 }
@@ -133,8 +133,8 @@ function renderLegacyMessage(message: ChatMessage) {
   if (message.role === 'user' && !message.toolResult) {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 sm:max-w-[68%]">
-          <div className="space-y-3 text-[15px] leading-7 text-zinc-100">
+        <div className="max-w-[78%] rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/95 px-4 py-3 sm:max-w-[68%]">
+          <div className="space-y-3 text-[15px] leading-7 text-[rgb(var(--foreground))]">
             {renderMarkdownLike(message.content)}
           </div>
         </div>
@@ -144,8 +144,8 @@ function renderLegacyMessage(message: ChatMessage) {
 
   if (message.toolResult) {
     return (
-      <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/75 px-4 py-3 text-zinc-200">
-        <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
+      <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/90 px-4 py-3 text-[rgb(var(--foreground))]">
+        <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-[rgb(var(--foreground))]">
           {message.toolResult.content}
         </pre>
       </div>
@@ -153,7 +153,7 @@ function renderLegacyMessage(message: ChatMessage) {
   }
 
   return (
-    <div className="space-y-3 text-[15px] leading-7 text-zinc-200">
+    <div className="space-y-3 text-[15px] leading-7 text-[rgb(var(--foreground))]">
       {renderMarkdownLike(message.content)}
     </div>
   );
@@ -556,33 +556,35 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     buildProviderModelOptions(providers, selectedProvider?.id, selectedModel)
   ), [providers, selectedModel, selectedProvider?.id]);
 
-  const assistantLabel = selectedProvider?.name?.trim() || 'Agent';
+  const assistantLabel = t('chatPane.agentName');
+  const sshConnected = hasExecutableLinkedSsh;
+  const sshSignalTitle = sshConnected ? t('chatPane.sshConnected') : t('chatPane.sshDisconnected');
 
   return (
     <div
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
-      style={{
-        backgroundImage: 'radial-gradient(circle at top, rgba(74, 222, 128, 0.08), transparent 28%), linear-gradient(180deg, #17171a 0%, #101012 100%)',
-      }}
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[rgb(var(--background))]"
       onMouseDown={onActivate}
     >
-      <div className="px-4 pb-2 pt-4">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4">
-          <div className="inline-flex max-w-full items-center gap-3 rounded-full border border-zinc-800/90 bg-zinc-900/70 px-3 py-2 shadow-[0_18px_40px_-34px_rgba(0,0,0,0.9)]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-200">
-              <Sparkles size={14} />
+      <div className="border-b border-[rgb(var(--border))] px-3 py-2">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
+          <div className="min-w-0 flex items-center gap-2.5">
+            <div
+              role="status"
+              aria-label={sshSignalTitle}
+              title={sshSignalTitle}
+              className="inline-flex h-6 items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2"
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${sshConnected ? 'bg-[rgb(var(--success))] shadow-[0_0_8px_rgba(22,198,12,0.45)]' : 'bg-[rgb(var(--destructive))] shadow-[0_0_8px_rgba(231,72,86,0.38)]'}`}
+                aria-hidden="true"
+              />
+            </div>
+            <span className="truncate text-[13px] font-semibold tracking-[0.02em] text-[rgb(var(--foreground))]">
+              {t('chatPane.title')}
             </span>
-            <span className="truncate text-[11px] font-semibold uppercase tracking-[0.24em] text-zinc-300">
-              {assistantLabel}
-            </span>
-            {agentState && (
-              <span className="rounded-full border border-zinc-800/90 bg-zinc-950/80 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-                {agentState.status}
-              </span>
-            )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               tabIndex={-1}
@@ -590,10 +592,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               onMouseDown={preventMouseButtonFocus}
               onClick={handleNewConversation}
               disabled={isBusy}
-              className="group relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-zinc-800/90 bg-[linear-gradient(180deg,rgba(31,31,35,0.96),rgba(18,18,21,0.98))] text-zinc-300 shadow-[0_18px_36px_-32px_rgba(0,0,0,0.98)] transition-all duration-200 before:absolute before:inset-[1px] before:rounded-full before:bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.12),transparent_46%)] hover:-translate-y-0.5 hover:border-zinc-700 hover:text-[rgb(var(--primary))] hover:shadow-[0_24px_44px_-34px_rgba(0,0,0,0.98)] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/72 text-[rgb(var(--muted-foreground))] transition-[color,border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-[rgb(var(--ring))]/55 hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <span className="absolute inset-[7px] rounded-full border border-zinc-500/10 opacity-70 transition-opacity group-hover:opacity-100" />
-              <ChatNewConversationIcon size={17} className="relative z-[1]" />
+              <ChatNewConversationIcon size={16} />
             </button>
 
             {onClose && (
@@ -603,7 +604,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 aria-label={t('common.close')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={onClose}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800/90 bg-zinc-900/70 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/72 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
               >
                 <X size={14} />
               </button>
@@ -612,23 +613,23 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-2">
+      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1">
         <div className="mx-auto w-full max-w-4xl">
           {!settingsLoaded ? (
-            <div className="rounded-[24px] border border-zinc-800/80 bg-zinc-900/60 px-5 py-4 text-sm text-zinc-300">
+            <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-5 py-4 text-sm text-[rgb(var(--muted-foreground))]">
               {t('common.loading')}
             </div>
           ) : providers.length === 0 ? (
             <div className="flex gap-3 pt-6">
-              <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+              <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                 <Sparkles size={15} />
               </div>
               <div className="max-w-3xl">
-                <div className="inline-flex items-center rounded-full border border-zinc-800/80 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-zinc-300">
+                <div className="inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
                   {assistantLabel}
                 </div>
-                <div className="mt-4 text-[15px] leading-7 text-zinc-100">{t('chatPane.noProviderTitle')}</div>
-                <p className="mt-2 text-sm leading-7 text-zinc-500">{t('chatPane.noProviderDescription')}</p>
+                <div className="mt-4 text-[15px] leading-7 text-[rgb(var(--foreground))]">{t('chatPane.noProviderTitle')}</div>
+                <p className="mt-2 text-sm leading-7 text-[rgb(var(--muted-foreground))]">{t('chatPane.noProviderDescription')}</p>
               </div>
             </div>
           ) : agentState ? (
@@ -654,19 +655,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             </div>
           ) : (
             <div className="flex gap-3 pt-6">
-              <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+              <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                 <Sparkles size={15} />
               </div>
               <div className="max-w-3xl">
-                <div className="inline-flex items-center rounded-full border border-zinc-800/80 bg-zinc-900/60 px-3 py-1 text-xs font-medium text-zinc-300">
+                <div className="inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
                   {assistantLabel}
                 </div>
-                <div className="mt-4 text-[15px] leading-7 text-zinc-100">Remote Agent Ready</div>
-                <p className="mt-2 text-sm leading-7 text-zinc-500">
-                  {hasExecutableLinkedSsh
-                    ? 'This pane is bound to an SSH session. The agent will show reasoning, tool calls, command output, approvals, and interactive prompts here.'
-                    : 'Bind this chat to an SSH pane so the agent can execute real remote diagnostics instead of plain conversation.'}
-                </p>
+                <div className="mt-4 text-[15px] leading-7 text-[rgb(var(--foreground))]">{t('chatPane.emptyTitle')}</div>
               </div>
             </div>
           )}
@@ -681,24 +677,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             </div>
           )}
 
-          <div className="rounded-[28px] border border-zinc-800/90 bg-[#17181b]/95 p-3 shadow-[0_30px_60px_-40px_rgba(0,0,0,0.98)]">
+          <div className="rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/95 p-3 shadow-[0_30px_60px_-40px_rgba(0,0,0,0.98)]">
             <textarea
               value={composerValue}
               onChange={(event) => setComposerValue(event.target.value)}
               onKeyDown={handleComposerKeyDown}
               placeholder={providers.length === 0 ? t('chatPane.disabledPlaceholder') : t('chatPane.inputPlaceholder')}
               disabled={!providers.length || isBusy}
-              className="min-h-[108px] w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-7 text-zinc-100 outline-none placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-[108px] w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-7 text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
             />
 
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="text-xs text-zinc-500">
-                {linkedPane && getPaneBackend(linkedPane) === 'ssh'
-                  ? 'SSH runtime bound'
-                  : 'No SSH runtime bound'}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
                 <ControlSelect
                   ariaLabel={t('chatPane.providerModelLabel')}
                   value={selectedProviderModelValue}
@@ -721,7 +710,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     onClick={() => {
                       void handleCancelStreaming();
                     }}
-                    className="inline-flex h-10 items-center gap-2 rounded-full border border-zinc-700 bg-zinc-900 px-4 text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-800"
+                    className="inline-flex h-10 items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
                   >
                     <Square size={12} />
                     {t('chatPane.cancel')}
@@ -739,7 +728,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     {t('chatPane.send')}
                   </button>
                 )}
-              </div>
             </div>
           </div>
         </div>

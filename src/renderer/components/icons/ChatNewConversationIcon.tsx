@@ -19,34 +19,33 @@ export const ChatNewConversationIcon: React.FC<ChatNewConversationIconProps> = (
       className={className}
       {...rest}
     >
-      <circle
-        cx="7.1"
-        cy="7.2"
-        r="2.25"
+      <path
+        d="M4.75 8.5A2.75 2.75 0 0 1 7.5 5.75h5.25A2.75 2.75 0 0 1 15.5 8.5v4.25a2.75 2.75 0 0 1-2.75 2.75H9.25L6.5 17.75V15.5h1A2.75 2.75 0 0 1 4.75 12.75V8.5Z"
         stroke="currentColor"
-        strokeWidth="1.45"
-        opacity="0.92"
+        strokeWidth="1.65"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
 
       <path
-        d="M9.35 5.1A8.05 8.05 0 1 1 18.2 18.1"
+        d="M7.9 9.45h4.45"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="1.65"
         strokeLinecap="round"
       />
 
       <path
-        d="M17.05 19.05a8.1 8.1 0 0 1-2.55.45"
+        d="M7.9 12.2h2.9"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="1.65"
         strokeLinecap="round"
         opacity="0.8"
       />
 
       <path
-        d="M12 9.15v5.7M9.15 12h5.7"
+        d="M18.4 5.45v4.1M16.35 7.5h4.1"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.75"
         strokeLinecap="round"
       />
     </svg>
