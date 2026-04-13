@@ -1928,4 +1928,184 @@ describe('ChatPane', () => {
     expect((root as HTMLElement).className).not.toContain('border-t-sky-400');
     expect((root as HTMLElement).className).not.toContain('border-t-sky-700/60');
   });
+
+  it('auto-scrolls only while the transcript is pinned to the bottom', async () => {
+    const listeners = createListenerMap();
+    const originalRequestAnimationFrame = window.requestAnimationFrame;
+    const originalCancelAnimationFrame = window.cancelAnimationFrame;
+    window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    }) as typeof window.requestAnimationFrame;
+    window.cancelAnimationFrame = vi.fn();
+
+    try {
+      vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+        success: true,
+        data: {
+          language: 'zh-CN',
+          ides: [],
+          chat: {
+            providers: [
+              {
+                id: 'provider-1',
+                type: 'anthropic',
+                name: 'Claude API',
+                apiKey: 'sk-ant-test',
+                models: ['claude-sonnet-4-5'],
+                defaultModel: 'claude-sonnet-4-5',
+              },
+            ],
+            activeProviderId: 'provider-1',
+            enableCommandSecurity: true,
+          },
+        } as any,
+      });
+      vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+        success: true,
+        data: null,
+      });
+      vi.mocked(window.electronAPI.onAgentTaskState).mockImplementation((callback) => {
+        listeners.state.add(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+      });
+      vi.mocked(window.electronAPI.offAgentTaskState).mockImplementation((callback) => {
+        listeners.state.delete(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+      });
+      vi.mocked(window.electronAPI.onAgentTaskError).mockImplementation((callback) => {
+        listeners.error.add(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
+      });
+      vi.mocked(window.electronAPI.offAgentTaskError).mockImplementation((callback) => {
+        listeners.error.delete(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
+      });
+
+      useWindowStore.setState({
+        windows: [
+          {
+            id: 'win-1',
+            name: 'Chat Window',
+            activePaneId: 'chat-pane-1',
+            createdAt: new Date().toISOString(),
+            lastActiveAt: new Date().toISOString(),
+            layout: {
+              type: 'split',
+              direction: 'horizontal',
+              sizes: [1],
+              children: [
+                {
+                  type: 'pane',
+                  id: 'chat-pane-1',
+                  pane: {
+                    id: 'chat-pane-1',
+                    cwd: '',
+                    command: '',
+                    kind: 'chat',
+                    status: WindowStatus.Paused,
+                    pid: null,
+                    chat: {
+                      messages: [],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+        activeWindowId: 'win-1',
+        mruList: ['win-1'],
+        sidebarExpanded: false,
+        sidebarWidth: 200,
+      });
+
+      const { container } = render(
+        <I18nProvider>
+          <ChatPaneHarness />
+        </I18nProvider>,
+      );
+
+      await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行');
+
+      const scrollContainer = container.querySelector('.overflow-y-auto.px-4.pb-4.pt-1') as HTMLDivElement | null;
+      expect(scrollContainer).toBeTruthy();
+      if (!scrollContainer) {
+        return;
+      }
+
+      let scrollHeight = 1200;
+      const clientHeight = 400;
+      let scrollTop = 800;
+
+      Object.defineProperty(scrollContainer, 'scrollHeight', {
+        configurable: true,
+        get: () => scrollHeight,
+      });
+      Object.defineProperty(scrollContainer, 'clientHeight', {
+        configurable: true,
+        get: () => clientHeight,
+      });
+      Object.defineProperty(scrollContainer, 'scrollTop', {
+        configurable: true,
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = value;
+        },
+      });
+
+      const emitState = async (updatedAt: string, content: string) => {
+        await act(async () => {
+          listeners.state.forEach((listener) => listener({}, {
+            paneId: 'chat-pane-1',
+            task: createAgentSnapshot({
+              status: 'running',
+              updatedAt,
+              timeline: [
+                {
+                  id: 'user-1',
+                  taskId: 'task-1',
+                  paneId: 'chat-pane-1',
+                  timestamp: updatedAt,
+                  kind: 'user-message',
+                  status: 'completed',
+                  content: '分析日志',
+                },
+                {
+                  id: 'assistant-1',
+                  taskId: 'task-1',
+                  paneId: 'chat-pane-1',
+                  timestamp: updatedAt,
+                  kind: 'assistant-message',
+                  status: 'streaming',
+                  content,
+                },
+              ],
+              messages: [],
+            }),
+          }));
+        });
+      };
+
+      await emitState('2026-04-13T14:10:00.000Z', '第一段输出');
+      expect(scrollTop).toBe(1200);
+
+      scrollTop = 180;
+      await act(async () => {
+        scrollContainer.dispatchEvent(new Event('scroll'));
+      });
+
+      scrollHeight = 1600;
+      await emitState('2026-04-13T14:10:01.000Z', '第二段输出');
+      expect(scrollTop).toBe(180);
+
+      scrollTop = 1200;
+      await act(async () => {
+        scrollContainer.dispatchEvent(new Event('scroll'));
+      });
+
+      scrollHeight = 1800;
+      await emitState('2026-04-13T14:10:02.000Z', '第三段输出');
+      expect(scrollTop).toBe(1800);
+    } finally {
+      window.requestAnimationFrame = originalRequestAnimationFrame;
+      window.cancelAnimationFrame = originalCancelAnimationFrame;
+    }
+  });
 });

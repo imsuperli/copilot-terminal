@@ -396,6 +396,10 @@ function selectNewestAgentTask(
   return primary.updatedAt >= secondary.updatedAt ? primary : secondary;
 }
 
+function isScrollContainerNearBottom(element: HTMLDivElement): boolean {
+  return element.scrollHeight - element.scrollTop - element.clientHeight <= 32;
+}
+
 export const ChatPane: React.FC<ChatPaneProps> = ({
   windowId,
   pane,
@@ -407,7 +411,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
   const paneRef = useRef(pane);
   const hasLiveTaskRef = useRef(false);
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const autoScrollPinnedRef = useRef(true);
+  const autoScrollFrameRef = useRef<number | null>(null);
   const [composerValue, setComposerValue] = useState('');
   const [settings, setSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -422,6 +428,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   useEffect(() => {
     setLiveAgentTask(null);
     setOptimisticTask(null);
+    autoScrollPinnedRef.current = true;
   }, [pane.id]);
 
   const terminalWindow = useWindowStore(useCallback(
@@ -558,9 +565,49 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     };
   }, [loadSettings]);
 
+  const handleTranscriptScroll = useCallback(() => {
+    const element = scrollContainerRef.current;
+    if (!element) {
+      return;
+    }
+
+    autoScrollPinnedRef.current = isScrollContainerNearBottom(element);
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: 'end' });
-  }, [chatState.messages, agentState?.timeline.length, agentState?.status]);
+    if (!autoScrollPinnedRef.current) {
+      return;
+    }
+
+    if (typeof window.requestAnimationFrame !== 'function') {
+      const element = scrollContainerRef.current;
+      if (element) {
+        element.scrollTop = element.scrollHeight;
+      }
+      return;
+    }
+
+    if (autoScrollFrameRef.current !== null) {
+      window.cancelAnimationFrame(autoScrollFrameRef.current);
+    }
+
+    autoScrollFrameRef.current = window.requestAnimationFrame(() => {
+      autoScrollFrameRef.current = null;
+      const element = scrollContainerRef.current;
+      if (!element || !autoScrollPinnedRef.current) {
+        return;
+      }
+
+      element.scrollTop = element.scrollHeight;
+    });
+
+    return () => {
+      if (autoScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(autoScrollFrameRef.current);
+        autoScrollFrameRef.current = null;
+      }
+    };
+  }, [agentState?.updatedAt, agentState?.status, chatState.messages.length]);
 
   useEffect(() => {
     const handleTaskState = (_event: unknown, payload: { paneId: string; task: NonNullable<NonNullable<Pane['chat']>['agent']> }) => {
@@ -781,6 +828,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
     setComposerValue('');
     setErrorMessage(null);
+    autoScrollPinnedRef.current = true;
     setOptimisticTask(optimisticTask);
     persistChatState((currentChat) => ({
       ...currentChat,
@@ -971,7 +1019,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-4 pt-1">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto px-4 pb-4 pt-1"
+        onScroll={handleTranscriptScroll}
+      >
         <div className="mx-auto w-full max-w-4xl">
           {!settingsLoaded ? (
             <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-5 py-4 text-sm text-[rgb(var(--muted-foreground))]">
@@ -1000,7 +1052,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 onSubmitInteraction={handleSubmitInteraction}
                 onCancelInteraction={handleCancelInteraction}
               />
-              <div ref={messagesEndRef} />
             </>
           ) : chatState.messages.length > 0 ? (
             <div className="space-y-6 pt-4">
@@ -1009,7 +1060,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                   {renderLegacyMessage(message)}
                 </div>
               ))}
-              <div ref={messagesEndRef} />
             </div>
           ) : (
             <div className="pt-2">

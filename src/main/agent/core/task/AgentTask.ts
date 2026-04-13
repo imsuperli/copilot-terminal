@@ -48,6 +48,8 @@ const OFFLOAD_PREVIEW_HEAD = 6_000;
 const OFFLOAD_PREVIEW_TAIL = 3_000;
 const AGENT_OFFLOAD_DIR = path.join(os.tmpdir(), 'copilot-terminal-agent-offload');
 const RUNNING_STATE_SYNC_DEBOUNCE_MS = 80;
+const STREAM_PREVIEW_FLUSH_INTERVAL_MS = 140;
+const STREAM_PREVIEW_MAX_BUFFER_CHARS = 96;
 type ApprovalResolution = 'approved' | 'rejected' | 'cancelled';
 
 interface AgentTaskDependencies {
@@ -408,6 +410,77 @@ export class AgentTask {
     let aggregated = '';
     let toolCalls: ToolCall[] | undefined;
     let streamError: string | null = null;
+    let pendingPreviewBuffer = '';
+    let pendingPreviewFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const emitStreamingSections = () => {
+      let emitted = false;
+      const sections = parseAssistantSections(aggregated);
+
+      if (sections.reasoning) {
+        const reasoningEvent: AgentReasoningEvent = {
+          id: reasoningEventId,
+          taskId: this.snapshot.taskId,
+          paneId: this.snapshot.paneId,
+          timestamp: new Date().toISOString(),
+          kind: 'reasoning',
+          status: 'streaming',
+          content: sections.reasoning,
+        };
+        this.appendEvent(reasoningEvent, 'skip');
+        emitted = true;
+      }
+
+      if (sections.response) {
+        this.appendEvent({
+          id: assistantEventId,
+          taskId: this.snapshot.taskId,
+          paneId: this.snapshot.paneId,
+          timestamp: new Date().toISOString(),
+          kind: 'assistant-message',
+          status: 'streaming',
+          content: sections.response,
+        }, 'skip');
+        emitted = true;
+      }
+
+      if (emitted) {
+        this.syncState('immediate');
+      }
+    };
+
+    const clearPreviewFlushTimer = () => {
+      if (pendingPreviewFlushTimer) {
+        clearTimeout(pendingPreviewFlushTimer);
+        pendingPreviewFlushTimer = null;
+      }
+    };
+
+    const flushStreamingPreview = () => {
+      if (!pendingPreviewBuffer) {
+        return;
+      }
+
+      pendingPreviewBuffer = '';
+      emitStreamingSections();
+    };
+
+    const scheduleStreamingPreviewFlush = (immediate = false) => {
+      if (immediate) {
+        clearPreviewFlushTimer();
+        flushStreamingPreview();
+        return;
+      }
+
+      if (pendingPreviewFlushTimer) {
+        return;
+      }
+
+      pendingPreviewFlushTimer = setTimeout(() => {
+        pendingPreviewFlushTimer = null;
+        flushStreamingPreview();
+      }, STREAM_PREVIEW_FLUSH_INTERVAL_MS);
+    };
 
     this.abortController = new AbortController();
     const systemPrompt = buildAgentSystemPrompt({
@@ -431,32 +504,15 @@ export class AgentTask {
       {
         onChunk: (chunk) => {
           aggregated += chunk;
-          const sections = parseAssistantSections(aggregated);
+          pendingPreviewBuffer += chunk;
+          const shouldFlushImmediately = pendingPreviewBuffer.length >= STREAM_PREVIEW_MAX_BUFFER_CHARS
+            || /[\n\r]/.test(chunk)
+            || /[.!?;:。！？；：]$/.test(pendingPreviewBuffer.trimEnd())
+            || chunk.includes('```')
+            || chunk.includes('<thinking>')
+            || chunk.includes('</thinking>');
 
-          if (sections.reasoning) {
-            const reasoningEvent: AgentReasoningEvent = {
-              id: reasoningEventId,
-              taskId: this.snapshot.taskId,
-              paneId: this.snapshot.paneId,
-              timestamp: new Date().toISOString(),
-              kind: 'reasoning',
-              status: 'streaming',
-              content: sections.reasoning,
-            };
-            this.appendEvent(reasoningEvent);
-          }
-
-          if (sections.response) {
-            this.appendEvent({
-              id: assistantEventId,
-              taskId: this.snapshot.taskId,
-              paneId: this.snapshot.paneId,
-              timestamp: new Date().toISOString(),
-              kind: 'assistant-message',
-              status: 'streaming',
-              content: sections.response,
-            });
-          }
+          scheduleStreamingPreviewFlush(shouldFlushImmediately);
         },
         onDone: (fullContent, nextToolCalls) => {
           aggregated = fullContent;
@@ -464,13 +520,17 @@ export class AgentTask {
             ...toolCall,
             status: 'pending',
           }));
+          scheduleStreamingPreviewFlush(true);
         },
         onError: (error) => {
           streamError = error;
+          scheduleStreamingPreviewFlush(true);
         },
       },
       this.abortController.signal,
     );
+
+    scheduleStreamingPreviewFlush(true);
 
     if (streamError) {
       throw new Error(streamError);
@@ -1040,7 +1100,10 @@ export class AgentTask {
     this.contextManager.appendMessage(toolResultMessage);
   }
 
-  private appendEvent(event: AgentTimelineEvent): void {
+  private appendEvent(
+    event: AgentTimelineEvent,
+    syncMode: 'auto' | 'immediate' | 'defer' | 'skip' = 'auto',
+  ): void {
     const existingIndex = this.snapshot.timeline.findIndex((item) => item.id === event.id);
     if (existingIndex >= 0) {
       this.snapshot.timeline[existingIndex] = event;
@@ -1054,6 +1117,21 @@ export class AgentTask {
       taskId: this.snapshot.taskId,
       event,
     });
+
+    if (syncMode === 'skip') {
+      return;
+    }
+
+    if (syncMode === 'immediate') {
+      this.syncState('immediate');
+      return;
+    }
+
+    if (syncMode === 'defer') {
+      this.syncState('defer');
+      return;
+    }
+
     this.syncState(this.shouldDeferStateSync() ? 'defer' : 'immediate');
   }
 

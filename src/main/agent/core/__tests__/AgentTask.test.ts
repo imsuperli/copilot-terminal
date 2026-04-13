@@ -262,12 +262,12 @@ describe('AgentTask', () => {
       let finishTurn: (() => void) | null = null;
       const deps = createDeps();
       vi.mocked(deps.chatService.streamChat).mockImplementationOnce(async (_request, callbacks) => {
-        callbacks.onChunk('<thinking>a</thinking>');
-        callbacks.onChunk('<thinking>ab</thinking>');
+        callbacks.onChunk('he');
+        callbacks.onChunk('llo');
         await new Promise<void>((resolve) => {
           finishTurn = resolve;
         });
-        callbacks.onDone('<thinking>ab</thinking>done', []);
+        callbacks.onDone('hello done', []);
       });
 
       const task = new AgentTask(createSnapshot(), deps);
@@ -275,7 +275,7 @@ describe('AgentTask', () => {
 
       expect(deps.postState).toHaveBeenCalledTimes(1);
 
-      await vi.advanceTimersByTimeAsync(79);
+      await vi.advanceTimersByTimeAsync(139);
       expect(deps.postState).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(1);
