@@ -31,6 +31,7 @@ import type {
   CodePaneFsChangedPayload,
   CodePaneGitStatusEntry,
   CodePaneIndexProgressPayload,
+  CodePaneLocation,
   CodePaneReadFileResult,
   CodePaneTreeEntry,
 } from '../../shared/types/electron-api';
@@ -57,6 +58,7 @@ type MonacoModel = import('monaco-editor').editor.ITextModel;
 type MonacoDisposable = import('monaco-editor').IDisposable;
 type MonacoViewState = import('monaco-editor').editor.ICodeEditorViewState | null;
 type MonacoMarker = import('monaco-editor').editor.IMarker;
+type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
 
 type FileNavigationLocation = {
@@ -90,6 +92,10 @@ type FileRuntimeMeta = {
 
 type CodePaneFsChange = CodePaneFsChangedPayload['changes'][number];
 type CodePaneIndexStatus = CodePaneIndexProgressPayload;
+type DefinitionLookupResult = {
+  location: CodePaneLocation | null;
+  error?: string;
+};
 
 export interface CodePaneProps {
   windowId: string;
@@ -105,6 +111,15 @@ function normalizePath(pathValue: string): string {
 
 function isVirtualDocumentPath(pathValue: string): boolean {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(pathValue) && !pathValue.toLowerCase().startsWith('file://');
+}
+
+function createFallbackRange(lineNumber: number, column: number): MonacoRange {
+  return {
+    startLineNumber: lineNumber,
+    startColumn: column,
+    endLineNumber: lineNumber,
+    endColumn: column + 1,
+  };
 }
 
 function getRelativePath(rootPath: string, targetPath: string): string {
@@ -284,7 +299,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const suppressModelEventsRef = useRef(new Set<string>());
   const markerListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
+  const editorMouseMoveListenerRef = useRef<MonacoDisposable | null>(null);
+  const editorMouseLeaveListenerRef = useRef<MonacoDisposable | null>(null);
   const diffEditorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
+  const diffEditorMouseMoveListenerRef = useRef<MonacoDisposable | null>(null);
+  const diffEditorMouseLeaveListenerRef = useRef<MonacoDisposable | null>(null);
+  const definitionLinkDecorationEditorRef = useRef<MonacoEditor | null>(null);
+  const definitionLinkDecorationIdsRef = useRef<string[]>([]);
+  const definitionHoverRequestKeyRef = useRef<string | null>(null);
+  const definitionLookupCacheRef = useRef(new Map<string, Promise<DefinitionLookupResult>>());
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => (
@@ -574,6 +597,157 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [closeLanguageDocument]);
 
+  const clearDefinitionLookupCache = useCallback(() => {
+    definitionLookupCacheRef.current.clear();
+  }, []);
+
+  const getModelRequestPath = useCallback((filePath: string) => (
+    fileMetaRef.current.get(filePath)?.documentUri ?? filePath
+  ), []);
+
+  const getDefinitionLookupRange = useCallback((model: MonacoModel, lineNumber: number, column: number): MonacoRange => {
+    const word = model.getWordAtPosition?.({ lineNumber, column });
+    if (!word) {
+      return createFallbackRange(lineNumber, column);
+    }
+
+    return {
+      startLineNumber: lineNumber,
+      startColumn: word.startColumn,
+      endLineNumber: lineNumber,
+      endColumn: word.endColumn,
+    };
+  }, []);
+
+  const getDefinitionLookupKey = useCallback((model: MonacoModel, filePath: string, lineNumber: number, column: number) => {
+    const range = getDefinitionLookupRange(model, lineNumber, column);
+    const requestPath = getModelRequestPath(filePath);
+    return `${requestPath}:${model.getLanguageId()}:${range.startLineNumber}:${range.startColumn}:${range.endColumn}`;
+  }, [getDefinitionLookupRange, getModelRequestPath]);
+
+  const lookupDefinitionTarget = useCallback(async (
+    model: MonacoModel,
+    filePath: string,
+    lineNumber: number,
+    column: number,
+    options?: {
+      showErrors?: boolean;
+    },
+  ) => {
+    const requestPath = getModelRequestPath(filePath);
+    const requestKey = getDefinitionLookupKey(model, filePath, lineNumber, column);
+
+    let pendingLookup = definitionLookupCacheRef.current.get(requestKey);
+    if (!pendingLookup) {
+      pendingLookup = window.electronAPI.codePaneGetDefinition({
+        rootPath,
+        filePath: requestPath,
+        language: model.getLanguageId(),
+        position: {
+          lineNumber,
+          column,
+        },
+      }).then((response): DefinitionLookupResult => {
+        if (!response.success) {
+          return {
+            location: null,
+            error: response.error || t('common.retry'),
+          };
+        }
+
+        return {
+          location: response.data?.[0] ?? null,
+        };
+      }).catch((error): DefinitionLookupResult => ({
+        location: null,
+        error: error instanceof Error ? error.message : t('common.retry'),
+      }));
+      definitionLookupCacheRef.current.set(requestKey, pendingLookup);
+    }
+
+    const result = await pendingLookup;
+    if (result.error && options?.showErrors) {
+      setBanner({
+        tone: 'warning',
+        message: result.error,
+        filePath,
+      });
+    }
+
+    return {
+      requestKey,
+      range: getDefinitionLookupRange(model, lineNumber, column),
+      location: result.location,
+    };
+  }, [getDefinitionLookupKey, getDefinitionLookupRange, getModelRequestPath, rootPath, t]);
+
+  const clearDefinitionLinkDecoration = useCallback((editorInstance?: MonacoEditor | null) => {
+    const targetEditor = editorInstance ?? definitionLinkDecorationEditorRef.current;
+    if (targetEditor && typeof targetEditor.deltaDecorations === 'function') {
+      definitionLinkDecorationIdsRef.current = targetEditor.deltaDecorations(
+        definitionLinkDecorationIdsRef.current,
+        [],
+      );
+    } else {
+      definitionLinkDecorationIdsRef.current = [];
+    }
+
+    if (!editorInstance || targetEditor === definitionLinkDecorationEditorRef.current) {
+      definitionLinkDecorationEditorRef.current = null;
+    }
+
+    definitionHoverRequestKeyRef.current = null;
+  }, []);
+
+  const applyDefinitionLinkDecoration = useCallback((editorInstance: MonacoEditor, range: MonacoRange) => {
+    if (definitionLinkDecorationEditorRef.current && definitionLinkDecorationEditorRef.current !== editorInstance) {
+      clearDefinitionLinkDecoration(definitionLinkDecorationEditorRef.current);
+    }
+
+    definitionLinkDecorationEditorRef.current = editorInstance;
+    definitionLinkDecorationIdsRef.current = editorInstance.deltaDecorations(
+      definitionLinkDecorationIdsRef.current,
+      [{
+        range,
+        options: {
+          inlineClassName: 'code-pane-definition-link',
+        },
+      }],
+    );
+  }, [clearDefinitionLinkDecoration]);
+
+  const updateDefinitionLinkHover = useCallback(async (
+    editorInstance: MonacoEditor | null,
+    lineNumber: number,
+    column: number,
+  ) => {
+    const model = editorInstance?.getModel();
+    const filePath = activeFilePathRef.current ?? model?.uri.fsPath ?? model?.uri.path;
+    if (!editorInstance || !model || !filePath) {
+      clearDefinitionLinkDecoration(editorInstance);
+      return;
+    }
+
+    const { requestKey, range, location } = await lookupDefinitionTarget(
+      model,
+      filePath,
+      lineNumber,
+      column,
+      { showErrors: false },
+    );
+
+    if (definitionHoverRequestKeyRef.current !== requestKey) {
+      return;
+    }
+
+    if (!location) {
+      clearDefinitionLinkDecoration(editorInstance);
+      return;
+    }
+
+    applyDefinitionLinkDecoration(editorInstance, range);
+  }, [applyDefinitionLinkDecoration, clearDefinitionLinkDecoration, lookupDefinitionTarget]);
+
   const applyPendingNavigation = useCallback((editorInstance: MonacoEditor | null, filePath: string) => {
     const pendingNavigation = pendingNavigationRef.current;
     if (!editorInstance || !pendingNavigation || pendingNavigation.filePath !== filePath) {
@@ -613,13 +787,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
     saveCurrentViewState();
     editorMouseDownListenerRef.current?.dispose();
     editorMouseDownListenerRef.current = null;
+    editorMouseMoveListenerRef.current?.dispose();
+    editorMouseMoveListenerRef.current = null;
+    editorMouseLeaveListenerRef.current?.dispose();
+    editorMouseLeaveListenerRef.current = null;
     diffEditorMouseDownListenerRef.current?.dispose();
     diffEditorMouseDownListenerRef.current = null;
+    diffEditorMouseMoveListenerRef.current?.dispose();
+    diffEditorMouseMoveListenerRef.current = null;
+    diffEditorMouseLeaveListenerRef.current?.dispose();
+    diffEditorMouseLeaveListenerRef.current = null;
+    clearDefinitionLinkDecoration();
     editorRef.current?.dispose();
     diffEditorRef.current?.dispose();
     editorRef.current = null;
     diffEditorRef.current = null;
-  }, [saveCurrentViewState]);
+  }, [clearDefinitionLinkDecoration, saveCurrentViewState]);
 
   const disposeAllModels = useCallback(() => {
     for (const timer of autoSaveTimersRef.current.values()) {
@@ -648,9 +831,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
     diffModelsRef.current.clear();
 
     fileMetaRef.current.clear();
+    preloadedReadResultsRef.current.clear();
+    clearDefinitionLookupCache();
     viewStatesRef.current.clear();
     setProblems([]);
-  }, []);
+  }, [clearDefinitionLookupCache]);
 
   const refreshGitStatus = useCallback(async () => {
     const response = await window.electronAPI.codePaneGetGitStatus({ rootPath });
@@ -735,6 +920,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
           return;
         }
 
+        clearDefinitionLookupCache();
+
         if (suppressModelEventsRef.current.has(filePath)) {
           return;
         }
@@ -772,6 +959,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         suppressModelEventsRef.current.add(filePath);
         model.setValue(readResult.content);
         suppressModelEventsRef.current.delete(filePath);
+        clearDefinitionLookupCache();
       }
     }
 
@@ -792,7 +980,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       void syncLanguageDocument(filePath, 'open');
     }
     return model;
-  }, [clearBannerForFile, markDirty, refreshProblems, syncLanguageDocument]);
+  }, [clearBannerForFile, clearDefinitionLookupCache, markDirty, refreshProblems, syncLanguageDocument]);
 
   const loadFileIntoModel = useCallback(async (filePath: string) => {
     if (!monacoRef.current && supportsMonaco) {
@@ -842,31 +1030,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const handleDefinitionClick = useCallback(async (editorInstance: MonacoEditor | null, lineNumber: number, column: number) => {
     const model = editorInstance?.getModel();
-    const filePath = model?.uri.fsPath || model?.uri.path;
+    const filePath = activeFilePathRef.current ?? model?.uri.fsPath ?? model?.uri.path;
     if (!model || !filePath) {
       return;
     }
 
-    const response = await window.electronAPI.codePaneGetDefinition({
-      rootPath,
+    const { location: nextLocation } = await lookupDefinitionTarget(
+      model,
       filePath,
-      language: model.getLanguageId(),
-      position: {
-        lineNumber,
-        column,
-      },
-    });
-
-    if (!response.success) {
-      setBanner({
-        tone: 'warning',
-        message: response.error || t('common.retry'),
-        filePath,
-      });
-      return;
-    }
-
-    const nextLocation = response.data?.[0];
+      lineNumber,
+      column,
+      { showErrors: true },
+    );
     if (!nextLocation) {
       return;
     }
@@ -881,24 +1056,74 @@ export const CodePane: React.FC<CodePaneProps> = ({
       displayPath: nextLocation.displayPath,
       documentUri: nextLocation.uri,
     });
-  }, [rootPath, t]);
+  }, [lookupDefinitionTarget]);
 
   const attachDefinitionClickNavigation = useCallback((
     editorInstance: MonacoEditor | null,
     target: 'editor' | 'diff',
   ) => {
-    const listenerRef = target === 'editor'
+    const mouseDownListenerRef = target === 'editor'
       ? editorMouseDownListenerRef
       : diffEditorMouseDownListenerRef;
+    const mouseMoveListenerRef = target === 'editor'
+      ? editorMouseMoveListenerRef
+      : diffEditorMouseMoveListenerRef;
+    const mouseLeaveListenerRef = target === 'editor'
+      ? editorMouseLeaveListenerRef
+      : diffEditorMouseLeaveListenerRef;
 
-    listenerRef.current?.dispose();
-    listenerRef.current = null;
+    mouseDownListenerRef.current?.dispose();
+    mouseDownListenerRef.current = null;
+    mouseMoveListenerRef.current?.dispose();
+    mouseMoveListenerRef.current = null;
+    mouseLeaveListenerRef.current?.dispose();
+    mouseLeaveListenerRef.current = null;
 
     if (!editorInstance || typeof editorInstance.onMouseDown !== 'function') {
       return;
     }
 
-    listenerRef.current = editorInstance.onMouseDown((event: any) => {
+    mouseMoveListenerRef.current = editorInstance.onMouseMove?.((event: any) => {
+      const pointerEvent = event.event?.browserEvent ?? event.event ?? {};
+      const hasModifier = isMac
+        ? pointerEvent.metaKey === true && pointerEvent.ctrlKey !== true
+        : pointerEvent.ctrlKey === true && pointerEvent.metaKey !== true;
+
+      if (!hasModifier || !event.target?.position) {
+        clearDefinitionLinkDecoration(editorInstance);
+        return;
+      }
+
+      const model = editorInstance.getModel?.();
+      const filePath = activeFilePathRef.current ?? model?.uri.fsPath ?? model?.uri.path;
+      if (!model || !filePath) {
+        clearDefinitionLinkDecoration(editorInstance);
+        return;
+      }
+
+      const requestKey = getDefinitionLookupKey(
+        model,
+        filePath,
+        event.target.position.lineNumber,
+        event.target.position.column,
+      );
+      if (definitionHoverRequestKeyRef.current === requestKey) {
+        return;
+      }
+
+      definitionHoverRequestKeyRef.current = requestKey;
+      void updateDefinitionLinkHover(
+        editorInstance,
+        event.target.position.lineNumber,
+        event.target.position.column,
+      );
+    }) ?? null;
+
+    mouseLeaveListenerRef.current = editorInstance.onMouseLeave?.(() => {
+      clearDefinitionLinkDecoration(editorInstance);
+    }) ?? null;
+
+    mouseDownListenerRef.current = editorInstance.onMouseDown((event: any) => {
       const pointerEvent = event.event?.browserEvent ?? event.event ?? {};
       const hasModifier = isMac
         ? pointerEvent.metaKey === true && pointerEvent.ctrlKey !== true
@@ -922,7 +1147,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         event.target.position.column,
       );
     });
-  }, [handleDefinitionClick, isMac]);
+  }, [clearDefinitionLinkDecoration, getDefinitionLookupKey, handleDefinitionClick, isMac, updateDefinitionLinkHover]);
 
   const refreshEditorSurface = useCallback(async () => {
     const hostElement = editorHostRef.current;
@@ -1316,6 +1541,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     diffModelsRef.current.get(filePath)?.dispose();
     diffModelsRef.current.delete(filePath);
     fileMetaRef.current.delete(filePath);
+    preloadedReadResultsRef.current.delete(filePath);
+    clearDefinitionLookupCache();
     viewStatesRef.current.delete(filePath);
     markDirty(filePath, false);
     clearBannerForFile(filePath);
@@ -1335,7 +1562,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       viewMode: 'editor',
       diffTargetPath: null,
     });
-  }, [activeFilePath, clearBannerForFile, closeLanguageDocument, flushDirtyFiles, markDirty, openFiles, persistCodeState, selectedPath]);
+  }, [activeFilePath, clearBannerForFile, clearDefinitionLookupCache, closeLanguageDocument, flushDirtyFiles, markDirty, openFiles, persistCodeState, selectedPath]);
 
   const toggleDirectory = useCallback((directoryPath: string) => {
     setExpandedDirectories((currentExpandedDirectories) => {
@@ -2119,10 +2346,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [flushDirtyFiles, onClose]);
 
   return (
-    <div
-      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
-      onMouseDown={onActivate}
-    >
+    <>
+      <style>
+        {`
+          .code-pane-definition-link {
+            cursor: pointer;
+            text-decoration: underline;
+            text-decoration-thickness: 1px;
+            text-underline-offset: 2px;
+          }
+        `}
+      </style>
+      <div
+        className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
+        onMouseDown={onActivate}
+      >
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
         <div className="flex min-w-0 items-center gap-2 text-zinc-200">
           <FileCode2 size={14} className="shrink-0 text-[rgb(var(--primary))]" />
@@ -2673,7 +2911,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

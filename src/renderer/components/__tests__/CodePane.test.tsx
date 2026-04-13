@@ -71,6 +71,35 @@ class FakeModel {
     return this.value;
   }
 
+  getWordAtPosition(position: { lineNumber: number; column: number }) {
+    const lines = this.value.split('\n');
+    const line = lines[position.lineNumber - 1] ?? '';
+    const index = Math.max(position.column - 1, 0);
+    if (index >= line.length) {
+      return null;
+    }
+
+    const isWordCharacter = (character: string) => /[A-Za-z0-9_$]/.test(character);
+    if (!isWordCharacter(line[index] ?? '')) {
+      return null;
+    }
+
+    let start = index;
+    let end = index;
+    while (start > 0 && isWordCharacter(line[start - 1] ?? '')) {
+      start -= 1;
+    }
+    while (end < line.length && isWordCharacter(line[end] ?? '')) {
+      end += 1;
+    }
+
+    return {
+      word: line.slice(start, end),
+      startColumn: start + 1,
+      endColumn: end + 1,
+    };
+  }
+
   setValue(value: string) {
     this.value = value;
     for (const listener of Array.from(this.listeners)) {
@@ -86,9 +115,16 @@ class FakeModel {
 function createFakeEditor() {
   let model: FakeModel | null = null;
   const mouseDownListeners = new Set<(event: any) => void>();
+  const mouseMoveListeners = new Set<(event: any) => void>();
+  const mouseLeaveListeners = new Set<() => void>();
+  let decorationIds: string[] = [];
 
   return {
     addCommand: vi.fn(),
+    deltaDecorations: vi.fn((oldDecorations: string[], newDecorations: Array<{ range: unknown }>) => {
+      decorationIds = newDecorations.map((_, index) => `decoration-${index + 1}`);
+      return decorationIds;
+    }),
     dispose: vi.fn(),
     focus: vi.fn(),
     onMouseDown: vi.fn((listener: (event: any) => void) => {
@@ -96,6 +132,22 @@ function createFakeEditor() {
       return {
         dispose: () => {
           mouseDownListeners.delete(listener);
+        },
+      };
+    }),
+    onMouseMove: vi.fn((listener: (event: any) => void) => {
+      mouseMoveListeners.add(listener);
+      return {
+        dispose: () => {
+          mouseMoveListeners.delete(listener);
+        },
+      };
+    }),
+    onMouseLeave: vi.fn((listener: () => void) => {
+      mouseLeaveListeners.add(listener);
+      return {
+        dispose: () => {
+          mouseLeaveListeners.delete(listener);
         },
       };
     }),
@@ -113,6 +165,16 @@ function createFakeEditor() {
     fireMouseDown: (event: any) => {
       for (const listener of Array.from(mouseDownListeners)) {
         listener(event);
+      }
+    },
+    fireMouseMove: (event: any) => {
+      for (const listener of Array.from(mouseMoveListeners)) {
+        listener(event);
+      }
+    },
+    fireMouseLeave: () => {
+      for (const listener of Array.from(mouseLeaveListeners)) {
+        listener();
       }
     },
   };
@@ -1029,6 +1091,63 @@ describe('CodePane', () => {
     await waitFor(() => {
       expect(view.getPane().code?.activeFilePath).toBe('/workspace/project/src/util.ts');
     });
+  });
+
+  it('prefetches definitions on Ctrl/Cmd-hover and decorates the symbol as a link', async () => {
+    vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/util.ts',
+          range: {
+            startLineNumber: 3,
+            startColumn: 5,
+            endLineNumber: 3,
+            endColumn: 9,
+          },
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    expect(activeEditor).toBeDefined();
+
+    await act(async () => {
+      activeEditor.fireMouseMove({
+        target: {
+          position: {
+            lineNumber: 1,
+            column: 14,
+          },
+        },
+        event: {
+          browserEvent: {
+            ctrlKey: true,
+            metaKey: false,
+          },
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetDefinition).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        position: {
+          lineNumber: 1,
+          column: 14,
+        },
+      });
+    });
+
+    expect(activeEditor.deltaDecorations).toHaveBeenCalled();
   });
 
   it('opens read-only dependency definitions returned as virtual JDT documents', async () => {

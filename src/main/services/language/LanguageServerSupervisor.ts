@@ -1116,6 +1116,7 @@ function extractLastRuntimeErrorLine(rawMessage: string): string | null {
       Boolean(line)
       && !/Registered provider .*SLF4JServiceProvider.*logback/i.test(line)
       && !/org\.apache\.aries\.spifly\.BaseActivator log/i.test(line)
+      && !/WARNING:\s+Using incubator modules:\s+jdk\.incubator\.vector/i.test(line)
     ));
 
   return lines.length > 0 ? lines[lines.length - 1] : null;
