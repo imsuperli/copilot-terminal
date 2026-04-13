@@ -221,7 +221,7 @@ function renderNestedBlocks(content: string, keyPrefix: string): React.ReactNode
     return null;
   }
 
-  return <div className="space-y-3">{blocks}</div>;
+  return <div className="space-y-2">{blocks}</div>;
 }
 
 function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNode[] {
@@ -260,10 +260,10 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
           key={`${keyPrefix}-codeblock-${blockIndex}`}
           className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/95"
         >
-          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-zinc-400">
+          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-zinc-400">
             <span>{language || 'text'}</span>
           </div>
-          <pre className="overflow-x-auto px-3 py-3 text-[12px] leading-6 text-zinc-100">
+          <pre className="overflow-x-auto px-3 py-2.5 text-[12px] leading-5 text-zinc-100">
             <code>{codeLines.join('\n')}</code>
           </pre>
         </div>,
@@ -288,13 +288,13 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
           key={`${keyPrefix}-table-${blockIndex}`}
           className="overflow-x-auto rounded-2xl border border-zinc-800/80 bg-zinc-950/35"
         >
-          <table className="min-w-full border-collapse text-left text-[14px] leading-6 text-inherit">
+          <table className="min-w-full border-collapse text-left text-[14px] leading-5 text-inherit">
             <thead className="bg-zinc-900/65">
               <tr>
                 {headerCells.map((cell, cellIndex) => (
                   <th
                     key={`${keyPrefix}-table-${blockIndex}-head-${cellIndex}`}
-                    className="border-b border-zinc-800 px-4 py-3 font-semibold text-zinc-100"
+                    className="border-b border-zinc-800 px-4 py-2.5 font-semibold text-zinc-100"
                   >
                     {renderInlineContent(cell, `${keyPrefix}-table-${blockIndex}-head-${cellIndex}`)}
                   </th>
@@ -307,7 +307,7 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
                   {headerCells.map((_, cellIndex) => (
                     <td
                       key={`${keyPrefix}-table-${blockIndex}-row-${rowIndex}-cell-${cellIndex}`}
-                      className="px-4 py-3 align-top text-zinc-200"
+                      className="px-4 py-2.5 align-top text-zinc-200"
                     >
                       {renderInlineContent(row[cellIndex] ?? '', `${keyPrefix}-table-${blockIndex}-row-${rowIndex}-cell-${cellIndex}`)}
                     </td>
@@ -375,7 +375,7 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <blockquote
           key={`${keyPrefix}-quote-${blockIndex}`}
-          className="border-l-2 border-zinc-700/90 pl-4 text-zinc-300"
+          className="border-l-2 border-zinc-700/90 pl-3 text-zinc-300"
         >
           {renderNestedBlocks(quoteLines.join('\n'), `${keyPrefix}-quote-${blockIndex}`)}
         </blockquote>,
@@ -426,7 +426,7 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <ListTag
           key={`${keyPrefix}-list-${blockIndex}`}
-          className={`${ordered ? 'list-decimal' : 'list-disc'} space-y-2 pl-6 text-inherit`}
+          className={`${ordered ? 'list-decimal' : 'list-disc'} space-y-1 pl-6 text-inherit`}
         >
           {items.map((item, itemIndex) => (
             <li key={`${keyPrefix}-list-${blockIndex}-item-${itemIndex}`} className="pl-1">
@@ -451,7 +451,7 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
     blocks.push(
       <p
         key={`${keyPrefix}-paragraph-${blockIndex}`}
-        className="break-words leading-7 text-inherit"
+        className="break-words leading-6 text-inherit"
       >
         {renderInlineContent(paragraphLines.join('\n'), `${keyPrefix}-paragraph-${blockIndex}`)}
       </p>,

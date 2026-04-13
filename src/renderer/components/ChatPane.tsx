@@ -136,7 +136,7 @@ function renderLegacyMessage(message: ChatMessage) {
     return (
       <div className="flex justify-end">
         <div className="max-w-[78%] rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/95 px-4 py-3 sm:max-w-[68%]">
-          <div className="space-y-3 text-[15px] leading-7 text-[rgb(var(--foreground))]">
+          <div className="space-y-2 text-[15px] leading-6 text-[rgb(var(--foreground))]">
             {renderMarkdownLike(message.content)}
           </div>
         </div>
@@ -155,7 +155,7 @@ function renderLegacyMessage(message: ChatMessage) {
   }
 
   return (
-    <div className="space-y-3 text-[15px] leading-7 text-[rgb(var(--foreground))]">
+    <div className="space-y-2 text-[15px] leading-6 text-[rgb(var(--foreground))]">
       {renderMarkdownLike(message.content)}
     </div>
   );
@@ -893,7 +893,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               disabled={isBusy}
               className="inline-flex shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] leading-none transition-colors duration-200 hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <ChatNewConversationIcon size={18} />
+              <ChatNewConversationIcon size={20} />
             </button>
 
             {onClose && (

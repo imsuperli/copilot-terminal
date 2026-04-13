@@ -123,8 +123,8 @@ export function ToolCallBlock({
   }, [errorIds]);
 
   return (
-    <div className="rounded-[18px] border border-zinc-800/80 bg-zinc-900/70 p-2.5 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
-      <div className="space-y-1.5">
+    <div className="rounded-[18px] border border-zinc-800/80 bg-zinc-900/70 p-2 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
+      <div className="space-y-1">
         {items.map((item) => {
           const summary = formatToolSummary(item.event.toolCall);
           const detailContent = buildDetailContent(item);
@@ -135,15 +135,15 @@ export function ToolCallBlock({
           return (
             <div
               key={item.event.toolCall.id}
-              className="rounded-[16px] border border-zinc-800/80 bg-zinc-950/55"
+              className="rounded-[15px] border border-zinc-800/80 bg-zinc-950/55"
             >
-              <div className="flex items-center gap-2 px-2.5 py-1.5">
-                <div className="min-w-0 flex-1 truncate font-mono text-[12px] leading-5 text-zinc-400">
+              <div className="flex items-center gap-1.5 px-2 py-1">
+                <div className="min-w-0 flex-1 truncate font-mono text-[12px] leading-4 text-zinc-400">
                   {summary}
                 </div>
 
                 <div
-                  className={`inline-flex h-5 w-5 shrink-0 items-center justify-center ${status.tone}`}
+                  className={`inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center ${status.tone}`}
                   aria-label={`Status: ${item.event.toolCall.status}`}
                   title={item.event.toolCall.status}
                 >
@@ -163,7 +163,7 @@ export function ToolCallBlock({
                       return next;
                     });
                   }}
-                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-100"
+                  className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-100"
                   aria-label={`${isExpanded ? 'Hide' : 'Show'} details for ${summary}`}
                 >
                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -171,9 +171,9 @@ export function ToolCallBlock({
               </div>
 
               {isExpanded && (
-                <div className="border-t border-zinc-800/80 px-2.5 py-2.5">
+                <div className="border-t border-zinc-800/80 px-2 py-2">
                   {detailContent ? (
-                    <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-zinc-300">
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-4 text-zinc-300">
                       {detailContent}
                     </pre>
                   ) : isRunning ? (
@@ -186,7 +186,7 @@ export function ToolCallBlock({
                   )}
 
                   {item.event.toolCall.reason && (
-                    <p className="mt-2 text-xs leading-5 text-zinc-400">{item.event.toolCall.reason}</p>
+                    <p className="mt-1.5 text-xs leading-4 text-zinc-400">{item.event.toolCall.reason}</p>
                   )}
                 </div>
               )}

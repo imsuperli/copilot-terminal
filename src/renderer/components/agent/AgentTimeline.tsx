@@ -324,14 +324,14 @@ export function AgentTimeline({
 
     return (
       <EventShell icon={<Sparkles size={15} />} title={title}>
-        <div className="space-y-4">
+        <div className="space-y-3">
           {sections.map((section, sectionIndex) => {
             switch (section.kind) {
               case 'reasoning':
                 return (
                   <div key={`reasoning-${section.event.id}`}>
                     {hasNonReasoningSection && (
-                      <div className="mb-2 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
+                      <div className="mb-1.5 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
                         Thinking
                       </div>
                     )}
@@ -342,7 +342,7 @@ export function AgentTimeline({
                 return (
                   <div
                     key={`assistant-message-${section.event.id}`}
-                    className="space-y-3 text-[15px] leading-7 text-zinc-200"
+                    className="space-y-2 text-[15px] leading-6 text-zinc-200"
                   >
                     {renderMarkdownLike(section.event.content)}
                   </div>
@@ -350,7 +350,7 @@ export function AgentTimeline({
               case 'tool-call-group':
                 return (
                   <div key={`tool-call-group-${sectionIndex}`}>
-                    <div className="mb-3 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
+                    <div className="mb-2 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
                       {section.events.length > 1 ? 'Tool Calls' : 'Tool Call'}
                     </div>
                     <ToolCallBlock items={section.events} />
@@ -407,7 +407,7 @@ export function AgentTimeline({
         return (
           <div className="flex justify-end">
             <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
-              <div className="space-y-3 text-[15px] leading-7 text-zinc-100">
+              <div className="space-y-2 text-[15px] leading-6 text-zinc-100">
                 {renderMarkdownLike(event.content)}
               </div>
             </div>
@@ -422,7 +422,7 @@ export function AgentTimeline({
       case 'assistant-message':
         return (
           <EventShell icon={<Sparkles size={15} />} title={assistantLabel}>
-            <div className="space-y-3 text-[15px] leading-7 text-zinc-200">
+            <div className="space-y-2 text-[15px] leading-6 text-zinc-200">
               {renderMarkdownLike(event.content)}
             </div>
           </EventShell>
@@ -474,7 +474,7 @@ export function AgentTimeline({
   };
 
   return (
-    <div className="space-y-6 pt-4">
+    <div className="space-y-5 pt-4">
       {displayTimeline.map((item) => (
         <div
           key={

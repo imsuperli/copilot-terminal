@@ -19,7 +19,7 @@ export function ReasoningBlock({
           <span>Thinking...</span>
         </div>
       ) : (
-        <div className="space-y-3 text-sm leading-7 text-zinc-400">
+        <div className="space-y-2 text-sm leading-6 text-zinc-400">
           {renderMarkdownLike(content)}
         </div>
       )}
