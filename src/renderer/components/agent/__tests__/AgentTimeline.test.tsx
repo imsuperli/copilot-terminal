@@ -56,9 +56,10 @@ describe('AgentTimeline', () => {
       />,
     );
 
-    const thinkingLabel = screen.getByText('codex · Thinking');
-    const assistantLabel = screen.getByText('codex');
-    expect(thinkingLabel.compareDocumentPosition(assistantLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const thinkingLabel = screen.getByText('Thinking');
+    const assistantReply = screen.getByText('最终答复');
+    expect(thinkingLabel.compareDocumentPosition(assistantReply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByText('codex')).toHaveLength(1);
   });
 
   it('groups consecutive tool calls into one compact block and expands command details on demand', async () => {
@@ -159,7 +160,7 @@ describe('AgentTimeline', () => {
     );
 
     expect(screen.getByText('Tool calls')).toBeInTheDocument();
-    expect(screen.getByText('codex')).toBeInTheDocument();
+    expect(screen.getAllByText('codex')).toHaveLength(1);
     expect(screen.getByText('uname -a')).toBeInTheDocument();
     expect(screen.getByText('cat /etc/os-release')).toBeInTheDocument();
     expect(screen.queryByText('execute_command')).not.toBeInTheDocument();
@@ -174,6 +175,51 @@ describe('AgentTimeline', () => {
     expect(screen.queryByText('192.168.3.25')).not.toBeInTheDocument();
 
     expect(screen.getByText('Running')).toBeInTheDocument();
+  });
+
+  it('keeps a single agent block when an empty assistant message is followed by tool calls', () => {
+    render(
+      <AgentTimeline
+        task={createTaskSnapshot({
+          timeline: [
+            {
+              id: 'assistant-turn-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:01.000Z',
+              kind: 'assistant-message',
+              status: 'completed',
+              content: '',
+            },
+            {
+              id: 'tool-tool-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:01.500Z',
+              kind: 'tool-call',
+              status: 'completed',
+              toolCall: {
+                id: 'tool-1',
+                name: 'execute_command',
+                params: {
+                  command: 'df -h',
+                },
+                status: 'completed',
+              },
+            },
+          ],
+        })}
+        assistantLabel="codex"
+        onApprove={() => {}}
+        onReject={() => {}}
+        onSubmitInteraction={() => {}}
+        onCancelInteraction={() => {}}
+      />,
+    );
+
+    expect(screen.getAllByText('codex')).toHaveLength(1);
+    expect(screen.getByText('Tool call')).toBeInTheDocument();
+    expect(screen.getByText('df -h')).toBeInTheDocument();
   });
 
   it('does not render internal context summary events', () => {

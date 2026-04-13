@@ -316,8 +316,29 @@ function isInternalBootstrapEvent(event: AgentTimelineEvent): boolean {
     || event.kind === 'context-summary';
 }
 
+function isRenderableAssistantProgressEvent(event: AgentTimelineEvent): boolean {
+  switch (event.kind) {
+    case 'reasoning':
+      return Boolean(event.content.trim());
+    case 'assistant-message':
+      return Boolean(event.content.trim());
+    case 'tool-call':
+    case 'tool-result':
+    case 'command':
+    case 'command-output':
+    case 'approval-request':
+    case 'interaction-request':
+      return true;
+    default:
+      return false;
+  }
+}
+
 function hasVisibleAgentProgress(events: AgentTimelineEvent[]): boolean {
-  return events.some((event) => !isInternalBootstrapEvent(event));
+  return events.some((event) => (
+    !isInternalBootstrapEvent(event)
+    && isRenderableAssistantProgressEvent(event)
+  ));
 }
 
 function isOptimisticAgentTask(task: AgentTaskSnapshot | null | undefined): boolean {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, TerminalSquare, User2 } from 'lucide-react';
+import { Sparkles, TerminalSquare } from 'lucide-react';
 import type { AgentTaskSnapshot } from '../../../shared/types/agent';
 import type {
   AgentCommandEvent,
@@ -63,9 +63,59 @@ interface HydratedToolCallEvent {
   toolResultEvent?: AgentToolResultEvent;
 }
 
+type AssistantTurnSection =
+  | { kind: 'reasoning'; event: AgentTimelineEvent & { kind: 'reasoning' } }
+  | { kind: 'assistant-message'; event: AgentTimelineEvent & { kind: 'assistant-message' } }
+  | { kind: 'tool-call-group'; events: HydratedToolCallItem[] }
+  | { kind: 'approval-request'; event: AgentTimelineEvent & { kind: 'approval-request' } }
+  | { kind: 'interaction-request'; event: AgentTimelineEvent & { kind: 'interaction-request' } }
+  | { kind: 'approval-result'; event: AgentTimelineEvent & { kind: 'approval-result' } }
+  | { kind: 'interaction-result'; event: AgentTimelineEvent & { kind: 'interaction-result' } };
+
 type TimelineDisplayItem =
   | { kind: 'event'; event: AgentTimelineEvent }
-  | { kind: 'tool-call-group'; events: HydratedToolCallItem[] };
+  | { kind: 'assistant-turn'; key: string; sections: AssistantTurnSection[] };
+
+function isInternalSystemNotice(event: AgentTimelineEvent): boolean {
+  return event.kind === 'system-notice'
+    && event.content === 'Imported existing chat transcript into the new agent runtime.';
+}
+
+function shouldRenderTimelineEvent(event: AgentTimelineEvent): boolean {
+  if (event.kind === 'context-summary') {
+    return false;
+  }
+
+  if (isInternalSystemNotice(event)) {
+    return false;
+  }
+
+  if (event.kind === 'assistant-message') {
+    return Boolean(event.content.trim());
+  }
+
+  if (event.kind === 'reasoning') {
+    return Boolean(event.content.trim())
+      || ['pending', 'running', 'streaming'].includes(event.status ?? '');
+  }
+
+  return true;
+}
+
+function isAssistantTurnEvent(event: AgentTimelineEvent): boolean {
+  switch (event.kind) {
+    case 'reasoning':
+    case 'assistant-message':
+    case 'tool-call':
+    case 'approval-request':
+    case 'interaction-request':
+    case 'approval-result':
+    case 'interaction-result':
+      return true;
+    default:
+      return false;
+  }
+}
 
 function EventShell({
   icon,
@@ -171,7 +221,7 @@ export function AgentTimeline({
     };
   }, [orderedTimeline]);
   const visibleTimeline = React.useMemo(
-    () => orderedTimeline.filter((event) => !hiddenEventIds.has(event.id) && event.kind !== 'context-summary'),
+    () => orderedTimeline.filter((event) => !hiddenEventIds.has(event.id) && shouldRenderTimelineEvent(event)),
     [hiddenEventIds, orderedTimeline],
   );
   const displayTimeline = React.useMemo<TimelineDisplayItem[]>(() => {
@@ -179,26 +229,82 @@ export function AgentTimeline({
 
     for (let index = 0; index < visibleTimeline.length; index += 1) {
       const event = visibleTimeline[index];
-      if (event.kind === 'tool-call') {
-        const groupedEvents: HydratedToolCallItem[] = [];
+      if (isAssistantTurnEvent(event)) {
+        const sections: AssistantTurnSection[] = [];
         let cursor = index;
 
-        while (cursor < visibleTimeline.length && visibleTimeline[cursor]?.kind === 'tool-call') {
-          const toolEvent = visibleTimeline[cursor] as AgentToolCallEvent;
-          const hydrated = hydratedToolCalls.get(toolEvent.id);
-          groupedEvents.push({
-            event: toolEvent,
-            commandEvent: hydrated?.commandEvent,
-            commandOutputs: hydrated?.commandOutputs ?? [],
-            toolResultEvent: hydrated?.toolResultEvent,
-          });
+        while (cursor < visibleTimeline.length) {
+          const currentEvent = visibleTimeline[cursor];
+          if (!currentEvent || !isAssistantTurnEvent(currentEvent)) {
+            break;
+          }
+
+          if (currentEvent.kind === 'tool-call') {
+            const groupedEvents: HydratedToolCallItem[] = [];
+
+            while (cursor < visibleTimeline.length && visibleTimeline[cursor]?.kind === 'tool-call') {
+              const toolEvent = visibleTimeline[cursor] as AgentToolCallEvent;
+              const hydrated = hydratedToolCalls.get(toolEvent.id);
+              groupedEvents.push({
+                event: toolEvent,
+                commandEvent: hydrated?.commandEvent,
+                commandOutputs: hydrated?.commandOutputs ?? [],
+                toolResultEvent: hydrated?.toolResultEvent,
+              });
+              cursor += 1;
+            }
+
+            sections.push({
+              kind: 'tool-call-group',
+              events: groupedEvents,
+            });
+            continue;
+          }
+
+          if (currentEvent.kind === 'reasoning') {
+            sections.push({
+              kind: 'reasoning',
+              event: currentEvent,
+            });
+          } else if (currentEvent.kind === 'assistant-message') {
+            sections.push({
+              kind: 'assistant-message',
+              event: currentEvent,
+            });
+          } else if (currentEvent.kind === 'approval-request') {
+            sections.push({
+              kind: 'approval-request',
+              event: currentEvent,
+            });
+          } else if (currentEvent.kind === 'interaction-request') {
+            sections.push({
+              kind: 'interaction-request',
+              event: currentEvent,
+            });
+          } else if (currentEvent.kind === 'approval-result') {
+            sections.push({
+              kind: 'approval-result',
+              event: currentEvent,
+            });
+          } else if (currentEvent.kind === 'interaction-result') {
+            sections.push({
+              kind: 'interaction-result',
+              event: currentEvent,
+            });
+          }
+
           cursor += 1;
         }
 
-        items.push({
-          kind: 'tool-call-group',
-          events: groupedEvents,
-        });
+        if (sections.length > 0) {
+          items.push({
+            kind: 'assistant-turn',
+            key: sections[0]?.kind === 'tool-call-group'
+              ? `assistant-turn-${sections[0].events.map((entry) => entry.event.id).join('-')}`
+              : `assistant-turn-${sections[0].event.id}`,
+            sections,
+          });
+        }
         index = cursor - 1;
         continue;
       }
@@ -211,6 +317,89 @@ export function AgentTimeline({
 
     return items;
   }, [hydratedToolCalls, visibleTimeline]);
+
+  const renderAssistantTurn = (sections: AssistantTurnSection[]) => {
+    const hasNonReasoningSection = sections.some((section) => section.kind !== 'reasoning');
+    const title = hasNonReasoningSection ? assistantLabel : `${assistantLabel} · Thinking`;
+
+    return (
+      <EventShell icon={<Sparkles size={15} />} title={title}>
+        <div className="space-y-4">
+          {sections.map((section, sectionIndex) => {
+            switch (section.kind) {
+              case 'reasoning':
+                return (
+                  <div key={`reasoning-${section.event.id}`}>
+                    {hasNonReasoningSection && (
+                      <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                        Thinking
+                      </div>
+                    )}
+                    <ReasoningBlock content={section.event.content} status={section.event.status} />
+                  </div>
+                );
+              case 'assistant-message':
+                return (
+                  <div
+                    key={`assistant-message-${section.event.id}`}
+                    className="space-y-3 text-[15px] leading-7 text-zinc-200"
+                  >
+                    {renderMarkdownLike(section.event.content)}
+                  </div>
+                );
+              case 'tool-call-group':
+                return (
+                  <div key={`tool-call-group-${sectionIndex}`}>
+                    <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                      {section.events.length > 1 ? 'Tool calls' : 'Tool call'}
+                    </div>
+                    <ToolCallBlock items={section.events} />
+                  </div>
+                );
+              case 'approval-request':
+                return task.pendingApproval?.approvalId === section.event.approvalId ? (
+                  <div key={`approval-request-${section.event.id}`}>
+                    <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Approval</div>
+                    <ApprovalCard
+                      approval={task.pendingApproval}
+                      onApprove={() => onApprove(section.event.approvalId)}
+                      onReject={() => onReject(section.event.approvalId)}
+                    />
+                  </div>
+                ) : null;
+              case 'interaction-request':
+                return task.pendingInteraction?.interactionId === section.event.interactionId ? (
+                  <div key={`interaction-request-${section.event.id}`}>
+                    <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Interaction needed</div>
+                    <InteractionPrompt
+                      interaction={task.pendingInteraction}
+                      onSubmit={(value) => onSubmitInteraction(section.event.interactionId, value)}
+                      onCancel={() => onCancelInteraction(section.event.interactionId)}
+                    />
+                  </div>
+                ) : null;
+              case 'approval-result':
+              case 'interaction-result':
+                return (
+                  <div
+                    key={`${section.kind}-${section.event.id}`}
+                    className="rounded-[18px] border border-zinc-800/70 bg-zinc-900/50 px-4 py-2 text-xs text-zinc-400"
+                  >
+                    {section.kind === 'approval-result'
+                      ? `Approval ${section.event.approved ? 'granted' : 'rejected'}`
+                      : section.event.cancelled
+                        ? 'Interaction cancelled'
+                        : 'Interaction submitted'}
+                  </div>
+                );
+              default:
+                return null;
+            }
+          })}
+        </div>
+      </EventShell>
+    );
+  };
 
   const renderEvent = (event: AgentTimelineEvent) => {
     switch (event.kind) {
@@ -268,43 +457,17 @@ export function AgentTimeline({
             <CommandOutputBlock content={event.content} stream={event.stream} />
           </div>
         );
-      case 'approval-request':
-        return task.pendingApproval?.approvalId === event.approvalId ? (
-          <EventShell icon={<User2 size={15} />} title="Approval">
-            <ApprovalCard
-              approval={task.pendingApproval}
-              onApprove={() => onApprove(event.approvalId)}
-              onReject={() => onReject(event.approvalId)}
-            />
-          </EventShell>
-        ) : null;
-      case 'interaction-request':
-        return task.pendingInteraction?.interactionId === event.interactionId ? (
-          <EventShell icon={<User2 size={15} />} title="Interaction needed">
-            <InteractionPrompt
-              interaction={task.pendingInteraction}
-              onSubmit={(value) => onSubmitInteraction(event.interactionId, value)}
-              onCancel={() => onCancelInteraction(event.interactionId)}
-            />
-          </EventShell>
-        ) : null;
       case 'system-notice':
         return (
           <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/60 px-4 py-3 text-sm leading-7 text-zinc-300">
             {event.content}
           </div>
         );
+      case 'approval-request':
+      case 'interaction-request':
       case 'approval-result':
       case 'interaction-result':
-        return (
-          <div className="rounded-[18px] border border-zinc-800/70 bg-zinc-900/50 px-4 py-2 text-xs text-zinc-400">
-            {event.kind === 'approval-result'
-              ? `Approval ${event.approved ? 'granted' : 'rejected'}`
-              : event.cancelled
-                ? 'Interaction cancelled'
-                : 'Interaction submitted'}
-          </div>
-        );
+        return null;
       default:
         return null;
     }
@@ -312,24 +475,16 @@ export function AgentTimeline({
 
   return (
     <div className="space-y-6 pt-4">
-      {displayTimeline.map((item, index) => (
+      {displayTimeline.map((item) => (
         <div
           key={
-            item.kind === 'tool-call-group'
-              ? `tool-group-${item.events.map((event) => event.event.id).join('-')}`
+            item.kind === 'assistant-turn'
+              ? item.key
               : item.event.id
           }
         >
-          {item.kind === 'tool-call-group' ? (
-            <EventShell
-              icon={<Sparkles size={15} />}
-              title={assistantLabel}
-            >
-              <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                {item.events.length > 1 ? 'Tool calls' : 'Tool call'}
-              </div>
-              <ToolCallBlock items={item.events} />
-            </EventShell>
+          {item.kind === 'assistant-turn' ? (
+            renderAssistantTurn(item.sections)
           ) : (
             renderEvent(item.event)
           )}
