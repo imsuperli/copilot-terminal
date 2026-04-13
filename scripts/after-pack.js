@@ -1,4 +1,3 @@
-const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
@@ -31,19 +30,5 @@ exports.default = async function afterPack(context) {
     }
   } else {
     console.log(`[after-pack] bin directory not found: ${binDir}, skipping`);
-  }
-
-  // ---- 2. macOS ad-hoc 签名 ----
-  if (platform === 'darwin') {
-    const appPath = path.join(
-      appOutDir,
-      `${context.packager.appInfo.productFilename}.app`
-    );
-
-    console.log(`[after-pack] Ad-hoc signing: ${appPath}`);
-    execSync(
-      `codesign --force --deep --sign - --entitlements "${path.resolve(__dirname, '../resources/entitlements.mac.plist')}" "${appPath}"`,
-      { stdio: 'inherit' }
-    );
   }
 };
