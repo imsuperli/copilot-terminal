@@ -36,7 +36,7 @@ mac:
   artifactName: ${productName}-${version}-mac-${arch}.${ext}
   category: public.app-category.developer-tools
   identity: "-"
-  hardenedRuntime: true
+  hardenedRuntime: false
   gatekeeperAssess: false
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.inherit.plist
