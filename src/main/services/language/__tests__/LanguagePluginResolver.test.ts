@@ -142,6 +142,7 @@ describe('LanguagePluginResolver', () => {
     });
 
     expect(resolution?.mergedSettings).toMatchObject({
+      'extendedClientCapabilities.classFileContentsSupport': true,
       'java.configuration.updateBuildConfiguration': 'interactive',
       'java.import.maven.enabled': true,
       'java.import.gradle.enabled': false,

@@ -104,6 +104,7 @@ function createFakeEditor() {
     saveViewState: vi.fn(() => null),
     setPosition: vi.fn(),
     setSelection: vi.fn(),
+    updateOptions: vi.fn(),
     setModel: vi.fn((nextModel: FakeModel | null) => {
       model = nextModel;
       fakeMonacoState.lastEditorModel = nextModel;
@@ -1028,6 +1029,66 @@ describe('CodePane', () => {
     await waitFor(() => {
       expect(view.getPane().code?.activeFilePath).toBe('/workspace/project/src/util.ts');
     });
+  });
+
+  it('opens read-only dependency definitions returned as virtual JDT documents', async () => {
+    vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: 'jdt://contents/java.base/java/lang/String.class?=mock',
+          uri: 'jdt://contents/java.base/java/lang/String.class?=mock',
+          displayPath: 'External Libraries/java.base/java/lang/String.java',
+          readOnly: true,
+          language: 'java',
+          content: 'package java.lang;\npublic final class String {}\n',
+          range: {
+            startLineNumber: 2,
+            startColumn: 20,
+            endLineNumber: 2,
+            endColumn: 26,
+          },
+        },
+      ],
+    });
+
+    const view = renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    expect(activeEditor).toBeDefined();
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockClear();
+
+    await act(async () => {
+      activeEditor.fireMouseDown({
+        target: {
+          position: {
+            lineNumber: 1,
+            column: 8,
+          },
+        },
+        event: {
+          ctrlKey: true,
+          metaKey: false,
+          leftButton: true,
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(view.getPane().code?.activeFilePath).toBe('jdt://contents/java.base/java/lang/String.class?=mock');
+    });
+
+    expect(screen.getAllByText('String.java').length).toBeGreaterThan(0);
+    expect(window.electronAPI.codePaneReadFile).not.toHaveBeenCalledWith(expect.objectContaining({
+      filePath: 'jdt://contents/java.base/java/lang/String.class?=mock',
+    }));
   });
 
   it('applies plugin diagnostics to Monaco markers and the problems panel', async () => {

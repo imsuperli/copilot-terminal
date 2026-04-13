@@ -18,6 +18,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     codeGitService,
     codePaneWatcherService,
     codeProjectIndexService,
+    languageFeatureService,
     getMainWindow,
   } = ctx;
 
@@ -35,6 +36,18 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
 
   ipcMain.handle('code-pane-read-file', async (_event, config: CodePaneReadFileConfig) => {
     try {
+      if (config.documentUri) {
+        if (!languageFeatureService) {
+          throw new Error('LanguageFeatureService not initialized');
+        }
+
+        const result = await languageFeatureService.readDocument(config, ctx.getCurrentWorkspace());
+        if (!result) {
+          throw new Error(`Unable to read virtual document: ${config.documentUri}`);
+        }
+        return successResponse(result);
+      }
+
       if (!codeFileService) {
         throw new Error('CodeFileService not initialized');
       }

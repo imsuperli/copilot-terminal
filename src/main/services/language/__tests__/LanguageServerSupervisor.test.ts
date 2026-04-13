@@ -194,6 +194,57 @@ describe('LanguageServerSupervisor', () => {
 
     expect(spawnCount).toBe(1);
   });
+
+  it('returns read-only virtual class definitions for JDTLS dependency symbols', async () => {
+    const workspaceRoot = path.join(tempDir, 'workspace');
+    const installPath = path.join(tempDir, 'plugin-install');
+    const filePath = path.join(workspaceRoot, 'src', 'Main.java');
+    await fs.ensureDir(path.dirname(filePath));
+    await fs.ensureDir(installPath);
+    await fs.writeFile(filePath, 'class Main {}');
+
+    supervisor = new LanguageServerSupervisor({
+      runtimeRootPath: path.join(tempDir, 'runtime'),
+      adapters: [createNodeFixtureAdapter()],
+      emitDiagnostics: () => {},
+      emitRuntimeState: () => {},
+      requestTimeoutMs: 5000,
+    });
+
+    const resolution = createResolution(workspaceRoot, installPath, {
+      pluginId: 'official.java-jdtls',
+    });
+
+    await supervisor.syncDocument(resolution, {
+      ownerId: 'pane-1:/workspace/src/Main.java',
+      rootPath: workspaceRoot,
+      filePath,
+      languageId: 'java',
+      content: 'class Main {}',
+    }, 'open');
+
+    const definitions = await supervisor.getDefinition(resolution, filePath, {
+      lineNumber: 1,
+      column: 2,
+    });
+
+    expect(definitions).toEqual([
+      {
+        filePath: 'jdt://contents/java.base/java/lang/String.class?=mock',
+        uri: 'jdt://contents/java.base/java/lang/String.class?=mock',
+        displayPath: 'External Libraries/java.base/java/lang/String.java',
+        readOnly: true,
+        language: 'java',
+        content: expect.stringContaining('public final class String'),
+        range: {
+          startLineNumber: 11,
+          startColumn: 5,
+          endLineNumber: 11,
+          endColumn: 11,
+        },
+      },
+    ]);
+  });
 });
 
 function createNodeFixtureAdapter(): LanguageRuntimeAdapter {
@@ -223,10 +274,16 @@ function createFailingNodeAdapter(onSpawn: () => void): LanguageRuntimeAdapter {
   };
 }
 
-function createResolution(workspaceRoot: string, installPath: string): ResolvedLanguagePlugin {
+function createResolution(
+  workspaceRoot: string,
+  installPath: string,
+  options?: {
+    pluginId?: string;
+  },
+): ResolvedLanguagePlugin {
   const manifest: PluginManifest = {
     schemaVersion: 1,
-    id: 'acme.java-language',
+    id: options?.pluginId ?? 'acme.java-language',
     name: 'Java Language Support',
     publisher: 'Acme',
     version: '1.0.0',

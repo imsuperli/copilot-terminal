@@ -319,7 +319,7 @@ function normalizeLanguage(language: string): string {
 
 function toMonacoLocation(monaco: MonacoModule, location: CodePaneLocation): MonacoLocation {
   return {
-    uri: monaco.Uri.file(location.filePath),
+    uri: location.uri ? monaco.Uri.parse(location.uri) : monaco.Uri.file(location.filePath),
     range: toMonacoRange(location.range),
   };
 }

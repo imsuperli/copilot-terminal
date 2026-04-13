@@ -7,6 +7,7 @@ import type {
   CodePaneHoverResult,
   CodePaneLocation,
   CodePanePosition,
+  CodePaneReadFileResult,
   CodePaneReference,
   PluginRuntimeStateChangedPayload,
 } from '../../../shared/types/electron-api';
@@ -31,6 +32,7 @@ type TextSyncKind = 0 | 1 | 2;
 const JAVA_SLOW_REQUEST_TIMEOUT_MS = 60_000;
 const JAVA_SLOW_REQUEST_METHODS = new Set([
   'initialize',
+  'java/classFileContents',
   'textDocument/definition',
   'textDocument/hover',
   'textDocument/references',
@@ -210,6 +212,13 @@ export class LanguageServerSupervisor {
 
   async getDocumentSymbols(resolution: ResolvedLanguagePlugin, filePath: string): Promise<CodePaneDocumentSymbol[]> {
     return await this.getOrCreateSession(resolution).getDocumentSymbols(filePath);
+  }
+
+  async readVirtualDocument(
+    resolution: ResolvedLanguagePlugin,
+    documentUri: string,
+  ): Promise<CodePaneReadFileResult | null> {
+    return await this.getOrCreateSession(resolution).readVirtualDocument(documentUri);
   }
 
   async resetSessions(pluginId?: string): Promise<void> {
@@ -422,7 +431,10 @@ class LanguageServerSession {
     });
 
     const items = Array.isArray(result) ? result : result ? [result] : [];
-    return items.map(normalizeLocationLikeResult).filter((item): item is CodePaneLocation => Boolean(item));
+    const normalizedLocations = await Promise.all(items.map(async (item) => (
+      await this.normalizeLocationLikeResult(item)
+    )));
+    return normalizedLocations.filter((item): item is CodePaneLocation => Boolean(item));
   }
 
   async getHover(filePath: string, position: CodePanePosition): Promise<CodePaneHoverResult | null> {
@@ -476,6 +488,36 @@ class LanguageServerSession {
     }) as Array<LspDocumentSymbol | LspSymbolInformation> | null;
 
     return (result ?? []).map(normalizeDocumentSymbol).filter((symbol): symbol is CodePaneDocumentSymbol => Boolean(symbol));
+  }
+
+  async readVirtualDocument(documentUri: string): Promise<CodePaneReadFileResult | null> {
+    await this.ensureInitialized();
+
+    if (!isVirtualDocumentUri(documentUri)) {
+      return null;
+    }
+
+    if (this.pluginId !== 'official.java-jdtls') {
+      return null;
+    }
+
+    const result = await this.sendRequest('java/classFileContents', {
+      uri: documentUri,
+    }) as string | null;
+    if (typeof result !== 'string' || result.length === 0) {
+      return null;
+    }
+
+    return {
+      content: result,
+      mtimeMs: 0,
+      size: Buffer.byteLength(result, 'utf8'),
+      language: 'java',
+      isBinary: false,
+      readOnly: true,
+      documentUri,
+      displayPath: deriveVirtualDocumentDisplayPath(documentUri),
+    };
   }
 
   async dispose(): Promise<void> {
@@ -769,6 +811,45 @@ class LanguageServerSession {
     });
   }
 
+  private async normalizeLocationLikeResult(
+    value: LspLocation | LspLocationLink | null | undefined,
+  ): Promise<CodePaneLocation | null> {
+    if (!value) {
+      return null;
+    }
+
+    const targetUri = 'targetUri' in value ? value.targetUri : value.uri;
+    const filePath = uriToFilePath(targetUri);
+    const normalizedRange = fromLspRange('targetRange' in value ? value.targetRange : value.range);
+    const originSelectionRange = 'targetUri' in value && value.targetSelectionRange
+      ? fromLspRange(value.targetSelectionRange)
+      : undefined;
+
+    if (filePath) {
+      return {
+        filePath,
+        range: normalizedRange,
+        ...(originSelectionRange ? { originSelectionRange } : {}),
+      };
+    }
+
+    const virtualDocument = await this.readVirtualDocument(targetUri);
+    if (!virtualDocument) {
+      return null;
+    }
+
+    return {
+      filePath: virtualDocument.documentUri ?? targetUri,
+      uri: targetUri,
+      displayPath: virtualDocument.displayPath,
+      readOnly: true,
+      language: virtualDocument.language,
+      content: virtualDocument.content,
+      range: normalizedRange,
+      ...(originSelectionRange ? { originSelectionRange } : {}),
+    };
+  }
+
   private async stopProcess(): Promise<void> {
     const spawnedProcess = this.spawnedProcess;
     if (!spawnedProcess) {
@@ -941,23 +1022,29 @@ function fromLspRange(range: LspRange): CodePaneLocation['range'] {
   };
 }
 
-function normalizeLocationLikeResult(value: LspLocation | LspLocationLink | null | undefined): CodePaneLocation | null {
-  if (!value) {
-    return null;
-  }
+function isVirtualDocumentUri(uri: string | undefined): boolean {
+  return typeof uri === 'string'
+    && /^[a-z][a-z0-9+.-]*:\/\//i.test(uri)
+    && !uri.toLowerCase().startsWith('file://');
+}
 
-  if ('targetUri' in value) {
-    return {
-      filePath: uriToFilePath(value.targetUri),
-      range: fromLspRange(value.targetRange),
-      ...(value.targetSelectionRange ? { originSelectionRange: fromLspRange(value.targetSelectionRange) } : {}),
-    };
-  }
+function deriveVirtualDocumentDisplayPath(documentUri: string): string {
+  try {
+    const parsedUri = new URL(documentUri);
+    const decodedPath = decodeURIComponent(parsedUri.pathname || '');
+    const trimmedPath = decodedPath.replace(/^\/+/, '');
+    if (!trimmedPath) {
+      return documentUri;
+    }
 
-  return {
-    filePath: uriToFilePath(value.uri),
-    range: fromLspRange(value.range),
-  };
+    const normalizedPath = trimmedPath.endsWith('.class')
+      ? `${trimmedPath.slice(0, -'.class'.length)}.java`
+      : trimmedPath;
+
+    return path.posix.join('External Libraries', normalizedPath);
+  } catch {
+    return documentUri;
+  }
 }
 
 function normalizeDiagnostic(value: LspDiagnostic, filePath: string): CodePaneDiagnostic | null {
@@ -1028,6 +1115,7 @@ function extractLastRuntimeErrorLine(rawMessage: string): string | null {
     .filter((line) => (
       Boolean(line)
       && !/Registered provider .*SLF4JServiceProvider.*logback/i.test(line)
+      && !/org\.apache\.aries\.spifly\.BaseActivator log/i.test(line)
     ));
 
   return lines.length > 0 ? lines[lines.length - 1] : null;

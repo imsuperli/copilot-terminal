@@ -268,6 +268,7 @@ export interface CodePaneListDirectoryConfig {
 export interface CodePaneReadFileConfig {
   rootPath: string;
   filePath: string;
+  documentUri?: string;
 }
 
 export interface CodePaneReadFileResult {
@@ -276,6 +277,9 @@ export interface CodePaneReadFileResult {
   size: number;
   language: string;
   isBinary: boolean;
+  readOnly?: boolean;
+  documentUri?: string;
+  displayPath?: string;
 }
 
 export interface CodePaneWriteFileConfig {
@@ -373,6 +377,11 @@ export interface CodePaneLocation {
   filePath: string;
   range: CodePaneRange;
   originSelectionRange?: CodePaneRange;
+  uri?: string;
+  displayPath?: string;
+  readOnly?: boolean;
+  language?: string;
+  content?: string;
 }
 
 export interface CodePaneGetDefinitionConfig {

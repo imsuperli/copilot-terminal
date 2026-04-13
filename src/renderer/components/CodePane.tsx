@@ -63,6 +63,11 @@ type FileNavigationLocation = {
   filePath: string;
   lineNumber: number;
   column: number;
+  content?: string;
+  language?: string;
+  readOnly?: boolean;
+  displayPath?: string;
+  documentUri?: string;
 };
 
 type BannerState = {
@@ -78,6 +83,9 @@ type FileRuntimeMeta = {
   mtimeMs: number;
   size: number;
   lastSavedAt?: number;
+  readOnly?: boolean;
+  displayPath?: string;
+  documentUri?: string;
 };
 
 type CodePaneFsChange = CodePaneFsChangedPayload['changes'][number];
@@ -93,6 +101,10 @@ export interface CodePaneProps {
 
 function normalizePath(pathValue: string): string {
   return pathValue.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+function isVirtualDocumentPath(pathValue: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(pathValue) && !pathValue.toLowerCase().startsWith('file://');
 }
 
 function getRelativePath(rootPath: string, targetPath: string): string {
@@ -265,6 +277,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const diffModelsRef = useRef(new Map<string, MonacoModel>());
   const modelDisposersRef = useRef(new Map<string, MonacoDisposable>());
   const fileMetaRef = useRef(new Map<string, FileRuntimeMeta>());
+  const preloadedReadResultsRef = useRef(new Map<string, CodePaneReadFileResult>());
   const viewStatesRef = useRef(new Map<string, MonacoViewState>());
   const autoSaveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const documentSyncTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -480,7 +493,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const buildLanguageDocumentContext = useCallback((filePath: string) => {
     const model = fileModelsRef.current.get(filePath);
+    const fileMeta = fileMetaRef.current.get(filePath);
     if (!model) {
+      return null;
+    }
+
+    if (fileMeta?.readOnly) {
       return null;
     }
 
@@ -488,7 +506,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       paneId: pane.id,
       rootPath,
       filePath,
-      language: fileMetaRef.current.get(filePath)?.language ?? model.getLanguageId(),
+      language: fileMeta?.language ?? model.getLanguageId(),
       model,
     };
   }, [pane.id, rootPath]);
@@ -706,10 +724,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
 
+    const modelUri = readResult.documentUri
+      ? monaco.Uri.parse(readResult.documentUri)
+      : monaco.Uri.file(filePath);
     let model = fileModelsRef.current.get(filePath);
     if (!model) {
-      model = monaco.editor.createModel(readResult.content, readResult.language, monaco.Uri.file(filePath));
+      model = monaco.editor.createModel(readResult.content, readResult.language, modelUri);
       const disposable = model.onDidChangeContent(() => {
+        if (fileMetaRef.current.get(filePath)?.readOnly) {
+          return;
+        }
+
         if (suppressModelEventsRef.current.has(filePath)) {
           return;
         }
@@ -755,12 +780,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       mtimeMs: readResult.mtimeMs,
       size: readResult.size,
       lastSavedAt: fileMetaRef.current.get(filePath)?.lastSavedAt,
+      readOnly: readResult.readOnly,
+      displayPath: readResult.displayPath,
+      documentUri: readResult.documentUri,
     });
 
     markDirty(filePath, false);
     clearBannerForFile(filePath);
     refreshProblems();
-    void syncLanguageDocument(filePath, 'open');
+    if (!readResult.readOnly) {
+      void syncLanguageDocument(filePath, 'open');
+    }
     return model;
   }, [clearBannerForFile, markDirty, refreshProblems, syncLanguageDocument]);
 
@@ -772,9 +802,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
+    const preloadedReadResult = preloadedReadResultsRef.current.get(filePath);
+    if (preloadedReadResult) {
+      preloadedReadResultsRef.current.delete(filePath);
+      return createOrUpdateModel(filePath, preloadedReadResult);
+    }
+
     const response = await window.electronAPI.codePaneReadFile({
       rootPath,
       filePath,
+      ...(isVirtualDocumentPath(filePath) ? { documentUri: filePath } : {}),
     });
 
     if (!response.success || !response.data) {
@@ -838,6 +875,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       filePath: nextLocation.filePath,
       lineNumber: nextLocation.range.startLineNumber,
       column: nextLocation.range.startColumn,
+      content: nextLocation.content,
+      language: nextLocation.language,
+      readOnly: nextLocation.readOnly,
+      displayPath: nextLocation.displayPath,
+      documentUri: nextLocation.uri,
     });
   }, [rootPath, t]);
 
@@ -906,6 +948,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (!model) {
       return;
     }
+    const isReadOnlyFile = fileMetaRef.current.get(currentActiveFilePath)?.readOnly === true;
 
     saveCurrentViewState();
 
@@ -948,6 +991,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       diffEditorRef.current.setModel({
         original: diffModel,
         modified: model,
+      });
+      diffEditorRef.current.getModifiedEditor().updateOptions?.({
+        readOnly: isReadOnlyFile,
       });
 
       const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
@@ -992,6 +1038,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     editorRef.current.setModel(model);
+    editorRef.current.updateOptions?.({
+      readOnly: isReadOnlyFile,
+    });
 
     const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
     if (savedViewState) {
@@ -1037,6 +1086,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const model = fileModelsRef.current.get(filePath);
     const fileMeta = fileMetaRef.current.get(filePath);
     if (!model || !fileMeta) {
+      return true;
+    }
+
+    if (fileMeta.readOnly) {
       return true;
     }
 
@@ -1793,6 +1846,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
   }, [deferredContentSearchQuery, rootPath, t]);
 
+  const getDisplayPath = useCallback((filePath: string) => (
+    fileMetaRef.current.get(filePath)?.displayPath ?? filePath
+  ), []);
+
+  const getFileLabel = useCallback((filePath: string) => (
+    getPathLeafLabel(getDisplayPath(filePath)) || getDisplayPath(filePath)
+  ), [getDisplayPath]);
+
   const activeTabStatus = activeFilePath ? getEntryStatus(activeFilePath, 'file') : undefined;
   const activeStatusText = activeFilePath
     ? savingPaths.has(activeFilePath)
@@ -1801,6 +1862,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ? t('codePane.unsaved')
         : t('codePane.saved')
     : t('codePane.autoSave');
+  const activeFileDisplayPath = activeFilePath ? getDisplayPath(activeFilePath) : null;
   const indexStatusText = indexStatus?.state === 'building'
     ? t('codePane.indexingProgress', {
       processed: indexStatus.processedDirectoryCount,
@@ -2014,6 +2076,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [problems]);
 
   const openFileLocation = useCallback(async (location: FileNavigationLocation) => {
+    if (typeof location.content === 'string') {
+      preloadedReadResultsRef.current.set(location.filePath, {
+        content: location.content,
+        mtimeMs: 0,
+        size: location.content.length,
+        language: location.language ?? 'plaintext',
+        isBinary: false,
+        readOnly: location.readOnly,
+        displayPath: location.displayPath,
+        documentUri: location.documentUri,
+      });
+    }
+
     pendingNavigationRef.current = location;
     await activateFile(location.filePath);
   }, [activateFile]);
@@ -2513,7 +2588,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       >
                         <FileIcon size={12} className="shrink-0" />
                         {isTabPinned && <Pin size={10} className="shrink-0 text-zinc-500" />}
-                        <span className="truncate">{getPathLeafLabel(tab.path)}</span>
+                        <span className="truncate">{getFileLabel(tab.path)}</span>
                         {isTabDirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />}
                         {badge && (
                           <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
@@ -2570,7 +2645,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 py-2 text-[11px] text-zinc-500">
             <div className="flex min-w-0 items-center gap-3">
               <span className="truncate">
-                {activeFilePath ? getRelativePath(rootPath, activeFilePath) : t('codePane.autoSave')}
+                {activeFilePath
+                  ? (activeFileDisplayPath && isPathInside(rootPath, activeFileDisplayPath)
+                    ? getRelativePath(rootPath, activeFileDisplayPath)
+                    : activeFileDisplayPath)
+                  : t('codePane.autoSave')}
               </span>
               {statusTone && (
                 <span className={`rounded px-1.5 py-0.5 font-medium ${statusTone.className}`}>

@@ -184,6 +184,37 @@ describe('LanguageFeatureService', () => {
     expect(resolver.invalidate).toHaveBeenCalledTimes(1);
     expect(supervisor.resetSessions).toHaveBeenCalledWith('acme.java-language');
   });
+
+  it('reads virtual dependency documents through the language supervisor', async () => {
+    const { service, resolver, supervisor } = createService();
+    resolver.resolve.mockResolvedValue(resolution);
+    supervisor.readVirtualDocument.mockResolvedValue({
+      content: 'package java.lang;\npublic final class String {}\n',
+      mtimeMs: 0,
+      size: 47,
+      language: 'java',
+      isBinary: false,
+      readOnly: true,
+      documentUri: 'jdt://contents/java.base/java/lang/String.class?=mock',
+      displayPath: 'External Libraries/java.base/java/lang/String.java',
+    });
+
+    const result = await service.readDocument({
+      rootPath: '/workspace',
+      filePath: 'jdt://contents/java.base/java/lang/String.class?=mock',
+      documentUri: 'jdt://contents/java.base/java/lang/String.class?=mock',
+    }, null);
+
+    expect(result).toMatchObject({
+      language: 'java',
+      readOnly: true,
+      documentUri: 'jdt://contents/java.base/java/lang/String.class?=mock',
+    });
+    expect(supervisor.readVirtualDocument).toHaveBeenCalledWith(
+      resolution,
+      'jdt://contents/java.base/java/lang/String.class?=mock',
+    );
+  });
 });
 
 function createService() {
@@ -207,6 +238,7 @@ function createService() {
     getHover: vi.fn(),
     getReferences: vi.fn(),
     getDocumentSymbols: vi.fn(),
+    readVirtualDocument: vi.fn(),
     resetSessions: vi.fn(),
   } as unknown as LanguageServerSupervisor & {
     syncDocument: ReturnType<typeof vi.fn>;
@@ -216,6 +248,7 @@ function createService() {
     getHover: ReturnType<typeof vi.fn>;
     getReferences: ReturnType<typeof vi.fn>;
     getDocumentSymbols: ReturnType<typeof vi.fn>;
+    readVirtualDocument: ReturnType<typeof vi.fn>;
     resetSessions: ReturnType<typeof vi.fn>;
   };
 

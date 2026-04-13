@@ -75,16 +75,38 @@ function handleMessage(message) {
     }
     case 'textDocument/definition': {
       const uri = message.params.textDocument.uri;
+      const character = message.params.position?.character ?? 0;
       send({
         jsonrpc: '2.0',
         id: message.id,
-        result: [{
-          uri,
-          range: createRange(0, 0, 0, 4),
-        }],
+        result: character === 1
+          ? [{
+              uri: 'jdt://contents/java.base/java/lang/String.class?=mock',
+              range: createRange(10, 4, 10, 10),
+            }]
+          : [{
+              uri,
+              range: createRange(0, 0, 0, 4),
+            }],
       });
       return;
     }
+    case 'java/classFileContents':
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: [
+          'package java.lang;',
+          '',
+          'public final class String {',
+          '  public int length() {',
+          '    return 0;',
+          '  }',
+          '}',
+          '',
+        ].join('\n'),
+      });
+      return;
     case 'textDocument/hover':
       send({
         jsonrpc: '2.0',

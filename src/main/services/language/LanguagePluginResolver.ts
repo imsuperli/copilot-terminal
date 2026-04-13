@@ -322,6 +322,10 @@ async function getComputedPluginDefaults(
 
   const defaults: Record<string, unknown> = {};
 
+  if (currentSettings['extendedClientCapabilities.classFileContentsSupport'] === undefined) {
+    defaults['extendedClientCapabilities.classFileContentsSupport'] = true;
+  }
+
   if (currentSettings['java.import.exclusions'] === undefined) {
     defaults['java.import.exclusions'] = [
       '**/.git/**',

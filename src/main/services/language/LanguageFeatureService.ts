@@ -1,3 +1,4 @@
+import path from 'path';
 import type {
   CodePaneDocumentCloseConfig,
   CodePaneDocumentSyncConfig,
@@ -8,6 +9,8 @@ import type {
   CodePaneGetReferencesConfig,
   CodePaneHoverResult,
   CodePaneLocation,
+  CodePaneReadFileConfig,
+  CodePaneReadFileResult,
   CodePaneReference,
 } from '../../../shared/types/electron-api';
 import type { Workspace } from '../../types/workspace';
@@ -116,6 +119,19 @@ export class LanguageFeatureService {
     ));
   }
 
+  async readDocument(config: CodePaneReadFileConfig, workspace: Workspace | null): Promise<CodePaneReadFileResult | null> {
+    if (!config.documentUri) {
+      return await this.codeFileService.readFile(config);
+    }
+
+    const resolution = await this.resolveVirtualDocument(config.rootPath, workspace);
+    if (!resolution) {
+      return null;
+    }
+
+    return await this.supervisor.readVirtualDocument(resolution, config.documentUri);
+  }
+
   async resetSessions(pluginId?: string): Promise<void> {
     this.resolver.invalidate();
     await this.supervisor.resetSessions(pluginId);
@@ -172,6 +188,18 @@ export class LanguageFeatureService {
       rootPath,
       filePath,
       language,
+      workspacePluginSettings: workspace?.settings.plugins,
+    });
+  }
+
+  private async resolveVirtualDocument(
+    rootPath: string,
+    workspace: Workspace | null,
+  ): Promise<ResolvedLanguagePlugin | null> {
+    return await this.resolver.resolve({
+      rootPath,
+      filePath: path.join(rootPath, '__virtual__.java'),
+      language: 'java',
       workspacePluginSettings: workspace?.settings.plugins,
     });
   }
