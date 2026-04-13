@@ -89,6 +89,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const webviewHostRef = useRef<HTMLDivElement | null>(null);
   const restoreReadyTimerRef = useRef<number | null>(null);
   const webviewReadyRef = useRef(false);
+  const pendingNavigationUrlRef = useRef<string | null>(null);
   const [isBrowserDropDragActive, setIsBrowserDropDragActive] = useState(() => getBrowserDropDragActive());
   const addressInputRef = useRef<HTMLInputElement>(null);
   const skipNextAutoFocusRef = useRef(false);
@@ -116,13 +117,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     setIsWebviewReady((currentReady) => (currentReady === ready ? currentReady : ready));
   }, []);
 
-  const syncWebviewBounds = useCallback(() => {
-    const webview = webviewRef.current;
-    const host = webviewHostRef.current;
-    if (!webview || !host || webview.parentElement !== host) {
-      return;
-    }
-
+  const applyWebviewBounds = useCallback((webview: HTMLWebViewElement, host: HTMLDivElement) => {
     const rect = host.getBoundingClientRect();
     const nextWidth = Math.max(0, Math.round(rect.width));
     const nextHeight = Math.max(0, Math.round(rect.height));
@@ -138,6 +133,16 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       height: `${nextHeight}px`,
     });
   }, []);
+
+  const syncWebviewBounds = useCallback(() => {
+    const webview = webviewRef.current;
+    const host = webviewHostRef.current;
+    if (!webview || !host || webview.parentElement !== host) {
+      return;
+    }
+
+    applyWebviewBounds(webview, host);
+  }, [applyWebviewBounds]);
 
   useEffect(() => subscribeBrowserDropDragActive(setIsBrowserDropDragActive), []);
 
@@ -195,6 +200,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
     try {
       const nextUrl = webview.getURL?.() || persistedUrlRef.current;
+      pendingNavigationUrlRef.current = null;
       syncPaneUrl(nextUrl);
       setCanGoBack(Boolean(webview.canGoBack?.()));
       setCanGoForward(Boolean(webview.canGoForward?.()));
@@ -224,11 +230,21 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
     if (webview) {
       if (!webviewReadyRef.current) {
+        pendingNavigationUrlRef.current = nextUrl;
         webview.src = nextUrl;
         return;
       }
 
+      pendingNavigationUrlRef.current = nextUrl;
       void webview.loadURL(nextUrl).catch((error: unknown) => {
+        if (
+          error instanceof Error
+          && error.message.includes('ERR_ABORTED')
+          && pendingNavigationUrlRef.current !== nextUrl
+        ) {
+          return;
+        }
+        pendingNavigationUrlRef.current = null;
         console.error('Failed to navigate browser pane:', error);
       });
     }
@@ -290,6 +306,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     webviewRef.current = webview;
 
     webview.className = BROWSER_WEBVIEW_CLASSNAME;
+    applyWebviewBounds(webview, host);
     webview.setAttribute('partition', BROWSER_PARTITION);
     webview.setAttribute('src', persistedUrl);
     host.replaceChildren(webview);
@@ -302,7 +319,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       webview.remove();
       webviewRef.current = null;
     };
-  }, [clearRestoreReadyTimer, pane.id, resetNavigationState, setWebviewReady, syncWebviewBounds]);
+  }, [applyWebviewBounds, clearRestoreReadyTimer, pane.id, resetNavigationState, setWebviewReady, syncWebviewBounds]);
 
   useEffect(() => {
     const host = webviewHostRef.current;
@@ -411,8 +428,20 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
     try {
       const currentWebviewUrl = webview.getURL?.() || DEFAULT_BROWSER_URL;
+      if (pendingNavigationUrlRef.current === persistedUrl) {
+        return;
+      }
       if (currentWebviewUrl !== persistedUrl) {
+        pendingNavigationUrlRef.current = persistedUrl;
         void webview.loadURL(persistedUrl).catch((error: unknown) => {
+          if (
+            error instanceof Error
+            && error.message.includes('ERR_ABORTED')
+            && pendingNavigationUrlRef.current !== persistedUrl
+          ) {
+            return;
+          }
+          pendingNavigationUrlRef.current = null;
           console.error('Failed to sync browser pane URL:', error);
         });
         return;
@@ -446,6 +475,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     }
 
     if (webview.parentElement !== host) {
+      applyWebviewBounds(webview, host);
       host.replaceChildren(webview);
       syncWebviewBounds();
       logBrowserDnd('webview restored after drag', {
@@ -453,7 +483,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         paneId: pane.id,
       });
     }
-  }, [isBrowserDropDragActive, pane.id, syncWebviewBounds, windowId]);
+  }, [applyWebviewBounds, isBrowserDropDragActive, pane.id, syncWebviewBounds, windowId]);
 
   const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

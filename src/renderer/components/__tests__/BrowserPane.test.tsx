@@ -305,6 +305,65 @@ describe('BrowserPane', () => {
     expect(secondWebview).toBe(firstWebview);
   });
 
+  it('does not trigger a second load when the persisted url catches up to a pending navigation', async () => {
+    const pane = createBrowserPane('https://example.com/one');
+    const { container, rerender } = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={pane}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const webview = container.querySelector('webview') as MockWebViewElement | null;
+    if (!webview) {
+      throw new Error('expected webview element');
+    }
+
+    await act(async () => {
+      webview.markReady('https://example.com/one');
+      fireEvent(webview, new Event('dom-ready'));
+      await vi.runAllTimersAsync();
+    });
+
+    const loadURLSpy = vi.fn().mockResolvedValue(undefined);
+    webview.loadURL = loadURLSpy;
+
+    const input = container.querySelector('input') as HTMLInputElement | null;
+    const form = container.querySelector('form') as HTMLFormElement | null;
+    if (!input || !form) {
+      throw new Error('expected browser pane form controls');
+    }
+
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'https://example.com/two' } });
+      fireEvent.submit(form);
+      await Promise.resolve();
+    });
+
+    rerender(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={{
+            ...pane,
+            browser: {
+              url: 'https://example.com/two',
+            },
+          }}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(loadURLSpy).toHaveBeenCalledTimes(1);
+    expect(loadURLSpy).toHaveBeenCalledWith('https://example.com/two');
+  });
+
   it('sizes the webview to the host bounds when the pane becomes measurable', () => {
     let resizeCallback: ResizeObserverCallback | null = null;
     global.ResizeObserver = class ResizeObserver {
