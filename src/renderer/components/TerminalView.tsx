@@ -2,7 +2,7 @@
 import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { v4 as uuidv4 } from 'uuid';
-import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, FileCode2, MessageSquare } from 'lucide-react';
+import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, MessageSquare } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
@@ -117,10 +117,6 @@ function SplitBrowserIcon() {
   );
 }
 
-function SplitCodeIcon() {
-  return <FileCode2 size={15} strokeWidth={1.8} />;
-}
-
 function SplitChatIcon() {
   return <MessageSquare size={15} strokeWidth={1.8} />;
 }
@@ -188,6 +184,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => panes.some((pane) => isChatPane(pane)),
     [panes],
   );
+  const existingCodePane = useMemo(
+    () => panes.find((pane) => isCodePane(pane)) ?? null,
+    [panes],
+  );
+  const hasCodePaneInWindow = Boolean(existingCodePane);
   const terminalPaneCount = terminalPanes.length;
   const activePane = useMemo(
     () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
@@ -242,7 +243,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [activePane, showRemoteWindowTabs],
   );
   const canSplitActivePane = useMemo(
-    () => Boolean(activePane && !isChatPane(activePane)),
+    () => Boolean(activePane && !isChatPane(activePane) && !isCodePane(activePane)),
     [activePane],
   );
 
@@ -467,25 +468,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
 
-      if (isCodePane(sourcePane)) {
-        const newPaneId = uuidv4();
-        const newPane = createCodePaneDraft(
-          newPaneId,
-          sourcePane.code?.rootPath ?? sourcePane.cwd,
-          {
-            openFiles: sourcePane.code?.openFiles ?? [],
-            activeFilePath: sourcePane.code?.activeFilePath ?? null,
-            selectedPath: sourcePane.code?.selectedPath ?? null,
-            expandedPaths: sourcePane.code?.expandedPaths ?? [sourcePane.code?.rootPath ?? sourcePane.cwd],
-            viewMode: sourcePane.code?.viewMode ?? 'editor',
-            diffTargetPath: sourcePane.code?.diffTargetPath ?? null,
-          },
-        );
-        splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
-        return;
-      }
-
-      if (isChatPane(sourcePane)) {
+      if (isCodePane(sourcePane) || isChatPane(sourcePane)) {
         return;
       }
 
@@ -567,9 +550,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const isSshOnlyWindow = codePaneTerminalPanes.length > 0
     && codePaneTerminalPanes.every((pane) => pane.backend === 'ssh');
 
-  const handleSplitCodePane = useCallback(() => {
-    const activePaneId = terminalWindow.activePaneId;
-    if (!activePaneId) {
+  const handleOpenCodePane = useCallback(() => {
+    if (existingCodePane) {
+      setActivePane(terminalWindow.id, existingCodePane.id);
       return;
     }
 
@@ -577,28 +560,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-    const { getPaneById } = useWindowStore.getState();
-    const sourcePane = getPaneById(terminalWindow.id, activePaneId);
-    const newPaneId = uuidv4();
-    const newPane = createCodePaneDraft(
-      newPaneId,
-      codePaneRootPath,
-      sourcePane && isCodePane(sourcePane)
-        ? {
-          openFiles: sourcePane.code?.openFiles ?? [],
-          activeFilePath: sourcePane.code?.activeFilePath ?? null,
-          selectedPath: sourcePane.code?.selectedPath ?? null,
-          expandedPaths: sourcePane.code?.expandedPaths ?? [sourcePane.code?.rootPath ?? codePaneRootPath],
-          viewMode: sourcePane.code?.viewMode ?? 'editor',
-          diffTargetPath: sourcePane.code?.diffTargetPath ?? null,
-        }
-        : undefined,
-    );
-    const direction = getSmartBrowserSplitDirection(terminalWindow.layout, activePaneId);
+    const targetPaneId = panes.find((pane) => !isCodePane(pane))?.id ?? terminalWindow.activePaneId;
+    if (!targetPaneId) {
+      return;
+    }
 
-    splitPaneInWindow(terminalWindow.id, activePaneId, direction, newPane);
+    const newPaneId = uuidv4();
+    const newPane = createCodePaneDraft(newPaneId, codePaneRootPath);
+
+    placePaneInWindow(terminalWindow.id, targetPaneId, 'horizontal', newPane, true);
     setActivePane(terminalWindow.id, newPaneId);
-  }, [codePaneRootPath, setActivePane, splitPaneInWindow, terminalWindow.activePaneId, terminalWindow.id, terminalWindow.layout]);
+  }, [codePaneRootPath, existingCodePane, panes, placePaneInWindow, setActivePane, terminalWindow.activePaneId, terminalWindow.id]);
 
   const handleSplitChatPane = useCallback(() => {
     const activePaneId = terminalWindow.activePaneId;
@@ -1036,6 +1008,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           onWindowSelect={onWindowSwitch}
           onGroupSelect={onGroupSwitch}
           onSettingsClick={() => setIsSettingsPanelOpen(true)}
+          onOpenCodePane={handleOpenCodePane}
+          showOpenCodePaneAction={!isSshOnlyWindow || hasCodePaneInWindow}
+          canOpenCodePane={hasCodePaneInWindow || Boolean(codePaneRootPath)}
+          isCodePaneActive={Boolean(activePane && isCodePane(activePane))}
           sshEnabled={sshEnabled}
           sshProfiles={sshProfiles}
           onSSHProfileSaved={onSSHProfileSaved}
@@ -1244,22 +1220,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 <SplitBrowserIcon />
               </button>
             </AppTooltip>
-
-            {!isSshOnlyWindow && (
-              <AppTooltip content={t('terminalView.splitCode')} placement="toolbar-trailing">
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={t('terminalView.splitCode')}
-                  onMouseDown={preventMouseButtonFocus}
-                  onClick={handleSplitCodePane}
-                  disabled={!codePaneRootPath}
-                  className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <SplitCodeIcon />
-                </button>
-              </AppTooltip>
-            )}
 
             {activePaneCapabilities?.canOpenSFTP && !hasChatPaneInWindow && (
               <AppTooltip content={t('terminalView.splitChat')} placement="toolbar-trailing">

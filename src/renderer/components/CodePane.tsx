@@ -171,7 +171,11 @@ function createEmptySet(): Set<string> {
 }
 
 function createExpandedDirectorySet(rootPath: string, expandedPaths?: string[] | null): Set<string> {
-  const nextExpandedDirectories = new Set<string>([rootPath]);
+  if (!expandedPaths) {
+    return new Set<string>([rootPath]);
+  }
+
+  const nextExpandedDirectories = new Set<string>();
   for (const expandedPath of expandedPaths ?? []) {
     if (expandedPath && isPathInside(rootPath, expandedPath)) {
       nextExpandedDirectories.add(expandedPath);
@@ -1644,6 +1648,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     : t('codePane.autoSave');
   const statusTone = getStatusTone(activeTabStatus);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
+  const rootLabel = useMemo(() => getPathLeafLabel(rootPath) || rootPath, [rootPath]);
+  const isRootExpanded = expandedDirectories.has(rootPath);
+  const isRootSelected = selectedPath === rootPath;
+  const rootBadge = getStatusTone(getEntryStatus(rootPath, 'directory'));
   const orderedOpenFiles = useMemo(() => sortOpenFilesByPinned(openFiles), [openFiles]);
   const contextMenuContentClassName = 'z-50 min-w-[180px] rounded border border-zinc-800 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur';
   const contextMenuItemClassName = 'flex items-center gap-2 rounded px-3 py-2 text-xs text-zinc-200 outline-none transition-colors focus:bg-zinc-800 data-[highlighted]:bg-zinc-800';
@@ -2075,7 +2083,42 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   ) : treeLoadError ? (
                     <div className="px-2 text-xs text-red-300">{treeLoadError}</div>
                   ) : sidebarEntries.length > 0 ? (
-                    renderTree(rootPath, 0)
+                    <>
+                      <ContextMenu.Root>
+                        <ContextMenu.Trigger asChild>
+                          <button
+                            type="button"
+                            title={rootPath}
+                            onClick={() => {
+                              toggleDirectory(rootPath);
+                            }}
+                            className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+                          >
+                            {isRootExpanded ? (
+                              <ChevronDown size={14} className="shrink-0 text-zinc-500" />
+                            ) : (
+                              <ChevronRight size={14} className="shrink-0 text-zinc-500" />
+                            )}
+                            {isRootExpanded ? (
+                              <FolderOpen size={14} className="shrink-0 text-amber-300" />
+                            ) : (
+                              <Folder size={14} className="shrink-0 text-amber-300" />
+                            )}
+                            <span className="min-w-0 flex-1 truncate">{rootLabel}</span>
+                            {loadingDirectories.has(rootPath) && (
+                              <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
+                            )}
+                            {rootBadge && (
+                              <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${rootBadge.className}`}>
+                                {rootBadge.badge}
+                              </span>
+                            )}
+                          </button>
+                        </ContextMenu.Trigger>
+                        {renderFileContextMenu(rootPath, 'directory')}
+                      </ContextMenu.Root>
+                      {isRootExpanded && renderTree(rootPath, 1)}
+                    </>
                   ) : (
                     <div className="px-2 text-xs text-zinc-500">{t('codePane.emptyFolder')}</div>
                   )}

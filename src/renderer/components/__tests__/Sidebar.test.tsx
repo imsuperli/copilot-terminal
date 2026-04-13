@@ -322,4 +322,35 @@ describe('Terminal Sidebar', () => {
 
     expect(screen.getByTestId('create-window-dialog')).toHaveTextContent('local-only');
   });
+
+  it('renders the open code pane action above new terminal and triggers it', async () => {
+    const user = userEvent.setup();
+    const localWindow = createSinglePaneWindow('Local Terminal', '/workspace/local', 'bash');
+    const onOpenCodePane = vi.fn();
+
+    useWindowStore.setState({
+      windows: [localWindow],
+      activeWindowId: localWindow.id,
+      mruList: [localWindow.id],
+      sidebarExpanded: true,
+    });
+
+    render(
+      <Sidebar
+        activeWindowId={localWindow.id}
+        onWindowSelect={vi.fn()}
+        onOpenCodePane={onOpenCodePane}
+        showOpenCodePaneAction
+        canOpenCodePane
+      />,
+    );
+
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.findIndex((button) => button.getAttribute('aria-label') === '打开代码面板'))
+      .toBeLessThan(buttons.findIndex((button) => button.getAttribute('aria-label') === '新建终端'));
+
+    await user.click(screen.getByRole('button', { name: '打开代码面板' }));
+
+    expect(onOpenCodePane).toHaveBeenCalledTimes(1);
+  });
 });

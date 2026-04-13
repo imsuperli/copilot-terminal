@@ -592,6 +592,38 @@ describe('CodePane', () => {
     ]);
   });
 
+  it('allows collapsing and expanding the root file tree entry', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src',
+          name: 'src',
+          type: 'directory',
+        },
+      ],
+    });
+
+    const view = renderCodePane(createPane());
+
+    const rootButton = await screen.findByRole('button', { name: 'project' });
+    expect(await screen.findByRole('button', { name: 'src' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(rootButton);
+    });
+
+    expect(screen.queryByRole('button', { name: 'src' })).not.toBeInTheDocument();
+    expect(view.getPane().code?.expandedPaths).toEqual([]);
+
+    await act(async () => {
+      fireEvent.click(rootButton);
+    });
+
+    expect(await screen.findByRole('button', { name: 'src' })).toBeInTheDocument();
+    expect(view.getPane().code?.expandedPaths).toEqual(['/workspace/project']);
+  });
+
   it('runs file context menu actions', async () => {
     const user = userEvent.setup();
     renderCodePane(createPane());

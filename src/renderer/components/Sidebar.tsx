@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Plus, Settings } from 'lucide-react';
+import { FileCode2, Plus, Settings } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
 import { SidebarWindowItem } from './SidebarWindowItem';
@@ -24,6 +24,10 @@ interface SidebarProps {
   onGroupSelect?: (groupId: string) => void;
   onWindowContextMenu?: (windowId: string, e: React.MouseEvent) => void;
   onSettingsClick?: () => void;
+  onOpenCodePane?: () => void;
+  showOpenCodePaneAction?: boolean;
+  canOpenCodePane?: boolean;
+  isCodePaneActive?: boolean;
   sshEnabled?: boolean;
   sshProfiles?: SSHProfile[];
   onSSHProfileSaved?: (profile: SSHProfile, credentialState: SSHCredentialState) => void;
@@ -52,6 +56,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onGroupSelect,
   onWindowContextMenu,
   onSettingsClick,
+  onOpenCodePane,
+  showOpenCodePaneAction = false,
+  canOpenCodePane = false,
+  isCodePaneActive = false,
   sshEnabled = false,
   sshProfiles = [],
   onSSHProfileSaved,
@@ -337,6 +345,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 底部操作区 */}
         <div className="border-t border-zinc-800 flex-shrink-0">
+          {showOpenCodePaneAction && (
+            <Tooltip.Provider>
+              <Tooltip.Root delayDuration={300}>
+                <Tooltip.Trigger asChild>
+                  <button
+                    onClick={() => onOpenCodePane?.()}
+                    disabled={!canOpenCodePane}
+                    className={`
+                      w-full h-10 flex items-center gap-2
+                      transition-all duration-200 border-b border-zinc-800
+                      ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
+                      ${isCodePaneActive
+                        ? 'bg-zinc-800 text-zinc-100'
+                        : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700'}
+                      disabled:cursor-not-allowed disabled:opacity-40
+                    `}
+                    aria-label={t('terminalView.openCode')}
+                  >
+                    <FileCode2 size={16} />
+                    {sidebarExpanded && (
+                      <span className="text-sm transition-opacity duration-200">
+                        {t('terminalView.openCode')}
+                      </span>
+                    )}
+                  </button>
+                </Tooltip.Trigger>
+                {!sidebarExpanded && (
+                  <Tooltip.Portal>
+                    <Tooltip.Content
+                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                      side="right"
+                      sideOffset={5}
+                    >
+                      {t('terminalView.openCode')}
+                    </Tooltip.Content>
+                  </Tooltip.Portal>
+                )}
+              </Tooltip.Root>
+            </Tooltip.Provider>
+          )}
+
           <Tooltip.Provider>
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
