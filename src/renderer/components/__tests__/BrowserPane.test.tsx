@@ -265,6 +265,30 @@ describe('BrowserPane', () => {
     expect(secondWebview?.partitionSetCount).toBe(1);
   });
 
+  it('sizes the webview to fill the browser pane host', () => {
+    const { container } = render(
+      <I18nProvider>
+        <BrowserPane
+          windowId="win-1"
+          pane={createBrowserPane('https://example.com')}
+          isActive={false}
+          onActivate={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const webview = container.querySelector('webview') as MockWebViewElement | null;
+    if (!webview) {
+      throw new Error('expected webview element');
+    }
+
+    expect(webview.className).toContain('h-full');
+    expect(webview.className).toContain('w-full');
+    expect(webview.style.display).toBe('block');
+    expect(webview.style.width).toBe('100%');
+    expect(webview.style.height).toBe('100%');
+  });
+
   it('prevents mouse focus on browser toolbar buttons', () => {
     const { container } = render(
       <I18nProvider>

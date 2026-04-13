@@ -14,7 +14,7 @@ import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/brow
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
-const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-zinc-950';
+const BROWSER_WEBVIEW_CLASSNAME = 'block h-full w-full min-h-0 min-w-0 bg-zinc-950';
 const BLANK_PAGE_THEME_CSS = `
   :root { color-scheme: dark; }
   html, body {
@@ -267,6 +267,11 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     webviewRef.current = webview;
 
     webview.className = BROWSER_WEBVIEW_CLASSNAME;
+    Object.assign(webview.style, {
+      display: 'block',
+      width: '100%',
+      height: '100%',
+    });
     webview.setAttribute('partition', BROWSER_PARTITION);
     webview.setAttribute('src', persistedUrl);
     host.replaceChildren(webview);
@@ -579,7 +584,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         </div>
       </div>
 
-      <div ref={webviewHostRef} className="min-h-0 min-w-0 flex-1 bg-zinc-950" />
+      <div ref={webviewHostRef} className="min-h-0 min-w-0 flex-1 overflow-hidden bg-zinc-950" />
     </div>
   );
 };
