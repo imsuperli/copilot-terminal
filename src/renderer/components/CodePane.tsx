@@ -10,6 +10,7 @@ import React, {
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {
   AlertTriangle,
+  ChevronLeft,
   ChevronDown,
   ChevronRight,
   File as FileIcon,
@@ -18,6 +19,7 @@ import {
   FolderOpen,
   GitBranch,
   GitCompareArrows,
+  GripVertical,
   Loader2,
   Pin,
   RefreshCw,
@@ -60,6 +62,10 @@ type MonacoViewState = import('monaco-editor').editor.ICodeEditorViewState | nul
 type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
+
+const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
+const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
+const CODE_PANE_SIDEBAR_MAX_WIDTH = 520;
 
 type FileNavigationLocation = {
   filePath: string;
@@ -119,6 +125,50 @@ function createFallbackRange(lineNumber: number, column: number): MonacoRange {
     startColumn: column,
     endLineNumber: lineNumber,
     endColumn: column + 1,
+  };
+}
+
+function normalizeSidebarMode(mode: string | undefined): SidebarMode {
+  switch (mode) {
+    case 'search':
+    case 'scm':
+    case 'problems':
+      return mode;
+    case 'files':
+    default:
+      return 'files';
+  }
+}
+
+function clampSidebarWidth(width: number | undefined | null): number {
+  if (!Number.isFinite(width)) {
+    return CODE_PANE_SIDEBAR_DEFAULT_WIDTH;
+  }
+
+  return Math.min(
+    CODE_PANE_SIDEBAR_MAX_WIDTH,
+    Math.max(CODE_PANE_SIDEBAR_MIN_WIDTH, Math.round(width as number)),
+  );
+}
+
+function getInitialSidebarLayout(pane: Pane): {
+  visible: boolean;
+  activeView: SidebarMode;
+  width: number;
+  lastExpandedWidth: number;
+} {
+  const sidebarState = pane.code?.layout?.sidebar;
+  const width = clampSidebarWidth(
+    sidebarState?.width
+      ?? sidebarState?.lastExpandedWidth
+      ?? CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+  );
+
+  return {
+    visible: sidebarState?.visible ?? true,
+    activeView: normalizeSidebarMode(sidebarState?.activeView),
+    width,
+    lastExpandedWidth: clampSidebarWidth(sidebarState?.lastExpandedWidth ?? width),
   };
 }
 
@@ -276,12 +326,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const supportsMonaco = typeof Worker !== 'undefined';
   const isMac = window.electronAPI.platform === 'darwin';
   const paneRef = useRef(pane);
+  const rootContainerRef = useRef<HTMLDivElement | null>(null);
   const rootPath = pane.code?.rootPath ?? pane.cwd;
   const openFiles = pane.code?.openFiles ?? [];
   const activeFilePath = pane.code?.activeFilePath ?? null;
   const selectedPath = pane.code?.selectedPath ?? null;
   const viewMode = pane.code?.viewMode ?? 'editor';
   const diffTargetPath = pane.code?.diffTargetPath ?? null;
+  const initialSidebarLayout = useMemo(() => getInitialSidebarLayout(pane), [pane]);
 
   const monacoRef = useRef<MonacoModule | null>(null);
   const languageBridgeRef = useRef<MonacoLanguageBridge | null>(null);
@@ -308,6 +360,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const definitionLinkDecorationIdsRef = useRef<string[]>([]);
   const definitionHoverRequestKeyRef = useRef<string | null>(null);
   const definitionLookupCacheRef = useRef(new Map<string, Promise<DefinitionLookupResult>>());
+  const sidebarResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => (
@@ -319,7 +373,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [sidebarMode, setSidebarMode] = useState<SidebarMode>('files');
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(initialSidebarLayout.activeView);
+  const [isSidebarVisible, setIsSidebarVisible] = useState(initialSidebarLayout.visible);
+  const [sidebarWidth, setSidebarWidth] = useState(initialSidebarLayout.width);
+  const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(initialSidebarLayout.lastExpandedWidth);
+  const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [contentSearchQuery, setContentSearchQuery] = useState('');
   const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
   const [contentSearchResults, setContentSearchResults] = useState<CodePaneContentMatch[]>([]);
@@ -343,10 +401,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const activeFilePathRef = useRef(activeFilePath);
   const pendingNavigationRef = useRef<FileNavigationLocation | null>(null);
   const openFileLocationRef = useRef<(location: FileNavigationLocation) => Promise<void>>(async () => {});
+  const sidebarModeRef = useRef(sidebarMode);
+  const sidebarVisibleRef = useRef(isSidebarVisible);
+  const sidebarWidthRef = useRef(sidebarWidth);
+  const lastExpandedSidebarWidthRef = useRef(lastExpandedSidebarWidth);
 
   useEffect(() => {
     paneRef.current = pane;
   }, [pane]);
+
+  useEffect(() => {
+    const nextSidebarLayout = getInitialSidebarLayout(pane);
+    setSidebarMode(nextSidebarLayout.activeView);
+    setIsSidebarVisible(nextSidebarLayout.visible);
+    setSidebarWidth(nextSidebarLayout.width);
+    setLastExpandedSidebarWidth(nextSidebarLayout.lastExpandedWidth);
+  }, [pane.id, pane.code?.layout, pane]);
 
   useEffect(() => {
     expandedDirectoriesRef.current = expandedDirectories;
@@ -368,6 +438,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
     activeFilePathRef.current = activeFilePath;
   }, [activeFilePath]);
 
+  useEffect(() => {
+    sidebarModeRef.current = sidebarMode;
+  }, [sidebarMode]);
+
+  useEffect(() => {
+    sidebarVisibleRef.current = isSidebarVisible;
+  }, [isSidebarVisible]);
+
+  useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth;
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    lastExpandedSidebarWidthRef.current = lastExpandedSidebarWidth;
+  }, [lastExpandedSidebarWidth]);
+
   const persistCodeState = useCallback((updates: Partial<NonNullable<Pane['code']>>) => {
     const currentCodeState = {
       rootPath,
@@ -377,6 +463,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       expandedPaths: [rootPath],
       viewMode: 'editor' as const,
       diffTargetPath: null,
+      layout: {
+        sidebar: getInitialSidebarLayout(paneRef.current),
+      },
       ...(paneRef.current.code ?? {}),
     };
     const nextCodeState = {
@@ -397,6 +486,101 @@ export const CodePane: React.FC<CodePaneProps> = ({
       code: nextCodeState,
     });
   }, [pane.id, rootPath, updatePane, windowId]);
+
+  const persistSidebarLayout = useCallback((updates: Partial<NonNullable<NonNullable<Pane['code']>['layout']>['sidebar']>) => {
+    const currentSidebarLayout = {
+      ...getInitialSidebarLayout(paneRef.current),
+      ...(paneRef.current.code?.layout?.sidebar ?? {}),
+    };
+
+    persistCodeState({
+      layout: {
+        ...(paneRef.current.code?.layout ?? {}),
+        sidebar: {
+          ...currentSidebarLayout,
+          ...updates,
+        },
+      },
+    });
+  }, [persistCodeState]);
+
+  const toggleSidebarVisibility = useCallback((nextVisible?: boolean) => {
+    const shouldShowSidebar = nextVisible ?? !sidebarVisibleRef.current;
+    const restoredWidth = clampSidebarWidth(lastExpandedSidebarWidthRef.current);
+    const nextWidth = shouldShowSidebar ? restoredWidth : sidebarWidthRef.current;
+    const nextLastExpandedWidth = shouldShowSidebar
+      ? restoredWidth
+      : clampSidebarWidth(sidebarWidthRef.current);
+
+    setIsSidebarVisible(shouldShowSidebar);
+    setSidebarWidth(nextWidth);
+    setLastExpandedSidebarWidth(nextLastExpandedWidth);
+    sidebarVisibleRef.current = shouldShowSidebar;
+    sidebarWidthRef.current = nextWidth;
+    lastExpandedSidebarWidthRef.current = nextLastExpandedWidth;
+    persistSidebarLayout({
+      visible: shouldShowSidebar,
+      activeView: sidebarModeRef.current,
+      width: nextWidth,
+      lastExpandedWidth: nextLastExpandedWidth,
+    });
+  }, [persistSidebarLayout]);
+
+  const handleSidebarModeSelect = useCallback((mode: SidebarMode) => {
+    const isSameMode = sidebarModeRef.current === mode;
+    if (isSameMode) {
+      toggleSidebarVisibility();
+      return;
+    }
+
+    const nextWidth = clampSidebarWidth(lastExpandedSidebarWidthRef.current);
+    setSidebarMode(mode);
+    setIsSidebarVisible(true);
+    setSidebarWidth(nextWidth);
+    setLastExpandedSidebarWidth(nextWidth);
+    sidebarModeRef.current = mode;
+    sidebarVisibleRef.current = true;
+    sidebarWidthRef.current = nextWidth;
+    lastExpandedSidebarWidthRef.current = nextWidth;
+    persistSidebarLayout({
+      visible: true,
+      activeView: mode,
+      width: nextWidth,
+      lastExpandedWidth: nextWidth,
+    });
+  }, [persistSidebarLayout, toggleSidebarVisibility]);
+
+  useEffect(() => {
+    if (!isActive) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.shiftKey) {
+        return;
+      }
+
+      const isPrimaryModifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+      if (!isPrimaryModifier || event.key.toLowerCase() !== 'b') {
+        return;
+      }
+
+      event.preventDefault();
+      toggleSidebarVisibility();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isActive, isMac, toggleSidebarVisibility]);
+
+  useEffect(() => (
+    () => {
+      sidebarResizeCleanupRef.current?.();
+      sidebarResizeCleanupRef.current = null;
+    }
+  ), []);
 
   const clearBannerForFile = useCallback((filePath?: string | null) => {
     if (!filePath) {
@@ -2106,6 +2290,101 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const orderedOpenFiles = useMemo(() => sortOpenFilesByPinned(openFiles), [openFiles]);
   const contextMenuContentClassName = 'z-50 min-w-[180px] rounded border border-zinc-800 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur';
   const contextMenuItemClassName = 'flex items-center gap-2 rounded px-3 py-2 text-xs text-zinc-200 outline-none transition-colors focus:bg-zinc-800 data-[highlighted]:bg-zinc-800';
+  const sidebarTabs = useMemo(() => ([
+    {
+      mode: 'files' as const,
+      icon: FileCode2,
+      label: t('codePane.filesTab'),
+    },
+    {
+      mode: 'search' as const,
+      icon: Search,
+      label: t('codePane.searchTab'),
+    },
+    {
+      mode: 'scm' as const,
+      icon: GitBranch,
+      label: t('codePane.scmTab'),
+    },
+    {
+      mode: 'problems' as const,
+      icon: AlertTriangle,
+      label: t('codePane.problemsTab'),
+    },
+  ]), [t]);
+  const activeSidebarTab = sidebarTabs.find((tab) => tab.mode === sidebarMode) ?? sidebarTabs[0];
+
+  const startSidebarResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    sidebarResizeCleanupRef.current?.();
+    sidebarResizeStartRef.current = {
+      startX: event.clientX,
+      startWidth: sidebarWidthRef.current,
+    };
+    setIsSidebarResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (nextEvent: MouseEvent) => {
+      const resizeStart = sidebarResizeStartRef.current;
+      if (!resizeStart) {
+        return;
+      }
+
+      const nextWidth = clampSidebarWidth(resizeStart.startWidth + (nextEvent.clientX - resizeStart.startX));
+      sidebarWidthRef.current = nextWidth;
+      setSidebarWidth(nextWidth);
+    };
+
+    const cleanup = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      sidebarResizeCleanupRef.current = null;
+    };
+
+    const handleMouseUp = () => {
+      const resizeStart = sidebarResizeStartRef.current;
+      sidebarResizeStartRef.current = null;
+      setIsSidebarResizing(false);
+
+      if (resizeStart) {
+        const nextWidth = clampSidebarWidth(sidebarWidthRef.current);
+        sidebarWidthRef.current = nextWidth;
+        lastExpandedSidebarWidthRef.current = nextWidth;
+        setSidebarWidth(nextWidth);
+        setLastExpandedSidebarWidth(nextWidth);
+        persistSidebarLayout({
+          visible: true,
+          activeView: sidebarModeRef.current,
+          width: nextWidth,
+          lastExpandedWidth: nextWidth,
+        });
+      }
+
+      cleanup();
+    };
+
+    sidebarResizeCleanupRef.current = cleanup;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [persistSidebarLayout]);
+
+  const resetSidebarWidth = useCallback(() => {
+    const nextWidth = CODE_PANE_SIDEBAR_DEFAULT_WIDTH;
+    sidebarWidthRef.current = nextWidth;
+    lastExpandedSidebarWidthRef.current = nextWidth;
+    setSidebarWidth(nextWidth);
+    setLastExpandedSidebarWidth(nextWidth);
+    persistSidebarLayout({
+      visible: true,
+      activeView: sidebarModeRef.current,
+      width: nextWidth,
+      lastExpandedWidth: nextWidth,
+    });
+  }, [persistSidebarLayout]);
+  const ActiveSidebarIcon = activeSidebarTab.icon;
 
   const renderFileContextMenu = useCallback((
     filePath: string,
@@ -2358,6 +2637,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         `}
       </style>
       <div
+        ref={rootContainerRef}
         className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
         onMouseDown={onActivate}
       >
@@ -2489,41 +2769,51 @@ export const CodePane: React.FC<CodePaneProps> = ({
       )}
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/70">
-          <div className="grid grid-cols-2 gap-px border-b border-zinc-800 bg-zinc-900/80 p-1">
-            <button
-              type="button"
-              onClick={() => setSidebarMode('files')}
-              className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'files' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
-            >
-              <FileCode2 size={12} />
-              {t('codePane.filesTab')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarMode('search')}
-              className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'search' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
-            >
-              <Search size={12} />
-              {t('codePane.searchTab')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarMode('scm')}
-              className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'scm' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
-            >
-              <GitBranch size={12} />
-              {t('codePane.scmTab')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarMode('problems')}
-              className={`flex items-center justify-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${sidebarMode === 'problems' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100'}`}
-            >
-              <AlertTriangle size={12} />
-              {t('codePane.problemsTab')}
-            </button>
+        <div className="flex h-full shrink-0">
+          <div className="flex h-full w-11 shrink-0 flex-col items-center gap-1 border-r border-zinc-800 bg-zinc-950/85 px-1 py-2">
+            {sidebarTabs.map((tab) => {
+              const Icon = tab.icon;
+              const isSelected = sidebarMode === tab.mode && isSidebarVisible;
+              return (
+                <AppTooltip key={tab.mode} content={tab.label} placement="pane-corner">
+                  <button
+                    type="button"
+                    aria-label={tab.label}
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      handleSidebarModeSelect(tab.mode);
+                    }}
+                    className={`flex h-8 w-8 items-center justify-center rounded text-zinc-400 transition-colors ${isSelected ? 'bg-zinc-800 text-zinc-100' : 'hover:bg-zinc-900 hover:text-zinc-100'}`}
+                  >
+                    <Icon size={15} />
+                  </button>
+                </AppTooltip>
+              );
+            })}
           </div>
+
+          {isSidebarVisible && (
+            <>
+              <aside
+                className="flex h-full shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/70"
+                style={{ width: `${sidebarWidth}px` }}
+              >
+                <div className="flex items-center justify-between border-b border-zinc-800 px-2 py-2">
+                  <div className="flex min-w-0 items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+                    <ActiveSidebarIcon size={12} />
+                    <span className="truncate">{activeSidebarTab.label}</span>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Collapse code pane sidebar"
+                    onClick={() => {
+                      toggleSidebarVisibility(false);
+                    }}
+                    className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                </div>
 
           {sidebarMode === 'files' ? (
             <>
@@ -2800,7 +3090,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
               </div>
             </>
           )}
-        </aside>
+              </aside>
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                data-testid="code-pane-sidebar-resize-handle"
+                onMouseDown={startSidebarResize}
+                onDoubleClick={resetSidebarWidth}
+                className={`flex h-full w-3 shrink-0 cursor-col-resize items-center justify-center bg-zinc-950/60 transition-colors ${isSidebarResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+              >
+                <GripVertical size={12} />
+              </div>
+            </>
+          )}
+        </div>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-[34px] items-stretch overflow-x-auto border-b border-zinc-800 bg-zinc-950/70">

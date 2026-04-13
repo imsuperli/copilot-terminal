@@ -27,6 +27,19 @@ export interface CodePaneOpenFile {
   pinned?: boolean;
 }
 
+export type CodePaneSidebarView = 'files' | 'search' | 'scm' | 'problems';
+
+export interface CodePaneSidebarState {
+  visible: boolean;
+  activeView: CodePaneSidebarView;
+  width: number;
+  lastExpandedWidth?: number;
+}
+
+export interface CodePaneLayoutState {
+  sidebar: CodePaneSidebarState;
+}
+
 export interface CodePaneState {
   rootPath: string;
   openFiles: CodePaneOpenFile[];
@@ -35,6 +48,7 @@ export interface CodePaneState {
   expandedPaths?: string[];
   viewMode?: 'editor' | 'diff';
   diffTargetPath?: string | null;
+  layout?: CodePaneLayoutState;
 }
 
 export interface PaneCapabilities {

@@ -603,6 +603,55 @@ describe('CodePane', () => {
     expect(await screen.findByText('codePane.indexingProgress')).toBeInTheDocument();
   });
 
+  it('toggles the workbench sidebar from the activity rail and persists the selected view', async () => {
+    const view = renderCodePane(createPane());
+
+    expect(await screen.findByPlaceholderText('codePane.searchFilesPlaceholder')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.filesTab' }));
+    });
+
+    expect(screen.queryByPlaceholderText('codePane.searchFilesPlaceholder')).not.toBeInTheDocument();
+    expect(view.getPane().code?.layout?.sidebar).toMatchObject({
+      visible: false,
+      activeView: 'files',
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.searchTab' }));
+    });
+
+    expect(await screen.findByPlaceholderText('codePane.searchContentsPlaceholder')).toBeInTheDocument();
+    expect(view.getPane().code?.layout?.sidebar).toMatchObject({
+      visible: true,
+      activeView: 'search',
+    });
+  });
+
+  it('persists the code pane sidebar width after drag resizing', async () => {
+    const view = renderCodePane(createPane());
+
+    await screen.findByPlaceholderText('codePane.searchFilesPlaceholder');
+
+    const resizeHandle = screen.getByTestId('code-pane-sidebar-resize-handle');
+
+    await act(async () => {
+      fireEvent.mouseDown(resizeHandle, { clientX: 300 });
+      fireEvent.mouseMove(window, { clientX: 384 });
+      fireEvent.mouseUp(window);
+    });
+
+    await waitFor(() => {
+      expect(view.getPane().code?.layout?.sidebar).toMatchObject({
+        visible: true,
+        activeView: 'files',
+        width: 384,
+        lastExpandedWidth: 384,
+      });
+    });
+  });
+
   it('does not bootstrap the project tree again when only isActive changes', async () => {
     const pane = createPane();
     const onActivate = vi.fn();

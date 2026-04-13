@@ -11,6 +11,7 @@ export function createCodePaneDraft(
     expandedPaths?: string[];
     viewMode?: 'editor' | 'diff';
     diffTargetPath?: string | null;
+    layout?: NonNullable<NonNullable<Pane['code']>['layout']>;
   },
 ): Pane {
   const openFiles = options?.openFiles ?? [];
@@ -30,6 +31,7 @@ export function createCodePaneDraft(
       expandedPaths: options?.expandedPaths ?? [rootPath],
       viewMode: options?.viewMode ?? 'editor',
       diffTargetPath: options?.diffTargetPath ?? null,
+      layout: options?.layout,
     },
   };
 }
