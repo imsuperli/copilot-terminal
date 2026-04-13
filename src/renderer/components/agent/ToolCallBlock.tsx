@@ -64,25 +64,6 @@ function formatToolSummary(toolCall: ToolCall): string {
     .join(' ');
 }
 
-function formatStatusLabel(status: ToolCall['status']): string {
-  switch (status) {
-    case 'approved':
-      return 'Approved';
-    case 'executing':
-      return 'Running';
-    case 'completed':
-      return 'Completed';
-    case 'rejected':
-      return 'Rejected';
-    case 'blocked':
-      return 'Blocked';
-    case 'error':
-      return 'Failed';
-    default:
-      return 'Pending';
-  }
-}
-
 function getStatusPresentation(status: ToolCall['status']) {
   switch (status) {
     case 'approved':
@@ -142,8 +123,8 @@ export function ToolCallBlock({
   }, [errorIds]);
 
   return (
-    <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/70 p-3 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
-      <div className="space-y-2">
+    <div className="rounded-[18px] border border-zinc-800/80 bg-zinc-900/70 p-2.5 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
+      <div className="space-y-1.5">
         {items.map((item) => {
           const summary = formatToolSummary(item.event.toolCall);
           const detailContent = buildDetailContent(item);
@@ -154,16 +135,19 @@ export function ToolCallBlock({
           return (
             <div
               key={item.event.toolCall.id}
-              className="rounded-2xl border border-zinc-800/80 bg-zinc-950/55"
+              className="rounded-[16px] border border-zinc-800/80 bg-zinc-950/55"
             >
-              <div className="flex items-center gap-3 px-3 py-2.5">
-                <div className="min-w-0 flex-1 truncate font-mono text-[12px] leading-6 text-zinc-200">
+              <div className="flex items-center gap-2 px-2.5 py-1.5">
+                <div className="min-w-0 flex-1 truncate font-mono text-[12px] leading-5 text-zinc-400">
                   {summary}
                 </div>
 
-                <div className={`inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] ${status.tone}`}>
+                <div
+                  className={`inline-flex h-5 w-5 shrink-0 items-center justify-center ${status.tone}`}
+                  aria-label={`Status: ${item.event.toolCall.status}`}
+                  title={item.event.toolCall.status}
+                >
                   {status.icon}
-                  <span>{formatStatusLabel(item.event.toolCall.status)}</span>
                 </div>
 
                 <button
@@ -179,22 +163,21 @@ export function ToolCallBlock({
                       return next;
                     });
                   }}
-                  className="inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.18em] text-zinc-400 transition-colors hover:text-zinc-100"
+                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-100"
                   aria-label={`${isExpanded ? 'Hide' : 'Show'} details for ${summary}`}
                 >
-                  {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                  <span>{isExpanded ? 'Hide' : 'Show'}</span>
+                  {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
               </div>
 
               {isExpanded && (
-                <div className="border-t border-zinc-800/80 px-3 py-3">
+                <div className="border-t border-zinc-800/80 px-2.5 py-2.5">
                   {detailContent ? (
-                    <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-300">
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-zinc-300">
                       {detailContent}
                     </pre>
                   ) : isRunning ? (
-                    <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-sky-300">
+                    <div className="inline-flex items-center gap-1.5 text-[11px] text-sky-300">
                       <LoaderCircle size={12} className="animate-spin" />
                       <span>Waiting for output</span>
                     </div>
@@ -203,7 +186,7 @@ export function ToolCallBlock({
                   )}
 
                   {item.event.toolCall.reason && (
-                    <p className="mt-3 text-xs leading-5 text-zinc-400">{item.event.toolCall.reason}</p>
+                    <p className="mt-2 text-xs leading-5 text-zinc-400">{item.event.toolCall.reason}</p>
                   )}
                 </div>
               )}

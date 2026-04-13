@@ -159,7 +159,7 @@ describe('AgentTimeline', () => {
       />,
     );
 
-    expect(screen.getByText('Tool calls')).toBeInTheDocument();
+    expect(screen.getByText('Tool Calls')).toBeInTheDocument();
     expect(screen.getAllByText('codex')).toHaveLength(1);
     expect(screen.getByText('uname -a')).toBeInTheDocument();
     expect(screen.getByText('cat /etc/os-release')).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe('AgentTimeline', () => {
     expect(screen.getByText('Linux localhost')).toBeInTheDocument();
     expect(screen.queryByText('192.168.3.25')).not.toBeInTheDocument();
 
-    expect(screen.getByText('Running')).toBeInTheDocument();
+    expect(screen.queryByText('Running')).not.toBeInTheDocument();
   });
 
   it('keeps a single agent block when an empty assistant message is followed by tool calls', () => {
@@ -218,7 +218,7 @@ describe('AgentTimeline', () => {
     );
 
     expect(screen.getAllByText('codex')).toHaveLength(1);
-    expect(screen.getByText('Tool call')).toBeInTheDocument();
+    expect(screen.getByText('Tool Call')).toBeInTheDocument();
     expect(screen.getByText('df -h')).toBeInTheDocument();
   });
 

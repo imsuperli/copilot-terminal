@@ -331,7 +331,7 @@ export function AgentTimeline({
                 return (
                   <div key={`reasoning-${section.event.id}`}>
                     {hasNonReasoningSection && (
-                      <div className="mb-2 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                      <div className="mb-2 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
                         Thinking
                       </div>
                     )}
@@ -350,8 +350,8 @@ export function AgentTimeline({
               case 'tool-call-group':
                 return (
                   <div key={`tool-call-group-${sectionIndex}`}>
-                    <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                      {section.events.length > 1 ? 'Tool calls' : 'Tool call'}
+                    <div className="mb-3 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
+                      {section.events.length > 1 ? 'Tool Calls' : 'Tool Call'}
                     </div>
                     <ToolCallBlock items={section.events} />
                   </div>
@@ -359,7 +359,7 @@ export function AgentTimeline({
               case 'approval-request':
                 return task.pendingApproval?.approvalId === section.event.approvalId ? (
                   <div key={`approval-request-${section.event.id}`}>
-                    <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Approval</div>
+                    <div className="mb-3 text-[11px] font-medium tracking-[0.02em] text-zinc-500">Approval</div>
                     <ApprovalCard
                       approval={task.pendingApproval}
                       onApprove={() => onApprove(section.event.approvalId)}
@@ -370,7 +370,7 @@ export function AgentTimeline({
               case 'interaction-request':
                 return task.pendingInteraction?.interactionId === section.event.interactionId ? (
                   <div key={`interaction-request-${section.event.id}`}>
-                    <div className="mb-3 text-[11px] uppercase tracking-[0.18em] text-zinc-500">Interaction needed</div>
+                    <div className="mb-3 text-[11px] font-medium tracking-[0.02em] text-zinc-500">Interaction Needed</div>
                     <InteractionPrompt
                       interaction={task.pendingInteraction}
                       onSubmit={(value) => onSubmitInteraction(section.event.interactionId, value)}
