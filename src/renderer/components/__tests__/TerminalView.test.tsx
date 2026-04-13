@@ -347,7 +347,7 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'terminalView.splitHorizontal' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.splitVertical' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.splitBrowser' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'terminalView.splitChat' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'terminalView.splitChat' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.stop' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.restart' })).toBeInTheDocument();
   });
@@ -395,6 +395,7 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'terminalView.openSftp' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.showSshMonitor' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.managePortForwards' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'terminalView.splitChat' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'terminalView.openFolder' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'terminalView.splitCode' })).not.toBeInTheDocument();
   });
@@ -473,20 +474,20 @@ describe('TerminalView', () => {
     expect(window.electronAPI.closePane).not.toHaveBeenCalled();
   });
 
-  it('creates a linked chat pane from the toolbar', () => {
-    const localWindow = createLocalWindow();
-    const linkedPaneId = localWindow.activePaneId;
+  it('creates a linked chat pane from the ssh toolbar', () => {
+    const sshWindow = createSshWindow();
+    const linkedPaneId = sshWindow.activePaneId;
     useWindowStore.setState({
-      windows: [localWindow],
-      activeWindowId: localWindow.id,
-      mruList: [localWindow.id],
+      windows: [sshWindow],
+      activeWindowId: sshWindow.id,
+      mruList: [sshWindow.id],
       sidebarExpanded: false,
       sidebarWidth: 200,
     });
 
     render(
       <TerminalView
-        window={localWindow}
+        window={sshWindow}
         onReturn={vi.fn()}
         onWindowSwitch={vi.fn()}
         isActive
@@ -495,7 +496,7 @@ describe('TerminalView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'terminalView.splitChat' }));
 
-    const updatedWindow = useWindowStore.getState().getWindowById(localWindow.id);
+    const updatedWindow = useWindowStore.getState().getWindowById(sshWindow.id);
     expect(updatedWindow).toBeDefined();
     expect(updatedWindow?.layout.type).toBe('split');
     if (updatedWindow?.layout.type === 'split') {
@@ -509,8 +510,11 @@ describe('TerminalView', () => {
     expect(updatedWindow?.activePaneId).toBe(chatPane?.id);
   });
 
-  it('prefers an ssh pane when creating a chat pane in a mixed window', () => {
-    const mixedWindow = createMixedLocalAndSshWindow();
+  it('creates a chat pane from the ssh pane in a mixed window', () => {
+    const mixedWindow = {
+      ...createMixedLocalAndSshWindow(),
+      activePaneId: 'pane-ssh-1',
+    };
     useWindowStore.setState({
       windows: [mixedWindow],
       activeWindowId: mixedWindow.id,

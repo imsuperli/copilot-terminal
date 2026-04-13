@@ -1261,18 +1261,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </AppTooltip>
             )}
 
-            <AppTooltip content={t('terminalView.splitChat')} placement="toolbar-trailing">
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label={t('terminalView.splitChat')}
-                onMouseDown={preventMouseButtonFocus}
-                onClick={handleSplitChatPane}
-                className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700"
-              >
-                <SplitChatIcon />
-              </button>
-            </AppTooltip>
+            {activePaneCapabilities?.canOpenSFTP && (
+              <AppTooltip content={t('terminalView.splitChat')} placement="toolbar-trailing">
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label={t('terminalView.splitChat')}
+                  onMouseDown={preventMouseButtonFocus}
+                  onClick={handleSplitChatPane}
+                  className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700"
+                >
+                  <SplitChatIcon />
+                </button>
+              </AppTooltip>
+            )}
 
             {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
             {/* 嵌入模式（组内）：移除和停止并移除按钮 */}

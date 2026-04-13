@@ -799,10 +799,97 @@ describe('ChatPane', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('这是上一轮对话')).not.toBeInTheDocument();
-      expect(screen.getByText('开始一段新对话')).toBeInTheDocument();
+      expect(screen.getByText('全新的对话')).toBeInTheDocument();
     });
+    expect(screen.queryByText('开始一段新对话')).not.toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'SSH 未连接' })).toBeInTheDocument();
     expect((input as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('renders header actions as icon-only controls', async () => {
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    const pane = {
+      id: 'chat-pane-1',
+      cwd: '',
+      command: '',
+      kind: 'chat' as const,
+      status: WindowStatus.Paused,
+      pid: null,
+      chat: {
+        messages: [],
+      },
+    };
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane,
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPane
+          windowId="win-1"
+          pane={pane}
+          isActive
+          onActivate={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    const newConversationButton = screen.getByRole('button', { name: '新建对话' });
+    const closeButton = screen.getByRole('button', { name: '关闭' });
+
+    expect(newConversationButton).toHaveClass('leading-none');
+    expect(closeButton).toHaveClass('leading-none');
+    expect(newConversationButton).not.toHaveClass('border');
+    expect(closeButton).not.toHaveClass('border');
+    expect(newConversationButton).not.toHaveClass('h-9');
+    expect(closeButton).not.toHaveClass('h-9');
   });
 
   it('renders reasoning and command output blocks from the structured agent timeline', async () => {
@@ -1265,7 +1352,7 @@ describe('ChatPane', () => {
       </I18nProvider>,
     );
 
-    expect(await screen.findByText('开始一段新对话')).toBeInTheDocument();
+    expect(await screen.findByText('全新的对话')).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'SSH 已连接' })).toBeInTheDocument();
 
     await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '帮我看下系统的版本号是什么？');

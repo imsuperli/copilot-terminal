@@ -592,9 +592,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               onMouseDown={preventMouseButtonFocus}
               onClick={handleNewConversation}
               disabled={isBusy}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/72 text-[rgb(var(--muted-foreground))] transition-[color,border-color,background-color,transform] duration-200 hover:-translate-y-px hover:border-[rgb(var(--ring))]/55 hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] leading-none transition-colors duration-200 hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              <ChatNewConversationIcon size={16} />
+              <ChatNewConversationIcon size={18} />
             </button>
 
             {onClose && (
@@ -604,9 +604,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 aria-label={t('common.close')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={onClose}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/72 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                className="inline-flex shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] leading-none transition-colors duration-200 hover:text-[rgb(var(--foreground))]"
               >
-                <X size={14} />
+                <X size={18} strokeWidth={1.9} />
               </button>
             )}
           </div>
@@ -654,15 +654,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               <div ref={messagesEndRef} />
             </div>
           ) : (
-            <div className="flex gap-3 pt-6">
-              <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                <Sparkles size={15} />
-              </div>
-              <div className="max-w-3xl">
-                <div className="inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
-                  {assistantLabel}
-                </div>
-                <div className="mt-4 text-[15px] leading-7 text-[rgb(var(--foreground))]">{t('chatPane.emptyTitle')}</div>
+            <div className="pt-2">
+              <div className="text-[12px] font-medium tracking-[0.04em] text-[rgb(var(--muted-foreground))]">
+                {t('chatPane.freshConversation')}
               </div>
             </div>
           )}
