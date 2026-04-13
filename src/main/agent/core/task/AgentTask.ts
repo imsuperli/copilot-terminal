@@ -47,6 +47,7 @@ const OFFLOAD_THRESHOLD = 14_000;
 const OFFLOAD_PREVIEW_HEAD = 6_000;
 const OFFLOAD_PREVIEW_TAIL = 3_000;
 const AGENT_OFFLOAD_DIR = path.join(os.tmpdir(), 'copilot-terminal-agent-offload');
+const RUNNING_STATE_SYNC_DEBOUNCE_MS = 80;
 type ApprovalResolution = 'approved' | 'rejected' | 'cancelled';
 
 interface AgentTaskDependencies {
@@ -121,6 +122,7 @@ export class AgentTask {
     | null = null;
   private isCancelled = false;
   private commandOutputSeq = 0;
+  private pendingStateSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(snapshot: AgentTaskSnapshot, deps: AgentTaskDependencies) {
     this.snapshot = cloneSnapshot(snapshot);
@@ -252,6 +254,7 @@ export class AgentTask {
       status: 'completed',
       content: request.text,
     });
+    this.syncState();
 
     this.runPromise = this.runLoop().catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -1051,7 +1054,7 @@ export class AgentTask {
       taskId: this.snapshot.taskId,
       event,
     });
-    this.syncState();
+    this.syncState(this.shouldDeferStateSync() ? 'defer' : 'immediate');
   }
 
   private emitNotice(level: AgentSystemNoticeEvent['level'], content: string): void {
@@ -1073,7 +1076,30 @@ export class AgentTask {
     this.syncState();
   }
 
-  private syncState(): void {
+  private shouldDeferStateSync(): boolean {
+    return this.snapshot.status === 'running'
+      && !this.snapshot.pendingApproval
+      && !this.snapshot.pendingInteraction;
+  }
+
+  private syncState(mode: 'immediate' | 'defer' = 'immediate'): void {
+    if (mode === 'defer') {
+      if (this.pendingStateSyncTimer) {
+        return;
+      }
+
+      this.pendingStateSyncTimer = setTimeout(() => {
+        this.pendingStateSyncTimer = null;
+        this.deps.postState(this.getSnapshot());
+      }, RUNNING_STATE_SYNC_DEBOUNCE_MS);
+      return;
+    }
+
+    if (this.pendingStateSyncTimer) {
+      clearTimeout(this.pendingStateSyncTimer);
+      this.pendingStateSyncTimer = null;
+    }
+
     this.deps.postState(this.getSnapshot());
   }
 }

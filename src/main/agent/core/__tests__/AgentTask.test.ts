@@ -255,6 +255,44 @@ describe('AgentTask', () => {
     });
   });
 
+  it('batches running stream state syncs while chunks are arriving', async () => {
+    vi.useFakeTimers();
+
+    try {
+      let finishTurn: (() => void) | null = null;
+      const deps = createDeps();
+      vi.mocked(deps.chatService.streamChat).mockImplementationOnce(async (_request, callbacks) => {
+        callbacks.onChunk('<thinking>a</thinking>');
+        callbacks.onChunk('<thinking>ab</thinking>');
+        await new Promise<void>((resolve) => {
+          finishTurn = resolve;
+        });
+        callbacks.onDone('<thinking>ab</thinking>done', []);
+      });
+
+      const task = new AgentTask(createSnapshot(), deps);
+      task.start(createRequest('streaming request'), createProvider());
+
+      expect(deps.postState).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(79);
+      expect(deps.postState).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(deps.postState).toHaveBeenCalledTimes(2);
+
+      finishTurn?.();
+      await Promise.resolve();
+      await Promise.resolve();
+      await vi.runAllTimersAsync();
+
+      expect(task.getSnapshot().status).toBe('completed');
+      expect(vi.mocked(deps.postState).mock.calls.length).toBeGreaterThanOrEqual(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('runs non-interactive execute_command calls through the silent SSH path', async () => {
     const commandToolCall: ToolCall = {
       id: 'tool-silent',

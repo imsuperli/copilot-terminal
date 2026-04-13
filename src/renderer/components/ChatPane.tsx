@@ -381,6 +381,21 @@ function mergeAgentTaskWithOptimisticReasoning(
   };
 }
 
+function selectNewestAgentTask(
+  primary?: AgentTaskSnapshot | null,
+  secondary?: AgentTaskSnapshot | null,
+): AgentTaskSnapshot | undefined {
+  if (!primary) {
+    return secondary ?? undefined;
+  }
+
+  if (!secondary) {
+    return primary;
+  }
+
+  return primary.updatedAt >= secondary.updatedAt ? primary : secondary;
+}
+
 export const ChatPane: React.FC<ChatPaneProps> = ({
   windowId,
   pane,
@@ -398,12 +413,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [optimisticTask, setOptimisticTask] = useState<AgentTaskSnapshot | null>(null);
+  const [liveAgentTask, setLiveAgentTask] = useState<AgentTaskSnapshot | null>(null);
 
   useEffect(() => {
     paneRef.current = pane;
   }, [pane]);
 
   useEffect(() => {
+    setLiveAgentTask(null);
     setOptimisticTask(null);
   }, [pane.id]);
 
@@ -419,7 +436,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   );
 
   const chatState = pane.chat ?? { messages: [] };
-  const agentState = useMemo(() => {
+  const persistedAgentState = useMemo(() => {
     if (optimisticTask && (!chatState.agent || chatState.agent.updatedAt < optimisticTask.updatedAt)) {
       return optimisticTask;
     }
@@ -430,6 +447,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
     return mergeAgentTaskWithOptimisticReasoning(chatState.agent, optimisticTask);
   }, [chatState.agent, optimisticTask]);
+  const agentState = useMemo(() => {
+    const freshestTask = selectNewestAgentTask(persistedAgentState, liveAgentTask);
+    if (!freshestTask) {
+      return undefined;
+    }
+
+    return mergeAgentTaskWithOptimisticReasoning(freshestTask, optimisticTask);
+  }, [liveAgentTask, optimisticTask, persistedAgentState]);
   const resolvedLinkedPaneId = selectPreferredChatLinkedPaneId(terminalPanes, chatState.linkedPaneId);
   const linkedPane = useMemo(
     () => terminalPanes.find((candidate) => candidate.id === resolvedLinkedPaneId) ?? null,
@@ -469,6 +494,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
   const syncAgentTask = useCallback((task: NonNullable<NonNullable<Pane['chat']>['agent']>) => {
     hasLiveTaskRef.current = true;
+    setLiveAgentTask(task);
     const runtimeOnly = task.status === 'running';
     persistChatState((currentChat) => ({
       ...currentChat,
@@ -479,6 +505,29 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       linkedPaneId: task.linkedPaneId ?? currentChat.linkedPaneId,
       isStreaming: task.status === 'running',
     }), runtimeOnly);
+  }, [persistChatState]);
+
+  const syncRunningAgentTask = useCallback((task: NonNullable<NonNullable<Pane['chat']>['agent']>) => {
+    hasLiveTaskRef.current = true;
+    setLiveAgentTask(task);
+
+    const currentChat = paneRef.current.chat;
+    const needsRuntimeSync = currentChat?.activeProviderId !== task.providerId
+      || currentChat?.activeModel !== task.model
+      || currentChat?.linkedPaneId !== task.linkedPaneId
+      || currentChat?.isStreaming !== true;
+
+    if (!needsRuntimeSync) {
+      return;
+    }
+
+    persistChatState((currentChat) => ({
+      ...currentChat,
+      activeProviderId: task.providerId,
+      activeModel: task.model,
+      linkedPaneId: task.linkedPaneId ?? currentChat.linkedPaneId,
+      isStreaming: true,
+    }), true);
   }, [persistChatState]);
 
   const loadSettings = useCallback(async () => {
@@ -520,7 +569,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       }
 
       setErrorMessage(payload.task.error ?? null);
-      syncAgentTask(payload.task);
+      if (payload.task.status === 'running') {
+        syncRunningAgentTask(payload.task);
+      } else {
+        syncAgentTask(payload.task);
+      }
       setOptimisticTask((currentTask) => {
         if (!currentTask) {
           return null;
@@ -556,7 +609,11 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
     void window.electronAPI.agentGetTask({ paneId: pane.id }).then((response) => {
       if (response.success && response.data) {
-        syncAgentTask(response.data);
+        if (response.data.status === 'running') {
+          syncRunningAgentTask(response.data);
+        } else {
+          syncAgentTask(response.data);
+        }
       } else if (paneRef.current.chat?.agent && !isOptimisticAgentTask(paneRef.current.chat.agent)) {
         return window.electronAPI.agentRestoreTask({
           task: paneRef.current.chat.agent,
@@ -579,7 +636,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       window.electronAPI.offAgentTaskState(handleTaskState);
       window.electronAPI.offAgentTaskError(handleTaskError);
     };
-  }, [pane.id, syncAgentTask]);
+  }, [pane.id, syncAgentTask, syncRunningAgentTask]);
 
   const handleProviderModelChange = useCallback((value: string) => {
     if (!value) {
@@ -621,6 +678,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         setComposerValue('');
         setErrorMessage(null);
         hasLiveTaskRef.current = false;
+        setLiveAgentTask(null);
         setOptimisticTask(null);
         persistChatState((currentChat) => ({
           ...currentChat,
@@ -782,6 +840,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       const message = error instanceof Error ? error.message : String(error);
       setErrorMessage(message);
       hasLiveTaskRef.current = previousHasLiveTask;
+      setLiveAgentTask(null);
       setOptimisticTask(null);
       persistChatState(() => ({
         ...previousChat,

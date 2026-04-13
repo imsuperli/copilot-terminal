@@ -10,6 +10,7 @@ const MAX_ARRAY_ITEMS = 50;
 const MAX_OBJECT_DEPTH = 6;
 const SENSITIVE_KEY_PATTERN = /(api[-_]?key|authorization|token|password|passphrase|secret|private[-_]?key)/i;
 const CONSOLE_DEBUG_ENABLED = process.env.AUSOME_CHAT_DEBUG === '1';
+const FILE_DEBUG_ENABLED = CONSOLE_DEBUG_ENABLED || Boolean(process.env.AUSOME_CHAT_DEBUG_LOG_FILE?.trim());
 
 export function getChatDebugLogFilePath(): string {
   const configuredPath = process.env.AUSOME_CHAT_DEBUG_LOG_FILE?.trim();
@@ -76,14 +77,20 @@ function sanitizeLogValue(value: unknown, depth = 0): unknown {
 }
 
 function appendChatDebugLog(level: ChatDebugLevel, scope: string, message: string, extra?: unknown): void {
+  if (!FILE_DEBUG_ENABLED && !CONSOLE_DEBUG_ENABLED) {
+    return;
+  }
+
   const safeExtra = extra === undefined ? undefined : sanitizeLogValue(extra);
   const suffix = safeExtra === undefined ? '' : ` ${JSON.stringify(safeExtra)}`;
   const line = `[ChatDebug ${new Date().toISOString()}] [${level}] [${scope}] ${message}${suffix}\n`;
 
-  try {
-    fs.appendFileSync(getChatDebugLogFilePath(), line, 'utf8');
-  } catch {
-    // Ignore file logging failures.
+  if (FILE_DEBUG_ENABLED) {
+    try {
+      fs.appendFileSync(getChatDebugLogFilePath(), line, 'utf8');
+    } catch {
+      // Ignore file logging failures.
+    }
   }
 
   if (!CONSOLE_DEBUG_ENABLED) {
