@@ -30,6 +30,8 @@ import {
 import type { Pane } from '../types/window';
 import type {
   CodePaneContentMatch,
+  CodePaneGitGraphCommit,
+  CodePaneGitRepositorySummary,
   CodePaneFsChangedPayload,
   CodePaneGitStatusEntry,
   CodePaneIndexProgressPayload,
@@ -104,6 +106,21 @@ type DefinitionLookupResult = {
   location: CodePaneLocation | null;
   error?: string;
 };
+type GitChangeSection = 'conflicted' | 'staged' | 'unstaged' | 'untracked';
+type GitChangeTreeNode = {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  entry?: CodePaneGitStatusEntry;
+  children?: GitChangeTreeNode[];
+};
+type GitChangeSectionGroup = {
+  section: GitChangeSection;
+  count: number;
+  roots: GitChangeTreeNode[];
+};
+
+const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
 
 export interface CodePaneProps {
   windowId: string;
@@ -343,6 +360,135 @@ function getProblemTone(severity: number): {
   return { label: 'hint', className: 'bg-emerald-500/15 text-emerald-300' };
 }
 
+function getGitEntrySections(entry: CodePaneGitStatusEntry): GitChangeSection[] {
+  if (entry.conflicted || entry.section === 'conflicted') {
+    return ['conflicted'];
+  }
+
+  const sections: GitChangeSection[] = [];
+  if (entry.staged || entry.section === 'staged') {
+    sections.push('staged');
+  }
+  if (entry.unstaged || entry.section === 'unstaged') {
+    sections.push('unstaged');
+  }
+  if (entry.status === 'untracked' || entry.section === 'untracked') {
+    sections.push('untracked');
+  }
+
+  if (sections.length === 0) {
+    sections.push(entry.status === 'untracked' ? 'untracked' : 'unstaged');
+  }
+
+  return Array.from(new Set(sections));
+}
+
+function sortGitChangeTreeNodes(nodes: GitChangeTreeNode[]): GitChangeTreeNode[] {
+  return nodes
+    .map((node) => ({
+      ...node,
+      children: node.children ? sortGitChangeTreeNodes(node.children) : undefined,
+    }))
+    .sort((left, right) => {
+      if (left.type !== right.type) {
+        return left.type === 'directory' ? -1 : 1;
+      }
+      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    });
+}
+
+function insertGitChangeTreeNode(
+  nodes: GitChangeTreeNode[],
+  segments: string[],
+  fullPath: string,
+  entry: CodePaneGitStatusEntry,
+  currentPath = '',
+): GitChangeTreeNode[] {
+  const [segment, ...restSegments] = segments;
+  if (!segment) {
+    return nodes;
+  }
+
+  const nextPath = currentPath ? `${currentPath}/${segment}` : segment;
+  const existingNode = nodes.find((node) => node.name === segment);
+  if (restSegments.length === 0) {
+    if (existingNode) {
+      existingNode.type = 'file';
+      existingNode.path = fullPath;
+      existingNode.entry = entry;
+      delete existingNode.children;
+      return nodes;
+    }
+
+    nodes.push({
+      name: segment,
+      path: fullPath,
+      type: 'file',
+      entry,
+    });
+    return nodes;
+  }
+
+  const directoryNode = existingNode && existingNode.type === 'directory'
+    ? existingNode
+    : (() => {
+      if (existingNode) {
+        existingNode.type = 'directory';
+        existingNode.path = nextPath;
+        existingNode.children = existingNode.children ?? [];
+        return existingNode;
+      }
+
+      const nextNode: GitChangeTreeNode = {
+        name: segment,
+        path: nextPath,
+        type: 'directory',
+        children: [],
+      };
+      nodes.push(nextNode);
+      return nextNode;
+    })();
+
+  directoryNode.children = insertGitChangeTreeNode(
+    directoryNode.children ?? [],
+    restSegments,
+    fullPath,
+    entry,
+    nextPath,
+  );
+
+  return nodes;
+}
+
+function buildGitChangeSectionGroups(
+  entries: CodePaneGitStatusEntry[],
+  rootPath: string,
+): GitChangeSectionGroup[] {
+  const groupedNodes = new Map<GitChangeSection, GitChangeTreeNode[]>();
+  const sectionCounts = new Map<GitChangeSection, number>();
+
+  for (const entry of entries) {
+    const relativePath = getRelativePath(rootPath, entry.path);
+    const pathSegments = relativePath.split('/').filter(Boolean);
+    if (pathSegments.length === 0) {
+      continue;
+    }
+
+    for (const section of getGitEntrySections(entry)) {
+      const nodes = groupedNodes.get(section) ?? [];
+      insertGitChangeTreeNode(nodes, pathSegments, entry.path, entry);
+      groupedNodes.set(section, nodes);
+      sectionCounts.set(section, (sectionCounts.get(section) ?? 0) + 1);
+    }
+  }
+
+  return GIT_CHANGE_SECTION_ORDER.map((section) => ({
+    section,
+    count: sectionCounts.get(section) ?? 0,
+    roots: sortGitChangeTreeNodes(groupedNodes.get(section) ?? []),
+  })).filter((group) => group.count > 0);
+}
+
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -417,6 +563,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(createEmptySet);
   const [savingPaths, setSavingPaths] = useState<Set<string>>(createEmptySet);
   const [gitStatusByPath, setGitStatusByPath] = useState<Record<string, CodePaneGitStatusEntry>>({});
+  const [gitRepositorySummary, setGitRepositorySummary] = useState<CodePaneGitRepositorySummary | null>(null);
+  const [gitGraph, setGitGraph] = useState<CodePaneGitGraphCommit[]>([]);
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [treeLoadError, setTreeLoadError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -1051,16 +1199,33 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setProblems([]);
   }, [clearDefinitionLookupCache]);
 
-  const refreshGitStatus = useCallback(async () => {
-    const response = await window.electronAPI.codePaneGetGitStatus({ rootPath });
-    if (!response.success) {
-      return;
-    }
+  const refreshGitSnapshot = useCallback(async (options?: { includeGraph?: boolean }) => {
+    const includeGraph = options?.includeGraph ?? (
+      sidebarVisibleRef.current && sidebarModeRef.current === 'scm'
+    );
+
+    const statusPromise = window.electronAPI.codePaneGetGitStatus({ rootPath });
+    const summaryPromise = window.electronAPI.codePaneGetGitRepositorySummary({ rootPath });
+    const graphPromise = includeGraph
+      ? window.electronAPI.codePaneGetGitGraph({ rootPath, limit: 60 })
+      : Promise.resolve(null);
+
+    const [statusResponse, summaryResponse, graphResponse] = await Promise.all([
+      statusPromise,
+      summaryPromise,
+      graphPromise,
+    ]);
 
     startTransition(() => {
       setGitStatusByPath(
-        Object.fromEntries((response.data ?? []).map((entry) => [entry.path, entry])),
+        statusResponse?.success
+          ? Object.fromEntries((statusResponse.data ?? []).map((entry) => [entry.path, entry]))
+          : {},
       );
+      setGitRepositorySummary(summaryResponse?.success ? summaryResponse.data ?? null : null);
+      if (includeGraph) {
+        setGitGraph(graphResponse?.success ? graphResponse.data ?? [] : []);
+      }
     });
   }, [rootPath]);
 
@@ -1116,6 +1281,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     }
   }, [rootPath, t]);
+
+  const revealPathInExplorer = useCallback(async (targetPath: string) => {
+    const directoryPathsToExpand: string[] = [];
+    let currentPath = getParentDirectory(targetPath);
+
+    while (isPathInside(rootPath, currentPath) && currentPath !== rootPath) {
+      directoryPathsToExpand.unshift(currentPath);
+      const parentPath = getParentDirectory(currentPath);
+      if (parentPath === currentPath) {
+        break;
+      }
+      currentPath = parentPath;
+    }
+
+    const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
+    nextExpandedDirectories.add(rootPath);
+    for (const directoryPath of directoryPathsToExpand) {
+      nextExpandedDirectories.add(directoryPath);
+    }
+
+    setExpandedDirectories(nextExpandedDirectories);
+    persistCodeState({
+      selectedPath: targetPath,
+      expandedPaths: Array.from(nextExpandedDirectories),
+    });
+    handleSidebarModeSelect('files');
+
+    const directoriesToLoad = directoryPathsToExpand.filter((directoryPath) => !loadedDirectoriesRef.current.has(directoryPath));
+    if (directoriesToLoad.length > 0) {
+      await Promise.all(directoriesToLoad.map((directoryPath) => loadDirectory(directoryPath)));
+    }
+  }, [handleSidebarModeSelect, loadDirectory, persistCodeState, rootPath]);
 
   const createOrUpdateModel = useCallback((filePath: string, readResult: CodePaneReadFileResult) => {
     const monaco = monacoRef.current;
@@ -1575,9 +1772,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     markDirty(filePath, false);
     clearBannerForFile(filePath);
     await syncLanguageDocument(filePath, 'save');
-    void refreshGitStatus();
+    void refreshGitSnapshot();
     return true;
-  }, [clearBannerForFile, flushPendingLanguageSync, markDirty, markSaving, refreshGitStatus, rootPath, syncLanguageDocument, t]);
+  }, [clearBannerForFile, flushPendingLanguageSync, markDirty, markSaving, refreshGitSnapshot, rootPath, syncLanguageDocument, t]);
 
   const flushDirtyFiles = useCallback(async (targetFilePaths?: string[]) => {
     const pathsToFlush = targetFilePaths ?? Array.from(dirtyPathsRef.current);
@@ -1822,9 +2019,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (options?.refreshGitStatus !== false) {
-      await refreshGitStatus();
+      await refreshGitSnapshot();
     }
-  }, [loadDirectory, refreshGitStatus]);
+  }, [loadDirectory, refreshGitSnapshot]);
 
   const refreshLoadedDirectories = useCallback(async () => {
     const directoriesToRefresh = Array.from(new Set([rootPath, ...loadedDirectoriesRef.current]));
@@ -2145,7 +2342,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         await Promise.all([
           loadDirectory(rootPath),
-          refreshGitStatus(),
+          refreshGitSnapshot(),
         ]);
 
         const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
@@ -2184,7 +2381,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
       });
     };
-  }, [loadDirectory, pane.id, refreshGitStatus, rootPath, supportsMonaco, t]);
+  }, [loadDirectory, pane.id, refreshGitSnapshot, rootPath, supportsMonaco, t]);
+
+  useEffect(() => {
+    if (!isSidebarVisible || sidebarMode !== 'scm') {
+      return undefined;
+    }
+
+    void refreshGitSnapshot({ includeGraph: true });
+
+    const refreshInterval = window.setInterval(() => {
+      if (!document.hidden) {
+        void refreshGitSnapshot({ includeGraph: true });
+      }
+    }, 5000);
+
+    return () => {
+      window.clearInterval(refreshInterval);
+    };
+  }, [isSidebarVisible, refreshGitSnapshot, sidebarMode]);
 
   useEffect(() => {
     if (!activeFilePath) {
@@ -2641,6 +2856,78 @@ export const CodePane: React.FC<CodePaneProps> = ({
     })
   ), [gitStatusByPath, rootPath]);
 
+  const gitChangeSectionGroups = useMemo(
+    () => buildGitChangeSectionGroups(scmEntries, rootPath),
+    [rootPath, scmEntries],
+  );
+
+  const gitOperationLabel = useMemo(() => {
+    switch (gitRepositorySummary?.operation) {
+      case 'merge':
+        return t('codePane.gitOperationMerge');
+      case 'rebase':
+        return t('codePane.gitOperationRebase');
+      case 'cherry-pick':
+        return t('codePane.gitOperationCherryPick');
+      case 'revert':
+        return t('codePane.gitOperationRevert');
+      case 'bisect':
+        return t('codePane.gitOperationBisect');
+      default:
+        return t('codePane.gitOperationIdle');
+    }
+  }, [gitRepositorySummary?.operation, t]);
+
+  const gitSummaryBranchLabel = useMemo(() => {
+    if (!gitRepositorySummary) {
+      return null;
+    }
+
+    if (gitRepositorySummary.currentBranch) {
+      return gitRepositorySummary.currentBranch;
+    }
+
+    if (gitRepositorySummary.detachedHead && gitRepositorySummary.headSha) {
+      return `${t('codePane.gitDetachedHead')} ${gitRepositorySummary.headSha.slice(0, 7)}`;
+    }
+
+    return t('codePane.gitDetachedHead');
+  }, [gitRepositorySummary, t]);
+
+  const gitBranchCopyValue = useMemo(
+    () => gitRepositorySummary?.currentBranch ?? gitRepositorySummary?.headSha ?? '',
+    [gitRepositorySummary],
+  );
+
+  const gitStatusChip = useMemo(() => {
+    if (!gitRepositorySummary) {
+      return null;
+    }
+
+    if (gitRepositorySummary.hasConflicts) {
+      return {
+        className: 'bg-red-500/15 text-red-300',
+        text: `${gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')} · ${t('codePane.gitConflictsActive')}`,
+      };
+    }
+
+    if (gitRepositorySummary.operation !== 'idle') {
+      return {
+        className: 'bg-amber-500/15 text-amber-300',
+        text: `${gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')} · ${gitOperationLabel}`,
+      };
+    }
+
+    const aheadBehindText = gitRepositorySummary.aheadCount > 0 || gitRepositorySummary.behindCount > 0
+      ? ` ↑${gitRepositorySummary.aheadCount} ↓${gitRepositorySummary.behindCount}`
+      : '';
+
+    return {
+      className: 'bg-emerald-500/15 text-emerald-300',
+      text: `${gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}${aheadBehindText}`,
+    };
+  }, [gitOperationLabel, gitRepositorySummary, gitSummaryBranchLabel, t]);
+
   const problemGroups = useMemo(() => {
     const groups = new Map<string, Array<MonacoMarker & { filePath: string }>>();
     for (const problem of problems) {
@@ -2719,6 +3006,105 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     onClose();
   }, [flushDirtyFiles, onClose]);
+
+  const getGitSectionLabel = useCallback((section: GitChangeSection) => {
+    switch (section) {
+      case 'conflicted':
+        return t('codePane.gitSectionConflicted');
+      case 'staged':
+        return t('codePane.gitSectionStaged');
+      case 'unstaged':
+        return t('codePane.gitSectionUnstaged');
+      case 'untracked':
+        return t('codePane.gitSectionUntracked');
+      default:
+        return section;
+    }
+  }, [t]);
+
+  const renderGitChangeTree = (nodes: GitChangeTreeNode[], depth = 0): React.ReactNode => nodes.map((node) => {
+    if (node.type === 'directory') {
+      return (
+        <div key={`${node.path}-${node.name}`}>
+          <div
+            className="flex items-center gap-2 rounded px-2 py-1 text-xs text-zinc-400"
+            style={{ paddingLeft: `${8 + (depth * 14)}px` }}
+          >
+            <Folder size={13} className="shrink-0 text-zinc-500" />
+            <span className="truncate">{node.name}</span>
+          </div>
+          {node.children && renderGitChangeTree(node.children, depth + 1)}
+        </div>
+      );
+    }
+
+    const entry = node.entry;
+    if (!entry) {
+      return null;
+    }
+
+    const badge = getStatusTone(entry.status);
+    const relativePath = getRelativePath(rootPath, node.path);
+
+    return (
+      <div key={`${node.path}-${depth}`} className="group">
+        <div
+          className="flex items-center gap-2 rounded px-2 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70"
+          style={{ paddingLeft: `${8 + (depth * 14)}px` }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              if (entry.status === 'deleted') {
+                void revealPathInExplorer(node.path);
+                return;
+              }
+              void activateFile(node.path);
+            }}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            <FileIcon size={13} className="shrink-0 text-zinc-500" />
+            <span className="min-w-0 flex-1 truncate">{node.name}</span>
+            {badge && (
+              <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
+                {badge.badge}
+              </span>
+            )}
+          </button>
+          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            {entry.status !== 'deleted' && (
+              <button
+                type="button"
+                onClick={() => {
+                  void openDiffForFile(node.path);
+                }}
+                className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+              >
+                {t('codePane.openDiff')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                void revealPathInExplorer(node.path);
+              }}
+              className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+            >
+              {t('codePane.gitRevealInExplorer')}
+            </button>
+          </div>
+        </div>
+        <div className="pb-1 pr-2 text-[10px] text-zinc-500" style={{ paddingLeft: `${31 + (depth * 14)}px` }}>
+          <div className="truncate">{relativePath}</div>
+          {entry.originalPath && (
+            <div className="truncate text-zinc-600">
+              {getRelativePath(rootPath, entry.originalPath)} -&gt; {relativePath}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  });
 
   return (
     <>
@@ -3067,61 +3453,208 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <GitBranch size={12} />
                   {t('codePane.sourceControl')}
                 </div>
-                <div className="text-xs text-zinc-500">
-                  {scmEntries.length > 0 ? t('codePane.sourceControlHint') : t('codePane.noChanges')}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                  {gitSummaryBranchLabel ? (
+                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-200">
+                      {gitSummaryBranchLabel}
+                    </span>
+                  ) : null}
+                  <span>
+                    {gitRepositorySummary || scmEntries.length > 0
+                      ? t('codePane.sourceControlHint')
+                      : t('codePane.gitRepositoryUnavailable')}
+                  </span>
                 </div>
               </div>
               <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-                {scmEntries.length > 0 ? (
-                  <div className="space-y-2">
-                    {scmEntries.map((entry) => {
-                      const badge = getStatusTone(entry.status);
-                      return (
-                        <div key={entry.path} className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-                          <div className="mb-2 flex items-center gap-2">
-                            <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                            <span className="min-w-0 flex-1 truncate text-xs text-zinc-200">
-                              {getPathLeafLabel(entry.path)}
-                            </span>
-                            {badge && (
-                              <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                                {badge.badge}
+                {gitRepositorySummary || scmEntries.length > 0 ? (
+                  <div className="space-y-3">
+                    {gitRepositorySummary && (
+                      <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                            {t('codePane.gitRepositorySummary')}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void refreshGitSnapshot({ includeGraph: true });
+                            }}
+                            className="rounded bg-zinc-800 p-1 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
+                            aria-label={t('codePane.gitRefreshStatus')}
+                          >
+                            <RefreshCw size={12} />
+                          </button>
+                        </div>
+                        {(gitRepositorySummary.operation !== 'idle' || gitRepositorySummary.hasConflicts) && (
+                          <div className="mb-2 flex flex-wrap gap-2">
+                            {gitRepositorySummary.operation !== 'idle' && (
+                              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                                {gitOperationLabel}
+                              </span>
+                            )}
+                            {gitRepositorySummary.hasConflicts && (
+                              <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
+                                {t('codePane.gitConflictsActive')}
                               </span>
                             )}
                           </div>
-                          <div className="mb-2 truncate text-[10px] text-zinc-500">
-                            {getRelativePath(rootPath, entry.path)}
+                        )}
+                        <div className="grid grid-cols-2 gap-2 text-xs text-zinc-300">
+                          <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                            <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitBranch')}</div>
+                            <div className="mt-1 truncate text-zinc-100">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            {entry.status !== 'deleted' && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void activateFile(entry.path);
-                                  }}
-                                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                                >
-                                  {t('common.open')}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void openDiffForFile(entry.path);
-                                  }}
-                                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                                >
-                                  {t('codePane.openDiff')}
-                                </button>
-                              </>
-                            )}
+                          <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                            <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitUpstream')}</div>
+                            <div className="mt-1 truncate text-zinc-100">{gitRepositorySummary.upstreamBranch ?? t('codePane.gitNoUpstream')}</div>
+                          </div>
+                          <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                            <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitAheadBehind')}</div>
+                            <div className="mt-1 text-zinc-100">
+                              ↑{gitRepositorySummary.aheadCount} ↓{gitRepositorySummary.behindCount}
+                            </div>
+                          </div>
+                          <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                            <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitOperation')}</div>
+                            <div className="mt-1 truncate text-zinc-100">{gitOperationLabel}</div>
+                          </div>
+                          <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                            <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitConflicts')}</div>
+                            <div className="mt-1 truncate text-zinc-100">
+                              {gitRepositorySummary.hasConflicts
+                                ? t('codePane.gitConflictsActive')
+                                : t('codePane.gitConflictsNone')}
+                            </div>
+                          </div>
+                          <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                            <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitRepoRoot')}</div>
+                            <div className="mt-1 truncate text-zinc-100">{gitRepositorySummary.repoRootPath}</div>
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    )}
+
+                    <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+                      <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                        {t('codePane.gitQuickActions')}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void refreshGitSnapshot({ includeGraph: true });
+                          }}
+                          className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                        >
+                          {t('codePane.gitRefreshStatus')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void window.electronAPI.openFolder(gitRepositorySummary?.repoRootPath ?? rootPath);
+                          }}
+                          className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                        >
+                          {t('codePane.gitOpenRepository')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!gitBranchCopyValue}
+                          onClick={() => {
+                            if (gitBranchCopyValue) {
+                              void window.electronAPI.writeClipboardText(gitBranchCopyValue);
+                            }
+                          }}
+                          className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {t('codePane.gitCopyBranchName')}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                          {t('codePane.gitBranchGraph')}
+                        </div>
+                        <div className="text-[10px] text-zinc-500">{gitGraph.length}</div>
+                      </div>
+                      {gitGraph.length > 0 ? (
+                        <div className="space-y-1">
+                          {gitGraph.map((commit) => {
+                            const laneWidth = Math.max(commit.laneCount, 1) * 12;
+                            const visibleRefs = commit.refs.slice(0, 4);
+                            return (
+                              <div key={commit.sha} className="flex items-start gap-3 rounded px-1 py-1 text-xs hover:bg-zinc-800/60">
+                                <div className="relative mt-1 h-5 shrink-0" style={{ width: `${laneWidth}px` }}>
+                                  {Array.from({ length: Math.max(commit.laneCount, 1) }).map((_, laneIndex) => (
+                                    <span
+                                      key={`${commit.sha}-lane-${laneIndex}`}
+                                      className="absolute inset-y-0 w-px bg-zinc-700/70"
+                                      style={{ left: `${(laneIndex * 12) + 5}px` }}
+                                    />
+                                  ))}
+                                  <span
+                                    className={`absolute top-1 h-2.5 w-2.5 rounded-full border ${commit.isMergeCommit ? 'border-sky-300 bg-sky-400' : commit.isHead ? 'border-emerald-300 bg-emerald-400' : 'border-zinc-300 bg-zinc-400'}`}
+                                    style={{ left: `${(commit.lane * 12) + 1}px` }}
+                                  />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="truncate text-zinc-100">{commit.subject || commit.shortSha}</span>
+                                    {visibleRefs.map((ref) => (
+                                      <span
+                                        key={`${commit.sha}-${ref}`}
+                                        className="rounded bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-300"
+                                      >
+                                        {ref}
+                                      </span>
+                                    ))}
+                                    {commit.refs.length > visibleRefs.length && (
+                                      <span className="text-[10px] text-zinc-500">+{commit.refs.length - visibleRefs.length}</span>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                                    <span>{commit.author}</span>
+                                    <span>{new Date(commit.timestamp * 1000).toLocaleString()}</span>
+                                    <span>{commit.shortSha}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">{t('codePane.gitCommitGraphEmpty')}</div>
+                      )}
+                    </div>
+
+                    <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+                      <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                        {t('codePane.gitChanges')}
+                      </div>
+                      {gitChangeSectionGroups.length > 0 ? (
+                        <div className="space-y-3">
+                          {gitChangeSectionGroups.map((group) => (
+                            <div key={group.section}>
+                              <div className="mb-1 flex items-center gap-2 px-2 text-[11px] font-medium text-zinc-400">
+                                <span>{getGitSectionLabel(group.section)}</span>
+                                <span className="rounded bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-500">{group.count}</span>
+                              </div>
+                              <div className="space-y-0.5">
+                                {renderGitChangeTree(group.roots)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">{t('codePane.noChanges')}</div>
+                      )}
+                    </div>
                   </div>
                 ) : (
-                  <div className="text-xs text-zinc-500">{t('codePane.noChanges')}</div>
+                  <div className="text-xs text-zinc-500">{t('codePane.gitRepositoryUnavailable')}</div>
                 )}
               </div>
             </>
@@ -3309,6 +3842,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     <Loader2 size={11} className="shrink-0 animate-spin" />
                   )}
                   <span>{languageStatusText}</span>
+                </span>
+              )}
+              {gitStatusChip && (
+                <span className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 ${gitStatusChip.className}`}>
+                  <GitBranch size={11} className="shrink-0" />
+                  <span>{gitStatusChip.text}</span>
                 </span>
               )}
               <span>{activeStatusText}</span>

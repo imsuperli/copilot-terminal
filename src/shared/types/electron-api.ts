@@ -297,11 +297,47 @@ export interface CodePaneGitStatusConfig {
   rootPath: string;
 }
 
+export type CodePaneGitOperationState = 'idle' | 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'bisect';
+
 export interface CodePaneGitStatusEntry {
   path: string;
   status: 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked';
   staged?: boolean;
+  unstaged?: boolean;
+  conflicted?: boolean;
+  section?: 'staged' | 'unstaged' | 'untracked' | 'conflicted';
   originalPath?: string;
+}
+
+export interface CodePaneGitRepositorySummary {
+  repoRootPath: string;
+  currentBranch?: string;
+  upstreamBranch?: string;
+  detachedHead?: boolean;
+  headSha?: string;
+  aheadCount: number;
+  behindCount: number;
+  operation: CodePaneGitOperationState;
+  hasConflicts: boolean;
+}
+
+export interface CodePaneGitGraphConfig {
+  rootPath: string;
+  limit?: number;
+}
+
+export interface CodePaneGitGraphCommit {
+  sha: string;
+  shortSha: string;
+  parents: string[];
+  subject: string;
+  author: string;
+  timestamp: number;
+  refs: string[];
+  isHead: boolean;
+  isMergeCommit: boolean;
+  lane: number;
+  laneCount: number;
 }
 
 export interface CodePaneReadGitBaseFileConfig {
@@ -731,6 +767,8 @@ export interface ElectronAPI {
   codePaneReadFile: (config: CodePaneReadFileConfig) => Promise<IpcResponse<CodePaneReadFileResult>>;
   codePaneWriteFile: (config: CodePaneWriteFileConfig) => Promise<IpcResponse<CodePaneWriteFileResult>>;
   codePaneGetGitStatus: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitStatusEntry[]>>;
+  codePaneGetGitRepositorySummary: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitRepositorySummary | null>>;
+  codePaneGetGitGraph: (config: CodePaneGitGraphConfig) => Promise<IpcResponse<CodePaneGitGraphCommit[]>>;
   codePaneReadGitBaseFile: (config: CodePaneReadGitBaseFileConfig) => Promise<IpcResponse<CodePaneReadGitBaseFileResult>>;
   codePaneWatchRoot: (config: CodePaneWatchRootConfig) => Promise<IpcResponse<void>>;
   codePaneUnwatchRoot: (paneId: string) => Promise<IpcResponse<void>>;

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import type {
+  CodePaneGitGraphConfig,
   CodePaneGitStatusConfig,
   CodePaneListDirectoryConfig,
   CodePaneReadFileConfig,
@@ -77,6 +78,30 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await codeGitService.getStatus(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-repository-summary', async (_event, config: CodePaneGitStatusConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.getRepositorySummary(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-graph', async (_event, config: CodePaneGitGraphConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.getGraph(config));
     } catch (error) {
       return errorResponse(error);
     }

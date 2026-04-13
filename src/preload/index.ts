@@ -145,6 +145,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-write-file', config),
   codePaneGetGitStatus: (config) =>
     ipcRenderer.invoke('code-pane-git-status', config),
+  codePaneGetGitRepositorySummary: (config) =>
+    ipcRenderer.invoke('code-pane-git-repository-summary', config),
+  codePaneGetGitGraph: (config) =>
+    ipcRenderer.invoke('code-pane-git-graph', config),
   codePaneReadGitBaseFile: (config) =>
     ipcRenderer.invoke('code-pane-read-git-base-file', config),
   codePaneWatchRoot: (config) =>

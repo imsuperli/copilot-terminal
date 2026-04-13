@@ -479,6 +479,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneReadFile).mockReset();
     vi.mocked(window.electronAPI.codePaneWriteFile).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetGitGraph).mockReset();
     vi.mocked(window.electronAPI.codePaneReadGitBaseFile).mockReset();
     vi.mocked(window.electronAPI.codePaneWatchRoot).mockReset();
     vi.mocked(window.electronAPI.codePaneUnwatchRoot).mockReset();
@@ -530,6 +532,24 @@ describe('CodePane', () => {
       },
     });
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'main',
+        upstreamBranch: 'origin/main',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 0,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitGraph).mockResolvedValue({
       success: true,
       data: [],
     });
@@ -879,13 +899,47 @@ describe('CodePane', () => {
     });
   });
 
-  it('shows changed files in the SCM tab and opens a diff from there', async () => {
+  it('shows repository summary, branch graph, and changed files in the SCM tab', async () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
       success: true,
       data: [
         {
           path: '/workspace/project/src/index.ts',
           status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/scm',
+        upstreamBranch: 'origin/feature/scm',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 2,
+        behindCount: 1,
+        operation: 'merge',
+        hasConflicts: true,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitGraph).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          sha: '1234567890abcdef',
+          shortSha: '1234567',
+          parents: ['abcdef1234567890'],
+          subject: 'Merge feature branch',
+          author: 'Test User',
+          timestamp: 1_710_000_000,
+          refs: ['HEAD -> feature/scm', 'origin/feature/scm'],
+          isHead: true,
+          isMergeCommit: true,
+          lane: 0,
+          laneCount: 1,
         },
       ],
     });
@@ -896,7 +950,14 @@ describe('CodePane', () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
     });
 
+    expect((await screen.findAllByText('feature/scm')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Merge feature branch')).toBeInTheDocument();
+    expect(screen.getByText('codePane.gitSectionUnstaged')).toBeInTheDocument();
     expect(await screen.findByText('index.ts')).toBeInTheDocument();
+    expect(window.electronAPI.codePaneGetGitGraph).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      limit: 60,
+    });
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.openDiff' }));

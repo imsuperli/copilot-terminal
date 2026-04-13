@@ -124,6 +124,8 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneReadFile: vi.fn().mockResolvedValue({ success: true, data: { content: '', mtimeMs: Date.now(), size: 0, language: 'plaintext', isBinary: false } }),
     codePaneWriteFile: vi.fn().mockResolvedValue({ success: true, data: { mtimeMs: Date.now() } }),
     codePaneGetGitStatus: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    codePaneGetGitRepositorySummary: vi.fn().mockResolvedValue({ success: true, data: null }),
+    codePaneGetGitGraph: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneReadGitBaseFile: vi.fn().mockResolvedValue({ success: true, data: { content: '', existsInHead: false } }),
     codePaneWatchRoot: vi.fn().mockResolvedValue({ success: true }),
     codePaneUnwatchRoot: vi.fn().mockResolvedValue({ success: true }),
