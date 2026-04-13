@@ -14,8 +14,9 @@ const env = {
   ...process.env,
 };
 const configuredJavaHome = settingString('java.home');
-if (configuredJavaHome) {
-  env.JAVA_HOME = configuredJavaHome;
+const configuredJavaRuntime = resolveConfiguredJavaRuntime(configuredJavaHome);
+if (configuredJavaRuntime.javaHome) {
+  env.JAVA_HOME = configuredJavaRuntime.javaHome;
 }
 
 const bundledLauncherJar = findBundledLauncherJar(path.join(pluginRoot, 'vendor', 'jdtls'));
@@ -135,24 +136,77 @@ function resolveCommand(candidates) {
 }
 
 function resolveJavaExecutable(javaHome) {
-  const explicitJavaHome = normalizeJavaHome(javaHome)
-    || normalizeJavaHome(process.env.JAVA_HOME)
-    || normalizeJavaHome(process.env.JDK_HOME);
+  const configuredRuntime = resolveConfiguredJavaRuntime(javaHome);
+  if (configuredRuntime.javaExecutable) {
+    return configuredRuntime.javaExecutable;
+  }
 
-  if (explicitJavaHome) {
-    const candidatePath = path.join(explicitJavaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
-    if (isExecutable(candidatePath)) {
-      return candidatePath;
+  for (const candidate of [process.env.JAVA_HOME, process.env.JDK_HOME]) {
+    const candidateRuntime = resolveConfiguredJavaRuntime(candidate);
+    if (candidateRuntime.javaExecutable) {
+      return candidateRuntime.javaExecutable;
     }
   }
 
   return resolveCommand(process.platform === 'win32' ? ['java.exe', 'java'] : ['java']);
 }
 
+function resolveConfiguredJavaRuntime(value) {
+  const normalized = normalizeJavaHome(value);
+  if (!normalized) {
+    return {
+      javaHome: null,
+      javaExecutable: null,
+    };
+  }
+
+  if (looksLikeJavaExecutable(normalized) && isExecutable(normalized)) {
+    return {
+      javaHome: deriveJavaHomeFromExecutable(normalized),
+      javaExecutable: normalized,
+    };
+  }
+
+  if (path.basename(normalized).toLowerCase() === 'bin') {
+    const binCandidatePath = path.join(normalized, process.platform === 'win32' ? 'java.exe' : 'java');
+    if (isExecutable(binCandidatePath)) {
+      return {
+        javaHome: path.dirname(normalized),
+        javaExecutable: binCandidatePath,
+      };
+    }
+  }
+
+  const homeCandidatePath = path.join(normalized, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
+  if (isExecutable(homeCandidatePath)) {
+    return {
+      javaHome: normalized,
+      javaExecutable: homeCandidatePath,
+    };
+  }
+
+  return {
+    javaHome: normalized,
+    javaExecutable: null,
+  };
+}
+
 function normalizeJavaHome(value) {
   return typeof value === 'string' && value.trim().length > 0
     ? value.trim()
     : null;
+}
+
+function looksLikeJavaExecutable(filePath) {
+  const baseName = path.basename(filePath).toLowerCase();
+  return baseName === 'java' || baseName === 'java.exe';
+}
+
+function deriveJavaHomeFromExecutable(javaExecutable) {
+  const binDirectoryPath = path.dirname(javaExecutable);
+  return path.basename(binDirectoryPath).toLowerCase() === 'bin'
+    ? path.dirname(binDirectoryPath)
+    : binDirectoryPath;
 }
 
 function validateJavaRuntime(javaExecutable) {

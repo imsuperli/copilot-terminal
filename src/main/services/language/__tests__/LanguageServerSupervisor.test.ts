@@ -185,12 +185,12 @@ describe('LanguageServerSupervisor', () => {
       filePath,
       languageId: 'java',
       content: 'class Main {}',
-    }, 'open')).rejects.toThrow('Language server exited with code 1');
+    }, 'open')).rejects.toThrow('startup failed');
 
     await expect(supervisor.getHover(resolution, filePath, {
       lineNumber: 1,
       column: 1,
-    })).rejects.toThrow('Language server exited with code 1');
+    })).rejects.toThrow('startup failed');
 
     expect(spawnCount).toBe(1);
   });

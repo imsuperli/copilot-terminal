@@ -41,6 +41,12 @@ describe('PluginManifestValidator', () => {
         },
       ],
       settingsSchema: {
+        'java.home': {
+          type: 'string',
+          title: 'Java 21+ Runtime Home',
+          scope: 'global',
+          inputKind: 'directory',
+        },
         'trace.server': {
           type: 'enum',
           title: 'Trace Level',
@@ -62,6 +68,7 @@ describe('PluginManifestValidator', () => {
     expect(manifest.capabilities[0].languages).toEqual(['java']);
     expect(manifest.capabilities[0].fileExtensions).toEqual(['.java']);
     expect(manifest.capabilities[0].projectIndicators).toEqual(['pom.xml', 'build.gradle']);
+    expect(manifest.settingsSchema?.['java.home']?.inputKind).toBe('directory');
     expect(validator.getLanguages(manifest)).toEqual(['java']);
   });
 
@@ -88,5 +95,38 @@ describe('PluginManifestValidator', () => {
         },
       ],
     })).toThrow('Unsupported plugin capability type');
+  });
+
+  it('rejects invalid setting input kinds', () => {
+    const validator = new PluginManifestValidator();
+
+    expect(() => validator.validate({
+      schemaVersion: 1,
+      id: 'acme.invalid-input-kind',
+      name: 'Invalid Input Kind',
+      publisher: 'Acme',
+      version: '1.0.0',
+      engines: {
+        app: '>=3.0.0',
+      },
+      capabilities: [
+        {
+          type: 'language-server',
+          languages: ['java'],
+          runtime: {
+            type: 'java',
+            entry: 'server/jdtls.jar',
+          },
+        },
+      ],
+      settingsSchema: {
+        retries: {
+          type: 'number',
+          title: 'Retries',
+          scope: 'global',
+          inputKind: 'directory',
+        },
+      },
+    })).toThrow('Plugin setting schema entry inputKind requires a string type');
   });
 });

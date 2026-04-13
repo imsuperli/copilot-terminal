@@ -37,10 +37,45 @@ function resolveJavaExecutable(settings: Record<string, unknown>, env: NodeJS.Pr
       ? settings.javaHome
       : null;
 
-  if (javaHome) {
-    const candidatePath = path.join(javaHome, 'bin', process.platform === 'win32' ? 'java.exe' : 'java');
-    return candidatePath;
+  const configuredJavaRuntime = resolveConfiguredJavaRuntime(javaHome);
+  if (configuredJavaRuntime.javaExecutable) {
+    return configuredJavaRuntime.javaExecutable;
   }
 
   return findExecutableOnPath('java', env) ?? 'java';
+}
+
+function resolveConfiguredJavaRuntime(value: string | null): {
+  javaExecutable: string | null;
+} {
+  const normalized = typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
+
+  if (!normalized) {
+    return {
+      javaExecutable: null,
+    };
+  }
+
+  if (looksLikeJavaExecutable(normalized)) {
+    return {
+      javaExecutable: normalized,
+    };
+  }
+
+  if (path.basename(normalized).toLowerCase() === 'bin') {
+    return {
+      javaExecutable: path.join(normalized, process.platform === 'win32' ? 'java.exe' : 'java'),
+    };
+  }
+
+  return {
+    javaExecutable: path.join(normalized, 'bin', process.platform === 'win32' ? 'java.exe' : 'java'),
+  };
+}
+
+function looksLikeJavaExecutable(filePath: string): boolean {
+  const baseName = path.basename(filePath).toLowerCase();
+  return baseName === 'java' || baseName === 'java.exe';
 }

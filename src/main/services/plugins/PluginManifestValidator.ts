@@ -182,11 +182,22 @@ export class PluginManifestValidator {
       throw new Error('Plugin setting schema entry scope is invalid');
     }
 
+    if (candidate.inputKind !== undefined) {
+      if (candidate.type !== 'string') {
+        throw new Error('Plugin setting schema entry inputKind requires a string type');
+      }
+
+      if (!['text', 'directory'].includes(candidate.inputKind)) {
+        throw new Error('Plugin setting schema entry inputKind is invalid');
+      }
+    }
+
     return {
       type: candidate.type,
       title: requireNonEmptyString(candidate.title, 'plugin setting schema title'),
       scope: candidate.scope,
       ...(normalizeOptionalString(candidate.description) ? { description: normalizeOptionalString(candidate.description) } : {}),
+      ...(candidate.inputKind ? { inputKind: candidate.inputKind } : {}),
       ...(normalizeOptionalString(candidate.placeholder) ? { placeholder: normalizeOptionalString(candidate.placeholder) } : {}),
       ...(candidate.defaultValue !== undefined ? { defaultValue: candidate.defaultValue } : {}),
       ...(Array.isArray(candidate.options)

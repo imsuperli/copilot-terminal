@@ -155,28 +155,33 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     return catalogEntries.filter((entry) => !installedPluginIds.has(entry.id));
   }, [catalogEntries, installedPlugins]);
 
-  const availableLanguageCatalogEntries = useMemo(() => availableCatalogEntries
-    .filter((entry) => (entry.languages?.length ?? 0) > 0)
-    .sort((left, right) => left.name.localeCompare(right.name)), [availableCatalogEntries]);
-
   const languageBindingOptions = useMemo(() => {
-    const languages = new Set<string>();
+    const languages = new Map<string, PluginListItem[]>();
 
     for (const plugin of installedPlugins) {
       for (const language of plugin.languages ?? []) {
-        languages.add(language);
+        const currentPlugins = languages.get(language) ?? [];
+        currentPlugins.push(plugin);
+        languages.set(language, currentPlugins);
       }
     }
 
-    return Array.from(languages)
-      .sort((left, right) => left.localeCompare(right))
-      .map((language) => ({
+    return Array.from(languages.entries())
+      .map(([language, plugins]) => ({
         language,
-        plugins: installedPlugins
-          .filter((plugin) => (plugin.languages ?? []).includes(language))
-          .sort((left, right) => left.name.localeCompare(right.name)),
-      }));
-  }, [installedPlugins]);
+        plugins: [...plugins].sort((left, right) => left.name.localeCompare(right.name)),
+      }))
+      .filter(({ language, plugins }) => (
+        plugins.length > 1
+        || Boolean(pluginRegistry.globalLanguageBindings?.[language])
+        || Boolean(workspacePluginSettings.languageBindings?.[language])
+      ))
+      .sort((left, right) => left.language.localeCompare(right.language));
+  }, [
+    installedPlugins,
+    pluginRegistry.globalLanguageBindings,
+    workspacePluginSettings.languageBindings,
+  ]);
 
   const isInitialLoad = isHydrating && !hasLoadedOnce;
   const hasPluginMutationInFlight = activeActionKeys.some((actionKey) => (
@@ -326,7 +331,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
   const handleInstallMarketplacePlugin = useCallback(async (pluginId: string) => {
     await performAction(
       `install:${pluginId}`,
-      () => window.electronAPI.installMarketplacePlugin({ pluginId }),
+      () => window.electronAPI.installMarketplacePlugin({ pluginId, enableByDefault: true }),
       {
         successMessage: t('settings.plugins.messages.installSuccess'),
         onSuccess: (item?: PluginListItem) => {
@@ -345,7 +350,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
 
     await performAction(
       `install-local:${selectedPath}`,
-      () => window.electronAPI.installLocalPlugin({ filePath: selectedPath }),
+      () => window.electronAPI.installLocalPlugin({ filePath: selectedPath, enableByDefault: true }),
       {
         successMessage: t('settings.plugins.messages.installSuccess'),
         onSuccess: (item?: PluginListItem) => {
@@ -472,15 +477,42 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     scope: PluginSettingScope,
   ) => {
     const values = pluginSettingDrafts[pluginId]?.[scope] ?? {};
+    const shouldEnableByDefault = scope === 'global'
+      && Object.keys(values).length > 0
+      && installedPlugins.find((plugin) => plugin.id === pluginId)?.enabledByDefault !== true;
 
     if (scope === 'global') {
       await performAction(
         `settings:${scope}:${pluginId}`,
-        () => window.electronAPI.setPluginSettings({ pluginId, scope, values }),
+        async () => {
+          const response = await window.electronAPI.setPluginSettings({ pluginId, scope, values });
+          if (!response.success) {
+            return response;
+          }
+
+          if (shouldEnableByDefault) {
+            const enableResponse = await window.electronAPI.setPluginEnabled({
+              pluginId,
+              enabled: true,
+              scope: 'global',
+            });
+            if (!enableResponse.success) {
+              return {
+                success: false,
+                error: enableResponse.error,
+              };
+            }
+          }
+
+          return response;
+        },
         {
           successMessage: t('settings.plugins.messages.pluginSettingsSaved'),
           onSuccess: () => {
             applyGlobalPluginSettings(pluginId, values);
+            if (shouldEnableByDefault) {
+              updateInstalledPluginEnabledByDefault(pluginId, true);
+            }
           },
         },
       );
@@ -497,7 +529,15 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
         },
       },
     );
-  }, [applyGlobalPluginSettings, applyWorkspaceSettings, performAction, pluginSettingDrafts, t]);
+  }, [
+    applyGlobalPluginSettings,
+    applyWorkspaceSettings,
+    installedPlugins,
+    performAction,
+    pluginSettingDrafts,
+    t,
+    updateInstalledPluginEnabledByDefault,
+  ]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -554,7 +594,8 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
         )}
       </section>
 
-      <section className="space-y-4">
+      {languageBindingOptions.length > 0 && (
+        <section className="space-y-4">
         <div className="flex items-center gap-3">
           <Globe size={18} className="text-[rgb(var(--primary))]" />
           <h3 className="text-base font-semibold text-white">{t('settings.plugins.sections.languageBindings')}</h3>
@@ -566,34 +607,6 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
 
           {isInitialLoad ? (
             <SectionLoadingState label={t('settings.plugins.loadingSection')} />
-          ) : languageBindingOptions.length === 0 ? (
-            <div className="mt-5 rounded-[20px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-5 py-10 text-center">
-              <p className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.emptyBindingsTitle')}</p>
-              <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.emptyBindingsDescription')}</p>
-              {availableLanguageCatalogEntries.length > 0 && (
-                <div className="mt-5">
-                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
-                    {t('settings.plugins.emptyBindingsQuickInstall')}
-                  </p>
-                  <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-                    {availableLanguageCatalogEntries.map((entry) => (
-                      <button
-                        key={`empty-binding-install:${entry.id}`}
-                        type="button"
-                        onClick={() => void handleInstallMarketplacePlugin(entry.id)}
-                        disabled={hasPluginMutationInFlight}
-                        className="inline-flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {isActionActive(`install:${entry.id}`)
-                          ? <LoaderCircle size={16} className="animate-spin" />
-                          : <Download size={16} />}
-                        {entry.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
           ) : (
             <div className="mt-5 space-y-4">
               {languageBindingOptions.map(({ language, plugins }) => {
@@ -665,7 +678,8 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
             </div>
           )}
         </div>
-      </section>
+        </section>
+      )}
 
       <section className="space-y-4">
         <div className="flex items-center gap-3">
@@ -1128,6 +1142,7 @@ function renderSettingsScopeCard({
               <span className="mb-2 block text-xs leading-5 text-[rgb(var(--muted-foreground))]">{entry.description}</span>
             )}
             {renderSettingControl({
+              t,
               entry,
               value: drafts[key],
               onChange: (value) => onChange(plugin.id, scope, key, value),
@@ -1140,10 +1155,12 @@ function renderSettingsScopeCard({
 }
 
 function renderSettingControl({
+  t,
   entry,
   value,
   onChange,
 }: {
+  t: TranslateFn;
   entry: PluginSettingSchemaEntry;
   value: unknown;
   onChange: (value: unknown) => void;
@@ -1153,6 +1170,7 @@ function renderSettingControl({
       <label className="flex items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3">
         <span className="text-sm text-[rgb(var(--foreground))]">{String(value ?? entry.defaultValue ?? false)}</span>
         <Switch.Root
+          aria-label={entry.title}
           checked={Boolean(value ?? entry.defaultValue ?? false)}
           onCheckedChange={(checked) => onChange(checked)}
           className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
@@ -1168,6 +1186,7 @@ function renderSettingControl({
 
     return (
       <select
+        aria-label={entry.title}
         value={stringifySettingValue(resolvedValue)}
         onChange={(event) => onChange(parseSettingOptionValue(event.target.value, entry.options ?? []))}
         className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
@@ -1190,6 +1209,7 @@ function renderSettingControl({
 
     return (
       <input
+        aria-label={entry.title}
         type="number"
         value={numericValue}
         onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))}
@@ -1199,19 +1219,60 @@ function renderSettingControl({
     );
   }
 
+  if (entry.inputKind === 'directory') {
+    const stringValue = resolveStringSettingValue(value, entry.defaultValue);
+
+    return (
+      <div className="flex gap-3">
+        <input
+          aria-label={entry.title}
+          type="text"
+          value={stringValue}
+          onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value)}
+          placeholder={entry.placeholder}
+          className="min-w-0 flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+        />
+        <button
+          type="button"
+          aria-label={`${t('common.browse')} ${entry.title}`}
+          onClick={() => void handleBrowseDirectorySetting(onChange)}
+          className="inline-flex shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))]"
+        >
+          {t('common.browse')}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <input
+      aria-label={entry.title}
       type="text"
-      value={typeof value === 'string'
-        ? value
-        : typeof entry.defaultValue === 'string'
-          ? entry.defaultValue
-          : ''}
+      value={resolveStringSettingValue(value, entry.defaultValue)}
       onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value)}
       placeholder={entry.placeholder}
       className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
     />
   );
+}
+
+async function handleBrowseDirectorySetting(onChange: (value: unknown) => void): Promise<void> {
+  const selection = await window.electronAPI.selectDirectory();
+  if (selection.success && selection.data) {
+    onChange(selection.data);
+  }
+}
+
+function resolveStringSettingValue(value: unknown, defaultValue: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof defaultValue === 'string') {
+    return defaultValue;
+  }
+
+  return '';
 }
 
 function stringifySettingValue(value: string | number | boolean | undefined): string {

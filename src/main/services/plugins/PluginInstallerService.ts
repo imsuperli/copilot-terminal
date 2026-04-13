@@ -123,7 +123,7 @@ export class PluginInstallerService {
       source: options.source,
       installedVersion: manifest.version,
       installPath: pluginInstallPath,
-      enabledByDefault: options.enableByDefault ?? currentRecord?.enabledByDefault ?? false,
+      enabledByDefault: options.enableByDefault ?? currentRecord?.enabledByDefault ?? true,
       status: 'installed',
       lastCheckedAt: this.now(),
       lastKnownHealth: currentRecord?.lastKnownHealth ?? 'unknown',

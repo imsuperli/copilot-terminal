@@ -286,6 +286,7 @@ class LanguageServerSession {
   private expectedExit = false;
   private disposed = false;
   private recentStartFailure: { message: string; timestampMs: number } | null = null;
+  private lastRuntimeErrorMessage: string | null = null;
 
   constructor(options: LanguageServerSessionOptions) {
     this.resolution = options.resolution;
@@ -523,6 +524,7 @@ class LanguageServerSession {
     this.stdoutBuffer = Buffer.alloc(0);
     this.isInitialized = false;
     this.expectedExit = false;
+    this.lastRuntimeErrorMessage = null;
 
     try {
       this.spawnedProcess = await adapter.spawn(this.resolution.capability.runtime, spawnContext);
@@ -605,17 +607,20 @@ class LanguageServerSession {
     });
 
     spawnedProcess.child.stderr.on('data', (chunk: Buffer) => {
-      const message = chunk.toString('utf8').trim();
+      const message = extractLastRuntimeErrorLine(chunk.toString('utf8'));
       if (message) {
+        this.lastRuntimeErrorMessage = message;
         console.warn(`[LanguageServer:${this.resolution.pluginId}] ${message}`);
       }
     });
 
     spawnedProcess.child.on('error', (error) => {
       const runtimeError = error instanceof Error ? error : new Error(String(error));
-      this.rememberRecentStartFailure(runtimeError.message);
-      this.rejectPendingRequests(runtimeError);
-      this.emitRuntimeStateChange('error', runtimeError.message);
+      const message = this.lastRuntimeErrorMessage ?? runtimeError.message;
+      const propagatedError = new Error(message);
+      this.rememberRecentStartFailure(message);
+      this.rejectPendingRequests(propagatedError);
+      this.emitRuntimeStateChange('error', message);
     });
 
     spawnedProcess.child.on('exit', (code, signal) => {
@@ -624,13 +629,14 @@ class LanguageServerSession {
       const exitMessage = signal
         ? `Language server exited with signal ${signal}`
         : `Language server exited with code ${String(code ?? 0)}`;
-      this.rejectPendingRequests(new Error(exitMessage));
+      const failureMessage = this.lastRuntimeErrorMessage ?? exitMessage;
+      this.rejectPendingRequests(new Error(failureMessage));
 
       if (this.expectedExit || this.disposed) {
         this.emitRuntimeStateChange('stopped');
       } else {
-        this.rememberRecentStartFailure(exitMessage);
-        this.emitRuntimeStateChange('error', exitMessage);
+        this.rememberRecentStartFailure(failureMessage);
+        this.emitRuntimeStateChange('error', failureMessage);
       }
     });
   }
@@ -990,6 +996,15 @@ function normalizeDocumentSymbol(
         }
       : {}),
   };
+}
+
+function extractLastRuntimeErrorLine(rawMessage: string): string | null {
+  const lines = rawMessage
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return lines.length > 0 ? lines[lines.length - 1] : null;
 }
 
 function normalizeTextSyncKind(value: any): TextSyncKind {

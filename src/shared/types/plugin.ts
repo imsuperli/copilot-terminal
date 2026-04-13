@@ -15,6 +15,7 @@ export type PluginBindingScope = 'global' | 'workspace';
 export type PluginWorkspaceMode = 'per-root' | 'per-pane';
 export type PluginSettingScope = 'global' | 'workspace';
 export type PluginSettingType = 'boolean' | 'string' | 'number' | 'enum';
+export type PluginSettingInputKind = 'text' | 'directory';
 export type PluginPlatformOS = 'darwin' | 'linux' | 'win32';
 export type PluginPlatformArch = 'x64' | 'arm64';
 
@@ -58,6 +59,7 @@ export interface PluginSettingSchemaEntry {
   title: string;
   description?: string;
   scope: PluginSettingScope;
+  inputKind?: PluginSettingInputKind;
   placeholder?: string;
   defaultValue?: string | number | boolean;
   options?: PluginSettingOption[];
@@ -173,4 +175,3 @@ export interface WorkspacePluginSettings {
   languageBindings?: Record<string, string>;
   pluginSettings?: Record<string, Record<string, unknown>>;
 }
-

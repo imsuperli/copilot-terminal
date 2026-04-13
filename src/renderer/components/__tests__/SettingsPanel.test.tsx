@@ -243,7 +243,7 @@ describe('SettingsPanel', () => {
           installStatus: 'installed',
           runtimeState: 'idle',
           health: 'unknown',
-          enabledByDefault: true,
+          enabledByDefault: false,
           updateAvailable: true,
           installPath: '/plugins/acme.java-language/1.0.0',
           manifest: {
@@ -274,8 +274,9 @@ describe('SettingsPanel', () => {
             settingsSchema: {
               'java.home': {
                 type: 'string',
-                title: 'JDK Home',
+                title: 'Java 21+ Runtime Home',
                 scope: 'global',
+                inputKind: 'directory',
               },
               'trace.server': {
                 type: 'enum',
@@ -301,7 +302,7 @@ describe('SettingsPanel', () => {
             source: 'marketplace',
             installedVersion: '1.0.0',
             installPath: '/plugins/acme.java-language/1.0.0',
-            enabledByDefault: true,
+            enabledByDefault: false,
             status: 'installed',
           },
         },
@@ -377,6 +378,10 @@ describe('SettingsPanel', () => {
       success: true,
       data: '/tmp/acme-python-language.zip',
     });
+    vi.mocked(window.electronAPI.selectDirectory).mockResolvedValueOnce({
+      success: true,
+      data: 'C:\\Program Files\\Java\\jdk-21',
+    });
     vi.mocked(window.electronAPI.installLocalPlugin).mockResolvedValue({
       success: true,
       data: {
@@ -427,6 +432,29 @@ describe('SettingsPanel', () => {
     expect(window.electronAPI.selectPluginPackage).toHaveBeenCalledOnce();
     expect(window.electronAPI.installLocalPlugin).toHaveBeenCalledWith({
       filePath: '/tmp/acme-python-language.zip',
+      enableByDefault: true,
+    });
+
+    await user.click(screen.getByText('展开配置和运行时要求'));
+    await user.click(screen.getByRole('button', { name: '浏览 Java 21+ Runtime Home' }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Java 21+ Runtime Home')).toHaveValue('C:\\Program Files\\Java\\jdk-21');
+    });
+
+    await user.click(screen.getAllByRole('button', { name: '保存' })[0]);
+
+    expect(window.electronAPI.setPluginSettings).toHaveBeenCalledWith({
+      pluginId: 'acme.java-language',
+      scope: 'global',
+      values: {
+        'java.home': 'C:\\Program Files\\Java\\jdk-21',
+      },
+    });
+    expect(window.electronAPI.setPluginEnabled).toHaveBeenLastCalledWith({
+      pluginId: 'acme.java-language',
+      enabled: true,
+      scope: 'global',
     });
   });
 });

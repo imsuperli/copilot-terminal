@@ -80,7 +80,6 @@ describe('PluginManager', () => {
 
     const installed = await manager.installLocalPlugin({
       filePath: packageRoot,
-      enableByDefault: true,
     });
 
     expect(installed.id).toBe('acme.java-language');

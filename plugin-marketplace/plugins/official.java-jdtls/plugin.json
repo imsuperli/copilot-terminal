@@ -84,6 +84,7 @@
       "title": "Java 21+ Runtime Home",
       "description": "Path to a local Java 21+ runtime directory used to start bundled JDTLS. Example: C:\\Program Files\\Java\\jdk-21 or /Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home.",
       "scope": "global",
+      "inputKind": "directory",
       "placeholder": "/path/to/java-21-home"
     },
     "java.configuration.updateBuildConfiguration": {
