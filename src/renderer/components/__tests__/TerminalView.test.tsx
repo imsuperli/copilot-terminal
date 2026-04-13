@@ -701,7 +701,7 @@ describe('TerminalView', () => {
     expect(updatedWindow?.activePaneId).toBe(codePane?.id);
 
     if (updatedWindow?.layout.type === 'split') {
-      expect(updatedWindow.layout.sizes).toEqual([0.65, 0.35]);
+      expect(updatedWindow.layout.sizes).toEqual([0.7, 0.3]);
       expect(updatedWindow.layout.children[0]).toMatchObject({
         type: 'pane',
         pane: {
@@ -738,6 +738,9 @@ describe('TerminalView', () => {
 
     expect(codePanes).toHaveLength(1);
     expect(updatedWindow?.activePaneId).toBe('code-1');
+    if (updatedWindow?.layout.type === 'split') {
+      expect(updatedWindow.layout.sizes).toEqual([0.3, 0.7]);
+    }
   });
 
   it('prevents mouse focus on toolbar action buttons', () => {

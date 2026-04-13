@@ -4,7 +4,7 @@ import { getEmptyImage } from 'react-dnd-html5-backend';
 import { v4 as uuidv4 } from 'uuid';
 import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, MessageSquare } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
-import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
+import { findPanePath, getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { Sidebar } from './Sidebar';
 import { SplitLayout } from './SplitLayout';
 import { RemoteWindowTabs } from './RemoteWindowTabs';
@@ -66,7 +66,7 @@ import {
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.65, 0.35];
-const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.65, 0.35];
+const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 
 const LazyQuickSwitcher = lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -264,6 +264,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const movePaneInWindow = useWindowStore((state) => state.movePaneInWindow);
   const closePaneInWindow = useWindowStore((state) => state.closePaneInWindow);
   const setActivePane = useWindowStore((state) => state.setActivePane);
+  const updateSplitSizes = useWindowStore((state) => state.updateSplitSizes);
   const archiveWindow = useWindowStore((state) => state.archiveWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
   const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
@@ -552,8 +553,28 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const isSshOnlyWindow = codePaneTerminalPanes.length > 0
     && codePaneTerminalPanes.every((pane) => pane.backend === 'ssh');
 
+  const ensureCodePaneWidth = useCallback((codePaneId: string) => {
+    const panePath = findPanePath(terminalWindow.layout, codePaneId);
+    const parentSplitEntry = panePath?.[panePath.length - 1];
+    if (!parentSplitEntry || parentSplitEntry.node.direction !== 'horizontal') {
+      return;
+    }
+
+    if (parentSplitEntry.node.children.length !== 2) {
+      return;
+    }
+
+    const splitPath = panePath?.slice(0, -1).map((entry) => entry.childIndex) ?? [];
+    const nextSizes: [number, number] = parentSplitEntry.childIndex === 0
+      ? CODE_PANE_DEFAULT_SPLIT_SIZES
+      : [CODE_PANE_DEFAULT_SPLIT_SIZES[1], CODE_PANE_DEFAULT_SPLIT_SIZES[0]];
+
+    updateSplitSizes(terminalWindow.id, splitPath, nextSizes);
+  }, [terminalWindow.id, terminalWindow.layout, updateSplitSizes]);
+
   const handleOpenCodePane = useCallback(() => {
     if (existingCodePane) {
+      ensureCodePaneWidth(existingCodePane.id);
       setActivePane(terminalWindow.id, existingCodePane.id);
       return;
     }
@@ -579,7 +600,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       CODE_PANE_DEFAULT_SPLIT_SIZES,
     );
     setActivePane(terminalWindow.id, newPaneId);
-  }, [codePaneRootPath, existingCodePane, panes, placePaneInWindow, setActivePane, terminalWindow.activePaneId, terminalWindow.id]);
+  }, [codePaneRootPath, ensureCodePaneWidth, existingCodePane, panes, placePaneInWindow, setActivePane, terminalWindow.activePaneId, terminalWindow.id]);
 
   const handleSplitChatPane = useCallback(() => {
     const activePaneId = terminalWindow.activePaneId;
