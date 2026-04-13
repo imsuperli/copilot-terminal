@@ -156,6 +156,44 @@ describe('LanguageServerSupervisor', () => {
       diagnostics: [],
     });
   });
+
+  it('backs off restarting a language server that just failed to initialize', async () => {
+    const workspaceRoot = path.join(tempDir, 'workspace');
+    const installPath = path.join(tempDir, 'plugin-install');
+    const filePath = path.join(workspaceRoot, 'src', 'Main.java');
+    await fs.ensureDir(path.dirname(filePath));
+    await fs.ensureDir(installPath);
+    await fs.writeFile(filePath, 'class Main {}');
+
+    let spawnCount = 0;
+
+    supervisor = new LanguageServerSupervisor({
+      runtimeRootPath: path.join(tempDir, 'runtime'),
+      adapters: [createFailingNodeAdapter(() => {
+        spawnCount += 1;
+      })],
+      emitDiagnostics: () => {},
+      emitRuntimeState: () => {},
+      restartBackoffMs: 60_000,
+    });
+
+    const resolution = createResolution(workspaceRoot, installPath);
+
+    await expect(supervisor.syncDocument(resolution, {
+      ownerId: 'pane-1:/workspace/src/Main.java',
+      rootPath: workspaceRoot,
+      filePath,
+      languageId: 'java',
+      content: 'class Main {}',
+    }, 'open')).rejects.toThrow('Language server exited with code 1');
+
+    await expect(supervisor.getHover(resolution, filePath, {
+      lineNumber: 1,
+      column: 1,
+    })).rejects.toThrow('Language server exited with code 1');
+
+    expect(spawnCount).toBe(1);
+  });
 });
 
 function createNodeFixtureAdapter(): LanguageRuntimeAdapter {
@@ -165,6 +203,19 @@ function createNodeFixtureAdapter(): LanguageRuntimeAdapter {
     supports: (runtime) => runtime.type === 'node',
     async spawn(_runtime, context) {
       return spawnRuntimeProcess(process.execPath, [fixturePath], {
+        cwd: context.projectRoot,
+        env: process.env,
+      });
+    },
+  };
+}
+
+function createFailingNodeAdapter(onSpawn: () => void): LanguageRuntimeAdapter {
+  return {
+    supports: (runtime) => runtime.type === 'node',
+    async spawn(_runtime, context) {
+      onSpawn();
+      return spawnRuntimeProcess(process.execPath, ['-e', 'process.stderr.write("startup failed\\n"); process.exit(1);'], {
         cwd: context.projectRoot,
         env: process.env,
       });

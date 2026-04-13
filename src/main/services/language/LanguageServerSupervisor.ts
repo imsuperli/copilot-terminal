@@ -55,6 +55,7 @@ interface LanguageServerSessionOptions {
   emitRuntimeState: (payload: PluginRuntimeStateChangedPayload) => void;
   now?: () => string;
   requestTimeoutMs?: number;
+  restartBackoffMs?: number;
 }
 
 interface DocumentSyncConfig {
@@ -128,6 +129,7 @@ export interface LanguageServerSupervisorOptions {
   emitRuntimeState: (payload: PluginRuntimeStateChangedPayload) => void;
   now?: () => string;
   requestTimeoutMs?: number;
+  restartBackoffMs?: number;
 }
 
 export interface DocumentOwnerConfig {
@@ -145,6 +147,7 @@ export class LanguageServerSupervisor {
   private readonly emitRuntimeState: (payload: PluginRuntimeStateChangedPayload) => void;
   private readonly now: () => string;
   private readonly requestTimeoutMs: number;
+  private readonly restartBackoffMs: number;
   private readonly sessions = new Map<string, LanguageServerSession>();
 
   constructor(options: LanguageServerSupervisorOptions) {
@@ -159,6 +162,7 @@ export class LanguageServerSupervisor {
     this.emitRuntimeState = options.emitRuntimeState;
     this.now = options.now ?? (() => new Date().toISOString());
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15000;
+    this.restartBackoffMs = options.restartBackoffMs ?? 10_000;
   }
 
   async syncDocument(resolution: ResolvedLanguagePlugin, config: DocumentOwnerConfig, reason: 'open' | 'change' | 'save'): Promise<void> {
@@ -240,6 +244,7 @@ export class LanguageServerSupervisor {
       emitRuntimeState: this.emitRuntimeState,
       now: this.now,
       requestTimeoutMs: this.requestTimeoutMs,
+      restartBackoffMs: this.restartBackoffMs,
     });
 
     this.sessions.set(sessionKey, session);
@@ -268,6 +273,7 @@ class LanguageServerSession {
   private readonly emitRuntimeState: (payload: PluginRuntimeStateChangedPayload) => void;
   private readonly now: () => string;
   private readonly requestTimeoutMs: number;
+  private readonly restartBackoffMs: number;
   private readonly documents = new Map<string, TrackedDocument>();
   private readonly pendingRequests = new Map<number, PendingRequest>();
 
@@ -279,6 +285,7 @@ class LanguageServerSession {
   private textSyncKind: TextSyncKind = 1;
   private expectedExit = false;
   private disposed = false;
+  private recentStartFailure: { message: string; timestampMs: number } | null = null;
 
   constructor(options: LanguageServerSessionOptions) {
     this.resolution = options.resolution;
@@ -289,6 +296,7 @@ class LanguageServerSession {
     this.emitRuntimeState = options.emitRuntimeState;
     this.now = options.now ?? (() => new Date().toISOString());
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15000;
+    this.restartBackoffMs = options.restartBackoffMs ?? 10_000;
   }
 
   hasTrackedDocuments(): boolean {
@@ -478,6 +486,11 @@ class LanguageServerSession {
       return await this.initializePromise;
     }
 
+    const recentStartFailureMessage = this.getRecentStartFailureMessage();
+    if (recentStartFailureMessage) {
+      throw new Error(recentStartFailureMessage);
+    }
+
     this.initializePromise = this.startProcess();
     try {
       await this.initializePromise;
@@ -514,58 +527,75 @@ class LanguageServerSession {
     try {
       this.spawnedProcess = await adapter.spawn(this.resolution.capability.runtime, spawnContext);
     } catch (error) {
-      this.emitRuntimeStateChange('error', error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      this.rememberRecentStartFailure(message);
+      this.emitRuntimeStateChange('error', message);
       throw error;
     }
 
     this.attachProcessListeners(this.spawnedProcess);
     this.emitRuntimeStateChange('starting');
 
-    const initializeResult = await this.sendRequest('initialize', {
-      processId: process.pid,
-      rootUri: filePathToUri(this.resolution.projectRoot),
-      workspaceFolders: [
-        {
-          uri: filePathToUri(this.resolution.projectRoot),
-          name: path.basename(this.resolution.projectRoot),
-        },
-      ],
-      capabilities: {
-        workspace: {
-          configuration: true,
-          workspaceFolders: true,
-        },
-        textDocument: {
-          definition: {},
-          hover: {
-            contentFormat: ['markdown', 'plaintext'],
+    try {
+      const initializeResult = await this.sendRequest('initialize', {
+        processId: process.pid,
+        rootUri: filePathToUri(this.resolution.projectRoot),
+        workspaceFolders: [
+          {
+            uri: filePathToUri(this.resolution.projectRoot),
+            name: path.basename(this.resolution.projectRoot),
           },
-          references: {},
-          documentSymbol: {
-            hierarchicalDocumentSymbolSupport: true,
+        ],
+        capabilities: {
+          workspace: {
+            configuration: true,
+            workspaceFolders: true,
           },
-          synchronization: {
-            didSave: true,
-            dynamicRegistration: false,
-            willSave: false,
-            willSaveWaitUntil: false,
+          textDocument: {
+            definition: {},
+            hover: {
+              contentFormat: ['markdown', 'plaintext'],
+            },
+            references: {},
+            documentSymbol: {
+              hierarchicalDocumentSymbolSupport: true,
+            },
+            synchronization: {
+              didSave: true,
+              dynamicRegistration: false,
+              willSave: false,
+              willSaveWaitUntil: false,
+            },
           },
         },
-      },
-      initializationOptions: inflateSettings(this.resolution.mergedSettings),
-      clientInfo: {
-        name: 'copilot-terminal',
-        version: '3.0.0',
-      },
-    });
+        initializationOptions: inflateSettings(this.resolution.mergedSettings),
+        clientInfo: {
+          name: 'copilot-terminal',
+          version: '3.0.0',
+        },
+      });
 
-    this.textSyncKind = normalizeTextSyncKind(initializeResult?.capabilities?.textDocumentSync);
-    this.isInitialized = true;
-    this.sendNotification('initialized', {});
-    this.sendNotification('workspace/didChangeConfiguration', {
-      settings: inflateSettings(this.resolution.mergedSettings),
-    });
-    this.emitRuntimeStateChange('running');
+      this.textSyncKind = normalizeTextSyncKind(initializeResult?.capabilities?.textDocumentSync);
+      this.isInitialized = true;
+      this.clearRecentStartFailure();
+      this.sendNotification('initialized', {});
+      this.sendNotification('workspace/didChangeConfiguration', {
+        settings: inflateSettings(this.resolution.mergedSettings),
+      });
+      this.emitRuntimeStateChange('running');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.rememberRecentStartFailure(message);
+
+      if (this.spawnedProcess) {
+        this.spawnedProcess.child.stdin.end();
+        if (!this.spawnedProcess.child.killed) {
+          this.spawnedProcess.child.kill();
+        }
+      }
+
+      throw error;
+    }
   }
 
   private attachProcessListeners(spawnedProcess: SpawnedRuntimeProcess): void {
@@ -582,8 +612,10 @@ class LanguageServerSession {
     });
 
     spawnedProcess.child.on('error', (error) => {
-      this.rejectPendingRequests(error instanceof Error ? error : new Error(String(error)));
-      this.emitRuntimeStateChange('error', error instanceof Error ? error.message : String(error));
+      const runtimeError = error instanceof Error ? error : new Error(String(error));
+      this.rememberRecentStartFailure(runtimeError.message);
+      this.rejectPendingRequests(runtimeError);
+      this.emitRuntimeStateChange('error', runtimeError.message);
     });
 
     spawnedProcess.child.on('exit', (code, signal) => {
@@ -597,6 +629,7 @@ class LanguageServerSession {
       if (this.expectedExit || this.disposed) {
         this.emitRuntimeStateChange('stopped');
       } else {
+        this.rememberRecentStartFailure(exitMessage);
         this.emitRuntimeStateChange('error', exitMessage);
       }
     });
@@ -807,6 +840,30 @@ class LanguageServerSession {
       pendingRequest.reject(error);
       this.pendingRequests.delete(requestId);
     }
+  }
+
+  private clearRecentStartFailure(): void {
+    this.recentStartFailure = null;
+  }
+
+  private rememberRecentStartFailure(message: string): void {
+    this.recentStartFailure = {
+      message,
+      timestampMs: Date.now(),
+    };
+  }
+
+  private getRecentStartFailureMessage(): string | null {
+    if (!this.recentStartFailure) {
+      return null;
+    }
+
+    if (Date.now() - this.recentStartFailure.timestampMs > this.restartBackoffMs) {
+      this.recentStartFailure = null;
+      return null;
+    }
+
+    return this.recentStartFailure.message;
   }
 
   private emitRuntimeStateChange(
