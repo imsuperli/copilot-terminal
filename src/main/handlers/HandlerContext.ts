@@ -13,6 +13,7 @@ import { SSHKnownHostsStore } from '../services/ssh/SSHKnownHostsStore';
 import { ChatProviderVaultService } from '../services/chat/ChatProviderVaultService';
 import { CodeFileService } from '../services/code/CodeFileService';
 import { CodeGitService } from '../services/code/CodeGitService';
+import { CodeProjectIndexService } from '../services/code/CodeProjectIndexService';
 import { CodePaneWatcherService } from '../services/code/CodePaneWatcherService';
 import { LanguageFeatureService } from '../services/language/LanguageFeatureService';
 import { PluginManager } from '../services/plugins/PluginManager';
@@ -38,6 +39,7 @@ export interface HandlerContext {
   chatProviderVaultService?: ChatProviderVaultService | null;
   codeFileService?: CodeFileService | null;
   codeGitService?: CodeGitService | null;
+  codeProjectIndexService?: CodeProjectIndexService | null;
   codePaneWatcherService?: CodePaneWatcherService | null;
   languageFeatureService?: LanguageFeatureService | null;
   pluginManager?: PluginManager | null;

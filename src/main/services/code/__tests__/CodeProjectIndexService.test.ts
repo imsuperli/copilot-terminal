@@ -1,0 +1,119 @@
+import path from 'path';
+import { tmpdir } from 'os';
+import { promises as fsPromises } from 'fs';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { CodeProjectIndexService } from '../CodeProjectIndexService';
+
+describe('CodeProjectIndexService', () => {
+  let tempProjectRoot: string;
+  let tempIndexRoot: string;
+
+  beforeEach(async () => {
+    tempProjectRoot = await fsPromises.mkdtemp(path.join(tmpdir(), 'code-project-root-'));
+    tempIndexRoot = await fsPromises.mkdtemp(path.join(tmpdir(), 'code-project-index-'));
+  });
+
+  afterEach(async () => {
+    await fsPromises.rm(tempProjectRoot, { recursive: true, force: true });
+    await fsPromises.rm(tempIndexRoot, { recursive: true, force: true });
+  });
+
+  it('warms a project, persists the index, and serves directory listings', async () => {
+    const srcDirectoryPath = path.join(tempProjectRoot, 'src');
+    await fsPromises.mkdir(srcDirectoryPath, { recursive: true });
+    await fsPromises.mkdir(path.join(tempProjectRoot, '.hidden'), { recursive: true });
+    await fsPromises.mkdir(path.join(tempProjectRoot, 'node_modules', 'pkg'), { recursive: true });
+    await Promise.all([
+      fsPromises.writeFile(path.join(srcDirectoryPath, 'index.ts'), 'export const value = 1;\n', 'utf-8'),
+      fsPromises.writeFile(path.join(tempProjectRoot, '.env'), 'A=1\n', 'utf-8'),
+      fsPromises.writeFile(path.join(tempProjectRoot, '.hidden', 'secret.txt'), 'secret\n', 'utf-8'),
+      fsPromises.writeFile(path.join(tempProjectRoot, 'node_modules', 'pkg', 'index.js'), 'module.exports = {};\n', 'utf-8'),
+    ]);
+
+    const service = new CodeProjectIndexService(tempIndexRoot);
+    await service.listDirectory({ rootPath: tempProjectRoot });
+    await service.waitForIdle(tempProjectRoot);
+
+    const rootEntries = await service.listDirectory({ rootPath: tempProjectRoot });
+    expect(rootEntries).toEqual([
+      expect.objectContaining({
+        path: srcDirectoryPath,
+        name: 'src',
+        type: 'directory',
+      }),
+    ]);
+
+    const hiddenEntries = await service.listDirectory({ rootPath: tempProjectRoot, includeHidden: true });
+    expect(hiddenEntries.map((entry) => entry.name)).toEqual(['.hidden', 'src', '.env']);
+
+    const searchResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'index' });
+    expect(searchResults).toEqual([path.join(srcDirectoryPath, 'index.ts')]);
+
+    const persistedProjectRoots = await fsPromises.readdir(path.join(tempIndexRoot, 'projects'));
+    expect(persistedProjectRoots).toHaveLength(1);
+    const persistedProjectPath = path.join(tempIndexRoot, 'projects', persistedProjectRoots[0] ?? '');
+    await expect(fsPromises.stat(path.join(persistedProjectPath, 'manifest.json'))).resolves.toBeTruthy();
+    await expect(fsPromises.stat(path.join(persistedProjectPath, 'index.json'))).resolves.toBeTruthy();
+
+    await service.destroy();
+
+    const restartedService = new CodeProjectIndexService(tempIndexRoot);
+    const restartedEntries = await restartedService.listDirectory({ rootPath: tempProjectRoot });
+    expect(restartedEntries).toEqual([
+      expect.objectContaining({
+        path: srcDirectoryPath,
+        name: 'src',
+        type: 'directory',
+      }),
+    ]);
+    await restartedService.destroy();
+  });
+
+  it('applies incremental file and directory changes through watcher notifications', async () => {
+    const srcDirectoryPath = path.join(tempProjectRoot, 'src');
+    const initialFilePath = path.join(srcDirectoryPath, 'index.ts');
+    await fsPromises.mkdir(srcDirectoryPath, { recursive: true });
+    await fsPromises.writeFile(initialFilePath, 'export const value = 1;\n', 'utf-8');
+
+    const service = new CodeProjectIndexService(tempIndexRoot);
+    await service.listDirectory({ rootPath: tempProjectRoot });
+    await service.waitForIdle(tempProjectRoot);
+
+    const addedFilePath = path.join(srcDirectoryPath, 'new-file.ts');
+    await fsPromises.writeFile(addedFilePath, 'export const added = true;\n', 'utf-8');
+    await service.notifyChanges(tempProjectRoot, [{ type: 'add', path: addedFilePath }]);
+    await service.waitForIdle(tempProjectRoot);
+
+    const afterAddResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'new-file' });
+    expect(afterAddResults).toEqual([addedFilePath]);
+
+    const libDirectoryPath = path.join(tempProjectRoot, 'lib');
+    const libFilePath = path.join(libDirectoryPath, 'util.ts');
+    await fsPromises.mkdir(libDirectoryPath, { recursive: true });
+    await fsPromises.writeFile(libFilePath, 'export const util = true;\n', 'utf-8');
+    await service.notifyChanges(tempProjectRoot, [{ type: 'addDir', path: libDirectoryPath }]);
+    await service.waitForIdle(tempProjectRoot);
+
+    const afterDirectoryAddResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'util' });
+    expect(afterDirectoryAddResults).toEqual([libFilePath]);
+
+    await fsPromises.rm(libDirectoryPath, { recursive: true, force: true });
+    await service.notifyChanges(tempProjectRoot, [{ type: 'unlinkDir', path: libDirectoryPath }]);
+    await service.waitForIdle(tempProjectRoot);
+
+    const afterDirectoryRemoveResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'util' });
+    expect(afterDirectoryRemoveResults).toEqual([]);
+
+    await fsPromises.rm(addedFilePath, { force: true });
+    await service.notifyChanges(tempProjectRoot, [{ type: 'unlink', path: addedFilePath }]);
+    await service.waitForIdle(tempProjectRoot);
+
+    const srcEntries = await service.listDirectory({
+      rootPath: tempProjectRoot,
+      targetPath: srcDirectoryPath,
+    });
+    expect(srcEntries.map((entry) => entry.path)).toEqual([initialFilePath]);
+
+    await service.destroy();
+  });
+});

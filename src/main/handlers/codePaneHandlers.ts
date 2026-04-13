@@ -13,7 +13,12 @@ import type {
 } from '../../shared/types/electron-api';
 
 export function registerCodePaneHandlers(ctx: HandlerContext) {
-  const { codeFileService, codeGitService, codePaneWatcherService } = ctx;
+  const {
+    codeFileService,
+    codeGitService,
+    codePaneWatcherService,
+    codeProjectIndexService,
+  } = ctx;
 
   ipcMain.handle('code-pane-list-directory', async (_event, config: CodePaneListDirectoryConfig) => {
     try {
@@ -80,8 +85,14 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       if (!codePaneWatcherService) {
         throw new Error('CodePaneWatcherService not initialized');
       }
+      if (!codeProjectIndexService) {
+        throw new Error('CodeProjectIndexService not initialized');
+      }
 
-      await codePaneWatcherService.watchRoot(config.paneId, config.rootPath);
+      await Promise.all([
+        codePaneWatcherService.watchRoot(config.paneId, config.rootPath),
+        codeProjectIndexService.watchProjectForPane(config.paneId, config.rootPath),
+      ]);
       return successResponse();
     } catch (error) {
       return errorResponse(error);
@@ -93,8 +104,14 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       if (!codePaneWatcherService) {
         throw new Error('CodePaneWatcherService not initialized');
       }
+      if (!codeProjectIndexService) {
+        throw new Error('CodeProjectIndexService not initialized');
+      }
 
-      await codePaneWatcherService.unwatchRoot(paneId);
+      await Promise.all([
+        codePaneWatcherService.unwatchRoot(paneId),
+        codeProjectIndexService.unwatchProjectForPane(paneId),
+      ]);
       return successResponse();
     } catch (error) {
       return errorResponse(error);

@@ -21,6 +21,7 @@ import { ElectronSSHHostKeyPromptService } from './services/ssh/SSHHostKeyPrompt
 import { ChatProviderVaultService } from './services/chat/ChatProviderVaultService';
 import { CodeFileService } from './services/code/CodeFileService';
 import { CodeGitService } from './services/code/CodeGitService';
+import { CodeProjectIndexService } from './services/code/CodeProjectIndexService';
 import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
 import { LanguageFeatureService } from './services/language/LanguageFeatureService';
 import { LanguagePluginResolver } from './services/language/LanguagePluginResolver';
@@ -33,6 +34,7 @@ import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 import { isTerminalPane } from '../shared/utils/terminalCapabilities';
 import { isAllowedBrowserUrl } from '../shared/utils/browserUrls';
+import { collectWorkspaceProjectRoots } from './utils/workspaceProjectRoots';
 
 const APP_DISPLAY_NAME = 'Copilot-Terminal';
 const USER_DATA_DIR_NAME = 'copilot-terminal';
@@ -58,6 +60,7 @@ let chatProviderVaultService: ChatProviderVaultService | null = null;
 let sshHostKeyPromptService: ElectronSSHHostKeyPromptService | null = null;
 let codeFileService: CodeFileService | null = null;
 let codeGitService: CodeGitService | null = null;
+let codeProjectIndexService: CodeProjectIndexService | null = null;
 let codePaneWatcherService: CodePaneWatcherService | null = null;
 let languageFeatureService: LanguageFeatureService | null = null;
 let pluginManager: PluginManager | null = null;
@@ -531,7 +534,8 @@ app.whenReady().then(async () => {
 
   // 初始化 FileWatcherService（通用文件监听服务）
   fileWatcherService = new FileWatcherService();
-  codeFileService = new CodeFileService();
+  codeProjectIndexService = new CodeProjectIndexService(path.join(app.getPath('userData'), 'code-index'));
+  codeFileService = new CodeFileService(codeProjectIndexService);
   codeGitService = new CodeGitService();
   codePaneWatcherService = new CodePaneWatcherService(() => mainWindow);
   const pluginDataPath = path.join(app.getPath('userData'), 'plugins');
@@ -639,6 +643,7 @@ app.whenReady().then(async () => {
     chatProviderVaultService,
     codeFileService,
     codeGitService,
+    codeProjectIndexService,
     codePaneWatcherService,
     languageFeatureService,
     pluginManager,
@@ -655,6 +660,9 @@ app.whenReady().then(async () => {
     const workspace = await workspaceManager.loadWorkspace();
     currentWorkspace = workspace;
     await syncProjectConfigWatchers();
+    await codeProjectIndexService?.syncWorkspaceProjects(
+      collectWorkspaceProjectRoots(workspace),
+    );
 
     // 启动自动保存
     if (autoSaveManager && workspaceManager) {
@@ -720,6 +728,7 @@ app.on('window-all-closed', () => {
         fileWatcherService,
         gitBranchWatcher,
         tmuxCompatService,
+        codeProjectIndexService,
         languageFeatureService,
         currentWorkspace,
       }).catch(error => {

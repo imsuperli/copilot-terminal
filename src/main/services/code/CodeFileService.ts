@@ -17,20 +17,14 @@ import {
   CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
 } from '../../../shared/types/electron-api';
 import { PathValidator } from '../../utils/pathValidator';
+import { CodeProjectIndexService } from './CodeProjectIndexService';
+import { CODE_PANE_IGNORED_DIRECTORY_NAMES } from './codePaneFsConstants';
 
 const DEFAULT_MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_SEARCH_LIMIT = 100;
 const MAX_SEARCH_LIMIT = 500;
 const DEFAULT_CONTENT_MATCH_LIMIT = 200;
 const DEFAULT_CONTENT_MATCHES_PER_FILE = 20;
-const IGNORED_DIRECTORY_NAMES = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.next',
-]);
-
 type RootInfo = {
   rootPath: string;
   rootRealPath: string;
@@ -179,43 +173,22 @@ function trimSearchLine(lineText: string): string {
 }
 
 export class CodeFileService {
+  constructor(
+    private readonly projectIndexService: CodeProjectIndexService | null = null,
+  ) {}
+
   async listDirectory(config: CodePaneListDirectoryConfig): Promise<CodePaneTreeEntry[]> {
+    if (this.projectIndexService) {
+      return await this.projectIndexService.listDirectory(config);
+    }
+
     const rootInfo = await this.resolveRoot(config.rootPath);
     const targetPath = config.targetPath ?? rootInfo.rootPath;
     const resolvedTargetPath = await this.resolveExistingPath(rootInfo, targetPath, 'directory');
-    const directoryEntries = await fsPromises.readdir(resolvedTargetPath, { withFileTypes: true });
-    const includeHidden = config.includeHidden ?? false;
-
-    const results: CodePaneTreeEntry[] = [];
-
-    for (const entry of directoryEntries) {
-      if (!includeHidden && entry.name.startsWith('.')) {
-        continue;
-      }
-
-      if (entry.isDirectory() && IGNORED_DIRECTORY_NAMES.has(entry.name)) {
-        continue;
-      }
-
-      const entryPath = path.join(resolvedTargetPath, entry.name);
-      const stats = await fsPromises.lstat(entryPath);
-      if (stats.isSymbolicLink()) {
-        continue;
-      }
-
-      if (!stats.isFile() && !stats.isDirectory()) {
-        continue;
-      }
-
-      results.push({
-        path: entryPath,
-        name: entry.name,
-        type: stats.isDirectory() ? 'directory' : 'file',
-        size: stats.isFile() ? stats.size : undefined,
-        mtimeMs: stats.mtimeMs,
-        hasChildren: stats.isDirectory() ? true : undefined,
-      });
-    }
+    const results = await this.readDirectoryEntries(
+      resolvedTargetPath,
+      config.includeHidden ?? false,
+    );
 
     results.sort((left, right) => {
       if (left.type !== right.type) {
@@ -276,6 +249,10 @@ export class CodeFileService {
   }
 
   async searchFiles(config: CodePaneSearchFilesConfig): Promise<string[]> {
+    if (this.projectIndexService) {
+      return await this.projectIndexService.searchFiles(config);
+    }
+
     const rootInfo = await this.resolveRoot(config.rootPath);
     const limit = getClampedLimit(config.limit, DEFAULT_SEARCH_LIMIT);
     const query = config.query.trim().toLowerCase();
@@ -305,7 +282,7 @@ export class CodeFileService {
         }
 
         if (stats.isDirectory()) {
-          if (!IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+          if (!CODE_PANE_IGNORED_DIRECTORY_NAMES.has(entry.name)) {
             stack.push(entryPath);
           }
           continue;
@@ -362,7 +339,7 @@ export class CodeFileService {
         }
 
         if (stats.isDirectory()) {
-          if (!IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+          if (!CODE_PANE_IGNORED_DIRECTORY_NAMES.has(entry.name)) {
             stack.push(entryPath);
           }
           continue;
@@ -493,5 +470,42 @@ export class CodeFileService {
     }
 
     return resolvedPath;
+  }
+
+  private async readDirectoryEntries(
+    directoryPath: string,
+    includeHidden: boolean,
+  ): Promise<CodePaneTreeEntry[]> {
+    const directoryEntries = await fsPromises.readdir(directoryPath, { withFileTypes: true });
+    const entryResults = await Promise.all(directoryEntries.map(async (entry): Promise<CodePaneTreeEntry | null> => {
+      if (!includeHidden && entry.name.startsWith('.')) {
+        return null;
+      }
+
+      if (entry.isDirectory() && CODE_PANE_IGNORED_DIRECTORY_NAMES.has(entry.name)) {
+        return null;
+      }
+
+      if (entry.isSymbolicLink()) {
+        return null;
+      }
+
+      if (!entry.isDirectory() && !entry.isFile()) {
+        return null;
+      }
+
+      const entryPath = path.join(directoryPath, entry.name);
+      const stats = await fsPromises.stat(entryPath);
+      return {
+        path: entryPath,
+        name: entry.name,
+        type: entry.isDirectory() ? 'directory' as const : 'file' as const,
+        size: entry.isFile() ? stats.size : undefined,
+        mtimeMs: stats.mtimeMs,
+        hasChildren: entry.isDirectory() ? true : undefined,
+      };
+    }));
+
+    return entryResults.filter((entry): entry is CodePaneTreeEntry => entry !== null);
   }
 }
