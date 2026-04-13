@@ -310,6 +310,16 @@ function isOptimisticReasoningEvent(event: AgentTimelineEvent): boolean {
   return event.kind === 'reasoning' && event.id.startsWith('reasoning-optimistic-');
 }
 
+function isInternalBootstrapEvent(event: AgentTimelineEvent): boolean {
+  return event.kind === 'user-message'
+    || event.kind === 'system-notice'
+    || event.kind === 'context-summary';
+}
+
+function hasVisibleAgentProgress(events: AgentTimelineEvent[]): boolean {
+  return events.some((event) => !isInternalBootstrapEvent(event));
+}
+
 function mergeAgentTaskWithOptimisticReasoning(
   task: AgentTaskSnapshot,
   optimisticTask?: AgentTaskSnapshot | null,
@@ -325,7 +335,7 @@ function mergeAgentTaskWithOptimisticReasoning(
   if (
     task.status !== 'running'
     || optimisticReasoningEvents.length === 0
-    || task.timeline.some((event) => event.kind !== 'user-message')
+    || hasVisibleAgentProgress(task.timeline)
   ) {
     return task;
   }
@@ -486,8 +496,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           return null;
         }
 
-        const hasAssistantSideEvent = payload.task.timeline.some((event) => event.kind !== 'user-message');
-        if (payload.task.status !== 'running' || hasAssistantSideEvent) {
+        const keepOptimisticTask = payload.task.status === 'running'
+          && !hasVisibleAgentProgress(payload.task.timeline);
+        if (!keepOptimisticTask) {
           return null;
         }
 

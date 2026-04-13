@@ -502,6 +502,166 @@ describe('ChatPane', () => {
     expect(screen.getByText('Thinking...')).toBeInTheDocument();
   });
 
+  it('keeps optimistic thinking visible while only internal bootstrap events have arrived', async () => {
+    const user = userEvent.setup();
+    const listeners = createListenerMap();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentSend).mockResolvedValue({
+      success: true,
+      data: {
+        taskId: 'task-1',
+        status: 'running',
+      },
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.onAgentTaskState).mockImplementation((callback) => {
+      listeners.state.add(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+    });
+    vi.mocked(window.electronAPI.offAgentTaskState).mockImplementation((callback) => {
+      listeners.state.delete(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+    });
+    vi.mocked(window.electronAPI.onAgentTaskError).mockImplementation((callback) => {
+      listeners.error.add(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
+    });
+    vi.mocked(window.electronAPI.offAgentTaskError).mockImplementation((callback) => {
+      listeners.error.delete(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [
+                      {
+                        id: 'legacy-assistant-1',
+                        role: 'assistant',
+                        content: '旧回复',
+                        timestamp: new Date().toISOString(),
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '继续分析');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    expect(await screen.findByText('Agent · Thinking')).toBeInTheDocument();
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+
+    await act(async () => {
+      const snapshot = createAgentSnapshot({
+        timeline: [
+          {
+            id: 'user-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'user-message',
+            status: 'completed',
+            content: '继续分析',
+          },
+          {
+            id: 'notice-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'system-notice',
+            status: 'completed',
+            level: 'warning',
+            content: 'Imported existing chat transcript into the new agent runtime.',
+          },
+          {
+            id: 'context-summary-1',
+            taskId: 'task-1',
+            paneId: 'chat-pane-1',
+            timestamp: new Date().toISOString(),
+            kind: 'context-summary',
+            status: 'completed',
+            summary: '历史上下文摘要：旧消息被压缩。',
+          },
+        ],
+        messages: [
+          {
+            id: 'legacy-assistant-1',
+            role: 'assistant',
+            content: '旧回复',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        status: 'running',
+      });
+
+      listeners.state.forEach((listener) => listener({}, {
+        paneId: 'chat-pane-1',
+        task: snapshot,
+      }));
+    });
+
+    expect(screen.getByText('Agent · Thinking')).toBeInTheDocument();
+    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    expect(screen.queryByText('历史上下文摘要：旧消息被压缩。')).not.toBeInTheDocument();
+  });
+
   it('reloads provider options when chat settings are updated', async () => {
     vi.mocked(window.electronAPI.getSettings)
       .mockResolvedValueOnce({
