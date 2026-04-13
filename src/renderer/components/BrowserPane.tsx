@@ -5,10 +5,6 @@ import { AppTooltip } from './ui/AppTooltip';
 import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { DEFAULT_BROWSER_URL, normalizeBrowserInput } from '../utils/browserPane';
-import {
-  getBrowserDropDragActive,
-  subscribeBrowserDropDragActive,
-} from '../utils/browserDropDragState';
 import { logBrowserDnd } from '../utils/browserDndDebug';
 import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/browserUrls';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
@@ -23,41 +19,12 @@ const BLANK_PAGE_THEME_CSS = `
   }
 `;
 
-let browserWebviewParkingLot: HTMLDivElement | null = null;
-
 function getBrowserPaneUrl(pane: Pane): string {
   return sanitizeBrowserUrl(pane.browser?.url || DEFAULT_BROWSER_URL);
 }
 
-function ensureBrowserWebviewParkingLot(): HTMLDivElement | null {
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  if (browserWebviewParkingLot && document.body.contains(browserWebviewParkingLot)) {
-    return browserWebviewParkingLot;
-  }
-
-  const parkingLot = document.createElement('div');
-  parkingLot.dataset.browserWebviewParkingLot = 'true';
-  Object.assign(parkingLot.style, {
-    position: 'fixed',
-    left: '-10000px',
-    top: '-10000px',
-    width: '1px',
-    height: '1px',
-    overflow: 'hidden',
-    opacity: '0',
-    pointerEvents: 'none',
-  });
-  document.body.appendChild(parkingLot);
-  browserWebviewParkingLot = parkingLot;
-  return parkingLot;
-}
-
 export function __resetBrowserPaneWebviewCacheForTests(): void {
-  browserWebviewParkingLot?.remove();
-  browserWebviewParkingLot = null;
+  // No-op. BrowserPane no longer moves webviews into a shared parking lot.
 }
 
 export interface BrowserPaneProps {
@@ -90,7 +57,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const restoreReadyTimerRef = useRef<number | null>(null);
   const webviewReadyRef = useRef(false);
   const pendingNavigationUrlRef = useRef<string | null>(null);
-  const [isBrowserDropDragActive, setIsBrowserDropDragActive] = useState(() => getBrowserDropDragActive());
   const addressInputRef = useRef<HTMLInputElement>(null);
   const skipNextAutoFocusRef = useRef(false);
   const [inputValue, setInputValue] = useState(() => getBrowserPaneUrl(pane));
@@ -143,8 +109,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
     applyWebviewBounds(webview, host);
   }, [applyWebviewBounds]);
-
-  useEffect(() => subscribeBrowserDropDragActive(setIsBrowserDropDragActive), []);
 
   const resetNavigationState = useCallback(() => {
     setCanGoBack(false);
@@ -453,37 +417,6 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
     syncNavigationState();
   }, [isWebviewReady, persistedUrl, syncNavigationState]);
-
-  useLayoutEffect(() => {
-    const webview = webviewRef.current;
-    const host = webviewHostRef.current;
-
-    if (!webview || !host) {
-      return;
-    }
-
-    if (isBrowserDropDragActive) {
-      const parkingLot = ensureBrowserWebviewParkingLot();
-      if (parkingLot && webview.parentElement !== parkingLot) {
-        parkingLot.appendChild(webview);
-        logBrowserDnd('webview parked for drag', {
-          windowId,
-          paneId: pane.id,
-        });
-      }
-      return;
-    }
-
-    if (webview.parentElement !== host) {
-      applyWebviewBounds(webview, host);
-      host.replaceChildren(webview);
-      syncWebviewBounds();
-      logBrowserDnd('webview restored after drag', {
-        windowId,
-        paneId: pane.id,
-      });
-    }
-  }, [applyWebviewBounds, isBrowserDropDragActive, pane.id, syncWebviewBounds, windowId]);
 
   const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
