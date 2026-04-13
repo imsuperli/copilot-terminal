@@ -1,8 +1,12 @@
 import path from 'path';
 import { tmpdir } from 'os';
 import { promises as fsPromises } from 'fs';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CodeProjectIndexService } from '../CodeProjectIndexService';
+
+const execFileAsync = promisify(execFile);
 
 describe('CodeProjectIndexService', () => {
   let tempProjectRoot: string;
@@ -153,5 +157,68 @@ describe('CodeProjectIndexService', () => {
     expect(results).toEqual([sourceFilePath]);
 
     await reopenedService.destroy();
+  });
+
+  it('ignores common Maven and IDE output directories during indexing', async () => {
+    const srcDirectoryPath = path.join(tempProjectRoot, 'src', 'main', 'java');
+    await fsPromises.mkdir(srcDirectoryPath, { recursive: true });
+    await fsPromises.mkdir(path.join(tempProjectRoot, 'target', 'classes', 'com', 'example'), { recursive: true });
+    await fsPromises.mkdir(path.join(tempProjectRoot, '.idea'), { recursive: true });
+    await fsPromises.mkdir(path.join(tempProjectRoot, '.gradle', '8.0'), { recursive: true });
+    await Promise.all([
+      fsPromises.writeFile(path.join(srcDirectoryPath, 'App.java'), 'class App {}\n', 'utf-8'),
+      fsPromises.writeFile(path.join(tempProjectRoot, 'target', 'classes', 'com', 'example', 'App.class'), 'bytecode', 'utf-8'),
+      fsPromises.writeFile(path.join(tempProjectRoot, '.idea', 'workspace.xml'), '<workspace />\n', 'utf-8'),
+      fsPromises.writeFile(path.join(tempProjectRoot, '.gradle', '8.0', 'gc.properties'), 'state=true\n', 'utf-8'),
+    ]);
+
+    const service = new CodeProjectIndexService(tempIndexRoot, undefined, { enableWatcher: false });
+    await service.watchProjectForPane('pane-1', tempProjectRoot);
+    await service.waitForIdle(tempProjectRoot);
+
+    const rootEntries = await service.listDirectory({ rootPath: tempProjectRoot, includeHidden: true });
+    expect(rootEntries.map((entry) => entry.name)).toEqual(['src']);
+
+    const sourceResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'app.java' });
+    expect(sourceResults).toEqual([path.join(srcDirectoryPath, 'App.java')]);
+
+    const classResults = await service.searchFiles({ rootPath: tempProjectRoot, query: 'app.class' });
+    expect(classResults).toEqual([]);
+
+    await service.destroy();
+  });
+
+  it('keeps the pane root as the indexed project root even inside a larger git repository', async () => {
+    const nestedProjectRoot = path.join(tempProjectRoot, 'services', 'orders');
+    const nestedSourceFilePath = path.join(nestedProjectRoot, 'src', 'main', 'java', 'OrdersApp.java');
+    const siblingFilePath = path.join(tempProjectRoot, 'shared', 'Shared.java');
+    await fsPromises.mkdir(path.dirname(nestedSourceFilePath), { recursive: true });
+    await fsPromises.mkdir(path.dirname(siblingFilePath), { recursive: true });
+    await Promise.all([
+      fsPromises.writeFile(path.join(nestedProjectRoot, 'pom.xml'), '<project />\n', 'utf-8'),
+      fsPromises.writeFile(nestedSourceFilePath, 'class OrdersApp {}\n', 'utf-8'),
+      fsPromises.writeFile(siblingFilePath, 'class Shared {}\n', 'utf-8'),
+    ]);
+    await execFileAsync('git', ['init'], { cwd: tempProjectRoot });
+
+    const service = new CodeProjectIndexService(tempIndexRoot, undefined, { enableWatcher: false });
+    await service.watchProjectForPane('pane-1', nestedProjectRoot);
+    await service.waitForIdle(nestedProjectRoot);
+
+    const persistedProjectRoots = await fsPromises.readdir(path.join(tempIndexRoot, 'projects'));
+    expect(persistedProjectRoots).toHaveLength(1);
+    const persistedProjectPath = path.join(tempIndexRoot, 'projects', persistedProjectRoots[0] ?? '');
+    const manifest = JSON.parse(
+      await fsPromises.readFile(path.join(persistedProjectPath, 'manifest.json'), 'utf-8'),
+    ) as { projectRootPath: string };
+    const index = JSON.parse(
+      await fsPromises.readFile(path.join(persistedProjectPath, 'index.json'), 'utf-8'),
+    ) as { files: string[] };
+
+    expect(manifest.projectRootPath).toBe(nestedProjectRoot);
+    expect(index.files).toEqual(['pom.xml', 'src/main/java/OrdersApp.java']);
+    expect(index.files).not.toContain('shared/Shared.java');
+
+    await service.destroy();
   });
 });

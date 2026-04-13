@@ -857,16 +857,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     listenerRef.current = editorInstance.onMouseDown((event: any) => {
+      const pointerEvent = event.event?.browserEvent ?? event.event ?? {};
       const hasModifier = isMac
-        ? event.event?.metaKey === true && event.event?.ctrlKey !== true
-        : event.event?.ctrlKey === true && event.event?.metaKey !== true;
+        ? pointerEvent.metaKey === true && pointerEvent.ctrlKey !== true
+        : pointerEvent.ctrlKey === true && pointerEvent.metaKey !== true;
+      const isPrimaryButton = event.event?.leftButton === true
+        || pointerEvent.button === 0
+        || pointerEvent.buttons === 1;
 
-      if (!hasModifier || event.event?.leftButton !== true || !event.target?.position) {
+      if (!hasModifier || !isPrimaryButton || !event.target?.position) {
         return;
       }
 
-      event.event.preventDefault?.();
-      event.event.stopPropagation?.();
+      pointerEvent.preventDefault?.();
+      pointerEvent.stopPropagation?.();
+      event.event?.preventDefault?.();
+      event.event?.stopPropagation?.();
 
       void handleDefinitionClick(
         editorInstance,
@@ -917,6 +923,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         diffEditorRef.current = monaco.editor.createDiffEditor(hostElement, {
           automaticLayout: true,
           minimap: { enabled: false },
+          links: true,
+          definitionLinkOpensInPeek: false,
           renderSideBySide: true,
           wordWrap: 'off',
           fontSize: 13,
@@ -964,6 +972,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       editorRef.current = monaco.editor.create(hostElement, {
         automaticLayout: true,
         minimap: { enabled: false },
+        links: true,
+        definitionLinkOpensInPeek: false,
         wordWrap: 'off',
         fontSize: 13,
         tabSize: 2,

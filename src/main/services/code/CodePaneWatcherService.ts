@@ -1,6 +1,7 @@
 import path from 'path';
 import { BrowserWindow } from 'electron';
 import { PathValidator } from '../../utils/pathValidator';
+import { CODE_PANE_IGNORED_DIRECTORY_NAMES } from './codePaneFsConstants';
 
 let chokidarModule: any = null;
 let chokidarPromise: Promise<any> | null = null;
@@ -22,14 +23,6 @@ async function getChokidar() {
   return chokidarPromise;
 }
 
-const IGNORED_DIRECTORY_NAMES = new Set([
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.next',
-]);
-
 type WatchChange = {
   type: 'add' | 'change' | 'unlink' | 'addDir' | 'unlinkDir';
   path: string;
@@ -49,6 +42,7 @@ export class CodePaneWatcherService {
 
   constructor(
     private readonly getMainWindow: () => BrowserWindow | null,
+    private readonly onChanges?: (rootPath: string, changes: WatchChange[]) => void | Promise<void>,
   ) {}
 
   async watchRoot(paneId: string, rootPath: string): Promise<void> {
@@ -82,7 +76,7 @@ export class CodePaneWatcherService {
             return false;
           }
 
-          return relativePath.split(path.sep).some((segment) => IGNORED_DIRECTORY_NAMES.has(segment));
+          return relativePath.split(path.sep).some((segment) => CODE_PANE_IGNORED_DIRECTORY_NAMES.has(segment));
         },
       });
 
@@ -178,14 +172,14 @@ export class CodePaneWatcherService {
 
       const changes = watcherInfo.pendingChanges.splice(0, watcherInfo.pendingChanges.length);
       const mainWindow = this.getMainWindow();
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        return;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('code-pane-fs-changed', {
+          rootPath,
+          changes,
+        });
       }
 
-      mainWindow.webContents.send('code-pane-fs-changed', {
-        rootPath,
-        changes,
-      });
+      void this.onChanges?.(rootPath, changes);
     }, 100);
   }
 }

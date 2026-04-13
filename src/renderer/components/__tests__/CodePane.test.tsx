@@ -969,6 +969,67 @@ describe('CodePane', () => {
     expect(view.getPane().code?.activeFilePath).toBe('/workspace/project/src/util.ts');
   });
 
+  it('opens the first definition target when Monaco exposes browserEvent button metadata', async () => {
+    vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/util.ts',
+          range: {
+            startLineNumber: 3,
+            startColumn: 5,
+            endLineNumber: 3,
+            endColumn: 9,
+          },
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockImplementation(async ({ filePath }) => ({
+      success: true,
+      data: {
+        content: filePath.endsWith('util.ts') ? 'export const util = 1;\n' : 'export const value = 1;\n',
+        mtimeMs: 100,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    }));
+
+    const view = renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    expect(activeEditor).toBeDefined();
+
+    await act(async () => {
+      activeEditor.fireMouseDown({
+        target: {
+          position: {
+            lineNumber: 1,
+            column: 8,
+          },
+        },
+        event: {
+          browserEvent: {
+            ctrlKey: true,
+            metaKey: false,
+            button: 0,
+            buttons: 1,
+            preventDefault: vi.fn(),
+            stopPropagation: vi.fn(),
+          },
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(view.getPane().code?.activeFilePath).toBe('/workspace/project/src/util.ts');
+    });
+  });
+
   it('applies plugin diagnostics to Monaco markers and the problems panel', async () => {
     renderCodePane(createPane());
 

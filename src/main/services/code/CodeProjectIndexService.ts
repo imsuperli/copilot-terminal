@@ -1,8 +1,6 @@
-import { execFile } from 'child_process';
 import { createHash } from 'crypto';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
-import { promisify } from 'util';
 import type {
   CodePaneIndexProgressPayload,
   CodePaneListDirectoryConfig,
@@ -16,9 +14,7 @@ import {
   CODE_PANE_INDEX_SCHEMA_VERSION,
 } from './codePaneFsConstants';
 
-const execFileAsync = promisify(execFile);
-
-type ProjectType = 'git' | 'directory';
+type ProjectType = 'directory';
 
 type DirectorySignature = {
   mtimeMs: number;
@@ -439,10 +435,7 @@ export class CodeProjectIndexService {
     const paneRootInfo = await this.resolvePaneRoot(rootPath);
 
     for (const state of this.projectStates.values()) {
-      if (state.projectType === 'git' && isPathWithin(state.projectRootPath, paneRootInfo.rootPath)) {
-        return state;
-      }
-      if (state.projectType === 'directory' && state.projectRootPath === paneRootInfo.rootPath) {
+      if (state.projectRootPath === paneRootInfo.rootPath) {
         return state;
       }
     }
@@ -488,9 +481,8 @@ export class CodeProjectIndexService {
   }
 
   private async resolveProjectIdentity(rootPath: string): Promise<ProjectIdentity> {
-    const gitProjectRootPath = await this.resolveGitProjectRoot(rootPath);
-    const projectType: ProjectType = gitProjectRootPath ? 'git' : 'directory';
-    const projectRootPath = gitProjectRootPath ?? rootPath;
+    const projectType: ProjectType = 'directory';
+    const projectRootPath = rootPath;
     const projectRootRealPath = await fsPromises.realpath(projectRootPath);
     const projectId = createHash('sha1')
       .update(`${projectType}:${projectRootRealPath}`)
@@ -502,25 +494,6 @@ export class CodeProjectIndexService {
       projectRootPath,
       projectRootRealPath,
     };
-  }
-
-  private async resolveGitProjectRoot(rootPath: string): Promise<string | null> {
-    try {
-      const { stdout } = await execFileAsync(
-        'git',
-        ['-C', rootPath, 'rev-parse', '--show-toplevel'],
-        { encoding: 'utf-8' },
-      );
-
-      const repoRootPath = stdout.trim();
-      if (!repoRootPath || !isPathWithin(repoRootPath, rootPath)) {
-        return null;
-      }
-
-      return repoRootPath;
-    } catch {
-      return null;
-    }
   }
 
   private async loadPersistedState(identity: ProjectIdentity): Promise<LoadedPersistedProjectState | null> {

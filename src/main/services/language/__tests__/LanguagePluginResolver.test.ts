@@ -29,6 +29,14 @@ describe('LanguagePluginResolver', () => {
     await writePlugin(tempDir, registryStore, {
       id: 'acme.java-workspace',
       enabledByDefault: true,
+      settingsSchema: {
+        'java.import.maven.enabled': {
+          type: 'boolean',
+          title: 'Enable Maven import',
+          scope: 'workspace',
+          defaultValue: true,
+        },
+      },
       capability: {
         languages: ['java'],
         priority: 10,
@@ -74,10 +82,75 @@ describe('LanguagePluginResolver', () => {
         'java.home': '/opt/jdk-21',
       },
       mergedSettings: {
+        'java.import.maven.enabled': true,
         'trace.server': 'verbose',
         'java.home': '/opt/jdk-21',
       },
     });
+  });
+
+  it('applies JDTLS defaults and Maven-specific import exclusions for pom projects', async () => {
+    await writePlugin(tempDir, registryStore, {
+      id: 'official.java-jdtls',
+      enabledByDefault: true,
+      settingsSchema: {
+        'java.configuration.updateBuildConfiguration': {
+          type: 'enum',
+          title: 'Update build configuration',
+          scope: 'workspace',
+          defaultValue: 'interactive',
+          options: [
+            { label: 'disabled', value: 'disabled' },
+            { label: 'interactive', value: 'interactive' },
+            { label: 'automatic', value: 'automatic' },
+          ],
+        },
+        'java.import.maven.enabled': {
+          type: 'boolean',
+          title: 'Enable Maven import',
+          scope: 'workspace',
+          defaultValue: true,
+        },
+        'java.import.gradle.enabled': {
+          type: 'boolean',
+          title: 'Enable Gradle import',
+          scope: 'workspace',
+          defaultValue: true,
+        },
+      },
+      capability: {
+        languages: ['java'],
+        priority: 60,
+        projectIndicators: ['pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle', 'gradlew'],
+        runtime: {
+          type: 'node',
+          entry: 'bin/jdtls-proxy.cjs',
+        },
+      },
+    });
+
+    const workspaceRoot = path.join(tempDir, 'workspace');
+    const projectRoot = path.join(workspaceRoot, 'orders-service');
+    const filePath = path.join(projectRoot, 'src', 'main', 'java', 'Main.java');
+    await fs.ensureDir(path.dirname(filePath));
+    await fs.writeFile(path.join(projectRoot, 'pom.xml'), '<project />');
+    await fs.writeFile(filePath, 'class Main {}');
+
+    const resolution = await resolver.resolve({
+      rootPath: workspaceRoot,
+      filePath,
+    });
+
+    expect(resolution?.mergedSettings).toMatchObject({
+      'java.configuration.updateBuildConfiguration': 'interactive',
+      'java.import.maven.enabled': true,
+      'java.import.gradle.enabled': false,
+    });
+    expect(resolution?.mergedSettings['java.import.exclusions']).toEqual(expect.arrayContaining([
+      '**/target/**',
+      '**/build/**',
+      '**/.git/**',
+    ]));
   });
 
   it('keeps TypeScript on Monaco unless the plugin explicitly takes over builtin language services', async () => {
@@ -193,6 +266,7 @@ async function writePlugin(
     id: string;
     enabledByDefault: boolean;
     lastCheckedAt?: string;
+    settingsSchema?: PluginManifest['settingsSchema'];
     capability?: Partial<LanguageServerPluginCapability> & Pick<LanguageServerPluginCapability, 'languages' | 'runtime'>;
     capabilities?: LanguageServerPluginCapability[];
   },
@@ -207,6 +281,7 @@ async function writePlugin(
     engines: {
       app: '>=3.0.0',
     },
+    ...(config.settingsSchema ? { settingsSchema: config.settingsSchema } : {}),
     capabilities: config.capabilities ?? [
       {
         type: 'language-server',

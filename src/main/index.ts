@@ -542,10 +542,24 @@ app.whenReady().then(async () => {
 
       mainWindow.webContents.send('code-pane-index-progress', payload);
     },
+    {
+      enableWatcher: false,
+    },
   );
   codeFileService = new CodeFileService(codeProjectIndexService);
   codeGitService = new CodeGitService();
-  codePaneWatcherService = new CodePaneWatcherService(() => mainWindow);
+  codePaneWatcherService = new CodePaneWatcherService(
+    () => mainWindow,
+    (rootPath, changes) => {
+      if (!codeProjectIndexService) {
+        return;
+      }
+
+      void codeProjectIndexService.notifyChanges(rootPath, changes).catch((error) => {
+        console.error('[CodePaneWatcherService] Failed to forward index changes:', error);
+      });
+    },
+  );
   const pluginDataPath = path.join(app.getPath('userData'), 'plugins');
   const pluginRegistryStore = new PluginRegistryStore({
     filePath: path.join(pluginDataPath, 'registry.json'),

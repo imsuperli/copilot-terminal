@@ -227,6 +227,7 @@ interface WindowStore {
     direction: 'horizontal' | 'vertical',
     newPane: Pane,
     insertBefore: boolean,
+    sizes?: [number, number],
   ) => void;
   movePaneInWindow: (
     windowId: string,
@@ -584,11 +585,11 @@ export const useWindowStore = create<WindowStore>()(
       triggerAutoSave(windows, groups);
     },
 
-    placePaneInWindow: (windowId, targetPaneId, direction, newPane, insertBefore) => {
+    placePaneInWindow: (windowId, targetPaneId, direction, newPane, insertBefore, sizes) => {
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
         if (window) {
-          const newLayout = splitPaneInLayout(window.layout, targetPaneId, direction, newPane, insertBefore);
+          const newLayout = splitPaneInLayout(window.layout, targetPaneId, direction, newPane, insertBefore, sizes);
           if (newLayout) {
             window.layout = newLayout;
             window.lastActiveAt = new Date().toISOString();

@@ -1025,7 +1025,10 @@ function extractLastRuntimeErrorLine(rawMessage: string): string | null {
   const lines = rawMessage
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line) => (
+      Boolean(line)
+      && !/Registered provider .*SLF4JServiceProvider.*logback/i.test(line)
+    ));
 
   return lines.length > 0 ? lines[lines.length - 1] : null;
 }
