@@ -16,6 +16,7 @@ import { CodeGitService } from '../services/code/CodeGitService';
 import { CodeProjectIndexService } from '../services/code/CodeProjectIndexService';
 import { CodePaneWatcherService } from '../services/code/CodePaneWatcherService';
 import { LanguageFeatureService } from '../services/language/LanguageFeatureService';
+import { LanguageProjectContributionService } from '../services/language/LanguageProjectContributionService';
 import { PluginManager } from '../services/plugins/PluginManager';
 import { Workspace } from '../types/workspace';
 
@@ -42,6 +43,7 @@ export interface HandlerContext {
   codeProjectIndexService?: CodeProjectIndexService | null;
   codePaneWatcherService?: CodePaneWatcherService | null;
   languageFeatureService?: LanguageFeatureService | null;
+  languageProjectContributionService?: LanguageProjectContributionService | null;
   pluginManager?: PluginManager | null;
   currentWorkspace: Workspace | null;
   getMainWindow?: () => BrowserWindow | null;

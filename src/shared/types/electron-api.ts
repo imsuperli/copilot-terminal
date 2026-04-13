@@ -282,6 +282,24 @@ export interface CodePaneReadFileResult {
   displayPath?: string;
 }
 
+export interface CodePaneExternalLibraryRoot {
+  id: string;
+  label: string;
+  path: string;
+  description?: string;
+}
+
+export interface CodePaneExternalLibrarySection {
+  id: string;
+  label: string;
+  languageId: string;
+  roots: CodePaneExternalLibraryRoot[];
+}
+
+export interface CodePaneGetExternalLibrarySectionsConfig {
+  rootPath: string;
+}
+
 export interface CodePaneWriteFileConfig {
   rootPath: string;
   filePath: string;
@@ -848,6 +866,7 @@ export interface ElectronAPI {
   codePaneListDirectory: (config: CodePaneListDirectoryConfig) => Promise<IpcResponse<CodePaneTreeEntry[]>>;
   codePaneReadFile: (config: CodePaneReadFileConfig) => Promise<IpcResponse<CodePaneReadFileResult>>;
   codePaneWriteFile: (config: CodePaneWriteFileConfig) => Promise<IpcResponse<CodePaneWriteFileResult>>;
+  codePaneGetExternalLibrarySections: (config: CodePaneGetExternalLibrarySectionsConfig) => Promise<IpcResponse<CodePaneExternalLibrarySection[]>>;
   codePaneGetGitStatus: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitStatusEntry[]>>;
   codePaneGetGitRepositorySummary: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitRepositorySummary | null>>;
   codePaneGetGitGraph: (config: CodePaneGitGraphConfig) => Promise<IpcResponse<CodePaneGitGraphCommit[]>>;

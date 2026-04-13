@@ -30,6 +30,11 @@ type RootInfo = {
   rootRealPath: string;
 };
 
+type AllowedPathResult = {
+  resolvedPath: string;
+  rootInfo: RootInfo;
+};
+
 type IPCErrorWithCode = Error & {
   ipcErrorCode?: string;
 };
@@ -190,37 +195,37 @@ export class CodeFileService {
       config.includeHidden ?? false,
     );
 
-    results.sort((left, right) => {
-      if (left.type !== right.type) {
-        return left.type === 'directory' ? -1 : 1;
-      }
-      return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
-    });
-
-    return results;
+    return sortTreeEntries(results);
   }
 
   async readFile(config: CodePaneReadFileConfig): Promise<CodePaneReadFileResult> {
     const rootInfo = await this.resolveRoot(config.rootPath);
     const filePath = await this.resolveExistingPath(rootInfo, config.filePath, 'file');
-    const stats = await fsPromises.stat(filePath);
+    return await this.readValidatedFile(filePath);
+  }
 
-    if (stats.size > DEFAULT_MAX_FILE_SIZE_BYTES) {
-      throw createIpcError('File is too large to open in the code pane', CODE_PANE_FILE_TOO_LARGE_ERROR_CODE);
-    }
+  async listDirectoryFromAllowedRoots(config: {
+    allowedRootPaths: string[];
+    targetPath: string;
+    includeHidden?: boolean;
+  }): Promise<CodePaneTreeEntry[]> {
+    const rootInfos = await this.resolveAllowedRoots(config.allowedRootPaths);
+    const { resolvedPath } = await this.resolveExistingPathWithinRoots(rootInfos, config.targetPath, 'directory');
+    const results = await this.readDirectoryEntries(
+      resolvedPath,
+      config.includeHidden ?? false,
+    );
 
-    const buffer = await fsPromises.readFile(filePath);
-    if (looksBinary(buffer)) {
-      throw createIpcError('Binary files are not supported in the code pane', CODE_PANE_BINARY_FILE_ERROR_CODE);
-    }
+    return sortTreeEntries(results);
+  }
 
-    return {
-      content: buffer.toString('utf-8'),
-      mtimeMs: stats.mtimeMs,
-      size: stats.size,
-      language: detectLanguage(filePath),
-      isBinary: false,
-    };
+  async readFileFromAllowedRoots(config: {
+    allowedRootPaths: string[];
+    filePath: string;
+  }): Promise<CodePaneReadFileResult> {
+    const rootInfos = await this.resolveAllowedRoots(config.allowedRootPaths);
+    const { resolvedPath } = await this.resolveExistingPathWithinRoots(rootInfos, config.filePath, 'file');
+    return await this.readValidatedFile(resolvedPath);
   }
 
   async writeFile(config: CodePaneWriteFileConfig): Promise<CodePaneWriteFileResult> {
@@ -421,6 +426,13 @@ export class CodeFileService {
     };
   }
 
+  private async resolveAllowedRoots(rootPaths: string[]): Promise<RootInfo[]> {
+    const uniqueRootPaths = Array.from(new Set(
+      rootPaths.map((rootPath) => path.resolve(PathValidator.expandHomePath(rootPath))),
+    ));
+    return await Promise.all(uniqueRootPaths.map(async (rootPath) => await this.resolveRoot(rootPath)));
+  }
+
   private async resolveExistingPath(
     rootInfo: RootInfo,
     targetPath: string,
@@ -452,6 +464,45 @@ export class CodeFileService {
     return resolvedPath;
   }
 
+  private async resolveExistingPathWithinRoots(
+    rootInfos: RootInfo[],
+    targetPath: string,
+    expectedType: 'file' | 'directory',
+  ): Promise<AllowedPathResult> {
+    const resolvedPath = path.resolve(targetPath);
+    if (!path.isAbsolute(targetPath)) {
+      throw new Error('Target path is outside the allowed code pane roots');
+    }
+
+    const stats = await fsPromises.lstat(resolvedPath);
+    if (stats.isSymbolicLink()) {
+      throw new Error('Symbolic links are not supported in the code pane');
+    }
+
+    if (expectedType === 'file' && !stats.isFile()) {
+      throw new Error('Target path is not a file');
+    }
+
+    if (expectedType === 'directory' && !stats.isDirectory()) {
+      throw new Error('Target path is not a directory');
+    }
+
+    const realPath = await fsPromises.realpath(resolvedPath);
+    const matchedRootInfo = rootInfos.find((rootInfo) => (
+      isPathWithin(rootInfo.rootPath, resolvedPath)
+      && isPathWithin(rootInfo.rootRealPath, realPath)
+    ));
+
+    if (!matchedRootInfo) {
+      throw new Error('Target path is outside the allowed code pane roots');
+    }
+
+    return {
+      resolvedPath,
+      rootInfo: matchedRootInfo,
+    };
+  }
+
   private async resolveWritablePath(rootInfo: RootInfo, targetPath: string): Promise<string> {
     const resolvedPath = path.resolve(targetPath);
     if (!path.isAbsolute(targetPath) || !isPathWithin(rootInfo.rootPath, resolvedPath)) {
@@ -470,6 +521,27 @@ export class CodeFileService {
     }
 
     return resolvedPath;
+  }
+
+  private async readValidatedFile(filePath: string): Promise<CodePaneReadFileResult> {
+    const stats = await fsPromises.stat(filePath);
+
+    if (stats.size > DEFAULT_MAX_FILE_SIZE_BYTES) {
+      throw createIpcError('File is too large to open in the code pane', CODE_PANE_FILE_TOO_LARGE_ERROR_CODE);
+    }
+
+    const buffer = await fsPromises.readFile(filePath);
+    if (looksBinary(buffer)) {
+      throw createIpcError('Binary files are not supported in the code pane', CODE_PANE_BINARY_FILE_ERROR_CODE);
+    }
+
+    return {
+      content: buffer.toString('utf-8'),
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      language: detectLanguage(filePath),
+      isBinary: false,
+    };
   }
 
   private async readDirectoryEntries(
@@ -508,4 +580,13 @@ export class CodeFileService {
 
     return entryResults.filter((entry): entry is CodePaneTreeEntry => entry !== null);
   }
+}
+
+function sortTreeEntries(entries: CodePaneTreeEntry[]): CodePaneTreeEntry[] {
+  return [...entries].sort((left, right) => {
+    if (left.type !== right.type) {
+      return left.type === 'directory' ? -1 : 1;
+    }
+    return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+  });
 }

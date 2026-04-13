@@ -25,6 +25,7 @@ import { CodeProjectIndexService } from './services/code/CodeProjectIndexService
 import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
 import { LanguageFeatureService } from './services/language/LanguageFeatureService';
 import { LanguagePluginResolver } from './services/language/LanguagePluginResolver';
+import { LanguageProjectContributionService } from './services/language/LanguageProjectContributionService';
 import { LanguageServerSupervisor } from './services/language/LanguageServerSupervisor';
 import { LanguageWorkspaceService } from './services/language/LanguageWorkspaceService';
 import { PluginCatalogService } from './services/plugins/PluginCatalogService';
@@ -63,6 +64,7 @@ let codeGitService: CodeGitService | null = null;
 let codeProjectIndexService: CodeProjectIndexService | null = null;
 let codePaneWatcherService: CodePaneWatcherService | null = null;
 let languageFeatureService: LanguageFeatureService | null = null;
+let languageProjectContributionService: LanguageProjectContributionService | null = null;
 let pluginManager: PluginManager | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 const forwardPtyData = createPtyDataForwarder(() => mainWindow);
@@ -604,6 +606,9 @@ app.whenReady().then(async () => {
     resolver: languagePluginResolver,
     supervisor: languageServerSupervisor,
   });
+  languageProjectContributionService = new LanguageProjectContributionService({
+    codeFileService,
+  });
 
   // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
   initProjectConfigWatcher(fileWatcherService);
@@ -677,6 +682,7 @@ app.whenReady().then(async () => {
     codeProjectIndexService,
     codePaneWatcherService,
     languageFeatureService,
+    languageProjectContributionService,
     pluginManager,
     currentWorkspace,
     getMainWindow: () => mainWindow,

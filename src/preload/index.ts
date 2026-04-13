@@ -143,6 +143,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-read-file', config),
   codePaneWriteFile: (config) =>
     ipcRenderer.invoke('code-pane-write-file', config),
+  codePaneGetExternalLibrarySections: (config) =>
+    ipcRenderer.invoke('code-pane-get-external-library-sections', config),
   codePaneGetGitStatus: (config) =>
     ipcRenderer.invoke('code-pane-git-status', config),
   codePaneGetGitRepositorySummary: (config) =>

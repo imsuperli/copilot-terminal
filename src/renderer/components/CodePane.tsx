@@ -30,6 +30,7 @@ import {
 import type { Pane } from '../types/window';
 import type {
   CodePaneContentMatch,
+  CodePaneExternalLibrarySection,
   CodePaneGitGraphCommit,
   CodePaneGitRepositorySummary,
   CodePaneFsChangedPayload,
@@ -586,11 +587,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
+  const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => (
     createExpandedDirectorySet(rootPath, pane.code?.expandedPaths)
   ));
   const [loadedDirectories, setLoadedDirectories] = useState<Set<string>>(() => new Set());
+  const [loadedExternalDirectories, setLoadedExternalDirectories] = useState<Set<string>>(() => new Set());
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(() => new Set([rootPath]));
+  const [loadingExternalDirectories, setLoadingExternalDirectories] = useState<Set<string>>(() => new Set());
+  const [externalLibrarySections, setExternalLibrarySections] = useState<CodePaneExternalLibrarySection[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState<string[]>([]);
@@ -624,6 +629,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [gitGraph, setGitGraph] = useState<CodePaneGitGraphCommit[]>([]);
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [treeLoadError, setTreeLoadError] = useState<string | null>(null);
+  const [externalLibrariesError, setExternalLibrariesError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [contentSearchError, setContentSearchError] = useState<string | null>(null);
   const [indexStatus, setIndexStatus] = useState<CodePaneIndexStatus | null>(null);
@@ -631,6 +637,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const expandedDirectoriesRef = useRef(expandedDirectories);
   const loadedDirectoriesRef = useRef(loadedDirectories);
+  const loadedExternalDirectoriesRef = useRef(loadedExternalDirectories);
   const dirtyPathsRef = useRef(dirtyPaths);
   const savingPathsRef = useRef(savingPaths);
   const activeFilePathRef = useRef(activeFilePath);
@@ -660,6 +667,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     loadedDirectoriesRef.current = loadedDirectories;
   }, [loadedDirectories]);
+
+  useEffect(() => {
+    loadedExternalDirectoriesRef.current = loadedExternalDirectories;
+  }, [loadedExternalDirectories]);
 
   useEffect(() => {
     dirtyPathsRef.current = dirtyPaths;
@@ -738,6 +749,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       },
     });
   }, [persistCodeState]);
+
+  const getPersistedExpandedPaths = useCallback((paths: Set<string>) => (
+    Array.from(paths).filter((directoryPath) => isPathInside(rootPath, directoryPath))
+  ), [rootPath]);
 
   const toggleSidebarVisibility = useCallback((nextVisible?: boolean) => {
     const shouldShowSidebar = nextVisible ?? !sidebarVisibleRef.current;
@@ -1339,6 +1354,132 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [rootPath, t]);
 
+  const loadExternalLibrarySections = useCallback(async () => {
+    const response = await window.electronAPI.codePaneGetExternalLibrarySections({
+      rootPath,
+    });
+
+    if (!response.success) {
+      setExternalLibrariesError(response.error || t('common.retry'));
+      setExternalLibrarySections([]);
+      return [];
+    }
+
+    const nextSections = response.data ?? [];
+    const nextExternalRootPaths = nextSections.flatMap((section) => section.roots.map((root) => root.path));
+
+    setExternalLibrariesError(null);
+    setExternalLibrarySections(nextSections);
+    setExternalEntriesByDirectory((currentEntries) => (
+      Object.fromEntries(
+        Object.entries(currentEntries).filter(([directoryPath]) => (
+          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+        )),
+      )
+    ));
+    setLoadedExternalDirectories((currentLoadedDirectories) => (
+      new Set(
+        Array.from(currentLoadedDirectories).filter((directoryPath) => (
+          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+        )),
+      )
+    ));
+    setLoadingExternalDirectories((currentLoadingDirectories) => (
+      new Set(
+        Array.from(currentLoadingDirectories).filter((directoryPath) => (
+          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+        )),
+      )
+    ));
+    setExpandedDirectories((currentExpandedDirectories) => (
+      new Set(
+        Array.from(currentExpandedDirectories).filter((directoryPath) => (
+          isPathInside(rootPath, directoryPath)
+          || nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+        )),
+      )
+    ));
+    return nextSections;
+  }, [rootPath, t]);
+
+  const loadExternalDirectory = useCallback(async (
+    directoryPath: string,
+    options?: { showLoadingIndicator?: boolean },
+  ) => {
+    const showLoadingIndicator = options?.showLoadingIndicator ?? true;
+
+    if (showLoadingIndicator) {
+      setLoadingExternalDirectories((currentLoadingDirectories) => {
+        const nextLoadingDirectories = new Set(currentLoadingDirectories);
+        nextLoadingDirectories.add(directoryPath);
+        return nextLoadingDirectories;
+      });
+    }
+
+    const response = await window.electronAPI.codePaneListDirectory({
+      rootPath,
+      targetPath: directoryPath,
+    });
+
+    if (response.success) {
+      setExternalLibrariesError(null);
+      startTransition(() => {
+        setExternalEntriesByDirectory((currentTreeEntries) => ({
+          ...currentTreeEntries,
+          [directoryPath]: response.data ?? [],
+        }));
+        setLoadedExternalDirectories((currentLoadedDirectories) => {
+          const nextLoadedDirectories = new Set(currentLoadedDirectories);
+          nextLoadedDirectories.add(directoryPath);
+          return nextLoadedDirectories;
+        });
+      });
+    } else {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+    }
+
+    if (showLoadingIndicator) {
+      setLoadingExternalDirectories((currentLoadingDirectories) => {
+        const nextLoadingDirectories = new Set(currentLoadingDirectories);
+        nextLoadingDirectories.delete(directoryPath);
+        return nextLoadingDirectories;
+      });
+    }
+  }, [rootPath, t]);
+
+  const loadExplorerDirectory = useCallback(async (
+    directoryPath: string,
+    options?: { showLoadingIndicator?: boolean },
+  ) => {
+    if (isPathInside(rootPath, directoryPath)) {
+      await loadDirectory(directoryPath, options);
+      return;
+    }
+
+    await loadExternalDirectory(directoryPath, options);
+  }, [loadDirectory, loadExternalDirectory, rootPath]);
+
+  const isDirectoryLoaded = useCallback((directoryPath: string) => (
+    isPathInside(rootPath, directoryPath)
+      ? loadedDirectoriesRef.current.has(directoryPath)
+      : loadedExternalDirectoriesRef.current.has(directoryPath)
+  ), [rootPath]);
+
+  const isDirectoryLoading = useCallback((directoryPath: string) => (
+    isPathInside(rootPath, directoryPath)
+      ? loadingDirectories.has(directoryPath)
+      : loadingExternalDirectories.has(directoryPath)
+  ), [loadingDirectories, loadingExternalDirectories, rootPath]);
+
+  const getDirectoryEntries = useCallback((directoryPath: string) => (
+    isPathInside(rootPath, directoryPath)
+      ? (treeEntriesByDirectory[directoryPath] ?? [])
+      : (externalEntriesByDirectory[directoryPath] ?? [])
+  ), [externalEntriesByDirectory, rootPath, treeEntriesByDirectory]);
+
   const revealPathInExplorer = useCallback(async (targetPath: string) => {
     const directoryPathsToExpand: string[] = [];
     let currentPath = getParentDirectory(targetPath);
@@ -1361,7 +1502,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setExpandedDirectories(nextExpandedDirectories);
     persistCodeState({
       selectedPath: targetPath,
-      expandedPaths: Array.from(nextExpandedDirectories),
+      expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
     });
     handleSidebarModeSelect('files');
 
@@ -1369,7 +1510,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (directoriesToLoad.length > 0) {
       await Promise.all(directoriesToLoad.map((directoryPath) => loadDirectory(directoryPath)));
     }
-  }, [handleSidebarModeSelect, loadDirectory, persistCodeState, rootPath]);
+  }, [getPersistedExpandedPaths, handleSidebarModeSelect, loadDirectory, persistCodeState, rootPath]);
 
   const createOrUpdateModel = useCallback((filePath: string, readResult: CodePaneReadFileResult) => {
     const monaco = monacoRef.current;
@@ -2151,6 +2292,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [clearBannerForFile, ensureMonacoReady, gitStatusByPath, rootPath, supportsMonaco, t]);
 
   const openDiffForFile = useCallback(async (filePath: string, options?: { preserveTabs?: boolean }) => {
+    if (!isPathInside(rootPath, filePath)) {
+      setBanner({
+        tone: 'info',
+        message: t('codePane.gitUnavailable'),
+        filePath,
+      });
+      return;
+    }
+
     const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
     if (!loadedModel) {
       persistCodeState({
@@ -2178,7 +2328,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       diffTargetPath: filePath,
     });
     await refreshEditorSurface();
-  }, [ensureDiffModel, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface]);
+  }, [ensureDiffModel, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, rootPath, t]);
 
   const closeFileTab = useCallback(async (filePath: string) => {
     const didFlush = await flushDirtyFiles([filePath]);
@@ -2230,19 +2380,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
         nextExpandedDirectories.delete(directoryPath);
       } else {
         nextExpandedDirectories.add(directoryPath);
-        if (!loadedDirectoriesRef.current.has(directoryPath)) {
-          void loadDirectory(directoryPath);
+        if (!isDirectoryLoaded(directoryPath)) {
+          void loadExplorerDirectory(directoryPath);
         }
       }
 
       persistCodeState({
         selectedPath: directoryPath,
-        expandedPaths: Array.from(nextExpandedDirectories),
+        expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
       });
 
       return nextExpandedDirectories;
     });
-  }, [loadDirectory, persistCodeState]);
+  }, [getPersistedExpandedPaths, isDirectoryLoaded, loadExplorerDirectory, persistCodeState]);
 
   const openDiffForActiveFile = useCallback(async () => {
     const filePath = activeFilePathRef.current;
@@ -2261,7 +2411,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ) => {
     const uniqueDirectoryPaths = Array.from(new Set(directoryPaths));
     if (uniqueDirectoryPaths.length > 0) {
-      await Promise.all(uniqueDirectoryPaths.map((directoryPath) => loadDirectory(directoryPath, {
+      await Promise.all(uniqueDirectoryPaths.map((directoryPath) => loadExplorerDirectory(directoryPath, {
         showLoadingIndicator: options?.showLoadingIndicator,
       })));
     }
@@ -2269,12 +2419,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (options?.refreshGitStatus !== false) {
       await refreshGitSnapshot();
     }
-  }, [loadDirectory, refreshGitSnapshot]);
+  }, [loadExplorerDirectory, refreshGitSnapshot]);
 
   const refreshLoadedDirectories = useCallback(async () => {
-    const directoriesToRefresh = Array.from(new Set([rootPath, ...loadedDirectoriesRef.current]));
-    await refreshDirectoryPaths(directoriesToRefresh);
-  }, [refreshDirectoryPaths, rootPath]);
+    const directoriesToRefresh = Array.from(new Set([
+      rootPath,
+      ...loadedDirectoriesRef.current,
+      ...loadedExternalDirectoriesRef.current,
+    ]));
+
+    await Promise.all([
+      refreshDirectoryPaths(directoriesToRefresh),
+      loadExternalLibrarySections(),
+    ]);
+  }, [loadExternalLibrarySections, refreshDirectoryPaths, rootPath]);
 
   const pruneRemovedDirectories = useCallback((changes: CodePaneFsChange[]) => {
     const removedFilePaths = new Set(
@@ -2315,7 +2473,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
 
         persistCodeState({
-          expandedPaths: Array.from(nextExpandedDirectories),
+          expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
         });
 
         return nextExpandedDirectories;
@@ -2528,11 +2686,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setSearchError(null);
       setContentSearchError(null);
       setTreeEntriesByDirectory({});
+      setExternalEntriesByDirectory({});
+      setExternalLibrarySections([]);
+      setExternalLibrariesError(null);
       setIndexStatus(null);
       setLanguageWorkspaceState(null);
       setExpandedDirectories(initialExpandedDirectories);
       setLoadedDirectories(new Set());
+      setLoadedExternalDirectories(new Set());
       setLoadingDirectories(new Set([rootPath]));
+      setLoadingExternalDirectories(new Set());
       setSearchResults([]);
       setContentSearchResults([]);
       disposeEditorsRef.current();
@@ -2590,6 +2753,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         await Promise.all([
           loadDirectory(rootPath),
+          loadExternalLibrarySections(),
           refreshGitSnapshot(),
         ]);
 
@@ -2629,7 +2793,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
       });
     };
-  }, [loadDirectory, pane.id, refreshGitSnapshot, rootPath, supportsMonaco, t]);
+  }, [loadDirectory, loadExternalLibrarySections, pane.id, refreshGitSnapshot, rootPath, supportsMonaco, t]);
 
   useEffect(() => {
     if (!isSidebarVisible || sidebarMode !== 'scm') {
@@ -2880,6 +3044,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [languageWorkspaceState]);
   const statusTone = getStatusTone(activeTabStatus);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
+  const hasExternalLibraries = externalLibrarySections.some((section) => section.roots.length > 0);
   const rootLabel = useMemo(() => getPathLeafLabel(rootPath) || rootPath, [rootPath]);
   const isRootExpanded = expandedDirectories.has(rootPath);
   const isRootSelected = selectedPath === rootPath;
@@ -2987,6 +3152,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     filePath: string,
     entryType: CodePaneTreeEntry['type'],
     options?: {
+      allowDiff?: boolean;
       pinned?: boolean;
       showPinToggle?: boolean;
     },
@@ -3009,7 +3175,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         >
           {t('codePane.copyPath')}
         </ContextMenu.Item>
-        {entryType === 'file' && (
+        {entryType === 'file' && options?.allowDiff !== false && (
           <ContextMenu.Item
             className={contextMenuItemClassName}
             onSelect={() => {
@@ -3037,7 +3203,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ), [contextMenuContentClassName, contextMenuItemClassName, copyPath, openDiffForFile, revealPath, t, togglePinnedTab]);
 
   const renderTree = useCallback((directoryPath: string, depth: number): React.ReactNode => {
-    const entries = treeEntriesByDirectory[directoryPath] ?? [];
+    const entries = getDirectoryEntries(directoryPath);
     return entries.map((entry) => {
       const isDirectory = entry.type === 'directory';
       const isExpanded = expandedDirectories.has(entry.path);
@@ -3072,7 +3238,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <FileIcon size={14} className="shrink-0 text-zinc-500" />
                 )}
                 <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                {loadingDirectories.has(entry.path) && (
+                {isDirectoryLoading(entry.path) && (
                   <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
                 )}
                 {badge && (
@@ -3082,13 +3248,76 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 )}
               </button>
             </ContextMenu.Trigger>
-            {renderFileContextMenu(entry.path, entry.type)}
+            {renderFileContextMenu(entry.path, entry.type, {
+              allowDiff: isPathInside(rootPath, entry.path),
+            })}
           </ContextMenu.Root>
           {isDirectory && isExpanded && renderTree(entry.path, depth + 1)}
         </React.Fragment>
       );
     });
-  }, [activateFile, expandedDirectories, getEntryStatus, loadingDirectories, renderFileContextMenu, selectedPath, toggleDirectory, treeEntriesByDirectory]);
+  }, [activateFile, expandedDirectories, getDirectoryEntries, getEntryStatus, isDirectoryLoading, renderFileContextMenu, rootPath, selectedPath, toggleDirectory]);
+
+  const renderedExternalLibrarySections = useMemo(() => {
+    if (!hasExternalLibraries && !externalLibrariesError) {
+      return null;
+    }
+
+    return (
+      <div className="mt-3 border-t border-zinc-800/80 pt-3">
+        {externalLibrariesError ? (
+          <div className="px-2 pb-2 text-xs text-red-300">{externalLibrariesError}</div>
+        ) : null}
+        {externalLibrarySections.map((section) => (
+          <div key={section.id} className="pb-3">
+            <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+              {`${t('codePane.externalLibraries')} · ${formatLanguageLabel(section.languageId)}`}
+            </div>
+            {section.roots.map((root) => {
+              const isExpanded = expandedDirectories.has(root.path);
+              const isSelected = selectedPath === root.path;
+              const helperText = root.description ?? root.path;
+
+              return (
+                <div key={root.id}>
+                  <ContextMenu.Root>
+                    <ContextMenu.Trigger asChild>
+                      <button
+                        type="button"
+                        title={root.path}
+                        onClick={() => {
+                          toggleDirectory(root.path);
+                        }}
+                        className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+                      >
+                        {isExpanded ? (
+                          <ChevronDown size={14} className="shrink-0 text-zinc-500" />
+                        ) : (
+                          <ChevronRight size={14} className="shrink-0 text-zinc-500" />
+                        )}
+                        {isExpanded ? (
+                          <FolderOpen size={14} className="shrink-0 text-amber-300" />
+                        ) : (
+                          <Folder size={14} className="shrink-0 text-amber-300" />
+                        )}
+                        <span className="min-w-0 flex-1 truncate">{root.label}</span>
+                        {isDirectoryLoading(root.path) && (
+                          <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
+                        )}
+                      </button>
+                    </ContextMenu.Trigger>
+                    {renderFileContextMenu(root.path, 'directory', { allowDiff: false })}
+                  </ContextMenu.Root>
+                  <div className="truncate px-8 pb-1 text-[10px] text-zinc-600">{helperText}</div>
+                  {isExpanded ? renderTree(root.path, 1) : null}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  }, [expandedDirectories, externalLibrariesError, externalLibrarySections, hasExternalLibraries, isDirectoryLoading, renderFileContextMenu, renderTree, selectedPath, t, toggleDirectory]);
 
   const renderedSearchResults = useMemo(() => searchResults.map((filePath) => {
     const entryStatus = getEntryStatus(filePath, 'file');
@@ -3678,42 +3907,47 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     )
                   ) : treeLoadError ? (
                     <div className="px-2 text-xs text-red-300">{treeLoadError}</div>
-                  ) : sidebarEntries.length > 0 ? (
+                  ) : sidebarEntries.length > 0 || hasExternalLibraries || externalLibrariesError ? (
                     <>
-                      <ContextMenu.Root>
-                        <ContextMenu.Trigger asChild>
-                          <button
-                            type="button"
-                            title={rootPath}
-                            onClick={() => {
-                              toggleDirectory(rootPath);
-                            }}
-                            className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
-                          >
-                            {isRootExpanded ? (
-                              <ChevronDown size={14} className="shrink-0 text-zinc-500" />
-                            ) : (
-                              <ChevronRight size={14} className="shrink-0 text-zinc-500" />
-                            )}
-                            {isRootExpanded ? (
-                              <FolderOpen size={14} className="shrink-0 text-amber-300" />
-                            ) : (
-                              <Folder size={14} className="shrink-0 text-amber-300" />
-                            )}
-                            <span className="min-w-0 flex-1 truncate">{rootLabel}</span>
-                            {loadingDirectories.has(rootPath) && (
-                              <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
-                            )}
-                            {rootBadge && (
-                              <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${rootBadge.className}`}>
-                                {rootBadge.badge}
-                              </span>
-                            )}
-                          </button>
-                        </ContextMenu.Trigger>
-                        {renderFileContextMenu(rootPath, 'directory')}
-                      </ContextMenu.Root>
-                      {isRootExpanded && renderTree(rootPath, 1)}
+                      {sidebarEntries.length > 0 ? (
+                        <>
+                          <ContextMenu.Root>
+                            <ContextMenu.Trigger asChild>
+                              <button
+                                type="button"
+                                title={rootPath}
+                                onClick={() => {
+                                  toggleDirectory(rootPath);
+                                }}
+                                className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+                              >
+                                {isRootExpanded ? (
+                                  <ChevronDown size={14} className="shrink-0 text-zinc-500" />
+                                ) : (
+                                  <ChevronRight size={14} className="shrink-0 text-zinc-500" />
+                                )}
+                                {isRootExpanded ? (
+                                  <FolderOpen size={14} className="shrink-0 text-amber-300" />
+                                ) : (
+                                  <Folder size={14} className="shrink-0 text-amber-300" />
+                                )}
+                                <span className="min-w-0 flex-1 truncate">{rootLabel}</span>
+                                {isDirectoryLoading(rootPath) && (
+                                  <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
+                                )}
+                                {rootBadge && (
+                                  <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${rootBadge.className}`}>
+                                    {rootBadge.badge}
+                                  </span>
+                                )}
+                              </button>
+                            </ContextMenu.Trigger>
+                            {renderFileContextMenu(rootPath, 'directory')}
+                          </ContextMenu.Root>
+                          {isRootExpanded && renderTree(rootPath, 1)}
+                        </>
+                      ) : null}
+                      {renderedExternalLibrarySections}
                     </>
                   ) : (
                     <div className="px-2 text-xs text-zinc-500">{t('codePane.emptyFolder')}</div>
@@ -4274,6 +4508,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     </div>
                   </ContextMenu.Trigger>
                   {renderFileContextMenu(tab.path, 'file', {
+                    allowDiff: isPathInside(rootPath, tab.path),
                     pinned: isTabPinned,
                     showPinToggle: true,
                   })}

@@ -1,7 +1,9 @@
 import { ipcMain } from 'electron';
+import path from 'path';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import type {
+  CodePaneGetExternalLibrarySectionsConfig,
   CodePaneGitGraphConfig,
   CodePaneGitStatusConfig,
   CodePaneListDirectoryConfig,
@@ -20,16 +22,30 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     codePaneWatcherService,
     codeProjectIndexService,
     languageFeatureService,
+    languageProjectContributionService,
     getMainWindow,
   } = ctx;
 
   ipcMain.handle('code-pane-list-directory', async (_event, config: CodePaneListDirectoryConfig) => {
     try {
-      if (!codeFileService) {
-        throw new Error('CodeFileService not initialized');
+      const targetPath = config.targetPath;
+      const isExternalLibraryPath = targetPath && languageProjectContributionService
+        ? await languageProjectContributionService.hasExternalLibraryPath(config.rootPath, targetPath)
+        : false;
+
+      if (!targetPath || (!isExternalLibraryPath && isPathWithin(config.rootPath, targetPath))) {
+        if (!codeFileService) {
+          throw new Error('CodeFileService not initialized');
+        }
+
+        return successResponse(await codeFileService.listDirectory(config));
       }
 
-      return successResponse(await codeFileService.listDirectory(config));
+      if (!languageProjectContributionService) {
+        throw new Error('LanguageProjectContributionService not initialized');
+      }
+
+      return successResponse(await languageProjectContributionService.listDirectory(config));
     } catch (error) {
       return errorResponse(error);
     }
@@ -49,11 +65,23 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
         return successResponse(result);
       }
 
-      if (!codeFileService) {
-        throw new Error('CodeFileService not initialized');
+      const isExternalLibraryPath = languageProjectContributionService
+        ? await languageProjectContributionService.hasExternalLibraryPath(config.rootPath, config.filePath)
+        : false;
+
+      if (!isExternalLibraryPath && isPathWithin(config.rootPath, config.filePath)) {
+        if (!codeFileService) {
+          throw new Error('CodeFileService not initialized');
+        }
+
+        return successResponse(await codeFileService.readFile(config));
       }
 
-      return successResponse(await codeFileService.readFile(config));
+      if (!languageProjectContributionService) {
+        throw new Error('LanguageProjectContributionService not initialized');
+      }
+
+      return successResponse(await languageProjectContributionService.readFile(config));
     } catch (error) {
       return errorResponse(error);
     }
@@ -195,4 +223,23 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       return errorResponse(error);
     }
   });
+
+  ipcMain.handle('code-pane-get-external-library-sections', async (_event, config: CodePaneGetExternalLibrarySectionsConfig) => {
+    try {
+      if (!languageProjectContributionService) {
+        throw new Error('LanguageProjectContributionService not initialized');
+      }
+
+      return successResponse(await languageProjectContributionService.getExternalLibrarySections(config.rootPath));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+}
+
+function isPathWithin(rootPath: string, targetPath: string): boolean {
+  const normalizedRootPath = path.resolve(rootPath);
+  const normalizedTargetPath = path.resolve(targetPath);
+  const relativePath = path.relative(normalizedRootPath, normalizedTargetPath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }

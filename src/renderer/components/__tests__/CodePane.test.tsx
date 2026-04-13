@@ -499,6 +499,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockReset();
     vi.mocked(window.electronAPI.codePaneReadFile).mockReset();
     vi.mocked(window.electronAPI.codePaneWriteFile).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitGraph).mockReset();
@@ -556,6 +557,10 @@ describe('CodePane', () => {
       data: {
         mtimeMs: 200,
       },
+    });
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockResolvedValue({
+      success: true,
+      data: [],
     });
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
       success: true,
@@ -625,6 +630,111 @@ describe('CodePane', () => {
     });
     expect(screen.getAllByText('index.ts').length).toBeGreaterThan(1);
     expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+  });
+
+  it('renders external libraries and opens external files in read-only mode', async () => {
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'python-external-libraries',
+          label: 'External Libraries',
+          languageId: 'python',
+          roots: [
+            {
+              id: 'python-site-packages',
+              label: 'site-packages',
+              path: '/usr/lib/python3.12/site-packages',
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (!targetPath || targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/usr/lib/python3.12/site-packages') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/usr/lib/python3.12/site-packages/requests',
+              name: 'requests',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/usr/lib/python3.12/site-packages/requests') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/usr/lib/python3.12/site-packages/requests/api.py',
+              name: 'api.py',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockImplementation(async ({ filePath }) => ({
+      success: true,
+      data: filePath === '/usr/lib/python3.12/site-packages/requests/api.py'
+        ? {
+            content: 'def get(url: str):\n    return url\n',
+            mtimeMs: 100,
+            size: 34,
+            language: 'python',
+            isBinary: false,
+            readOnly: true,
+            displayPath: 'External Libraries/Python/site-packages/requests/api.py',
+          }
+        : {
+            content: 'export const value = 1;\n',
+            mtimeMs: 100,
+            size: 24,
+            language: 'typescript',
+            isBinary: false,
+          },
+    }));
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByText('codePane.externalLibraries · Python')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'site-packages' }));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'requests' }));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'api.py' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/usr/lib/python3.12/site-packages/requests/api.py',
+      });
+    });
+    expect(window.electronAPI.codePaneDidOpenDocument).not.toHaveBeenCalled();
+    expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('def get(url: str):\n    return url\n');
   });
 
   it('does not render an outer active border', () => {

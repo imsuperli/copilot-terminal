@@ -123,6 +123,7 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneListDirectory: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneReadFile: vi.fn().mockResolvedValue({ success: true, data: { content: '', mtimeMs: Date.now(), size: 0, language: 'plaintext', isBinary: false } }),
     codePaneWriteFile: vi.fn().mockResolvedValue({ success: true, data: { mtimeMs: Date.now() } }),
+    codePaneGetExternalLibrarySections: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetGitStatus: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetGitRepositorySummary: vi.fn().mockResolvedValue({ success: true, data: null }),
     codePaneGetGitGraph: vi.fn().mockResolvedValue({ success: true, data: [] }),
