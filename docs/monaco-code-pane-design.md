@@ -1,5 +1,7 @@
 # Monaco Code Pane 设计方案
 
+> 详细延伸设计见：`docs/code-pane-ide-detailed-design-2026-04-13.md`
+
 ## 1. 背景
 
 目标是在现有 terminal 窗口内新增一种 `Monaco code pane`，让用户在同一窗口中完成以下动作：

@@ -1,5 +1,7 @@
 # CodePane 语言插件系统设计
 
+> 详细延伸设计见：`docs/code-pane-ide-detailed-design-2026-04-13.md`
+
 ## 1. 背景
 
 当前 `CodePane` 已经具备以下能力：
