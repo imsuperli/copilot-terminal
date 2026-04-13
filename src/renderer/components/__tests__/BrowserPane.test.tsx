@@ -120,6 +120,7 @@ function createBrowserPane(url: string = DEFAULT_BROWSER_URL): Pane {
 
 describe('BrowserPane', () => {
   let createElementSpy: ReturnType<typeof vi.spyOn>;
+  const OriginalResizeObserver = global.ResizeObserver;
 
   beforeAll(() => {
     const originalCreateElement = document.createElement.bind(document);
@@ -146,6 +147,7 @@ describe('BrowserPane', () => {
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
+    global.ResizeObserver = OriginalResizeObserver;
   });
 
   it('does not call ready-only webview APIs before dom-ready', () => {
@@ -265,7 +267,18 @@ describe('BrowserPane', () => {
     expect(secondWebview?.partitionSetCount).toBe(1);
   });
 
-  it('sizes the webview to fill the browser pane host', () => {
+  it('sizes the webview to the host bounds when the pane becomes measurable', () => {
+    let resizeCallback: ResizeObserverCallback | null = null;
+    global.ResizeObserver = class ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback;
+      }
+
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+
     const { container } = render(
       <I18nProvider>
         <BrowserPane
@@ -282,11 +295,32 @@ describe('BrowserPane', () => {
       throw new Error('expected webview element');
     }
 
-    expect(webview.className).toContain('h-full');
-    expect(webview.className).toContain('w-full');
+    const host = container.querySelector('[data-browser-webview-host="true"]') as HTMLDivElement | null;
+    if (!host) {
+      throw new Error('expected webview host element');
+    }
+
+    vi.spyOn(host, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 420,
+      right: 720,
+      width: 720,
+      height: 420,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    act(() => {
+      resizeCallback?.([] as ResizeObserverEntry[], {} as ResizeObserver);
+    });
+
     expect(webview.style.display).toBe('block');
-    expect(webview.style.width).toBe('100%');
-    expect(webview.style.height).toBe('100%');
+    expect(webview.style.position).toBe('absolute');
+    expect(webview.style.inset).toBe('0px');
+    expect(webview.style.width).toBe('720px');
+    expect(webview.style.height).toBe('420px');
   });
 
   it('prevents mouse focus on browser toolbar buttons', () => {

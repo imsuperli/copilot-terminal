@@ -141,13 +141,16 @@ const MountedTerminalSurface = React.memo(({
 
   const isMac = window.electronAPI?.platform === 'darwin';
   const titleBarHeight = isMac ? 36 : 32;
+  const keepsLayoutWhileHidden = getAllPanes(terminalWindow.layout).some((pane) => pane.kind === 'browser');
 
   return (
     <div
       className="transition-opacity duration-300"
       style={{
-        display: isVisible ? 'block' : 'none',
+        display: isVisible || keepsLayoutWhileHidden ? 'block' : 'none',
         opacity: isVisible ? 1 : 0,
+        visibility: isVisible ? 'visible' : 'hidden',
+        pointerEvents: isVisible ? 'auto' : 'none',
         position: 'fixed',
         top: titleBarHeight,
         left: 0,

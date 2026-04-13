@@ -14,7 +14,7 @@ import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/brow
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
-const BROWSER_WEBVIEW_CLASSNAME = 'block h-full w-full min-h-0 min-w-0 bg-zinc-950';
+const BROWSER_WEBVIEW_CLASSNAME = 'block min-h-0 min-w-0 bg-zinc-950';
 const BLANK_PAGE_THEME_CSS = `
   :root { color-scheme: dark; }
   html, body {
@@ -114,6 +114,29 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const setWebviewReady = useCallback((ready: boolean) => {
     webviewReadyRef.current = ready;
     setIsWebviewReady((currentReady) => (currentReady === ready ? currentReady : ready));
+  }, []);
+
+  const syncWebviewBounds = useCallback(() => {
+    const webview = webviewRef.current;
+    const host = webviewHostRef.current;
+    if (!webview || !host || webview.parentElement !== host) {
+      return;
+    }
+
+    const rect = host.getBoundingClientRect();
+    const nextWidth = Math.max(0, Math.round(rect.width));
+    const nextHeight = Math.max(0, Math.round(rect.height));
+    if (nextWidth === 0 || nextHeight === 0) {
+      return;
+    }
+
+    Object.assign(webview.style, {
+      display: 'block',
+      position: 'absolute',
+      inset: '0px',
+      width: `${nextWidth}px`,
+      height: `${nextHeight}px`,
+    });
   }, []);
 
   useEffect(() => subscribeBrowserDropDragActive(setIsBrowserDropDragActive), []);
@@ -267,14 +290,10 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     webviewRef.current = webview;
 
     webview.className = BROWSER_WEBVIEW_CLASSNAME;
-    Object.assign(webview.style, {
-      display: 'block',
-      width: '100%',
-      height: '100%',
-    });
     webview.setAttribute('partition', BROWSER_PARTITION);
     webview.setAttribute('src', persistedUrl);
     host.replaceChildren(webview);
+    syncWebviewBounds();
 
     return () => {
       clearRestoreReadyTimer();
@@ -283,7 +302,38 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
       webview.remove();
       webviewRef.current = null;
     };
-  }, [clearRestoreReadyTimer, pane.id, persistedUrl, resetNavigationState, setWebviewReady]);
+  }, [clearRestoreReadyTimer, pane.id, persistedUrl, resetNavigationState, setWebviewReady, syncWebviewBounds]);
+
+  useEffect(() => {
+    const host = webviewHostRef.current;
+    if (!host) {
+      return undefined;
+    }
+
+    const handleWindowResize = () => {
+      syncWebviewBounds();
+    };
+    const resizeObserver = new ResizeObserver(() => {
+      syncWebviewBounds();
+    });
+
+    resizeObserver.observe(host);
+    window.addEventListener('resize', handleWindowResize);
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      syncWebviewBounds();
+    });
+    const delayedSyncTimer = window.setTimeout(() => {
+      syncWebviewBounds();
+    }, 80);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+      window.cancelAnimationFrame(animationFrameId);
+      window.clearTimeout(delayedSyncTimer);
+    };
+  }, [pane.id, syncWebviewBounds]);
 
   useEffect(() => {
     if (!isActive) {
@@ -397,12 +447,13 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
 
     if (webview.parentElement !== host) {
       host.replaceChildren(webview);
+      syncWebviewBounds();
       logBrowserDnd('webview restored after drag', {
         windowId,
         paneId: pane.id,
       });
     }
-  }, [isBrowserDropDragActive, pane.id, windowId]);
+  }, [isBrowserDropDragActive, pane.id, syncWebviewBounds, windowId]);
 
   const handleSubmit = useCallback((event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -584,7 +635,11 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         </div>
       </div>
 
-      <div ref={webviewHostRef} className="min-h-0 min-w-0 flex-1 overflow-hidden bg-zinc-950" />
+      <div
+        ref={webviewHostRef}
+        data-browser-webview-host="true"
+        className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-zinc-950"
+      />
     </div>
   );
 };
