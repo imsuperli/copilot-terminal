@@ -2368,6 +2368,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsGitBranchesLoading(false);
   }, [rootPath, t]);
 
+  const handleSelectGitBranch = useCallback((branchName: string) => {
+    setSelectedGitBranchName(branchName);
+    const selectedBranch = gitBranches.find((branch) => branch.name === branchName);
+    if (selectedBranch?.commitSha) {
+      setSelectedGitLogCommitSha(selectedBranch.commitSha);
+    }
+  }, [gitBranches]);
+
   const loadGitRebasePlan = useCallback(async (baseRef: string) => {
     if (!baseRef) {
       setGitRebasePlan(null);
@@ -9792,7 +9800,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               branchesError={gitBranchesError}
               isRebaseLoading={isGitRebaseLoading}
               rebaseError={gitRebaseError}
-              onSelectBranch={setSelectedGitBranchName}
+              onSelectBranch={handleSelectGitBranch}
               onSelectCommit={setSelectedGitLogCommitSha}
               onChangeRebaseBaseRef={setGitRebaseBaseRef}
               onRefresh={refreshBottomPanel}

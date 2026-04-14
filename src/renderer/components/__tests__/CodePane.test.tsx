@@ -2660,7 +2660,7 @@ describe('CodePane', () => {
         baseRef: 'origin/main',
       });
     });
-    expect(await screen.findByText('codePane.gitBranchManager')).toBeInTheDocument();
+    expect((await screen.findAllByText('codePane.gitBranchManager')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Feature commit 2').length).toBeGreaterThan(0);
     expect(screen.getAllByText('feature/workbench').length).toBeGreaterThan(0);
   });

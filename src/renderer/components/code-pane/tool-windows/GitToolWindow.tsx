@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
+  ChevronDown,
+  ChevronRight,
+  FolderTree,
   GitBranch,
   GitCommitHorizontal,
   Loader2,
@@ -18,6 +21,7 @@ import type {
   CodePaneGitRebasePlanResult,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import { buildGitGraphLayout, type GitGraphLineSegment, type GitGraphRowLayout } from '../../../utils/gitGraphLayout';
 
 type GitToolWindowTab = 'log' | 'rebase';
 
@@ -45,14 +49,42 @@ interface GitToolWindowProps {
   onClose: () => void;
 }
 
-const GIT_LANE_COLORS = [
+type BranchTreeNode =
+  | {
+    key: string;
+    kind: 'folder';
+    label: string;
+    children: BranchTreeNode[];
+    branchCount: number;
+  }
+  | {
+    key: string;
+    kind: 'branch';
+    label: string;
+    branch: CodePaneGitBranchEntry;
+  };
+
+interface BranchTreeSection {
+  key: string;
+  label: string;
+  count: number;
+  nodes: BranchTreeNode[];
+}
+
+const GIT_GRAPH_COLORS = [
   '#60a5fa',
   '#34d399',
   '#f59e0b',
   '#f472b6',
   '#a78bfa',
   '#f87171',
+  '#22d3ee',
+  '#facc15',
 ] as const;
+
+const GRAPH_LANE_WIDTH = 14;
+const GRAPH_ROW_HEIGHT = 28;
+const GRAPH_NODE_RADIUS = 4;
 
 export function GitToolWindow({
   branches,
@@ -102,7 +134,7 @@ export function GitToolWindow({
     [branches],
   );
   const localBranches = useMemo(
-    () => branches.filter((branch) => branch.kind === 'local' && !branch.current),
+    () => branches.filter((branch) => branch.kind === 'local'),
     [branches],
   );
   const remoteBranches = useMemo(
@@ -143,10 +175,11 @@ export function GitToolWindow({
   };
 
   return (
-    <div className="flex h-80 shrink-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
+    <div className="flex h-[26rem] shrink-0 flex-col border-t border-zinc-800 bg-zinc-950/95">
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+            <GitBranch size={12} className="text-sky-300" />
             {t('codePane.gitWorkbenchTab')}
           </div>
           <div className="flex rounded bg-zinc-900/80 p-0.5">
@@ -162,7 +195,7 @@ export function GitToolWindow({
                 }}
                 className={`rounded px-2 py-1 text-[11px] transition-colors ${
                   activeTab === tabId
-                    ? 'bg-zinc-700 text-zinc-100'
+                    ? 'bg-sky-500/20 text-sky-100'
                     : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
                 }`}
               >
@@ -199,8 +232,8 @@ export function GitToolWindow({
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[280px_minmax(0,1fr)_320px] overflow-hidden">
-        <div className="min-h-0 border-r border-zinc-800">
+      <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)_340px] overflow-hidden">
+        <div className="min-h-0 border-r border-zinc-800 bg-zinc-950/70">
           <BranchListSection
             currentBranches={currentBranches}
             localBranches={localBranches}
@@ -212,7 +245,7 @@ export function GitToolWindow({
           />
         </div>
 
-        <div className="min-h-0 border-r border-zinc-800">
+        <div className="min-h-0 border-r border-zinc-800 bg-zinc-950/40">
           {activeTab === 'log' ? (
             <CommitLogSection
               commits={commits}
@@ -279,36 +312,62 @@ function BranchListSection({
   onSelectBranch: (branchName: string) => void;
   t: ReturnType<typeof useI18n>['t'];
 }) {
-  const renderBranchRow = (branch: CodePaneGitBranchEntry) => {
-    const isSelected = branch.name === selectedBranchName;
-    return (
-      <button
-        key={branch.name}
-        type="button"
-        onClick={() => {
-          onSelectBranch(branch.name);
-        }}
-        className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${
-          isSelected
-            ? 'bg-sky-500/15 text-sky-100'
-            : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
-        }`}
-      >
-        <GitBranch size={12} className="shrink-0 text-zinc-500" />
-        <span className="min-w-0 flex-1 truncate">{branch.name}</span>
-        {branch.current && (
-          <span className="rounded bg-emerald-500/15 px-1 py-0.5 text-[10px] text-emerald-200">
-            HEAD
-          </span>
-        )}
-      </button>
-    );
+  const [collapsedNodeKeys, setCollapsedNodeKeys] = useState<string[]>([]);
+  const sections = useMemo<BranchTreeSection[]>(() => {
+    const headNodes = currentBranches.map((branch) => ({
+      key: `head:branch:${branch.name}`,
+      kind: 'branch',
+      label: branch.shortName || branch.name,
+      branch,
+    } satisfies BranchTreeNode));
+    const localNodes = buildBranchTree(localBranches, 'local', (branch) => splitBranchPath(branch.shortName || branch.name));
+    const remoteNodes = buildBranchTree(remoteBranches, 'remote', (branch) => {
+      const [remoteName, ...restPath] = splitBranchPath(branch.shortName || branch.name);
+      return [remoteName || branch.name, ...restPath];
+    });
+
+    return [
+      {
+        key: 'head',
+        label: t('codePane.gitCurrentBranchGroup'),
+        count: headNodes.length,
+        nodes: headNodes,
+      },
+      {
+        key: 'local',
+        label: t('codePane.gitLocalBranches'),
+        count: localBranches.length,
+        nodes: localNodes,
+      },
+      {
+        key: 'remote',
+        label: t('codePane.gitRemoteBranches'),
+        count: remoteBranches.length,
+        nodes: remoteNodes,
+      },
+    ].filter((section) => section.count > 0);
+  }, [currentBranches, localBranches, remoteBranches, t]);
+
+  const toggleNode = (nodeKey: string) => {
+    setCollapsedNodeKeys((currentKeys) => (
+      currentKeys.includes(nodeKey)
+        ? currentKeys.filter((key) => key !== nodeKey)
+        : [...currentKeys, nodeKey]
+    ));
   };
+
+  const totalBranches = localBranches.length + remoteBranches.length;
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-        {t('codePane.gitBranchManager')}
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          <FolderTree size={12} />
+          {t('codePane.gitBranchManager')}
+        </div>
+        <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400">
+          {totalBranches}
+        </span>
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
         {isLoading ? (
@@ -316,17 +375,33 @@ function BranchListSection({
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.loading')}
           </div>
-        ) : (
+        ) : sections.length > 0 ? (
           <div className="space-y-3">
-            <BranchGroup title={t('codePane.gitCurrentBranchGroup')}>
-              {currentBranches.map(renderBranchRow)}
-            </BranchGroup>
-            <BranchGroup title={t('codePane.gitLocalBranches')}>
-              {localBranches.map(renderBranchRow)}
-            </BranchGroup>
-            <BranchGroup title={t('codePane.gitRemoteBranches')}>
-              {remoteBranches.map(renderBranchRow)}
-            </BranchGroup>
+            {sections.map((section) => (
+              <div key={section.key}>
+                <div className="mb-1 flex items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500">
+                  <span>{section.label}</span>
+                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{section.count}</span>
+                </div>
+                <div className="space-y-0.5">
+                  {section.nodes.map((node) => (
+                    <BranchTreeRow
+                      key={node.key}
+                      node={node}
+                      depth={0}
+                      selectedBranchName={selectedBranchName}
+                      collapsedNodeKeys={collapsedNodeKeys}
+                      onToggleNode={toggleNode}
+                      onSelectBranch={onSelectBranch}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+            {t('codePane.gitCommitGraphEmpty')}
           </div>
         )}
       </div>
@@ -334,18 +409,82 @@ function BranchListSection({
   );
 }
 
-function BranchGroup({
-  title,
-  children,
+function BranchTreeRow({
+  node,
+  depth,
+  selectedBranchName,
+  collapsedNodeKeys,
+  onToggleNode,
+  onSelectBranch,
 }: {
-  title: string;
-  children: React.ReactNode;
+  node: BranchTreeNode;
+  depth: number;
+  selectedBranchName: string | null;
+  collapsedNodeKeys: string[];
+  onToggleNode: (nodeKey: string) => void;
+  onSelectBranch: (branchName: string) => void;
 }) {
+  if (node.kind === 'folder') {
+    const isCollapsed = collapsedNodeKeys.includes(node.key);
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => {
+            onToggleNode(node.key);
+          }}
+          className="flex w-full items-center gap-2 rounded py-1 text-left text-xs text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+          style={{ paddingLeft: `${10 + (depth * 14)}px`, paddingRight: '8px' }}
+        >
+          {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+          <FolderTree size={12} className="shrink-0 text-zinc-500" />
+          <span className="min-w-0 flex-1 truncate">{node.label}</span>
+          <span className="rounded bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-500">
+            {node.branchCount}
+          </span>
+        </button>
+        {!isCollapsed && (
+          <div className="space-y-0.5">
+            {node.children.map((childNode) => (
+              <BranchTreeRow
+                key={childNode.key}
+                node={childNode}
+                depth={depth + 1}
+                selectedBranchName={selectedBranchName}
+                collapsedNodeKeys={collapsedNodeKeys}
+                onToggleNode={onToggleNode}
+                onSelectBranch={onSelectBranch}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const isSelected = node.branch.name === selectedBranchName;
   return (
-    <div>
-      <div className="mb-1 px-2 text-[11px] font-medium text-zinc-500">{title}</div>
-      <div className="space-y-0.5">{children}</div>
-    </div>
+    <button
+      type="button"
+      onClick={() => {
+        onSelectBranch(node.branch.name);
+      }}
+      className={`flex w-full items-center gap-2 rounded py-1 text-left text-xs transition-colors ${
+        isSelected
+          ? 'bg-sky-500/15 text-sky-100'
+          : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+      }`}
+      style={{ paddingLeft: `${28 + (depth * 14)}px`, paddingRight: '8px' }}
+    >
+      <GitBranch size={12} className={`shrink-0 ${node.branch.current ? 'text-emerald-300' : 'text-zinc-500'}`} />
+      <span className="min-w-0 flex-1 truncate">{node.label}</span>
+      <span className="truncate text-[10px] text-zinc-500">{node.branch.shortSha}</span>
+      {node.branch.current && (
+        <span className="rounded bg-emerald-500/15 px-1 py-0.5 text-[10px] text-emerald-200">
+          HEAD
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -360,41 +499,62 @@ function CommitLogSection({
   onSelectCommit: (commitSha: string) => void;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  const layout = useMemo(() => buildGitGraphLayout(commits), [commits]);
+  const graphWidth = Math.max(layout.maxColumns, 1) * GRAPH_LANE_WIDTH;
+  const gridTemplateColumns = `${graphWidth + 24}px minmax(0,1fr) 110px 138px`;
+
   return (
     <div className="flex h-full flex-col">
-      <div className="grid grid-cols-[72px_minmax(0,1fr)_120px_140px] gap-2 border-b border-zinc-800 px-3 py-2 text-[11px] font-medium text-zinc-500">
+      <div
+        className="grid gap-2 border-b border-zinc-800 px-3 py-2 text-[11px] font-medium text-zinc-500"
+        style={{ gridTemplateColumns }}
+      >
         <span>{t('codePane.gitGraph')}</span>
         <span>{t('codePane.gitCommit')}</span>
         <span>{t('codePane.gitAuthor')}</span>
         <span>{t('codePane.gitDate')}</span>
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-        {commits.length > 0 ? (
+        {layout.rows.length > 0 ? (
           <div className="space-y-0.5">
-            {commits.map((commit) => {
-              const isSelected = commit.sha === selectedCommitSha;
+            {layout.rows.map((row) => {
+              const isSelected = row.commit.sha === selectedCommitSha;
+              const visibleRefs = row.commit.refs.slice(0, 3);
               return (
                 <button
-                  key={commit.sha}
+                  key={row.commit.sha}
                   type="button"
                   onClick={() => {
-                    onSelectCommit(commit.sha);
+                    onSelectCommit(row.commit.sha);
                   }}
-                  className={`grid w-full grid-cols-[72px_minmax(0,1fr)_120px_140px] items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${
+                  className={`grid w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${
                     isSelected
                       ? 'bg-sky-500/15 text-sky-100'
-                      : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                      : 'text-zinc-300 hover:bg-zinc-900/80 hover:text-zinc-100'
                   }`}
+                  style={{ gridTemplateColumns }}
                 >
-                  <GitLanePreview commit={commit} />
-                  <div className="min-w-0 truncate">
-                    <span className="truncate">{commit.subject || commit.shortSha}</span>
-                    {commit.refs.length > 0 && (
-                      <span className="ml-2 truncate text-[10px] text-zinc-500">{commit.refs.join(' · ')}</span>
+                  <GitCommitGraphCell row={row} graphWidth={graphWidth} />
+                  <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+                    <span className="min-w-0 flex-1 truncate text-zinc-100">
+                      {row.commit.subject || row.commit.shortSha}
+                    </span>
+                    {visibleRefs.map((ref) => (
+                      <span
+                        key={`${row.commit.sha}-${ref}`}
+                        className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${getRefClassName(ref)}`}
+                      >
+                        {ref}
+                      </span>
+                    ))}
+                    {row.commit.refs.length > visibleRefs.length && (
+                      <span className="shrink-0 text-[10px] text-zinc-500">
+                        +{row.commit.refs.length - visibleRefs.length}
+                      </span>
                     )}
                   </div>
-                  <span className="truncate text-zinc-400">{commit.author}</span>
-                  <span className="truncate text-zinc-500">{new Date(commit.timestamp * 1000).toLocaleString()}</span>
+                  <span className="truncate text-zinc-400">{row.commit.author}</span>
+                  <span className="truncate text-zinc-500">{formatTimestamp(row.commit.timestamp)}</span>
                 </button>
               );
             })}
@@ -409,27 +569,56 @@ function CommitLogSection({
   );
 }
 
-function GitLanePreview({ commit }: { commit: CodePaneGitGraphCommit }) {
+function GitCommitGraphCell({
+  row,
+  graphWidth,
+}: {
+  row: GitGraphRowLayout;
+  graphWidth: number;
+}) {
+  const nodeColor = getGraphColor(row.nodeColorIndex);
+
   return (
-    <div className="flex h-5 items-center">
-      {Array.from({ length: Math.max(commit.laneCount, 1) }).map((_, laneIndex) => {
-        const laneColor = GIT_LANE_COLORS[laneIndex % GIT_LANE_COLORS.length];
-        const isActiveLane = laneIndex === commit.lane;
-        return (
-          <div key={`${commit.sha}-${laneIndex}`} className="relative flex h-5 w-3 items-center justify-center">
-            <span
-              className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2"
-              style={{ backgroundColor: laneColor, opacity: isActiveLane ? 0.8 : 0.35 }}
-            />
-            {isActiveLane && (
-              <span
-                className="relative z-10 h-2.5 w-2.5 rounded-full border border-zinc-950"
-                style={{ backgroundColor: laneColor }}
-              />
-            )}
-          </div>
-        );
-      })}
+    <div className="flex items-center">
+      <svg
+        width={graphWidth}
+        height={GRAPH_ROW_HEIGHT}
+        viewBox={`0 0 ${graphWidth} ${GRAPH_ROW_HEIGHT}`}
+        className="block h-7"
+        aria-hidden="true"
+      >
+        {row.segments.map((segment, index) => (
+          <path
+            key={`${row.commit.sha}-segment-${index}`}
+            d={toSegmentPath(segment)}
+            fill="none"
+            stroke={getGraphColor(segment.colorIndex)}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.95}
+          />
+        ))}
+        <circle
+          cx={getLaneCenter(row.nodeLane)}
+          cy={GRAPH_ROW_HEIGHT / 2}
+          r={row.commit.isMergeCommit ? GRAPH_NODE_RADIUS + 0.5 : GRAPH_NODE_RADIUS}
+          fill={nodeColor}
+          stroke={row.commit.isHead ? '#ecfccb' : '#18181b'}
+          strokeWidth={row.commit.isHead ? 1.8 : 1.2}
+        />
+        {row.commit.isHead && (
+          <circle
+            cx={getLaneCenter(row.nodeLane)}
+            cy={GRAPH_ROW_HEIGHT / 2}
+            r={GRAPH_NODE_RADIUS + 2}
+            fill="none"
+            stroke={nodeColor}
+            strokeWidth={1.1}
+            opacity={0.45}
+          />
+        )}
+      </svg>
     </div>
   );
 }
@@ -457,7 +646,10 @@ function GitWorkbenchDetails({
         <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-zinc-100">{selectedBranch.name}</div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                {t('codePane.gitBranchManager')}
+              </div>
+              <div className="mt-2 truncate text-sm font-medium text-zinc-100">{selectedBranch.name}</div>
               <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500">
                 <span>{selectedBranch.kind === 'local' ? t('codePane.gitLocalBranch') : t('codePane.gitRemoteBranch')}</span>
                 <span>{selectedBranch.shortSha}</span>
@@ -471,6 +663,11 @@ function GitWorkbenchDetails({
               </span>
             )}
           </div>
+          {selectedBranch.subject && (
+            <div className="mt-3 rounded bg-zinc-950/50 px-2 py-1.5 text-xs text-zinc-400">
+              {selectedBranch.subject}
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {!selectedBranch.current && selectedBranch.kind === 'local' && (
               <button
@@ -538,11 +735,6 @@ function GitWorkbenchDetails({
               </button>
             )}
           </div>
-          {selectedBranch.subject && (
-            <div className="mt-3 rounded bg-zinc-950/50 px-2 py-1.5 text-xs text-zinc-400">
-              {selectedBranch.subject}
-            </div>
-          )}
         </div>
       )}
 
@@ -550,11 +742,14 @@ function GitWorkbenchDetails({
         <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-zinc-100">{selectedCommit.subject || selectedCommit.shortSha}</div>
+              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                {t('codePane.gitCommit')}
+              </div>
+              <div className="mt-2 text-sm font-medium text-zinc-100">{selectedCommit.subject || selectedCommit.shortSha}</div>
               <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500">
                 <span>{selectedCommit.author}</span>
                 <span>{selectedCommit.shortSha}</span>
-                <span>{new Date(selectedCommit.timestamp * 1000).toLocaleString()}</span>
+                <span>{formatTimestamp(selectedCommit.timestamp)}</span>
               </div>
             </div>
             <button
@@ -571,7 +766,7 @@ function GitWorkbenchDetails({
           {selectedCommit.refs.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {selectedCommit.refs.map((ref) => (
-                <span key={`${selectedCommit.sha}-${ref}`} className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300">
+                <span key={`${selectedCommit.sha}-${ref}`} className={`rounded px-2 py-1 text-[11px] ${getRefClassName(ref)}`}>
                   {ref}
                 </span>
               ))}
@@ -752,4 +947,135 @@ function GitRebaseDetails({
       </div>
     </div>
   );
+}
+
+function buildBranchTree(
+  branches: CodePaneGitBranchEntry[],
+  keyPrefix: string,
+  getSegments: (branch: CodePaneGitBranchEntry) => string[],
+): BranchTreeNode[] {
+  const rootNodes: BranchTreeNode[] = [];
+
+  for (const branch of branches) {
+    const segments = getSegments(branch).filter(Boolean);
+    insertBranchTreeNode(rootNodes, segments.length > 0 ? segments : [branch.name], branch, keyPrefix, []);
+  }
+
+  return sortBranchTreeNodes(rootNodes);
+}
+
+function insertBranchTreeNode(
+  nodes: BranchTreeNode[],
+  segments: string[],
+  branch: CodePaneGitBranchEntry,
+  keyPrefix: string,
+  parentSegments: string[],
+): void {
+  if (segments.length <= 1) {
+    nodes.push({
+      key: `${keyPrefix}:branch:${branch.name}`,
+      kind: 'branch',
+      label: segments[0] ?? branch.name,
+      branch,
+    });
+    return;
+  }
+
+  const [folderLabel, ...restSegments] = segments;
+  const folderPath = [...parentSegments, folderLabel];
+  let folderNode = nodes.find((node): node is Extract<BranchTreeNode, { kind: 'folder' }> => (
+    node.kind === 'folder' && node.label === folderLabel
+  ));
+
+  if (!folderNode) {
+    folderNode = {
+      key: `${keyPrefix}:folder:${folderPath.join('/')}`,
+      kind: 'folder',
+      label: folderLabel,
+      children: [],
+      branchCount: 0,
+    };
+    nodes.push(folderNode);
+  }
+
+  insertBranchTreeNode(folderNode.children, restSegments, branch, keyPrefix, folderPath);
+  folderNode.branchCount = countBranchNodes(folderNode.children);
+}
+
+function sortBranchTreeNodes(nodes: BranchTreeNode[]): BranchTreeNode[] {
+  return [...nodes]
+    .map((node) => (
+      node.kind === 'folder'
+        ? {
+          ...node,
+          children: sortBranchTreeNodes(node.children),
+          branchCount: countBranchNodes(node.children),
+        }
+        : node
+    ))
+    .sort((leftNode, rightNode) => {
+      if (leftNode.kind !== rightNode.kind) {
+        return leftNode.kind === 'folder' ? -1 : 1;
+      }
+
+      if (leftNode.kind === 'branch' && rightNode.kind === 'branch') {
+        if (leftNode.branch.current !== rightNode.branch.current) {
+          return leftNode.branch.current ? -1 : 1;
+        }
+      }
+
+      return leftNode.label.localeCompare(rightNode.label);
+    });
+}
+
+function countBranchNodes(nodes: BranchTreeNode[]): number {
+  return nodes.reduce((count, node) => (
+    count + (node.kind === 'folder' ? countBranchNodes(node.children) : 1)
+  ), 0);
+}
+
+function splitBranchPath(branchName: string): string[] {
+  return branchName.split('/').filter(Boolean);
+}
+
+function toSegmentPath(segment: GitGraphLineSegment): string {
+  const startX = getLaneCenter(segment.fromLane);
+  const endX = getLaneCenter(segment.toLane);
+  const startY = segment.fromY * GRAPH_ROW_HEIGHT;
+  const endY = segment.toY * GRAPH_ROW_HEIGHT;
+
+  if (segment.fromLane === segment.toLane) {
+    return `M ${startX} ${startY} L ${endX} ${endY}`;
+  }
+
+  const controlY = startY + ((endY - startY) * 0.5);
+  return `M ${startX} ${startY} C ${startX} ${controlY}, ${endX} ${controlY}, ${endX} ${endY}`;
+}
+
+function getLaneCenter(lane: number): number {
+  return (lane * GRAPH_LANE_WIDTH) + (GRAPH_LANE_WIDTH / 2);
+}
+
+function getGraphColor(colorIndex: number): string {
+  return GIT_GRAPH_COLORS[colorIndex % GIT_GRAPH_COLORS.length];
+}
+
+function getRefClassName(ref: string): string {
+  if (ref.startsWith('HEAD ->')) {
+    return 'bg-emerald-500/15 text-emerald-200';
+  }
+
+  if (ref.startsWith('origin/')) {
+    return 'bg-sky-500/15 text-sky-200';
+  }
+
+  if (ref.startsWith('tag:')) {
+    return 'bg-amber-500/15 text-amber-200';
+  }
+
+  return 'bg-zinc-800 text-zinc-300';
+}
+
+function formatTimestamp(timestamp: number): string {
+  return new Date(timestamp * 1000).toLocaleString();
 }
