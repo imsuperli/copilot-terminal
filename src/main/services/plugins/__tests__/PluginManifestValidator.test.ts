@@ -72,6 +72,53 @@ describe('PluginManifestValidator', () => {
     expect(validator.getLanguages(manifest)).toEqual(['java']);
   });
 
+  it('normalizes formatter and debug adapter capabilities', () => {
+    const validator = new PluginManifestValidator();
+
+    const manifest = validator.validate({
+      schemaVersion: 1,
+      id: 'acme.polyglot',
+      name: 'Polyglot Tooling',
+      publisher: 'Acme',
+      version: '1.0.0',
+      engines: {
+        app: '>=3.0.0',
+      },
+      capabilities: [
+        {
+          type: 'formatter',
+          languages: ['java'],
+          runtime: {
+            type: 'node',
+            entry: 'server.js',
+          },
+        },
+        {
+          type: 'debug-adapter',
+          languages: ['go'],
+          adapterType: 'dlv',
+          runtime: {
+            type: 'binary',
+            entry: 'bin/dlv-dap',
+          },
+        },
+      ],
+    });
+
+    expect(manifest.capabilities).toEqual([
+      expect.objectContaining({
+        type: 'formatter',
+        languages: ['java'],
+      }),
+      expect.objectContaining({
+        type: 'debug-adapter',
+        languages: ['go'],
+        adapterType: 'dlv',
+      }),
+    ]);
+    expect(validator.getLanguages(manifest)).toEqual(['go', 'java']);
+  });
+
   it('rejects unsupported capability types', () => {
     const validator = new PluginManifestValidator();
 
@@ -86,7 +133,7 @@ describe('PluginManifestValidator', () => {
       },
       capabilities: [
         {
-          type: 'formatter',
+          type: 'mystery',
           languages: ['java'],
           runtime: {
             type: 'node',

@@ -1,7 +1,11 @@
 import fs from 'fs-extra';
 import path from 'path';
 import type {
+  CodeActionProviderPluginCapability,
+  DebugAdapterPluginCapability,
+  FormatterPluginCapability,
   LanguageServerPluginCapability,
+  LinterPluginCapability,
   PluginCapability,
   PluginCapabilityFeatures,
   PluginManifest,
@@ -9,6 +13,7 @@ import type {
   PluginRuntime,
   PluginSettingOption,
   PluginSettingSchemaEntry,
+  TestProviderPluginCapability,
 } from '../../../shared/types/plugin';
 import { normalizeOptionalString, uniqueStrings } from '../ssh/storeUtils';
 
@@ -71,31 +76,81 @@ export class PluginManifestValidator {
       throw new Error(`Plugin capability at index ${index} must be an object`);
     }
 
-    const candidate = value as Partial<LanguageServerPluginCapability>;
-    if (candidate.type !== 'language-server') {
-      throw new Error(`Unsupported plugin capability type: ${String(candidate.type ?? '')}`);
+    const candidate = value as Partial<PluginCapability>;
+    switch (candidate.type) {
+      case 'language-server':
+        return {
+          type: 'language-server',
+          languages: normalizeRequiredStringArray(candidate.languages, `plugin capability[${index}].languages`),
+          ...(Array.isArray(candidate.fileExtensions)
+            ? { fileExtensions: uniqueStrings(candidate.fileExtensions) }
+            : {}),
+          ...(Array.isArray(candidate.projectIndicators)
+            ? { projectIndicators: uniqueStrings(candidate.projectIndicators) }
+            : {}),
+          ...(typeof candidate.priority === 'number' ? { priority: candidate.priority } : {}),
+          ...(typeof candidate.takesOverBuiltinLanguageService === 'boolean'
+            ? { takesOverBuiltinLanguageService: candidate.takesOverBuiltinLanguageService }
+            : {}),
+          ...(candidate.workspaceMode === 'per-pane' || candidate.workspaceMode === 'per-root'
+            ? { workspaceMode: candidate.workspaceMode }
+            : {}),
+          ...(candidate.features ? { features: this.normalizeCapabilityFeatures(candidate.features) } : {}),
+          runtime: this.normalizeRuntime(candidate.runtime, index),
+          ...(Array.isArray(candidate.requirements)
+            ? { requirements: candidate.requirements.map((requirement, requirementIndex) => this.normalizeRequirement(requirement, index, requirementIndex)) }
+            : {}),
+        } satisfies LanguageServerPluginCapability;
+      case 'formatter':
+        return {
+          type: 'formatter',
+          ...this.normalizeExecutableCapability(candidate, index),
+        } satisfies FormatterPluginCapability;
+      case 'linter':
+        return {
+          type: 'linter',
+          ...this.normalizeExecutableCapability(candidate, index),
+        } satisfies LinterPluginCapability;
+      case 'code-action-provider':
+        return {
+          type: 'code-action-provider',
+          ...this.normalizeExecutableCapability(candidate, index),
+        } satisfies CodeActionProviderPluginCapability;
+      case 'test-provider':
+        return {
+          type: 'test-provider',
+          ...this.normalizeExecutableCapability(candidate, index),
+        } satisfies TestProviderPluginCapability;
+      case 'debug-adapter':
+        return {
+          type: 'debug-adapter',
+          ...this.normalizeExecutableCapability(candidate, index),
+          adapterType: requireNonEmptyString(candidate.adapterType, `plugin capability[${index}].adapterType`),
+        } satisfies DebugAdapterPluginCapability;
+      default:
+        throw new Error(`Unsupported plugin capability type: ${String(candidate.type ?? '')}`);
     }
+  }
 
+  private normalizeExecutableCapability(
+    candidate: Partial<
+      FormatterPluginCapability
+      | LinterPluginCapability
+      | CodeActionProviderPluginCapability
+      | TestProviderPluginCapability
+      | DebugAdapterPluginCapability
+    >,
+    capabilityIndex: number,
+  ) {
     return {
-      type: 'language-server',
-      languages: normalizeRequiredStringArray(candidate.languages, `plugin capability[${index}].languages`),
+      languages: normalizeRequiredStringArray(candidate.languages, `plugin capability[${capabilityIndex}].languages`),
       ...(Array.isArray(candidate.fileExtensions)
         ? { fileExtensions: uniqueStrings(candidate.fileExtensions) }
         : {}),
-      ...(Array.isArray(candidate.projectIndicators)
-        ? { projectIndicators: uniqueStrings(candidate.projectIndicators) }
-        : {}),
       ...(typeof candidate.priority === 'number' ? { priority: candidate.priority } : {}),
-      ...(typeof candidate.takesOverBuiltinLanguageService === 'boolean'
-        ? { takesOverBuiltinLanguageService: candidate.takesOverBuiltinLanguageService }
-        : {}),
-      ...(candidate.workspaceMode === 'per-pane' || candidate.workspaceMode === 'per-root'
-        ? { workspaceMode: candidate.workspaceMode }
-        : {}),
-      ...(candidate.features ? { features: this.normalizeCapabilityFeatures(candidate.features) } : {}),
-      runtime: this.normalizeRuntime(candidate.runtime, index),
+      runtime: this.normalizeRuntime(candidate.runtime, capabilityIndex),
       ...(Array.isArray(candidate.requirements)
-        ? { requirements: candidate.requirements.map((requirement, requirementIndex) => this.normalizeRequirement(requirement, index, requirementIndex)) }
+        ? { requirements: candidate.requirements.map((requirement, requirementIndex) => this.normalizeRequirement(requirement, capabilityIndex, requirementIndex)) }
         : {}),
     };
   }

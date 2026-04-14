@@ -5,7 +5,9 @@ export type PluginCapabilityType =
   | 'formatter'
   | 'linter'
   | 'statusline-adapter'
-  | 'code-action-provider';
+  | 'code-action-provider'
+  | 'test-provider'
+  | 'debug-adapter';
 export type PluginInstallStatus = 'not-installed' | 'installing' | 'installed' | 'updating' | 'error';
 export type PluginRuntimeState = 'idle' | 'starting' | 'running' | 'stopped' | 'error';
 export type PluginHealth = 'unknown' | 'ok' | 'warning' | 'error';
@@ -82,7 +84,59 @@ export interface LanguageServerPluginCapability {
   requirements?: PluginRequirement[];
 }
 
-export type PluginCapability = LanguageServerPluginCapability;
+export interface FormatterPluginCapability {
+  type: 'formatter';
+  languages: string[];
+  fileExtensions?: string[];
+  priority?: number;
+  runtime: PluginRuntime;
+  requirements?: PluginRequirement[];
+}
+
+export interface LinterPluginCapability {
+  type: 'linter';
+  languages: string[];
+  fileExtensions?: string[];
+  priority?: number;
+  runtime: PluginRuntime;
+  requirements?: PluginRequirement[];
+}
+
+export interface CodeActionProviderPluginCapability {
+  type: 'code-action-provider';
+  languages: string[];
+  fileExtensions?: string[];
+  priority?: number;
+  runtime: PluginRuntime;
+  requirements?: PluginRequirement[];
+}
+
+export interface TestProviderPluginCapability {
+  type: 'test-provider';
+  languages: string[];
+  fileExtensions?: string[];
+  priority?: number;
+  runtime: PluginRuntime;
+  requirements?: PluginRequirement[];
+}
+
+export interface DebugAdapterPluginCapability {
+  type: 'debug-adapter';
+  languages: string[];
+  fileExtensions?: string[];
+  priority?: number;
+  adapterType: string;
+  runtime: PluginRuntime;
+  requirements?: PluginRequirement[];
+}
+
+export type PluginCapability =
+  | LanguageServerPluginCapability
+  | FormatterPluginCapability
+  | LinterPluginCapability
+  | CodeActionProviderPluginCapability
+  | TestProviderPluginCapability
+  | DebugAdapterPluginCapability;
 
 export interface PluginManifest {
   schemaVersion: number;
