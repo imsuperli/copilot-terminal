@@ -1,9 +1,14 @@
+import { randomUUID } from 'crypto';
+import { tmpdir } from 'os';
+import path from 'path';
+import fs from 'fs-extra';
 import type {
   CodePaneGitCheckoutConfig,
   CodePaneGitCherryPickConfig,
   CodePaneGitCommitConfig,
   CodePaneGitCommitResult,
   CodePaneGitDiscardConfig,
+  CodePaneGitHunkActionConfig,
   CodePaneGitRebaseControlConfig,
   CodePaneGitResolveConflictConfig,
   CodePaneGitStageConfig,
@@ -58,6 +63,27 @@ export class CodeGitOperationService {
       ['-C', repoContext.repoRootPath, ...restoreArgs, ...pathspecArgs],
       { encoding: 'utf-8' },
     );
+  }
+
+  async stageHunk(config: CodePaneGitHunkActionConfig): Promise<void> {
+    await this.applyHunkPatch(config, {
+      cached: true,
+      reverse: false,
+    });
+  }
+
+  async unstageHunk(config: CodePaneGitHunkActionConfig): Promise<void> {
+    await this.applyHunkPatch(config, {
+      cached: true,
+      reverse: true,
+    });
+  }
+
+  async discardHunk(config: CodePaneGitHunkActionConfig): Promise<void> {
+    await this.applyHunkPatch(config, {
+      cached: false,
+      reverse: true,
+    });
   }
 
   async commit(config: CodePaneGitCommitConfig): Promise<CodePaneGitCommitResult> {
@@ -172,6 +198,45 @@ export class CodeGitOperationService {
       .map((filePath) => getRepoRelativePath(repoContext, filePath))
       .filter((candidatePath): candidatePath is string => Boolean(candidatePath));
     return getPathspecArgs(relativePaths);
+  }
+
+  private async applyHunkPatch(
+    config: CodePaneGitHunkActionConfig,
+    options: {
+      cached: boolean;
+      reverse: boolean;
+    },
+  ): Promise<void> {
+    const repoContext = await requireRepoContext(config.rootPath);
+    const relativeFilePath = getRepoRelativePath(repoContext, config.filePath);
+    if (!relativeFilePath) {
+      throw new Error('Git hunk target path is outside the repository root');
+    }
+
+    if (!config.patch.trim()) {
+      throw new Error('Git hunk patch is empty');
+    }
+
+    const patchFilePath = path.join(tmpdir(), `code-pane-git-hunk-${randomUUID()}.patch`);
+    await fs.writeFile(patchFilePath, config.patch, 'utf-8');
+    try {
+      await execFileAsync(
+        'git',
+        [
+          '-C',
+          repoContext.repoRootPath,
+          'apply',
+          '--whitespace=nowarn',
+          '--recount',
+          ...(options.cached ? ['--cached'] : []),
+          ...(options.reverse ? ['--reverse'] : []),
+          patchFilePath,
+        ],
+        { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+      );
+    } finally {
+      await fs.rm(patchFilePath, { force: true });
+    }
   }
 }
 

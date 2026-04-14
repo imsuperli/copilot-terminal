@@ -80,6 +80,30 @@ describeGit('CodeGitService', () => {
     });
   });
 
+  it('returns separated git diff hunks for a changed file', async () => {
+    const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
+    const baseLines = Array.from({ length: 20 }, (_item, index) => `export const value${index + 1} = ${index + 1};`);
+    await fsPromises.writeFile(trackedFilePath, `${baseLines.join('\n')}\n`, 'utf-8');
+    execFileSync('git', ['add', 'tracked.ts'], { cwd: repoRootPath, stdio: 'ignore' });
+    execFileSync('git', ['commit', '-m', 'multiline base'], { cwd: repoRootPath, stdio: 'ignore' });
+
+    const nextLines = [...baseLines];
+    nextLines[0] = 'export const value1 = 101;';
+    nextLines[19] = 'export const value20 = 2000;';
+    await fsPromises.writeFile(trackedFilePath, `${nextLines.join('\n')}\n`, 'utf-8');
+
+    const diffHunks = await service.getDiffHunks({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+    });
+
+    expect(diffHunks.filePath).toBe(trackedFilePath);
+    expect(diffHunks.stagedHunks).toHaveLength(0);
+    expect(diffHunks.unstagedHunks).toHaveLength(2);
+    expect(diffHunks.unstagedHunks[0]?.patch).toContain('value1 = 101');
+    expect(diffHunks.unstagedHunks[1]?.patch).toContain('value20 = 2000');
+  });
+
   it('returns repository summary and detects repository operations', async () => {
     const initialSummary = await service.getRepositorySummary({ rootPath: repoRootPath });
     expect(initialSummary).toMatchObject({

@@ -358,9 +358,42 @@ export interface CodePaneGitGraphCommit {
   laneCount: number;
 }
 
+export interface CodePaneGitDiffHunkLine {
+  type: 'context' | 'add' | 'delete';
+  text: string;
+  oldLineNumber?: number;
+  newLineNumber?: number;
+}
+
+export interface CodePaneGitDiffHunk {
+  id: string;
+  filePath: string;
+  staged: boolean;
+  header: string;
+  patch: string;
+  lines: CodePaneGitDiffHunkLine[];
+}
+
+export interface CodePaneGitDiffHunksConfig {
+  rootPath: string;
+  filePath: string;
+}
+
+export interface CodePaneGitDiffHunksResult {
+  filePath: string;
+  stagedHunks: CodePaneGitDiffHunk[];
+  unstagedHunks: CodePaneGitDiffHunk[];
+}
+
 export interface CodePaneGitStageConfig {
   rootPath: string;
   paths: string[];
+}
+
+export interface CodePaneGitHunkActionConfig {
+  rootPath: string;
+  filePath: string;
+  patch: string;
 }
 
 export interface CodePaneGitDiscardConfig {
@@ -1450,9 +1483,13 @@ export interface ElectronAPI {
   codePaneGetGitStatus: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitStatusEntry[]>>;
   codePaneGetGitRepositorySummary: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitRepositorySummary | null>>;
   codePaneGetGitGraph: (config: CodePaneGitGraphConfig) => Promise<IpcResponse<CodePaneGitGraphCommit[]>>;
+  codePaneGetGitDiffHunks: (config: CodePaneGitDiffHunksConfig) => Promise<IpcResponse<CodePaneGitDiffHunksResult>>;
   codePaneGitStage: (config: CodePaneGitStageConfig) => Promise<IpcResponse<void>>;
   codePaneGitUnstage: (config: CodePaneGitStageConfig) => Promise<IpcResponse<void>>;
   codePaneGitDiscard: (config: CodePaneGitDiscardConfig) => Promise<IpcResponse<void>>;
+  codePaneGitStageHunk: (config: CodePaneGitHunkActionConfig) => Promise<IpcResponse<void>>;
+  codePaneGitUnstageHunk: (config: CodePaneGitHunkActionConfig) => Promise<IpcResponse<void>>;
+  codePaneGitDiscardHunk: (config: CodePaneGitHunkActionConfig) => Promise<IpcResponse<void>>;
   codePaneGitCommit: (config: CodePaneGitCommitConfig) => Promise<IpcResponse<CodePaneGitCommitResult>>;
   codePaneGitStash: (config: CodePaneGitStashConfig) => Promise<IpcResponse<CodePaneGitStashResult>>;
   codePaneGitCheckout: (config: CodePaneGitCheckoutConfig) => Promise<IpcResponse<void>>;

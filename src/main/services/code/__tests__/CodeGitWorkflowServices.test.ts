@@ -4,6 +4,7 @@ import { promises as fsPromises } from 'fs';
 import { tmpdir } from 'os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CodeGitBlameService } from '../CodeGitBlameService';
+import { CodeGitService } from '../CodeGitService';
 import { CodeGitHistoryService } from '../CodeGitHistoryService';
 import { CodeGitOperationService } from '../CodeGitOperationService';
 
@@ -20,6 +21,7 @@ const describeGit = hasGit ? describe : describe.skip;
 
 describeGit('Code Git workflow services', () => {
   const operationService = new CodeGitOperationService();
+  const gitService = new CodeGitService();
   const historyService = new CodeGitHistoryService();
   const blameService = new CodeGitBlameService();
   let repoRootPath: string;
@@ -78,6 +80,68 @@ describeGit('Code Git workflow services', () => {
       paths: [trackedFilePath],
     });
     expect(await fsPromises.readFile(trackedFilePath, 'utf-8')).toBe('export const value = 2;\n');
+  });
+
+  it('stages, unstages, and discards a single git hunk', async () => {
+    const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
+    const baseLines = Array.from({ length: 20 }, (_item, index) => `export const value${index + 1} = ${index + 1};`);
+    await fsPromises.writeFile(trackedFilePath, `${baseLines.join('\n')}\n`, 'utf-8');
+    execFileSync('git', ['add', 'tracked.ts'], { cwd: repoRootPath, stdio: 'ignore' });
+    execFileSync('git', ['commit', '-m', 'multiline base'], { cwd: repoRootPath, stdio: 'ignore' });
+
+    const nextLines = [...baseLines];
+    nextLines[0] = 'export const value1 = 101;';
+    nextLines[19] = 'export const value20 = 2000;';
+    await fsPromises.writeFile(trackedFilePath, `${nextLines.join('\n')}\n`, 'utf-8');
+
+    const initialHunks = await gitService.getDiffHunks({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+    });
+    const firstHunk = initialHunks.unstagedHunks[0];
+    expect(firstHunk?.patch).toContain('value1 = 101');
+
+    await operationService.stageHunk({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+      patch: firstHunk?.patch ?? '',
+    });
+    const cachedAfterStage = execFileSync('git', ['diff', '--cached', '--', 'tracked.ts'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    });
+    expect(cachedAfterStage).toContain('value1 = 101');
+    expect(cachedAfterStage).not.toContain('value20 = 2000');
+
+    const stagedHunks = await gitService.getDiffHunks({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+    });
+    const stagedFirstHunk = stagedHunks.stagedHunks[0];
+    await operationService.unstageHunk({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+      patch: stagedFirstHunk?.patch ?? '',
+    });
+    expect(execFileSync('git', ['diff', '--cached', '--name-only'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    }).trim()).toBe('');
+
+    const unstagedHunks = await gitService.getDiffHunks({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+    });
+    const secondHunk = unstagedHunks.unstagedHunks.find((hunk) => hunk.patch.includes('value20 = 2000'));
+    await operationService.discardHunk({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+      patch: secondHunk?.patch ?? '',
+    });
+
+    const finalContent = await fsPromises.readFile(trackedFilePath, 'utf-8');
+    expect(finalContent).toContain('export const value1 = 101;');
+    expect(finalContent).toContain('export const value20 = 20;');
   });
 
   it('returns file history and blame details', async () => {

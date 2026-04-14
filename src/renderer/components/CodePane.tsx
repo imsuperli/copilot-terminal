@@ -45,6 +45,7 @@ import type {
   CodePaneDebugSessionOutputPayload,
   CodePaneDebugStackFrame,
   CodePaneExternalLibrarySection,
+  CodePaneGitDiffHunk,
   CodePaneGitGraphCommit,
   CodePaneGitBlameLine,
   CodePaneGitHistoryResult,
@@ -102,6 +103,7 @@ import { WorkspaceToolWindow } from './code-pane/tool-windows/WorkspaceToolWindo
 import { GitBranchGraph } from './code-pane/GitBranchGraph';
 import { BlameGutter } from './code-pane/scm/BlameGutter';
 import { CommitComposer } from './code-pane/scm/CommitComposer';
+import { GitHunkList } from './code-pane/scm/GitHunkList';
 import { useI18n } from '../i18n';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { useWindowStore } from '../stores/windowStore';
@@ -1184,6 +1186,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [gitStatusByPath, setGitStatusByPath] = useState<Record<string, CodePaneGitStatusEntry>>({});
   const [gitRepositorySummary, setGitRepositorySummary] = useState<CodePaneGitRepositorySummary | null>(null);
   const [gitGraph, setGitGraph] = useState<CodePaneGitGraphCommit[]>([]);
+  const [selectedGitChangePath, setSelectedGitChangePath] = useState<string | null>(null);
+  const [gitStagedHunks, setGitStagedHunks] = useState<CodePaneGitDiffHunk[]>([]);
+  const [gitUnstagedHunks, setGitUnstagedHunks] = useState<CodePaneGitDiffHunk[]>([]);
+  const [isGitHunksLoading, setIsGitHunksLoading] = useState(false);
+  const [gitHunksError, setGitHunksError] = useState<string | null>(null);
   const [refactorPreview, setRefactorPreview] = useState<CodePanePreviewChangeSet | null>(null);
   const [selectedPreviewChangeId, setSelectedPreviewChangeId] = useState<string | null>(null);
   const [isApplyingRefactorPreview, setIsApplyingRefactorPreview] = useState(false);
@@ -2298,6 +2305,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     });
   }, [rootPath]);
+
+  const loadGitDiffHunks = useCallback(async (filePath: string | null) => {
+    if (!filePath) {
+      setGitStagedHunks([]);
+      setGitUnstagedHunks([]);
+      setGitHunksError(null);
+      setIsGitHunksLoading(false);
+      return;
+    }
+
+    setIsGitHunksLoading(true);
+    setGitHunksError(null);
+    const response = await window.electronAPI.codePaneGetGitDiffHunks({
+      rootPath,
+      filePath,
+    });
+
+    if (!response.success || !response.data) {
+      setGitStagedHunks([]);
+      setGitUnstagedHunks([]);
+      setGitHunksError(response.error || t('common.retry'));
+      setIsGitHunksLoading(false);
+      return;
+    }
+
+    const diffHunks = response.data;
+    startTransition(() => {
+      setGitStagedHunks(diffHunks.stagedHunks ?? []);
+      setGitUnstagedHunks(diffHunks.unstagedHunks ?? []);
+    });
+    setIsGitHunksLoading(false);
+  }, [rootPath, t]);
 
   const loadDirectory = useCallback(async (
     directoryPath: string,
@@ -4266,6 +4305,48 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }, [rootPath, runGitOperation, t]);
 
+  const stageGitHunk = useCallback(async (hunk: CodePaneGitDiffHunk) => {
+    const didApply = await runGitOperation(
+      async () => await window.electronAPI.codePaneGitStageHunk({
+        rootPath,
+        filePath: hunk.filePath,
+        patch: hunk.patch,
+      }),
+      { successMessage: t('codePane.gitStageHunkSuccess') },
+    );
+    if (didApply) {
+      await loadGitDiffHunks(hunk.filePath);
+    }
+  }, [loadGitDiffHunks, rootPath, runGitOperation, t]);
+
+  const unstageGitHunk = useCallback(async (hunk: CodePaneGitDiffHunk) => {
+    const didApply = await runGitOperation(
+      async () => await window.electronAPI.codePaneGitUnstageHunk({
+        rootPath,
+        filePath: hunk.filePath,
+        patch: hunk.patch,
+      }),
+      { successMessage: t('codePane.gitUnstageHunkSuccess') },
+    );
+    if (didApply) {
+      await loadGitDiffHunks(hunk.filePath);
+    }
+  }, [loadGitDiffHunks, rootPath, runGitOperation, t]);
+
+  const discardGitHunk = useCallback(async (hunk: CodePaneGitDiffHunk) => {
+    const didApply = await runGitOperation(
+      async () => await window.electronAPI.codePaneGitDiscardHunk({
+        rootPath,
+        filePath: hunk.filePath,
+        patch: hunk.patch,
+      }),
+      { successMessage: t('codePane.gitDiscardHunkSuccess') },
+    );
+    if (didApply) {
+      await loadGitDiffHunks(hunk.filePath);
+    }
+  }, [loadGitDiffHunks, rootPath, runGitOperation, t]);
+
   const commitGitChanges = useCallback(async (config: { message: string; amend: boolean; includeAll: boolean }) => {
     const response = await window.electronAPI.codePaneGitCommit({
       rootPath,
@@ -4800,6 +4881,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setProjectContributions([]);
       setIsProjectLoading(false);
       setProjectError(null);
+      setSelectedGitChangePath(null);
+      setGitStagedHunks([]);
+      setGitUnstagedHunks([]);
+      setIsGitHunksLoading(false);
+      setGitHunksError(null);
       setRunSessions([]);
       setRunSessionOutputs({});
       setSelectedRunSessionId(null);
@@ -5920,6 +6006,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
     () => buildGitChangeSectionGroups(scmEntries, rootPath),
     [rootPath, scmEntries],
   );
+
+  const selectedGitChangeRelativePath = useMemo(
+    () => selectedGitChangePath ? getRelativePath(rootPath, selectedGitChangePath) : null,
+    [rootPath, selectedGitChangePath],
+  );
+
+  useEffect(() => {
+    if (!selectedGitChangePath) {
+      return;
+    }
+
+    if (gitStatusByPath[selectedGitChangePath]) {
+      return;
+    }
+
+    setSelectedGitChangePath(null);
+    void loadGitDiffHunks(null);
+  }, [gitStatusByPath, loadGitDiffHunks, selectedGitChangePath]);
 
   const gitOperationLabel = useMemo(() => {
     switch (gitRepositorySummary?.operation) {
@@ -7667,18 +7771,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const badge = getStatusTone(entry.status);
     const relativePath = getRelativePath(rootPath, node.path);
+    const isSelected = selectedGitChangePath === node.path;
 
     return (
       <div key={`${node.path}-${depth}`} className="group">
         <div
-          className="flex items-center gap-2 rounded px-2 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70"
+          className={`flex items-center gap-2 rounded px-2 py-1 text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
           style={{ paddingLeft: `${8 + (depth * 14)}px` }}
         >
           <button
             type="button"
             onClick={() => {
+              setSelectedGitChangePath(node.path);
+              void loadGitDiffHunks(node.path);
               if (entry.status === 'deleted') {
-                void revealPathInExplorer(node.path);
                 return;
               }
               void activateFile(node.path, { preview: true });
@@ -7793,7 +7899,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         </div>
       </div>
     );
-  }), [activateFile, discardGitPaths, loadGitHistory, openDiffForFile, resolveGitConflict, revealPathInExplorer, rootPath, stageGitPaths, t, unstageGitPaths]);
+  }), [activateFile, discardGitPaths, loadGitDiffHunks, loadGitHistory, openDiffForFile, resolveGitConflict, revealPathInExplorer, rootPath, selectedGitChangePath, stageGitPaths, t, unstageGitPaths]);
 
   return (
     <>
@@ -8934,6 +9040,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         <div className="text-xs text-zinc-500">{t('codePane.noChanges')}</div>
                       )}
                     </div>
+
+                    <GitHunkList
+                      selectedPath={selectedGitChangePath}
+                      relativePath={selectedGitChangeRelativePath}
+                      stagedHunks={gitStagedHunks}
+                      unstagedHunks={gitUnstagedHunks}
+                      loading={isGitHunksLoading}
+                      error={gitHunksError}
+                      onStageHunk={stageGitHunk}
+                      onUnstageHunk={unstageGitHunk}
+                      onDiscardHunk={discardGitHunk}
+                      t={t}
+                    />
                   </div>
                 ) : (
                   <div className="text-xs text-zinc-500">{t('codePane.gitRepositoryUnavailable')}</div>

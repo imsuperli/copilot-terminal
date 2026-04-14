@@ -151,12 +151,20 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-repository-summary', config),
   codePaneGetGitGraph: (config) =>
     ipcRenderer.invoke('code-pane-git-graph', config),
+  codePaneGetGitDiffHunks: (config) =>
+    ipcRenderer.invoke('code-pane-git-diff-hunks', config),
   codePaneGitStage: (config) =>
     ipcRenderer.invoke('code-pane-git-stage', config),
   codePaneGitUnstage: (config) =>
     ipcRenderer.invoke('code-pane-git-unstage', config),
   codePaneGitDiscard: (config) =>
     ipcRenderer.invoke('code-pane-git-discard', config),
+  codePaneGitStageHunk: (config) =>
+    ipcRenderer.invoke('code-pane-git-stage-hunk', config),
+  codePaneGitUnstageHunk: (config) =>
+    ipcRenderer.invoke('code-pane-git-unstage-hunk', config),
+  codePaneGitDiscardHunk: (config) =>
+    ipcRenderer.invoke('code-pane-git-discard-hunk', config),
   codePaneGitCommit: (config) =>
     ipcRenderer.invoke('code-pane-git-commit', config),
   codePaneGitStash: (config) =>

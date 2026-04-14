@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { CodePane } from '../CodePane';
 import type {
   CodePaneFsChangedPayload,
+  CodePaneGitDiffHunk,
   CodePaneIndexProgressPayload,
   CodePaneLanguageWorkspaceChangedPayload,
 } from '../../../shared/types/electron-api';
@@ -636,9 +637,13 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitGraph).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetGitDiffHunks).mockReset();
     vi.mocked(window.electronAPI.codePaneGitStage).mockReset();
     vi.mocked(window.electronAPI.codePaneGitUnstage).mockReset();
     vi.mocked(window.electronAPI.codePaneGitDiscard).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitStageHunk).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitUnstageHunk).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitDiscardHunk).mockReset();
     vi.mocked(window.electronAPI.codePaneGitCommit).mockReset();
     vi.mocked(window.electronAPI.codePaneGitStash).mockReset();
     vi.mocked(window.electronAPI.codePaneGitCheckout).mockReset();
@@ -772,9 +777,20 @@ describe('CodePane', () => {
       success: true,
       data: [],
     });
+    vi.mocked(window.electronAPI.codePaneGetGitDiffHunks).mockResolvedValue({
+      success: true,
+      data: {
+        filePath: '/workspace/project/src/index.ts',
+        stagedHunks: [],
+        unstagedHunks: [],
+      },
+    });
     vi.mocked(window.electronAPI.codePaneGitStage).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitUnstage).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitDiscard).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitStageHunk).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitUnstageHunk).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitDiscardHunk).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitCommit).mockResolvedValue({
       success: true,
       data: {
@@ -2429,6 +2445,87 @@ describe('CodePane', () => {
       });
     });
     expect(await screen.findByText(/Test User · Refine index flow/)).toBeInTheDocument();
+  });
+
+  it('loads and applies git hunks for the selected SCM file', async () => {
+    const unstagedHunk: CodePaneGitDiffHunk = {
+      id: '/workspace/project/src/index.ts:unstaged:1',
+      filePath: '/workspace/project/src/index.ts',
+      staged: false,
+      header: '@@ -1,1 +1,1 @@',
+      patch: [
+        'diff --git a/src/index.ts b/src/index.ts',
+        'index 1111111..2222222 100644',
+        '--- a/src/index.ts',
+        '+++ b/src/index.ts',
+        '@@ -1,1 +1,1 @@',
+        '-export const value = 1;',
+        '+export const value = 2;',
+        '',
+      ].join('\n'),
+      lines: [
+        {
+          type: 'delete',
+          text: 'export const value = 1;',
+          oldLineNumber: 1,
+        },
+        {
+          type: 'add',
+          text: 'export const value = 2;',
+          newLineNumber: 1,
+        },
+      ],
+    };
+
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitDiffHunks).mockResolvedValue({
+      success: true,
+      data: {
+        filePath: '/workspace/project/src/index.ts',
+        stagedHunks: [],
+        unstagedHunks: [unstagedHunk],
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    const scmFileButton = await screen.findByRole('button', { name: /index\.ts/ });
+    await act(async () => {
+      fireEvent.click(scmFileButton);
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitDiffHunks).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+    expect(await screen.findByText('codePane.gitSelectedFileHunks')).toBeInTheDocument();
+    expect(screen.getByText('@@ -1,1 +1,1 @@')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitStageHunk' }));
+    });
+
+    expect(window.electronAPI.codePaneGitStageHunk).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      patch: unstagedHunk.patch,
+    });
   });
 
   it('shows Monaco diagnostics in the problems tab', async () => {

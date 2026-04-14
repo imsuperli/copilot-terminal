@@ -3,6 +3,9 @@ import fs from 'fs-extra';
 import path from 'path';
 import { promisify } from 'util';
 import type {
+  CodePaneGitDiffHunk,
+  CodePaneGitDiffHunksConfig,
+  CodePaneGitDiffHunksResult,
   CodePaneGitGraphCommit,
   CodePaneGitGraphConfig,
   CodePaneGitRepositorySummary,
@@ -98,6 +101,38 @@ export class CodeGitService {
     } catch {
       return [];
     }
+  }
+
+  async getDiffHunks(config: CodePaneGitDiffHunksConfig): Promise<CodePaneGitDiffHunksResult> {
+    const resolvedFilePath = path.resolve(config.filePath);
+    const repoContext = await this.resolveRepoContext(config.rootPath);
+    if (!repoContext) {
+      return {
+        filePath: resolvedFilePath,
+        stagedHunks: [],
+        unstagedHunks: [],
+      };
+    }
+
+    if (!path.isAbsolute(config.filePath) || !isPathWithin(repoContext.rootPath, resolvedFilePath)) {
+      throw new Error('Target path is outside the code pane root');
+    }
+
+    const relativeFilePath = path.relative(repoContext.repoRootPath, resolvedFilePath);
+    if (!relativeFilePath || relativeFilePath.startsWith('..')) {
+      throw new Error('Target path is outside the repository root');
+    }
+
+    const [unstagedPatch, stagedPatch] = await Promise.all([
+      this.readDiffOutput(repoContext, relativeFilePath, false),
+      this.readDiffOutput(repoContext, relativeFilePath, true),
+    ]);
+
+    return {
+      filePath: resolvedFilePath,
+      stagedHunks: parseGitDiffHunks(stagedPatch, resolvedFilePath, true),
+      unstagedHunks: parseGitDiffHunks(unstagedPatch, resolvedFilePath, false),
+    };
   }
 
   async readGitBaseFile(config: CodePaneReadGitBaseFileConfig): Promise<CodePaneReadGitBaseFileResult> {
@@ -295,6 +330,34 @@ export class CodeGitService {
 
     return entries;
   }
+
+  private async readDiffOutput(
+    repoContext: RepoContext,
+    relativeFilePath: string,
+    staged: boolean,
+  ): Promise<string> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        [
+          '-C',
+          repoContext.repoRootPath,
+          'diff',
+          '--no-color',
+          '--no-ext-diff',
+          '--unified=3',
+          ...(staged ? ['--cached'] : []),
+          '--',
+          toGitPath(relativeFilePath),
+        ],
+        { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+      );
+
+      return stdout as string;
+    } catch {
+      return '';
+    }
+  }
 }
 
 function parseRepositorySummary(
@@ -429,4 +492,111 @@ function buildCommitGraph(output: string): CodePaneGitGraphCommit[] {
       laneCount,
     };
   });
+}
+
+function parseGitDiffHunks(
+  output: string,
+  filePath: string,
+  staged: boolean,
+): CodePaneGitDiffHunk[] {
+  if (!output.trim()) {
+    return [];
+  }
+
+  const lines = output.split(/\r?\n/);
+  const fileHeaderLines: string[] = [];
+  const hunks: CodePaneGitDiffHunk[] = [];
+  let currentHeader: string | null = null;
+  let currentPatchLines: string[] = [];
+  let currentLines: CodePaneGitDiffHunk['lines'] = [];
+  let oldLineNumber = 0;
+  let newLineNumber = 0;
+
+  const flushCurrentHunk = () => {
+    if (!currentHeader) {
+      return;
+    }
+
+    hunks.push({
+      id: `${filePath}:${staged ? 'staged' : 'unstaged'}:${hunks.length + 1}`,
+      filePath,
+      staged,
+      header: currentHeader,
+      patch: `${currentPatchLines.join('\n')}\n`,
+      lines: currentLines,
+    });
+  };
+
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex];
+    if (lineIndex === lines.length - 1 && line === '') {
+      continue;
+    }
+
+    if (!currentHeader) {
+      if (line.startsWith('@@')) {
+        currentHeader = line;
+        currentPatchLines = [...fileHeaderLines, line];
+        currentLines = [];
+        const headerMatch = line.match(/^@@\s+\-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/);
+        oldLineNumber = Number(headerMatch?.[1] ?? 0);
+        newLineNumber = Number(headerMatch?.[3] ?? 0);
+        continue;
+      }
+
+      if (line) {
+        fileHeaderLines.push(line);
+      }
+      continue;
+    }
+
+    if (line.startsWith('@@')) {
+      flushCurrentHunk();
+      currentHeader = line;
+      currentPatchLines = [...fileHeaderLines, line];
+      currentLines = [];
+      const headerMatch = line.match(/^@@\s+\-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/);
+      oldLineNumber = Number(headerMatch?.[1] ?? 0);
+      newLineNumber = Number(headerMatch?.[3] ?? 0);
+      continue;
+    }
+
+    currentPatchLines.push(line);
+    if (line.startsWith('\\')) {
+      continue;
+    }
+
+    if (line.startsWith('+')) {
+      currentLines.push({
+        type: 'add',
+        text: line.slice(1),
+        newLineNumber,
+      });
+      newLineNumber += 1;
+      continue;
+    }
+
+    if (line.startsWith('-')) {
+      currentLines.push({
+        type: 'delete',
+        text: line.slice(1),
+        oldLineNumber,
+      });
+      oldLineNumber += 1;
+      continue;
+    }
+
+    const contextText = line.startsWith(' ') ? line.slice(1) : line;
+    currentLines.push({
+      type: 'context',
+      text: contextText,
+      oldLineNumber,
+      newLineNumber,
+    });
+    oldLineNumber += 1;
+    newLineNumber += 1;
+  }
+
+  flushCurrentHunk();
+  return hunks;
 }

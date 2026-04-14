@@ -17,8 +17,10 @@ import type {
   CodePaneGitCherryPickConfig,
   CodePaneGitCommitConfig,
   CodePaneGitDiscardConfig,
+  CodePaneGitDiffHunksConfig,
   CodePaneGitGraphConfig,
   CodePaneGitHistoryConfig,
+  CodePaneGitHunkActionConfig,
   CodePaneGitRebaseControlConfig,
   CodePaneGitResolveConflictConfig,
   CodePaneGitStageConfig,
@@ -171,6 +173,18 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('code-pane-git-diff-hunks', async (_event, config: CodePaneGitDiffHunksConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.getDiffHunks(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('code-pane-git-stage', async (_event, config: CodePaneGitStageConfig) => {
     try {
       if (!codeGitOperationService) {
@@ -204,6 +218,45 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       await codeGitOperationService.discard(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-stage-hunk', async (_event, config: CodePaneGitHunkActionConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.stageHunk(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-unstage-hunk', async (_event, config: CodePaneGitHunkActionConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.unstageHunk(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-discard-hunk', async (_event, config: CodePaneGitHunkActionConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.discardHunk(config);
       return successResponse();
     } catch (error) {
       return errorResponse(error);
