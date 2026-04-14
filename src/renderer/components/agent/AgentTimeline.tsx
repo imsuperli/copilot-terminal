@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, TerminalSquare } from 'lucide-react';
+import { Check, Copy, Sparkles, TerminalSquare, Undo2 } from 'lucide-react';
 import type { AgentTaskSnapshot } from '../../../shared/types/agent';
 import type {
   AgentCommandEvent,
@@ -15,6 +15,7 @@ import { ReasoningBlock } from './ReasoningBlock';
 import { renderMarkdownLike } from './RichText';
 import { ThinkingStatusBar } from './ThinkingStatusBar';
 import { ToolCallBlock, type HydratedToolCallItem } from './ToolCallBlock';
+import { preventMouseButtonFocus } from '../../utils/buttonFocus';
 
 function getAssistantTurnKey(event: AgentTimelineEvent): string | null {
   if (event.kind === 'reasoning' && event.id.startsWith('reasoning-')) {
@@ -122,6 +123,47 @@ function isAssistantTurnEvent(event: AgentTimelineEvent): boolean {
   }
 }
 
+function MessageActionBar({
+  copied,
+  copyLabel,
+  rollbackLabel,
+  onCopy,
+  onRollback,
+}: {
+  copied: boolean;
+  copyLabel: string;
+  rollbackLabel?: string;
+  onCopy: () => void;
+  onRollback?: () => void;
+}) {
+  return (
+    <div className="pointer-events-none flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+      {onRollback ? (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={rollbackLabel}
+          onMouseDown={preventMouseButtonFocus}
+          onClick={onRollback}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-zinc-800/90 bg-zinc-950/75 text-zinc-400 transition-colors duration-150 hover:border-zinc-700 hover:text-zinc-100"
+        >
+          <Undo2 size={13} strokeWidth={1.9} />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={copyLabel}
+        onMouseDown={preventMouseButtonFocus}
+        onClick={onCopy}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-zinc-800/90 bg-zinc-950/75 text-zinc-400 transition-colors duration-150 hover:border-zinc-700 hover:text-zinc-100"
+      >
+        {copied ? <Check size={13} strokeWidth={2.2} /> : <Copy size={13} strokeWidth={1.9} />}
+      </button>
+    </div>
+  );
+}
+
 function EventShell({
   icon,
   title,
@@ -149,17 +191,29 @@ function EventShell({
 export function AgentTimeline({
   task,
   assistantLabel,
+  copiedMessageId = null,
+  copyMessageLabel = 'Copy message',
+  copiedMessageLabel = 'Copied',
   onApprove,
   onReject,
   onSubmitInteraction,
   onCancelInteraction,
+  onCopyMessage = () => {},
+  onRollbackMessage = () => {},
+  rollbackLabelFormatter = (round) => `Roll back to round ${round}`,
 }: {
   task: AgentTaskSnapshot;
   assistantLabel: string;
+  copiedMessageId?: string | null;
+  copyMessageLabel?: string;
+  copiedMessageLabel?: string;
   onApprove: (approvalId: string) => void;
   onReject: (approvalId: string) => void;
   onSubmitInteraction: (interactionId: string, value: string) => void;
   onCancelInteraction: (interactionId: string) => void;
+  onCopyMessage?: (messageId: string, content: string) => void;
+  onRollbackMessage?: (messageId: string, content: string) => void;
+  rollbackLabelFormatter?: (round: number) => string;
 }) {
   const orderedTimeline = React.useMemo(() => orderTimelineEvents(task.timeline), [task.timeline]);
   const { hiddenEventIds, hydratedToolCalls } = React.useMemo(() => {
@@ -254,6 +308,21 @@ export function AgentTimeline({
     )),
     [activeThinkingEvent, baseVisibleTimeline],
   );
+  const userRoundByMessageId = React.useMemo(() => {
+    const rounds = new Map<string, number>();
+    let round = 0;
+
+    for (const event of visibleTimeline) {
+      if (event.kind !== 'user-message') {
+        continue;
+      }
+
+      round += 1;
+      rounds.set(event.id, round);
+    }
+
+    return rounds;
+  }, [visibleTimeline]);
   const displayTimeline = React.useMemo<TimelineDisplayItem[]>(() => {
     const items: TimelineDisplayItem[] = [];
 
@@ -399,14 +468,28 @@ export function AgentTimeline({
                   </div>
                 );
               case 'assistant-message':
-                return (
-                  <div
-                    key={`assistant-message-${section.event.id}`}
-                    className="space-y-2 text-[15px] leading-6 text-zinc-200"
-                  >
-                    {renderMarkdownLike(section.event.content)}
-                  </div>
-                );
+                {
+                  const isCopied = copiedMessageId === section.event.id;
+                  const copyLabel = isCopied ? copiedMessageLabel : copyMessageLabel;
+
+                  return (
+                    <div
+                      key={`assistant-message-${section.event.id}`}
+                      className="group relative"
+                    >
+                      <div className="absolute right-0 top-0 z-10">
+                        <MessageActionBar
+                          copied={isCopied}
+                          copyLabel={copyLabel}
+                          onCopy={() => onCopyMessage(section.event.id, section.event.content)}
+                        />
+                      </div>
+                      <div className="space-y-2 pr-10 text-[15px] leading-6 text-zinc-200">
+                        {renderMarkdownLike(section.event.content)}
+                      </div>
+                    </div>
+                  );
+                }
               case 'tool-call-group':
                 return (
                   <div key={`tool-call-group-${sectionIndex}`}>
@@ -464,15 +547,28 @@ export function AgentTimeline({
   const renderEvent = (event: AgentTimelineEvent) => {
     switch (event.kind) {
       case 'user-message':
-        return (
-          <div className="flex justify-end">
-            <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
-              <div className="space-y-2 text-[15px] leading-6 text-zinc-100">
-                {renderMarkdownLike(event.content)}
+        {
+          const round = userRoundByMessageId.get(event.id) ?? 1;
+          const isCopied = copiedMessageId === event.id;
+          const copyLabel = isCopied ? copiedMessageLabel : copyMessageLabel;
+
+          return (
+            <div className="group flex items-start justify-end gap-2">
+              <MessageActionBar
+                copied={isCopied}
+                copyLabel={copyLabel}
+                rollbackLabel={rollbackLabelFormatter(round)}
+                onCopy={() => onCopyMessage(event.id, event.content)}
+                onRollback={() => onRollbackMessage(event.id, event.content)}
+              />
+              <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
+                <div className="space-y-2 text-[15px] leading-6 text-zinc-100">
+                  {renderMarkdownLike(event.content)}
+                </div>
               </div>
             </div>
-          </div>
-        );
+          );
+        }
       case 'reasoning':
         if (event.id === activeThinkingEvent?.id) {
           if (!event.content.trim()) {
@@ -488,13 +584,27 @@ export function AgentTimeline({
           </EventShell>
         );
       case 'assistant-message':
-        return (
-          <EventShell icon={<Sparkles size={15} />}>
-            <div className="space-y-2 text-[15px] leading-6 text-zinc-200">
-              {renderMarkdownLike(event.content)}
-            </div>
-          </EventShell>
-        );
+        {
+          const isCopied = copiedMessageId === event.id;
+          const copyLabel = isCopied ? copiedMessageLabel : copyMessageLabel;
+
+          return (
+            <EventShell icon={<Sparkles size={15} />}>
+              <div className="group relative">
+                <div className="absolute right-0 top-0 z-10">
+                  <MessageActionBar
+                    copied={isCopied}
+                    copyLabel={copyLabel}
+                    onCopy={() => onCopyMessage(event.id, event.content)}
+                  />
+                </div>
+                <div className="space-y-2 pr-10 text-[15px] leading-6 text-zinc-200">
+                  {renderMarkdownLike(event.content)}
+                </div>
+              </div>
+            </EventShell>
+          );
+        }
       case 'tool-result':
         return (
           <EventShell icon={<TerminalSquare size={15} />} title="Tool result">

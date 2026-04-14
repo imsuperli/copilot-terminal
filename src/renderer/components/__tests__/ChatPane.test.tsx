@@ -14,6 +14,8 @@ type AgentListenerMap = {
   error: Set<(event: unknown, payload: { paneId: string; error: string }) => void>;
 };
 
+let clipboardWriteTextMock = vi.fn().mockResolvedValue(undefined);
+
 function createListenerMap(): AgentListenerMap {
   return {
     state: new Set(),
@@ -84,6 +86,14 @@ async function expectThinkingIndicator() {
 describe('ChatPane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
+    clipboardWriteTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, 'clipboard', {
+      value: {
+        writeText: clipboardWriteTextMock,
+      },
+      configurable: true,
+    });
     useWindowStore.setState({
       windows: [],
       activeWindowId: null,
@@ -1988,6 +1998,359 @@ describe('ChatPane', () => {
     await waitFor(() => {
       expect(screen.queryByText('旧会话内容')).not.toBeInTheDocument();
     });
+  });
+
+  it('restores the latest saved conversation and lets the user switch history entries', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    window.localStorage.setItem('copilot-terminal:chat-conversation-history:v1', JSON.stringify([
+      {
+        id: 'conversation-latest',
+        windowId: 'win-1',
+        title: '最新会话',
+        createdAt: '2026-04-14T10:00:00.000Z',
+        updatedAt: '2026-04-14T10:05:00.000Z',
+        activeProviderId: 'provider-1',
+        activeModel: 'claude-sonnet-4-5',
+        messages: [
+          {
+            id: 'latest-user',
+            role: 'user',
+            content: '最新会话内容',
+            timestamp: '2026-04-14T10:05:00.000Z',
+          },
+        ],
+      },
+      {
+        id: 'conversation-older',
+        windowId: 'win-1',
+        title: '较早会话',
+        createdAt: '2026-04-14T09:00:00.000Z',
+        updatedAt: '2026-04-14T09:05:00.000Z',
+        activeProviderId: 'provider-1',
+        activeModel: 'claude-sonnet-4-5',
+        messages: [
+          {
+            id: 'older-user',
+            role: 'user',
+            content: '较早会话内容',
+            timestamp: '2026-04-14T09:05:00.000Z',
+          },
+        ],
+      },
+    ]));
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByText('最新会话内容')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '对话历史' }));
+
+    expect(screen.getByRole('button', { name: /较早会话/ })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /较早会话/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('较早会话内容')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('最新会话内容')).not.toBeInTheDocument();
+  });
+
+  it('copies message content from the hover action buttons', async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [
+                      {
+                        id: 'legacy-user',
+                        role: 'user',
+                        content: '你好',
+                        timestamp: new Date().toISOString(),
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '复制内容' }));
+
+    expect(await screen.findByRole('button', { name: '已复制' })).toBeInTheDocument();
+  });
+
+  it('rolls back a multi-turn conversation to the selected round and restores the draft input', async () => {
+    const user = userEvent.setup();
+    const restoredAgent = createAgentSnapshot({
+      taskId: 'task-rollback',
+      status: 'completed',
+      timeline: [
+        {
+          id: 'user-1',
+          taskId: 'task-rollback',
+          paneId: 'chat-pane-1',
+          timestamp: '2026-04-14T10:00:00.000Z',
+          kind: 'user-message',
+          status: 'completed',
+          content: '第一轮问题',
+        },
+        {
+          id: 'assistant-1',
+          taskId: 'task-rollback',
+          paneId: 'chat-pane-1',
+          timestamp: '2026-04-14T10:00:10.000Z',
+          kind: 'assistant-message',
+          status: 'completed',
+          content: '第一轮回答',
+        },
+        {
+          id: 'user-2',
+          taskId: 'task-rollback',
+          paneId: 'chat-pane-1',
+          timestamp: '2026-04-14T10:01:00.000Z',
+          kind: 'user-message',
+          status: 'completed',
+          content: '第二轮问题',
+        },
+        {
+          id: 'assistant-2',
+          taskId: 'task-rollback',
+          paneId: 'chat-pane-1',
+          timestamp: '2026-04-14T10:01:10.000Z',
+          kind: 'assistant-message',
+          status: 'completed',
+          content: '第二轮回答',
+        },
+      ],
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          content: '第一轮问题',
+          timestamp: '2026-04-14T10:00:00.000Z',
+        },
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: '第一轮回答',
+          timestamp: '2026-04-14T10:00:10.000Z',
+        },
+        {
+          id: 'user-2',
+          role: 'user',
+          content: '第二轮问题',
+          timestamp: '2026-04-14T10:01:00.000Z',
+        },
+        {
+          id: 'assistant-2',
+          role: 'assistant',
+          content: '第二轮回答',
+          timestamp: '2026-04-14T10:01:10.000Z',
+        },
+      ],
+    });
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: restoredAgent.messages,
+                    agent: restoredAgent,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByText('第二轮回答')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '回退到第 2 轮对话' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentResetTask).toHaveBeenCalledWith({
+        paneId: 'chat-pane-1',
+        taskId: 'task-rollback',
+      });
+    });
+    expect(screen.getByDisplayValue('第二轮问题')).toBeInTheDocument();
+    expect(screen.getByText('第一轮回答')).toBeInTheDocument();
+    expect(screen.queryByText('第二轮回答')).not.toBeInTheDocument();
   });
 
   it('hydrates SSH host/user from the linked profile before sending agent requests', async () => {

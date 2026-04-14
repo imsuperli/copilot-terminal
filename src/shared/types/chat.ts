@@ -91,6 +91,8 @@ export interface ChatMessage {
 
 export interface ChatPaneState {
   messages: ChatMessage[];
+  /** 当前绑定的历史会话 id */
+  conversationId?: string;
   /** 当前选中的模型 */
   activeModel?: string;
   /** 当前选中的 provider id */

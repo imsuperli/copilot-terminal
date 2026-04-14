@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, SendHorizonal, Sparkles, Square, X } from 'lucide-react';
+import { Check, ChevronDown, Copy, History, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
 import type { AgentTaskSnapshot } from '../../shared/types/agent';
 import type { AgentTimelineEvent } from '../../shared/types/agentTimeline';
 import type { ChatMessage, ChatSettings, ChatSshContext, LLMProviderConfig } from '../../shared/types/chat';
@@ -12,6 +12,15 @@ import { getPaneBackend, isTerminalPane } from '../../shared/utils/terminalCapab
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from '../utils/settingsEvents';
 import { ChatNewConversationIcon } from './icons/ChatNewConversationIcon';
 import { selectPreferredChatLinkedPaneId } from '../utils/chatPane';
+import {
+  buildChatConversationTitle,
+  createChatConversationHistoryId,
+  getLatestChatConversationHistory,
+  loadChatConversationHistory,
+  normalizeAgentSnapshotForHistory,
+  upsertChatConversationHistory,
+  type ChatConversationHistoryEntry,
+} from '../utils/chatHistory';
 import { AgentTimeline } from './agent/AgentTimeline';
 import { renderMarkdownLike } from './agent/RichText';
 
@@ -28,6 +37,14 @@ interface ProviderModelOption {
   providerId: string;
   model: string;
   label: string;
+}
+
+interface MessageActionBarProps {
+  copied: boolean;
+  copyLabel: string;
+  rollbackLabel?: string;
+  onCopy: () => void;
+  onRollback?: () => void;
 }
 
 function normalizeChatSettings(settings: ChatSettings | undefined): ChatSettings {
@@ -135,10 +152,164 @@ function ControlSelect({
   );
 }
 
-function renderLegacyMessage(message: ChatMessage) {
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  if (typeof document === 'undefined') {
+    throw new Error('Clipboard is unavailable.');
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', 'true');
+  textarea.style.position = 'absolute';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  try {
+    document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+function cloneChatMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((message) => ({
+    ...message,
+    toolCalls: message.toolCalls?.map((toolCall) => ({
+      ...toolCall,
+      params: { ...toolCall.params },
+    })),
+    toolResult: message.toolResult ? { ...message.toolResult } : undefined,
+  }));
+}
+
+function hasConversationContent(messages: ChatMessage[], agent?: AgentTaskSnapshot): boolean {
+  return messages.length > 0 || Boolean(agent?.timeline.length);
+}
+
+function formatHistoryTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+
+  return date.toLocaleString(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function buildRollbackSnapshot(
+  task: AgentTaskSnapshot | undefined,
+  messageId: string,
+  paneId: string,
+  windowId: string,
+): AgentTaskSnapshot | undefined {
+  if (!task) {
+    return undefined;
+  }
+
+  const rollbackMessageIndex = task.messages.findIndex((message) => (
+    message.id === messageId && message.role === 'user'
+  ));
+  if (rollbackMessageIndex < 0) {
+    return normalizeAgentSnapshotForHistory(task, paneId, windowId);
+  }
+
+  const nextMessages = task.messages.slice(0, rollbackMessageIndex);
+  if (nextMessages.length === 0) {
+    return undefined;
+  }
+
+  const rollbackTimelineIndex = task.timeline.findIndex((event) => (
+    event.kind === 'user-message' && event.id === messageId
+  ));
+  const nextTimeline = rollbackTimelineIndex >= 0
+    ? task.timeline.slice(0, rollbackTimelineIndex)
+    : task.timeline;
+
+  return normalizeAgentSnapshotForHistory({
+    ...task,
+    paneId,
+    windowId,
+    status: 'completed',
+    timeline: nextTimeline,
+    messages: nextMessages,
+    pendingApproval: undefined,
+    pendingInteraction: undefined,
+    error: undefined,
+    updatedAt: new Date().toISOString(),
+  }, paneId, windowId);
+}
+
+function MessageActionBar({
+  copied,
+  copyLabel,
+  rollbackLabel,
+  onCopy,
+  onRollback,
+}: MessageActionBarProps) {
+  return (
+    <div className="pointer-events-none flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
+      {onRollback ? (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={rollbackLabel}
+          onMouseDown={preventMouseButtonFocus}
+          onClick={onRollback}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-zinc-800/90 bg-zinc-950/75 text-zinc-400 transition-colors duration-150 hover:border-zinc-700 hover:text-zinc-100"
+        >
+          <Undo2 size={13} strokeWidth={1.9} />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={copyLabel}
+        onMouseDown={preventMouseButtonFocus}
+        onClick={onCopy}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-zinc-800/90 bg-zinc-950/75 text-zinc-400 transition-colors duration-150 hover:border-zinc-700 hover:text-zinc-100"
+      >
+        {copied ? <Check size={13} strokeWidth={2.2} /> : <Copy size={13} strokeWidth={1.9} />}
+      </button>
+    </div>
+  );
+}
+
+function renderLegacyMessage(
+  message: ChatMessage,
+  {
+    copied,
+    copyLabel,
+    rollbackLabel,
+    onCopy,
+    onRollback,
+  }: {
+    copied: boolean;
+    copyLabel: string;
+    rollbackLabel?: string;
+    onCopy: () => void;
+    onRollback?: () => void;
+  },
+) {
   if (message.role === 'user' && !message.toolResult) {
     return (
-      <div className="flex justify-end">
+      <div className="group flex items-start justify-end gap-2">
+        <MessageActionBar
+          copied={copied}
+          copyLabel={copyLabel}
+          rollbackLabel={rollbackLabel}
+          onCopy={onCopy}
+          onRollback={onRollback}
+        />
         <div className="max-w-[78%] rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/95 px-4 py-3 sm:max-w-[68%]">
           <div className="space-y-2 text-[15px] leading-6 text-[rgb(var(--foreground))]">
             {renderMarkdownLike(message.content)}
@@ -159,8 +330,19 @@ function renderLegacyMessage(message: ChatMessage) {
   }
 
   return (
-    <div className="space-y-2 text-[15px] leading-6 text-[rgb(var(--foreground))]">
-      {renderMarkdownLike(message.content)}
+    <div className="group relative">
+      <div className="absolute right-0 top-0 z-10">
+        <MessageActionBar
+          copied={copied}
+          copyLabel={copyLabel}
+          onCopy={onCopy}
+        />
+      </div>
+      <div className="pr-10">
+        <div className="space-y-2 text-[15px] leading-6 text-[rgb(var(--foreground))]">
+          {renderMarkdownLike(message.content)}
+        </div>
+      </div>
     </div>
   );
 }
@@ -466,12 +648,19 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const autoScrollPinnedRef = useRef(true);
   const autoScrollFrameRef = useRef<number | null>(null);
+  const hasAttemptedHistoryHydrationRef = useRef(false);
+  const historyMenuRef = useRef<HTMLDivElement | null>(null);
+  const historyButtonRef = useRef<HTMLButtonElement | null>(null);
+  const copyResetTimerRef = useRef<number | null>(null);
   const [composerValue, setComposerValue] = useState('');
   const [settings, setSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [optimisticTask, setOptimisticTask] = useState<AgentTaskSnapshot | null>(null);
   const [liveAgentTask, setLiveAgentTask] = useState<AgentTaskSnapshot | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<ChatConversationHistoryEntry[]>([]);
+  const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     paneRef.current = pane;
@@ -481,6 +670,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setLiveAgentTask(null);
     setOptimisticTask(null);
     autoScrollPinnedRef.current = true;
+    hasAttemptedHistoryHydrationRef.current = false;
+    setHistoryMenuOpen(false);
+    setCopiedMessageId(null);
   }, [pane.id]);
 
   const terminalWindow = useWindowStore(useCallback(
@@ -495,6 +687,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   );
 
   const chatState = pane.chat ?? { messages: [] };
+  const refreshHistoryEntries = useCallback(() => {
+    setHistoryEntries(loadChatConversationHistory(windowId));
+  }, [windowId]);
   const persistedAgentState = useMemo(() => {
     if (optimisticTask && (!chatState.agent || chatState.agent.updatedAt < optimisticTask.updatedAt)) {
       return optimisticTask;
@@ -608,6 +803,133 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     }), true);
   }, [persistChatState]);
 
+  const resetCurrentAgentTask = useCallback(async (taskId?: string) => {
+    if (!taskId) {
+      return;
+    }
+
+    const response = await window.electronAPI.agentResetTask({
+      paneId: pane.id,
+      taskId,
+    });
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to reset agent task');
+    }
+  }, [pane.id]);
+
+  const replaceConversationState = useCallback(({
+    conversationId,
+    messages,
+    agent,
+    activeProviderId,
+    activeModel,
+    linkedPaneId,
+  }: {
+    conversationId?: string;
+    messages: ChatMessage[];
+    agent?: AgentTaskSnapshot;
+    activeProviderId?: string;
+    activeModel?: string;
+    linkedPaneId?: string;
+  }) => {
+    hasLiveTaskRef.current = false;
+    setLiveAgentTask(null);
+    setOptimisticTask(null);
+    setErrorMessage(null);
+    autoScrollPinnedRef.current = true;
+    persistChatState((currentChat) => ({
+      ...currentChat,
+      conversationId,
+      messages: cloneChatMessages(messages),
+      agent,
+      activeProviderId: activeProviderId ?? currentChat.activeProviderId,
+      activeModel: activeModel ?? currentChat.activeModel,
+      linkedPaneId: linkedPaneId ?? currentChat.linkedPaneId,
+      isStreaming: false,
+    }));
+  }, [persistChatState]);
+
+  const handleCopyMessage = useCallback(async (messageId: string, content: string) => {
+    try {
+      await copyTextToClipboard(content);
+      setCopiedMessageId(messageId);
+      if (copyResetTimerRef.current !== null) {
+        window.clearTimeout(copyResetTimerRef.current);
+      }
+      copyResetTimerRef.current = window.setTimeout(() => {
+        setCopiedMessageId((currentMessageId) => (
+          currentMessageId === messageId ? null : currentMessageId
+        ));
+        copyResetTimerRef.current = null;
+      }, 1200);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
+  const handleRestoreConversation = useCallback(async (entry: ChatConversationHistoryEntry) => {
+    if (isBusy) {
+      return;
+    }
+
+    try {
+      await resetCurrentAgentTask(agentState?.taskId);
+      setComposerValue('');
+      hasAttemptedHistoryHydrationRef.current = true;
+      replaceConversationState({
+        conversationId: entry.id,
+        messages: entry.messages,
+        agent: normalizeAgentSnapshotForHistory(entry.agent, pane.id, windowId),
+        activeProviderId: entry.activeProviderId,
+        activeModel: entry.activeModel,
+        linkedPaneId: entry.linkedPaneId,
+      });
+      setHistoryMenuOpen(false);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [agentState?.taskId, isBusy, pane.id, replaceConversationState, resetCurrentAgentTask, windowId]);
+
+  const handleRollbackToMessage = useCallback(async (messageId: string, content: string) => {
+    if (isBusy) {
+      return;
+    }
+
+    const rollbackMessageIndex = chatState.messages.findIndex((message) => message.id === messageId);
+    if (rollbackMessageIndex < 0) {
+      return;
+    }
+
+    try {
+      await resetCurrentAgentTask(agentState?.taskId);
+      setComposerValue(content);
+      hasAttemptedHistoryHydrationRef.current = true;
+      const nextMessages = chatState.messages.slice(0, rollbackMessageIndex);
+      const nextAgent = buildRollbackSnapshot(agentState ?? chatState.agent, messageId, pane.id, windowId);
+      replaceConversationState({
+        conversationId: nextMessages.length > 0 || nextAgent
+          ? (chatState.conversationId ?? createChatConversationHistoryId())
+          : undefined,
+        messages: nextMessages,
+        agent: nextAgent,
+        linkedPaneId: resolvedLinkedPaneId,
+      });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    }
+  }, [
+    agentState,
+    chatState.agent,
+    chatState.conversationId,
+    chatState.messages,
+    isBusy,
+    pane.id,
+    replaceConversationState,
+    resetCurrentAgentTask,
+    resolvedLinkedPaneId,
+    windowId,
+  ]);
+
   const loadSettings = useCallback(async () => {
     try {
       const response = await window.electronAPI.getSettings();
@@ -635,6 +957,119 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       window.removeEventListener(WORKSPACE_SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
     };
   }, [loadSettings]);
+
+  useEffect(() => {
+    refreshHistoryEntries();
+  }, [refreshHistoryEntries]);
+
+  useEffect(() => () => {
+    if (copyResetTimerRef.current !== null) {
+      window.clearTimeout(copyResetTimerRef.current);
+      copyResetTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!historyMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (
+        target
+        && (historyMenuRef.current?.contains(target) || historyButtonRef.current?.contains(target))
+      ) {
+        return;
+      }
+
+      setHistoryMenuOpen(false);
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [historyMenuOpen]);
+
+  useEffect(() => {
+    if (hasAttemptedHistoryHydrationRef.current) {
+      return;
+    }
+
+    if (hasConversationContent(chatState.messages, chatState.agent ?? agentState)) {
+      hasAttemptedHistoryHydrationRef.current = true;
+      return;
+    }
+
+    hasAttemptedHistoryHydrationRef.current = true;
+    const latestEntry = getLatestChatConversationHistory(windowId);
+    if (!latestEntry) {
+      return;
+    }
+
+    replaceConversationState({
+      conversationId: latestEntry.id,
+      messages: latestEntry.messages,
+      agent: normalizeAgentSnapshotForHistory(latestEntry.agent, pane.id, windowId),
+      activeProviderId: latestEntry.activeProviderId,
+      activeModel: latestEntry.activeModel,
+      linkedPaneId: latestEntry.linkedPaneId,
+    });
+  }, [
+    agentState,
+    chatState.agent,
+    chatState.messages,
+    pane.id,
+    replaceConversationState,
+    windowId,
+  ]);
+
+  useEffect(() => {
+    const conversationId = chatState.conversationId;
+    const stableAgent = normalizeAgentSnapshotForHistory(chatState.agent ?? agentState, pane.id, windowId);
+    if (!hasConversationContent(chatState.messages, stableAgent)) {
+      refreshHistoryEntries();
+      return;
+    }
+
+    if (!conversationId) {
+      persistChatState((currentChat) => ({
+        ...currentChat,
+        conversationId: createChatConversationHistoryId(),
+      }));
+      return;
+    }
+
+    const referenceMessages = chatState.messages.length > 0
+      ? chatState.messages
+      : stableAgent?.messages ?? [];
+
+    setHistoryEntries(upsertChatConversationHistory({
+      id: conversationId,
+      windowId,
+      title: buildChatConversationTitle(referenceMessages),
+      createdAt: stableAgent?.createdAt ?? referenceMessages[0]?.timestamp ?? new Date().toISOString(),
+      updatedAt: stableAgent?.updatedAt ?? referenceMessages.at(-1)?.timestamp ?? new Date().toISOString(),
+      linkedPaneId: chatState.linkedPaneId,
+      activeProviderId: chatState.activeProviderId ?? stableAgent?.providerId,
+      activeModel: chatState.activeModel ?? stableAgent?.model,
+      messages: cloneChatMessages(referenceMessages),
+      agent: stableAgent,
+    }));
+  }, [
+    agentState,
+    chatState.activeModel,
+    chatState.activeProviderId,
+    chatState.agent,
+    chatState.conversationId,
+    chatState.linkedPaneId,
+    chatState.messages,
+    pane.id,
+    persistChatState,
+    refreshHistoryEntries,
+    windowId,
+  ]);
 
   const handleTranscriptScroll = useCallback(() => {
     const element = scrollContainerRef.current;
@@ -798,8 +1233,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         hasLiveTaskRef.current = false;
         setLiveAgentTask(null);
         setOptimisticTask(null);
+        hasAttemptedHistoryHydrationRef.current = true;
         persistChatState((currentChat) => ({
           ...currentChat,
+          conversationId: undefined,
           messages: [],
           agent: undefined,
           isStreaming: false,
@@ -870,9 +1307,10 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     }
 
     const previousHasLiveTask = hasLiveTaskRef.current;
+    const conversationId = chatState.conversationId ?? createChatConversationHistoryId();
     const previousChat = {
       ...chatState,
-      messages: [...chatState.messages],
+      messages: cloneChatMessages(chatState.messages),
       agent: agentState,
     };
     const seedMessages = hasLiveTaskRef.current ? undefined : chatState.messages;
@@ -891,10 +1329,12 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     setComposerValue('');
     setErrorMessage(null);
     autoScrollPinnedRef.current = true;
+    hasAttemptedHistoryHydrationRef.current = true;
     setLiveAgentTask(optimisticTask);
     setOptimisticTask(optimisticTask);
     persistChatState((currentChat) => ({
       ...currentChat,
+      conversationId,
       messages: optimisticTask.messages,
       agent: optimisticTask,
       activeProviderId: selectedProvider.id,
@@ -963,6 +1403,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
     }
   }, [
     agentState,
+    chatState.conversationId,
     chatState.messages,
     composerValue,
     isBusy,
@@ -1028,8 +1469,24 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const providerModelOptions = useMemo(() => (
     buildProviderModelOptions(providers, selectedProvider?.id, selectedModel)
   ), [providers, selectedModel, selectedProvider?.id]);
+  const legacyUserRoundById = useMemo(() => {
+    const rounds = new Map<string, number>();
+    let round = 0;
+    for (const message of chatState.messages) {
+      if (message.role !== 'user' || message.toolResult) {
+        continue;
+      }
+
+      round += 1;
+      rounds.set(message.id, round);
+    }
+
+    return rounds;
+  }, [chatState.messages]);
 
   const assistantLabel = t('chatPane.agentName');
+  const copyMessageLabel = t('chatPane.copyMessage');
+  const copiedMessageLabel = t('chatPane.copied');
   const sshConnected = hasExecutableLinkedSsh;
   const sshSignalTitle = sshConnected ? t('chatPane.sshConnected') : t('chatPane.sshDisconnected');
   const emptyConversationTarget = resolveEmptyConversationTarget(terminalWindow?.name, linkedPane)
@@ -1060,6 +1517,59 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
+            <div className="relative">
+              <button
+                ref={historyButtonRef}
+                type="button"
+                tabIndex={-1}
+                aria-label={t('chatPane.history')}
+                onMouseDown={preventMouseButtonFocus}
+                onClick={() => setHistoryMenuOpen((open) => !open)}
+                className="inline-flex shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] leading-none transition-colors duration-200 hover:text-[rgb(var(--foreground))]"
+              >
+                <History size={18} strokeWidth={1.9} />
+              </button>
+
+              {historyMenuOpen ? (
+                <div
+                  ref={historyMenuRef}
+                  className="absolute right-0 top-[calc(100%+10px)] z-30 w-[320px] overflow-hidden rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/98 p-2 shadow-[0_30px_60px_-36px_rgba(0,0,0,0.95)]"
+                >
+                  <div className="px-2 pb-2 pt-1 text-[11px] font-medium tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
+                    {t('chatPane.history')}
+                  </div>
+                  {historyEntries.length > 0 ? (
+                    <div className="max-h-[360px] space-y-1 overflow-y-auto">
+                      {historyEntries.map((entry) => {
+                        const isCurrentConversation = entry.id === chatState.conversationId;
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => {
+                              void handleRestoreConversation(entry);
+                            }}
+                            className={`flex w-full flex-col rounded-[16px] px-3 py-2.5 text-left transition-colors ${isCurrentConversation ? 'bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))]' : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--secondary))]/80'}`}
+                          >
+                            <span className="truncate text-[13px] font-medium leading-5">
+                              {entry.title}
+                            </span>
+                            <span className="mt-1 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
+                              {formatHistoryTimestamp(entry.updatedAt)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-[16px] px-3 py-3 text-sm leading-6 text-[rgb(var(--muted-foreground))]">
+                      {t('chatPane.historyEmpty')}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
             <button
               type="button"
               tabIndex={-1}
@@ -1116,17 +1626,37 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               <AgentTimeline
                 task={agentState}
                 assistantLabel={assistantLabel}
+                copiedMessageId={copiedMessageId}
+                copyMessageLabel={copyMessageLabel}
+                copiedMessageLabel={copiedMessageLabel}
                 onApprove={(approvalId) => handleApprovalResponse(approvalId, true)}
                 onReject={(approvalId) => handleApprovalResponse(approvalId, false)}
                 onSubmitInteraction={handleSubmitInteraction}
                 onCancelInteraction={handleCancelInteraction}
+                onCopyMessage={handleCopyMessage}
+                onRollbackMessage={handleRollbackToMessage}
+                rollbackLabelFormatter={(round) => t('chatPane.rollbackToRound', { round })}
               />
             </>
           ) : chatState.messages.length > 0 ? (
             <div className="space-y-6 pt-4">
-              {chatState.messages.map((message) => (
+              {chatState.messages.map((message, index) => (
                 <div key={message.id}>
-                  {renderLegacyMessage(message)}
+                  {renderLegacyMessage(message, {
+                    copied: copiedMessageId === message.id,
+                    copyLabel: copiedMessageId === message.id ? copiedMessageLabel : copyMessageLabel,
+                    rollbackLabel: message.role === 'user'
+                      ? t('chatPane.rollbackToRound', { round: legacyUserRoundById.get(message.id) ?? index + 1 })
+                      : undefined,
+                    onCopy: () => {
+                      void handleCopyMessage(message.id, message.content);
+                    },
+                    onRollback: message.role === 'user'
+                      ? () => {
+                          void handleRollbackToMessage(message.id, message.content);
+                        }
+                      : undefined,
+                  })}
                 </div>
               ))}
             </div>
