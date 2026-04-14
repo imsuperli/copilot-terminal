@@ -1459,7 +1459,7 @@ describe('ChatPane', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('这是上一轮对话')).not.toBeInTheDocument();
-      expect(screen.getByText('与AI写作 博客初稿')).toBeInTheDocument();
+      expect(screen.getByText('与AI协作 博客初稿')).toBeInTheDocument();
     });
     expect(screen.queryByText('全新的对话')).not.toBeInTheDocument();
     expect(screen.queryByText('开始一段新对话')).not.toBeInTheDocument();
@@ -1626,7 +1626,11 @@ describe('ChatPane', () => {
     expect(input).toHaveClass('min-h-[72px]');
     expect(input).not.toHaveClass('min-h-[108px]');
     expect(selector).toHaveClass('h-9');
-    expect(selector.closest('label')).toHaveClass('sm:max-w-[240px]');
+    expect(selector).toHaveClass('pl-3');
+    expect(selector).not.toHaveClass('pl-9');
+    expect(selector.closest('label')).toHaveClass('sm:w-fit');
+    expect(selector.closest('label')).toHaveClass('sm:max-w-[220px]');
+    expect(selector.closest('label')).not.toHaveClass('sm:min-w-[180px]');
   });
 
   it('renders reasoning and command output blocks from the structured agent timeline', async () => {
@@ -2089,7 +2093,7 @@ describe('ChatPane', () => {
       </I18nProvider>,
     );
 
-    expect(await screen.findByText('与AI写作 app')).toBeInTheDocument();
+    expect(await screen.findByText('与AI协作 app')).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'SSH 已连接' })).toBeInTheDocument();
 
     await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '帮我看下系统的版本号是什么？');

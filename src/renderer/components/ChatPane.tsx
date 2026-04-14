@@ -107,22 +107,26 @@ function ControlSelect({
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
-  icon: React.ReactNode;
+  icon?: React.ReactNode;
   minWidthClass?: string;
   children: React.ReactNode;
 }) {
+  const hasIcon = Boolean(icon);
+
   return (
     <label className={`relative inline-flex max-w-full items-center ${minWidthClass}`}>
       <span className="sr-only">{ariaLabel}</span>
-      <span className="pointer-events-none absolute left-3 text-[rgb(var(--muted-foreground))]">
-        {icon}
-      </span>
+      {hasIcon ? (
+        <span className="pointer-events-none absolute left-3 text-[rgb(var(--muted-foreground))]">
+          {icon}
+        </span>
+      ) : null}
       <select
         aria-label={ariaLabel}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        className="h-9 w-full appearance-none rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/90 pl-9 pr-9 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]/70 disabled:cursor-not-allowed disabled:opacity-50"
+        className={`h-9 min-w-0 w-full appearance-none rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/90 pr-8 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]/70 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ${hasIcon ? 'pl-9' : 'pl-3'}`}
       >
         {children}
       </select>
@@ -1169,8 +1173,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                   value={selectedProviderModelValue}
                   onChange={handleProviderModelChange}
                   disabled={!providers.length}
-                  icon={<Sparkles size={14} />}
-                  minWidthClass="w-full sm:w-auto sm:min-w-[180px] sm:max-w-[240px]"
+                  minWidthClass="w-full sm:w-fit sm:max-w-[220px]"
                 >
                   <option value="">{t('chatPane.providerModelPlaceholder')}</option>
                   {providerModelOptions.map((option) => (
