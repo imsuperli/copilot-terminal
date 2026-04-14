@@ -128,7 +128,7 @@ function EventShell({
   children,
 }: {
   icon: React.ReactNode;
-  title: string;
+  title?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -137,7 +137,9 @@ function EventShell({
         {icon}
       </div>
       <div className="min-w-0 flex-1 pt-1">
-        <div className="mb-3 text-sm font-medium text-zinc-100">{title}</div>
+        {title ? (
+          <div className="mb-3 text-sm font-medium text-zinc-100">{title}</div>
+        ) : null}
         {children}
       </div>
     </div>
@@ -353,8 +355,8 @@ export function AgentTimeline({
     ));
     const hasNonReasoningSection = sections.some((section) => section.kind !== 'reasoning');
     const title = hasNonReasoningSection || hasActiveThinkingSection
-      ? assistantLabel
-      : `${assistantLabel} · Thinking`;
+      ? undefined
+      : 'Thinking';
 
     if (hasActiveThinkingSection && !hasNonReasoningSection) {
       const reasoningSections = sections.filter((section): section is Extract<AssistantTurnSection, { kind: 'reasoning' }> => (
@@ -481,13 +483,13 @@ export function AgentTimeline({
         }
 
         return (
-          <EventShell icon={<Sparkles size={15} />} title={`${assistantLabel} · Thinking`}>
+          <EventShell icon={<Sparkles size={15} />} title="Thinking">
             <ReasoningBlock content={event.content} status={event.status} />
           </EventShell>
         );
       case 'assistant-message':
         return (
-          <EventShell icon={<Sparkles size={15} />} title={assistantLabel}>
+          <EventShell icon={<Sparkles size={15} />}>
             <div className="space-y-2 text-[15px] leading-6 text-zinc-200">
               {renderMarkdownLike(event.content)}
             </div>

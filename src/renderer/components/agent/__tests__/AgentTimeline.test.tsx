@@ -59,7 +59,7 @@ describe('AgentTimeline', () => {
     const thinkingLabel = screen.getByText(/Thinking/);
     const assistantReply = screen.getByText('最终答复');
     expect(thinkingLabel.compareDocumentPosition(assistantReply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getAllByText('codex')).toHaveLength(1);
+    expect(screen.queryByText('codex')).not.toBeInTheDocument();
   });
 
   it('groups consecutive tool calls into one compact block and expands command details on demand', async () => {
@@ -160,7 +160,7 @@ describe('AgentTimeline', () => {
     );
 
     expect(screen.getByText('Tool Calls')).toBeInTheDocument();
-    expect(screen.getAllByText('codex')).toHaveLength(1);
+    expect(screen.queryByText('codex')).not.toBeInTheDocument();
     expect(screen.getByText('uname -a')).toBeInTheDocument();
     expect(screen.getByText('cat /etc/os-release')).toBeInTheDocument();
     expect(screen.queryByText('execute_command')).not.toBeInTheDocument();
@@ -217,7 +217,7 @@ describe('AgentTimeline', () => {
       />,
     );
 
-    expect(screen.getAllByText('codex')).toHaveLength(1);
+    expect(screen.queryByText('codex')).not.toBeInTheDocument();
     expect(screen.getByText('Tool Call')).toBeInTheDocument();
     expect(screen.getByText('df -h')).toBeInTheDocument();
   });
