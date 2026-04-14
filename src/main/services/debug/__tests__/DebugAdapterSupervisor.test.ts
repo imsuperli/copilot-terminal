@@ -243,6 +243,41 @@ describe('DebugAdapterSupervisor', () => {
       chunk: '[logpoint] value=eval:value\n',
     }));
   });
+
+  it('lists stored sessions with accumulated output', async () => {
+    const { runProfileService, targetId } = createRunProfileService();
+
+    const supervisor = new DebugAdapterSupervisor({
+      runProfileService,
+      emitSessionChanged: vi.fn(),
+      emitSessionOutput: vi.fn(),
+      now: () => '2026-04-13T00:00:00.000Z',
+      createDriver: (context) => new FakeDebugDriver(context, {
+        startSnapshot: createSnapshot({
+          frameLineNumber: 10,
+          variables: [{ name: 'value', value: '1' }],
+        }),
+        startOutputChunks: [{
+          chunk: 'hello debugger\n',
+          stream: 'stdout',
+        }],
+      }),
+    });
+
+    const session = await supervisor.startSession({
+      rootPath: '/workspace/project',
+      targetId,
+    });
+
+    expect(await supervisor.listSessions('/workspace/project')).toEqual([
+      {
+        session: expect.objectContaining({
+          id: session.id,
+        }),
+        output: 'hello debugger\n',
+      },
+    ]);
+  });
 });
 
 class FakeDebugDriver implements DebugDriver {
@@ -263,19 +298,23 @@ class FakeDebugDriver implements DebugDriver {
   private readonly initialExceptionBreakpoints: CodePaneExceptionBreakpoint[];
 
   constructor(
-    context: DebugDriverContext,
+    private readonly context: DebugDriverContext,
     private readonly options: {
       startSnapshot: DebugDriverSnapshot;
       resumeSnapshot?: DebugDriverSnapshot;
+      startOutputChunks?: Array<{ chunk: string; stream: 'stdout' | 'stderr' | 'system' }>;
       onApplyBreakpoints?: (breakpoints: CodePaneBreakpoint[]) => void;
       onApplyExceptionBreakpoints?: (breakpoints: CodePaneExceptionBreakpoint[]) => void;
     },
   ) {
-    this.initialBreakpoints = context.breakpoints;
-    this.initialExceptionBreakpoints = context.exceptionBreakpoints;
+    this.initialBreakpoints = this.context.breakpoints;
+    this.initialExceptionBreakpoints = this.context.exceptionBreakpoints;
   }
 
   async start(): Promise<DebugDriverSnapshot> {
+    for (const outputChunk of this.options.startOutputChunks ?? []) {
+      this.context.callbacks.onOutput(outputChunk.chunk, outputChunk.stream);
+    }
     await this.applyBreakpoints(this.initialBreakpoints);
     await this.applyExceptionBreakpoints(this.initialExceptionBreakpoints);
     return this.options.startSnapshot;

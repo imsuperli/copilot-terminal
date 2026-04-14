@@ -3,12 +3,14 @@ import type {
   CodePaneExceptionBreakpoint,
   CodePaneDebugSession,
   CodePaneDebugSessionDetails,
+  CodePaneDebugSessionSnapshot,
 } from '../../../shared/types/electron-api';
 
 interface StoredDebugSession {
   rootPath: string;
   session: CodePaneDebugSession;
   details: CodePaneDebugSessionDetails;
+  output: string;
 }
 
 export class DebugSessionStore {
@@ -59,6 +61,7 @@ export class DebugSessionStore {
         stackFrames: [],
         scopes: [],
       },
+      output: '',
     });
   }
 
@@ -91,6 +94,25 @@ export class DebugSessionStore {
 
   getSessionDetails(sessionId: string): CodePaneDebugSessionDetails | null {
     return this.sessions.get(sessionId)?.details ?? null;
+  }
+
+  appendSessionOutput(sessionId: string, chunk: string): void {
+    const storedSession = this.sessions.get(sessionId);
+    if (!storedSession) {
+      return;
+    }
+
+    storedSession.output = `${storedSession.output}${chunk}`;
+  }
+
+  listSessions(rootPath: string): CodePaneDebugSessionSnapshot[] {
+    return Array.from(this.sessions.values())
+      .filter((storedSession) => storedSession.rootPath === rootPath)
+      .sort((left, right) => right.session.startedAt.localeCompare(left.session.startedAt))
+      .map((storedSession) => ({
+        session: storedSession.session,
+        output: storedSession.output,
+      }));
   }
 
   deleteSession(sessionId: string): void {

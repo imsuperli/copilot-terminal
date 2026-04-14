@@ -10,6 +10,7 @@ import type {
   CodePaneGetExternalLibrarySectionsConfig,
   CodePaneGetDebugSessionDetailsConfig,
   CodePaneGetExceptionBreakpointsConfig,
+  CodePaneListDebugSessionsConfig,
   CodePaneGetProjectContributionConfig,
   CodePaneGitBlameConfig,
   CodePaneGitCheckoutConfig,
@@ -604,6 +605,18 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await debugAdapterSupervisor.getSessionDetails(config.sessionId));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-list-debug-sessions', async (_event, config: CodePaneListDebugSessionsConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      return successResponse(await debugAdapterSupervisor.listSessions(config.rootPath));
     } catch (error) {
       return errorResponse(error);
     }

@@ -688,6 +688,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneDebugStepOver).mockReset();
     vi.mocked(window.electronAPI.codePaneDebugStepInto).mockReset();
     vi.mocked(window.electronAPI.codePaneDebugStepOut).mockReset();
+    vi.mocked(window.electronAPI.codePaneListDebugSessions).mockReset();
     vi.mocked(window.electronAPI.codePaneGetDebugSessionDetails).mockReset();
     vi.mocked(window.electronAPI.codePaneDebugEvaluate).mockReset();
     vi.mocked(window.electronAPI.codePaneSetBreakpoint).mockReset();
@@ -861,6 +862,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneDebugStepOver).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneDebugStepInto).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneDebugStepOut).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneListDebugSessions).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetDebugSessionDetails).mockResolvedValue({
       success: true,
       data: {
@@ -1600,7 +1602,7 @@ describe('CodePane', () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.debugTab' }));
     });
 
-    expect(await screen.findByText('service.py')).toBeInTheDocument();
+    expect((await screen.findAllByText('service.py')).length).toBeGreaterThan(0);
 
     await act(async () => {
       fireEvent.click(screen.getByText('service.py'));
@@ -1658,6 +1660,90 @@ describe('CodePane', () => {
     const evaluationEntries = await screen.findAllByText('value');
     expect(evaluationEntries.length).toBeGreaterThan(1);
     expect((await screen.findAllByText('1')).length).toBeGreaterThan(valueOneCountBeforeEvaluate);
+  });
+
+  it('restores debug sessions and persisted watch expressions', async () => {
+    vi.mocked(window.electronAPI.codePaneListDebugSessions).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          session: {
+            id: 'debug-session-restored',
+            targetId: 'debug-target-python',
+            label: 'service.py',
+            detail: 'python service.py',
+            languageId: 'python',
+            adapterType: 'pdb',
+            request: 'launch',
+            state: 'paused',
+            workingDirectory: '/workspace/project',
+            startedAt: '2026-04-13T00:00:00.000Z',
+            stopReason: 'breakpoint',
+            currentFrame: {
+              id: 'frame-1',
+              name: 'main',
+              filePath: '/workspace/project/src/service.py',
+              lineNumber: 12,
+              column: 1,
+            },
+          },
+          output: 'Restored output\n',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetDebugSessionDetails).mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: 'debug-session-restored',
+        stackFrames: [
+          {
+            id: 'frame-1',
+            name: 'main',
+            filePath: '/workspace/project/src/service.py',
+            lineNumber: 12,
+            column: 1,
+          },
+        ],
+        scopes: [
+          {
+            id: 'locals',
+            name: 'Locals',
+            variables: [
+              {
+                id: 'var-1',
+                name: 'value',
+                value: '1',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneDebugEvaluate).mockImplementation(async ({ expression }) => ({
+      success: true,
+      data: {
+        value: expression === 'value' ? '1' : '',
+      },
+    }));
+
+    renderCodePane(createPane({
+      debug: {
+        watchExpressions: ['value'],
+      },
+    }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.debugTab' }));
+    });
+
+    expect((await screen.findAllByText('service.py')).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/Restored output/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneDebugEvaluate).toHaveBeenCalledWith({
+        sessionId: 'debug-session-restored',
+        expression: 'value',
+      });
+    });
   });
 
   it('toggles breakpoints from the editor gutter', async () => {

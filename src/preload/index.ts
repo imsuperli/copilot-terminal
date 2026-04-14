@@ -255,6 +255,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-debug-step-into', config),
   codePaneDebugStepOut: (config) =>
     ipcRenderer.invoke('code-pane-debug-step-out', config),
+  codePaneListDebugSessions: (config) =>
+    ipcRenderer.invoke('code-pane-list-debug-sessions', config),
   codePaneGetDebugSessionDetails: (config) =>
     ipcRenderer.invoke('code-pane-get-debug-session-details', config),
   codePaneDebugEvaluate: (config) =>

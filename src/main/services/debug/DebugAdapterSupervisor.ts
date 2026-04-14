@@ -8,6 +8,7 @@ import type {
   CodePaneDebugSession,
   CodePaneDebugSessionChangedPayload,
   CodePaneDebugSessionDetails,
+  CodePaneDebugSessionSnapshot,
   CodePaneDebugSessionOutputPayload,
   CodePaneExceptionBreakpoint,
   CodePaneDebugStartConfig,
@@ -76,6 +77,7 @@ export class DebugAdapterSupervisor {
       exceptionBreakpoints: this.sessionStore.getExceptionBreakpoints(config.rootPath),
       callbacks: {
         onOutput: (chunk, stream) => {
+          this.sessionStore.appendSessionOutput(sessionId, chunk);
           this.emitSessionOutput({
             rootPath: config.rootPath,
             sessionId,
@@ -172,6 +174,10 @@ export class DebugAdapterSupervisor {
       stackFrames: [],
       scopes: [],
     };
+  }
+
+  async listSessions(rootPath: string): Promise<CodePaneDebugSessionSnapshot[]> {
+    return this.sessionStore.listSessions(rootPath);
   }
 
   async setBreakpoint(config: CodePaneSetBreakpointConfig): Promise<void> {

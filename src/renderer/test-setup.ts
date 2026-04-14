@@ -179,6 +179,7 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneDebugStepOver: vi.fn().mockResolvedValue({ success: true }),
     codePaneDebugStepInto: vi.fn().mockResolvedValue({ success: true }),
     codePaneDebugStepOut: vi.fn().mockResolvedValue({ success: true }),
+    codePaneListDebugSessions: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetDebugSessionDetails: vi.fn().mockResolvedValue({ success: true, data: { sessionId: 'debug-session-1', stackFrames: [], scopes: [] } }),
     codePaneDebugEvaluate: vi.fn().mockResolvedValue({ success: true, data: { value: '' } }),
     codePaneSetBreakpoint: vi.fn().mockResolvedValue({ success: true }),

@@ -26,6 +26,13 @@ interface DebugEvaluationEntry {
   value: string;
 }
 
+interface DebugWatchEntry {
+  id: string;
+  expression: string;
+  value?: string;
+  error?: string;
+}
+
 interface DebugToolWindowProps {
   targets: CodePaneRunTarget[];
   breakpoints: CodePaneBreakpoint[];
@@ -34,6 +41,7 @@ interface DebugToolWindowProps {
   selectedSession: CodePaneDebugSession | null;
   selectedDetails: CodePaneDebugSessionDetails | null;
   selectedOutput: string;
+  watchEntries: DebugWatchEntry[];
   evaluations: DebugEvaluationEntry[];
   isLoading: boolean;
   isDetailsLoading: boolean;
@@ -50,6 +58,9 @@ interface DebugToolWindowProps {
   onStepOut: (sessionId: string) => void | Promise<void>;
   onOpenFrame: (frameId: string) => void | Promise<void>;
   onEvaluate: (expression: string) => void | Promise<void>;
+  onAddWatch: (expression: string) => void | Promise<void>;
+  onRemoveWatch: (expression: string) => void | Promise<void>;
+  onRefreshWatches: () => void | Promise<void>;
   onUpdateBreakpoint: (breakpoint: CodePaneBreakpoint) => void | Promise<void>;
   onRemoveBreakpoint: (breakpoint: CodePaneBreakpoint) => void | Promise<void>;
   onSetExceptionBreakpoint: (breakpointId: CodePaneExceptionBreakpoint['id'], enabled: boolean) => void | Promise<void>;
@@ -63,6 +74,7 @@ export function DebugToolWindow({
   selectedSession,
   selectedDetails,
   selectedOutput,
+  watchEntries,
   evaluations,
   isLoading,
   isDetailsLoading,
@@ -79,12 +91,16 @@ export function DebugToolWindow({
   onStepOut,
   onOpenFrame,
   onEvaluate,
+  onAddWatch,
+  onRemoveWatch,
+  onRefreshWatches,
   onUpdateBreakpoint,
   onRemoveBreakpoint,
   onSetExceptionBreakpoint,
 }: DebugToolWindowProps) {
   const { t } = useI18n();
   const [expression, setExpression] = useState('');
+  const [watchExpression, setWatchExpression] = useState('');
   const isPaused = selectedSession?.state === 'paused';
   const isRunning = selectedSession?.state === 'running';
 
@@ -357,7 +373,7 @@ export function DebugToolWindow({
               </div>
             </div>
 
-            <div className="grid min-h-0 grid-rows-[minmax(0,180px)_minmax(0,1fr)] overflow-hidden">
+            <div className="grid min-h-0 grid-rows-[minmax(0,220px)_minmax(0,1fr)] overflow-hidden">
               <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] border-b border-zinc-800">
                 <div className="flex min-h-0 flex-col border-r border-zinc-800">
                   <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
@@ -391,59 +407,134 @@ export function DebugToolWindow({
 
                 <div className="flex min-h-0 flex-col">
                   <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                    {t('codePane.debugEvaluate')}
+                    {t('codePane.debugWatch')}
                   </div>
                   <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
                     <input
-                      value={expression}
+                      value={watchExpression}
                       onChange={(event) => {
-                        setExpression(event.target.value);
+                        setWatchExpression(event.target.value);
                       }}
-                      placeholder={t('codePane.debugEvaluatePlaceholder')}
-                      disabled={!selectedSession || !isPaused}
+                      placeholder={t('codePane.debugWatchPlaceholder')}
+                      disabled={!selectedSession}
                       className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
                     />
                     <button
                       type="button"
                       onClick={() => {
-                        if (!expression.trim()) {
+                        if (!watchExpression.trim()) {
                           return;
                         }
 
-                        void onEvaluate(expression.trim());
-                        setExpression('');
+                        void onAddWatch(watchExpression.trim());
+                        setWatchExpression('');
                       }}
-                      disabled={!selectedSession || !isPaused || !expression.trim()}
+                      disabled={!selectedSession || !watchExpression.trim()}
                       className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {t('codePane.debugEvaluateRun')}
+                      {t('codePane.debugWatchAdd')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onRefreshWatches();
+                      }}
+                      disabled={!selectedSession || !isPaused || watchEntries.length === 0}
+                      className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {t('codePane.refresh')}
                     </button>
                   </div>
                   <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
-                    {evaluations.length > 0 ? (
+                    {watchEntries.length > 0 ? (
                       <div className="space-y-2">
-                        {evaluations.map((evaluation) => (
-                          <div key={evaluation.id} className="rounded bg-zinc-900/60 px-2 py-2 text-[11px] text-zinc-300">
-                            <div className="font-medium text-zinc-100">{evaluation.expression}</div>
-                            <div className="mt-1 break-words text-zinc-400">{evaluation.value}</div>
+                        {watchEntries.map((watchEntry) => (
+                          <div key={watchEntry.id} className="rounded bg-zinc-900/60 px-2 py-2 text-[11px] text-zinc-300">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium text-zinc-100">{watchEntry.expression}</div>
+                                <div className={`mt-1 break-words ${watchEntry.error ? 'text-red-300' : 'text-zinc-400'}`}>
+                                  {watchEntry.error ?? watchEntry.value ?? t('codePane.debugWatchUnavailable')}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  void onRemoveWatch(watchEntry.expression);
+                                }}
+                                className="shrink-0 rounded bg-zinc-800 px-2 py-1 text-[10px] text-zinc-300 transition-colors hover:bg-red-500/20 hover:text-red-200"
+                              >
+                                {t('common.delete')}
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-xs text-zinc-500">{t('codePane.debugEvaluateEmpty')}</div>
+                      <div className="text-xs text-zinc-500">{t('codePane.debugWatchEmpty')}</div>
                     )}
                   </div>
                 </div>
               </div>
 
               <div className="flex min-h-0 flex-col">
-                <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                  {t('codePane.runConsole')}
-                </div>
-                <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
-                  <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-zinc-200">
-                    {selectedOutput || '$ '}
-                  </pre>
+                <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden">
+                  <div className="flex min-h-0 flex-col border-r border-zinc-800">
+                    <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                      {t('codePane.debugEvaluate')}
+                    </div>
+                    <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2">
+                      <input
+                        value={expression}
+                        onChange={(event) => {
+                          setExpression(event.target.value);
+                        }}
+                        placeholder={t('codePane.debugEvaluatePlaceholder')}
+                        disabled={!selectedSession || !isPaused}
+                        className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!expression.trim()) {
+                            return;
+                          }
+
+                          void onEvaluate(expression.trim());
+                          setExpression('');
+                        }}
+                        disabled={!selectedSession || !isPaused || !expression.trim()}
+                        className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {t('codePane.debugEvaluateRun')}
+                      </button>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+                      {evaluations.length > 0 ? (
+                        <div className="space-y-2">
+                          {evaluations.map((evaluation) => (
+                            <div key={evaluation.id} className="rounded bg-zinc-900/60 px-2 py-2 text-[11px] text-zinc-300">
+                              <div className="font-medium text-zinc-100">{evaluation.expression}</div>
+                              <div className="mt-1 break-words text-zinc-400">{evaluation.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">{t('codePane.debugEvaluateEmpty')}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex min-h-0 flex-col">
+                    <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                      {t('codePane.runConsole')}
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+                      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-zinc-200">
+                        {selectedOutput || '$ '}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

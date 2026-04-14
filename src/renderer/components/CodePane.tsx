@@ -226,6 +226,13 @@ type DebugEvaluationEntry = {
   value: string;
 };
 
+type DebugWatchEntry = {
+  id: string;
+  expression: string;
+  value?: string;
+  error?: string;
+};
+
 type EditorTarget = 'editor' | 'secondary' | 'diff';
 type CodePaneTodoItem = CodePaneContentMatch & {
   token: typeof CODE_PANE_TODO_TOKENS[number];
@@ -356,6 +363,23 @@ function normalizeExceptionBreakpoints(
     label: allBreakpoint?.label ?? CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS[0].label,
     enabled: allBreakpoint?.enabled === true,
   }];
+}
+
+function normalizeWatchExpressions(watchExpressions: string[] | undefined | null): string[] {
+  const normalizedExpressions: string[] = [];
+  const seenExpressions = new Set<string>();
+
+  for (const watchExpression of watchExpressions ?? []) {
+    const normalizedExpression = watchExpression.trim();
+    if (!normalizedExpression || seenExpressions.has(normalizedExpression)) {
+      continue;
+    }
+
+    seenExpressions.add(normalizedExpression);
+    normalizedExpressions.push(normalizedExpression);
+  }
+
+  return normalizedExpressions;
 }
 
 function getBreakpointGlyphClassName(breakpoint: CodePaneBreakpoint): string {
@@ -1133,6 +1157,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [debugSessionOutputs, setDebugSessionOutputs] = useState<Record<string, string>>({});
   const [selectedDebugSessionId, setSelectedDebugSessionId] = useState<string | null>(null);
   const [debugSessionDetails, setDebugSessionDetails] = useState<CodePaneDebugSessionDetails | null>(null);
+  const [watchExpressions, setWatchExpressions] = useState<string[]>(
+    () => normalizeWatchExpressions(pane.code?.debug?.watchExpressions),
+  );
+  const [watchEntries, setWatchEntries] = useState<DebugWatchEntry[]>([]);
   const [isDebugDetailsLoading, setIsDebugDetailsLoading] = useState(false);
   const [debugEvaluations, setDebugEvaluations] = useState<DebugEvaluationEntry[]>([]);
   const [testItems, setTestItems] = useState<CodePaneTestItem[]>([]);
@@ -1303,6 +1331,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [exceptionBreakpoints]);
 
   useEffect(() => {
+    setWatchExpressions(normalizeWatchExpressions(pane.code?.debug?.watchExpressions));
+  }, [pane.id, pane.code?.debug?.watchExpressions]);
+
+  useEffect(() => {
     dirtyPathsRef.current = dirtyPaths;
   }, [dirtyPaths]);
 
@@ -1460,6 +1492,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [persistDebugState]);
 
+  const persistWatchExpressions = useCallback((nextWatchExpressions: string[]) => {
+    const normalizedWatchExpressions = normalizeWatchExpressions(nextWatchExpressions);
+    setWatchExpressions(normalizedWatchExpressions);
+    persistDebugState({
+      watchExpressions: normalizedWatchExpressions,
+    });
+  }, [persistDebugState]);
+
   const updateOpenFileTabs = useCallback((
     updater: (currentOpenFiles: CodePaneOpenFile[]) => CodePaneOpenFile[],
   ) => {
@@ -1583,6 +1623,35 @@ export const CodePane: React.FC<CodePaneProps> = ({
     persistExceptionBreakpoints(response.data ?? CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS);
   }, [persistExceptionBreakpoints, rootPath, t]);
 
+  const loadDebugSessions = useCallback(async () => {
+    const response = await window.electronAPI.codePaneListDebugSessions({
+      rootPath,
+    });
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    const snapshots = response.data ?? [];
+    setDebugSessions(snapshots.map((snapshot) => snapshot.session));
+    setDebugSessionOutputs(
+      snapshots.reduce<Record<string, string>>((accumulator, snapshot) => {
+        accumulator[snapshot.session.id] = snapshot.output;
+        return accumulator;
+      }, {}),
+    );
+    setSelectedDebugSessionId((currentSelectedSessionId) => {
+      if (currentSelectedSessionId && snapshots.some((snapshot) => snapshot.session.id === currentSelectedSessionId)) {
+        return currentSelectedSessionId;
+      }
+
+      return snapshots[0]?.session.id ?? null;
+    });
+  }, [rootPath, t]);
+
   useEffect(() => {
     for (const breakpoint of breakpointsRef.current) {
       void window.electronAPI.codePaneSetBreakpoint({
@@ -1590,8 +1659,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         breakpoint,
       });
     }
-    void loadExceptionBreakpoints();
-  }, [loadExceptionBreakpoints, rootPath]);
+  }, [rootPath]);
 
   const toggleSidebarVisibility = useCallback((nextVisible?: boolean) => {
     const shouldShowSidebar = nextVisible ?? !sidebarVisibleRef.current;
@@ -7056,6 +7124,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [rootPath, t]);
 
   const debugTargetById = useCallback(async (targetId: string) => {
+    await loadExceptionBreakpoints();
     const response = await window.electronAPI.codePaneDebugStart({
       rootPath,
       targetId,
@@ -7071,7 +7140,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setBottomPanelMode('debug');
     setSelectedDebugSessionId(response.data.id);
-  }, [rootPath, t]);
+  }, [loadExceptionBreakpoints, rootPath, t]);
 
   const runTestTarget = useCallback(async (targetId: string) => {
     const response = await window.electronAPI.codePaneRunTests({
@@ -7230,6 +7299,66 @@ export const CodePane: React.FC<CodePaneProps> = ({
     ].slice(0, 20));
   }, [selectedDebugSession, t]);
 
+  const refreshDebugWatches = useCallback(async (
+    sessionOverride?: CodePaneDebugSession | null,
+    expressionsOverride?: string[],
+  ) => {
+    const targetSession = sessionOverride ?? selectedDebugSession;
+    const expressions = expressionsOverride ?? watchExpressions;
+    if (expressions.length === 0) {
+      setWatchEntries([]);
+      return;
+    }
+
+    if (!targetSession || targetSession.state !== 'paused') {
+      setWatchEntries((currentEntries) => expressions.map((expression) => (
+        currentEntries.find((entry) => entry.expression === expression) ?? {
+          id: expression,
+          expression,
+        }
+      )));
+      return;
+    }
+
+    const nextEntries = await Promise.all(expressions.map(async (expression) => {
+      const response = await window.electronAPI.codePaneDebugEvaluate({
+        sessionId: targetSession.id,
+        expression,
+      });
+      if (!response.success) {
+        return {
+          id: expression,
+          expression,
+          error: response.error || t('common.retry'),
+        };
+      }
+
+      return {
+        id: expression,
+        expression,
+        value: response.data?.value ?? '',
+      };
+    }));
+    setWatchEntries(nextEntries);
+  }, [selectedDebugSession, t, watchExpressions]);
+
+  const addDebugWatchExpression = useCallback(async (expression: string) => {
+    const normalizedExpression = expression.trim();
+    if (!normalizedExpression) {
+      return;
+    }
+
+    const nextExpressions = normalizeWatchExpressions([...watchExpressions, normalizedExpression]);
+    persistWatchExpressions(nextExpressions);
+    await refreshDebugWatches(selectedDebugSession, nextExpressions);
+  }, [persistWatchExpressions, refreshDebugWatches, selectedDebugSession, watchExpressions]);
+
+  const removeDebugWatchExpression = useCallback((expression: string) => {
+    const nextExpressions = watchExpressions.filter((watchExpression) => watchExpression !== expression);
+    persistWatchExpressions(nextExpressions);
+    setWatchEntries((currentEntries) => currentEntries.filter((entry) => entry.expression !== expression));
+  }, [persistWatchExpressions, watchExpressions]);
+
   const openTestItem = useCallback(async (item: CodePaneTestItem) => {
     if (!item.filePath) {
       return;
@@ -7370,6 +7499,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (bottomPanelMode === 'debug') {
       void loadRunTargets();
+      void loadDebugSessions();
       void loadDebugSessionDetails(selectedDebugSessionId);
       void loadExceptionBreakpoints();
       return;
@@ -7417,6 +7547,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitHistory?.targetLineNumber,
     loadGitHistory,
     loadHierarchyRoot,
+    loadDebugSessions,
     loadDebugSessionDetails,
     loadExceptionBreakpoints,
     loadSemanticSummary,
@@ -7433,6 +7564,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       void loadRunTargets();
     } else if (bottomPanelMode === 'debug') {
       void loadRunTargets();
+      void loadDebugSessions();
       void loadExceptionBreakpoints();
     } else if (bottomPanelMode === 'tests') {
       void loadTests();
@@ -7457,6 +7589,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitHistory?.targetLineNumber,
     loadGitHistory,
     loadHierarchyRoot,
+    loadDebugSessions,
     loadExceptionBreakpoints,
     loadTodoEntries,
     loadProjectContributions,
@@ -7473,6 +7606,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     setDebugEvaluations([]);
   }, [selectedDebugSessionId]);
+
+  useEffect(() => {
+    void refreshDebugWatches(selectedDebugSession);
+  }, [refreshDebugWatches, selectedDebugSession, watchExpressions]);
 
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
@@ -9086,6 +9223,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               selectedSession={selectedDebugSession}
               selectedDetails={debugSessionDetails}
               selectedOutput={selectedDebugSessionOutput}
+              watchEntries={watchEntries}
               evaluations={debugEvaluations}
               isLoading={isRunTargetsLoading}
               isDetailsLoading={isDebugDetailsLoading}
@@ -9104,6 +9242,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onStepOut={(sessionId) => stepDebugSession(sessionId, 'out')}
               onOpenFrame={openDebugFrame}
               onEvaluate={evaluateDebugExpression}
+              onAddWatch={addDebugWatchExpression}
+              onRemoveWatch={removeDebugWatchExpression}
+              onRefreshWatches={() => refreshDebugWatches()}
               onUpdateBreakpoint={updateBreakpoint}
               onRemoveBreakpoint={removeBreakpoint}
               onSetExceptionBreakpoint={setExceptionBreakpoint}

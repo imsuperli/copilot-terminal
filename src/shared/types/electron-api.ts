@@ -1010,6 +1010,11 @@ export interface CodePaneDebugSessionOutputPayload {
   stream: 'stdout' | 'stderr' | 'system';
 }
 
+export interface CodePaneDebugSessionSnapshot {
+  session: CodePaneDebugSession;
+  output: string;
+}
+
 export interface CodePaneDebugStartConfig {
   rootPath: string;
   targetId: string;
@@ -1021,6 +1026,10 @@ export interface CodePaneDebugControlConfig {
 
 export interface CodePaneGetDebugSessionDetailsConfig {
   sessionId: string;
+}
+
+export interface CodePaneListDebugSessionsConfig {
+  rootPath: string;
 }
 
 export interface CodePaneDebugEvaluateConfig {
@@ -1480,6 +1489,7 @@ export interface ElectronAPI {
   codePaneDebugStepOver: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
   codePaneDebugStepInto: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
   codePaneDebugStepOut: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
+  codePaneListDebugSessions: (config: CodePaneListDebugSessionsConfig) => Promise<IpcResponse<CodePaneDebugSessionSnapshot[]>>;
   codePaneGetDebugSessionDetails: (config: CodePaneGetDebugSessionDetailsConfig) => Promise<IpcResponse<CodePaneDebugSessionDetails>>;
   codePaneDebugEvaluate: (config: CodePaneDebugEvaluateConfig) => Promise<IpcResponse<CodePaneDebugEvaluationResult>>;
   codePaneSetBreakpoint: (config: CodePaneSetBreakpointConfig) => Promise<IpcResponse<void>>;
