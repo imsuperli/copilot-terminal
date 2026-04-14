@@ -75,7 +75,7 @@ function ChatPaneHarness() {
 
 async function expectThinkingIndicator() {
   const indicator = await screen.findByTestId('agent-thinking-indicator');
-  expect(indicator).toHaveTextContent('Thinking');
+  expect(indicator).toHaveTextContent('Thinking ...');
   expect(screen.queryByText('Agent · Thinking')).not.toBeInTheDocument();
   return indicator;
 }
@@ -832,7 +832,7 @@ describe('ChatPane', () => {
       }));
     });
 
-    expect(screen.getByTestId('agent-thinking-indicator')).toHaveTextContent('Thinking');
+    expect(screen.getByTestId('agent-thinking-indicator')).toHaveTextContent('Thinking ...');
     expect(screen.queryByText('Agent · Thinking')).not.toBeInTheDocument();
     expect(screen.queryByText('历史上下文摘要：旧消息被压缩。')).not.toBeInTheDocument();
   });
@@ -967,7 +967,7 @@ describe('ChatPane', () => {
       }));
     });
 
-    expect(screen.getByTestId('agent-thinking-indicator')).toHaveTextContent('Thinking');
+    expect(screen.getByTestId('agent-thinking-indicator')).toHaveTextContent('Thinking ...');
     expect(screen.queryByText('Agent · Thinking')).not.toBeInTheDocument();
   });
 

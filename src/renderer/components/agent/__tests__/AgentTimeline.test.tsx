@@ -56,7 +56,7 @@ describe('AgentTimeline', () => {
       />,
     );
 
-    const thinkingLabel = screen.getByText('Thinking');
+    const thinkingLabel = screen.getByText(/Thinking/);
     const assistantReply = screen.getByText('最终答复');
     expect(thinkingLabel.compareDocumentPosition(assistantReply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByText('codex')).toHaveLength(1);
@@ -306,7 +306,7 @@ describe('AgentTimeline', () => {
     const assistantReply = screen.getByText('正在读取服务输出');
 
     expect(indicator).toHaveClass('sticky');
-    expect(indicator).toHaveTextContent('Thinking');
+    expect(indicator).toHaveTextContent('Thinking ...');
     expect(screen.queryByText('codex · Thinking')).not.toBeInTheDocument();
     expect(assistantReply.compareDocumentPosition(indicator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
