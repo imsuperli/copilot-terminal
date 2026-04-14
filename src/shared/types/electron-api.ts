@@ -986,10 +986,21 @@ export interface CodePaneProjectDetailCard {
   lines: string[];
 }
 
+export interface CodePaneProjectTreeItem {
+  id: string;
+  label: string;
+  kind: 'group' | 'entry';
+  description?: string;
+  filePath?: string;
+  lineNumber?: number;
+  column?: number;
+  children?: CodePaneProjectTreeItem[];
+}
+
 export interface CodePaneProjectTreeSection {
   id: string;
   title: string;
-  items: CodePaneTestItem[];
+  items: CodePaneProjectTreeItem[];
 }
 
 export interface CodePaneProjectContribution {

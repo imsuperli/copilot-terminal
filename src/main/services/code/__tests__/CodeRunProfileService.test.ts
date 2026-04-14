@@ -67,6 +67,68 @@ describe('CodeRunProfileService', () => {
     ]));
   });
 
+  it('binds Django run targets to the detected interpreter', async () => {
+    const interpreterPath = path.join(tempRootPath, '.venv', 'bin', 'python');
+    const activeFilePath = path.join(tempRootPath, 'app.py');
+    await fsPromises.mkdir(path.dirname(interpreterPath), { recursive: true });
+    await fsPromises.writeFile(interpreterPath, '', 'utf8');
+    await fsPromises.writeFile(path.join(tempRootPath, 'manage.py'), 'print("manage")\n', 'utf8');
+    await fsPromises.writeFile(activeFilePath, 'print("app")\n', 'utf8');
+
+    const targets = await service.listRunTargets({
+      rootPath: tempRootPath,
+      activeFilePath,
+    });
+
+    expect(targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        label: 'app.py',
+        detail: `${interpreterPath} app.py`,
+        languageId: 'python',
+      }),
+      expect.objectContaining({
+        label: 'Django Server',
+        detail: `${interpreterPath} manage.py runserver`,
+        languageId: 'python',
+      }),
+    ]));
+  });
+
+  it('adds a FastAPI uvicorn target for FastAPI modules', async () => {
+    const interpreterPath = path.join(tempRootPath, '.venv', 'bin', 'python');
+    const activeFilePath = path.join(tempRootPath, 'app', 'main.py');
+    await fsPromises.mkdir(path.dirname(interpreterPath), { recursive: true });
+    await fsPromises.mkdir(path.dirname(activeFilePath), { recursive: true });
+    await fsPromises.writeFile(interpreterPath, '', 'utf8');
+    await fsPromises.writeFile(
+      activeFilePath,
+      [
+        'from fastapi import FastAPI',
+        '',
+        'app = FastAPI()',
+        '',
+        '@app.get("/health")',
+        'def health():',
+        '    return {"ok": True}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const targets = await service.listRunTargets({
+      rootPath: tempRootPath,
+      activeFilePath,
+    });
+
+    expect(targets).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        label: 'FastAPI',
+        detail: `${interpreterPath} -m uvicorn app.main:app --reload`,
+        languageId: 'python',
+      }),
+    ]));
+  });
+
   it('runs ad hoc test targets, emits output, and reruns failed tests', async () => {
     const target = service.registerAdHocTarget({
       rootPath: tempRootPath,

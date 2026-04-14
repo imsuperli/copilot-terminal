@@ -3,6 +3,7 @@ import { homedir } from 'os';
 import type {
   CodePaneExternalLibrarySection,
   CodePaneProjectContribution,
+  CodePaneProjectTreeItem,
 } from '../../../../shared/types/electron-api';
 import {
   createExternalLibraryRoot,
@@ -10,6 +11,8 @@ import {
   createProjectContribution,
   directoryExists,
   fileExists,
+  findWorkspaceFiles,
+  formatWorkspaceRelativePath,
   hasProjectIndicators,
   hasTopLevelExtension,
   readTextFile,
@@ -90,6 +93,16 @@ export class GoProjectAdapter implements LanguageProjectAdapter {
           label: projectInfo.hasVendor ? 'Vendor directory detected' : 'Using module cache',
           tone: projectInfo.hasVendor ? 'info' : 'warning',
         },
+        {
+          id: 'go-benchmarks',
+          label: `Benchmarks: ${projectInfo.insights.benchmarks.length}`,
+          tone: 'info',
+        },
+        {
+          id: 'go-examples',
+          label: `Examples: ${projectInfo.insights.examples.length}`,
+          tone: 'info',
+        },
       ],
       detailCards: [
         {
@@ -102,7 +115,17 @@ export class GoProjectAdapter implements LanguageProjectAdapter {
             `GOMODCACHE: ${projectInfo.goModuleCachePath}`,
           ],
         },
+        {
+          id: 'go-insights',
+          title: 'GoLand-style Insights',
+          lines: [
+            `Benchmarks: ${projectInfo.insights.benchmarks.length}`,
+            `Examples: ${projectInfo.insights.examples.length}`,
+            `go:generate directives: ${projectInfo.insights.generateDirectives.length}`,
+          ],
+        },
       ],
+      treeSections: buildGoTreeSections(projectInfo.insights),
       commandGroups: this.getCommandGroups(workspaceRoot, projectInfo),
     });
   }
@@ -133,6 +156,8 @@ export class GoProjectAdapter implements LanguageProjectAdapter {
       createGoCommand('go-project-build', 'Go Build', 'go build ./...', 'go', ['build', './...'], workspaceRoot),
       createGoCommand('go-project-env', 'Go Env', 'go env', 'go', ['env'], workspaceRoot),
       createGoCommand('go-project-mod-tidy', 'Go Mod Tidy', 'go mod tidy', 'go', ['mod', 'tidy'], workspaceRoot),
+      createGoCommand('go-project-generate', 'Go Generate', 'go generate ./...', 'go', ['generate', './...'], workspaceRoot),
+      createGoCommand('go-project-bench', 'Go Bench', 'go test ./... -bench .', 'go', ['test', './...', '-bench', '.'], workspaceRoot),
     ];
 
     if (projectInfo.goWorkPath) {
@@ -149,12 +174,27 @@ export class GoProjectAdapter implements LanguageProjectAdapter {
   }
 }
 
+interface GoProjectInsightEntry {
+  id: string;
+  label: string;
+  description: string;
+  filePath: string;
+  lineNumber: number;
+}
+
+interface GoProjectInsights {
+  benchmarks: GoProjectInsightEntry[];
+  examples: GoProjectInsightEntry[];
+  generateDirectives: GoProjectInsightEntry[];
+}
+
 interface GoProjectInfo {
   moduleName: string | null;
   goModPath: string | null;
   goWorkPath: string | null;
   hasVendor: boolean;
   goModuleCachePath: string;
+  insights: GoProjectInsights;
 }
 
 async function detectGoProject(workspaceRoot: string): Promise<GoProjectInfo | null> {
@@ -176,7 +216,117 @@ async function detectGoProject(workspaceRoot: string): Promise<GoProjectInfo | n
     goModuleCachePath: process.env.GOMODCACHE
       ? path.resolve(process.env.GOMODCACHE)
       : path.join(homedir(), 'go', 'pkg', 'mod'),
+    insights: await collectGoInsights(workspaceRoot),
   };
+}
+
+async function collectGoInsights(workspaceRoot: string): Promise<GoProjectInsights> {
+  const goFiles = await findWorkspaceFiles(workspaceRoot, ['**/*.go']);
+  const benchmarks: GoProjectInsightEntry[] = [];
+  const examples: GoProjectInsightEntry[] = [];
+  const generateDirectives: GoProjectInsightEntry[] = [];
+
+  for (const filePath of goFiles) {
+    const content = await readTextFile(filePath);
+    if (!content) {
+      continue;
+    }
+
+    const relativePath = formatWorkspaceRelativePath(workspaceRoot, filePath);
+    const lines = content.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      const trimmedLine = lines[index].trim();
+      const benchmarkMatch = trimmedLine.match(/^func\s+(Benchmark[A-Za-z0-9_]+)\s*\(\s*[A-Za-z0-9_]+\s+\*testing\.B\s*\)/);
+      if (benchmarkMatch) {
+        benchmarks.push({
+          id: `go-benchmark:${filePath}:${benchmarkMatch[1]}:${index + 1}`,
+          label: benchmarkMatch[1],
+          description: relativePath,
+          filePath,
+          lineNumber: index + 1,
+        });
+      }
+
+      const exampleMatch = trimmedLine.match(/^func\s+(Example[A-Za-z0-9_]+)\s*\(\s*\)/);
+      if (exampleMatch) {
+        examples.push({
+          id: `go-example:${filePath}:${exampleMatch[1]}:${index + 1}`,
+          label: exampleMatch[1],
+          description: relativePath,
+          filePath,
+          lineNumber: index + 1,
+        });
+      }
+
+      const generateMatch = trimmedLine.match(/^\/\/go:generate\s+(.+)$/);
+      if (generateMatch) {
+        generateDirectives.push({
+          id: `go-generate:${filePath}:${index + 1}`,
+          label: '//go:generate',
+          description: `${generateMatch[1]} · ${relativePath}`,
+          filePath,
+          lineNumber: index + 1,
+        });
+      }
+    }
+  }
+
+  return {
+    benchmarks,
+    examples,
+    generateDirectives,
+  };
+}
+
+function buildGoTreeSections(insights: GoProjectInsights) {
+  const sections: Array<{ id: string; title: string; items: CodePaneProjectTreeItem[] }> = [];
+
+  if (insights.benchmarks.length > 0) {
+    sections.push({
+      id: 'go-benchmarks',
+      title: 'Benchmarks',
+      items: insights.benchmarks.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        kind: 'entry',
+        description: entry.description,
+        filePath: entry.filePath,
+        lineNumber: entry.lineNumber,
+      })),
+    });
+  }
+
+  if (insights.examples.length > 0) {
+    sections.push({
+      id: 'go-examples',
+      title: 'Examples',
+      items: insights.examples.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        kind: 'entry',
+        description: entry.description,
+        filePath: entry.filePath,
+        lineNumber: entry.lineNumber,
+      })),
+    });
+  }
+
+  if (insights.generateDirectives.length > 0) {
+    sections.push({
+      id: 'go-generate',
+      title: 'go:generate',
+      items: insights.generateDirectives.map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        kind: 'entry',
+        description: entry.description,
+        filePath: entry.filePath,
+        lineNumber: entry.lineNumber,
+      })),
+    });
+  }
+
+  return sections;
 }
 
 function createGoCommand(

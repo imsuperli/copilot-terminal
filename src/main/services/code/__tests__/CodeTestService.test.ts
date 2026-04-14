@@ -75,6 +75,36 @@ describe('CodeTestService', () => {
     });
   });
 
+  it('expands pytest parametrized cases into individual runnable items', async () => {
+    const filePath = path.join(tempRootPath, 'tests', 'test_params.py');
+    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+    await fsPromises.writeFile(
+      filePath,
+      [
+        'import pytest',
+        '',
+        '@pytest.mark.parametrize("value", ["alpha", "beta"], ids=["a", "b"])',
+        'def test_value(value):',
+        '    assert value',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const items = await testService.listTests({
+      rootPath: tempRootPath,
+      activeFilePath: filePath,
+    });
+
+    expect(items[0]).toMatchObject({
+      label: 'test_params.py',
+      children: expect.arrayContaining([
+        expect.objectContaining({ label: 'test_value[a]' }),
+        expect.objectContaining({ label: 'test_value[b]' }),
+      ]),
+    });
+  });
+
   it('builds a Java test tree with suite and case targets', async () => {
     const filePath = path.join(tempRootPath, 'src', 'test', 'java', 'com', 'example', 'ServiceTest.java');
     await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
@@ -125,6 +155,39 @@ describe('CodeTestService', () => {
           ]),
         }),
       ],
+    });
+  });
+
+  it('detects Go benchmarks and examples as runnable test items', async () => {
+    const filePath = path.join(tempRootPath, 'pkg', 'service_test.go');
+    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+    await fsPromises.writeFile(
+      filePath,
+      [
+        'package pkg',
+        '',
+        'import "testing"',
+        '',
+        'func TestService(t *testing.T) {}',
+        'func BenchmarkService(b *testing.B) {}',
+        'func ExampleService() {}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const items = await testService.listTests({
+      rootPath: tempRootPath,
+      activeFilePath: filePath,
+    });
+
+    expect(items[0]).toMatchObject({
+      label: 'service_test.go',
+      children: expect.arrayContaining([
+        expect.objectContaining({ label: 'TestService' }),
+        expect.objectContaining({ label: 'BenchmarkService' }),
+        expect.objectContaining({ label: 'ExampleService' }),
+      ]),
     });
   });
 });

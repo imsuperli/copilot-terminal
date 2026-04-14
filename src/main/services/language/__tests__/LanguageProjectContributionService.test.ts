@@ -174,6 +174,142 @@ describe('LanguageProjectContributionService', () => {
     ));
     expect(sessionEvents.some((event) => event.rootPath === workspaceRootPath)).toBe(true);
   });
+
+  it('builds Spring Boot project insights with request mappings and config files', async () => {
+    await fsPromises.mkdir(path.join(workspaceRootPath, 'src', 'main', 'java', 'com', 'example'), { recursive: true });
+    await fsPromises.mkdir(path.join(workspaceRootPath, 'src', 'main', 'resources'), { recursive: true });
+    await fsPromises.writeFile(
+      path.join(workspaceRootPath, 'pom.xml'),
+      '<project><artifactId>demo</artifactId><dependencies><dependency>spring-boot-starter-web</dependency></dependencies></project>',
+      'utf8',
+    );
+    await fsPromises.writeFile(
+      path.join(workspaceRootPath, 'src', 'main', 'java', 'com', 'example', 'DemoApplication.java'),
+      [
+        '@SpringBootApplication',
+        'public class DemoApplication {}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await fsPromises.writeFile(
+      path.join(workspaceRootPath, 'src', 'main', 'java', 'com', 'example', 'UserController.java'),
+      [
+        '@RestController',
+        '@RequestMapping("/api/users")',
+        'public class UserController {',
+        '  @GetMapping("/list")',
+        '  public String list() { return "ok"; }',
+        '}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await fsPromises.writeFile(
+      path.join(workspaceRootPath, 'src', 'main', 'resources', 'application.yml'),
+      'server:\n  port: 8080\n',
+      'utf8',
+    );
+
+    const service = new LanguageProjectContributionService({
+      codeFileService: new CodeFileService(),
+    });
+
+    const contributions = await service.getProjectContributions(workspaceRootPath);
+    const javaContribution = contributions.find((item) => item.languageId === 'java');
+    expect(javaContribution).toMatchObject({
+      title: 'Java Project',
+      treeSections: expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Request Mappings',
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              label: 'GET /api/users/list',
+            }),
+          ]),
+        }),
+        expect.objectContaining({
+          title: 'Config Files',
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              label: 'src/main/resources/application.yml',
+            }),
+          ]),
+        }),
+      ]),
+    });
+  });
+
+  it('builds Python and Go framework insights from the default adapters', async () => {
+    await fsPromises.mkdir(path.join(workspaceRootPath, 'app'), { recursive: true });
+    await fsPromises.writeFile(
+      path.join(workspaceRootPath, 'app', 'main.py'),
+      [
+        'from fastapi import FastAPI',
+        'app = FastAPI()',
+        '@app.get("/health")',
+        'def health():',
+        '    return {"ok": True}',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await fsPromises.writeFile(path.join(workspaceRootPath, 'go.mod'), 'module example.com/demo\n', 'utf8');
+    await fsPromises.writeFile(
+      path.join(workspaceRootPath, 'service_test.go'),
+      [
+        'package main',
+        'import "testing"',
+        'func BenchmarkService(b *testing.B) {}',
+        'func ExampleService() {}',
+        '//go:generate mockgen -source service.go',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const service = new LanguageProjectContributionService({
+      codeFileService: new CodeFileService(),
+    });
+
+    const contributions = await service.getProjectContributions(workspaceRootPath);
+    const pythonContribution = contributions.find((item) => item.languageId === 'python');
+    const goContribution = contributions.find((item) => item.languageId === 'go');
+
+    expect(pythonContribution).toMatchObject({
+      treeSections: expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Routes',
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              label: 'GET /health',
+            }),
+          ]),
+        }),
+      ]),
+    });
+
+    expect(goContribution).toMatchObject({
+      treeSections: expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Benchmarks',
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              label: 'BenchmarkService',
+            }),
+          ]),
+        }),
+        expect.objectContaining({
+          title: 'go:generate',
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              label: '//go:generate',
+            }),
+          ]),
+        }),
+      ]),
+    });
+  });
 });
 
 async function waitForCondition(predicate: () => boolean, timeoutMs = 5000): Promise<void> {

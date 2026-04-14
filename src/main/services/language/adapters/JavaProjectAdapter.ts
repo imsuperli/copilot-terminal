@@ -4,6 +4,7 @@ import { statSync } from 'fs';
 import type {
   CodePaneExternalLibrarySection,
   CodePaneProjectContribution,
+  CodePaneProjectTreeItem,
 } from '../../../../shared/types/electron-api';
 import {
   createExternalLibraryRoot,
@@ -11,6 +12,8 @@ import {
   createProjectContribution,
   directoryExists,
   fileExists,
+  findWorkspaceFiles,
+  formatWorkspaceRelativePath,
   hasProjectIndicators,
   readTextFile,
   type LanguageProjectAdapter,
@@ -65,6 +68,24 @@ export class JavaProjectAdapter implements LanguageProjectAdapter {
       return null;
     }
 
+    const springStatusItems = projectInfo.springInsights ? [
+      {
+        id: 'java-spring-endpoints',
+        label: `Endpoints: ${projectInfo.springInsights.endpoints.length}`,
+        tone: 'info' as const,
+      },
+      {
+        id: 'java-spring-beans',
+        label: `Beans: ${projectInfo.springInsights.beans.length}`,
+        tone: 'info' as const,
+      },
+      {
+        id: 'java-spring-configs',
+        label: `Configs: ${projectInfo.springInsights.configFiles.length}`,
+        tone: 'info' as const,
+      },
+    ] : [];
+
     return createProjectContribution('java-project', this.languageId, 'Java Project', {
       statusItems: [
         {
@@ -82,6 +103,7 @@ export class JavaProjectAdapter implements LanguageProjectAdapter {
           label: projectInfo.isSpringBoot ? 'Spring Boot detected' : 'Standard Java project',
           tone: projectInfo.isSpringBoot ? 'info' : 'warning',
         },
+        ...springStatusItems,
       ],
       detailCards: [
         {
@@ -94,7 +116,20 @@ export class JavaProjectAdapter implements LanguageProjectAdapter {
             `Test sources: ${projectInfo.testSourcePath}`,
           ],
         },
+        ...(projectInfo.springInsights ? [
+          {
+            id: 'java-spring-dashboard',
+            title: 'Spring Boot',
+            lines: [
+              `Application: ${projectInfo.springInsights.applicationClass?.label ?? 'Not detected'}`,
+              `Endpoints: ${projectInfo.springInsights.endpoints.length}`,
+              `Beans: ${projectInfo.springInsights.beans.length}`,
+              `Configs: ${projectInfo.springInsights.configFiles.length}`,
+            ],
+          },
+        ] : []),
       ],
+      treeSections: projectInfo.springInsights ? buildSpringTreeSections(workspaceRoot, projectInfo.springInsights) : undefined,
       commandGroups: await this.getCommandGroups(workspaceRoot, projectInfo),
     });
   }
@@ -139,6 +174,7 @@ interface JavaProjectInfo {
   testSourcePath: string;
   hasTests: boolean;
   isSpringBoot: boolean;
+  springInsights?: JavaSpringInsights;
 }
 
 async function detectJavaProject(workspaceRoot: string): Promise<JavaProjectInfo | null> {
@@ -153,6 +189,7 @@ async function detectJavaProject(workspaceRoot: string): Promise<JavaProjectInfo
     ? pomPath
     : (gradlePath ?? path.join(workspaceRoot, 'build.gradle'));
   const buildFileContent = await readTextFile(buildFilePath) ?? '';
+  const isSpringBoot = /spring-boot/i.test(buildFileContent);
 
   return {
     buildTool,
@@ -161,7 +198,8 @@ async function detectJavaProject(workspaceRoot: string): Promise<JavaProjectInfo
     mainSourcePath: path.join(workspaceRoot, 'src', 'main', 'java'),
     testSourcePath: path.join(workspaceRoot, 'src', 'test', 'java'),
     hasTests: await directoryExists(path.join(workspaceRoot, 'src', 'test', 'java')),
-    isSpringBoot: /spring-boot/i.test(buildFileContent),
+    isSpringBoot,
+    ...(isSpringBoot ? { springInsights: await collectSpringInsights(workspaceRoot) } : {}),
   };
 }
 
@@ -177,6 +215,7 @@ function buildJavaCommandDefinitions(
       createJavaCommand('java-gradle-dependencies', 'Dependencies', `${gradleCommand} dependencies`, gradleCommand, ['dependencies'], workspaceRoot),
       ...(projectInfo.isSpringBoot ? [
         createJavaCommand('java-gradle-bootrun', 'Boot Run', `${gradleCommand} bootRun`, gradleCommand, ['bootRun'], workspaceRoot),
+        createJavaCommand('java-gradle-boottest', 'Boot Test', `${gradleCommand} test --tests *`, gradleCommand, ['test', '--tests', '*'], workspaceRoot),
       ] : []),
     ];
   }
@@ -189,8 +228,314 @@ function buildJavaCommandDefinitions(
     createJavaCommand('java-maven-dependency-tree', 'Dependency Tree', `${mavenCommand} dependency:tree`, mavenCommand, ['dependency:tree'], workspaceRoot),
     ...(projectInfo.isSpringBoot ? [
       createJavaCommand('java-maven-spring-boot-run', 'Spring Boot Run', `${mavenCommand} spring-boot:run`, mavenCommand, ['spring-boot:run'], workspaceRoot),
+      createJavaCommand('java-maven-spring-boot-test', 'Spring Boot Test', `${mavenCommand} test -Dspring.profiles.active=dev`, mavenCommand, ['test', '-Dspring.profiles.active=dev'], workspaceRoot),
     ] : []),
   ];
+}
+
+interface JavaSpringInsightEntry {
+  id: string;
+  label: string;
+  description: string;
+  filePath: string;
+  lineNumber: number;
+}
+
+interface JavaSpringInsights {
+  applicationClass?: JavaSpringInsightEntry;
+  endpoints: JavaSpringInsightEntry[];
+  beans: JavaSpringInsightEntry[];
+  configFiles: Array<{
+    id: string;
+    filePath: string;
+    lineNumber: number;
+  }>;
+}
+
+async function collectSpringInsights(workspaceRoot: string): Promise<JavaSpringInsights> {
+  const javaFiles = await findWorkspaceFiles(workspaceRoot, ['src/main/java/**/*.java']);
+  const configFiles = await findWorkspaceFiles(workspaceRoot, ['src/main/resources/application*.yml', 'src/main/resources/application*.yaml', 'src/main/resources/application*.properties']);
+  const endpoints: JavaSpringInsightEntry[] = [];
+  const beans: JavaSpringInsightEntry[] = [];
+  let applicationClass: JavaSpringInsightEntry | undefined;
+
+  for (const filePath of javaFiles) {
+    const content = await readTextFile(filePath);
+    if (!content) {
+      continue;
+    }
+
+    const parsed = parseSpringJavaFile(filePath, content, workspaceRoot);
+    endpoints.push(...parsed.endpoints);
+    beans.push(...parsed.beans);
+    if (!applicationClass && parsed.applicationClass) {
+      applicationClass = parsed.applicationClass;
+    }
+  }
+
+  return {
+    ...(applicationClass ? { applicationClass } : {}),
+    endpoints: deduplicateSpringEntries(endpoints),
+    beans: deduplicateSpringEntries(beans),
+    configFiles: configFiles.map((filePath) => ({
+      id: `spring-config:${filePath}`,
+      filePath,
+      lineNumber: 1,
+    })),
+  };
+}
+
+function parseSpringJavaFile(
+  filePath: string,
+  content: string,
+  workspaceRoot: string,
+): {
+  applicationClass?: JavaSpringInsightEntry;
+  endpoints: JavaSpringInsightEntry[];
+  beans: JavaSpringInsightEntry[];
+} {
+  const lines = content.split(/\r?\n/);
+  const endpoints: JavaSpringInsightEntry[] = [];
+  const beans: JavaSpringInsightEntry[] = [];
+  let applicationClass: JavaSpringInsightEntry | undefined;
+  let pendingAnnotations: string[] = [];
+  let currentControllerClassName: string | null = null;
+  let currentBasePaths: string[] = [''];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
+    const trimmedLine = rawLine.trim();
+    if (!trimmedLine) {
+      continue;
+    }
+
+    if (trimmedLine.startsWith('@')) {
+      pendingAnnotations.push(trimmedLine);
+      continue;
+    }
+
+    const classMatch = trimmedLine.match(/(?:public\s+)?(?:abstract\s+|final\s+)?(?:class|record|interface)\s+([A-Za-z_$][A-Za-z0-9_$]*)\b/);
+    if (classMatch) {
+      const className = classMatch[1];
+      const stereotype = resolveSpringStereotype(pendingAnnotations);
+      if (stereotype) {
+        beans.push({
+          id: `spring-bean:${filePath}:${className}:${index + 1}`,
+          label: className,
+          description: `${stereotype} · ${formatWorkspaceRelativePath(workspaceRoot, filePath)}`,
+          filePath,
+          lineNumber: index + 1,
+        });
+      }
+
+      if (pendingAnnotations.some((annotation) => annotation.includes('@SpringBootApplication'))) {
+        applicationClass = {
+          id: `spring-app:${filePath}:${className}`,
+          label: className,
+          description: formatWorkspaceRelativePath(workspaceRoot, filePath),
+          filePath,
+          lineNumber: index + 1,
+        };
+      }
+
+      currentControllerClassName = pendingAnnotations.some(isControllerAnnotation) ? className : null;
+      currentBasePaths = extractRequestPaths(pendingAnnotations);
+      if (currentBasePaths.length === 0) {
+        currentBasePaths = [''];
+      }
+      pendingAnnotations = [];
+      continue;
+    }
+
+    const methodMatch = trimmedLine.match(/(?:public|protected|private)?\s*(?:static\s+)?(?:final\s+)?(?:<[^>]+>\s+)?[A-Za-z_$][A-Za-z0-9_$<>, ?\[\]]*\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\(/);
+    if (methodMatch) {
+      const methodName = methodMatch[1];
+      if (pendingAnnotations.some((annotation) => annotation.startsWith('@Bean'))) {
+        beans.push({
+          id: `spring-bean-method:${filePath}:${methodName}:${index + 1}`,
+          label: `${methodName}()`,
+          description: `@Bean · ${formatWorkspaceRelativePath(workspaceRoot, filePath)}`,
+          filePath,
+          lineNumber: index + 1,
+        });
+      }
+
+      const mappingAnnotations = pendingAnnotations.filter(isRequestMappingAnnotation);
+      if (mappingAnnotations.length > 0 && currentControllerClassName) {
+        const methodPaths = extractRequestPaths(mappingAnnotations);
+        const httpMethods = extractHttpMethods(mappingAnnotations);
+        const normalizedMethodPaths = methodPaths.length > 0 ? methodPaths : [''];
+
+        for (const httpMethod of httpMethods) {
+          for (const methodPath of normalizedMethodPaths) {
+            endpoints.push({
+              id: `spring-endpoint:${filePath}:${methodName}:${httpMethod}:${methodPath}:${index + 1}`,
+              label: `${httpMethod} ${joinSpringPaths(currentBasePaths[0] ?? '', methodPath)}`,
+              description: `${currentControllerClassName}.${methodName} · ${formatWorkspaceRelativePath(workspaceRoot, filePath)}`,
+              filePath,
+              lineNumber: index + 1,
+            });
+          }
+        }
+      }
+
+      pendingAnnotations = [];
+      continue;
+    }
+
+    pendingAnnotations = [];
+  }
+
+  return {
+    ...(applicationClass ? { applicationClass } : {}),
+    endpoints,
+    beans,
+  };
+}
+
+function buildSpringTreeSections(workspaceRoot: string, insights: JavaSpringInsights) {
+  const sections: Array<{ id: string; title: string; items: CodePaneProjectTreeItem[] }> = [];
+
+  if (insights.endpoints.length > 0) {
+    sections.push({
+      id: 'spring-endpoints',
+      title: 'Request Mappings',
+      items: insights.endpoints.map((endpoint) => ({
+        id: endpoint.id,
+        label: endpoint.label,
+        kind: 'entry',
+        description: endpoint.description,
+        filePath: endpoint.filePath,
+        lineNumber: endpoint.lineNumber,
+      })),
+    });
+  }
+
+  if (insights.beans.length > 0) {
+    sections.push({
+      id: 'spring-beans',
+      title: 'Beans',
+      items: insights.beans.map((bean) => ({
+        id: bean.id,
+        label: bean.label,
+        kind: 'entry',
+        description: bean.description,
+        filePath: bean.filePath,
+        lineNumber: bean.lineNumber,
+      })),
+    });
+  }
+
+  if (insights.configFiles.length > 0) {
+    sections.push({
+      id: 'spring-configs',
+      title: 'Config Files',
+      items: insights.configFiles.map((configFile) => ({
+        id: configFile.id,
+        label: formatWorkspaceRelativePath(workspaceRoot, configFile.filePath),
+        kind: 'entry',
+        description: 'Spring configuration',
+        filePath: configFile.filePath,
+        lineNumber: configFile.lineNumber,
+      })),
+    });
+  }
+
+  return sections;
+}
+
+function deduplicateSpringEntries(entries: JavaSpringInsightEntry[]): JavaSpringInsightEntry[] {
+  const seenIds = new Set<string>();
+  return entries.filter((entry) => {
+    if (seenIds.has(entry.id)) {
+      return false;
+    }
+
+    seenIds.add(entry.id);
+    return true;
+  });
+}
+
+function resolveSpringStereotype(annotations: string[]): string | null {
+  for (const annotation of annotations) {
+    if (annotation.startsWith('@RestController')) {
+      return '@RestController';
+    }
+    if (annotation.startsWith('@Controller')) {
+      return '@Controller';
+    }
+    if (annotation.startsWith('@Service')) {
+      return '@Service';
+    }
+    if (annotation.startsWith('@Repository')) {
+      return '@Repository';
+    }
+    if (annotation.startsWith('@Component')) {
+      return '@Component';
+    }
+    if (annotation.startsWith('@Configuration')) {
+      return '@Configuration';
+    }
+  }
+
+  return null;
+}
+
+function isControllerAnnotation(annotation: string): boolean {
+  return annotation.startsWith('@RestController')
+    || annotation.startsWith('@Controller')
+    || annotation.startsWith('@RequestMapping');
+}
+
+function isRequestMappingAnnotation(annotation: string): boolean {
+  return annotation.startsWith('@RequestMapping')
+    || annotation.startsWith('@GetMapping')
+    || annotation.startsWith('@PostMapping')
+    || annotation.startsWith('@PutMapping')
+    || annotation.startsWith('@DeleteMapping')
+    || annotation.startsWith('@PatchMapping');
+}
+
+function extractRequestPaths(annotations: string[]): string[] {
+  const paths = annotations.flatMap((annotation) => {
+    const quotedValues = Array.from(annotation.matchAll(/["']([^"']+)["']/g), (match) => match[1]);
+    return quotedValues.length > 0 ? quotedValues : [];
+  });
+
+  return paths.length > 0 ? paths : [];
+}
+
+function extractHttpMethods(annotations: string[]): string[] {
+  const methods = new Set<string>();
+  for (const annotation of annotations) {
+    if (annotation.startsWith('@GetMapping')) {
+      methods.add('GET');
+    } else if (annotation.startsWith('@PostMapping')) {
+      methods.add('POST');
+    } else if (annotation.startsWith('@PutMapping')) {
+      methods.add('PUT');
+    } else if (annotation.startsWith('@DeleteMapping')) {
+      methods.add('DELETE');
+    } else if (annotation.startsWith('@PatchMapping')) {
+      methods.add('PATCH');
+    } else if (annotation.startsWith('@RequestMapping')) {
+      const requestMethods = Array.from(annotation.matchAll(/RequestMethod\.([A-Z]+)/g), (match) => match[1]);
+      if (requestMethods.length === 0) {
+        methods.add('ANY');
+      } else {
+        requestMethods.forEach((method) => methods.add(method));
+      }
+    }
+  }
+
+  return methods.size > 0 ? Array.from(methods) : ['ANY'];
+}
+
+function joinSpringPaths(basePath: string, methodPath: string): string {
+  const joined = `${basePath || ''}/${methodPath || ''}`
+    .replace(/\/+/g, '/')
+    .replace(/\/$/, '');
+  return joined.startsWith('/') ? joined : `/${joined}`.replace(/\/+/g, '/');
 }
 
 function createJavaCommand(

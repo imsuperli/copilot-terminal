@@ -1780,6 +1780,22 @@ describe('CodePane', () => {
               lines: ['Root: /workspace/project'],
             },
           ],
+          treeSections: [
+            {
+              id: 'spring-routes',
+              title: 'Request Mappings',
+              items: [
+                {
+                  id: 'spring-route-1',
+                  label: 'GET /api/users',
+                  kind: 'entry',
+                  description: 'UserController.list',
+                  filePath: '/workspace/project/src/main/java/com/example/UserController.java',
+                  lineNumber: 12,
+                },
+              ],
+            },
+          ],
         },
       ],
     });
@@ -1811,6 +1827,7 @@ describe('CodePane', () => {
     });
 
     expect(await screen.findByText('Java Project')).toBeInTheDocument();
+    expect(screen.getByText('Request Mappings')).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: /Test\s*mvn test/i }));
@@ -1819,6 +1836,17 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneRunProjectCommand).toHaveBeenCalledWith({
       rootPath: '/workspace/project',
       commandId: 'java-maven-test',
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /GET \/api\/users/i }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/main/java/com/example/UserController.java',
+      });
     });
   });
 

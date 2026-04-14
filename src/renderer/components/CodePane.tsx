@@ -7093,6 +7093,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onRunCommand={runProjectCommandById}
               onSelectSession={setSelectedRunSessionId}
               onStopSession={stopRunSession}
+              onOpenTreeItem={(item) => {
+                if (!item.filePath) {
+                  return;
+                }
+
+                void openFileLocation({
+                  filePath: item.filePath,
+                  lineNumber: item.lineNumber ?? 1,
+                  column: item.column ?? 1,
+                });
+              }}
             />
           ) : bottomPanelMode === 'tests' ? (
             <TestsToolWindow

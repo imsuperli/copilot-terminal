@@ -1,5 +1,6 @@
 import { promises as fsPromises } from 'fs';
 import path from 'path';
+import fg from 'fast-glob';
 import type {
   CodePaneExternalLibraryRoot,
   CodePaneExternalLibrarySection,
@@ -117,6 +118,41 @@ export async function readTextFile(targetPath: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+export const DEFAULT_WORKSPACE_IGNORE_PATTERNS = [
+  '**/.git/**',
+  '**/node_modules/**',
+  '**/target/**',
+  '**/dist/**',
+  '**/.venv/**',
+  '**/venv/**',
+  '**/__pycache__/**',
+  '**/.pytest_cache/**',
+  '**/vendor/**',
+];
+
+export async function findWorkspaceFiles(
+  workspaceRoot: string,
+  patterns: string[],
+  ignore: string[] = [],
+): Promise<string[]> {
+  return await fg(patterns, {
+    cwd: workspaceRoot,
+    absolute: true,
+    onlyFiles: true,
+    unique: true,
+    ignore: [...DEFAULT_WORKSPACE_IGNORE_PATTERNS, ...ignore],
+  });
+}
+
+export function formatWorkspaceRelativePath(workspaceRoot: string, targetPath: string): string {
+  const relativePath = path.relative(workspaceRoot, targetPath);
+  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return path.basename(targetPath);
+  }
+
+  return relativePath.split(path.sep).join('/');
 }
 
 export function createProjectContribution(

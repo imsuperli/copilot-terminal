@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  ChevronRight,
   Loader2,
   Play,
   RefreshCw,
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 import type {
   CodePaneProjectContribution,
+  CodePaneProjectTreeItem,
   CodePaneRunSession,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
@@ -24,6 +26,7 @@ interface ProjectToolWindowProps {
   onRunCommand: (commandId: string) => void | Promise<void>;
   onSelectSession: (sessionId: string) => void;
   onStopSession: (sessionId: string) => void | Promise<void>;
+  onOpenTreeItem?: (item: CodePaneProjectTreeItem) => void;
 }
 
 export function ProjectToolWindow({
@@ -38,6 +41,7 @@ export function ProjectToolWindow({
   onRunCommand,
   onSelectSession,
   onStopSession,
+  onOpenTreeItem,
 }: ProjectToolWindowProps) {
   const { t } = useI18n();
 
@@ -131,6 +135,30 @@ export function ProjectToolWindow({
                               <Play size={12} className="shrink-0 text-emerald-300" />
                             </button>
                           ))}
+                        </div>
+                      </div>
+                    ))}
+
+                    {contribution.treeSections?.map((section) => (
+                      <div key={section.id} className="mb-3">
+                        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+                          {section.title}
+                        </div>
+                        <div className="rounded bg-zinc-950/60 px-2 py-2">
+                          {section.items.length > 0 ? (
+                            <div className="space-y-1">
+                              {section.items.map((item) => (
+                                <ProjectTreeItemRow
+                                  key={item.id}
+                                  item={item}
+                                  depth={0}
+                                  onOpenTreeItem={onOpenTreeItem}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-[11px] text-zinc-500">No items</div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -238,6 +266,64 @@ export function ProjectToolWindow({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+interface ProjectTreeItemRowProps {
+  item: CodePaneProjectTreeItem;
+  depth: number;
+  onOpenTreeItem?: (item: CodePaneProjectTreeItem) => void;
+}
+
+function ProjectTreeItemRow({ item, depth, onOpenTreeItem }: ProjectTreeItemRowProps) {
+  const content = (
+    <div className="min-w-0 flex-1">
+      <div className="truncate text-xs font-medium text-zinc-200">{item.label}</div>
+      {item.description && (
+        <div className="mt-0.5 truncate text-[10px] text-zinc-500">{item.description}</div>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      {item.filePath ? (
+        <button
+          type="button"
+          onClick={() => {
+            onOpenTreeItem?.(item);
+          }}
+          className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors hover:bg-zinc-900"
+          style={{ paddingLeft: `${depth * 14 + 6}px` }}
+        >
+          <ChevronRight size={11} className="shrink-0 text-zinc-600" />
+          {content}
+          {item.lineNumber && (
+            <div className="shrink-0 text-[10px] text-zinc-500">L{item.lineNumber}</div>
+          )}
+        </button>
+      ) : (
+        <div
+          className="flex items-center gap-2 px-1.5 py-1"
+          style={{ paddingLeft: `${depth * 14 + 6}px` }}
+        >
+          <ChevronRight size={11} className="shrink-0 text-zinc-700" />
+          {content}
+        </div>
+      )}
+      {item.children && item.children.length > 0 && (
+        <div className="space-y-1">
+          {item.children.map((child) => (
+            <ProjectTreeItemRow
+              key={child.id}
+              item={child}
+              depth={depth + 1}
+              onOpenTreeItem={onOpenTreeItem}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

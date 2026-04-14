@@ -12,6 +12,7 @@ import type {
   CodePaneRunTargetKind,
   CodePaneStopRunTargetConfig,
 } from '../../../shared/types/electron-api';
+import { resolvePythonEnvironment } from '../language/adapters/PythonProjectAdapter';
 
 export interface ResolvedCodeRunTarget extends CodePaneRunTarget {
   rootPath: string;
@@ -86,19 +87,56 @@ export class CodeRunProfileService {
     }
 
     if (activeFilePath?.endsWith('.py') && !isPythonTestFile(activeFilePath)) {
+      const pythonEnvironment = await resolvePythonEnvironment(rootPath);
+      const pythonCommand = pythonEnvironment.interpreterPath ?? resolveExecutable('python');
+
       targets.push(this.registerTarget({
         rootPath,
         key: `python:file:${activeFilePath}`,
         label: path.basename(activeFilePath),
-        detail: `python ${path.basename(activeFilePath)}`,
+        detail: `${pythonCommand} ${path.basename(activeFilePath)}`,
         kind: 'application',
         languageId: 'python',
         workingDirectory: path.dirname(activeFilePath),
         filePath: activeFilePath,
-        command: resolveExecutable('python'),
+        command: pythonCommand,
         args: [activeFilePath],
         canDebug: true,
       }));
+
+      const djangoManagePath = path.join(rootPath, 'manage.py');
+      if (await fs.pathExists(djangoManagePath)) {
+        targets.push(this.registerTarget({
+          rootPath,
+          key: 'python:django:runserver',
+          label: 'Django Server',
+          detail: `${pythonCommand} manage.py runserver`,
+          kind: 'application',
+          languageId: 'python',
+          workingDirectory: rootPath,
+          filePath: djangoManagePath,
+          command: pythonCommand,
+          args: ['manage.py', 'runserver'],
+          canDebug: true,
+        }));
+      }
+
+      const fastApiImportTarget = await detectFastApiImportTarget(rootPath, activeFilePath);
+      if (fastApiImportTarget) {
+        targets.push(this.registerTarget({
+          rootPath,
+          key: `python:fastapi:${activeFilePath}`,
+          label: 'FastAPI',
+          detail: `${pythonCommand} -m uvicorn ${fastApiImportTarget} --reload`,
+          kind: 'application',
+          languageId: 'python',
+          workingDirectory: rootPath,
+          filePath: activeFilePath,
+          command: pythonCommand,
+          args: ['-m', 'uvicorn', fastApiImportTarget, '--reload'],
+          canDebug: true,
+        }));
+      }
     }
 
     if (activeFilePath?.endsWith('.go') && !activeFilePath.endsWith('_test.go') && await isGoMainFile(activeFilePath)) {
@@ -396,4 +434,23 @@ function isPythonTestFile(filePath: string): boolean {
   return baseName.startsWith('test_')
     || baseName.endsWith('_test.py')
     || filePath.split(path.sep).includes('tests');
+}
+
+async function detectFastApiImportTarget(rootPath: string, filePath: string): Promise<string | null> {
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    if (!/FastAPI\s*\(/.test(content)) {
+      return null;
+    }
+
+    const relativePath = path.relative(rootPath, filePath).replace(/\.py$/i, '');
+    if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      return null;
+    }
+
+    const modulePath = relativePath.split(path.sep).join('.').replace(/\.__init__$/, '');
+    return `${modulePath}:app`;
+  } catch {
+    return null;
+  }
 }
