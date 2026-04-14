@@ -3,6 +3,7 @@ import { homedir } from 'os';
 import type {
   CodePaneExternalLibrarySection,
   CodePaneProjectContribution,
+  CodePaneProjectDiagnostic,
   CodePaneProjectTreeItem,
 } from '../../../../shared/types/electron-api';
 import {
@@ -104,6 +105,7 @@ export class GoProjectAdapter implements LanguageProjectAdapter {
           tone: 'info',
         },
       ],
+      diagnostics: buildGoProjectDiagnostics(projectInfo),
       detailCards: [
         {
           id: 'go-project-details',
@@ -183,7 +185,7 @@ export class GoProjectAdapter implements LanguageProjectAdapter {
         ['mod', 'tidy'],
         workspaceRoot,
         {
-          kind: 'refresh',
+          kind: 'repair',
         },
       ),
       createGoCommand('go-project-generate', 'Go Generate', 'go generate ./...', 'go', ['generate', './...'], workspaceRoot),
@@ -205,6 +207,11 @@ export class GoProjectAdapter implements LanguageProjectAdapter {
         id: 'go-project-sync',
         title: 'Workspace Sync',
         commands: buildGoSyncCommands(workspaceRoot, projectInfo),
+      },
+      {
+        id: 'go-project-repair',
+        title: 'Repair',
+        commands: buildGoRepairCommands(workspaceRoot, projectInfo),
       },
       {
         id: 'go-project-commands',
@@ -231,6 +238,7 @@ interface GoProjectInsights {
 
 interface GoProjectInfo {
   moduleName: string | null;
+  defaultModuleName: string;
   goModPath: string | null;
   goWorkPath: string | null;
   hasVendor: boolean;
@@ -251,6 +259,7 @@ async function detectGoProject(workspaceRoot: string): Promise<GoProjectInfo | n
 
   return {
     moduleName: goModContent?.match(/^module\s+(.+)$/m)?.[1]?.trim() ?? null,
+    defaultModuleName: `example.com/${path.basename(workspaceRoot)}`,
     goModPath: await fileExists(goModPath) ? goModPath : null,
     goWorkPath: await fileExists(goWorkPath) ? goWorkPath : null,
     hasVendor: await directoryExists(path.join(workspaceRoot, 'vendor')),
@@ -368,6 +377,80 @@ function buildGoTreeSections(insights: GoProjectInsights) {
   }
 
   return sections;
+}
+
+function buildGoRepairCommands(
+  workspaceRoot: string,
+  projectInfo: GoProjectInfo,
+): LanguageProjectCommandDefinition[] {
+  const commands: LanguageProjectCommandDefinition[] = [];
+
+  if (!projectInfo.goModPath) {
+    commands.push(createGoCommand(
+      'go-project-mod-init',
+      'Initialize Module',
+      `go mod init ${projectInfo.defaultModuleName}`,
+      'go',
+      ['mod', 'init', projectInfo.defaultModuleName],
+      workspaceRoot,
+      {
+        kind: 'repair',
+      },
+    ));
+  }
+
+  commands.push(createGoCommand(
+    'go-project-mod-tidy-repair',
+    'Repair Modules',
+    'go mod tidy',
+    'go',
+    ['mod', 'tidy'],
+    workspaceRoot,
+    {
+      kind: 'repair',
+    },
+  ));
+
+  return commands;
+}
+
+function buildGoProjectDiagnostics(projectInfo: GoProjectInfo): CodePaneProjectDiagnostic[] {
+  const diagnostics: CodePaneProjectDiagnostic[] = [];
+
+  if (!projectInfo.goModPath) {
+    diagnostics.push({
+      id: 'go-missing-module',
+      severity: 'error',
+      message: 'go.mod is not detected',
+      detail: 'Go module metadata is required for dependency resolution, imports, and package navigation.',
+      commandId: 'go-project-mod-init',
+      commandLabel: 'Initialize Module',
+    });
+  }
+
+  if (projectInfo.goWorkPath && !projectInfo.goModPath) {
+    diagnostics.push({
+      id: 'go-work-without-module',
+      severity: 'warning',
+      message: 'go.work exists without a local module',
+      detail: 'Create or restore a module before syncing the workspace to avoid incomplete package loading.',
+      commandId: 'go-project-work-sync',
+      commandLabel: 'Go Work Sync',
+    });
+  }
+
+  if (!projectInfo.hasVendor && !projectInfo.goModPath) {
+    diagnostics.push({
+      id: 'go-no-module-cache-fallback',
+      severity: 'warning',
+      message: 'No vendor directory or go.mod fallback is available',
+      detail: 'Package lookup will remain degraded until the module is initialized and dependencies are downloaded.',
+      commandId: 'go-project-mod-download',
+      commandLabel: 'Download Modules',
+    });
+  }
+
+  return diagnostics;
 }
 
 function buildGoSyncCommands(

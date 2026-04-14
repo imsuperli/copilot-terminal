@@ -2,6 +2,7 @@ import path from 'path';
 import type {
   CodePaneExternalLibrarySection,
   CodePaneProjectContribution,
+  CodePaneProjectDiagnostic,
   CodePaneProjectTreeItem,
 } from '../../../../shared/types/electron-api';
 import {
@@ -156,6 +157,7 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
         },
         ...frameworkStatusItems,
       ],
+      diagnostics: buildPythonProjectDiagnostics(projectInfo),
       detailCards: [
         {
           id: 'python-project-details',
@@ -327,6 +329,7 @@ interface PythonProjectInfo {
   environmentCount: number;
   projectFilePath: string | null;
   hasRequirementsFile: boolean;
+  hasPoetryProject: boolean;
   hasTests: boolean;
   managePyPath: string | null;
   entrypointLabel: string;
@@ -378,6 +381,7 @@ async function detectPythonProject(workspaceRoot: string): Promise<PythonProject
     'setup.py',
     'setup.cfg',
   ]);
+  const pyprojectContent = await readTextFile(path.join(workspaceRoot, 'pyproject.toml')) ?? '';
   const managePyPath = path.join(workspaceRoot, 'manage.py');
   const hasManagePy = await fileExists(managePyPath);
   const frameworkInsights = await collectPythonFrameworkInsights(workspaceRoot, hasManagePy ? managePyPath : null);
@@ -398,6 +402,8 @@ async function detectPythonProject(workspaceRoot: string): Promise<PythonProject
     environmentCount: environmentInfo.candidates.length,
     projectFilePath,
     hasRequirementsFile: await fileExists(path.join(workspaceRoot, 'requirements.txt')),
+    hasPoetryProject: /\[tool\.poetry(?:\.|])/i.test(pyprojectContent)
+      || await fileExists(path.join(workspaceRoot, 'poetry.lock')),
     hasTests: await directoryExists(path.join(workspaceRoot, 'tests')),
     managePyPath: hasManagePy ? managePyPath : null,
     entrypointLabel: `Entrypoint: ${primaryEntrypoint}`,
@@ -708,7 +714,78 @@ function buildPythonEnvironmentCommands(
     ));
   }
 
+  if (!projectInfo.hasEnvironment) {
+    commands.push(createPythonCommand(
+      'python-project-create-venv',
+      'Create .venv',
+      `${resolveExecutable('python')} -m venv .venv`,
+      resolveExecutable('python'),
+      ['-m', 'venv', '.venv'],
+      workspaceRoot,
+      {
+        kind: 'repair',
+      },
+    ));
+  }
+
+  if (projectInfo.hasPoetryProject) {
+    commands.push(createPythonCommand(
+      'python-project-poetry-install',
+      'Poetry Install',
+      'poetry install',
+      'poetry',
+      ['install'],
+      workspaceRoot,
+      {
+        kind: 'repair',
+      },
+    ));
+  }
+
   return commands;
+}
+
+function buildPythonProjectDiagnostics(projectInfo: PythonProjectInfo): CodePaneProjectDiagnostic[] {
+  const diagnostics: CodePaneProjectDiagnostic[] = [];
+
+  if (projectInfo.interpreterOverrideMissing) {
+    diagnostics.push({
+      id: 'python-missing-interpreter-override',
+      severity: 'error',
+      message: 'Selected interpreter is no longer available',
+      detail: 'Clear the override or choose another interpreter before running project commands.',
+      commandId: 'python-project-interpreter:auto',
+      commandLabel: 'Use Auto-detected Interpreter',
+    });
+  }
+
+  if (!projectInfo.hasEnvironment) {
+    diagnostics.push({
+      id: 'python-missing-environment',
+      severity: 'warning',
+      message: projectInfo.hasPoetryProject
+        ? 'No Poetry environment detected'
+        : 'No Python virtual environment detected',
+      detail: projectInfo.hasPoetryProject
+        ? 'Run Poetry install or create a local .venv to restore package resolution.'
+        : 'Create a local .venv or choose an existing interpreter to restore imports and jump-to-definition.',
+      commandId: projectInfo.hasPoetryProject ? 'python-project-poetry-install' : 'python-project-create-venv',
+      commandLabel: projectInfo.hasPoetryProject ? 'Poetry Install' : 'Create .venv',
+    });
+  }
+
+  if (projectInfo.hasRequirementsFile && projectInfo.hasEnvironment) {
+    diagnostics.push({
+      id: 'python-requirements-sync',
+      severity: 'info',
+      message: 'requirements.txt detected',
+      detail: 'Refresh installed packages after switching interpreters to keep completion and imports accurate.',
+      commandId: 'python-project-install-requirements',
+      commandLabel: 'Install Requirements',
+    });
+  }
+
+  return diagnostics;
 }
 
 async function resolvePythonEnvironmentDetails(workspaceRoot: string): Promise<PythonEnvironmentResolution> {

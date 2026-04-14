@@ -4,6 +4,7 @@ import { statSync } from 'fs';
 import type {
   CodePaneExternalLibrarySection,
   CodePaneProjectContribution,
+  CodePaneProjectDiagnostic,
   CodePaneProjectTreeItem,
 } from '../../../../shared/types/electron-api';
 import {
@@ -105,6 +106,7 @@ export class JavaProjectAdapter implements LanguageProjectAdapter {
         },
         ...springStatusItems,
       ],
+      diagnostics: buildJavaProjectDiagnostics(projectInfo),
       detailCards: [
         {
           id: 'java-project-files',
@@ -167,6 +169,11 @@ export class JavaProjectAdapter implements LanguageProjectAdapter {
         title: projectInfo.buildToolLabel,
         commands: buildJavaCommandDefinitions(workspaceRoot, projectInfo),
       },
+      {
+        id: 'java-project-repair',
+        title: 'Repair',
+        commands: buildJavaRepairCommands(workspaceRoot, projectInfo),
+      },
     ];
   }
 }
@@ -177,7 +184,9 @@ interface JavaProjectInfo {
   buildFilePath: string;
   mainSourcePath: string;
   testSourcePath: string;
+  hasMainSources: boolean;
   hasTests: boolean;
+  hasWrapper: boolean;
   isSpringBoot: boolean;
   springInsights?: JavaSpringInsights;
 }
@@ -202,7 +211,11 @@ async function detectJavaProject(workspaceRoot: string): Promise<JavaProjectInfo
     buildFilePath,
     mainSourcePath: path.join(workspaceRoot, 'src', 'main', 'java'),
     testSourcePath: path.join(workspaceRoot, 'src', 'test', 'java'),
+    hasMainSources: await directoryExists(path.join(workspaceRoot, 'src', 'main', 'java')),
     hasTests: await directoryExists(path.join(workspaceRoot, 'src', 'test', 'java')),
+    hasWrapper: buildTool === 'maven'
+      ? hasMavenWrapper(workspaceRoot)
+      : hasGradleWrapper(workspaceRoot),
     isSpringBoot,
     ...(isSpringBoot ? { springInsights: await collectSpringInsights(workspaceRoot) } : {}),
   };
@@ -347,6 +360,80 @@ function buildJavaSyncCommands(
       },
     ),
   ];
+}
+
+function buildJavaRepairCommands(
+  workspaceRoot: string,
+  projectInfo: JavaProjectInfo,
+): LanguageProjectCommandDefinition[] {
+  if (projectInfo.buildTool === 'gradle') {
+    const gradleCommand = resolveGradleCommand(workspaceRoot);
+    return [
+      createJavaCommand(
+        'java-gradle-clean-build',
+        'Clean Build',
+        `${gradleCommand} clean build`,
+        gradleCommand,
+        ['clean', 'build'],
+        workspaceRoot,
+        {
+          kind: 'repair',
+        },
+      ),
+    ];
+  }
+
+  const mavenCommand = resolveMavenCommand(workspaceRoot);
+  return [
+    createJavaCommand(
+      'java-maven-clean-verify',
+      'Clean Verify',
+      `${mavenCommand} clean verify`,
+      mavenCommand,
+      ['clean', 'verify'],
+      workspaceRoot,
+      {
+        kind: 'repair',
+      },
+    ),
+  ];
+}
+
+function buildJavaProjectDiagnostics(projectInfo: JavaProjectInfo): CodePaneProjectDiagnostic[] {
+  const diagnostics: CodePaneProjectDiagnostic[] = [];
+
+  if (!projectInfo.hasWrapper) {
+    diagnostics.push({
+      id: 'java-missing-wrapper',
+      severity: 'warning',
+      message: `${projectInfo.buildToolLabel} wrapper not detected`,
+      detail: `The project will fall back to the system ${projectInfo.buildToolLabel.toLowerCase()} installation, which can slow imports and create version drift.`,
+    });
+  }
+
+  if (!projectInfo.hasMainSources) {
+    diagnostics.push({
+      id: 'java-missing-main-sources',
+      severity: 'warning',
+      message: 'Main source directory is missing',
+      detail: 'Project import can succeed, but navigation and build actions will stay limited until src/main/java exists.',
+      commandId: projectInfo.buildTool === 'maven' ? 'java-maven-clean-verify' : 'java-gradle-clean-build',
+      commandLabel: projectInfo.buildTool === 'maven' ? 'Clean Verify' : 'Clean Build',
+    });
+  }
+
+  if (projectInfo.isSpringBoot && !projectInfo.springInsights?.applicationClass) {
+    diagnostics.push({
+      id: 'java-missing-spring-app',
+      severity: 'error',
+      message: 'Spring Boot application class was not detected',
+      detail: 'Add a @SpringBootApplication entrypoint or reimport the build model to restore run/debug targets.',
+      commandId: projectInfo.buildTool === 'maven' ? 'java-maven-refresh-model' : 'java-gradle-refresh-model',
+      commandLabel: projectInfo.buildTool === 'maven' ? 'Reimport Maven Model' : 'Refresh Gradle Model',
+    });
+  }
+
+  return diagnostics;
 }
 
 interface JavaSpringInsightEntry {
@@ -750,4 +837,18 @@ function fileExistsSync(targetPath: string): boolean {
   } catch {
     return false;
   }
+}
+
+function hasMavenWrapper(workspaceRoot: string): boolean {
+  const wrapperPath = process.platform === 'win32'
+    ? path.join(workspaceRoot, 'mvnw.cmd')
+    : path.join(workspaceRoot, 'mvnw');
+  return fileExistsSync(wrapperPath);
+}
+
+function hasGradleWrapper(workspaceRoot: string): boolean {
+  const wrapperPath = process.platform === 'win32'
+    ? path.join(workspaceRoot, 'gradlew.bat')
+    : path.join(workspaceRoot, 'gradlew');
+  return fileExistsSync(wrapperPath);
 }

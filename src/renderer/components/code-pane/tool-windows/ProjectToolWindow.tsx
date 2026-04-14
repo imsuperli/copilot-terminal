@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type {
   CodePaneProjectContribution,
+  CodePaneLanguageWorkspaceState,
   CodePaneProjectTreeItem,
   CodePaneRunSession,
 } from '../../../../shared/types/electron-api';
@@ -19,6 +20,7 @@ interface ProjectToolWindowProps {
   sessions: CodePaneRunSession[];
   selectedSession: CodePaneRunSession | null;
   selectedOutput: string;
+  languageWorkspaceState: CodePaneLanguageWorkspaceState | null;
   isLoading: boolean;
   error: string | null;
   onClose: () => void;
@@ -34,6 +36,7 @@ export function ProjectToolWindow({
   sessions,
   selectedSession,
   selectedOutput,
+  languageWorkspaceState,
   isLoading,
   error,
   onClose,
@@ -98,6 +101,41 @@ export function ProjectToolWindow({
                       </span>
                     </div>
 
+                    {languageWorkspaceState?.languageId === contribution.languageId && (
+                      <div className="mb-3">
+                        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+                          Workspace State
+                        </div>
+                        <div className="rounded border border-zinc-800 bg-zinc-950/60 px-2 py-2">
+                          <div className="flex items-center gap-2">
+                            {getWorkspaceStateTone(languageWorkspaceState).showSpinner ? (
+                              <Loader2 size={12} className="animate-spin text-amber-300" />
+                            ) : (
+                              <div className={`h-2 w-2 rounded-full ${getWorkspaceStateTone(languageWorkspaceState).dotClassName}`} />
+                            )}
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${getWorkspaceStateTone(languageWorkspaceState).badgeClassName}`}>
+                              {formatWorkspacePhaseLabel(languageWorkspaceState.phase)}
+                            </span>
+                            <span className="truncate text-[11px] text-zinc-300">
+                              {languageWorkspaceState.progressText ?? languageWorkspaceState.message ?? formatWorkspacePhaseLabel(languageWorkspaceState.phase)}
+                            </span>
+                          </div>
+                          {languageWorkspaceState.readyFeatures.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {languageWorkspaceState.readyFeatures.map((feature) => (
+                                <span
+                                  key={`${contribution.id}-${feature}`}
+                                  className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                                >
+                                  {feature}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {contribution.statusItems && contribution.statusItems.length > 0 && (
                       <div className="mb-3 flex flex-wrap gap-2">
                         {contribution.statusItems.map((item) => (
@@ -108,6 +146,65 @@ export function ProjectToolWindow({
                             {item.label}
                           </span>
                         ))}
+                      </div>
+                    )}
+
+                    {contribution.diagnostics && contribution.diagnostics.length > 0 && (
+                      <div className="mb-3">
+                        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+                          Diagnostics
+                        </div>
+                        <div className="space-y-2">
+                          {contribution.diagnostics.map((diagnostic) => (
+                            <div
+                              key={diagnostic.id}
+                              className={`rounded border px-2 py-2 text-xs ${getDiagnosticTone(diagnostic.severity).containerClassName}`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${getDiagnosticTone(diagnostic.severity).badgeClassName}`}>
+                                      {diagnostic.severity}
+                                    </span>
+                                    <div className="break-words font-medium text-zinc-100">{diagnostic.message}</div>
+                                  </div>
+                                  {diagnostic.detail && (
+                                    <div className="mt-1 break-words text-[10px] text-zinc-400">{diagnostic.detail}</div>
+                                  )}
+                                  {diagnostic.filePath && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        onOpenTreeItem?.({
+                                          id: diagnostic.id,
+                                          label: diagnostic.message,
+                                          kind: 'entry',
+                                          filePath: diagnostic.filePath,
+                                          lineNumber: diagnostic.lineNumber,
+                                        });
+                                      }}
+                                      className="mt-2 text-[10px] text-sky-300 transition-colors hover:text-sky-200"
+                                    >
+                                      {diagnostic.filePath}
+                                      {diagnostic.lineNumber ? `:${diagnostic.lineNumber}` : ''}
+                                    </button>
+                                  )}
+                                </div>
+                                {diagnostic.commandId && diagnostic.commandLabel && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      void onRunCommand(diagnostic.commandId!);
+                                    }}
+                                    className="shrink-0 rounded border border-zinc-700 bg-zinc-900/80 px-2 py-1 text-[10px] font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                                  >
+                                    {diagnostic.commandLabel}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
@@ -392,6 +489,85 @@ function getProjectCommandTone(kind: 'run' | 'refresh' | 'configure' | 'repair' 
         buttonClassName: 'border-zinc-800 bg-zinc-950/60 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100',
         icon: 'run',
       };
+  }
+}
+
+function getDiagnosticTone(severity: 'info' | 'warning' | 'error'): {
+  badgeClassName: string;
+  containerClassName: string;
+} {
+  switch (severity) {
+    case 'error':
+      return {
+        badgeClassName: 'bg-red-500/15 text-red-300',
+        containerClassName: 'border-red-500/20 bg-red-500/5 text-zinc-300',
+      };
+    case 'warning':
+      return {
+        badgeClassName: 'bg-amber-500/15 text-amber-300',
+        containerClassName: 'border-amber-500/20 bg-amber-500/5 text-zinc-300',
+      };
+    case 'info':
+    default:
+      return {
+        badgeClassName: 'bg-sky-500/15 text-sky-300',
+        containerClassName: 'border-sky-500/20 bg-sky-500/5 text-zinc-300',
+      };
+  }
+}
+
+function getWorkspaceStateTone(state: CodePaneLanguageWorkspaceState): {
+  badgeClassName: string;
+  dotClassName: string;
+  showSpinner: boolean;
+} {
+  switch (state.phase) {
+    case 'ready':
+      return {
+        badgeClassName: 'bg-emerald-500/15 text-emerald-300',
+        dotClassName: 'bg-emerald-300',
+        showSpinner: false,
+      };
+    case 'error':
+      return {
+        badgeClassName: 'bg-red-500/15 text-red-300',
+        dotClassName: 'bg-red-300',
+        showSpinner: false,
+      };
+    case 'degraded':
+      return {
+        badgeClassName: 'bg-amber-500/15 text-amber-300',
+        dotClassName: 'bg-amber-300',
+        showSpinner: false,
+      };
+    default:
+      return {
+        badgeClassName: 'bg-sky-500/15 text-sky-300',
+        dotClassName: 'bg-sky-300',
+        showSpinner: true,
+      };
+  }
+}
+
+function formatWorkspacePhaseLabel(phase: CodePaneLanguageWorkspaceState['phase']): string {
+  switch (phase) {
+    case 'detecting-project':
+      return 'Detecting';
+    case 'importing-project':
+      return 'Importing';
+    case 'indexing-workspace':
+      return 'Indexing';
+    case 'starting':
+      return 'Starting';
+    case 'ready':
+      return 'Ready';
+    case 'degraded':
+      return 'Degraded';
+    case 'error':
+      return 'Error';
+    case 'idle':
+    default:
+      return 'Idle';
   }
 }
 

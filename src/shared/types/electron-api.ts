@@ -1085,6 +1085,17 @@ export interface CodePaneProjectStatusItem {
   tone?: 'info' | 'warning' | 'error';
 }
 
+export interface CodePaneProjectDiagnostic {
+  id: string;
+  severity: 'info' | 'warning' | 'error';
+  message: string;
+  detail?: string;
+  filePath?: string;
+  lineNumber?: number;
+  commandId?: string;
+  commandLabel?: string;
+}
+
 export interface CodePaneProjectCommand {
   id: string;
   title: string;
@@ -1126,6 +1137,7 @@ export interface CodePaneProjectContribution {
   title: string;
   languageId: string;
   statusItems?: CodePaneProjectStatusItem[];
+  diagnostics?: CodePaneProjectDiagnostic[];
   commandGroups?: CodePaneProjectCommandGroup[];
   detailCards?: CodePaneProjectDetailCard[];
   treeSections?: CodePaneProjectTreeSection[];

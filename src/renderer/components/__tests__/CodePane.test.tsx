@@ -2077,6 +2077,90 @@ describe('CodePane', () => {
     expect(await screen.findByText('Environment: .venv')).toBeInTheDocument();
   });
 
+  it('shows workspace import state and project diagnostics in the project tool window', async () => {
+    vi.mocked(window.electronAPI.codePaneGetProjectContribution).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'java-project',
+          title: 'Java Project',
+          languageId: 'java',
+          diagnostics: [
+            {
+              id: 'java-missing-wrapper',
+              severity: 'warning',
+              message: 'Maven wrapper not detected',
+              detail: 'Falling back to the system Maven installation can slow imports.',
+              commandId: 'java-maven-refresh-model',
+              commandLabel: 'Reimport Maven Model',
+            },
+          ],
+          commandGroups: [
+            {
+              id: 'java-project-sync',
+              title: 'Project Sync',
+              commands: [
+                {
+                  id: 'java-maven-refresh-model',
+                  title: 'Reimport Maven Model',
+                  detail: 'Reload Maven metadata',
+                  kind: 'refresh',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneRunProjectCommand).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.codePaneRefreshProjectModel).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.projectTab' }));
+    });
+
+    await emitLanguageWorkspaceChanged({
+      state: {
+        pluginId: 'official.java-jdtls',
+        workspaceRoot: '/workspace/project',
+        projectRoot: '/workspace/project',
+        languageId: 'java',
+        runtimeState: 'running',
+        phase: 'importing-project',
+        message: 'Importing Maven project',
+        progressText: 'Resolving classpath containers',
+        readyFeatures: ['definition', 'hover', 'references'],
+        timestamp: '2026-04-14T00:00:00.000Z',
+      },
+    });
+
+    expect(await screen.findByText('Workspace State')).toBeInTheDocument();
+    expect(screen.getByText('Importing')).toBeInTheDocument();
+    expect(screen.getByText('Resolving classpath containers')).toBeInTheDocument();
+    expect(screen.getByText('Diagnostics')).toBeInTheDocument();
+    expect(screen.getByText('Maven wrapper not detected')).toBeInTheDocument();
+    expect(screen.getByText('definition')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Reimport Maven Model' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneRunProjectCommand).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        commandId: 'java-maven-refresh-model',
+      });
+    });
+  });
+
   it('shows repository summary, branch graph, and changed files in the SCM tab', async () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
       success: true,

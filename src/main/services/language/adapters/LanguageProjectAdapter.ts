@@ -6,6 +6,7 @@ import type {
   CodePaneExternalLibrarySection,
   CodePaneProjectCommand,
   CodePaneProjectContribution,
+  CodePaneProjectDiagnostic,
   CodePaneProjectDetailCard,
   CodePaneProjectStatusItem,
   CodePaneProjectTreeSection,
@@ -165,6 +166,7 @@ export function createProjectContribution(
   title: string,
   options: {
     statusItems?: CodePaneProjectStatusItem[];
+    diagnostics?: CodePaneProjectDiagnostic[];
     commandGroups?: LanguageProjectCommandGroupDefinition[];
     detailCards?: CodePaneProjectDetailCard[];
     treeSections?: CodePaneProjectTreeSection[];
@@ -175,6 +177,7 @@ export function createProjectContribution(
     title,
     languageId,
     ...(options.statusItems && options.statusItems.length > 0 ? { statusItems: options.statusItems } : {}),
+    ...(options.diagnostics && options.diagnostics.length > 0 ? { diagnostics: options.diagnostics } : {}),
     ...(options.commandGroups && options.commandGroups.length > 0 ? {
       commandGroups: options.commandGroups.map((group) => ({
         id: group.id,

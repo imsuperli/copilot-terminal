@@ -386,6 +386,55 @@ describe('LanguageProjectContributionService', () => {
     const resolvedEnvironment = await resolvePythonEnvironment(workspaceRootPath);
     expect(resolvedEnvironment.interpreterPath).toBe(venvInterpreterPath);
   });
+
+  it('builds diagnostics and repair actions for degraded project environments', async () => {
+    await fsPromises.writeFile(path.join(workspaceRootPath, 'requirements.txt'), 'requests\n', 'utf8');
+    await fsPromises.writeFile(path.join(workspaceRootPath, 'pom.xml'), '<project></project>\n', 'utf8');
+    await fsPromises.writeFile(path.join(workspaceRootPath, 'main.go'), 'package main\nfunc main() {}\n', 'utf8');
+
+    const service = new LanguageProjectContributionService({
+      codeFileService: new CodeFileService(),
+    });
+
+    const contributions = await service.getProjectContributions(workspaceRootPath);
+    const pythonContribution = contributions.find((item) => item.languageId === 'python');
+    const javaContribution = contributions.find((item) => item.languageId === 'java');
+    const goContribution = contributions.find((item) => item.languageId === 'go');
+
+    expect(pythonContribution).toMatchObject({
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'warning',
+          message: 'No Python virtual environment detected',
+          commandId: 'python-project-create-venv',
+        }),
+      ]),
+    });
+
+    expect(javaContribution).toMatchObject({
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'warning',
+          message: 'Maven wrapper not detected',
+        }),
+        expect.objectContaining({
+          severity: 'warning',
+          message: 'Main source directory is missing',
+          commandId: 'java-maven-clean-verify',
+        }),
+      ]),
+    });
+
+    expect(goContribution).toMatchObject({
+      diagnostics: expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'error',
+          message: 'go.mod is not detected',
+          commandId: 'go-project-mod-init',
+        }),
+      ]),
+    });
+  });
 });
 
 async function waitForCondition(predicate: () => boolean, timeoutMs = 5000): Promise<void> {

@@ -9301,6 +9301,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               sessions={visibleRunSessions}
               selectedSession={selectedRunSession}
               selectedOutput={selectedRunSessionOutput}
+              languageWorkspaceState={languageWorkspaceState}
               isLoading={isProjectLoading}
               error={projectError}
               onClose={() => {
