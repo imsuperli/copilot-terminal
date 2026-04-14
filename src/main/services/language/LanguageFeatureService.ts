@@ -1,14 +1,19 @@
 import path from 'path';
 import type {
+  CodePaneCodeAction,
   CodePaneCompletionItem,
   CodePaneDocumentCloseConfig,
+  CodePaneDocumentHighlight,
   CodePaneDocumentSyncConfig,
   CodePaneDocumentSymbol,
   CodePaneFormatDocumentConfig,
+  CodePaneGetCodeActionsConfig,
   CodePaneGetCompletionItemsConfig,
   CodePaneGetDefinitionConfig,
+  CodePaneGetDocumentHighlightsConfig,
   CodePaneGetDocumentSymbolsConfig,
   CodePaneGetHoverConfig,
+  CodePaneGetImplementationsConfig,
   CodePaneGetReferencesConfig,
   CodePaneGetSignatureHelpConfig,
   CodePaneGetWorkspaceSymbolsConfig,
@@ -18,6 +23,7 @@ import type {
   CodePaneReadFileResult,
   CodePaneReference,
   CodePaneRenameSymbolConfig,
+  CodePaneRunCodeActionConfig,
   CodePaneSignatureHelpResult,
   CodePaneTextEdit,
   CodePaneWorkspaceSymbol,
@@ -122,9 +128,27 @@ export class LanguageFeatureService {
     ));
   }
 
+  async getDocumentHighlights(
+    config: CodePaneGetDocumentHighlightsConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneDocumentHighlight[]> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
+      await this.supervisor.getDocumentHighlights(resolution, config.filePath, config.position)
+    ));
+  }
+
   async getDocumentSymbols(config: CodePaneGetDocumentSymbolsConfig, workspace: Workspace | null): Promise<CodePaneDocumentSymbol[]> {
     return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
       await this.supervisor.getDocumentSymbols(resolution, config.filePath)
+    ));
+  }
+
+  async getImplementations(
+    config: CodePaneGetImplementationsConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneLocation[]> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
+      await this.supervisor.getImplementations(resolution, config.filePath, config.position)
     ));
   }
 
@@ -167,6 +191,24 @@ export class LanguageFeatureService {
     }
 
     return await this.supervisor.getWorkspaceSymbols(resolution, config.query, config.limit);
+  }
+
+  async getCodeActions(
+    config: CodePaneGetCodeActionsConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneCodeAction[]> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
+      await this.supervisor.getCodeActions(resolution, config.filePath, config.range)
+    ));
+  }
+
+  async runCodeAction(
+    config: CodePaneRunCodeActionConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneTextEdit[]> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
+      await this.supervisor.runCodeAction(resolution, config.filePath, config.actionId)
+    ));
   }
 
   async readDocument(config: CodePaneReadFileConfig, workspace: Workspace | null): Promise<CodePaneReadFileResult | null> {

@@ -475,6 +475,18 @@ export interface CodePaneGetReferencesConfig {
   position: CodePanePosition;
 }
 
+export interface CodePaneDocumentHighlight {
+  range: CodePaneRange;
+  kind?: 'text' | 'read' | 'write';
+}
+
+export interface CodePaneGetDocumentHighlightsConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  position: CodePanePosition;
+}
+
 export interface CodePaneDocumentSymbol {
   name: string;
   detail?: string;
@@ -488,6 +500,13 @@ export interface CodePaneGetDocumentSymbolsConfig {
   rootPath: string;
   filePath: string;
   language?: string;
+}
+
+export interface CodePaneGetImplementationsConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  position: CodePanePosition;
 }
 
 export interface CodePaneCompletionItem {
@@ -570,6 +589,36 @@ export interface CodePaneGetWorkspaceSymbolsConfig {
   rootPath: string;
   query: string;
   limit?: number;
+}
+
+export interface CodePaneCodeActionDiagnostic {
+  message: string;
+  range: CodePaneRange;
+  severity?: 'error' | 'warning' | 'info' | 'hint';
+  code?: string;
+}
+
+export interface CodePaneCodeAction {
+  id: string;
+  title: string;
+  kind?: string;
+  isPreferred?: boolean;
+  disabledReason?: string;
+  diagnostics?: CodePaneCodeActionDiagnostic[];
+}
+
+export interface CodePaneGetCodeActionsConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  range: CodePaneRange;
+}
+
+export interface CodePaneRunCodeActionConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  actionId: string;
 }
 
 export interface CodePaneDiagnostic {
@@ -882,12 +931,16 @@ export interface ElectronAPI {
   codePaneGetDefinition: (config: CodePaneGetDefinitionConfig) => Promise<IpcResponse<CodePaneLocation[]>>;
   codePaneGetHover: (config: CodePaneGetHoverConfig) => Promise<IpcResponse<CodePaneHoverResult | null>>;
   codePaneGetReferences: (config: CodePaneGetReferencesConfig) => Promise<IpcResponse<CodePaneReference[]>>;
+  codePaneGetDocumentHighlights: (config: CodePaneGetDocumentHighlightsConfig) => Promise<IpcResponse<CodePaneDocumentHighlight[]>>;
   codePaneGetDocumentSymbols: (config: CodePaneGetDocumentSymbolsConfig) => Promise<IpcResponse<CodePaneDocumentSymbol[]>>;
+  codePaneGetImplementations: (config: CodePaneGetImplementationsConfig) => Promise<IpcResponse<CodePaneLocation[]>>;
   codePaneGetCompletionItems: (config: CodePaneGetCompletionItemsConfig) => Promise<IpcResponse<CodePaneCompletionItem[]>>;
   codePaneGetSignatureHelp: (config: CodePaneGetSignatureHelpConfig) => Promise<IpcResponse<CodePaneSignatureHelpResult | null>>;
   codePaneRenameSymbol: (config: CodePaneRenameSymbolConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
   codePaneFormatDocument: (config: CodePaneFormatDocumentConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
   codePaneGetWorkspaceSymbols: (config: CodePaneGetWorkspaceSymbolsConfig) => Promise<IpcResponse<CodePaneWorkspaceSymbol[]>>;
+  codePaneGetCodeActions: (config: CodePaneGetCodeActionsConfig) => Promise<IpcResponse<CodePaneCodeAction[]>>;
+  codePaneRunCodeAction: (config: CodePaneRunCodeActionConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
   onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   onCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;

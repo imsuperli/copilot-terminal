@@ -1,16 +1,20 @@
 import { ipcMain } from 'electron';
 import type {
+  CodePaneGetCodeActionsConfig,
   CodePaneFormatDocumentConfig,
   CodePaneGetCompletionItemsConfig,
   CodePaneDocumentCloseConfig,
   CodePaneDocumentSyncConfig,
   CodePaneGetDefinitionConfig,
+  CodePaneGetDocumentHighlightsConfig,
   CodePaneGetDocumentSymbolsConfig,
   CodePaneGetHoverConfig,
+  CodePaneGetImplementationsConfig,
   CodePaneGetReferencesConfig,
   CodePaneGetSignatureHelpConfig,
   CodePaneGetWorkspaceSymbolsConfig,
   CodePaneRenameSymbolConfig,
+  CodePaneRunCodeActionConfig,
 } from '../../shared/types/electron-api';
 import { HandlerContext } from './HandlerContext';
 import { errorResponse, successResponse } from './HandlerResponse';
@@ -106,6 +110,21 @@ export function registerLanguageHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('code-pane-get-document-highlights', async (
+    _event,
+    config: CodePaneGetDocumentHighlightsConfig,
+  ) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.getDocumentHighlights(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('code-pane-get-document-symbols', async (_event, config: CodePaneGetDocumentSymbolsConfig) => {
     try {
       if (!languageFeatureService) {
@@ -113,6 +132,18 @@ export function registerLanguageHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await languageFeatureService.getDocumentSymbols(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-implementations', async (_event, config: CodePaneGetImplementationsConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.getImplementations(config, getCurrentWorkspace()));
     } catch (error) {
       return errorResponse(error);
     }
@@ -173,6 +204,30 @@ export function registerLanguageHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await languageFeatureService.getWorkspaceSymbols(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-code-actions', async (_event, config: CodePaneGetCodeActionsConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.getCodeActions(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-run-code-action', async (_event, config: CodePaneRunCodeActionConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.runCodeAction(config, getCurrentWorkspace()));
     } catch (error) {
       return errorResponse(error);
     }

@@ -175,8 +175,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-get-hover', config),
   codePaneGetReferences: (config) =>
     ipcRenderer.invoke('code-pane-get-references', config),
+  codePaneGetDocumentHighlights: (config) =>
+    ipcRenderer.invoke('code-pane-get-document-highlights', config),
   codePaneGetDocumentSymbols: (config) =>
     ipcRenderer.invoke('code-pane-get-document-symbols', config),
+  codePaneGetImplementations: (config) =>
+    ipcRenderer.invoke('code-pane-get-implementations', config),
   codePaneGetCompletionItems: (config) =>
     ipcRenderer.invoke('code-pane-get-completion-items', config),
   codePaneGetSignatureHelp: (config) =>
@@ -187,6 +191,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-format-document', config),
   codePaneGetWorkspaceSymbols: (config) =>
     ipcRenderer.invoke('code-pane-get-workspace-symbols', config),
+  codePaneGetCodeActions: (config) =>
+    ipcRenderer.invoke('code-pane-get-code-actions', config),
+  codePaneRunCodeAction: (config) =>
+    ipcRenderer.invoke('code-pane-run-code-action', config),
   onCodePaneFsChanged: (callback) => {
     ipcRenderer.on('code-pane-fs-changed', callback);
   },

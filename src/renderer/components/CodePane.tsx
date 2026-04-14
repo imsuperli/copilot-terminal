@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import type { Pane } from '../types/window';
 import type {
+  CodePaneCodeAction,
   CodePaneContentMatch,
   CodePaneExternalLibrarySection,
   CodePaneGitGraphCommit,
@@ -70,10 +71,14 @@ type MonacoViewState = import('monaco-editor').editor.ICodeEditorViewState | nul
 type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
+type SearchEverywhereMode = 'all' | 'commands' | 'recent';
 
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
 const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
 const CODE_PANE_SIDEBAR_MAX_WIDTH = 520;
+const CODE_PANE_MAX_RECENT_FILES = 20;
+const CODE_PANE_MAX_RECENT_LOCATIONS = 30;
+const CODE_PANE_MAX_NAVIGATION_HISTORY = 50;
 
 type FileNavigationLocation = {
   filePath: string;
@@ -102,6 +107,22 @@ type FileRuntimeMeta = {
   readOnly?: boolean;
   displayPath?: string;
   documentUri?: string;
+};
+
+type NavigationHistoryEntry = {
+  filePath: string;
+  lineNumber: number;
+  column: number;
+  displayPath?: string;
+};
+
+type SearchEverywhereItem = {
+  id: string;
+  section: string;
+  title: string;
+  subtitle?: string;
+  meta?: string;
+  execute: () => void | Promise<void>;
 };
 
 type CodePaneFsChange = CodePaneFsChangedPayload['changes'][number];
@@ -326,6 +347,19 @@ function createTabList(existingTabs: Array<{ path: string; pinned?: boolean }>, 
   }
 
   return sortOpenFilesByPinned([...existingTabs, { path: filePath }]);
+}
+
+function isSameNavigationLocation(
+  left: Pick<NavigationHistoryEntry, 'filePath' | 'lineNumber' | 'column'> | null | undefined,
+  right: Pick<NavigationHistoryEntry, 'filePath' | 'lineNumber' | 'column'> | null | undefined,
+): boolean {
+  if (!left || !right) {
+    return false;
+  }
+
+  return left.filePath === right.filePath
+    && left.lineNumber === right.lineNumber
+    && left.column === right.column;
 }
 
 function getStatusTone(status?: CodePaneGitStatusEntry['status']): {
@@ -615,6 +649,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [workspaceSymbolResults, setWorkspaceSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
   const [isWorkspaceSymbolSearching, setIsWorkspaceSymbolSearching] = useState(false);
   const [workspaceSymbolError, setWorkspaceSymbolError] = useState<string | null>(null);
+  const [isSearchEverywhereOpen, setIsSearchEverywhereOpen] = useState(false);
+  const [searchEverywhereMode, setSearchEverywhereMode] = useState<SearchEverywhereMode>('all');
+  const [searchEverywhereQuery, setSearchEverywhereQuery] = useState('');
+  const deferredSearchEverywhereQuery = useDeferredValue(searchEverywhereQuery);
+  const [searchEverywhereFileResults, setSearchEverywhereFileResults] = useState<string[]>([]);
+  const [searchEverywhereSymbolResults, setSearchEverywhereSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
+  const [isSearchEverywhereLoading, setIsSearchEverywhereLoading] = useState(false);
+  const [searchEverywhereError, setSearchEverywhereError] = useState<string | null>(null);
+  const [searchEverywhereSelectedIndex, setSearchEverywhereSelectedIndex] = useState(0);
+  const [recentFiles, setRecentFiles] = useState<string[]>([]);
+  const [recentLocations, setRecentLocations] = useState<NavigationHistoryEntry[]>([]);
+  const [, setNavigationStateVersion] = useState(0);
+  const [isCodeActionMenuOpen, setIsCodeActionMenuOpen] = useState(false);
+  const [codeActionItems, setCodeActionItems] = useState<CodePaneCodeAction[]>([]);
+  const [isCodeActionMenuLoading, setIsCodeActionMenuLoading] = useState(false);
+  const [codeActionMenuError, setCodeActionMenuError] = useState<string | null>(null);
+  const [selectedCodeActionIndex, setSelectedCodeActionIndex] = useState(0);
   const [usageResults, setUsageResults] = useState<CodePaneReference[]>([]);
   const [isFindingUsages, setIsFindingUsages] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
@@ -647,6 +698,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const sidebarVisibleRef = useRef(isSidebarVisible);
   const sidebarWidthRef = useRef(sidebarWidth);
   const lastExpandedSidebarWidthRef = useRef(lastExpandedSidebarWidth);
+  const recentFilesRef = useRef<string[]>([]);
+  const recentLocationsRef = useRef<NavigationHistoryEntry[]>([]);
+  const navigationBackStackRef = useRef<NavigationHistoryEntry[]>([]);
+  const navigationForwardStackRef = useRef<NavigationHistoryEntry[]>([]);
+  const searchEverywhereInputRef = useRef<HTMLInputElement | null>(null);
+  const navigateBackRef = useRef<() => Promise<void>>(async () => {});
+  const navigateForwardRef = useRef<() => Promise<void>>(async () => {});
+  const goToImplementationAtCursorRef = useRef<() => Promise<void>>(async () => {});
+  const openCodeActionMenuRef = useRef<() => Promise<void>>(async () => {});
+  const runSelectedCodeActionRef = useRef<(action: CodePaneCodeAction | undefined) => Promise<void>>(async () => {});
 
   useEffect(() => {
     paneRef.current = pane;
@@ -2183,7 +2244,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     await applyLanguageTextEdits(response.data ?? []);
   }, [applyLanguageTextEdits, getActiveEditorContext, rootPath, t]);
 
-  const activateFile = useCallback(async (filePath: string, options?: { preserveTabs?: boolean }) => {
+  const activateFile = useCallback(async (
+    filePath: string,
+    options?: {
+      preserveTabs?: boolean;
+      recordRecent?: boolean;
+    },
+  ) => {
     const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
     if (!loadedModel) {
       persistCodeState({
@@ -2204,6 +2271,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       viewMode: 'editor',
       diffTargetPath: null,
     });
+
+    if (options?.recordRecent !== false) {
+      setRecentFiles((currentRecentFiles) => {
+        const nextRecentFiles = [
+          filePath,
+          ...currentRecentFiles.filter((currentFilePath) => currentFilePath !== filePath),
+        ].slice(0, CODE_PANE_MAX_RECENT_FILES);
+        recentFilesRef.current = nextRecentFiles;
+        return nextRecentFiles;
+      });
+    }
+
     await refreshEditorSurface();
   }, [loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface]);
 
@@ -2698,6 +2777,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setLoadingExternalDirectories(new Set());
       setSearchResults([]);
       setContentSearchResults([]);
+      setIsSearchEverywhereOpen(false);
+      setSearchEverywhereQuery('');
+      setCodeActionItems([]);
+      setIsCodeActionMenuOpen(false);
+      setCodeActionMenuError(null);
+      recentFilesRef.current = [];
+      recentLocationsRef.current = [];
+      navigationBackStackRef.current = [];
+      navigationForwardStackRef.current = [];
+      setRecentFiles([]);
+      setRecentLocations([]);
+      setNavigationStateVersion((currentVersion) => currentVersion + 1);
       disposeEditorsRef.current();
       disposeAllModelsRef.current();
 
@@ -2966,6 +3057,119 @@ export const CodePane: React.FC<CodePaneProps> = ({
       clearTimeout(timer);
     };
   }, [deferredWorkspaceSymbolQuery, rootPath, t]);
+
+  const getCurrentNavigationLocation = useCallback((): NavigationHistoryEntry | null => {
+    const context = getActiveEditorContext();
+    if (context) {
+      return {
+        filePath: context.filePath,
+        lineNumber: context.position.lineNumber,
+        column: context.position.column,
+        displayPath: fileMetaRef.current.get(context.filePath)?.displayPath,
+      };
+    }
+
+    const filePath = activeFilePathRef.current;
+    if (!filePath) {
+      return null;
+    }
+
+    return {
+      filePath,
+      lineNumber: 1,
+      column: 1,
+      displayPath: fileMetaRef.current.get(filePath)?.displayPath,
+    };
+  }, [getActiveEditorContext]);
+
+  const rememberRecentLocation = useCallback((location: NavigationHistoryEntry) => {
+    setRecentLocations((currentRecentLocations) => {
+      const nextRecentLocations = [
+        location,
+        ...currentRecentLocations.filter((entry) => !isSameNavigationLocation(entry, location)),
+      ].slice(0, CODE_PANE_MAX_RECENT_LOCATIONS);
+      recentLocationsRef.current = nextRecentLocations;
+      return nextRecentLocations;
+    });
+  }, []);
+
+  const clearNavigationForwardStack = useCallback(() => {
+    if (navigationForwardStackRef.current.length === 0) {
+      return;
+    }
+
+    navigationForwardStackRef.current = [];
+    setNavigationStateVersion((currentVersion) => currentVersion + 1);
+  }, []);
+
+  const pushNavigationBackStack = useCallback((location: NavigationHistoryEntry) => {
+    const currentBackStack = navigationBackStackRef.current;
+    const lastBackLocation = currentBackStack[currentBackStack.length - 1];
+    if (isSameNavigationLocation(lastBackLocation, location)) {
+      return;
+    }
+
+    navigationBackStackRef.current = [
+      ...currentBackStack,
+      location,
+    ].slice(-CODE_PANE_MAX_NAVIGATION_HISTORY);
+    setNavigationStateVersion((currentVersion) => currentVersion + 1);
+  }, []);
+
+  const openEditorLocation = useCallback(async (
+    location: FileNavigationLocation,
+    options?: {
+      preserveTabs?: boolean;
+      recordHistory?: boolean;
+      recordRecent?: boolean;
+      clearForward?: boolean;
+    },
+  ) => {
+    if (options?.recordHistory !== false) {
+      const currentLocation = getCurrentNavigationLocation();
+      if (currentLocation && !isSameNavigationLocation(currentLocation, location)) {
+        pushNavigationBackStack(currentLocation);
+      }
+    }
+
+    if (options?.clearForward !== false) {
+      clearNavigationForwardStack();
+    }
+
+    if (options?.recordRecent !== false) {
+      rememberRecentLocation({
+        filePath: location.filePath,
+        lineNumber: location.lineNumber,
+        column: location.column,
+        displayPath: location.displayPath,
+      });
+    }
+
+    if (typeof location.content === 'string') {
+      preloadedReadResultsRef.current.set(location.filePath, {
+        content: location.content,
+        mtimeMs: 0,
+        size: location.content.length,
+        language: location.language ?? 'plaintext',
+        isBinary: false,
+        readOnly: location.readOnly,
+        displayPath: location.displayPath,
+        documentUri: location.documentUri,
+      });
+    }
+
+    pendingNavigationRef.current = location;
+    await activateFile(location.filePath, {
+      preserveTabs: options?.preserveTabs,
+      recordRecent: options?.recordRecent,
+    });
+  }, [
+    activateFile,
+    clearNavigationForwardStack,
+    getCurrentNavigationLocation,
+    pushNavigationBackStack,
+    rememberRecentLocation,
+  ]);
 
   const getDisplayPath = useCallback((filePath: string) => (
     fileMetaRef.current.get(filePath)?.displayPath ?? filePath
@@ -3493,23 +3697,595 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
   }, [problems]);
 
-  const openFileLocation = useCallback(async (location: FileNavigationLocation) => {
-    if (typeof location.content === 'string') {
-      preloadedReadResultsRef.current.set(location.filePath, {
-        content: location.content,
-        mtimeMs: 0,
-        size: location.content.length,
-        language: location.language ?? 'plaintext',
-        isBinary: false,
-        readOnly: location.readOnly,
-        displayPath: location.displayPath,
-        documentUri: location.documentUri,
-      });
+  const sortedProblemLocations = useMemo(() => (
+    [...problems].sort((left, right) => (
+      left.filePath.localeCompare(right.filePath)
+      || left.startLineNumber - right.startLineNumber
+      || left.startColumn - right.startColumn
+    ))
+  ), [problems]);
+
+  const navigateProblem = useCallback(async (direction: 1 | -1) => {
+    if (sortedProblemLocations.length === 0) {
+      return;
     }
 
-    pendingNavigationRef.current = location;
-    await activateFile(location.filePath);
-  }, [activateFile]);
+    const currentLocation = getCurrentNavigationLocation();
+    let nextProblem = sortedProblemLocations[0];
+
+    if (currentLocation) {
+      if (direction > 0) {
+        nextProblem = sortedProblemLocations.find((problem) => (
+          problem.filePath > currentLocation.filePath
+          || (
+            problem.filePath === currentLocation.filePath
+            && (
+              problem.startLineNumber > currentLocation.lineNumber
+              || (
+                problem.startLineNumber === currentLocation.lineNumber
+                && problem.startColumn > currentLocation.column
+              )
+            )
+          )
+        )) ?? sortedProblemLocations[0];
+      } else {
+        nextProblem = [...sortedProblemLocations].reverse().find((problem) => (
+          problem.filePath < currentLocation.filePath
+          || (
+            problem.filePath === currentLocation.filePath
+            && (
+              problem.startLineNumber < currentLocation.lineNumber
+              || (
+                problem.startLineNumber === currentLocation.lineNumber
+                && problem.startColumn < currentLocation.column
+              )
+            )
+          )
+        )) ?? sortedProblemLocations[sortedProblemLocations.length - 1];
+      }
+    }
+
+    handleSidebarModeSelect('problems');
+    await openEditorLocation({
+      filePath: nextProblem.filePath,
+      lineNumber: nextProblem.startLineNumber,
+      column: nextProblem.startColumn,
+    }, {
+      preserveTabs: true,
+      recordHistory: true,
+      recordRecent: true,
+      clearForward: true,
+    });
+  }, [getCurrentNavigationLocation, handleSidebarModeSelect, openEditorLocation, sortedProblemLocations]);
+
+  const openSearchEverywhere = useCallback((mode: SearchEverywhereMode) => {
+    setSearchEverywhereMode(mode);
+    setSearchEverywhereQuery('');
+    setSearchEverywhereError(null);
+    setSearchEverywhereSelectedIndex(0);
+    setIsSearchEverywhereOpen(true);
+  }, []);
+
+  const closeSearchEverywhere = useCallback(() => {
+    setIsSearchEverywhereOpen(false);
+    setSearchEverywhereQuery('');
+    setSearchEverywhereError(null);
+    setSearchEverywhereSelectedIndex(0);
+  }, []);
+
+  const searchEverywhereCommandItems = useMemo<SearchEverywhereItem[]>(() => ([
+    {
+      id: 'command-search-everywhere',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.searchEverywhereOpen'),
+      meta: 'Ctrl/Cmd+P',
+      execute: () => {
+        openSearchEverywhere('all');
+      },
+    },
+    {
+      id: 'command-open-actions',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.codeActions'),
+      meta: 'Alt+Enter',
+      execute: async () => {
+        await openCodeActionMenuRef.current();
+      },
+    },
+    {
+      id: 'command-go-to-implementation',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.goToImplementation'),
+      meta: 'Ctrl/Cmd+Alt+B',
+      execute: async () => {
+        await goToImplementationAtCursorRef.current();
+      },
+    },
+    {
+      id: 'command-find-usages',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.findUsages'),
+      meta: 'Shift+F12',
+      execute: async () => {
+        await findUsagesAtCursor();
+      },
+    },
+    {
+      id: 'command-rename-symbol',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.renameSymbol'),
+      meta: 'F2',
+      execute: async () => {
+        await renameSymbolAtCursor();
+      },
+    },
+    {
+      id: 'command-format-document',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.formatDocument'),
+      meta: 'Shift+Alt+F',
+      execute: async () => {
+        await formatActiveDocument();
+      },
+    },
+    {
+      id: 'command-back',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.navigateBack'),
+      meta: 'Alt+Left',
+      execute: async () => {
+        await navigateBackRef.current();
+      },
+    },
+    {
+      id: 'command-forward',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.navigateForward'),
+      meta: 'Alt+Right',
+      execute: async () => {
+        await navigateForwardRef.current();
+      },
+    },
+    {
+      id: 'command-next-problem',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.nextProblem'),
+      meta: 'F8',
+      execute: async () => {
+        await navigateProblem(1);
+      },
+    },
+    {
+      id: 'command-previous-problem',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.previousProblem'),
+      meta: 'Shift+F8',
+      execute: async () => {
+        await navigateProblem(-1);
+      },
+    },
+    {
+      id: 'command-toggle-sidebar',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.toggleSidebar'),
+      meta: 'Ctrl/Cmd+B',
+      execute: () => {
+        toggleSidebarVisibility();
+      },
+    },
+    {
+      id: 'command-refresh-project',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.refresh'),
+      execute: async () => {
+        setIsRefreshing(true);
+        try {
+          await refreshLoadedDirectories();
+        } finally {
+          setIsRefreshing(false);
+        }
+      },
+    },
+  ]), [
+    findUsagesAtCursor,
+    formatActiveDocument,
+    navigateProblem,
+    openSearchEverywhere,
+    refreshLoadedDirectories,
+    renameSymbolAtCursor,
+    t,
+    toggleSidebarVisibility,
+  ]);
+
+  useEffect(() => {
+    if (!isSearchEverywhereOpen) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      searchEverywhereInputRef.current?.focus();
+      searchEverywhereInputRef.current?.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isSearchEverywhereOpen]);
+
+  useEffect(() => {
+    if (!isSearchEverywhereOpen) {
+      return;
+    }
+
+    const trimmedQuery = deferredSearchEverywhereQuery.trim();
+    if (!trimmedQuery || searchEverywhereMode === 'commands' || searchEverywhereMode === 'recent') {
+      setSearchEverywhereFileResults([]);
+      setSearchEverywhereSymbolResults([]);
+      setSearchEverywhereError(null);
+      setIsSearchEverywhereLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchEverywhereLoading(true);
+    setSearchEverywhereError(null);
+
+    const timer = window.setTimeout(async () => {
+      const [fileResponse, symbolResponse] = await Promise.all([
+        window.electronAPI.codePaneSearchFiles({
+          rootPath,
+          query: trimmedQuery,
+          limit: 40,
+        }),
+        window.electronAPI.codePaneGetWorkspaceSymbols({
+          rootPath,
+          query: trimmedQuery,
+          limit: 40,
+        }),
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      setSearchEverywhereFileResults(fileResponse.success ? (fileResponse.data ?? []) : []);
+      setSearchEverywhereSymbolResults(symbolResponse.success ? (symbolResponse.data ?? []) : []);
+      setSearchEverywhereError(
+        fileResponse.success && symbolResponse.success
+          ? null
+          : fileResponse.error || symbolResponse.error || t('common.retry'),
+      );
+      setIsSearchEverywhereLoading(false);
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [deferredSearchEverywhereQuery, isSearchEverywhereOpen, rootPath, searchEverywhereMode, t]);
+
+  const searchEverywhereItems = useMemo<SearchEverywhereItem[]>(() => {
+    const trimmedQuery = searchEverywhereQuery.trim().toLowerCase();
+
+    if (searchEverywhereMode === 'commands') {
+      return searchEverywhereCommandItems.filter((item) => (
+        trimmedQuery.length === 0
+        || item.title.toLowerCase().includes(trimmedQuery)
+        || item.meta?.toLowerCase().includes(trimmedQuery)
+      ));
+    }
+
+    if (searchEverywhereMode === 'recent') {
+      const recentLocationItems = recentLocations
+        .filter((location) => (
+          trimmedQuery.length === 0
+          || getPathLeafLabel(location.displayPath ?? location.filePath).toLowerCase().includes(trimmedQuery)
+          || location.filePath.toLowerCase().includes(trimmedQuery)
+        ))
+        .map((location, index) => ({
+          id: `recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
+          section: t('codePane.recentLocations'),
+          title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
+          subtitle: location.displayPath ?? getRelativePath(rootPath, location.filePath),
+          meta: `${location.lineNumber}:${location.column}`,
+          execute: async () => {
+            await openEditorLocation(location, {
+              preserveTabs: true,
+              recordHistory: true,
+              recordRecent: true,
+              clearForward: true,
+            });
+          },
+        }));
+      const recentFileItems = recentFiles
+        .filter((filePath) => (
+          trimmedQuery.length === 0
+          || getPathLeafLabel(getDisplayPath(filePath)).toLowerCase().includes(trimmedQuery)
+          || getDisplayPath(filePath).toLowerCase().includes(trimmedQuery)
+        ))
+        .map((filePath) => ({
+          id: `recent-file-${filePath}`,
+          section: t('codePane.recentFiles'),
+          title: getFileLabel(filePath),
+          subtitle: getRelativePath(rootPath, getDisplayPath(filePath)),
+          execute: async () => {
+            await openEditorLocation({
+              filePath,
+              lineNumber: 1,
+              column: 1,
+            }, {
+              preserveTabs: true,
+              recordHistory: true,
+              recordRecent: true,
+              clearForward: true,
+            });
+          },
+        }));
+      return [...recentLocationItems, ...recentFileItems];
+    }
+
+    const commandItems = searchEverywhereCommandItems.filter((item) => (
+      trimmedQuery.length === 0
+      || item.title.toLowerCase().includes(trimmedQuery)
+      || item.meta?.toLowerCase().includes(trimmedQuery)
+    ));
+
+    const recentItems = trimmedQuery.length === 0
+      ? [
+          ...recentLocations.map((location, index) => ({
+            id: `search-recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
+            section: t('codePane.recentLocations'),
+            title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
+            subtitle: location.displayPath ?? getRelativePath(rootPath, location.filePath),
+            meta: `${location.lineNumber}:${location.column}`,
+            execute: async () => {
+              await openEditorLocation(location, {
+                preserveTabs: true,
+                recordHistory: true,
+                recordRecent: true,
+                clearForward: true,
+              });
+            },
+          })),
+          ...recentFiles.map((filePath) => ({
+            id: `search-recent-file-${filePath}`,
+            section: t('codePane.recentFiles'),
+            title: getFileLabel(filePath),
+            subtitle: getRelativePath(rootPath, getDisplayPath(filePath)),
+            execute: async () => {
+              await openEditorLocation({
+                filePath,
+                lineNumber: 1,
+                column: 1,
+              }, {
+                preserveTabs: true,
+                recordHistory: true,
+                recordRecent: true,
+                clearForward: true,
+              });
+            },
+          })),
+        ]
+      : [];
+
+    const fileItems = searchEverywhereFileResults.map((filePath) => ({
+      id: `search-file-${filePath}`,
+      section: t('codePane.searchEverywhereFilesSection'),
+      title: getPathLeafLabel(filePath) || filePath,
+      subtitle: getRelativePath(rootPath, filePath),
+      execute: async () => {
+        await openEditorLocation({
+          filePath,
+          lineNumber: 1,
+          column: 1,
+        }, {
+          recordHistory: true,
+          recordRecent: true,
+          clearForward: true,
+        });
+      },
+    }));
+
+    const symbolItems = searchEverywhereSymbolResults.map((symbol) => ({
+      id: `search-symbol-${symbol.filePath}-${symbol.name}-${symbol.range.startLineNumber}-${symbol.range.startColumn}`,
+      section: t('codePane.searchEverywhereSymbolsSection'),
+      title: symbol.name,
+      subtitle: getRelativePath(rootPath, symbol.filePath),
+      meta: `${symbol.range.startLineNumber}:${symbol.range.startColumn}`,
+      execute: async () => {
+        await openEditorLocation({
+          filePath: symbol.filePath,
+          lineNumber: symbol.range.startLineNumber,
+          column: symbol.range.startColumn,
+        }, {
+          preserveTabs: true,
+          recordHistory: true,
+          recordRecent: true,
+          clearForward: true,
+        });
+      },
+    }));
+
+    return [
+      ...recentItems,
+      ...commandItems,
+      ...fileItems,
+      ...symbolItems,
+    ];
+  }, [
+    activateFile,
+    getDisplayPath,
+    getFileLabel,
+    openEditorLocation,
+    recentFiles,
+    recentLocations,
+    rootPath,
+    searchEverywhereCommandItems,
+    searchEverywhereFileResults,
+    searchEverywhereMode,
+    searchEverywhereQuery,
+    searchEverywhereSymbolResults,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (!isSearchEverywhereOpen) {
+      return;
+    }
+
+    setSearchEverywhereSelectedIndex((currentIndex) => (
+      searchEverywhereItems.length === 0
+        ? 0
+        : Math.min(currentIndex, searchEverywhereItems.length - 1)
+    ));
+  }, [isSearchEverywhereOpen, searchEverywhereItems]);
+
+  const canNavigateBack = navigationBackStackRef.current.length > 0;
+  const canNavigateForward = navigationForwardStackRef.current.length > 0;
+  const selectedSearchEverywhereItem = searchEverywhereItems[searchEverywhereSelectedIndex] ?? null;
+  const selectedCodeAction = codeActionItems[selectedCodeActionIndex] ?? null;
+
+  useEffect(() => {
+    if (!isActive) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditableTarget = target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target?.isContentEditable === true;
+      const hasPrimaryModifier = isMac
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey;
+
+      if (event.key === 'Escape') {
+        if (isSearchEverywhereOpen) {
+          event.preventDefault();
+          closeSearchEverywhere();
+          return;
+        }
+
+        if (isCodeActionMenuOpen) {
+          event.preventDefault();
+          setIsCodeActionMenuOpen(false);
+          setCodeActionItems([]);
+          setCodeActionMenuError(null);
+          return;
+        }
+      }
+
+      if (hasPrimaryModifier && !event.shiftKey && event.key.toLowerCase() === 'p') {
+        event.preventDefault();
+        openSearchEverywhere('all');
+        return;
+      }
+
+      if (hasPrimaryModifier && !event.shiftKey && event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        openSearchEverywhere('recent');
+        return;
+      }
+
+      if (hasPrimaryModifier && event.shiftKey && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        openSearchEverywhere('commands');
+        return;
+      }
+
+      if (isEditableTarget) {
+        return;
+      }
+
+      if (event.altKey && event.key === 'Enter') {
+        event.preventDefault();
+        void openCodeActionMenuRef.current();
+        return;
+      }
+
+      if (event.altKey && event.key === 'ArrowLeft') {
+        event.preventDefault();
+        void navigateBackRef.current();
+        return;
+      }
+
+      if (event.altKey && event.key === 'ArrowRight') {
+        event.preventDefault();
+        void navigateForwardRef.current();
+        return;
+      }
+
+      if (hasPrimaryModifier && event.altKey && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        void goToImplementationAtCursorRef.current();
+        return;
+      }
+
+      if (event.key === 'F8') {
+        event.preventDefault();
+        void navigateProblem(event.shiftKey ? -1 : 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [
+    closeSearchEverywhere,
+    isActive,
+    isCodeActionMenuOpen,
+    isMac,
+    isSearchEverywhereOpen,
+    navigateProblem,
+    openSearchEverywhere,
+  ]);
+
+  useEffect(() => {
+    if (!isCodeActionMenuOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSelectedCodeActionIndex((currentIndex) => (
+          codeActionItems.length === 0
+            ? 0
+            : Math.min(currentIndex + 1, codeActionItems.length - 1)
+        ));
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSelectedCodeActionIndex((currentIndex) => (
+          codeActionItems.length === 0
+            ? 0
+            : Math.max(currentIndex - 1, 0)
+        ));
+        return;
+      }
+
+      if (event.key === 'Enter' && selectedCodeAction) {
+        event.preventDefault();
+        void runSelectedCodeActionRef.current(selectedCodeAction);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [codeActionItems.length, isCodeActionMenuOpen, selectedCodeAction]);
+
+  const openFileLocation = useCallback(async (location: FileNavigationLocation) => {
+    await openEditorLocation(location, {
+      recordHistory: true,
+      recordRecent: true,
+      clearForward: true,
+    });
+  }, [openEditorLocation]);
 
   useEffect(() => {
     openFileLocationRef.current = openFileLocation;
@@ -3522,6 +4298,188 @@ export const CodePane: React.FC<CodePaneProps> = ({
       column: match.column,
     });
   }, [openFileLocation]);
+
+  const navigateHistory = useCallback(async (direction: 'back' | 'forward') => {
+    const sourceStackRef = direction === 'back'
+      ? navigationBackStackRef
+      : navigationForwardStackRef;
+    const targetStackRef = direction === 'back'
+      ? navigationForwardStackRef
+      : navigationBackStackRef;
+    const nextLocation = sourceStackRef.current[sourceStackRef.current.length - 1];
+
+    if (!nextLocation) {
+      return;
+    }
+
+    sourceStackRef.current = sourceStackRef.current.slice(0, -1);
+
+    const currentLocation = getCurrentNavigationLocation();
+    if (currentLocation && !isSameNavigationLocation(currentLocation, nextLocation)) {
+      targetStackRef.current = [
+        ...targetStackRef.current,
+        currentLocation,
+      ].slice(-CODE_PANE_MAX_NAVIGATION_HISTORY);
+    }
+
+    setNavigationStateVersion((currentVersion) => currentVersion + 1);
+    await openEditorLocation({
+      filePath: nextLocation.filePath,
+      lineNumber: nextLocation.lineNumber,
+      column: nextLocation.column,
+      displayPath: nextLocation.displayPath,
+    }, {
+      preserveTabs: true,
+      recordHistory: false,
+      recordRecent: true,
+      clearForward: false,
+    });
+  }, [getCurrentNavigationLocation, openEditorLocation]);
+
+  const navigateBack = useCallback(async () => {
+    await navigateHistory('back');
+  }, [navigateHistory]);
+
+  const navigateForward = useCallback(async () => {
+    await navigateHistory('forward');
+  }, [navigateHistory]);
+
+  useEffect(() => {
+    navigateBackRef.current = navigateBack;
+  }, [navigateBack]);
+
+  useEffect(() => {
+    navigateForwardRef.current = navigateForward;
+  }, [navigateForward]);
+
+  const goToImplementationAtCursor = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      return;
+    }
+
+    const response = await window.electronAPI.codePaneGetImplementations({
+      rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      position: {
+        lineNumber: context.position.lineNumber,
+        column: context.position.column,
+      },
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'warning',
+        message: response.error || t('common.retry'),
+        filePath: context.filePath,
+      });
+      return;
+    }
+
+    const implementation = response.data?.[0];
+    if (!implementation) {
+      setBanner({
+        tone: 'info',
+        message: t('codePane.goToImplementationEmpty'),
+        filePath: context.filePath,
+      });
+      return;
+    }
+
+    await openEditorLocation({
+      filePath: implementation.filePath,
+      lineNumber: implementation.range.startLineNumber,
+      column: implementation.range.startColumn,
+      content: implementation.content,
+      language: implementation.language,
+      readOnly: implementation.readOnly,
+      displayPath: implementation.displayPath,
+      documentUri: implementation.uri,
+    }, {
+      preserveTabs: true,
+      recordHistory: true,
+      recordRecent: true,
+      clearForward: true,
+    });
+  }, [getActiveEditorContext, openEditorLocation, rootPath, t]);
+
+  useEffect(() => {
+    goToImplementationAtCursorRef.current = goToImplementationAtCursor;
+  }, [goToImplementationAtCursor]);
+
+  const openCodeActionMenu = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      return;
+    }
+
+    const wordRange = context.model.getWordAtPosition(context.position);
+    const requestRange = wordRange
+      ? {
+          startLineNumber: context.position.lineNumber,
+          startColumn: wordRange.startColumn,
+          endLineNumber: context.position.lineNumber,
+          endColumn: wordRange.endColumn,
+        }
+      : {
+          startLineNumber: context.position.lineNumber,
+          startColumn: context.position.column,
+          endLineNumber: context.position.lineNumber,
+          endColumn: context.position.column + 1,
+        };
+
+    setIsCodeActionMenuOpen(true);
+    setCodeActionItems([]);
+    setCodeActionMenuError(null);
+    setIsCodeActionMenuLoading(true);
+    setSelectedCodeActionIndex(0);
+
+    const response = await window.electronAPI.codePaneGetCodeActions({
+      rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      range: requestRange,
+    });
+
+    startTransition(() => {
+      setCodeActionItems(response.success ? (response.data ?? []) : []);
+    });
+    setCodeActionMenuError(response.success ? null : (response.error || t('common.retry')));
+    setIsCodeActionMenuLoading(false);
+  }, [getActiveEditorContext, rootPath, t]);
+
+  useEffect(() => {
+    openCodeActionMenuRef.current = openCodeActionMenu;
+  }, [openCodeActionMenu]);
+
+  const runSelectedCodeAction = useCallback(async (action: CodePaneCodeAction | undefined) => {
+    const context = getActiveEditorContext();
+    if (!context || !action || action.disabledReason) {
+      return;
+    }
+
+    const response = await window.electronAPI.codePaneRunCodeAction({
+      rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      actionId: action.id,
+    });
+
+    if (!response.success) {
+      setCodeActionMenuError(response.error || t('common.retry'));
+      return;
+    }
+
+    await applyLanguageTextEdits(response.data ?? []);
+    setIsCodeActionMenuOpen(false);
+    setCodeActionItems([]);
+    setCodeActionMenuError(null);
+  }, [applyLanguageTextEdits, getActiveEditorContext, rootPath, t]);
+
+  useEffect(() => {
+    runSelectedCodeActionRef.current = runSelectedCodeAction;
+  }, [runSelectedCodeAction]);
 
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
@@ -3660,6 +4618,50 @@ export const CodePane: React.FC<CodePaneProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-1">
+          <AppTooltip content={t('codePane.navigateBack')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.navigateBack')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void navigateBack();
+              }}
+              disabled={!canNavigateBack}
+              className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft size={13} />
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.navigateForward')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.navigateForward')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void navigateForward();
+              }}
+              disabled={!canNavigateForward}
+              className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronRight size={13} />
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.searchEverywhereOpen')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.searchEverywhereOpen')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                openSearchEverywhere('all');
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
+            >
+              <Search size={13} />
+            </button>
+          </AppTooltip>
           <AppTooltip content={t('codePane.refresh')} placement="pane-corner">
             <button
               type="button"
@@ -3729,6 +4731,36 @@ export const CodePane: React.FC<CodePaneProps> = ({
               className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Ren
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.goToImplementation')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.goToImplementation')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void goToImplementationAtCursor();
+              }}
+              disabled={!activeFilePath}
+              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Impl
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.codeActions')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.codeActions')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void openCodeActionMenu();
+              }}
+              disabled={!activeFilePath}
+              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Fix
             </button>
           </AppTooltip>
           <AppTooltip content={t('codePane.formatDocument')} placement="pane-corner">
@@ -4588,6 +5620,220 @@ export const CodePane: React.FC<CodePaneProps> = ({
           </div>
         </div>
       </div>
+
+      {isSearchEverywhereOpen && (
+        <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/70 p-4">
+          <div className="mt-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
+            <div className="border-b border-zinc-800 p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-zinc-100">{t('codePane.searchEverywhereTitle')}</div>
+                <button
+                  type="button"
+                  onClick={closeSearchEverywhere}
+                  className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="mb-3 flex gap-1 rounded bg-zinc-900/60 p-1">
+                {([
+                  ['all', t('codePane.searchEverywhereAll')],
+                  ['recent', t('codePane.searchEverywhereRecent')],
+                  ['commands', t('codePane.searchEverywhereCommands')],
+                ] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      setSearchEverywhereMode(mode);
+                      setSearchEverywhereSelectedIndex(0);
+                    }}
+                    className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                      searchEverywhereMode === mode
+                        ? 'bg-zinc-800 text-zinc-100'
+                        : 'text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-3 py-2">
+                <Search size={13} className="shrink-0 text-zinc-500" />
+                <input
+                  ref={searchEverywhereInputRef}
+                  value={searchEverywhereQuery}
+                  onChange={(event) => setSearchEverywhereQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      setSearchEverywhereSelectedIndex((currentIndex) => (
+                        searchEverywhereItems.length === 0
+                          ? 0
+                          : Math.min(currentIndex + 1, searchEverywhereItems.length - 1)
+                      ));
+                      return;
+                    }
+
+                    if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      setSearchEverywhereSelectedIndex((currentIndex) => (
+                        searchEverywhereItems.length === 0
+                          ? 0
+                          : Math.max(currentIndex - 1, 0)
+                      ));
+                      return;
+                    }
+
+                    if (event.key === 'Enter' && selectedSearchEverywhereItem) {
+                      event.preventDefault();
+                      closeSearchEverywhere();
+                      void selectedSearchEverywhereItem.execute();
+                      return;
+                    }
+
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      closeSearchEverywhere();
+                    }
+                  }}
+                  placeholder={t('codePane.searchEverywherePlaceholder')}
+                  className="w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                />
+                {isSearchEverywhereLoading && <Loader2 size={13} className="shrink-0 animate-spin text-zinc-500" />}
+              </div>
+            </div>
+            <div className="max-h-[60vh] overflow-auto p-2">
+              {searchEverywhereError ? (
+                <div className="px-2 py-3 text-sm text-red-300">{searchEverywhereError}</div>
+              ) : searchEverywhereItems.length > 0 ? (
+                <div className="space-y-1">
+                  {searchEverywhereItems.map((item, index) => {
+                    const previousItem = index > 0 ? searchEverywhereItems[index - 1] : null;
+                    const showSectionLabel = !previousItem || previousItem.section !== item.section;
+                    const isSelected = index === searchEverywhereSelectedIndex;
+
+                    return (
+                      <React.Fragment key={item.id}>
+                        {showSectionLabel && (
+                          <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                            {item.section}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onMouseEnter={() => {
+                            setSearchEverywhereSelectedIndex(index);
+                          }}
+                          onClick={() => {
+                            closeSearchEverywhere();
+                            void item.execute();
+                          }}
+                          className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
+                            isSelected
+                              ? 'bg-zinc-800 text-zinc-100'
+                              : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm">{item.title}</div>
+                            {item.subtitle && (
+                              <div className="mt-1 truncate text-xs text-zinc-500">{item.subtitle}</div>
+                            )}
+                          </div>
+                          {item.meta && (
+                            <div className="shrink-0 text-[11px] text-zinc-500">{item.meta}</div>
+                          )}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.searchEverywhereEmpty')}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isCodeActionMenuOpen && (
+        <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/60 p-4">
+          <div className="mt-16 flex w-full max-w-xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+              <div className="text-sm font-medium text-zinc-100">{t('codePane.codeActions')}</div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCodeActionMenuOpen(false);
+                  setCodeActionItems([]);
+                  setCodeActionMenuError(null);
+                }}
+                className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="max-h-[50vh] overflow-auto p-2">
+              {isCodeActionMenuLoading ? (
+                <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500">
+                  <Loader2 size={13} className="animate-spin" />
+                  {t('codePane.codeActionsLoading')}
+                </div>
+              ) : codeActionMenuError ? (
+                <div className="px-2 py-3 text-sm text-red-300">{codeActionMenuError}</div>
+              ) : codeActionItems.length > 0 ? (
+                <div className="space-y-1">
+                  {codeActionItems.map((action, index) => {
+                    const isSelected = index === selectedCodeActionIndex;
+                    return (
+                      <button
+                        key={action.id}
+                        type="button"
+                        disabled={Boolean(action.disabledReason)}
+                        onMouseEnter={() => {
+                          setSelectedCodeActionIndex(index);
+                        }}
+                        onClick={() => {
+                          void runSelectedCodeAction(action);
+                        }}
+                        className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
+                          action.disabledReason
+                            ? 'cursor-not-allowed text-zinc-600'
+                            : isSelected
+                              ? 'bg-zinc-800 text-zinc-100'
+                              : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm">{action.title}</div>
+                          {(action.kind || action.disabledReason) && (
+                            <div className="mt-1 truncate text-xs text-zinc-500">
+                              {action.disabledReason ?? action.kind}
+                            </div>
+                          )}
+                        </div>
+                        {action.isPreferred && (
+                          <div className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                            {t('codePane.codeActionsPreferred')}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.codeActionsEmpty')}</div>
+              )}
+            </div>
+            {codeActionItems.length > 0 && !isCodeActionMenuLoading && (
+              <div className="border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
+                <span>{t('codePane.codeActionsHint')}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       </div>
     </>
   );

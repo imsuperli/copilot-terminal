@@ -142,6 +142,22 @@ describe('LanguageServerSupervisor', () => {
       },
     ]);
 
+    const documentHighlights = await supervisor.getDocumentHighlights(resolution, filePath, {
+      lineNumber: 1,
+      column: 15,
+    });
+    expect(documentHighlights).toEqual([
+      {
+        range: {
+          startLineNumber: 1,
+          startColumn: 14,
+          endLineNumber: 1,
+          endColumn: 19,
+        },
+        kind: 'read',
+      },
+    ]);
+
     const symbols = await supervisor.getDocumentSymbols(resolution, filePath);
     expect(symbols).toEqual([
       {
@@ -159,6 +175,22 @@ describe('LanguageServerSupervisor', () => {
           startColumn: 1,
           endLineNumber: 1,
           endColumn: 5,
+        },
+      },
+    ]);
+
+    const implementations = await supervisor.getImplementations(resolution, filePath, {
+      lineNumber: 1,
+      column: 1,
+    });
+    expect(implementations).toEqual([
+      {
+        filePath,
+        range: {
+          startLineNumber: 5,
+          startColumn: 3,
+          endLineNumber: 5,
+          endColumn: 13,
         },
       },
     ]);
@@ -253,6 +285,54 @@ describe('LanguageServerSupervisor', () => {
           endColumn: 5,
         },
         containerName: 'mock',
+      },
+    ]);
+
+    const codeActions = await supervisor.getCodeActions(resolution, filePath, {
+      startLineNumber: 1,
+      startColumn: 1,
+      endLineNumber: 1,
+      endColumn: 5,
+    });
+    expect(codeActions).toEqual([
+      {
+        id: 'code-action-1',
+        title: 'Add missing import',
+        kind: 'quickfix',
+        isPreferred: true,
+      },
+      {
+        id: 'code-action-2',
+        title: 'Organize imports',
+        kind: 'source.organizeImports',
+      },
+    ]);
+
+    const quickFixEdits = await supervisor.runCodeAction(resolution, filePath, 'code-action-1');
+    expect(quickFixEdits).toEqual([
+      {
+        filePath,
+        range: {
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 1,
+        },
+        newText: 'import mock.Dependency;\n',
+      },
+    ]);
+
+    const organizeImportsEdits = await supervisor.runCodeAction(resolution, filePath, 'code-action-2');
+    expect(organizeImportsEdits).toEqual([
+      {
+        filePath,
+        range: {
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 1,
+        },
+        newText: '// organized\n',
       },
     ]);
 

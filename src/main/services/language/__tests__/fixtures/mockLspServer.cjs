@@ -52,8 +52,13 @@ function handleMessage(message) {
             },
             hoverProvider: true,
             referencesProvider: true,
+            documentHighlightProvider: true,
             signatureHelpProvider: {
               triggerCharacters: ['(', ','],
+            },
+            implementationProvider: true,
+            codeActionProvider: {
+              resolveProvider: true,
             },
             renameProvider: true,
             documentFormattingProvider: true,
@@ -220,6 +225,100 @@ function handleMessage(message) {
           uri,
           range: createRange(0, 0, 0, 4),
         }],
+      });
+      return;
+    }
+    case 'textDocument/documentHighlight':
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: [{
+          range: createRange(0, 13, 0, 18),
+          kind: 2,
+        }],
+      });
+      return;
+    case 'textDocument/implementation': {
+      const uri = message.params.textDocument.uri;
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: [{
+          uri,
+          range: createRange(4, 2, 4, 12),
+        }],
+      });
+      return;
+    }
+    case 'textDocument/codeAction':
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: [
+          {
+            title: 'Add missing import',
+            kind: 'quickfix',
+            isPreferred: true,
+            data: {
+              action: 'add-import',
+            },
+          },
+          {
+            title: 'Organize imports',
+            kind: 'source.organizeImports',
+            command: {
+              title: 'Organize imports',
+              command: 'mock.organizeImports',
+              arguments: [message.params.textDocument.uri],
+            },
+          },
+        ],
+      });
+      return;
+    case 'codeAction/resolve': {
+      const uri = Array.from(documents.keys())[0];
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          ...message.params,
+          ...(message.params?.data?.action === 'add-import'
+            ? {
+                edit: {
+                  changes: uri ? {
+                    [uri]: [{
+                      range: createRange(0, 0, 0, 0),
+                      newText: "import mock.Dependency;\n",
+                    }],
+                  } : {},
+                },
+              }
+            : {}),
+        },
+      });
+      return;
+    }
+    case 'workspace/executeCommand': {
+      const uri = message.params.arguments?.[0] ?? Array.from(documents.keys())[0];
+      send({
+        jsonrpc: '2.0',
+        id: 9100,
+        method: 'workspace/applyEdit',
+        params: {
+          edit: {
+            changes: uri ? {
+              [uri]: [{
+                range: createRange(0, 0, 0, 0),
+                newText: '// organized\n',
+              }],
+            } : {},
+          },
+        },
+      });
+      send({
+        jsonrpc: '2.0',
+        id: message.id,
+        result: null,
       });
       return;
     }

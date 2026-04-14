@@ -1,6 +1,7 @@
 import type {
   CodePaneCompletionItem,
   CodePaneDiagnostic,
+  CodePaneDocumentHighlight,
   CodePaneDocumentSymbol,
   CodePaneHoverResult,
   CodePaneLocation,
@@ -16,6 +17,7 @@ type MonacoLocation = import('monaco-editor').languages.Location;
 type MonacoHover = import('monaco-editor').languages.Hover;
 type MonacoProviderResult<T> = import('monaco-editor').languages.ProviderResult<T>;
 type MonacoDocumentSymbol = import('monaco-editor').languages.DocumentSymbol;
+type MonacoDocumentHighlight = import('monaco-editor').languages.DocumentHighlight;
 type MonacoCompletionItem = import('monaco-editor').languages.CompletionItem;
 type MonacoSignatureHelp = import('monaco-editor').languages.SignatureHelp;
 type MonacoDocumentContext = {
@@ -151,9 +153,25 @@ export class MonacoLanguageBridge {
     );
 
     this.providerDisposables.push(
+      this.monaco.languages.registerDocumentHighlightProvider(normalizedLanguage, {
+        provideDocumentHighlights: async (model, position) => (
+          await this.provideDocumentHighlights(model, position.lineNumber, position.column)
+        ),
+      }),
+    );
+
+    this.providerDisposables.push(
       this.monaco.languages.registerDocumentSymbolProvider(normalizedLanguage, {
         provideDocumentSymbols: async (model) => (
           await this.provideDocumentSymbols(model)
+        ),
+      }),
+    );
+
+    this.providerDisposables.push(
+      this.monaco.languages.registerImplementationProvider(normalizedLanguage, {
+        provideImplementation: async (model, position) => (
+          await this.provideImplementations(model, position.lineNumber, position.column)
         ),
       }),
     );
@@ -260,6 +278,33 @@ export class MonacoLanguageBridge {
     return (response.data ?? []).map((reference) => toMonacoReference(this.monaco, reference));
   }
 
+  private async provideDocumentHighlights(
+    model: MonacoModel,
+    lineNumber: number,
+    column: number,
+  ): Promise<MonacoProviderResult<MonacoDocumentHighlight[]>> {
+    const context = this.contextsByModel.get(model);
+    if (!context) {
+      return [];
+    }
+
+    const response = await window.electronAPI.codePaneGetDocumentHighlights({
+      rootPath: context.rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      position: {
+        lineNumber,
+        column,
+      },
+    });
+
+    if (!response.success) {
+      return [];
+    }
+
+    return (response.data ?? []).map((highlight) => toMonacoDocumentHighlight(this.monaco, highlight));
+  }
+
   private async provideDocumentSymbols(
     model: MonacoModel,
   ): Promise<MonacoProviderResult<MonacoDocumentSymbol[]>> {
@@ -279,6 +324,33 @@ export class MonacoLanguageBridge {
     }
 
     return (response.data ?? []).map((symbol) => toMonacoDocumentSymbol(symbol));
+  }
+
+  private async provideImplementations(
+    model: MonacoModel,
+    lineNumber: number,
+    column: number,
+  ): Promise<MonacoProviderResult<MonacoLocation[]>> {
+    const context = this.contextsByModel.get(model);
+    if (!context) {
+      return [];
+    }
+
+    const response = await window.electronAPI.codePaneGetImplementations({
+      rootPath: context.rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      position: {
+        lineNumber,
+        column,
+      },
+    });
+
+    if (!response.success) {
+      return [];
+    }
+
+    return (response.data ?? []).map((location) => toMonacoLocation(this.monaco, location));
   }
 
   private async provideCompletionItems(
@@ -411,6 +483,16 @@ function toMonacoReference(monaco: MonacoModule, reference: CodePaneReference): 
   };
 }
 
+function toMonacoDocumentHighlight(
+  monaco: MonacoModule,
+  highlight: CodePaneDocumentHighlight,
+): MonacoDocumentHighlight {
+  return {
+    range: toMonacoRange(highlight.range),
+    kind: mapDocumentHighlightKind(monaco, highlight.kind),
+  };
+}
+
 function toMonacoHover(result: CodePaneHoverResult): MonacoHover {
   return {
     contents: result.contents.map((item) => ({
@@ -510,6 +592,21 @@ function toMonacoRange(range: MonacoRange): MonacoRange {
     endLineNumber: range.endLineNumber,
     endColumn: range.endColumn,
   };
+}
+
+function mapDocumentHighlightKind(
+  monaco: MonacoModule,
+  kind?: CodePaneDocumentHighlight['kind'],
+): MonacoDocumentHighlight['kind'] {
+  switch (kind) {
+    case 'read':
+      return monaco.languages.DocumentHighlightKind.Read;
+    case 'write':
+      return monaco.languages.DocumentHighlightKind.Write;
+    case 'text':
+    default:
+      return monaco.languages.DocumentHighlightKind.Text;
+  }
 }
 
 function createInlineRange(model: MonacoModel, lineNumber: number, column: number): MonacoRange {

@@ -1,9 +1,11 @@
 import { pathToFileURL, fileURLToPath } from 'url';
 import path from 'path';
 import type {
+  CodePaneCodeAction,
   CodePaneCompletionItem,
   CodePaneDiagnostic,
   CodePaneDiagnosticsChangedPayload,
+  CodePaneDocumentHighlight,
   CodePaneDocumentSymbol,
   CodePaneHoverResult,
   CodePaneLocation,
@@ -13,6 +15,7 @@ import type {
   CodePaneSignatureHelpResult,
   CodePaneTextEdit,
   CodePaneWorkspaceSymbol,
+  CodePaneRange,
   PluginRuntimeStateChangedPayload,
 } from '../../../shared/types/electron-api';
 import type { PluginRequirement, PluginRuntime } from '../../../shared/types/plugin';
@@ -41,7 +44,12 @@ const JAVA_SLOW_REQUEST_METHODS = new Set([
   'textDocument/definition',
   'textDocument/hover',
   'textDocument/references',
+  'textDocument/documentHighlight',
   'textDocument/documentSymbol',
+  'textDocument/implementation',
+  'textDocument/codeAction',
+  'codeAction/resolve',
+  'workspace/executeCommand',
   'textDocument/completion',
   'textDocument/signatureHelp',
   'textDocument/rename',
@@ -120,6 +128,11 @@ interface LspHoverResult {
   range?: LspRange;
 }
 
+interface LspDocumentHighlight {
+  range: LspRange;
+  kind?: number;
+}
+
 interface LspDiagnostic {
   severity?: number;
   message: string;
@@ -193,6 +206,25 @@ interface LspWorkspaceEdit {
     };
     edits?: LspTextEdit[];
   }>;
+}
+
+interface LspCommand {
+  title: string;
+  command: string;
+  arguments?: unknown[];
+}
+
+interface LspCodeAction {
+  title: string;
+  kind?: string;
+  diagnostics?: LspDiagnostic[];
+  isPreferred?: boolean;
+  disabled?: {
+    reason?: string;
+  };
+  edit?: LspWorkspaceEdit;
+  command?: LspCommand;
+  data?: unknown;
 }
 
 export interface LanguageServerSupervisorOptions {
@@ -275,8 +307,24 @@ export class LanguageServerSupervisor {
     return await this.getOrCreateSession(resolution).getReferences(filePath, position);
   }
 
+  async getDocumentHighlights(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    position: CodePanePosition,
+  ): Promise<CodePaneDocumentHighlight[]> {
+    return await this.getOrCreateSession(resolution).getDocumentHighlights(filePath, position);
+  }
+
   async getDocumentSymbols(resolution: ResolvedLanguagePlugin, filePath: string): Promise<CodePaneDocumentSymbol[]> {
     return await this.getOrCreateSession(resolution).getDocumentSymbols(filePath);
+  }
+
+  async getImplementations(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    position: CodePanePosition,
+  ): Promise<CodePaneLocation[]> {
+    return await this.getOrCreateSession(resolution).getImplementations(filePath, position);
   }
 
   async getCompletionItems(
@@ -328,6 +376,22 @@ export class LanguageServerSupervisor {
     limit?: number,
   ): Promise<CodePaneWorkspaceSymbol[]> {
     return await this.getOrCreateSession(resolution).getWorkspaceSymbols(query, limit);
+  }
+
+  async getCodeActions(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    range: CodePaneRange,
+  ): Promise<CodePaneCodeAction[]> {
+    return await this.getOrCreateSession(resolution).getCodeActions(filePath, range);
+  }
+
+  async runCodeAction(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    actionId: string,
+  ): Promise<CodePaneTextEdit[]> {
+    return await this.getOrCreateSession(resolution).runCodeAction(filePath, actionId);
   }
 
   async readVirtualDocument(
@@ -415,13 +479,17 @@ class LanguageServerSession {
   private readonly restartBackoffMs: number;
   private readonly documents = new Map<string, TrackedDocument>();
   private readonly pendingRequests = new Map<number, PendingRequest>();
+  private readonly codeActions = new Map<string, LspCodeAction | LspCommand>();
+  private readonly pendingAppliedWorkspaceEdits: CodePaneTextEdit[] = [];
 
   private spawnedProcess: SpawnedRuntimeProcess | null = null;
   private stdoutBuffer = Buffer.alloc(0);
   private nextRequestId = 1;
+  private nextCodeActionId = 1;
   private initializePromise: Promise<void> | null = null;
   private isInitialized = false;
   private textSyncKind: TextSyncKind = 1;
+  private serverCapabilities: any = null;
   private expectedExit = false;
   private disposed = false;
   private recentStartFailure: { message: string; timestampMs: number } | null = null;
@@ -601,6 +669,23 @@ class LanguageServerSession {
     }));
   }
 
+  async getDocumentHighlights(
+    filePath: string,
+    position: CodePanePosition,
+  ): Promise<CodePaneDocumentHighlight[]> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('textDocument/documentHighlight', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      position: toLspPosition(position),
+    }) as LspDocumentHighlight[] | null;
+
+    return (result ?? [])
+      .map(normalizeDocumentHighlight)
+      .filter((highlight): highlight is CodePaneDocumentHighlight => Boolean(highlight));
+  }
+
   async getDocumentSymbols(filePath: string): Promise<CodePaneDocumentSymbol[]> {
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/documentSymbol', {
@@ -610,6 +695,22 @@ class LanguageServerSession {
     }) as Array<LspDocumentSymbol | LspSymbolInformation> | null;
 
     return (result ?? []).map(normalizeDocumentSymbol).filter((symbol): symbol is CodePaneDocumentSymbol => Boolean(symbol));
+  }
+
+  async getImplementations(filePath: string, position: CodePanePosition): Promise<CodePaneLocation[]> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('textDocument/implementation', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      position: toLspPosition(position),
+    });
+
+    const items = Array.isArray(result) ? result : result ? [result] : [];
+    const normalizedLocations = await Promise.all(items.map(async (item) => (
+      await this.normalizeLocationLikeResult(item)
+    )));
+    return normalizedLocations.filter((item): item is CodePaneLocation => Boolean(item));
   }
 
   async getCompletionItems(
@@ -739,6 +840,69 @@ class LanguageServerSession {
       .slice(0, Math.max(limit ?? 100, 0));
   }
 
+  async getCodeActions(filePath: string, range: CodePaneRange): Promise<CodePaneCodeAction[]> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('textDocument/codeAction', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      range: toLspRange(range),
+      context: {
+        diagnostics: [],
+      },
+    }) as Array<LspCodeAction | LspCommand> | null;
+
+    const actions: CodePaneCodeAction[] = [];
+    for (const item of result ?? []) {
+      const actionId = `code-action-${this.nextCodeActionId}`;
+      this.nextCodeActionId += 1;
+      this.codeActions.set(actionId, item);
+      const normalizedAction = normalizeCodeAction(item, actionId, filePath);
+      if (normalizedAction) {
+        actions.push(normalizedAction);
+      }
+    }
+
+    return actions;
+  }
+
+  async runCodeAction(_filePath: string, actionId: string): Promise<CodePaneTextEdit[]> {
+    await this.ensureInitialized();
+    const storedAction = this.codeActions.get(actionId);
+    if (!storedAction) {
+      throw new Error(`Unknown code action: ${actionId}`);
+    }
+
+    const workspaceEditStartIndex = this.pendingAppliedWorkspaceEdits.length;
+    let resolvedAction = storedAction;
+    if (isResolvableCodeAction(storedAction) && this.serverCapabilities?.codeActionProvider?.resolveProvider) {
+      resolvedAction = await this.sendRequest('codeAction/resolve', storedAction) as LspCodeAction;
+      this.codeActions.set(actionId, resolvedAction);
+    }
+
+    const normalizedEdits: CodePaneTextEdit[] = [];
+    if (isCodeActionWithEdit(resolvedAction)) {
+      normalizedEdits.push(...normalizeWorkspaceEdit(resolvedAction.edit));
+    }
+
+    const command = getCodeActionCommand(resolvedAction);
+    if (command) {
+      await this.sendRequest('workspace/executeCommand', {
+        command: command.command,
+        arguments: command.arguments ?? [],
+      });
+      await waitForWorkspaceEditFlush();
+
+      if (this.pendingAppliedWorkspaceEdits.length > workspaceEditStartIndex) {
+        normalizedEdits.push(
+          ...this.pendingAppliedWorkspaceEdits.slice(workspaceEditStartIndex),
+        );
+      }
+    }
+
+    return deduplicateTextEdits(normalizedEdits);
+  }
+
   async readVirtualDocument(documentUri: string): Promise<CodePaneReadFileResult | null> {
     await this.ensureInitialized();
 
@@ -825,6 +989,9 @@ class LanguageServerSession {
     this.isInitialized = false;
     this.expectedExit = false;
     this.lastRuntimeErrorMessage = null;
+    this.serverCapabilities = null;
+    this.codeActions.clear();
+    this.pendingAppliedWorkspaceEdits.length = 0;
 
     try {
       this.spawnedProcess = await adapter.spawn(this.resolution.capability.runtime, spawnContext);
@@ -850,6 +1017,7 @@ class LanguageServerSession {
         ],
         capabilities: {
           workspace: {
+            applyEdit: true,
             configuration: true,
             workspaceFolders: true,
             symbol: {},
@@ -865,6 +1033,27 @@ class LanguageServerSession {
               contentFormat: ['markdown', 'plaintext'],
             },
             references: {},
+            documentHighlight: {},
+            implementation: {},
+            codeAction: {
+              codeActionLiteralSupport: {
+                codeActionKind: {
+                  valueSet: [
+                    '',
+                    'quickfix',
+                    'refactor',
+                    'refactor.extract',
+                    'refactor.inline',
+                    'refactor.rewrite',
+                    'source',
+                    'source.organizeImports',
+                  ],
+                },
+              },
+              resolveSupport: {
+                properties: ['edit', 'command'],
+              },
+            },
             signatureHelp: {
               signatureInformation: {
                 documentationFormat: ['markdown', 'plaintext'],
@@ -893,7 +1082,8 @@ class LanguageServerSession {
         },
       });
 
-      this.textSyncKind = normalizeTextSyncKind(initializeResult?.capabilities?.textDocumentSync);
+      this.serverCapabilities = initializeResult?.capabilities ?? null;
+      this.textSyncKind = normalizeTextSyncKind(this.serverCapabilities?.textDocumentSync);
       this.isInitialized = true;
       this.clearRecentStartFailure();
       this.sendNotification('initialized', {});
@@ -1041,6 +1231,14 @@ class LanguageServerSession {
       ];
     } else if (method === 'window/workDoneProgress/create') {
       result = null;
+    } else if (method === 'workspace/applyEdit') {
+      const edits = normalizeWorkspaceEdit(params?.edit);
+      if (edits.length > 0) {
+        this.pendingAppliedWorkspaceEdits.push(...edits);
+      }
+      result = {
+        applied: true,
+      };
     }
 
     this.sendMessage({
@@ -1326,6 +1524,19 @@ function toLspPosition(position: CodePanePosition): LspPosition {
   };
 }
 
+function toLspRange(range: CodePaneRange): LspRange {
+  return {
+    start: toLspPosition({
+      lineNumber: range.startLineNumber,
+      column: range.startColumn,
+    }),
+    end: toLspPosition({
+      lineNumber: range.endLineNumber,
+      column: range.endColumn,
+    }),
+  };
+}
+
 function fromLspRange(range: LspRange): CodePaneLocation['range'] {
   return {
     startLineNumber: range.start.line + 1,
@@ -1389,6 +1600,31 @@ function mapDiagnosticSeverity(value?: number): CodePaneDiagnostic['severity'] {
       return 'info';
     default:
       return 'hint';
+  }
+}
+
+function normalizeDocumentHighlight(value: LspDocumentHighlight): CodePaneDocumentHighlight | null {
+  if (!value?.range) {
+    return null;
+  }
+
+  const kind = mapDocumentHighlightKind(value.kind);
+
+  return {
+    range: fromLspRange(value.range),
+    ...(kind ? { kind } : {}),
+  };
+}
+
+function mapDocumentHighlightKind(value?: number): CodePaneDocumentHighlight['kind'] | undefined {
+  switch (value) {
+    case 2:
+      return 'read';
+    case 3:
+      return 'write';
+    case 1:
+    default:
+      return 'text';
   }
 }
 
@@ -1491,6 +1727,117 @@ function normalizeWorkspaceSymbol(value: LspSymbolInformation): CodePaneWorkspac
     range: fromLspRange(value.location.range),
     ...(value.containerName ? { containerName: value.containerName } : {}),
   };
+}
+
+function normalizeCodeAction(
+  value: LspCodeAction | LspCommand,
+  id: string,
+  filePath: string,
+): CodePaneCodeAction | null {
+  if (!value || typeof value.title !== 'string' || value.title.length === 0) {
+    return null;
+  }
+
+  return {
+    id,
+    title: value.title,
+    ...('kind' in value && value.kind ? { kind: value.kind } : {}),
+    ...('isPreferred' in value && value.isPreferred ? { isPreferred: true } : {}),
+    ...('disabled' in value && value.disabled?.reason
+      ? {
+          disabledReason: value.disabled.reason,
+        }
+      : {}),
+    ...('diagnostics' in value && Array.isArray(value.diagnostics)
+      ? {
+          diagnostics: value.diagnostics
+            .map((diagnostic) => normalizeCodeActionDiagnostic(diagnostic, filePath))
+            .filter((diagnostic): diagnostic is NonNullable<CodePaneCodeAction['diagnostics']>[number] => Boolean(diagnostic)),
+        }
+      : {}),
+  };
+}
+
+function normalizeCodeActionDiagnostic(
+  value: LspDiagnostic,
+  filePath: string,
+): NonNullable<CodePaneCodeAction['diagnostics']>[number] | null {
+  const diagnostic = normalizeDiagnostic(value, filePath);
+  if (!diagnostic) {
+    return null;
+  }
+
+  return {
+    message: diagnostic.message,
+    range: {
+      startLineNumber: diagnostic.startLineNumber,
+      startColumn: diagnostic.startColumn,
+      endLineNumber: diagnostic.endLineNumber,
+      endColumn: diagnostic.endColumn,
+    },
+    severity: diagnostic.severity,
+    ...(diagnostic.code ? { code: diagnostic.code } : {}),
+  };
+}
+
+function isResolvableCodeAction(value: LspCodeAction | LspCommand): value is LspCodeAction {
+  return 'kind' in value
+    || 'edit' in value
+    || 'diagnostics' in value
+    || 'disabled' in value
+    || 'data' in value
+    || 'isPreferred' in value;
+}
+
+function isCodeActionWithEdit(value: LspCodeAction | LspCommand): value is LspCodeAction {
+  return 'edit' in value && Boolean(value.edit);
+}
+
+function getCodeActionCommand(value: LspCodeAction | LspCommand): LspCommand | null {
+  if ('command' in value && typeof value.command === 'string') {
+    return value as LspCommand;
+  }
+
+  return 'command' in value && typeof value.command === 'object' && value.command
+    ? value.command
+    : null;
+}
+
+function deduplicateTextEdits(edits: CodePaneTextEdit[]): CodePaneTextEdit[] {
+  const dedupedEdits = new Map<string, CodePaneTextEdit>();
+
+  for (const edit of edits) {
+    if (!edit.filePath) {
+      continue;
+    }
+
+    const editKey = [
+      edit.filePath,
+      edit.range.startLineNumber,
+      edit.range.startColumn,
+      edit.range.endLineNumber,
+      edit.range.endColumn,
+      edit.newText,
+    ].join(':');
+    dedupedEdits.set(editKey, edit);
+  }
+
+  return Array.from(dedupedEdits.values()).sort((left, right) => (
+    left.filePath === right.filePath
+      ? compareRanges(left.range, right.range)
+      : left.filePath.localeCompare(right.filePath)
+  ));
+}
+
+function compareRanges(left: CodePaneRange, right: CodePaneRange): number {
+  return left.startLineNumber - right.startLineNumber
+    || left.startColumn - right.startColumn
+    || left.endLineNumber - right.endLineNumber
+    || left.endColumn - right.endColumn;
+}
+
+async function waitForWorkspaceEditFlush(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 20));
 }
 
 function normalizeMarkupContent(value: string | LspMarkupContent): string {
