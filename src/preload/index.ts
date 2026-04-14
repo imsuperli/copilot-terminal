@@ -203,6 +203,18 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-get-document-symbols', config),
   codePaneGetInlayHints: (config) =>
     ipcRenderer.invoke('code-pane-get-inlay-hints', config),
+  codePaneGetCallHierarchy: (config) =>
+    ipcRenderer.invoke('code-pane-get-call-hierarchy', config),
+  codePaneResolveCallHierarchy: (config) =>
+    ipcRenderer.invoke('code-pane-resolve-call-hierarchy', config),
+  codePaneGetTypeHierarchy: (config) =>
+    ipcRenderer.invoke('code-pane-get-type-hierarchy', config),
+  codePaneResolveTypeHierarchy: (config) =>
+    ipcRenderer.invoke('code-pane-resolve-type-hierarchy', config),
+  codePaneGetSemanticTokens: (config) =>
+    ipcRenderer.invoke('code-pane-get-semantic-tokens', config),
+  codePaneGetSemanticTokenLegend: (config) =>
+    ipcRenderer.invoke('code-pane-get-semantic-token-legend', config),
   codePaneGetImplementations: (config) =>
     ipcRenderer.invoke('code-pane-get-implementations', config),
   codePaneGetCompletionItems: (config) =>

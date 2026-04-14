@@ -1,9 +1,11 @@
 import path from 'path';
 import type {
+  CodePaneCallHierarchyDirection,
   CodePaneCodeAction,
   CodePaneCompletionItem,
   CodePaneDocumentCloseConfig,
   CodePaneDocumentHighlight,
+  CodePaneGetCallHierarchyConfig,
   CodePaneInlayHint,
   CodePaneDocumentSyncConfig,
   CodePaneDocumentSymbol,
@@ -17,8 +19,13 @@ import type {
   CodePaneGetHoverConfig,
   CodePaneGetImplementationsConfig,
   CodePaneGetReferencesConfig,
+  CodePaneGetSemanticTokenLegendConfig,
+  CodePaneGetSemanticTokensConfig,
   CodePaneGetSignatureHelpConfig,
+  CodePaneGetTypeHierarchyConfig,
   CodePaneGetWorkspaceSymbolsConfig,
+  CodePaneHierarchyItem,
+  CodePaneHierarchyResult,
   CodePaneHoverResult,
   CodePaneLocation,
   CodePaneReadFileConfig,
@@ -26,9 +33,14 @@ import type {
   CodePaneReference,
   CodePaneRenameSymbolConfig,
   CodePaneRunCodeActionConfig,
+  CodePaneSemanticTokensLegend,
+  CodePaneSemanticTokensResult,
   CodePaneSignatureHelpResult,
   CodePaneTextEdit,
+  CodePaneTypeHierarchyDirection,
   CodePaneWorkspaceSymbol,
+  CodePaneResolveCallHierarchyConfig,
+  CodePaneResolveTypeHierarchyConfig,
 } from '../../../shared/types/electron-api';
 import type { Workspace } from '../../types/workspace';
 import { CodeFileService } from '../code/CodeFileService';
@@ -151,6 +163,76 @@ export class LanguageFeatureService {
     ));
   }
 
+  async getCallHierarchy(
+    config: CodePaneGetCallHierarchyConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneHierarchyResult> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, {
+      root: null,
+      items: [],
+    }, async (resolution) => (
+      await this.supervisor.getCallHierarchy(resolution, config.filePath, config.position, config.direction)
+    ));
+  }
+
+  async resolveCallHierarchy(
+    config: CodePaneResolveCallHierarchyConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneHierarchyItem[]> {
+    return await this.resolveHierarchyChildren(
+      config.rootPath,
+      config.item,
+      config.language,
+      workspace,
+      config.direction,
+      async (resolution, item, direction) => await this.supervisor.resolveCallHierarchy(resolution, item, direction),
+    );
+  }
+
+  async getTypeHierarchy(
+    config: CodePaneGetTypeHierarchyConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneHierarchyResult> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, {
+      root: null,
+      items: [],
+    }, async (resolution) => (
+      await this.supervisor.getTypeHierarchy(resolution, config.filePath, config.position, config.direction)
+    ));
+  }
+
+  async resolveTypeHierarchy(
+    config: CodePaneResolveTypeHierarchyConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneHierarchyItem[]> {
+    return await this.resolveHierarchyChildren(
+      config.rootPath,
+      config.item,
+      config.language,
+      workspace,
+      config.direction,
+      async (resolution, item, direction) => await this.supervisor.resolveTypeHierarchy(resolution, item, direction),
+    );
+  }
+
+  async getSemanticTokenLegend(
+    config: CodePaneGetSemanticTokenLegendConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneSemanticTokensLegend | null> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, null, async (resolution) => (
+      await this.supervisor.getSemanticTokenLegend(resolution)
+    ));
+  }
+
+  async getSemanticTokens(
+    config: CodePaneGetSemanticTokensConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneSemanticTokensResult | null> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, null, async (resolution) => (
+      await this.supervisor.getSemanticTokens(resolution, config.filePath)
+    ));
+  }
+
   async getImplementations(
     config: CodePaneGetImplementationsConfig,
     workspace: Workspace | null,
@@ -245,7 +327,10 @@ export class LanguageFeatureService {
     fallback: T,
     callback: (resolution: ResolvedLanguagePlugin) => Promise<T>,
   ): Promise<T> {
-    const resolution = await this.resolve(rootPath, filePath, language, workspace);
+    const isVirtualDocument = isVirtualDocumentUri(filePath);
+    const resolution = isVirtualDocument
+      ? await this.resolveVirtualDocument(rootPath, workspace)
+      : await this.resolve(rootPath, filePath, language, workspace);
     if (!resolution) {
       return fallback;
     }
@@ -254,10 +339,15 @@ export class LanguageFeatureService {
       return await callback(resolution);
     }
 
-    const readResponse = await this.codeFileService.readFile({
-      rootPath,
-      filePath,
-    });
+    const readResponse = isVirtualDocument
+      ? await this.supervisor.readVirtualDocument(resolution, filePath)
+      : await this.codeFileService.readFile({
+        rootPath,
+        filePath,
+      });
+    if (!readResponse) {
+      return fallback;
+    }
     if (readResponse.isBinary) {
       return fallback;
     }
@@ -314,8 +404,29 @@ export class LanguageFeatureService {
       workspacePluginSettings: workspace?.settings.plugins,
     });
   }
+
+  private async resolveHierarchyChildren<TDirection extends CodePaneCallHierarchyDirection | CodePaneTypeHierarchyDirection>(
+    rootPath: string,
+    item: CodePaneHierarchyItem,
+    language: string | undefined,
+    workspace: Workspace | null,
+    direction: TDirection,
+    callback: (
+      resolution: ResolvedLanguagePlugin,
+      hierarchyItem: CodePaneHierarchyItem,
+      hierarchyDirection: TDirection,
+    ) => Promise<CodePaneHierarchyItem[]>,
+  ): Promise<CodePaneHierarchyItem[]> {
+    return await this.withResolvedDocument(rootPath, item.filePath, language ?? item.language, workspace, [], async (resolution) => (
+      await callback(resolution, item, direction)
+    ));
+  }
 }
 
 function createOwnerId(paneId: string, filePath: string): string {
   return `${paneId}:${filePath}`;
+}
+
+function isVirtualDocumentUri(filePath: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(filePath) && !filePath.toLowerCase().startsWith('file://');
 }

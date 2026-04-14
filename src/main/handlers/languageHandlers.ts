@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import type {
+  CodePaneGetCallHierarchyConfig,
   CodePaneGetCodeActionsConfig,
   CodePaneFormatDocumentConfig,
   CodePaneGetCompletionItemsConfig,
@@ -12,7 +13,12 @@ import type {
   CodePaneGetHoverConfig,
   CodePaneGetImplementationsConfig,
   CodePaneGetReferencesConfig,
+  CodePaneGetSemanticTokenLegendConfig,
+  CodePaneGetSemanticTokensConfig,
   CodePaneGetSignatureHelpConfig,
+  CodePaneGetTypeHierarchyConfig,
+  CodePaneResolveCallHierarchyConfig,
+  CodePaneResolveTypeHierarchyConfig,
   CodePaneGetWorkspaceSymbolsConfig,
   CodePaneRenameSymbolConfig,
   CodePaneRunCodeActionConfig,
@@ -145,6 +151,78 @@ export function registerLanguageHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await languageFeatureService.getInlayHints(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-call-hierarchy', async (_event, config: CodePaneGetCallHierarchyConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.getCallHierarchy(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-resolve-call-hierarchy', async (_event, config: CodePaneResolveCallHierarchyConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.resolveCallHierarchy(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-type-hierarchy', async (_event, config: CodePaneGetTypeHierarchyConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.getTypeHierarchy(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-resolve-type-hierarchy', async (_event, config: CodePaneResolveTypeHierarchyConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.resolveTypeHierarchy(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-semantic-token-legend', async (_event, config: CodePaneGetSemanticTokenLegendConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.getSemanticTokenLegend(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-semantic-tokens', async (_event, config: CodePaneGetSemanticTokensConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.getSemanticTokens(config, getCurrentWorkspace()));
     } catch (error) {
       return errorResponse(error);
     }

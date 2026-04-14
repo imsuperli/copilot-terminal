@@ -8,6 +8,7 @@ import type {
   CodePaneLocation,
   CodePaneRange,
   CodePaneReference,
+  CodePaneSemanticTokensLegend,
   CodePaneSignatureHelpResult,
 } from '../../../shared/types/electron-api';
 
@@ -24,6 +25,8 @@ type MonacoInlayHint = import('monaco-editor').languages.InlayHint;
 type MonacoInlayHintList = import('monaco-editor').languages.InlayHintList;
 type MonacoCompletionItem = import('monaco-editor').languages.CompletionItem;
 type MonacoSignatureHelp = import('monaco-editor').languages.SignatureHelp;
+type MonacoSemanticTokens = import('monaco-editor').languages.SemanticTokens;
+type MonacoSemanticTokensLegend = import('monaco-editor').languages.SemanticTokensLegend;
 type MonacoDocumentContext = {
   paneId: string;
   rootPath: string;
@@ -41,6 +44,8 @@ export class MonacoLanguageBridge {
   private readonly contextsByModel = new Map<MonacoModel, MonacoDocumentContext>();
   private readonly diagnosticsByFilePath = new Map<string, CodePaneDiagnostic[]>();
   private readonly registeredLanguages = new Set<string>();
+  private readonly semanticLegendsByLanguage = new Map<string, CodePaneSemanticTokensLegend>();
+  private readonly semanticProviderStates = new Map<string, 'loading' | 'registered' | 'unsupported'>();
   private readonly providerDisposables: Array<{ dispose: () => void }> = [];
   private diagnosticsListenerRegistered = false;
 
@@ -52,6 +57,7 @@ export class MonacoLanguageBridge {
   openDocument(context: MonacoDocumentContext): void {
     this.contextsByModel.set(context.model, normalizeContext(context));
     this.ensureProviders(context.language);
+    void this.ensureSemanticTokensProvider(context);
     this.applyCachedDiagnostics(context.model, context.filePath);
     void this.sendDocumentSync('codePaneDidOpenDocument', context);
   }
@@ -59,6 +65,7 @@ export class MonacoLanguageBridge {
   async changeDocument(context: MonacoDocumentContext): Promise<void> {
     this.contextsByModel.set(context.model, normalizeContext(context));
     this.ensureProviders(context.language);
+    void this.ensureSemanticTokensProvider(context);
     this.applyCachedDiagnostics(context.model, context.filePath);
     await this.sendDocumentSync('codePaneDidChangeDocument', context);
   }
@@ -86,6 +93,8 @@ export class MonacoLanguageBridge {
 
     this.providerDisposables.length = 0;
     this.registeredLanguages.clear();
+    this.semanticLegendsByLanguage.clear();
+    this.semanticProviderStates.clear();
     this.contextsByModel.clear();
     this.diagnosticsByFilePath.clear();
   }
@@ -207,6 +216,48 @@ export class MonacoLanguageBridge {
         },
       }),
     );
+  }
+
+  private async ensureSemanticTokensProvider(context: MonacoDocumentContext): Promise<void> {
+    const normalizedLanguage = normalizeLanguage(context.language);
+    if (!normalizedLanguage) {
+      return;
+    }
+
+    const currentProviderState = this.semanticProviderStates.get(normalizedLanguage);
+    if (currentProviderState === 'loading' || currentProviderState === 'registered' || currentProviderState === 'unsupported') {
+      return;
+    }
+
+    this.semanticProviderStates.set(normalizedLanguage, 'loading');
+    const response = await window.electronAPI.codePaneGetSemanticTokenLegend({
+      rootPath: context.rootPath,
+      filePath: context.filePath,
+      language: context.language,
+    });
+
+    const legend = response.success && response.data
+      ? toMonacoSemanticTokensLegend(response.data)
+      : null;
+    if (!legend) {
+      this.semanticProviderStates.set(normalizedLanguage, response.success ? 'unsupported' : 'loading');
+      if (!response.success) {
+        this.semanticProviderStates.delete(normalizedLanguage);
+      }
+      return;
+    }
+
+    this.semanticLegendsByLanguage.set(normalizedLanguage, legend);
+    this.providerDisposables.push(
+      this.monaco.languages.registerDocumentSemanticTokensProvider(normalizedLanguage, {
+        getLegend: () => this.semanticLegendsByLanguage.get(normalizedLanguage) ?? legend,
+        provideDocumentSemanticTokens: async (model) => (
+          await this.provideSemanticTokens(model)
+        ),
+        releaseDocumentSemanticTokens: () => {},
+      }),
+    );
+    this.semanticProviderStates.set(normalizedLanguage, 'registered');
   }
 
   private async provideDefinitions(
@@ -453,6 +504,33 @@ export class MonacoLanguageBridge {
     return toMonacoSignatureHelp(response.data);
   }
 
+  private async provideSemanticTokens(
+    model: MonacoModel,
+  ): Promise<MonacoProviderResult<MonacoSemanticTokens>> {
+    const context = this.contextsByModel.get(model);
+    if (!context) {
+      return {
+        data: new Uint32Array(),
+      };
+    }
+
+    const response = await window.electronAPI.codePaneGetSemanticTokens({
+      rootPath: context.rootPath,
+      filePath: context.filePath,
+      language: context.language,
+    });
+    if (!response.success || !response.data) {
+      return {
+        data: new Uint32Array(),
+      };
+    }
+
+    return {
+      ...(response.data.resultId ? { resultId: response.data.resultId } : {}),
+      data: new Uint32Array(response.data.data),
+    };
+  }
+
   private async sendDocumentSync(
     method: 'codePaneDidOpenDocument' | 'codePaneDidChangeDocument' | 'codePaneDidSaveDocument',
     context: MonacoDocumentContext,
@@ -597,6 +675,13 @@ function toMonacoInlayHint(monaco: MonacoModule, hint: CodePaneInlayHint): Monac
     ...(hint.kind ? { kind: mapInlayHintKind(monaco, hint.kind) } : {}),
     ...(hint.paddingLeft !== undefined ? { paddingLeft: hint.paddingLeft } : {}),
     ...(hint.paddingRight !== undefined ? { paddingRight: hint.paddingRight } : {}),
+  };
+}
+
+function toMonacoSemanticTokensLegend(legend: CodePaneSemanticTokensLegend): MonacoSemanticTokensLegend {
+  return {
+    tokenTypes: legend.tokenTypes,
+    tokenModifiers: legend.tokenModifiers,
   };
 }
 

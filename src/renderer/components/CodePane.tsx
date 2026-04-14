@@ -34,6 +34,7 @@ import type {
 } from '../types/window';
 import type {
   CodePaneBreakpoint,
+  CodePaneCallHierarchyDirection,
   CodePaneCodeAction,
   CodePaneContentMatch,
   CodePaneDocumentSymbol,
@@ -50,6 +51,8 @@ import type {
   CodePaneHoverResult,
   CodePaneFsChangedPayload,
   CodePaneGitStatusEntry,
+  CodePaneHierarchyItem,
+  CodePaneHierarchyResult,
   CodePaneIndexProgressPayload,
   CodePaneLanguageWorkspaceChangedPayload,
   CodePaneLanguageWorkspaceState,
@@ -62,9 +65,12 @@ import type {
   CodePaneRunSessionOutputPayload,
   CodePaneRunTarget,
   CodePanePreviewChangeSet,
+  CodePaneSemanticTokensLegend,
+  CodePaneSemanticTokensResult,
   CodePaneTextEdit,
   CodePaneTestItem,
   CodePaneTreeEntry,
+  CodePaneTypeHierarchyDirection,
   CodePaneWorkspaceSymbol,
 } from '../../shared/types/electron-api';
 import {
@@ -76,11 +82,20 @@ import { AppTooltip } from './ui/AppTooltip';
 import { BreadcrumbsBar, type CodePaneBreadcrumbItem } from './code-pane/BreadcrumbsBar';
 import { DebugToolWindow } from './code-pane/tool-windows/DebugToolWindow';
 import { GitHistoryToolWindow } from './code-pane/tool-windows/GitHistoryToolWindow';
+import {
+  HierarchyToolWindow,
+  type HierarchyMode,
+  type HierarchyTreeNode,
+} from './code-pane/tool-windows/HierarchyToolWindow';
 import { PerformanceToolWindow } from './code-pane/tool-windows/PerformanceToolWindow';
 import { ProjectToolWindow } from './code-pane/tool-windows/ProjectToolWindow';
 import { QuickDocumentationPanel } from './code-pane/QuickDocumentationPanel';
 import { RefactorPreviewToolWindow } from './code-pane/tool-windows/RefactorPreviewToolWindow';
 import { RunToolWindow } from './code-pane/tool-windows/RunToolWindow';
+import {
+  SemanticToolWindow,
+  type SemanticTokenSummaryEntry,
+} from './code-pane/tool-windows/SemanticToolWindow';
 import { TestsToolWindow } from './code-pane/tool-windows/TestsToolWindow';
 import { WorkspaceToolWindow } from './code-pane/tool-windows/WorkspaceToolWindow';
 import { GitBranchGraph } from './code-pane/GitBranchGraph';
@@ -107,7 +122,17 @@ type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
 type SearchEverywhereMode = 'all' | 'commands' | 'recent';
-type BottomPanelMode = 'run' | 'debug' | 'tests' | 'project' | 'preview' | 'history' | 'workspace' | 'performance';
+type BottomPanelMode =
+  | 'run'
+  | 'debug'
+  | 'tests'
+  | 'project'
+  | 'preview'
+  | 'history'
+  | 'workspace'
+  | 'performance'
+  | 'hierarchy'
+  | 'semantic';
 
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
 const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
@@ -283,6 +308,105 @@ function normalizeBreakpoints(
     const pathOrder = left.filePath.localeCompare(right.filePath);
     return pathOrder !== 0 ? pathOrder : left.lineNumber - right.lineNumber;
   });
+}
+
+function getHierarchyNodeKey(item: CodePaneHierarchyItem): string {
+  const selectionRange = item.selectionRange;
+  return [
+    item.filePath,
+    selectionRange.startLineNumber,
+    selectionRange.startColumn,
+    item.name,
+  ].join(':');
+}
+
+function createHierarchyTreeNode(
+  item: CodePaneHierarchyItem,
+  children?: CodePaneHierarchyItem[],
+): HierarchyTreeNode {
+  const childNodes = (children ?? []).map((child) => createHierarchyTreeNode(child));
+  return {
+    key: getHierarchyNodeKey(item),
+    item,
+    children: childNodes,
+    isExpanded: childNodes.length > 0,
+    isLoading: false,
+    isExpandable: true,
+    error: null,
+  };
+}
+
+function updateHierarchyTreeNode(
+  node: HierarchyTreeNode,
+  targetKey: string,
+  updater: (candidate: HierarchyTreeNode) => HierarchyTreeNode,
+): HierarchyTreeNode {
+  if (node.key === targetKey) {
+    return updater(node);
+  }
+
+  if (node.children.length === 0) {
+    return node;
+  }
+
+  let didChange = false;
+  const nextChildren = node.children.map((child) => {
+    const nextChild = updateHierarchyTreeNode(child, targetKey, updater);
+    if (nextChild !== child) {
+      didChange = true;
+    }
+    return nextChild;
+  });
+
+  if (!didChange) {
+    return node;
+  }
+
+  return {
+    ...node,
+    children: nextChildren,
+  };
+}
+
+function findHierarchyTreeNode(node: HierarchyTreeNode | null, targetKey: string): HierarchyTreeNode | null {
+  if (!node) {
+    return null;
+  }
+
+  if (node.key === targetKey) {
+    return node;
+  }
+
+  for (const child of node.children) {
+    const match = findHierarchyTreeNode(child, targetKey);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function summarizeSemanticTokens(result: CodePaneSemanticTokensResult): {
+  totalTokens: number;
+  summary: SemanticTokenSummaryEntry[];
+} {
+  const counts = new Map<string, number>();
+  const data = result.data ?? [];
+  for (let index = 0; index + 4 < data.length; index += 5) {
+    const tokenTypeIndex = data[index + 3];
+    const tokenType = result.legend.tokenTypes[tokenTypeIndex] ?? `token-${String(tokenTypeIndex)}`;
+    counts.set(tokenType, (counts.get(tokenType) ?? 0) + 1);
+  }
+
+  const summary = Array.from(counts.entries())
+    .map(([tokenType, count]) => ({ tokenType, count }))
+    .sort((left, right) => right.count - left.count || left.tokenType.localeCompare(right.tokenType));
+
+  return {
+    totalTokens: summary.reduce((total, entry) => total + entry.count, 0),
+    summary,
+  };
 }
 
 function clampSidebarWidth(width: number | undefined | null): number {
@@ -979,7 +1103,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [quickDocumentationError, setQuickDocumentationError] = useState<string | null>(null);
   const [isQuickDocumentationOpen, setIsQuickDocumentationOpen] = useState(false);
   const [isQuickDocumentationLoading, setIsQuickDocumentationLoading] = useState(false);
+  const [selectedHierarchyMode, setSelectedHierarchyMode] = useState<HierarchyMode>('call-outgoing');
+  const [hierarchyRootNode, setHierarchyRootNode] = useState<HierarchyTreeNode | null>(null);
+  const [isHierarchyLoading, setIsHierarchyLoading] = useState(false);
+  const [hierarchyError, setHierarchyError] = useState<string | null>(null);
   const [areInlayHintsEnabled, setAreInlayHintsEnabled] = useState(true);
+  const [areSemanticTokensEnabled, setAreSemanticTokensEnabled] = useState(true);
+  const [semanticLegend, setSemanticLegend] = useState<CodePaneSemanticTokensLegend | null>(null);
+  const [semanticSummary, setSemanticSummary] = useState<SemanticTokenSummaryEntry[]>([]);
+  const [semanticTokenCount, setSemanticTokenCount] = useState(0);
+  const [semanticSummaryFileLabel, setSemanticSummaryFileLabel] = useState<string | null>(null);
+  const [isSemanticSummaryLoading, setIsSemanticSummaryLoading] = useState(false);
+  const [semanticSummaryError, setSemanticSummaryError] = useState<string | null>(null);
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [treeLoadError, setTreeLoadError] = useState<string | null>(null);
   const [externalLibrariesError, setExternalLibrariesError] = useState<string | null>(null);
@@ -991,7 +1126,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     inlayHints: {
       enabled: (areInlayHintsEnabled ? 'on' : 'off') as 'on' | 'off',
     },
-  }), [areInlayHintsEnabled]);
+    semanticHighlighting: {
+      enabled: areSemanticTokensEnabled,
+    },
+  }), [areInlayHintsEnabled, areSemanticTokensEnabled]);
 
   const expandedDirectoriesRef = useRef(expandedDirectories);
   const loadedDirectoriesRef = useRef(loadedDirectories);
@@ -1025,6 +1163,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const loadDebugSessionDetailsRef = useRef<(sessionId: string | null) => Promise<void>>(async () => {});
   const toggleBreakpointRef = useRef<(filePath: string, lineNumber: number) => Promise<void>>(async () => {});
   const runSelectedCodeActionRef = useRef<(action: CodePaneCodeAction | undefined) => Promise<void>>(async () => {});
+  const hierarchyRequestIdRef = useRef(0);
+  const semanticRequestIdRef = useRef(0);
 
   useEffect(() => {
     paneRef.current = pane;
@@ -2950,6 +3090,266 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsQuickDocumentationOpen(true);
     void loadQuickDocumentation();
   }, [isQuickDocumentationOpen, loadQuickDocumentation]);
+
+  const loadHierarchyRoot = useCallback(async (mode: HierarchyMode) => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      setHierarchyRootNode(null);
+      setHierarchyError(null);
+      setIsHierarchyLoading(false);
+      return;
+    }
+
+    const requestPath = getModelRequestPath(context.filePath);
+    const requestKey = `hierarchy:${mode}:${requestPath}`;
+    const requestVersion = ++hierarchyRequestIdRef.current;
+    setIsHierarchyLoading(true);
+    setHierarchyError(null);
+
+    const requestLabel = mode.startsWith('call')
+      ? 'Call hierarchy'
+      : 'Type hierarchy';
+
+    try {
+      const response = mode.startsWith('call')
+        ? await trackRequest(
+          requestKey,
+          requestLabel,
+          `${getRelativePath(rootPath, context.filePath)}:${context.position.lineNumber}`,
+          async () => await window.electronAPI.codePaneGetCallHierarchy({
+            rootPath,
+            filePath: requestPath,
+            language: context.language,
+            position: {
+              lineNumber: context.position.lineNumber,
+              column: context.position.column,
+            },
+            direction: (mode === 'call-incoming' ? 'incoming' : 'outgoing') satisfies CodePaneCallHierarchyDirection,
+          }),
+        )
+        : await trackRequest(
+          requestKey,
+          requestLabel,
+          `${getRelativePath(rootPath, context.filePath)}:${context.position.lineNumber}`,
+          async () => await window.electronAPI.codePaneGetTypeHierarchy({
+            rootPath,
+            filePath: requestPath,
+            language: context.language,
+            position: {
+              lineNumber: context.position.lineNumber,
+              column: context.position.column,
+            },
+            direction: (mode === 'type-parents' ? 'parents' : 'children') satisfies CodePaneTypeHierarchyDirection,
+          }),
+        );
+
+      if (hierarchyRequestIdRef.current !== requestVersion) {
+        return;
+      }
+
+      const hierarchyResult: CodePaneHierarchyResult = response.success && response.data
+        ? response.data
+        : {
+          root: null,
+          items: [],
+        };
+
+      setHierarchyRootNode(
+        hierarchyResult.root
+          ? createHierarchyTreeNode(hierarchyResult.root, hierarchyResult.items)
+          : null,
+      );
+      setHierarchyError(response.success ? null : (response.error || t('common.retry')));
+    } catch (error) {
+      if (hierarchyRequestIdRef.current !== requestVersion) {
+        return;
+      }
+
+      setHierarchyRootNode(null);
+      setHierarchyError(error instanceof Error ? error.message : t('common.retry'));
+    } finally {
+      if (hierarchyRequestIdRef.current === requestVersion) {
+        setIsHierarchyLoading(false);
+      }
+    }
+  }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
+
+  const openHierarchyPanel = useCallback((mode: HierarchyMode) => {
+    setSelectedHierarchyMode(mode);
+    setBottomPanelMode('hierarchy');
+  }, []);
+
+  const toggleHierarchyNode = useCallback(async (nodeKey: string) => {
+    const currentRootNode = hierarchyRootNode;
+    const targetNode = findHierarchyTreeNode(currentRootNode, nodeKey);
+    if (!currentRootNode || !targetNode) {
+      return;
+    }
+
+    if (!targetNode.isExpandable && targetNode.children.length === 0) {
+      return;
+    }
+
+    if (targetNode.children.length > 0) {
+      setHierarchyRootNode(updateHierarchyTreeNode(currentRootNode, nodeKey, (candidate) => ({
+        ...candidate,
+        isExpanded: !candidate.isExpanded,
+      })));
+      return;
+    }
+
+    setHierarchyRootNode(updateHierarchyTreeNode(currentRootNode, nodeKey, (candidate) => ({
+      ...candidate,
+      isExpanded: true,
+      isLoading: true,
+      error: null,
+    })));
+
+    try {
+      const requestLabel = selectedHierarchyMode.startsWith('call')
+        ? 'Call hierarchy children'
+        : 'Type hierarchy children';
+      const response = selectedHierarchyMode.startsWith('call')
+        ? await trackRequest(
+          `hierarchy-child:${selectedHierarchyMode}:${nodeKey}`,
+          requestLabel,
+          targetNode.item.name,
+          async () => await window.electronAPI.codePaneResolveCallHierarchy({
+            rootPath,
+            language: targetNode.item.language,
+            direction: (
+              selectedHierarchyMode === 'call-incoming'
+                ? 'incoming'
+                : 'outgoing'
+            ) satisfies CodePaneCallHierarchyDirection,
+            item: targetNode.item,
+          }),
+        )
+        : await trackRequest(
+          `hierarchy-child:${selectedHierarchyMode}:${nodeKey}`,
+          requestLabel,
+          targetNode.item.name,
+          async () => await window.electronAPI.codePaneResolveTypeHierarchy({
+            rootPath,
+            language: targetNode.item.language,
+            direction: (
+              selectedHierarchyMode === 'type-parents'
+                ? 'parents'
+                : 'children'
+            ) satisfies CodePaneTypeHierarchyDirection,
+            item: targetNode.item,
+          }),
+        );
+
+      setHierarchyRootNode((currentNode) => (
+        currentNode
+          ? updateHierarchyTreeNode(currentNode, nodeKey, (candidate) => {
+            const nextChildren = response.success
+              ? (response.data ?? []).map((item) => createHierarchyTreeNode(item))
+              : [];
+            return {
+              ...candidate,
+              children: nextChildren,
+              isExpanded: true,
+              isLoading: false,
+              isExpandable: nextChildren.length > 0,
+              error: response.success ? null : (response.error || t('common.retry')),
+            };
+          })
+          : currentNode
+      ));
+    } catch (error) {
+      setHierarchyRootNode((currentNode) => (
+        currentNode
+          ? updateHierarchyTreeNode(currentNode, nodeKey, (candidate) => ({
+            ...candidate,
+            isLoading: false,
+            error: error instanceof Error ? error.message : t('common.retry'),
+          }))
+          : currentNode
+      ));
+    }
+  }, [hierarchyRootNode, rootPath, selectedHierarchyMode, t, trackRequest]);
+
+  const openHierarchyItem = useCallback(async (item: CodePaneHierarchyItem) => {
+    await openFileLocationRef.current({
+      filePath: item.filePath,
+      lineNumber: item.selectionRange.startLineNumber,
+      column: item.selectionRange.startColumn,
+      content: item.content,
+      language: item.language,
+      readOnly: item.readOnly,
+      displayPath: item.displayPath,
+      documentUri: item.uri ?? (isVirtualDocumentPath(item.filePath) ? item.filePath : undefined),
+    });
+  }, []);
+
+  const loadSemanticSummary = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      setSemanticLegend(null);
+      setSemanticSummary([]);
+      setSemanticTokenCount(0);
+      setSemanticSummaryFileLabel(null);
+      setSemanticSummaryError(null);
+      setIsSemanticSummaryLoading(false);
+      return;
+    }
+
+    const requestPath = getModelRequestPath(context.filePath);
+    const requestKey = `semantic:${requestPath}`;
+    const requestVersion = ++semanticRequestIdRef.current;
+    setIsSemanticSummaryLoading(true);
+    setSemanticSummaryError(null);
+    setSemanticSummaryFileLabel(getRelativePath(rootPath, context.filePath));
+
+    try {
+      const response = await trackRequest(
+        requestKey,
+        'Semantic tokens',
+        getRelativePath(rootPath, context.filePath),
+        async () => await window.electronAPI.codePaneGetSemanticTokens({
+          rootPath,
+          filePath: requestPath,
+          language: context.language,
+        }),
+      );
+
+      if (semanticRequestIdRef.current !== requestVersion) {
+        return;
+      }
+
+      const semanticResult: CodePaneSemanticTokensResult | null = response.success
+        ? (response.data ?? null)
+        : null;
+      if (!semanticResult) {
+        setSemanticLegend(null);
+        setSemanticSummary([]);
+        setSemanticTokenCount(0);
+        setSemanticSummaryError(response.success ? null : (response.error || t('common.retry')));
+        return;
+      }
+
+      const nextSummary = summarizeSemanticTokens(semanticResult);
+      setSemanticLegend(semanticResult.legend);
+      setSemanticSummary(nextSummary.summary);
+      setSemanticTokenCount(nextSummary.totalTokens);
+      setSemanticSummaryError(response.success ? null : (response.error || t('common.retry')));
+    } catch (error) {
+      if (semanticRequestIdRef.current !== requestVersion) {
+        return;
+      }
+
+      setSemanticLegend(null);
+      setSemanticSummary([]);
+      setSemanticTokenCount(0);
+      setSemanticSummaryError(error instanceof Error ? error.message : t('common.retry'));
+    } finally {
+      if (semanticRequestIdRef.current === requestVersion) {
+        setIsSemanticSummaryLoading(false);
+      }
+    }
+  }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
 
   const applyLanguageTextEdits = useCallback(async (edits: CodePaneTextEdit[]) => {
     if (edits.length === 0) {
@@ -6804,17 +7204,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setRuntimeStoreVersion((currentVersion) => currentVersion + 1);
       return;
     }
+
+    if (bottomPanelMode === 'hierarchy') {
+      void loadHierarchyRoot(selectedHierarchyMode);
+      return;
+    }
+
+    if (bottomPanelMode === 'semantic') {
+      void loadSemanticSummary();
+    }
   }, [
     bottomPanelMode,
     gitHistory?.targetFilePath,
     gitHistory?.targetLineNumber,
     loadGitHistory,
+    loadHierarchyRoot,
     loadDebugSessionDetails,
+    loadSemanticSummary,
     loadTodoEntries,
     loadProjectContributions,
     loadRunTargets,
     loadTests,
     selectedDebugSessionId,
+    selectedHierarchyMode,
   ]);
 
   useEffect(() => {
@@ -6833,6 +7245,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     } else if (bottomPanelMode === 'workspace') {
       void loadTodoEntries();
+    } else if (bottomPanelMode === 'hierarchy') {
+      void loadHierarchyRoot(selectedHierarchyMode);
+    } else if (bottomPanelMode === 'semantic') {
+      void loadSemanticSummary();
     }
   }, [
     activeFilePath,
@@ -6840,10 +7256,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitHistory?.targetFilePath,
     gitHistory?.targetLineNumber,
     loadGitHistory,
+    loadHierarchyRoot,
     loadTodoEntries,
     loadProjectContributions,
     loadRunTargets,
+    loadSemanticSummary,
     loadTests,
+    selectedHierarchyMode,
   ]);
 
   useEffect(() => {
@@ -7249,6 +7668,63 @@ export const CodePane: React.FC<CodePaneProps> = ({
               }`}
             >
               Hint
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.hierarchyTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.hierarchyTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                openHierarchyPanel('call-outgoing');
+              }}
+              disabled={!activeFilePath}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'hierarchy' && selectedHierarchyMode.startsWith('call')
+                  ? 'bg-sky-500/20 text-sky-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
+              }`}
+            >
+              Call
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.typeHierarchy')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.typeHierarchy')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                openHierarchyPanel('type-parents');
+              }}
+              disabled={!activeFilePath}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'hierarchy' && selectedHierarchyMode.startsWith('type')
+                  ? 'bg-violet-500/20 text-violet-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
+              }`}
+            >
+              Type
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.semanticTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.semanticTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                setBottomPanelMode('semantic');
+              }}
+              disabled={!activeFilePath}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'semantic'
+                  ? 'bg-fuchsia-500/20 text-fuchsia-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
+              }`}
+            >
+              Sem
             </button>
           </AppTooltip>
           <AppTooltip content={t('codePane.codeActions')} placement="pane-corner">
@@ -8410,6 +8886,47 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onStepOut={(sessionId) => stepDebugSession(sessionId, 'out')}
               onOpenFrame={openDebugFrame}
               onEvaluate={evaluateDebugExpression}
+            />
+          ) : bottomPanelMode === 'hierarchy' ? (
+            <HierarchyToolWindow
+              mode={selectedHierarchyMode}
+              root={hierarchyRootNode}
+              isLoading={isHierarchyLoading}
+              error={hierarchyError}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+              onRefresh={() => {
+                void loadHierarchyRoot(selectedHierarchyMode);
+              }}
+              onSelectMode={(mode) => {
+                setSelectedHierarchyMode(mode);
+              }}
+              onToggleNode={(nodeKey) => {
+                void toggleHierarchyNode(nodeKey);
+              }}
+              onOpenItem={(item) => {
+                void openHierarchyItem(item);
+              }}
+            />
+          ) : bottomPanelMode === 'semantic' ? (
+            <SemanticToolWindow
+              fileLabel={semanticSummaryFileLabel}
+              legend={semanticLegend}
+              summary={semanticSummary}
+              totalTokens={semanticTokenCount}
+              isEnabled={areSemanticTokensEnabled}
+              isLoading={isSemanticSummaryLoading}
+              error={semanticSummaryError}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+              onRefresh={() => {
+                void loadSemanticSummary();
+              }}
+              onToggleEnabled={() => {
+                setAreSemanticTokensEnabled((currentValue) => !currentValue);
+              }}
             />
           ) : bottomPanelMode === 'project' ? (
             <ProjectToolWindow

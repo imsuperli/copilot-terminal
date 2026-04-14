@@ -646,6 +646,75 @@ export interface CodePaneGetInlayHintsConfig {
   range: CodePaneRange;
 }
 
+export interface CodePaneHierarchyItem extends CodePaneLocation {
+  name: string;
+  detail?: string;
+  kind?: number;
+  selectionRange: CodePaneRange;
+  relationRanges?: CodePaneRange[];
+}
+
+export interface CodePaneHierarchyResult {
+  root: CodePaneHierarchyItem | null;
+  items: CodePaneHierarchyItem[];
+}
+
+export type CodePaneCallHierarchyDirection = 'incoming' | 'outgoing';
+export type CodePaneTypeHierarchyDirection = 'parents' | 'children';
+
+export interface CodePaneGetCallHierarchyConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  position: CodePanePosition;
+  direction: CodePaneCallHierarchyDirection;
+}
+
+export interface CodePaneResolveCallHierarchyConfig {
+  rootPath: string;
+  language?: string;
+  direction: CodePaneCallHierarchyDirection;
+  item: CodePaneHierarchyItem;
+}
+
+export interface CodePaneGetTypeHierarchyConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  position: CodePanePosition;
+  direction: CodePaneTypeHierarchyDirection;
+}
+
+export interface CodePaneResolveTypeHierarchyConfig {
+  rootPath: string;
+  language?: string;
+  direction: CodePaneTypeHierarchyDirection;
+  item: CodePaneHierarchyItem;
+}
+
+export interface CodePaneSemanticTokensLegend {
+  tokenTypes: string[];
+  tokenModifiers: string[];
+}
+
+export interface CodePaneSemanticTokensResult {
+  resultId?: string;
+  legend: CodePaneSemanticTokensLegend;
+  data: number[];
+}
+
+export interface CodePaneGetSemanticTokensConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+}
+
+export interface CodePaneGetSemanticTokenLegendConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+}
+
 export interface CodePaneGetImplementationsConfig {
   rootPath: string;
   filePath: string;
@@ -1363,6 +1432,12 @@ export interface ElectronAPI {
   codePaneGetDocumentHighlights: (config: CodePaneGetDocumentHighlightsConfig) => Promise<IpcResponse<CodePaneDocumentHighlight[]>>;
   codePaneGetDocumentSymbols: (config: CodePaneGetDocumentSymbolsConfig) => Promise<IpcResponse<CodePaneDocumentSymbol[]>>;
   codePaneGetInlayHints: (config: CodePaneGetInlayHintsConfig) => Promise<IpcResponse<CodePaneInlayHint[]>>;
+  codePaneGetCallHierarchy: (config: CodePaneGetCallHierarchyConfig) => Promise<IpcResponse<CodePaneHierarchyResult>>;
+  codePaneResolveCallHierarchy: (config: CodePaneResolveCallHierarchyConfig) => Promise<IpcResponse<CodePaneHierarchyItem[]>>;
+  codePaneGetTypeHierarchy: (config: CodePaneGetTypeHierarchyConfig) => Promise<IpcResponse<CodePaneHierarchyResult>>;
+  codePaneResolveTypeHierarchy: (config: CodePaneResolveTypeHierarchyConfig) => Promise<IpcResponse<CodePaneHierarchyItem[]>>;
+  codePaneGetSemanticTokens: (config: CodePaneGetSemanticTokensConfig) => Promise<IpcResponse<CodePaneSemanticTokensResult | null>>;
+  codePaneGetSemanticTokenLegend: (config: CodePaneGetSemanticTokenLegendConfig) => Promise<IpcResponse<CodePaneSemanticTokensLegend | null>>;
   codePaneGetImplementations: (config: CodePaneGetImplementationsConfig) => Promise<IpcResponse<CodePaneLocation[]>>;
   codePaneGetCompletionItems: (config: CodePaneGetCompletionItemsConfig) => Promise<IpcResponse<CodePaneCompletionItem[]>>;
   codePaneGetSignatureHelp: (config: CodePaneGetSignatureHelpConfig) => Promise<IpcResponse<CodePaneSignatureHelpResult | null>>;

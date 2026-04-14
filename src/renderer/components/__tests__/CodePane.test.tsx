@@ -207,6 +207,7 @@ const fakeMonacoState = {
   documentHighlightProviders: new Map<string, { provideDocumentHighlights: (...args: any[]) => Promise<unknown> }>(),
   documentSymbolProviders: new Map<string, { provideDocumentSymbols: (...args: any[]) => Promise<unknown> }>(),
   inlayHintsProviders: new Map<string, { provideInlayHints: (...args: any[]) => Promise<unknown> }>(),
+  semanticTokensProviders: new Map<string, { provideDocumentSemanticTokens: (...args: any[]) => Promise<unknown> }>(),
   implementationProviders: new Map<string, { provideImplementation: (...args: any[]) => Promise<unknown> }>(),
   completionProviders: new Map<string, { provideCompletionItems: (...args: any[]) => Promise<unknown> }>(),
   signatureHelpProviders: new Map<string, { provideSignatureHelp: (...args: any[]) => Promise<unknown> }>(),
@@ -251,6 +252,7 @@ const fakeMonacoState = {
     this.documentHighlightProviders.clear();
     this.documentSymbolProviders.clear();
     this.inlayHintsProviders.clear();
+    this.semanticTokensProviders.clear();
     this.implementationProviders.clear();
     this.completionProviders.clear();
     this.signatureHelpProviders.clear();
@@ -299,6 +301,10 @@ const fakeMonaco = {
     }),
     registerInlayHintsProvider: vi.fn((language: string, provider: { provideInlayHints: (...args: any[]) => Promise<unknown> }) => {
       fakeMonacoState.inlayHintsProviders.set(language, provider);
+      return { dispose: vi.fn() };
+    }),
+    registerDocumentSemanticTokensProvider: vi.fn((language: string, provider: { provideDocumentSemanticTokens: (...args: any[]) => Promise<unknown> }) => {
+      fakeMonacoState.semanticTokensProviders.set(language, provider);
       return { dispose: vi.fn() };
     }),
     registerImplementationProvider: vi.fn((language: string, provider: { provideImplementation: (...args: any[]) => Promise<unknown> }) => {
@@ -655,6 +661,12 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetDocumentHighlights).mockReset();
     vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockReset();
     vi.mocked(window.electronAPI.codePaneGetInlayHints).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetCallHierarchy).mockReset();
+    vi.mocked(window.electronAPI.codePaneResolveCallHierarchy).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetTypeHierarchy).mockReset();
+    vi.mocked(window.electronAPI.codePaneResolveTypeHierarchy).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetSemanticTokens).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetSemanticTokenLegend).mockReset();
     vi.mocked(window.electronAPI.codePaneGetImplementations).mockReset();
     vi.mocked(window.electronAPI.codePaneGetCompletionItems).mockReset();
     vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockReset();
@@ -808,6 +820,24 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetDocumentHighlights).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetInlayHints).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetCallHierarchy).mockResolvedValue({
+      success: true,
+      data: {
+        root: null,
+        items: [],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneResolveCallHierarchy).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetTypeHierarchy).mockResolvedValue({
+      success: true,
+      data: {
+        root: null,
+        items: [],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneResolveTypeHierarchy).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetSemanticTokens).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneGetSemanticTokenLegend).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneGetImplementations).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetCompletionItems).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockResolvedValue({ success: true, data: null });
@@ -3552,5 +3582,116 @@ describe('CodePane', () => {
 
     expect(await screen.findByText('codePane.performanceRequests')).toBeInTheDocument();
     expect(await screen.findByText('File search')).toBeInTheDocument();
+  });
+
+  it('opens the hierarchy tool window and loads call hierarchy data', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneGetCallHierarchy).mockResolvedValue({
+      success: true,
+      data: {
+        root: {
+          name: 'runApp',
+          filePath: '/workspace/project/src/index.ts',
+          range: {
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: 1,
+            endColumn: 7,
+          },
+          selectionRange: {
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: 1,
+            endColumn: 7,
+          },
+        },
+        items: [
+          {
+            name: 'bootstrap',
+            detail: 'src/bootstrap.ts',
+            filePath: '/workspace/project/src/bootstrap.ts',
+            range: {
+              startLineNumber: 3,
+              startColumn: 1,
+              endLineNumber: 3,
+              endColumn: 10,
+            },
+            selectionRange: {
+              startLineNumber: 3,
+              startColumn: 1,
+              endLineNumber: 3,
+              endColumn: 10,
+            },
+            relationRanges: [
+              {
+                startLineNumber: 8,
+                startColumn: 4,
+                endLineNumber: 8,
+                endColumn: 10,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    renderCodePane(createPane());
+    await openFileFromTree('index.ts', { doubleClick: true });
+    await user.click(await screen.findByRole('button', { name: 'codePane.hierarchyTab' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetCallHierarchy).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        position: {
+          lineNumber: 1,
+          column: 1,
+        },
+        direction: 'outgoing',
+      });
+    });
+    expect((await screen.findAllByText('runApp')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('bootstrap')).toBeInTheDocument();
+  });
+
+  it('shows semantic token summaries for the active file', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneGetSemanticTokenLegend).mockResolvedValue({
+      success: true,
+      data: {
+        tokenTypes: ['class', 'method'],
+        tokenModifiers: ['declaration'],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetSemanticTokens).mockResolvedValue({
+      success: true,
+      data: {
+        legend: {
+          tokenTypes: ['class', 'method'],
+          tokenModifiers: ['declaration'],
+        },
+        data: [
+          0, 0, 5, 0, 0,
+          0, 6, 3, 1, 0,
+          1, 0, 4, 0, 0,
+        ],
+      },
+    });
+
+    renderCodePane(createPane());
+    await openFileFromTree('index.ts', { doubleClick: true });
+    await user.click(await screen.findByRole('button', { name: 'codePane.semanticTab' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetSemanticTokens).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+      });
+    });
+    expect((await screen.findAllByText('class')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('method')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('codePane.semanticTokensTotal: 3')).toBeInTheDocument();
   });
 });

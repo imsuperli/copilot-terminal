@@ -1,6 +1,7 @@
 import { pathToFileURL, fileURLToPath } from 'url';
 import path from 'path';
 import type {
+  CodePaneCallHierarchyDirection,
   CodePaneCodeAction,
   CodePaneCompletionItem,
   CodePaneDiagnostic,
@@ -8,15 +9,20 @@ import type {
   CodePaneDocumentHighlight,
   CodePaneInlayHint,
   CodePaneDocumentSymbol,
+  CodePaneHierarchyItem,
+  CodePaneHierarchyResult,
   CodePaneHoverResult,
   CodePaneLocation,
   CodePanePosition,
   CodePaneReadFileResult,
   CodePaneReference,
+  CodePaneSemanticTokensLegend,
+  CodePaneSemanticTokensResult,
   CodePaneSignatureHelpResult,
   CodePaneTextEdit,
   CodePaneWorkspaceSymbol,
   CodePaneRange,
+  CodePaneTypeHierarchyDirection,
   PluginRuntimeStateChangedPayload,
 } from '../../../shared/types/electron-api';
 import type { PluginRequirement, PluginRuntime } from '../../../shared/types/plugin';
@@ -48,6 +54,13 @@ const JAVA_SLOW_REQUEST_METHODS = new Set([
   'textDocument/documentHighlight',
   'textDocument/documentSymbol',
   'textDocument/inlayHint',
+  'textDocument/prepareCallHierarchy',
+  'callHierarchy/incomingCalls',
+  'callHierarchy/outgoingCalls',
+  'textDocument/prepareTypeHierarchy',
+  'typeHierarchy/supertypes',
+  'typeHierarchy/subtypes',
+  'textDocument/semanticTokens/full',
   'textDocument/implementation',
   'textDocument/codeAction',
   'codeAction/resolve',
@@ -58,6 +71,43 @@ const JAVA_SLOW_REQUEST_METHODS = new Set([
   'textDocument/formatting',
   'workspace/symbol',
 ]);
+const SEMANTIC_TOKEN_TYPES = [
+  'namespace',
+  'type',
+  'class',
+  'enum',
+  'interface',
+  'struct',
+  'typeParameter',
+  'parameter',
+  'variable',
+  'property',
+  'enumMember',
+  'event',
+  'function',
+  'method',
+  'macro',
+  'keyword',
+  'modifier',
+  'comment',
+  'string',
+  'number',
+  'regexp',
+  'operator',
+  'decorator',
+] as const;
+const SEMANTIC_TOKEN_MODIFIERS = [
+  'declaration',
+  'definition',
+  'readonly',
+  'static',
+  'deprecated',
+  'abstract',
+  'async',
+  'modification',
+  'documentation',
+  'defaultLibrary',
+] as const;
 
 interface PendingRequest {
   resolve: (value: any) => void;
@@ -164,11 +214,35 @@ interface LspInlayHint {
   paddingRight?: boolean;
 }
 
+interface LspHierarchyItem {
+  name: string;
+  kind: number;
+  detail?: string;
+  uri: string;
+  range: LspRange;
+  selectionRange: LspRange;
+}
+
+interface LspCallHierarchyIncomingCall {
+  from: LspHierarchyItem;
+  fromRanges?: LspRange[];
+}
+
+interface LspCallHierarchyOutgoingCall {
+  to: LspHierarchyItem;
+  fromRanges?: LspRange[];
+}
+
 interface LspSymbolInformation {
   name: string;
   kind: number;
   location: LspLocation;
   containerName?: string;
+}
+
+interface LspSemanticTokens {
+  resultId?: string;
+  data: number[] | Uint32Array;
 }
 
 interface LspCompletionItem {
@@ -339,6 +413,53 @@ export class LanguageServerSupervisor {
     range: CodePaneRange,
   ): Promise<CodePaneInlayHint[]> {
     return await this.getOrCreateSession(resolution).getInlayHints(filePath, range);
+  }
+
+  async getCallHierarchy(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    position: CodePanePosition,
+    direction: CodePaneCallHierarchyDirection,
+  ): Promise<CodePaneHierarchyResult> {
+    return await this.getOrCreateSession(resolution).getCallHierarchy(filePath, position, direction);
+  }
+
+  async resolveCallHierarchy(
+    resolution: ResolvedLanguagePlugin,
+    item: CodePaneHierarchyItem,
+    direction: CodePaneCallHierarchyDirection,
+  ): Promise<CodePaneHierarchyItem[]> {
+    return await this.getOrCreateSession(resolution).resolveCallHierarchy(item, direction);
+  }
+
+  async getTypeHierarchy(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    position: CodePanePosition,
+    direction: CodePaneTypeHierarchyDirection,
+  ): Promise<CodePaneHierarchyResult> {
+    return await this.getOrCreateSession(resolution).getTypeHierarchy(filePath, position, direction);
+  }
+
+  async resolveTypeHierarchy(
+    resolution: ResolvedLanguagePlugin,
+    item: CodePaneHierarchyItem,
+    direction: CodePaneTypeHierarchyDirection,
+  ): Promise<CodePaneHierarchyItem[]> {
+    return await this.getOrCreateSession(resolution).resolveTypeHierarchy(item, direction);
+  }
+
+  async getSemanticTokenLegend(
+    resolution: ResolvedLanguagePlugin,
+  ): Promise<CodePaneSemanticTokensLegend | null> {
+    return await this.getOrCreateSession(resolution).getSemanticTokenLegend();
+  }
+
+  async getSemanticTokens(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+  ): Promise<CodePaneSemanticTokensResult | null> {
+    return await this.getOrCreateSession(resolution).getSemanticTokens(filePath);
   }
 
   async getImplementations(
@@ -721,6 +842,10 @@ class LanguageServerSession {
 
   async getInlayHints(filePath: string, range: CodePaneRange): Promise<CodePaneInlayHint[]> {
     await this.ensureInitialized();
+    if (!this.serverCapabilities?.inlayHintProvider) {
+      return [];
+    }
+
     const result = await this.sendRequest('textDocument/inlayHint', {
       textDocument: {
         uri: filePathToUri(filePath),
@@ -729,6 +854,182 @@ class LanguageServerSession {
     }) as LspInlayHint[] | null;
 
     return (result ?? []).map(normalizeInlayHint).filter((hint): hint is CodePaneInlayHint => Boolean(hint));
+  }
+
+  async getCallHierarchy(
+    filePath: string,
+    position: CodePanePosition,
+    direction: CodePaneCallHierarchyDirection,
+  ): Promise<CodePaneHierarchyResult> {
+    await this.ensureInitialized();
+    if (!this.serverCapabilities?.callHierarchyProvider) {
+      return {
+        root: null,
+        items: [],
+      };
+    }
+
+    const preparedItems = await this.sendRequest('textDocument/prepareCallHierarchy', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      position: toLspPosition(position),
+    }) as LspHierarchyItem[] | LspHierarchyItem | null;
+
+    const rootItem = Array.isArray(preparedItems)
+      ? preparedItems[0] ?? null
+      : preparedItems;
+    if (!rootItem) {
+      return {
+        root: null,
+        items: [],
+      };
+    }
+
+    const normalizedRoot = await this.normalizeHierarchyItem(rootItem);
+    if (!normalizedRoot) {
+      return {
+        root: null,
+        items: [],
+      };
+    }
+
+    return {
+      root: normalizedRoot,
+      items: await this.resolveCallHierarchy(normalizedRoot, direction),
+    };
+  }
+
+  async resolveCallHierarchy(
+    item: CodePaneHierarchyItem,
+    direction: CodePaneCallHierarchyDirection,
+  ): Promise<CodePaneHierarchyItem[]> {
+    await this.ensureInitialized();
+    if (!this.serverCapabilities?.callHierarchyProvider) {
+      return [];
+    }
+
+    const requestMethod = direction === 'incoming'
+      ? 'callHierarchy/incomingCalls'
+      : 'callHierarchy/outgoingCalls';
+    const result = await this.sendRequest(requestMethod, {
+      item: toLspHierarchyItem(item),
+    }) as LspCallHierarchyIncomingCall[] | LspCallHierarchyOutgoingCall[] | null;
+
+    const normalizedItems = await Promise.all((result ?? []).map(async (entry) => {
+      if (direction === 'incoming') {
+        const incomingEntry = entry as LspCallHierarchyIncomingCall;
+        return await this.normalizeHierarchyItem(
+          incomingEntry.from,
+          (incomingEntry.fromRanges ?? []).map(fromLspRange),
+        );
+      }
+
+      const outgoingEntry = entry as LspCallHierarchyOutgoingCall;
+      return await this.normalizeHierarchyItem(
+        outgoingEntry.to,
+        (outgoingEntry.fromRanges ?? []).map(fromLspRange),
+      );
+    }));
+
+    return normalizedItems.filter((candidate): candidate is CodePaneHierarchyItem => Boolean(candidate));
+  }
+
+  async getTypeHierarchy(
+    filePath: string,
+    position: CodePanePosition,
+    direction: CodePaneTypeHierarchyDirection,
+  ): Promise<CodePaneHierarchyResult> {
+    await this.ensureInitialized();
+    if (!this.serverCapabilities?.typeHierarchyProvider) {
+      return {
+        root: null,
+        items: [],
+      };
+    }
+
+    const preparedItems = await this.sendRequest('textDocument/prepareTypeHierarchy', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      position: toLspPosition(position),
+    }) as LspHierarchyItem[] | LspHierarchyItem | null;
+
+    const rootItem = Array.isArray(preparedItems)
+      ? preparedItems[0] ?? null
+      : preparedItems;
+    if (!rootItem) {
+      return {
+        root: null,
+        items: [],
+      };
+    }
+
+    const normalizedRoot = await this.normalizeHierarchyItem(rootItem);
+    if (!normalizedRoot) {
+      return {
+        root: null,
+        items: [],
+      };
+    }
+
+    return {
+      root: normalizedRoot,
+      items: await this.resolveTypeHierarchy(normalizedRoot, direction),
+    };
+  }
+
+  async resolveTypeHierarchy(
+    item: CodePaneHierarchyItem,
+    direction: CodePaneTypeHierarchyDirection,
+  ): Promise<CodePaneHierarchyItem[]> {
+    await this.ensureInitialized();
+    if (!this.serverCapabilities?.typeHierarchyProvider) {
+      return [];
+    }
+
+    const requestMethod = direction === 'parents'
+      ? 'typeHierarchy/supertypes'
+      : 'typeHierarchy/subtypes';
+    const result = await this.sendRequest(requestMethod, {
+      item: toLspHierarchyItem(item),
+    }) as LspHierarchyItem[] | null;
+
+    const normalizedItems = await Promise.all((result ?? []).map(async (entry) => (
+      await this.normalizeHierarchyItem(entry)
+    )));
+    return normalizedItems.filter((candidate): candidate is CodePaneHierarchyItem => Boolean(candidate));
+  }
+
+  async getSemanticTokenLegend(): Promise<CodePaneSemanticTokensLegend | null> {
+    await this.ensureInitialized();
+    return normalizeSemanticTokensLegend(this.serverCapabilities?.semanticTokensProvider?.legend);
+  }
+
+  async getSemanticTokens(filePath: string): Promise<CodePaneSemanticTokensResult | null> {
+    await this.ensureInitialized();
+    const legend = normalizeSemanticTokensLegend(this.serverCapabilities?.semanticTokensProvider?.legend);
+    if (!legend) {
+      return null;
+    }
+
+    const result = await this.sendRequest('textDocument/semanticTokens/full', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+    }) as LspSemanticTokens | null;
+    if (!result?.data) {
+      return {
+        legend,
+        data: [],
+      };
+    }
+
+    return {
+      legend,
+      ...(result.resultId ? { resultId: result.resultId } : {}),
+      data: Array.from(result.data),
+    };
   }
 
   async getImplementations(filePath: string, position: CodePanePosition): Promise<CodePaneLocation[]> {
@@ -1068,6 +1369,17 @@ class LanguageServerSession {
             },
             references: {},
             documentHighlight: {},
+            callHierarchy: {},
+            typeHierarchy: {},
+            semanticTokens: {
+              requests: {
+                full: true,
+              },
+              tokenTypes: Array.from(SEMANTIC_TOKEN_TYPES),
+              tokenModifiers: Array.from(SEMANTIC_TOKEN_MODIFIERS),
+              formats: ['relative'],
+            },
+            inlayHint: {},
             implementation: {},
             codeAction: {
               codeActionLiteralSupport: {
@@ -1394,6 +1706,51 @@ class LanguageServerSession {
     };
   }
 
+  private async normalizeHierarchyItem(
+    item: LspHierarchyItem | null | undefined,
+    relationRanges?: CodePaneRange[],
+  ): Promise<CodePaneHierarchyItem | null> {
+    if (!item) {
+      return null;
+    }
+
+    const filePath = uriToFilePath(item.uri);
+    const normalizedRange = fromLspRange(item.range);
+    const selectionRange = fromLspRange(item.selectionRange);
+
+    if (filePath) {
+      return {
+        name: item.name,
+        detail: item.detail,
+        kind: item.kind,
+        filePath,
+        range: normalizedRange,
+        selectionRange,
+        ...(relationRanges && relationRanges.length > 0 ? { relationRanges } : {}),
+      };
+    }
+
+    const virtualDocument = await this.readVirtualDocument(item.uri);
+    if (!virtualDocument) {
+      return null;
+    }
+
+    return {
+      name: item.name,
+      detail: item.detail,
+      kind: item.kind,
+      filePath: virtualDocument.documentUri ?? item.uri,
+      uri: item.uri,
+      displayPath: virtualDocument.displayPath,
+      readOnly: true,
+      language: virtualDocument.language,
+      content: virtualDocument.content,
+      range: normalizedRange,
+      selectionRange,
+      ...(relationRanges && relationRanges.length > 0 ? { relationRanges } : {}),
+    };
+  }
+
   private async stopProcess(): Promise<void> {
     const spawnedProcess = this.spawnedProcess;
     if (!spawnedProcess) {
@@ -1536,6 +1893,10 @@ class LanguageServerSession {
 }
 
 function filePathToUri(filePath: string): string {
+  if (isVirtualDocumentUri(filePath)) {
+    return filePath;
+  }
+
   return pathToFileURL(filePath).toString();
 }
 
@@ -1568,6 +1929,17 @@ function toLspRange(range: CodePaneRange): LspRange {
       lineNumber: range.endLineNumber,
       column: range.endColumn,
     }),
+  };
+}
+
+function toLspHierarchyItem(item: CodePaneHierarchyItem): LspHierarchyItem {
+  return {
+    name: item.name,
+    kind: item.kind ?? 12,
+    ...(item.detail ? { detail: item.detail } : {}),
+    uri: item.uri ?? filePathToUri(item.filePath),
+    range: toLspRange(item.range),
+    selectionRange: toLspRange(item.selectionRange),
   };
 }
 
@@ -1716,6 +2088,23 @@ function normalizeInlayHint(value: LspInlayHint): CodePaneInlayHint | null {
         : {}),
     ...(value.paddingLeft !== undefined ? { paddingLeft: value.paddingLeft } : {}),
     ...(value.paddingRight !== undefined ? { paddingRight: value.paddingRight } : {}),
+  };
+}
+
+function normalizeSemanticTokensLegend(value: unknown): CodePaneSemanticTokensLegend | null {
+  const tokenTypes = Array.isArray((value as { tokenTypes?: unknown[] } | null | undefined)?.tokenTypes)
+    ? (value as { tokenTypes: unknown[] }).tokenTypes.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  const tokenModifiers = Array.isArray((value as { tokenModifiers?: unknown[] } | null | undefined)?.tokenModifiers)
+    ? (value as { tokenModifiers: unknown[] }).tokenModifiers.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  if (tokenTypes.length === 0) {
+    return null;
+  }
+
+  return {
+    tokenTypes,
+    tokenModifiers,
   };
 }
 
