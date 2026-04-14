@@ -7,10 +7,16 @@ import type {
   CodePaneGitGraphConfig,
   CodePaneGitStatusConfig,
   CodePaneListDirectoryConfig,
+  CodePaneListRunTargetsConfig,
+  CodePaneListTestsConfig,
   CodePaneReadFileConfig,
   CodePaneReadGitBaseFileConfig,
+  CodePaneRerunFailedTestsConfig,
+  CodePaneRunTargetConfig,
+  CodePaneRunTestsConfig,
   CodePaneSearchContentsConfig,
   CodePaneSearchFilesConfig,
+  CodePaneStopRunTargetConfig,
   CodePaneWatchRootConfig,
   CodePaneWriteFileConfig,
 } from '../../shared/types/electron-api';
@@ -21,6 +27,8 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     codeGitService,
     codePaneWatcherService,
     codeProjectIndexService,
+    codeRunProfileService,
+    codeTestService,
     languageFeatureService,
     languageProjectContributionService,
     getMainWindow,
@@ -231,6 +239,79 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await languageProjectContributionService.getExternalLibrarySections(config.rootPath));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-list-run-targets', async (_event, config: CodePaneListRunTargetsConfig) => {
+    try {
+      if (!codeRunProfileService) {
+        throw new Error('CodeRunProfileService not initialized');
+      }
+
+      return successResponse(await codeRunProfileService.listRunTargets(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-run-target', async (_event, config: CodePaneRunTargetConfig) => {
+    try {
+      if (!codeRunProfileService) {
+        throw new Error('CodeRunProfileService not initialized');
+      }
+
+      return successResponse(await codeRunProfileService.runTarget(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-stop-run-target', async (_event, config: CodePaneStopRunTargetConfig) => {
+    try {
+      if (!codeRunProfileService) {
+        throw new Error('CodeRunProfileService not initialized');
+      }
+
+      await codeRunProfileService.stopRunTarget(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-list-tests', async (_event, config: CodePaneListTestsConfig) => {
+    try {
+      if (!codeTestService) {
+        throw new Error('CodeTestService not initialized');
+      }
+
+      return successResponse(await codeTestService.listTests(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-run-tests', async (_event, config: CodePaneRunTestsConfig) => {
+    try {
+      if (!codeTestService) {
+        throw new Error('CodeTestService not initialized');
+      }
+
+      return successResponse(await codeTestService.runTests(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-rerun-failed-tests', async (_event, config: CodePaneRerunFailedTestsConfig) => {
+    try {
+      if (!codeTestService) {
+        throw new Error('CodeTestService not initialized');
+      }
+
+      return successResponse(await codeTestService.rerunFailedTests(config.rootPath));
     } catch (error) {
       return errorResponse(error);
     }

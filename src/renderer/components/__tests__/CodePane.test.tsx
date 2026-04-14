@@ -493,6 +493,50 @@ async function emitLanguageWorkspaceChanged(payload: CodePaneLanguageWorkspaceCh
   });
 }
 
+async function emitRunSessionChanged(payload: {
+  rootPath: string;
+  session: {
+    id: string;
+    targetId: string;
+    label: string;
+    detail: string;
+    kind: 'application' | 'test' | 'task';
+    languageId: string;
+    state: 'starting' | 'running' | 'passed' | 'failed' | 'stopped';
+    workingDirectory: string;
+    startedAt: string;
+    endedAt?: string;
+    exitCode?: number | null;
+  };
+}) {
+  const callback = vi.mocked(window.electronAPI.onCodePaneRunSessionChanged).mock.calls.at(-1)?.[0];
+  if (!callback) {
+    throw new Error('expected run session listener to be registered');
+  }
+
+  await act(async () => {
+    callback({}, payload);
+    await Promise.resolve();
+  });
+}
+
+async function emitRunSessionOutput(payload: {
+  rootPath: string;
+  sessionId: string;
+  chunk: string;
+  stream: 'stdout' | 'stderr' | 'system';
+}) {
+  const callback = vi.mocked(window.electronAPI.onCodePaneRunSessionOutput).mock.calls.at(-1)?.[0];
+  if (!callback) {
+    throw new Error('expected run session output listener to be registered');
+  }
+
+  await act(async () => {
+    callback({}, payload);
+    await Promise.resolve();
+  });
+}
+
 describe('CodePane', () => {
   beforeAll(() => {
     vi.stubGlobal('Worker', class WorkerMock {});
@@ -542,10 +586,20 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockReset();
     vi.mocked(window.electronAPI.codePaneGetCodeActions).mockReset();
     vi.mocked(window.electronAPI.codePaneRunCodeAction).mockReset();
+    vi.mocked(window.electronAPI.codePaneListRunTargets).mockReset();
+    vi.mocked(window.electronAPI.codePaneRunTarget).mockReset();
+    vi.mocked(window.electronAPI.codePaneStopRunTarget).mockReset();
+    vi.mocked(window.electronAPI.codePaneListTests).mockReset();
+    vi.mocked(window.electronAPI.codePaneRunTests).mockReset();
+    vi.mocked(window.electronAPI.codePaneRerunFailedTests).mockReset();
     vi.mocked(window.electronAPI.onCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.onCodePaneIndexProgress).mockReset();
     vi.mocked(window.electronAPI.offCodePaneIndexProgress).mockReset();
+    vi.mocked(window.electronAPI.onCodePaneRunSessionChanged).mockReset();
+    vi.mocked(window.electronAPI.offCodePaneRunSessionChanged).mockReset();
+    vi.mocked(window.electronAPI.onCodePaneRunSessionOutput).mockReset();
+    vi.mocked(window.electronAPI.offCodePaneRunSessionOutput).mockReset();
     vi.mocked(window.electronAPI.onCodePaneDiagnosticsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneDiagnosticsChanged).mockReset();
     vi.mocked(window.electronAPI.onCodePaneLanguageWorkspaceChanged).mockReset();
@@ -633,6 +687,12 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetCodeActions).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneRunCodeAction).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneListRunTargets).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneRunTarget).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneStopRunTarget).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneListTests).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneRunTests).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneRerunFailedTests).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.openFolder).mockResolvedValue(undefined);
     vi.mocked(window.electronAPI.writeClipboardText).mockResolvedValue(undefined);
   });
@@ -1192,6 +1252,158 @@ describe('CodePane', () => {
         rootPath: '/workspace/project',
         filePath: '/workspace/project/src/app.ts',
       });
+    });
+  });
+
+  it('opens the run tool window and streams run session output', async () => {
+    vi.mocked(window.electronAPI.codePaneListRunTargets).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'run-target-spring-boot',
+          label: 'Spring Boot',
+          detail: 'mvn spring-boot:run',
+          kind: 'application',
+          languageId: 'java',
+          workingDirectory: '/workspace/project',
+          canDebug: true,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneRunTarget).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'run-session-1',
+        targetId: 'run-target-spring-boot',
+        label: 'Spring Boot',
+        detail: 'mvn spring-boot:run',
+        kind: 'application',
+        languageId: 'java',
+        state: 'starting',
+        workingDirectory: '/workspace/project',
+        startedAt: '2026-04-13T00:00:00.000Z',
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.runTab' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListRunTargets).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        activeFilePath: null,
+      });
+    });
+
+    expect(await screen.findByText('Spring Boot')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('codePane.runAction'));
+    });
+
+    expect(window.electronAPI.codePaneRunTarget).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      targetId: 'run-target-spring-boot',
+    });
+
+    await emitRunSessionChanged({
+      rootPath: '/workspace/project',
+      session: {
+        id: 'run-session-1',
+        targetId: 'run-target-spring-boot',
+        label: 'Spring Boot',
+        detail: 'mvn spring-boot:run',
+        kind: 'application',
+        languageId: 'java',
+        state: 'running',
+        workingDirectory: '/workspace/project',
+        startedAt: '2026-04-13T00:00:00.000Z',
+      },
+    });
+    await emitRunSessionOutput({
+      rootPath: '/workspace/project',
+      sessionId: 'run-session-1',
+      chunk: '$ mvn spring-boot:run\nStarted successfully\n',
+      stream: 'stdout',
+    });
+
+    expect(await screen.findByText(/Started successfully/)).toBeInTheDocument();
+  });
+
+  it('opens the tests tool window, shows the test tree, and reruns failed tests', async () => {
+    vi.mocked(window.electronAPI.codePaneListTests).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'test-file-1',
+          label: 'test_service.py',
+          kind: 'file',
+          filePath: '/workspace/project/tests/test_service.py',
+          runnableTargetId: 'test-target-1',
+          children: [
+            {
+              id: 'test-case-1',
+              label: 'test_handles_request',
+              kind: 'case',
+              filePath: '/workspace/project/tests/test_service.py',
+              runnableTargetId: 'test-target-case-1',
+            },
+          ],
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.testsTab' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListTests).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        activeFilePath: null,
+      });
+    });
+
+    const testFileButton = await screen.findByRole('button', { name: /test_service\.py/ });
+    await act(async () => {
+      fireEvent.click(testFileButton);
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/tests/test_service.py',
+      });
+    });
+
+    await emitRunSessionChanged({
+      rootPath: '/workspace/project',
+      session: {
+        id: 'test-session-1',
+        targetId: 'test-target-1',
+        label: 'test_service.py',
+        detail: 'python -m pytest test_service.py',
+        kind: 'test',
+        languageId: 'python',
+        state: 'failed',
+        workingDirectory: '/workspace/project',
+        startedAt: '2026-04-13T00:00:00.000Z',
+        endedAt: '2026-04-13T00:00:03.000Z',
+        exitCode: 1,
+      },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('codePane.rerunFailedTests'));
+    });
+
+    expect(window.electronAPI.codePaneRerunFailedTests).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
     });
   });
 

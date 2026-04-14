@@ -621,6 +621,83 @@ export interface CodePaneRunCodeActionConfig {
   actionId: string;
 }
 
+export type CodePaneRunTargetKind = 'application' | 'test' | 'task';
+export type CodePaneRunSessionState = 'starting' | 'running' | 'passed' | 'failed' | 'stopped';
+
+export interface CodePaneRunTarget {
+  id: string;
+  label: string;
+  detail: string;
+  kind: CodePaneRunTargetKind;
+  languageId: string;
+  workingDirectory: string;
+  filePath?: string;
+  canDebug?: boolean;
+}
+
+export interface CodePaneListRunTargetsConfig {
+  rootPath: string;
+  activeFilePath?: string | null;
+}
+
+export interface CodePaneRunTargetConfig {
+  rootPath: string;
+  targetId: string;
+}
+
+export interface CodePaneStopRunTargetConfig {
+  sessionId: string;
+}
+
+export interface CodePaneRunSession {
+  id: string;
+  targetId: string;
+  label: string;
+  detail: string;
+  kind: CodePaneRunTargetKind;
+  languageId: string;
+  state: CodePaneRunSessionState;
+  workingDirectory: string;
+  startedAt: string;
+  endedAt?: string;
+  exitCode?: number | null;
+}
+
+export interface CodePaneRunSessionChangedPayload {
+  rootPath: string;
+  session: CodePaneRunSession;
+}
+
+export interface CodePaneRunSessionOutputPayload {
+  rootPath: string;
+  sessionId: string;
+  chunk: string;
+  stream: 'stdout' | 'stderr' | 'system';
+}
+
+export interface CodePaneTestItem {
+  id: string;
+  label: string;
+  kind: 'file' | 'suite' | 'case';
+  filePath?: string;
+  runnableTargetId?: string;
+  children?: CodePaneTestItem[];
+}
+
+export interface CodePaneListTestsConfig {
+  rootPath: string;
+  activeFilePath?: string | null;
+}
+
+export interface CodePaneRunTestsConfig {
+  rootPath: string;
+  targetId: string;
+}
+
+export interface CodePaneRerunFailedTestsConfig {
+  rootPath: string;
+}
+
 export interface CodePaneDiagnostic {
   filePath: string;
   owner: string;
@@ -941,10 +1018,20 @@ export interface ElectronAPI {
   codePaneGetWorkspaceSymbols: (config: CodePaneGetWorkspaceSymbolsConfig) => Promise<IpcResponse<CodePaneWorkspaceSymbol[]>>;
   codePaneGetCodeActions: (config: CodePaneGetCodeActionsConfig) => Promise<IpcResponse<CodePaneCodeAction[]>>;
   codePaneRunCodeAction: (config: CodePaneRunCodeActionConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
+  codePaneListRunTargets: (config: CodePaneListRunTargetsConfig) => Promise<IpcResponse<CodePaneRunTarget[]>>;
+  codePaneRunTarget: (config: CodePaneRunTargetConfig) => Promise<IpcResponse<CodePaneRunSession>>;
+  codePaneStopRunTarget: (config: CodePaneStopRunTargetConfig) => Promise<IpcResponse<void>>;
+  codePaneListTests: (config: CodePaneListTestsConfig) => Promise<IpcResponse<CodePaneTestItem[]>>;
+  codePaneRunTests: (config: CodePaneRunTestsConfig) => Promise<IpcResponse<CodePaneRunSession>>;
+  codePaneRerunFailedTests: (config: CodePaneRerunFailedTestsConfig) => Promise<IpcResponse<CodePaneRunSession[]>>;
   onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   onCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;
   offCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;
+  onCodePaneRunSessionChanged: (callback: ElectronEventHandler<CodePaneRunSessionChangedPayload>) => void;
+  offCodePaneRunSessionChanged: (callback: ElectronEventHandler<CodePaneRunSessionChangedPayload>) => void;
+  onCodePaneRunSessionOutput: (callback: ElectronEventHandler<CodePaneRunSessionOutputPayload>) => void;
+  offCodePaneRunSessionOutput: (callback: ElectronEventHandler<CodePaneRunSessionOutputPayload>) => void;
   onCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
   offCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
   onCodePaneLanguageWorkspaceChanged: (callback: ElectronEventHandler<CodePaneLanguageWorkspaceChangedPayload>) => void;

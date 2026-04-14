@@ -42,7 +42,12 @@ import type {
   CodePaneLocation,
   CodePaneReadFileResult,
   CodePaneReference,
+  CodePaneRunSession,
+  CodePaneRunSessionChangedPayload,
+  CodePaneRunSessionOutputPayload,
+  CodePaneRunTarget,
   CodePaneTextEdit,
+  CodePaneTestItem,
   CodePaneTreeEntry,
   CodePaneWorkspaceSymbol,
 } from '../../shared/types/electron-api';
@@ -52,6 +57,8 @@ import {
   CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
 } from '../../shared/types/electron-api';
 import { AppTooltip } from './ui/AppTooltip';
+import { RunToolWindow } from './code-pane/tool-windows/RunToolWindow';
+import { TestsToolWindow } from './code-pane/tool-windows/TestsToolWindow';
 import { useI18n } from '../i18n';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { useWindowStore } from '../stores/windowStore';
@@ -72,6 +79,7 @@ type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
 type SearchEverywhereMode = 'all' | 'commands' | 'recent';
+type BottomPanelMode = 'run' | 'tests';
 
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
 const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
@@ -666,6 +674,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isCodeActionMenuLoading, setIsCodeActionMenuLoading] = useState(false);
   const [codeActionMenuError, setCodeActionMenuError] = useState<string | null>(null);
   const [selectedCodeActionIndex, setSelectedCodeActionIndex] = useState(0);
+  const [bottomPanelMode, setBottomPanelMode] = useState<BottomPanelMode | null>(null);
+  const [runTargets, setRunTargets] = useState<CodePaneRunTarget[]>([]);
+  const [isRunTargetsLoading, setIsRunTargetsLoading] = useState(false);
+  const [runTargetsError, setRunTargetsError] = useState<string | null>(null);
+  const [testItems, setTestItems] = useState<CodePaneTestItem[]>([]);
+  const [isTestsLoading, setIsTestsLoading] = useState(false);
+  const [testsError, setTestsError] = useState<string | null>(null);
+  const [runSessions, setRunSessions] = useState<CodePaneRunSession[]>([]);
+  const [runSessionOutputs, setRunSessionOutputs] = useState<Record<string, string>>({});
+  const [selectedRunSessionId, setSelectedRunSessionId] = useState<string | null>(null);
   const [usageResults, setUsageResults] = useState<CodePaneReference[]>([]);
   const [isFindingUsages, setIsFindingUsages] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
@@ -2782,6 +2800,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setCodeActionItems([]);
       setIsCodeActionMenuOpen(false);
       setCodeActionMenuError(null);
+      setBottomPanelMode(null);
+      setRunTargets([]);
+      setIsRunTargetsLoading(false);
+      setRunTargetsError(null);
+      setTestItems([]);
+      setIsTestsLoading(false);
+      setTestsError(null);
+      setRunSessions([]);
+      setRunSessionOutputs({});
+      setSelectedRunSessionId(null);
       recentFilesRef.current = [];
       recentLocationsRef.current = [];
       navigationBackStackRef.current = [];
@@ -4144,6 +4172,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const canNavigateForward = navigationForwardStackRef.current.length > 0;
   const selectedSearchEverywhereItem = searchEverywhereItems[searchEverywhereSelectedIndex] ?? null;
   const selectedCodeAction = codeActionItems[selectedCodeActionIndex] ?? null;
+  const visibleRunSessions = useMemo(() => {
+    if (bottomPanelMode === 'tests') {
+      return runSessions.filter((session) => session.kind === 'test');
+    }
+
+    if (bottomPanelMode === 'run') {
+      return runSessions.filter((session) => session.kind !== 'test');
+    }
+
+    return runSessions;
+  }, [bottomPanelMode, runSessions]);
+  const selectedRunSession = visibleRunSessions.find((session) => session.id === selectedRunSessionId) ?? visibleRunSessions[0] ?? null;
+  const selectedRunSessionOutput = selectedRunSession ? (runSessionOutputs[selectedRunSession.id] ?? '') : '';
+  const hasFailedTestSessions = runSessions.some((session) => session.kind === 'test' && session.state === 'failed');
 
   useEffect(() => {
     if (!isActive) {
@@ -4278,6 +4320,42 @@ export const CodePane: React.FC<CodePaneProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [codeActionItems.length, isCodeActionMenuOpen, selectedCodeAction]);
+
+  useEffect(() => {
+    const handleRunSessionChanged = (_event: unknown, payload: CodePaneRunSessionChangedPayload) => {
+      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+        return;
+      }
+
+      setRunSessions((currentSessions) => {
+        const nextSessions = [
+          payload.session,
+          ...currentSessions.filter((session) => session.id !== payload.session.id),
+        ];
+        return nextSessions.slice(0, 20);
+      });
+      setSelectedRunSessionId((currentSelectedSessionId) => currentSelectedSessionId ?? payload.session.id);
+    };
+
+    const handleRunSessionOutput = (_event: unknown, payload: CodePaneRunSessionOutputPayload) => {
+      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+        return;
+      }
+
+      setRunSessionOutputs((currentOutputs) => ({
+        ...currentOutputs,
+        [payload.sessionId]: `${currentOutputs[payload.sessionId] ?? ''}${payload.chunk}`,
+      }));
+    };
+
+    window.electronAPI.onCodePaneRunSessionChanged(handleRunSessionChanged);
+    window.electronAPI.onCodePaneRunSessionOutput(handleRunSessionOutput);
+
+    return () => {
+      window.electronAPI.offCodePaneRunSessionChanged(handleRunSessionChanged);
+      window.electronAPI.offCodePaneRunSessionOutput(handleRunSessionOutput);
+    };
+  }, [rootPath]);
 
   const openFileLocation = useCallback(async (location: FileNavigationLocation) => {
     await openEditorLocation(location, {
@@ -4480,6 +4558,143 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     runSelectedCodeActionRef.current = runSelectedCodeAction;
   }, [runSelectedCodeAction]);
+
+  const loadRunTargets = useCallback(async () => {
+    setIsRunTargetsLoading(true);
+    setRunTargetsError(null);
+
+    const response = await window.electronAPI.codePaneListRunTargets({
+      rootPath,
+      activeFilePath: activeFilePathRef.current,
+    });
+
+    setRunTargets(response.success ? (response.data ?? []) : []);
+    setRunTargetsError(response.success ? null : (response.error || t('common.retry')));
+    setIsRunTargetsLoading(false);
+  }, [rootPath, t]);
+
+  const loadTests = useCallback(async () => {
+    setIsTestsLoading(true);
+    setTestsError(null);
+
+    const response = await window.electronAPI.codePaneListTests({
+      rootPath,
+      activeFilePath: activeFilePathRef.current,
+    });
+
+    setTestItems(response.success ? (response.data ?? []) : []);
+    setTestsError(response.success ? null : (response.error || t('common.retry')));
+    setIsTestsLoading(false);
+  }, [rootPath, t]);
+
+  const runTargetById = useCallback(async (targetId: string) => {
+    const response = await window.electronAPI.codePaneRunTarget({
+      rootPath,
+      targetId,
+    });
+
+    if (!response.success || !response.data) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    setBottomPanelMode('run');
+    setSelectedRunSessionId(response.data.id);
+  }, [rootPath, t]);
+
+  const runTestTarget = useCallback(async (targetId: string) => {
+    const response = await window.electronAPI.codePaneRunTests({
+      rootPath,
+      targetId,
+    });
+
+    if (!response.success || !response.data) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    setBottomPanelMode('tests');
+    setSelectedRunSessionId(response.data.id);
+  }, [rootPath, t]);
+
+  const rerunFailedTests = useCallback(async () => {
+    const response = await window.electronAPI.codePaneRerunFailedTests({
+      rootPath,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    const latestSession = response.data?.at(-1) ?? null;
+    if (latestSession) {
+      setBottomPanelMode('tests');
+      setSelectedRunSessionId(latestSession.id);
+    }
+  }, [rootPath, t]);
+
+  const stopRunSession = useCallback(async (sessionId: string) => {
+    const response = await window.electronAPI.codePaneStopRunTarget({
+      sessionId,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+    }
+  }, [t]);
+
+  const openTestItem = useCallback(async (item: CodePaneTestItem) => {
+    if (!item.filePath) {
+      return;
+    }
+
+    await openEditorLocation({
+      filePath: item.filePath,
+      lineNumber: 1,
+      column: 1,
+    }, {
+      preserveTabs: true,
+      recordHistory: true,
+      recordRecent: true,
+      clearForward: true,
+    });
+  }, [openEditorLocation]);
+
+  const toggleBottomPanelMode = useCallback((mode: BottomPanelMode) => {
+    setBottomPanelMode((currentMode) => (currentMode === mode ? null : mode));
+  }, []);
+
+  const refreshBottomPanel = useCallback(() => {
+    if (bottomPanelMode === 'run') {
+      void loadRunTargets();
+      return;
+    }
+
+    if (bottomPanelMode === 'tests') {
+      void loadTests();
+    }
+  }, [bottomPanelMode, loadRunTargets, loadTests]);
+
+  useEffect(() => {
+    if (bottomPanelMode === 'run') {
+      void loadRunTargets();
+    } else if (bottomPanelMode === 'tests') {
+      void loadTests();
+    }
+  }, [activeFilePath, bottomPanelMode, loadRunTargets, loadTests]);
 
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
@@ -4761,6 +4976,42 @@ export const CodePane: React.FC<CodePaneProps> = ({
               className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Fix
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.runTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.runTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleBottomPanelMode('run');
+              }}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'run'
+                  ? 'bg-emerald-500/20 text-emerald-200'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
+              }`}
+            >
+              Run
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.testsTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.testsTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleBottomPanelMode('tests');
+              }}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'tests'
+                  ? 'bg-sky-500/20 text-sky-200'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
+              }`}
+            >
+              Test
             </button>
           </AppTooltip>
           <AppTooltip content={t('codePane.formatDocument')} placement="pane-corner">
@@ -5574,6 +5825,43 @@ export const CodePane: React.FC<CodePaneProps> = ({
               </div>
             )}
           </div>
+
+          {bottomPanelMode === 'run' ? (
+            <RunToolWindow
+              targets={runTargets}
+              sessions={visibleRunSessions}
+              selectedSession={selectedRunSession}
+              selectedOutput={selectedRunSessionOutput}
+              isLoading={isRunTargetsLoading}
+              error={runTargetsError}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+              onRefresh={refreshBottomPanel}
+              onRunTarget={runTargetById}
+              onSelectSession={setSelectedRunSessionId}
+              onStopSession={stopRunSession}
+            />
+          ) : bottomPanelMode === 'tests' ? (
+            <TestsToolWindow
+              testItems={testItems}
+              sessions={visibleRunSessions}
+              selectedSession={selectedRunSession}
+              selectedOutput={selectedRunSessionOutput}
+              isLoading={isTestsLoading}
+              error={testsError}
+              hasFailedSessions={hasFailedTestSessions}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+              onRefresh={refreshBottomPanel}
+              onRunTest={runTestTarget}
+              onSelectSession={setSelectedRunSessionId}
+              onStopSession={stopRunSession}
+              onOpenTestItem={openTestItem}
+              onRerunFailed={rerunFailedTests}
+            />
+          ) : null}
 
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 py-2 text-[11px] text-zinc-500">
             <div className="flex min-w-0 items-center gap-3">

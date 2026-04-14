@@ -15,6 +15,8 @@ import { CodeFileService } from '../services/code/CodeFileService';
 import { CodeGitService } from '../services/code/CodeGitService';
 import { CodeProjectIndexService } from '../services/code/CodeProjectIndexService';
 import { CodePaneWatcherService } from '../services/code/CodePaneWatcherService';
+import { CodeRunProfileService } from '../services/code/CodeRunProfileService';
+import { CodeTestService } from '../services/code/CodeTestService';
 import { LanguageFeatureService } from '../services/language/LanguageFeatureService';
 import { LanguageProjectContributionService } from '../services/language/LanguageProjectContributionService';
 import { PluginManager } from '../services/plugins/PluginManager';
@@ -42,6 +44,8 @@ export interface HandlerContext {
   codeGitService?: CodeGitService | null;
   codeProjectIndexService?: CodeProjectIndexService | null;
   codePaneWatcherService?: CodePaneWatcherService | null;
+  codeRunProfileService?: CodeRunProfileService | null;
+  codeTestService?: CodeTestService | null;
   languageFeatureService?: LanguageFeatureService | null;
   languageProjectContributionService?: LanguageProjectContributionService | null;
   pluginManager?: PluginManager | null;

@@ -195,6 +195,18 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-get-code-actions', config),
   codePaneRunCodeAction: (config) =>
     ipcRenderer.invoke('code-pane-run-code-action', config),
+  codePaneListRunTargets: (config) =>
+    ipcRenderer.invoke('code-pane-list-run-targets', config),
+  codePaneRunTarget: (config) =>
+    ipcRenderer.invoke('code-pane-run-target', config),
+  codePaneStopRunTarget: (config) =>
+    ipcRenderer.invoke('code-pane-stop-run-target', config),
+  codePaneListTests: (config) =>
+    ipcRenderer.invoke('code-pane-list-tests', config),
+  codePaneRunTests: (config) =>
+    ipcRenderer.invoke('code-pane-run-tests', config),
+  codePaneRerunFailedTests: (config) =>
+    ipcRenderer.invoke('code-pane-rerun-failed-tests', config),
   onCodePaneFsChanged: (callback) => {
     ipcRenderer.on('code-pane-fs-changed', callback);
   },
@@ -205,6 +217,16 @@ const electronAPI: ElectronAPI = {
   },
   offCodePaneIndexProgress: (callback) =>
     ipcRenderer.removeListener('code-pane-index-progress', callback),
+  onCodePaneRunSessionChanged: (callback) => {
+    ipcRenderer.on('code-pane-run-session-changed', callback);
+  },
+  offCodePaneRunSessionChanged: (callback) =>
+    ipcRenderer.removeListener('code-pane-run-session-changed', callback),
+  onCodePaneRunSessionOutput: (callback) => {
+    ipcRenderer.on('code-pane-run-session-output', callback);
+  },
+  offCodePaneRunSessionOutput: (callback) =>
+    ipcRenderer.removeListener('code-pane-run-session-output', callback),
   onCodePaneDiagnosticsChanged: (callback) => {
     ipcRenderer.on('code-pane-diagnostics-changed', callback);
   },

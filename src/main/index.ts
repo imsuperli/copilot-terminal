@@ -23,6 +23,8 @@ import { CodeFileService } from './services/code/CodeFileService';
 import { CodeGitService } from './services/code/CodeGitService';
 import { CodeProjectIndexService } from './services/code/CodeProjectIndexService';
 import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
+import { CodeRunProfileService } from './services/code/CodeRunProfileService';
+import { CodeTestService } from './services/code/CodeTestService';
 import { LanguageFeatureService } from './services/language/LanguageFeatureService';
 import { LanguagePluginResolver } from './services/language/LanguagePluginResolver';
 import { LanguageProjectContributionService } from './services/language/LanguageProjectContributionService';
@@ -63,6 +65,8 @@ let codeFileService: CodeFileService | null = null;
 let codeGitService: CodeGitService | null = null;
 let codeProjectIndexService: CodeProjectIndexService | null = null;
 let codePaneWatcherService: CodePaneWatcherService | null = null;
+let codeRunProfileService: CodeRunProfileService | null = null;
+let codeTestService: CodeTestService | null = null;
 let languageFeatureService: LanguageFeatureService | null = null;
 let languageProjectContributionService: LanguageProjectContributionService | null = null;
 let pluginManager: PluginManager | null = null;
@@ -609,6 +613,21 @@ app.whenReady().then(async () => {
   languageProjectContributionService = new LanguageProjectContributionService({
     codeFileService,
   });
+  codeRunProfileService = new CodeRunProfileService({
+    emitSessionChanged: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('code-pane-run-session-changed', payload);
+      }
+    },
+    emitSessionOutput: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('code-pane-run-session-output', payload);
+      }
+    },
+  });
+  codeTestService = new CodeTestService({
+    runProfileService: codeRunProfileService,
+  });
 
   // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
   initProjectConfigWatcher(fileWatcherService);
@@ -681,6 +700,8 @@ app.whenReady().then(async () => {
     codeGitService,
     codeProjectIndexService,
     codePaneWatcherService,
+    codeRunProfileService,
+    codeTestService,
     languageFeatureService,
     languageProjectContributionService,
     pluginManager,
