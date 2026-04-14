@@ -577,7 +577,7 @@ describe('TerminalView', () => {
     expect(updatedWindow).toBeDefined();
     expect(updatedWindow?.layout.type).toBe('split');
     if (updatedWindow?.layout.type === 'split') {
-      expect(updatedWindow.layout.sizes).toEqual([0.65, 0.35]);
+      expect(updatedWindow.layout.sizes).toEqual([0.7, 0.3]);
     }
 
     const panes = getAllPanes(updatedWindow!.layout);

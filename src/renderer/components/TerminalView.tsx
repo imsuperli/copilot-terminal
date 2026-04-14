@@ -65,7 +65,7 @@ import {
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
-const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.65, 0.35];
+const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 
 const LazyQuickSwitcher = lazy(async () => ({

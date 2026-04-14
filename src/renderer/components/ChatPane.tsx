@@ -122,7 +122,7 @@ function ControlSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        className="h-10 w-full appearance-none rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/90 pl-9 pr-9 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]/70 disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-9 w-full appearance-none rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/90 pl-9 pr-9 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]/70 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {children}
       </select>
@@ -174,6 +174,54 @@ function hasExecutableSshBinding(pane: Pane | null | undefined): boolean {
 
 function createOptimisticId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getPathLeaf(path?: string): string | undefined {
+  if (!path) {
+    return undefined;
+  }
+
+  const segments = path.split(/[\\/]/).filter(Boolean);
+  return segments.length > 0 ? segments[segments.length - 1] : undefined;
+}
+
+function isGenericWindowName(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  return normalized === 'ai chat'
+    || normalized === 'chat window'
+    || normalized === 'ssh window'
+    || normalized === 'local window'
+    || normalized === 'terminal window'
+    || normalized.endsWith(' window');
+}
+
+function resolveEmptyConversationTarget(
+  terminalWindowName: string | undefined,
+  linkedPane: Pane | null,
+): string | undefined {
+  if (linkedPane) {
+    const cwdTarget = getPathLeaf(linkedPane.cwd)
+      ?? getPathLeaf(linkedPane.ssh?.remoteCwd);
+    if (cwdTarget) {
+      return cwdTarget;
+    }
+
+    const sshHost = linkedPane.ssh?.host?.trim();
+    if (sshHost) {
+      return sshHost;
+    }
+  }
+
+  const trimmedWindowName = terminalWindowName?.trim();
+  if (trimmedWindowName && !isGenericWindowName(trimmedWindowName)) {
+    return trimmedWindowName;
+  }
+
+  return undefined;
 }
 
 function createLegacyTimeline(messages: ChatMessage[]): AgentTimelineEvent[] {
@@ -980,6 +1028,8 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   const assistantLabel = t('chatPane.agentName');
   const sshConnected = hasExecutableLinkedSsh;
   const sshSignalTitle = sshConnected ? t('chatPane.sshConnected') : t('chatPane.sshDisconnected');
+  const emptyConversationTarget = resolveEmptyConversationTarget(terminalWindow?.name, linkedPane)
+    ?? t('chatPane.emptyWritingFallback');
 
   return (
     <div
@@ -987,7 +1037,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       onMouseDown={onActivate}
     >
       <div className="border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3">
+        <div className="mx-auto flex w-full max-w-[860px] items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-2.5">
             <div
               role="status"
@@ -1039,7 +1089,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         className="flex-1 overflow-y-auto px-4 pb-4 pt-1"
         onScroll={handleTranscriptScroll}
       >
-        <div className="mx-auto w-full max-w-4xl">
+        <div className="mx-auto flex min-h-full w-full max-w-[860px] flex-col">
           {!settingsLoaded ? (
             <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-5 py-4 text-sm text-[rgb(var(--muted-foreground))]">
               {t('common.loading')}
@@ -1077,9 +1127,17 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               ))}
             </div>
           ) : (
-            <div className="pt-2">
-              <div className="text-[12px] font-medium tracking-[0.04em] text-[rgb(var(--muted-foreground))]">
-                {t('chatPane.freshConversation')}
+            <div className="flex flex-1 items-center justify-center py-10">
+              <div className="flex max-w-[520px] flex-col items-center text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/85 text-[rgb(var(--foreground))] shadow-[0_18px_45px_-28px_rgba(0,0,0,0.9)]">
+                  <Sparkles size={18} />
+                </div>
+                <div className="mt-6 text-[28px] font-semibold tracking-[-0.03em] text-[rgb(var(--foreground))] sm:text-[32px]">
+                  {t('chatPane.emptyWritingWithAi', { target: emptyConversationTarget })}
+                </div>
+                <p className="mt-3 max-w-[420px] text-sm leading-7 text-[rgb(var(--muted-foreground))]">
+                  {sshConnected ? t('chatPane.emptyDescriptionLinked') : t('chatPane.emptyDescription')}
+                </p>
               </div>
             </div>
           )}
@@ -1087,31 +1145,32 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       </div>
 
       <div className="px-4 pb-4 pt-2">
-        <div className="mx-auto w-full max-w-5xl">
+        <div className="mx-auto w-full max-w-[860px]">
           {errorMessage && (
             <div className="mb-3 rounded-[20px] border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
               {errorMessage}
             </div>
           )}
 
-          <div className="rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/95 p-3 shadow-[0_30px_60px_-40px_rgba(0,0,0,0.98)]">
+          <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/95 p-2.5 shadow-[0_24px_50px_-38px_rgba(0,0,0,0.98)]">
             <textarea
               value={composerValue}
               onChange={(event) => setComposerValue(event.target.value)}
               onKeyDown={handleComposerKeyDown}
               placeholder={providers.length === 0 ? t('chatPane.disabledPlaceholder') : t('chatPane.inputPlaceholder')}
               disabled={!providers.length || isBusy}
-              className="min-h-[108px] w-full resize-none bg-transparent px-1 py-1 text-[15px] leading-7 text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
+              rows={3}
+              className="max-h-[168px] min-h-[72px] w-full resize-none bg-transparent px-2 py-1.5 text-[14px] leading-6 text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
             />
 
-            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+            <div className="mt-2.5 flex flex-wrap items-center justify-end gap-2">
                 <ControlSelect
                   ariaLabel={t('chatPane.providerModelLabel')}
                   value={selectedProviderModelValue}
                   onChange={handleProviderModelChange}
                   disabled={!providers.length}
                   icon={<Sparkles size={14} />}
-                  minWidthClass="min-w-[240px] max-w-[360px]"
+                  minWidthClass="w-full sm:w-auto sm:min-w-[180px] sm:max-w-[240px]"
                 >
                   <option value="">{t('chatPane.providerModelPlaceholder')}</option>
                   {providerModelOptions.map((option) => (
@@ -1127,7 +1186,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     onClick={() => {
                       void handleCancelStreaming();
                     }}
-                    className="inline-flex h-10 items-center gap-2 rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                    className="inline-flex h-9 items-center gap-2 rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
                   >
                     <Square size={12} />
                     {t('chatPane.cancel')}
@@ -1139,7 +1198,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                       void handleSend();
                     }}
                     disabled={!canSend || !composerValue.trim()}
-                    className="inline-flex h-10 items-center gap-2 rounded-full bg-[rgb(var(--primary))] px-4 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-9 items-center gap-2 rounded-[16px] bg-[rgb(var(--primary))] px-4 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <SendHorizonal size={14} />
                     {t('chatPane.send')}
