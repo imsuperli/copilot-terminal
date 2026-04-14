@@ -25,6 +25,16 @@ export interface BrowserPaneState {
 export interface CodePaneOpenFile {
   path: string;
   pinned?: boolean;
+  preview?: boolean;
+}
+
+export interface CodePaneBookmark {
+  id: string;
+  filePath: string;
+  lineNumber: number;
+  column: number;
+  label?: string;
+  createdAt: string;
 }
 
 export type CodePaneSidebarView = 'files' | 'search' | 'scm' | 'problems';
@@ -38,6 +48,11 @@ export interface CodePaneSidebarState {
 
 export interface CodePaneLayoutState {
   sidebar: CodePaneSidebarState;
+  editorSplit?: {
+    visible: boolean;
+    size: number;
+    secondaryFilePath: string | null;
+  };
 }
 
 export interface CodePaneState {
@@ -46,6 +61,7 @@ export interface CodePaneState {
   activeFilePath: string | null;
   selectedPath?: string | null;
   expandedPaths?: string[];
+  bookmarks?: CodePaneBookmark[];
   breakpoints?: Array<{
     filePath: string;
     lineNumber: number;

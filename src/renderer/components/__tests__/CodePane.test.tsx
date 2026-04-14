@@ -423,10 +423,14 @@ function renderCodePane(initialPane: Pane) {
   };
 }
 
-async function openFileFromTree(fileName: string) {
+async function openFileFromTree(fileName: string, options?: { doubleClick?: boolean }) {
   const treeButton = await screen.findByRole('button', { name: fileName }, { timeout: 3000 });
   await act(async () => {
-    fireEvent.click(treeButton);
+    if (options?.doubleClick) {
+      fireEvent.doubleClick(treeButton);
+    } else {
+      fireEvent.click(treeButton);
+    }
   });
 }
 
@@ -844,7 +848,7 @@ describe('CodePane', () => {
   });
 
   it('opens a file from the tree and creates a tab', async () => {
-    renderCodePane(createPane());
+    const view = renderCodePane(createPane());
 
     await openFileFromTree('index.ts');
 
@@ -3270,8 +3274,8 @@ describe('CodePane', () => {
 
     const view = renderCodePane(createPane());
 
-    await openFileFromTree('index.ts');
-    await openFileFromTree('app.ts');
+    await openFileFromTree('index.ts', { doubleClick: true });
+    await openFileFromTree('app.ts', { doubleClick: true });
 
     const appTabLabels = screen.getAllByText('app.ts');
     const appTabLabel = appTabLabels[appTabLabels.length - 1];
@@ -3283,13 +3287,95 @@ describe('CodePane', () => {
     await user.click(await screen.findByText('codePane.pinTab'));
 
     expect(view.getPane().code?.openFiles).toEqual([
-      {
+      expect.objectContaining({
         path: '/workspace/project/src/app.ts',
         pinned: true,
-      },
+      }),
+      expect.objectContaining({
+        path: '/workspace/project/src/index.ts',
+      }),
+    ]);
+  });
+
+  it('uses preview tabs for single-click tree navigation and promotes them on double click', async () => {
+    const view = renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    expect(view.getPane().code?.openFiles).toEqual([
       {
         path: '/workspace/project/src/index.ts',
+        preview: true,
       },
+    ]);
+    expect(await screen.findByText('codePane.previewTabBadge')).toBeInTheDocument();
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+
+    expect(view.getPane().code?.openFiles).toEqual([
+      {
+        path: '/workspace/project/src/index.ts',
+        preview: false,
+      },
+    ]);
+  });
+
+  it('opens files in a secondary split editor from the context menu', async () => {
+    const user = userEvent.setup();
+    const view = renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+
+    const tabLabel = (await screen.findAllByText('index.ts')).at(-1);
+    if (!tabLabel) {
+      throw new Error('expected index.ts tab label');
+    }
+
+    await user.pointer({ keys: '[MouseRight]', target: tabLabel });
+    await user.click(await screen.findByText('codePane.openInSplit'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('code-pane-editor-split-resize-handle')).toBeInTheDocument();
+    });
+    expect(view.getPane().code?.layout?.editorSplit).toEqual({
+      visible: true,
+      size: 0.5,
+      secondaryFilePath: '/workspace/project/src/index.ts',
+    });
+  });
+
+  it('shows bookmarks, todo items, and local history in the workspace tool window', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneSearchContents).mockImplementation(async ({ query }) => ({
+      success: true,
+      data: query === 'TODO'
+        ? [
+          {
+            filePath: '/workspace/project/src/index.ts',
+            lineNumber: 1,
+            column: 1,
+            lineText: '// TODO: wire service',
+          },
+        ]
+        : [],
+    }));
+
+    const view = renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+    await user.click(await screen.findByRole('button', { name: 'codePane.bookmarkToggle' }));
+    await user.click(await screen.findByRole('button', { name: 'codePane.workspaceTab' }));
+
+    expect(await screen.findByText('codePane.bookmarksTitle')).toBeInTheDocument();
+    expect(await screen.findByText('codePane.todoTitle')).toBeInTheDocument();
+    expect(await screen.findByText('codePane.localHistoryTitle')).toBeInTheDocument();
+    expect(await screen.findByText('codePane.localHistoryOpened')).toBeInTheDocument();
+    expect(await screen.findByText('// TODO: wire service')).toBeInTheDocument();
+    expect(view.getPane().code?.bookmarks).toEqual([
+      expect.objectContaining({
+        id: '/workspace/project/src/index.ts:1',
+        filePath: '/workspace/project/src/index.ts',
+      }),
     ]);
   });
 });

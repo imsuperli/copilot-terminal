@@ -27,7 +27,10 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import type { Pane } from '../types/window';
+import type {
+  CodePaneOpenFile,
+  Pane,
+} from '../types/window';
 import type {
   CodePaneBreakpoint,
   CodePaneCodeAction,
@@ -73,6 +76,7 @@ import { ProjectToolWindow } from './code-pane/tool-windows/ProjectToolWindow';
 import { RefactorPreviewToolWindow } from './code-pane/tool-windows/RefactorPreviewToolWindow';
 import { RunToolWindow } from './code-pane/tool-windows/RunToolWindow';
 import { TestsToolWindow } from './code-pane/tool-windows/TestsToolWindow';
+import { WorkspaceToolWindow } from './code-pane/tool-windows/WorkspaceToolWindow';
 import { BlameGutter } from './code-pane/scm/BlameGutter';
 import { CommitComposer } from './code-pane/scm/CommitComposer';
 import { useI18n } from '../i18n';
@@ -95,14 +99,21 @@ type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
 type SearchEverywhereMode = 'all' | 'commands' | 'recent';
-type BottomPanelMode = 'run' | 'debug' | 'tests' | 'project' | 'preview' | 'history';
+type BottomPanelMode = 'run' | 'debug' | 'tests' | 'project' | 'preview' | 'history' | 'workspace';
 
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
 const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
 const CODE_PANE_SIDEBAR_MAX_WIDTH = 520;
+const CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE = 0.5;
+const CODE_PANE_EDITOR_SPLIT_MIN_SIZE = 0.3;
+const CODE_PANE_EDITOR_SPLIT_MAX_SIZE = 0.7;
 const CODE_PANE_MAX_RECENT_FILES = 20;
 const CODE_PANE_MAX_RECENT_LOCATIONS = 30;
 const CODE_PANE_MAX_NAVIGATION_HISTORY = 50;
+const CODE_PANE_MAX_LOCAL_HISTORY_PER_FILE = 12;
+const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
+const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
+const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 
 type FileNavigationLocation = {
   filePath: string;
@@ -173,6 +184,20 @@ type DebugEvaluationEntry = {
   id: string;
   expression: string;
   value: string;
+};
+
+type EditorTarget = 'editor' | 'secondary' | 'diff';
+type CodePaneTodoItem = CodePaneContentMatch & {
+  token: typeof CODE_PANE_TODO_TOKENS[number];
+};
+type LocalHistoryEntry = {
+  id: string;
+  filePath: string;
+  label: string;
+  reason: 'open' | 'draft' | 'save' | 'restore';
+  timestamp: number;
+  content: string;
+  preview: string;
 };
 
 const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
@@ -260,6 +285,25 @@ function clampSidebarWidth(width: number | undefined | null): number {
     CODE_PANE_SIDEBAR_MAX_WIDTH,
     Math.max(CODE_PANE_SIDEBAR_MIN_WIDTH, Math.round(width as number)),
   );
+}
+
+function clampEditorSplitSize(size: number | undefined | null): number {
+  if (!Number.isFinite(size)) {
+    return CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE;
+  }
+
+  return Math.min(
+    CODE_PANE_EDITOR_SPLIT_MAX_SIZE,
+    Math.max(CODE_PANE_EDITOR_SPLIT_MIN_SIZE, size ?? CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE),
+  );
+}
+
+function getInitialEditorSplitLayout(pane: Pane) {
+  return {
+    visible: Boolean(pane.code?.layout?.editorSplit?.visible),
+    size: clampEditorSplitSize(pane.code?.layout?.editorSplit?.size),
+    secondaryFilePath: pane.code?.layout?.editorSplit?.secondaryFilePath ?? null,
+  };
 }
 
 function getInitialSidebarLayout(pane: Pane): {
@@ -416,19 +460,51 @@ function createExpandedDirectorySet(rootPath: string, expandedPaths?: string[] |
   return nextExpandedDirectories;
 }
 
-function sortOpenFilesByPinned<T extends { pinned?: boolean }>(openFiles: T[]): T[] {
+function sortOpenFilesByPinned<T extends { pinned?: boolean; preview?: boolean }>(openFiles: T[]): T[] {
   const pinnedOpenFiles = openFiles.filter((tab) => tab.pinned);
-  const regularOpenFiles = openFiles.filter((tab) => !tab.pinned);
-  return [...pinnedOpenFiles, ...regularOpenFiles];
+  const regularOpenFiles = openFiles.filter((tab) => !tab.pinned && !tab.preview);
+  const previewOpenFiles = openFiles.filter((tab) => !tab.pinned && tab.preview);
+  return [...pinnedOpenFiles, ...regularOpenFiles, ...previewOpenFiles];
 }
 
-function createTabList(existingTabs: Array<{ path: string; pinned?: boolean }>, filePath: string) {
-  const existingTab = existingTabs.find((tab) => tab.path === filePath);
-  if (existingTab) {
-    return sortOpenFilesByPinned(existingTabs);
+function upsertOpenFileTab(
+  existingTabs: CodePaneOpenFile[],
+  filePath: string,
+  options?: {
+    preview?: boolean;
+    promote?: boolean;
+    pinned?: boolean;
+  },
+) {
+  const shouldOpenAsPreview = Boolean(options?.preview) && !options?.pinned;
+  const nextTabs = shouldOpenAsPreview
+    ? existingTabs.filter((tab) => !tab.preview || tab.path === filePath)
+    : [...existingTabs];
+  const existingTabIndex = nextTabs.findIndex((tab) => tab.path === filePath);
+
+  if (existingTabIndex >= 0) {
+    const existingTab = nextTabs[existingTabIndex];
+    const isPinned = options?.pinned ?? existingTab.pinned ?? false;
+    nextTabs[existingTabIndex] = {
+      ...existingTab,
+      pinned: isPinned || undefined,
+      preview: isPinned || options?.promote
+        ? false
+        : shouldOpenAsPreview
+          ? true
+          : existingTab.preview,
+    };
+    return sortOpenFilesByPinned(nextTabs);
   }
 
-  return sortOpenFilesByPinned([...existingTabs, { path: filePath }]);
+  return sortOpenFilesByPinned([
+    ...nextTabs,
+    {
+      path: filePath,
+      pinned: options?.pinned,
+      preview: shouldOpenAsPreview || undefined,
+    },
+  ]);
 }
 
 function isSameNavigationLocation(
@@ -679,34 +755,46 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const rootContainerRef = useRef<HTMLDivElement | null>(null);
   const rootPath = pane.code?.rootPath ?? pane.cwd;
   const openFiles = pane.code?.openFiles ?? [];
+  const bookmarks = pane.code?.bookmarks ?? [];
   const activeFilePath = pane.code?.activeFilePath ?? null;
   const selectedPath = pane.code?.selectedPath ?? null;
   const viewMode = pane.code?.viewMode ?? 'editor';
   const diffTargetPath = pane.code?.diffTargetPath ?? null;
   const initialSidebarLayout = useMemo(() => getInitialSidebarLayout(pane), [pane]);
+  const initialEditorSplitLayout = useMemo(() => getInitialEditorSplitLayout(pane), [pane]);
 
   const monacoRef = useRef<MonacoModule | null>(null);
   const languageBridgeRef = useRef<MonacoLanguageBridge | null>(null);
   const editorHostRef = useRef<HTMLDivElement | null>(null);
+  const secondaryEditorHostRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<MonacoEditor | null>(null);
+  const secondaryEditorRef = useRef<MonacoEditor | null>(null);
   const diffEditorRef = useRef<MonacoDiffEditor | null>(null);
   const fileModelsRef = useRef(new Map<string, MonacoModel>());
   const diffModelsRef = useRef(new Map<string, MonacoModel>());
   const modelDisposersRef = useRef(new Map<string, MonacoDisposable>());
   const fileMetaRef = useRef(new Map<string, FileRuntimeMeta>());
+  const modelFilePathRef = useRef(new Map<string, string>());
   const preloadedReadResultsRef = useRef(new Map<string, CodePaneReadFileResult>());
   const viewStatesRef = useRef(new Map<string, MonacoViewState>());
+  const secondaryViewStatesRef = useRef(new Map<string, MonacoViewState>());
   const autoSaveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const documentSyncTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const localHistoryTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const localHistoryEntriesRef = useRef(new Map<string, LocalHistoryEntry[]>());
   const suppressModelEventsRef = useRef(new Set<string>());
   const markerListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseMoveListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseLeaveListenerRef = useRef<MonacoDisposable | null>(null);
+  const secondaryEditorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
+  const secondaryEditorMouseMoveListenerRef = useRef<MonacoDisposable | null>(null);
+  const secondaryEditorMouseLeaveListenerRef = useRef<MonacoDisposable | null>(null);
   const diffEditorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
   const diffEditorMouseMoveListenerRef = useRef<MonacoDisposable | null>(null);
   const diffEditorMouseLeaveListenerRef = useRef<MonacoDisposable | null>(null);
   const editorCursorPositionListenerRef = useRef<MonacoDisposable | null>(null);
+  const secondaryEditorCursorPositionListenerRef = useRef<MonacoDisposable | null>(null);
   const diffEditorCursorPositionListenerRef = useRef<MonacoDisposable | null>(null);
   const definitionLinkDecorationEditorRef = useRef<MonacoEditor | null>(null);
   const definitionLinkDecorationIdsRef = useRef<string[]>([]);
@@ -716,6 +804,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const definitionLookupCacheRef = useRef(new Map<string, Promise<DefinitionLookupResult>>());
   const sidebarResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
+  const editorSplitResizeStartRef = useRef<{ startX: number; startSize: number } | null>(null);
+  const editorSplitResizeCleanupRef = useRef<(() => void) | null>(null);
+  const focusedEditorTargetRef = useRef<EditorTarget>('editor');
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
@@ -736,6 +827,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [sidebarWidth, setSidebarWidth] = useState(initialSidebarLayout.width);
   const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(initialSidebarLayout.lastExpandedWidth);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
+  const [isEditorSplitVisible, setIsEditorSplitVisible] = useState(initialEditorSplitLayout.visible);
+  const [editorSplitSize, setEditorSplitSize] = useState(initialEditorSplitLayout.size);
+  const [secondaryFilePath, setSecondaryFilePath] = useState<string | null>(initialEditorSplitLayout.secondaryFilePath);
+  const [isEditorSplitResizing, setIsEditorSplitResizing] = useState(false);
   const [searchPanelMode, setSearchPanelMode] = useState<'contents' | 'symbols' | 'usages'>('contents');
   const [contentSearchQuery, setContentSearchQuery] = useState('');
   const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
@@ -803,6 +898,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [selectedHistoryCommitSha, setSelectedHistoryCommitSha] = useState<string | null>(null);
   const [isGitHistoryLoading, setIsGitHistoryLoading] = useState(false);
   const [gitHistoryError, setGitHistoryError] = useState<string | null>(null);
+  const [todoItems, setTodoItems] = useState<CodePaneTodoItem[]>([]);
+  const [isTodoLoading, setIsTodoLoading] = useState(false);
+  const [todoError, setTodoError] = useState<string | null>(null);
+  const [localHistoryVersion, setLocalHistoryVersion] = useState(0);
   const [isBlameVisible, setIsBlameVisible] = useState(false);
   const [isBlameLoading, setIsBlameLoading] = useState(false);
   const [blameLines, setBlameLines] = useState<CodePaneGitBlameLine[]>([]);
@@ -829,6 +928,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const sidebarVisibleRef = useRef(isSidebarVisible);
   const sidebarWidthRef = useRef(sidebarWidth);
   const lastExpandedSidebarWidthRef = useRef(lastExpandedSidebarWidth);
+  const editorSplitSizeRef = useRef(editorSplitSize);
+  const secondaryFilePathRef = useRef(secondaryFilePath);
   const recentFilesRef = useRef<string[]>([]);
   const recentLocationsRef = useRef<NavigationHistoryEntry[]>([]);
   const navigationBackStackRef = useRef<NavigationHistoryEntry[]>([]);
@@ -837,6 +938,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const navigateBackRef = useRef<() => Promise<void>>(async () => {});
   const navigateForwardRef = useRef<() => Promise<void>>(async () => {});
   const goToImplementationAtCursorRef = useRef<() => Promise<void>>(async () => {});
+  const renameSymbolAtCursorRef = useRef<() => Promise<void>>(async () => {});
+  const findUsagesAtCursorRef = useRef<() => Promise<void>>(async () => {});
+  const formatActiveDocumentRef = useRef<() => Promise<void>>(async () => {});
+  const saveFileRef = useRef<(filePath: string, options?: { overwrite?: boolean }) => Promise<boolean>>(async () => true);
   const openCodeActionMenuRef = useRef<() => Promise<void>>(async () => {});
   const loadDebugSessionDetailsRef = useRef<(sessionId: string | null) => Promise<void>>(async () => {});
   const toggleBreakpointRef = useRef<(filePath: string, lineNumber: number) => Promise<void>>(async () => {});
@@ -847,11 +952,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [pane]);
 
   useEffect(() => {
+    localHistoryEntriesRef.current.clear();
+    localHistoryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    localHistoryTimersRef.current.clear();
+    setTodoItems([]);
+    setTodoError(null);
+    setLocalHistoryVersion((currentVersion) => currentVersion + 1);
+  }, [pane.id, rootPath]);
+
+  useEffect(() => {
     const nextSidebarLayout = getInitialSidebarLayout(pane);
     setSidebarMode(nextSidebarLayout.activeView);
     setIsSidebarVisible(nextSidebarLayout.visible);
     setSidebarWidth(nextSidebarLayout.width);
     setLastExpandedSidebarWidth(nextSidebarLayout.lastExpandedWidth);
+    const nextEditorSplitLayout = getInitialEditorSplitLayout(pane);
+    setIsEditorSplitVisible(nextEditorSplitLayout.visible);
+    setEditorSplitSize(nextEditorSplitLayout.size);
+    setSecondaryFilePath(nextEditorSplitLayout.secondaryFilePath);
   }, [pane.id, pane.code?.layout, pane]);
 
   useEffect(() => {
@@ -902,6 +1020,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     lastExpandedSidebarWidthRef.current = lastExpandedSidebarWidth;
   }, [lastExpandedSidebarWidth]);
 
+  useEffect(() => {
+    editorSplitSizeRef.current = editorSplitSize;
+  }, [editorSplitSize]);
+
+  useEffect(() => {
+    secondaryFilePathRef.current = secondaryFilePath;
+  }, [secondaryFilePath]);
+
   const persistCodeState = useCallback((updates: Partial<NonNullable<Pane['code']>>) => {
     const currentCodeState = {
       rootPath,
@@ -913,6 +1039,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       diffTargetPath: null,
       layout: {
         sidebar: getInitialSidebarLayout(paneRef.current),
+        editorSplit: getInitialEditorSplitLayout(paneRef.current),
       },
       ...(paneRef.current.code ?? {}),
     };
@@ -952,6 +1079,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [persistCodeState]);
 
+  const persistEditorSplitLayout = useCallback((updates: Partial<NonNullable<NonNullable<NonNullable<Pane['code']>['layout']>['editorSplit']>>) => {
+    const currentEditorSplitLayout = {
+      ...getInitialEditorSplitLayout(paneRef.current),
+      ...(paneRef.current.code?.layout?.editorSplit ?? {}),
+    };
+    const currentSidebarLayout = {
+      ...getInitialSidebarLayout(paneRef.current),
+      ...(paneRef.current.code?.layout?.sidebar ?? {}),
+    };
+
+    const nextEditorSplitLayout = {
+      ...currentEditorSplitLayout,
+      ...updates,
+      size: clampEditorSplitSize(updates.size ?? currentEditorSplitLayout.size),
+      secondaryFilePath: Object.prototype.hasOwnProperty.call(updates, 'secondaryFilePath')
+        ? (updates.secondaryFilePath ?? null)
+        : (currentEditorSplitLayout.secondaryFilePath ?? null),
+    };
+
+    setIsEditorSplitVisible(Boolean(nextEditorSplitLayout.visible));
+    setEditorSplitSize(nextEditorSplitLayout.size);
+    setSecondaryFilePath(nextEditorSplitLayout.secondaryFilePath);
+
+    persistCodeState({
+      layout: {
+        ...(paneRef.current.code?.layout ?? {}),
+        sidebar: currentSidebarLayout,
+        editorSplit: nextEditorSplitLayout,
+      },
+    });
+  }, [persistCodeState]);
+
   const getPersistedExpandedPaths = useCallback((paths: Set<string>) => (
     Array.from(paths).filter((directoryPath) => isPathInside(rootPath, directoryPath))
   ), [rootPath]);
@@ -966,6 +1125,81 @@ export const CodePane: React.FC<CodePaneProps> = ({
       })),
     });
   }, [persistCodeState]);
+
+  const updateOpenFileTabs = useCallback((
+    updater: (currentOpenFiles: CodePaneOpenFile[]) => CodePaneOpenFile[],
+  ) => {
+    const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
+    const nextOpenFiles = sortOpenFilesByPinned(updater(currentOpenFiles));
+    persistCodeState({
+      openFiles: nextOpenFiles,
+    });
+    return nextOpenFiles;
+  }, [openFiles, persistCodeState]);
+
+  const promotePreviewTab = useCallback((filePath: string) => {
+    updateOpenFileTabs((currentOpenFiles) => currentOpenFiles.map((tab) => (
+      tab.path === filePath && tab.preview
+        ? { ...tab, preview: false }
+        : tab
+    )));
+  }, [updateOpenFileTabs]);
+
+  const addLocalHistoryEntry = useCallback((
+    filePath: string,
+    reason: LocalHistoryEntry['reason'],
+    content: string,
+  ) => {
+    if (!filePath || content.length > CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE) {
+      return;
+    }
+
+    const normalizedContent = content.replace(/\r\n/g, '\n');
+    const existingEntries = localHistoryEntriesRef.current.get(filePath) ?? [];
+    const lastEntry = existingEntries[0];
+    if (lastEntry?.content === normalizedContent) {
+      return;
+    }
+
+    const nextEntry: LocalHistoryEntry = {
+      id: `${filePath}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+      filePath,
+      reason,
+      label: reason === 'save'
+        ? t('codePane.localHistorySaved')
+        : reason === 'draft'
+          ? t('codePane.localHistoryDraft')
+          : reason === 'restore'
+            ? t('codePane.localHistoryRestorePoint')
+            : t('codePane.localHistoryOpened'),
+      timestamp: Date.now(),
+      content: normalizedContent,
+      preview: normalizedContent.split('\n').find((line) => line.trim().length > 0)?.trim() ?? '',
+    };
+
+    localHistoryEntriesRef.current.set(filePath, [
+      nextEntry,
+      ...existingEntries,
+    ].slice(0, CODE_PANE_MAX_LOCAL_HISTORY_PER_FILE));
+    setLocalHistoryVersion((currentVersion) => currentVersion + 1);
+  }, [t]);
+
+  const scheduleLocalHistorySnapshot = useCallback((filePath: string) => {
+    const existingTimer = localHistoryTimersRef.current.get(filePath);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    localHistoryTimersRef.current.set(filePath, setTimeout(() => {
+      localHistoryTimersRef.current.delete(filePath);
+      const model = fileModelsRef.current.get(filePath);
+      if (!model) {
+        return;
+      }
+
+      addLocalHistoryEntry(filePath, 'draft', model.getValue());
+    }, CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS));
+  }, [addLocalHistoryEntry]);
 
   useEffect(() => {
     for (const breakpoint of breakpointsRef.current) {
@@ -1501,6 +1735,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     viewStatesRef.current.set(currentFilePath, editorRef.current?.saveViewState() ?? null);
+    const currentSecondaryFilePath = secondaryFilePathRef.current;
+    if (currentSecondaryFilePath) {
+      secondaryViewStatesRef.current.set(
+        currentSecondaryFilePath,
+        secondaryEditorRef.current?.saveViewState() ?? null,
+      );
+    }
   }, [viewMode]);
 
   const disposeEditors = useCallback(() => {
@@ -1513,6 +1754,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     editorMouseLeaveListenerRef.current = null;
     editorCursorPositionListenerRef.current?.dispose();
     editorCursorPositionListenerRef.current = null;
+    secondaryEditorMouseDownListenerRef.current?.dispose();
+    secondaryEditorMouseDownListenerRef.current = null;
+    secondaryEditorMouseMoveListenerRef.current?.dispose();
+    secondaryEditorMouseMoveListenerRef.current = null;
+    secondaryEditorMouseLeaveListenerRef.current?.dispose();
+    secondaryEditorMouseLeaveListenerRef.current = null;
+    secondaryEditorCursorPositionListenerRef.current?.dispose();
+    secondaryEditorCursorPositionListenerRef.current = null;
     diffEditorMouseDownListenerRef.current?.dispose();
     diffEditorMouseDownListenerRef.current = null;
     diffEditorMouseMoveListenerRef.current?.dispose();
@@ -1524,8 +1773,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     clearDefinitionLinkDecoration();
     clearDebugDecorations();
     editorRef.current?.dispose();
+    secondaryEditorRef.current?.dispose();
     diffEditorRef.current?.dispose();
     editorRef.current = null;
+    secondaryEditorRef.current = null;
     diffEditorRef.current = null;
   }, [clearDebugDecorations, clearDefinitionLinkDecoration, saveCurrentViewState]);
 
@@ -1539,6 +1790,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       clearTimeout(timer);
     }
     documentSyncTimersRef.current.clear();
+
+    for (const timer of localHistoryTimersRef.current.values()) {
+      clearTimeout(timer);
+    }
+    localHistoryTimersRef.current.clear();
 
     for (const disposable of modelDisposersRef.current.values()) {
       disposable.dispose();
@@ -1826,7 +2082,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
           return;
         }
 
+        promotePreviewTab(filePath);
         markDirty(filePath, true);
+        scheduleLocalHistorySnapshot(filePath);
         const existingTimer = autoSaveTimersRef.current.get(filePath);
         if (existingTimer) {
           clearTimeout(existingTimer);
@@ -1872,15 +2130,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
       displayPath: readResult.displayPath,
       documentUri: readResult.documentUri,
     });
+    modelFilePathRef.current.set(modelUri.path, filePath);
 
     markDirty(filePath, false);
     clearBannerForFile(filePath);
     refreshProblems();
+    addLocalHistoryEntry(filePath, 'open', readResult.content);
     if (!readResult.readOnly) {
       void syncLanguageDocument(filePath, 'open');
     }
     return model;
-  }, [clearBannerForFile, clearDefinitionLookupCache, markDirty, refreshProblems, syncLanguageDocument]);
+  }, [
+    addLocalHistoryEntry,
+    clearBannerForFile,
+    clearDefinitionLookupCache,
+    markDirty,
+    promotePreviewTab,
+    refreshProblems,
+    scheduleLocalHistorySnapshot,
+    syncLanguageDocument,
+  ]);
 
   const loadFileIntoModel = useCallback(async (filePath: string) => {
     if (!monacoRef.current && supportsMonaco) {
@@ -1928,9 +2197,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return createOrUpdateModel(filePath, response.data);
   }, [createOrUpdateModel, ensureMonacoReady, rootPath, supportsMonaco, t]);
 
+  const getModelFilePath = useCallback((model: MonacoModel | null | undefined) => {
+    if (!model) {
+      return null;
+    }
+
+    return modelFilePathRef.current.get(model.uri.path)
+      ?? model.uri.fsPath
+      ?? model.uri.path
+      ?? null;
+  }, []);
+
   const handleDefinitionClick = useCallback(async (editorInstance: MonacoEditor | null, lineNumber: number, column: number) => {
     const model = editorInstance?.getModel();
-    const filePath = activeFilePathRef.current ?? model?.uri.fsPath ?? model?.uri.path;
+    const filePath = getModelFilePath(model);
     if (!model || !filePath) {
       return;
     }
@@ -1956,24 +2236,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
       displayPath: nextLocation.displayPath,
       documentUri: nextLocation.uri,
     });
-  }, [lookupDefinitionTarget]);
+  }, [getModelFilePath, lookupDefinitionTarget]);
 
   const attachDefinitionClickNavigation = useCallback((
     editorInstance: MonacoEditor | null,
-    target: 'editor' | 'diff',
+    target: EditorTarget,
   ) => {
     const mouseDownListenerRef = target === 'editor'
       ? editorMouseDownListenerRef
-      : diffEditorMouseDownListenerRef;
+      : target === 'secondary'
+        ? secondaryEditorMouseDownListenerRef
+        : diffEditorMouseDownListenerRef;
     const mouseMoveListenerRef = target === 'editor'
       ? editorMouseMoveListenerRef
-      : diffEditorMouseMoveListenerRef;
+      : target === 'secondary'
+        ? secondaryEditorMouseMoveListenerRef
+        : diffEditorMouseMoveListenerRef;
     const mouseLeaveListenerRef = target === 'editor'
       ? editorMouseLeaveListenerRef
-      : diffEditorMouseLeaveListenerRef;
+      : target === 'secondary'
+        ? secondaryEditorMouseLeaveListenerRef
+        : diffEditorMouseLeaveListenerRef;
     const cursorPositionListenerRef = target === 'editor'
       ? editorCursorPositionListenerRef
-      : diffEditorCursorPositionListenerRef;
+      : target === 'secondary'
+        ? secondaryEditorCursorPositionListenerRef
+        : diffEditorCursorPositionListenerRef;
 
     mouseDownListenerRef.current?.dispose();
     mouseDownListenerRef.current = null;
@@ -2000,7 +2288,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       const model = editorInstance.getModel?.();
-      const filePath = activeFilePathRef.current ?? model?.uri.fsPath ?? model?.uri.path;
+      const filePath = getModelFilePath(model);
       if (!model || !filePath) {
         clearDefinitionLinkDecoration(editorInstance);
         return;
@@ -2035,6 +2323,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }) ?? null;
 
     mouseDownListenerRef.current = editorInstance.onMouseDown((event: any) => {
+      focusedEditorTargetRef.current = target;
       const pointerEvent = event.event?.browserEvent ?? event.event ?? {};
       const monaco = monacoRef.current;
       const mouseTargetType = event.target?.type;
@@ -2046,7 +2335,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         || event.target?.detail?.isBreakpointMargin === true;
       if (isGutterBreakpointTarget && event.target?.position?.lineNumber) {
         const model = editorInstance.getModel?.();
-        const filePath = activeFilePathRef.current ?? model?.uri.fsPath ?? model?.uri.path;
+        const filePath = getModelFilePath(model);
         const isReadOnlyFile = filePath
           ? fileMetaRef.current.get(filePath)?.readOnly === true
           : false;
@@ -2082,7 +2371,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
         event.target.position.column,
       );
     });
-  }, [clearDefinitionLinkDecoration, getDefinitionLookupKey, handleDefinitionClick, isMac, updateDefinitionLinkHover]);
+  }, [
+    clearDefinitionLinkDecoration,
+    getDefinitionLookupKey,
+    getModelFilePath,
+    handleDefinitionClick,
+    isMac,
+    updateDefinitionLinkHover,
+  ]);
 
   const refreshEditorSurface = useCallback(async () => {
     const hostElement = editorHostRef.current;
@@ -2098,6 +2394,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const currentActiveFilePath = activeFilePathRef.current;
     const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
+    const currentSecondaryFilePath = secondaryFilePathRef.current;
+    const shouldShowSplit = currentViewMode === 'editor'
+      && Boolean(paneRef.current.code?.layout?.editorSplit?.visible)
+      && Boolean(currentSecondaryFilePath)
+      && secondaryEditorHostRef.current;
 
     if (!currentActiveFilePath) {
       disposeEditors();
@@ -2119,6 +2420,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
+      secondaryEditorMouseDownListenerRef.current?.dispose();
+      secondaryEditorMouseDownListenerRef.current = null;
+      secondaryEditorMouseMoveListenerRef.current?.dispose();
+      secondaryEditorMouseMoveListenerRef.current = null;
+      secondaryEditorMouseLeaveListenerRef.current?.dispose();
+      secondaryEditorMouseLeaveListenerRef.current = null;
+      secondaryEditorCursorPositionListenerRef.current?.dispose();
+      secondaryEditorCursorPositionListenerRef.current = null;
+      secondaryEditorRef.current?.dispose();
+      secondaryEditorRef.current = null;
       editorRef.current?.dispose();
       editorRef.current = null;
 
@@ -2165,6 +2476,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       applyPendingNavigation(diffEditorRef.current.getModifiedEditor(), currentActiveFilePath);
 
       if (isActive) {
+        focusedEditorTargetRef.current = 'diff';
         diffEditorRef.current.getModifiedEditor().focus();
       }
       return;
@@ -2175,8 +2487,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     diffEditorRef.current?.dispose();
     diffEditorRef.current = null;
 
-    if (!editorRef.current) {
-      editorRef.current = monaco.editor.create(hostElement, {
+    const ensureCodeEditor = (target: 'editor' | 'secondary', host: HTMLElement) => {
+      const editorInstanceRef = target === 'editor' ? editorRef : secondaryEditorRef;
+      if (editorInstanceRef.current) {
+        return editorInstanceRef.current;
+      }
+
+      const nextEditor = monaco.editor.create(host, {
         automaticLayout: true,
         minimap: { enabled: false },
         links: true,
@@ -2189,39 +2506,72 @@ export const CodePane: React.FC<CodePaneProps> = ({
         glyphMargin: true,
         stickyScroll: { enabled: false },
       });
-      editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-        const filePath = activeFilePathRef.current;
+      nextEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        const filePath = target === 'secondary'
+          ? secondaryFilePathRef.current
+          : activeFilePathRef.current;
         if (filePath) {
-          void saveFile(filePath);
+          void saveFileRef.current(filePath);
         }
       });
-      editorRef.current.addCommand(monaco.KeyCode.F2, () => {
-        void renameSymbolAtCursor();
+      nextEditor.addCommand(monaco.KeyCode.F2, () => {
+        void renameSymbolAtCursorRef.current();
       });
-      editorRef.current.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => {
-        void findUsagesAtCursor();
+      nextEditor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => {
+        void findUsagesAtCursorRef.current();
       });
-      editorRef.current.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
-        void formatActiveDocument();
+      nextEditor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
+        void formatActiveDocumentRef.current();
       });
-      attachDefinitionClickNavigation(editorRef.current, 'editor');
-    }
+      attachDefinitionClickNavigation(nextEditor, target);
+      editorInstanceRef.current = nextEditor;
+      return nextEditor;
+    };
 
-    editorRef.current.setModel(model);
-    editorRef.current.updateOptions?.({
+    const primaryEditor = ensureCodeEditor('editor', hostElement);
+    primaryEditor.setModel(model);
+    primaryEditor.updateOptions?.({
       readOnly: isReadOnlyFile,
     });
-    applyDebugDecorations(editorRef.current, currentActiveFilePath);
+    applyDebugDecorations(primaryEditor, currentActiveFilePath);
 
     const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
     if (savedViewState) {
-      editorRef.current.restoreViewState(savedViewState);
+      primaryEditor.restoreViewState(savedViewState);
     }
 
-    applyPendingNavigation(editorRef.current, currentActiveFilePath);
+    applyPendingNavigation(primaryEditor, currentActiveFilePath);
+
+    if (shouldShowSplit && currentSecondaryFilePath) {
+      const secondaryModel = fileModelsRef.current.get(currentSecondaryFilePath);
+      if (secondaryModel && secondaryEditorHostRef.current) {
+        const secondaryEditor = ensureCodeEditor('secondary', secondaryEditorHostRef.current);
+        secondaryEditor.setModel(secondaryModel);
+        secondaryEditor.updateOptions?.({
+          readOnly: fileMetaRef.current.get(currentSecondaryFilePath)?.readOnly === true,
+        });
+
+        const savedSecondaryViewState = secondaryViewStatesRef.current.get(currentSecondaryFilePath);
+        if (savedSecondaryViewState) {
+          secondaryEditor.restoreViewState(savedSecondaryViewState);
+        }
+      }
+    } else {
+      secondaryEditorMouseDownListenerRef.current?.dispose();
+      secondaryEditorMouseDownListenerRef.current = null;
+      secondaryEditorMouseMoveListenerRef.current?.dispose();
+      secondaryEditorMouseMoveListenerRef.current = null;
+      secondaryEditorMouseLeaveListenerRef.current?.dispose();
+      secondaryEditorMouseLeaveListenerRef.current = null;
+      secondaryEditorCursorPositionListenerRef.current?.dispose();
+      secondaryEditorCursorPositionListenerRef.current = null;
+      secondaryEditorRef.current?.dispose();
+      secondaryEditorRef.current = null;
+    }
 
     if (isActive) {
-      editorRef.current.focus();
+      focusedEditorTargetRef.current = 'editor';
+      primaryEditor.focus();
     }
   }, [
     applyDebugDecorations,
@@ -2305,12 +2655,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
       mtimeMs: response.data.mtimeMs,
       lastSavedAt: Date.now(),
     });
+    addLocalHistoryEntry(filePath, 'save', model.getValue());
     markDirty(filePath, false);
     clearBannerForFile(filePath);
     await syncLanguageDocument(filePath, 'save');
     void refreshGitSnapshot();
     return true;
-  }, [clearBannerForFile, flushPendingLanguageSync, markDirty, markSaving, refreshGitSnapshot, rootPath, syncLanguageDocument, t]);
+  }, [
+    addLocalHistoryEntry,
+    clearBannerForFile,
+    flushPendingLanguageSync,
+    markDirty,
+    markSaving,
+    refreshGitSnapshot,
+    rootPath,
+    syncLanguageDocument,
+    t,
+  ]);
 
   const flushDirtyFiles = useCallback(async (targetFilePaths?: string[]) => {
     const pathsToFlush = targetFilePaths ?? Array.from(dirtyPathsRef.current);
@@ -2332,11 +2693,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const getActiveEditorContext = useCallback(() => {
     const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
+    const currentFocusedEditorTarget = focusedEditorTargetRef.current;
     const editorInstance = currentViewMode === 'diff'
       ? diffEditorRef.current?.getModifiedEditor() ?? null
-      : editorRef.current;
+      : currentFocusedEditorTarget === 'secondary' && isEditorSplitVisible
+        ? secondaryEditorRef.current ?? editorRef.current
+        : editorRef.current;
     const model = editorInstance?.getModel();
-    const filePath = activeFilePathRef.current;
+    const filePath = currentViewMode === 'diff'
+      ? activeFilePathRef.current
+      : currentFocusedEditorTarget === 'secondary' && isEditorSplitVisible
+        ? secondaryFilePathRef.current ?? getModelFilePath(model)
+        : activeFilePathRef.current ?? getModelFilePath(model);
     const position = editorInstance?.getPosition?.();
 
     if (!editorInstance || !model || !filePath || !position) {
@@ -2351,7 +2719,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       language: fileMetaRef.current.get(filePath)?.language ?? model.getLanguageId(),
       readOnly: Boolean(fileMetaRef.current.get(filePath)?.readOnly),
     };
-  }, [viewMode]);
+  }, [getModelFilePath, isEditorSplitVisible, viewMode]);
 
   const applyLanguageTextEdits = useCallback(async (edits: CodePaneTextEdit[]) => {
     if (edits.length === 0) {
@@ -2521,11 +2889,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
     await applyLanguageTextEdits(response.data ?? []);
   }, [applyLanguageTextEdits, getActiveEditorContext, rootPath, t]);
 
+  useEffect(() => {
+    saveFileRef.current = saveFile;
+  }, [saveFile]);
+
+  useEffect(() => {
+    findUsagesAtCursorRef.current = findUsagesAtCursor;
+  }, [findUsagesAtCursor]);
+
+  useEffect(() => {
+    renameSymbolAtCursorRef.current = renameSymbolAtCursor;
+  }, [renameSymbolAtCursor]);
+
+  useEffect(() => {
+    formatActiveDocumentRef.current = formatActiveDocument;
+  }, [formatActiveDocument]);
+
   const activateFile = useCallback(async (
     filePath: string,
     options?: {
-      preserveTabs?: boolean;
       recordRecent?: boolean;
+      preview?: boolean;
+      promotePreview?: boolean;
     },
   ) => {
     const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
@@ -2537,9 +2922,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
-    const nextTabs = options?.preserveTabs
-      ? sortOpenFilesByPinned(currentOpenFiles)
-      : createTabList(currentOpenFiles, filePath);
+    const nextTabs = upsertOpenFileTab(currentOpenFiles, filePath, {
+      preview: options?.preview,
+      promote: options?.promotePreview,
+    });
 
     persistCodeState({
       openFiles: nextTabs,
@@ -2671,9 +3057,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
-    const nextTabs = options?.preserveTabs
-      ? currentOpenFiles
-      : createTabList(currentOpenFiles, filePath);
+    const nextTabs = upsertOpenFileTab(currentOpenFiles, filePath, {
+      promote: !options?.preserveTabs,
+    });
 
     setBanner(null);
     persistCodeState({
@@ -2697,11 +3083,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
       clearTimeout(existingTimer);
       autoSaveTimersRef.current.delete(filePath);
     }
+    const localHistoryTimer = localHistoryTimersRef.current.get(filePath);
+    if (localHistoryTimer) {
+      clearTimeout(localHistoryTimer);
+      localHistoryTimersRef.current.delete(filePath);
+    }
 
     await closeLanguageDocument(filePath);
     modelDisposersRef.current.get(filePath)?.dispose();
     modelDisposersRef.current.delete(filePath);
-    fileModelsRef.current.get(filePath)?.dispose();
+    const existingModel = fileModelsRef.current.get(filePath);
+    if (existingModel) {
+      modelFilePathRef.current.delete(existingModel.uri.path);
+      existingModel.dispose();
+    }
     fileModelsRef.current.delete(filePath);
     diffModelsRef.current.get(filePath)?.dispose();
     diffModelsRef.current.delete(filePath);
@@ -2719,6 +3114,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const nextActiveFilePath = currentActiveFilePath === filePath
       ? nextOpenFiles[nextOpenFiles.length - 1]?.path ?? null
       : currentActiveFilePath;
+    const nextSecondaryFilePath = secondaryFilePathRef.current === filePath
+      ? null
+      : secondaryFilePathRef.current;
 
     persistCodeState({
       openFiles: nextOpenFiles,
@@ -2727,7 +3125,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
       viewMode: 'editor',
       diffTargetPath: null,
     });
-  }, [activeFilePath, clearBannerForFile, clearDefinitionLookupCache, closeLanguageDocument, flushDirtyFiles, markDirty, openFiles, persistCodeState, selectedPath]);
+    if (secondaryFilePathRef.current === filePath) {
+      persistEditorSplitLayout({
+        visible: false,
+        secondaryFilePath: nextSecondaryFilePath,
+      });
+    }
+  }, [
+    activeFilePath,
+    clearBannerForFile,
+    clearDefinitionLookupCache,
+    closeLanguageDocument,
+    flushDirtyFiles,
+    markDirty,
+    openFiles,
+    persistCodeState,
+    persistEditorSplitLayout,
+    selectedPath,
+  ]);
 
   const applyRefactorPreview = useCallback(async () => {
     if (!refactorPreview) {
@@ -3261,17 +3676,165 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [t]);
 
   const togglePinnedTab = useCallback((filePath: string) => {
-    const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
-    const nextOpenFiles = sortOpenFilesByPinned(currentOpenFiles.map((tab) => (
-      tab.path === filePath
-        ? { ...tab, pinned: !tab.pinned }
-        : tab
-    )));
+    updateOpenFileTabs((currentOpenFiles) => currentOpenFiles.map((tab) => {
+      if (tab.path !== filePath) {
+        return tab;
+      }
+
+      const nextPinned = !tab.pinned;
+      return {
+        ...tab,
+        pinned: nextPinned || undefined,
+        preview: nextPinned ? false : tab.preview,
+      };
+    }));
+  }, [updateOpenFileTabs]);
+
+  const openFileInSplit = useCallback(async (filePath: string) => {
+    const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
+    if (!loadedModel) {
+      return;
+    }
+
+    updateOpenFileTabs((currentOpenFiles) => upsertOpenFileTab(currentOpenFiles, filePath, {
+      promote: true,
+    }));
+    persistEditorSplitLayout({
+      visible: true,
+      secondaryFilePath: filePath,
+    });
+    await refreshEditorSurface();
+  }, [loadFileIntoModel, persistEditorSplitLayout, refreshEditorSurface, updateOpenFileTabs]);
+
+  const toggleEditorSplit = useCallback(async () => {
+    if (isEditorSplitVisible) {
+      persistEditorSplitLayout({
+        visible: false,
+      });
+      return;
+    }
+
+    const targetFilePath = secondaryFilePathRef.current ?? activeFilePathRef.current;
+    if (!targetFilePath) {
+      return;
+    }
+
+    await openFileInSplit(targetFilePath);
+  }, [isEditorSplitVisible, openFileInSplit, persistEditorSplitLayout]);
+
+  const loadTodoEntries = useCallback(async () => {
+    setIsTodoLoading(true);
+    setTodoError(null);
+
+    const responses = await Promise.all(
+      CODE_PANE_TODO_TOKENS.map(async (token) => ({
+        token,
+        response: await window.electronAPI.codePaneSearchContents({
+          rootPath,
+          query: token,
+          limit: 120,
+          maxMatchesPerFile: 20,
+        }),
+      })),
+    );
+
+    const nextTodoItems = responses.flatMap(({ token, response }) => {
+      if (!response.success) {
+        return [];
+      }
+
+      return (response.data ?? [])
+        .filter((item) => item.lineText.toUpperCase().includes(token))
+        .map((item) => ({
+          ...item,
+          token,
+        }));
+    }).sort((left, right) => {
+      const pathOrder = left.filePath.localeCompare(right.filePath);
+      if (pathOrder !== 0) {
+        return pathOrder;
+      }
+      if (left.lineNumber !== right.lineNumber) {
+        return left.lineNumber - right.lineNumber;
+      }
+      return left.column - right.column;
+    });
+
+    const uniqueTodoItems = nextTodoItems.filter((item, index, items) => {
+      const itemKey = `${item.token}:${item.filePath}:${item.lineNumber}:${item.column}`;
+      return items.findIndex((candidate) => (
+        `${candidate.token}:${candidate.filePath}:${candidate.lineNumber}:${candidate.column}` === itemKey
+      )) === index;
+    });
+
+    const firstError = responses.find(({ response }) => !response.success)?.response.error ?? null;
+    setTodoItems(uniqueTodoItems);
+    setTodoError(firstError);
+    setIsTodoLoading(false);
+  }, [rootPath]);
+
+  const toggleBookmarkAtCursor = useCallback(() => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      return;
+    }
+
+    const bookmarkId = `${context.filePath}:${context.position.lineNumber}`;
+    const currentBookmarks = paneRef.current.code?.bookmarks ?? bookmarks;
+    const existingBookmark = currentBookmarks.find((bookmark) => bookmark.id === bookmarkId);
+    const nextBookmarks = existingBookmark
+      ? currentBookmarks.filter((bookmark) => bookmark.id !== bookmarkId)
+      : [
+        {
+          id: bookmarkId,
+          filePath: context.filePath,
+          lineNumber: context.position.lineNumber,
+          column: context.position.column,
+          label: getPathLeafLabel(context.filePath) || context.filePath,
+          createdAt: new Date().toISOString(),
+        },
+        ...currentBookmarks,
+      ].sort((left, right) => {
+        const pathOrder = left.filePath.localeCompare(right.filePath);
+        return pathOrder !== 0 ? pathOrder : left.lineNumber - right.lineNumber;
+      });
 
     persistCodeState({
-      openFiles: nextOpenFiles,
+      bookmarks: nextBookmarks,
     });
-  }, [openFiles, persistCodeState]);
+  }, [bookmarks, getActiveEditorContext, persistCodeState]);
+
+  const restoreLocalHistoryEntry = useCallback(async (entryId: string) => {
+    const allEntries = Array.from(localHistoryEntriesRef.current.values()).flat();
+    const entry = allEntries.find((candidate) => candidate.id === entryId);
+    if (!entry) {
+      return;
+    }
+
+    const model = fileModelsRef.current.get(entry.filePath) ?? await loadFileIntoModel(entry.filePath);
+    if (!model) {
+      return;
+    }
+
+    addLocalHistoryEntry(entry.filePath, 'restore', model.getValue());
+    suppressModelEventsRef.current.add(entry.filePath);
+    model.setValue(entry.content);
+    suppressModelEventsRef.current.delete(entry.filePath);
+    clearDefinitionLookupCache();
+    markDirty(entry.filePath, true);
+    await syncLanguageDocument(entry.filePath, 'change');
+    await activateFile(entry.filePath, {
+      recordRecent: true,
+      promotePreview: true,
+    });
+  }, [
+    activateFile,
+    addLocalHistoryEntry,
+    clearDefinitionLookupCache,
+    loadFileIntoModel,
+    markDirty,
+    syncLanguageDocument,
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -3523,6 +4086,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const syncActiveSurface = async () => {
       const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
       const currentDiffTargetPath = paneRef.current.code?.diffTargetPath ?? diffTargetPath ?? activeFilePath;
+      const currentSecondaryFilePath = secondaryFilePathRef.current;
       const loadedModel = fileModelsRef.current.get(activeFilePath) ?? await loadFileIntoModel(activeFilePath);
       if (!loadedModel) {
         return;
@@ -3541,11 +4105,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
       }
 
+      if (currentViewMode === 'editor' && isEditorSplitVisible && currentSecondaryFilePath && currentSecondaryFilePath !== activeFilePath) {
+        await loadFileIntoModel(currentSecondaryFilePath);
+      }
+
       await refreshEditorSurface();
     };
 
     void syncActiveSurface();
-  }, [activeFilePath, diffTargetPath, ensureDiffModel, loadFileIntoModel, persistCodeState, refreshEditorSurface, viewMode]);
+  }, [
+    activeFilePath,
+    diffTargetPath,
+    ensureDiffModel,
+    isEditorSplitVisible,
+    loadFileIntoModel,
+    persistCodeState,
+    refreshEditorSurface,
+    secondaryFilePath,
+    viewMode,
+  ]);
 
   useEffect(() => {
     if (!isActive) {
@@ -3770,8 +4348,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     pendingNavigationRef.current = location;
     await activateFile(location.filePath, {
-      preserveTabs: options?.preserveTabs,
       recordRecent: options?.recordRecent,
+      promotePreview: true,
     });
   }, [
     activateFile,
@@ -3788,6 +4366,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const getFileLabel = useCallback((filePath: string) => (
     getPathLeafLabel(getDisplayPath(filePath)) || getDisplayPath(filePath)
   ), [getDisplayPath]);
+
+  const visibleLocalHistoryEntries = useMemo(() => {
+    const sourceEntries = activeFilePath
+      ? (localHistoryEntriesRef.current.get(activeFilePath) ?? [])
+      : Array.from(localHistoryEntriesRef.current.values()).flat();
+    return [...sourceEntries]
+      .sort((left, right) => right.timestamp - left.timestamp)
+      .slice(0, 24);
+  }, [activeFilePath, localHistoryVersion]);
+
+  const currentLineBookmarkId = activeFilePath
+    ? `${activeFilePath}:${activeCursorLineNumber}`
+    : null;
+  const isCurrentLineBookmarked = currentLineBookmarkId
+    ? bookmarks.some((bookmark) => bookmark.id === currentLineBookmarkId)
+    : false;
 
   const activeTabStatus = activeFilePath ? getEntryStatus(activeFilePath, 'file') : undefined;
   const activeFileReadOnly = activeFilePath ? Boolean(fileMetaRef.current.get(activeFilePath)?.readOnly) : false;
@@ -3960,6 +4554,64 @@ export const CodePane: React.FC<CodePaneProps> = ({
       lastExpandedWidth: nextWidth,
     });
   }, [persistSidebarLayout]);
+
+  const startEditorSplitResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    editorSplitResizeCleanupRef.current?.();
+    editorSplitResizeStartRef.current = {
+      startX: event.clientX,
+      startSize: editorSplitSizeRef.current,
+    };
+    setIsEditorSplitResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (nextEvent: MouseEvent) => {
+      const resizeStart = editorSplitResizeStartRef.current;
+      const containerWidth = editorHostRef.current?.parentElement?.parentElement?.getBoundingClientRect().width ?? 0;
+      if (!resizeStart || containerWidth <= 0) {
+        return;
+      }
+
+      const nextSize = clampEditorSplitSize(
+        resizeStart.startSize + ((nextEvent.clientX - resizeStart.startX) / containerWidth),
+      );
+      editorSplitSizeRef.current = nextSize;
+      setEditorSplitSize(nextSize);
+    };
+
+    const cleanup = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      editorSplitResizeCleanupRef.current = null;
+    };
+
+    const handleMouseUp = () => {
+      const resizeStart = editorSplitResizeStartRef.current;
+      editorSplitResizeStartRef.current = null;
+      setIsEditorSplitResizing(false);
+
+      if (resizeStart) {
+        const nextSize = clampEditorSplitSize(editorSplitSizeRef.current);
+        editorSplitSizeRef.current = nextSize;
+        setEditorSplitSize(nextSize);
+        persistEditorSplitLayout({
+          visible: true,
+          size: nextSize,
+          secondaryFilePath: secondaryFilePathRef.current,
+        });
+      }
+
+      cleanup();
+    };
+
+    editorSplitResizeCleanupRef.current = cleanup;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [persistEditorSplitLayout]);
+
   const ActiveSidebarIcon = activeSidebarTab.icon;
 
   const renderFileContextMenu = useCallback((
@@ -3989,6 +4641,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         >
           {t('codePane.copyPath')}
         </ContextMenu.Item>
+        {entryType === 'file' && (
+          <ContextMenu.Item
+            className={contextMenuItemClassName}
+            onSelect={() => {
+              void openFileInSplit(filePath);
+            }}
+          >
+            {t('codePane.openInSplit')}
+          </ContextMenu.Item>
+        )}
         {entryType === 'file' && options?.allowDiff !== false && (
           <ContextMenu.Item
             className={contextMenuItemClassName}
@@ -4044,6 +4706,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     contextMenuItemClassName,
     copyPath,
     movePathWithPreview,
+    openFileInSplit,
     openDiffForFile,
     renamePathWithPreview,
     revealPath,
@@ -4071,7 +4734,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   if (isDirectory) {
                     toggleDirectory(entry.path);
                   } else {
-                    void activateFile(entry.path);
+                    void activateFile(entry.path, { preview: true });
+                  }
+                }}
+                onDoubleClick={() => {
+                  if (!isDirectory) {
+                    void activateFile(entry.path, { promotePreview: true });
                   }
                 }}
                 className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
@@ -4178,7 +4846,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
           <button
             type="button"
             onClick={() => {
-              void activateFile(filePath);
+              void activateFile(filePath, { preview: true });
+            }}
+            onDoubleClick={() => {
+              void activateFile(filePath, { promotePreview: true });
             }}
             className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${selectedPath === filePath ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
           >
@@ -5630,6 +6301,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
         filePath: gitHistory?.targetFilePath,
         lineNumber: gitHistory?.targetLineNumber,
       });
+      return;
+    }
+
+    if (bottomPanelMode === 'workspace') {
+      void loadTodoEntries();
     }
   }, [
     bottomPanelMode,
@@ -5637,6 +6313,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitHistory?.targetLineNumber,
     loadGitHistory,
     loadDebugSessionDetails,
+    loadTodoEntries,
     loadProjectContributions,
     loadRunTargets,
     loadTests,
@@ -5657,6 +6334,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         filePath: gitHistory.targetFilePath,
         lineNumber: gitHistory.targetLineNumber,
       });
+    } else if (bottomPanelMode === 'workspace') {
+      void loadTodoEntries();
     }
   }, [
     activeFilePath,
@@ -5664,6 +6343,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitHistory?.targetFilePath,
     gitHistory?.targetLineNumber,
     loadGitHistory,
+    loadTodoEntries,
     loadProjectContributions,
     loadRunTargets,
     loadTests,
@@ -5742,7 +6422,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 void revealPathInExplorer(node.path);
                 return;
               }
-              void activateFile(node.path);
+              void activateFile(node.path, { preview: true });
             }}
             className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
@@ -6160,6 +6840,62 @@ export const CodePane: React.FC<CodePaneProps> = ({
               Hist
             </button>
           </AppTooltip>
+          <AppTooltip content={t('codePane.workspaceTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.workspaceTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleBottomPanelMode('workspace');
+              }}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'workspace'
+                  ? 'bg-fuchsia-500/20 text-fuchsia-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
+              }`}
+            >
+              Work
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.editorSplitToggle')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.editorSplitToggle')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                void toggleEditorSplit();
+              }}
+              disabled={!activeFilePath}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                isEditorSplitVisible
+                  ? 'bg-sky-500/20 text-sky-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
+              }`}
+            >
+              Split
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.bookmarkToggle')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.bookmarkToggle')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleBookmarkAtCursor();
+              }}
+              disabled={!activeFilePath}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                isCurrentLineBookmarked
+                  ? 'bg-amber-500/20 text-amber-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
+              }`}
+            >
+              Bmk
+            </button>
+          </AppTooltip>
           <AppTooltip content={t('codePane.gitBlame')} placement="pane-corner">
             <button
               type="button"
@@ -6495,7 +7231,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  void activateFile(group.filePath);
+                                  void activateFile(group.filePath, { preview: true });
                                 }}
                                 className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
                               >
@@ -6581,7 +7317,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                             <button
                               type="button"
                               onClick={() => {
-                                void activateFile(group.filePath);
+                                void activateFile(group.filePath, { preview: true });
                               }}
                               className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
                             >
@@ -6949,6 +7685,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               const tabStatus = getEntryStatus(tab.path, 'file');
               const badge = getStatusTone(tabStatus);
               const isTabPinned = Boolean(tab.pinned);
+              const isTabPreview = Boolean(tab.preview);
 
               return (
                 <ContextMenu.Root key={tab.path}>
@@ -6960,13 +7697,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         type="button"
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                         onClick={() => {
-                          void activateFile(tab.path, { preserveTabs: true });
+                          void activateFile(tab.path);
+                        }}
+                        onDoubleClick={() => {
+                          if (tab.preview) {
+                            void activateFile(tab.path, { promotePreview: true });
+                          }
                         }}
                       >
                         <FileIcon size={12} className="shrink-0" />
                         {isTabPinned && <Pin size={10} className="shrink-0 text-zinc-500" />}
-                        <span className="truncate">{getFileLabel(tab.path)}</span>
+                        <span className={`truncate ${isTabPreview ? 'italic text-zinc-300' : ''}`}>{getFileLabel(tab.path)}</span>
                         {isTabDirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />}
+                        {isTabPreview && (
+                          <span className="rounded bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-400">
+                            {t('codePane.previewTabBadge')}
+                          </span>
+                        )}
                         {badge && (
                           <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
                             {badge.badge}
@@ -7017,10 +7764,55 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     }}
                   />
                 )}
-                <div
-                  ref={editorHostRef}
-                  className="min-h-0 flex-1"
-                />
+                {isEditorSplitVisible && secondaryFilePath && viewMode === 'editor' ? (
+                  <div className="flex min-h-0 flex-1 overflow-hidden">
+                    <div
+                      className="min-w-0 shrink-0"
+                      style={{ width: `${editorSplitSize * 100}%` }}
+                    >
+                      <div
+                        ref={editorHostRef}
+                        className="h-full min-h-0"
+                      />
+                    </div>
+                    <div
+                      role="separator"
+                      aria-orientation="vertical"
+                      data-testid="code-pane-editor-split-resize-handle"
+                      onMouseDown={startEditorSplitResize}
+                      className={`flex h-full w-3 shrink-0 cursor-col-resize items-center justify-center border-l border-r border-zinc-800 bg-zinc-950/60 transition-colors ${isEditorSplitResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+                    >
+                      <GripVertical size={12} />
+                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col border-l border-zinc-800/70">
+                      <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-2 py-1 text-[11px] text-zinc-400">
+                        <span className="truncate">
+                          {secondaryFilePath ? getRelativePath(rootPath, getDisplayPath(secondaryFilePath)) : t('codePane.editorSplitEmpty')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            persistEditorSplitLayout({
+                              visible: false,
+                            });
+                          }}
+                          className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+                        >
+                          <X size={11} />
+                        </button>
+                      </div>
+                      <div
+                        ref={secondaryEditorHostRef}
+                        className="min-h-0 flex-1"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    ref={editorHostRef}
+                    className="min-h-0 flex-1"
+                  />
+                )}
                 {isBootstrapping && (
                   <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/80 text-xs text-zinc-500">
                     {t('codePane.loading')}
@@ -7148,6 +7940,45 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onClose={() => {
                 setBottomPanelMode(null);
               }}
+            />
+          ) : bottomPanelMode === 'workspace' ? (
+            <WorkspaceToolWindow
+              bookmarks={bookmarks}
+              todoItems={todoItems}
+              localHistoryEntries={visibleLocalHistoryEntries}
+              activeFilePath={activeFilePath}
+              isTodoLoading={isTodoLoading}
+              todoError={todoError}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+              onRefresh={loadTodoEntries}
+              onOpenBookmark={(bookmark) => {
+                void openFileLocation({
+                  filePath: bookmark.filePath,
+                  lineNumber: bookmark.lineNumber,
+                  column: bookmark.column,
+                });
+              }}
+              onOpenTodo={(item) => {
+                void openFileLocation({
+                  filePath: item.filePath,
+                  lineNumber: item.lineNumber,
+                  column: item.column,
+                });
+              }}
+              onOpenHistoryEntry={(entry) => {
+                void openFileLocation({
+                  filePath: entry.filePath,
+                  lineNumber: 1,
+                  column: 1,
+                });
+              }}
+              onRestoreHistoryEntry={(entry) => {
+                void restoreLocalHistoryEntry(entry.id);
+              }}
+              getFileLabel={getFileLabel}
+              getRelativePath={(filePath) => getRelativePath(rootPath, filePath)}
             />
           ) : null}
 
