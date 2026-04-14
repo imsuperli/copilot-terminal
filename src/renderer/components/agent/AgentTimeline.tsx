@@ -13,6 +13,7 @@ import { CommandOutputBlock } from './CommandOutputBlock';
 import { InteractionPrompt } from './InteractionPrompt';
 import { ReasoningBlock } from './ReasoningBlock';
 import { renderMarkdownLike } from './RichText';
+import { ThinkingStatusBar } from './ThinkingStatusBar';
 import { ToolCallBlock, type HydratedToolCallItem } from './ToolCallBlock';
 
 function getAssistantTurnKey(event: AgentTimelineEvent): string | null {
@@ -100,6 +101,10 @@ function shouldRenderTimelineEvent(event: AgentTimelineEvent): boolean {
   }
 
   return true;
+}
+
+function isActiveThinkingStatus(status?: string): boolean {
+  return ['pending', 'running', 'streaming'].includes(status ?? '');
 }
 
 function isAssistantTurnEvent(event: AgentTimelineEvent): boolean {
@@ -220,9 +225,32 @@ export function AgentTimeline({
       hydratedToolCalls: hydrated,
     };
   }, [orderedTimeline]);
-  const visibleTimeline = React.useMemo(
+  const baseVisibleTimeline = React.useMemo(
     () => orderedTimeline.filter((event) => !hiddenEventIds.has(event.id) && shouldRenderTimelineEvent(event)),
     [hiddenEventIds, orderedTimeline],
+  );
+  const activeThinkingEvent = React.useMemo(() => {
+    if (task.status !== 'running') {
+      return null;
+    }
+
+    for (let index = baseVisibleTimeline.length - 1; index >= 0; index -= 1) {
+      const event = baseVisibleTimeline[index];
+      if (event?.kind === 'reasoning' && isActiveThinkingStatus(event.status)) {
+        return event;
+      }
+    }
+
+    return null;
+  }, [baseVisibleTimeline, task.status]);
+  const visibleTimeline = React.useMemo(
+    () => baseVisibleTimeline.filter((event) => !(
+      activeThinkingEvent
+      && event.kind === 'reasoning'
+      && event.id === activeThinkingEvent.id
+      && !event.content.trim()
+    )),
+    [activeThinkingEvent, baseVisibleTimeline],
   );
   const displayTimeline = React.useMemo<TimelineDisplayItem[]>(() => {
     const items: TimelineDisplayItem[] = [];
@@ -319,8 +347,34 @@ export function AgentTimeline({
   }, [hydratedToolCalls, visibleTimeline]);
 
   const renderAssistantTurn = (sections: AssistantTurnSection[]) => {
+    const activeThinkingEventId = activeThinkingEvent?.id;
+    const hasActiveThinkingSection = sections.some((section) => (
+      section.kind === 'reasoning' && section.event.id === activeThinkingEventId
+    ));
     const hasNonReasoningSection = sections.some((section) => section.kind !== 'reasoning');
-    const title = hasNonReasoningSection ? assistantLabel : `${assistantLabel} · Thinking`;
+    const title = hasNonReasoningSection || hasActiveThinkingSection
+      ? assistantLabel
+      : `${assistantLabel} · Thinking`;
+
+    if (hasActiveThinkingSection && !hasNonReasoningSection) {
+      const reasoningSections = sections.filter((section): section is Extract<AssistantTurnSection, { kind: 'reasoning' }> => (
+        section.kind === 'reasoning' && Boolean(section.event.content.trim())
+      ));
+
+      if (reasoningSections.length === 0) {
+        return null;
+      }
+
+      return (
+        <div className="space-y-3">
+          {reasoningSections.map((section) => (
+            <div key={`reasoning-${section.event.id}`}>
+              <ReasoningBlock content={section.event.content} status={section.event.status} />
+            </div>
+          ))}
+        </div>
+      );
+    }
 
     return (
       <EventShell icon={<Sparkles size={15} />} title={title}>
@@ -328,9 +382,13 @@ export function AgentTimeline({
           {sections.map((section, sectionIndex) => {
             switch (section.kind) {
               case 'reasoning':
+                if (section.event.id === activeThinkingEventId && !section.event.content.trim()) {
+                  return null;
+                }
+
                 return (
                   <div key={`reasoning-${section.event.id}`}>
-                    {hasNonReasoningSection && (
+                    {hasNonReasoningSection && section.event.id !== activeThinkingEventId && (
                       <div className="mb-1.5 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
                         Thinking
                       </div>
@@ -414,6 +472,14 @@ export function AgentTimeline({
           </div>
         );
       case 'reasoning':
+        if (event.id === activeThinkingEvent?.id) {
+          if (!event.content.trim()) {
+            return null;
+          }
+
+          return <ReasoningBlock content={event.content} status={event.status} />;
+        }
+
         return (
           <EventShell icon={<Sparkles size={15} />} title={`${assistantLabel} · Thinking`}>
             <ReasoningBlock content={event.content} status={event.status} />
@@ -474,22 +540,28 @@ export function AgentTimeline({
   };
 
   return (
-    <div className="space-y-5 pt-4">
-      {displayTimeline.map((item) => (
-        <div
-          key={
-            item.kind === 'assistant-turn'
-              ? item.key
-              : item.event.id
-          }
-        >
-          {item.kind === 'assistant-turn' ? (
-            renderAssistantTurn(item.sections)
-          ) : (
-            renderEvent(item.event)
-          )}
-        </div>
-      ))}
+    <div className="flex min-h-full flex-col pt-4">
+      <div className="space-y-5">
+        {displayTimeline.map((item) => (
+          <div
+            key={
+              item.kind === 'assistant-turn'
+                ? item.key
+                : item.event.id
+            }
+          >
+            {item.kind === 'assistant-turn' ? (
+              renderAssistantTurn(item.sections)
+            ) : (
+              renderEvent(item.event)
+            )}
+          </div>
+        ))}
+      </div>
+
+      {task.status === 'running' ? (
+        <ThinkingStatusBar />
+      ) : null}
     </div>
   );
 }

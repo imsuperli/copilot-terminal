@@ -73,6 +73,13 @@ function ChatPaneHarness() {
   );
 }
 
+async function expectThinkingIndicator() {
+  const indicator = await screen.findByTestId('agent-thinking-indicator');
+  expect(indicator).toHaveTextContent('Thinking');
+  expect(screen.queryByText('Agent · Thinking')).not.toBeInTheDocument();
+  return indicator;
+}
+
 describe('ChatPane', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -203,8 +210,7 @@ describe('ChatPane', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
 
     expect(await screen.findByText('帮我检查 nginx 状态')).toBeInTheDocument();
-    expect(screen.getByText('Agent · Thinking')).toBeInTheDocument();
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    await expectThinkingIndicator();
 
     await waitFor(() => {
       expect(window.electronAPI.agentSend).toHaveBeenCalledWith(expect.objectContaining({
@@ -498,8 +504,7 @@ describe('ChatPane', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
 
     expect(await screen.findByText('马上给我反馈')).toBeInTheDocument();
-    expect(screen.getByText('Agent · Thinking')).toBeInTheDocument();
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    await expectThinkingIndicator();
   });
 
   it('shows optimistic thinking immediately for follow-up messages before SSH preflight resolves', async () => {
@@ -650,8 +655,7 @@ describe('ChatPane', () => {
     await user.click(screen.getByRole('button', { name: '发送' }));
 
     expect(await screen.findByText('继续看下 inode')).toBeInTheDocument();
-    expect(screen.getByText('Agent · Thinking')).toBeInTheDocument();
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    await expectThinkingIndicator();
     expect(window.electronAPI.agentSend).not.toHaveBeenCalled();
 
     resolveProfile?.({
@@ -777,8 +781,7 @@ describe('ChatPane', () => {
     await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '继续分析');
     await user.click(screen.getByRole('button', { name: '发送' }));
 
-    expect(await screen.findByText('Agent · Thinking')).toBeInTheDocument();
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    await expectThinkingIndicator();
 
     await act(async () => {
       const snapshot = createAgentSnapshot({
@@ -829,8 +832,8 @@ describe('ChatPane', () => {
       }));
     });
 
-    expect(screen.getByText('Agent · Thinking')).toBeInTheDocument();
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-thinking-indicator')).toHaveTextContent('Thinking');
+    expect(screen.queryByText('Agent · Thinking')).not.toBeInTheDocument();
     expect(screen.queryByText('历史上下文摘要：旧消息被压缩。')).not.toBeInTheDocument();
   });
 
@@ -930,8 +933,7 @@ describe('ChatPane', () => {
     await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '看下磁盘');
     await user.click(screen.getByRole('button', { name: '发送' }));
 
-    expect(await screen.findByText('Agent · Thinking')).toBeInTheDocument();
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    await expectThinkingIndicator();
 
     await act(async () => {
       const snapshot = createAgentSnapshot({
@@ -965,8 +967,8 @@ describe('ChatPane', () => {
       }));
     });
 
-    expect(screen.getByText('Agent · Thinking')).toBeInTheDocument();
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-thinking-indicator')).toHaveTextContent('Thinking');
+    expect(screen.queryByText('Agent · Thinking')).not.toBeInTheDocument();
   });
 
   it('does not restore a purely optimistic task while the real agent task has not been created yet', async () => {
@@ -1058,8 +1060,7 @@ describe('ChatPane', () => {
       </I18nProvider>,
     );
 
-    expect(await screen.findByText('Agent · Thinking')).toBeInTheDocument();
-    expect(screen.getByText('Thinking...')).toBeInTheDocument();
+    await expectThinkingIndicator();
     expect(window.electronAPI.agentRestoreTask).not.toHaveBeenCalled();
   });
 

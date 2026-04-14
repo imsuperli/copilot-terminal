@@ -258,4 +258,56 @@ describe('AgentTimeline', () => {
     expect(screen.queryByText('历史上下文摘要：旧消息被压缩。')).not.toBeInTheDocument();
     expect(screen.getByText('新的回复')).toBeInTheDocument();
   });
+
+  it('pins a single thinking indicator to the bottom while a task is running', () => {
+    render(
+      <AgentTimeline
+        task={createTaskSnapshot({
+          status: 'running',
+          timeline: [
+            {
+              id: 'user-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:01.000Z',
+              kind: 'user-message',
+              status: 'completed',
+              content: '检查服务状态',
+            },
+            {
+              id: 'reasoning-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:02.000Z',
+              kind: 'reasoning',
+              status: 'streaming',
+              content: '',
+            },
+            {
+              id: 'assistant-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:03.000Z',
+              kind: 'assistant-message',
+              status: 'streaming',
+              content: '正在读取服务输出',
+            },
+          ],
+        })}
+        assistantLabel="codex"
+        onApprove={() => {}}
+        onReject={() => {}}
+        onSubmitInteraction={() => {}}
+        onCancelInteraction={() => {}}
+      />,
+    );
+
+    const indicator = screen.getByTestId('agent-thinking-indicator');
+    const assistantReply = screen.getByText('正在读取服务输出');
+
+    expect(indicator).toHaveClass('sticky');
+    expect(indicator).toHaveTextContent('Thinking');
+    expect(screen.queryByText('codex · Thinking')).not.toBeInTheDocument();
+    expect(assistantReply.compareDocumentPosition(indicator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });

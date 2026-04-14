@@ -44,11 +44,24 @@
     }
   }
 
+  @keyframes agent-thinking-sweep {
+    from {
+      background-position: -160% 0;
+    }
+    to {
+      background-position: 160% 0;
+    }
+  }
+
   .animate-fade-in {
     animation: fade-in 0.2s ease-out;
   }
 
   .animate-scale-in {
     animation: scale-in 0.2s ease-out;
+  }
+
+  .animate-agent-thinking-sweep {
+    animation: agent-thinking-sweep 1.9s linear infinite;
   }
 }
