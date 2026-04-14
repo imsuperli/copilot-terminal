@@ -201,6 +201,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-get-document-highlights', config),
   codePaneGetDocumentSymbols: (config) =>
     ipcRenderer.invoke('code-pane-get-document-symbols', config),
+  codePaneGetInlayHints: (config) =>
+    ipcRenderer.invoke('code-pane-get-inlay-hints', config),
   codePaneGetImplementations: (config) =>
     ipcRenderer.invoke('code-pane-get-implementations', config),
   codePaneGetCompletionItems: (config) =>

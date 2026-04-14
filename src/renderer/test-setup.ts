@@ -152,6 +152,7 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneGetReferences: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetDocumentHighlights: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetDocumentSymbols: vi.fn().mockResolvedValue({ success: true, data: [] }),
+    codePaneGetInlayHints: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetImplementations: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetCompletionItems: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetSignatureHelp: vi.fn().mockResolvedValue({ success: true, data: null }),

@@ -2,9 +2,11 @@ import type {
   CodePaneCompletionItem,
   CodePaneDiagnostic,
   CodePaneDocumentHighlight,
+  CodePaneInlayHint,
   CodePaneDocumentSymbol,
   CodePaneHoverResult,
   CodePaneLocation,
+  CodePaneRange,
   CodePaneReference,
   CodePaneSignatureHelpResult,
 } from '../../../shared/types/electron-api';
@@ -18,6 +20,8 @@ type MonacoHover = import('monaco-editor').languages.Hover;
 type MonacoProviderResult<T> = import('monaco-editor').languages.ProviderResult<T>;
 type MonacoDocumentSymbol = import('monaco-editor').languages.DocumentSymbol;
 type MonacoDocumentHighlight = import('monaco-editor').languages.DocumentHighlight;
+type MonacoInlayHint = import('monaco-editor').languages.InlayHint;
+type MonacoInlayHintList = import('monaco-editor').languages.InlayHintList;
 type MonacoCompletionItem = import('monaco-editor').languages.CompletionItem;
 type MonacoSignatureHelp = import('monaco-editor').languages.SignatureHelp;
 type MonacoDocumentContext = {
@@ -164,6 +168,14 @@ export class MonacoLanguageBridge {
       this.monaco.languages.registerDocumentSymbolProvider(normalizedLanguage, {
         provideDocumentSymbols: async (model) => (
           await this.provideDocumentSymbols(model)
+        ),
+      }),
+    );
+
+    this.providerDisposables.push(
+      this.monaco.languages.registerInlayHintsProvider(normalizedLanguage, {
+        provideInlayHints: async (model, range) => (
+          await this.provideInlayHints(model, toCodePaneRange(range))
         ),
       }),
     );
@@ -324,6 +336,38 @@ export class MonacoLanguageBridge {
     }
 
     return (response.data ?? []).map((symbol) => toMonacoDocumentSymbol(symbol));
+  }
+
+  private async provideInlayHints(
+    model: MonacoModel,
+    range: CodePaneRange,
+  ): Promise<MonacoProviderResult<MonacoInlayHintList>> {
+    const context = this.contextsByModel.get(model);
+    if (!context) {
+      return {
+        hints: [],
+        dispose: () => {},
+      };
+    }
+
+    const response = await window.electronAPI.codePaneGetInlayHints({
+      rootPath: context.rootPath,
+      filePath: context.filePath,
+      language: context.language,
+      range,
+    });
+
+    if (!response.success) {
+      return {
+        hints: [],
+        dispose: () => {},
+      };
+    }
+
+    return {
+      hints: (response.data ?? []).map((hint) => toMonacoInlayHint(this.monaco, hint)),
+      dispose: () => {},
+    };
   }
 
   private async provideImplementations(
@@ -543,6 +587,19 @@ function toMonacoDocumentSymbol(symbol: CodePaneDocumentSymbol): MonacoDocumentS
   };
 }
 
+function toMonacoInlayHint(monaco: MonacoModule, hint: CodePaneInlayHint): MonacoInlayHint {
+  return {
+    label: hint.label,
+    position: {
+      lineNumber: hint.position.lineNumber,
+      column: hint.position.column,
+    },
+    ...(hint.kind ? { kind: mapInlayHintKind(monaco, hint.kind) } : {}),
+    ...(hint.paddingLeft !== undefined ? { paddingLeft: hint.paddingLeft } : {}),
+    ...(hint.paddingRight !== undefined ? { paddingRight: hint.paddingRight } : {}),
+  };
+}
+
 function toMonacoCompletionItem(item: CodePaneCompletionItem, defaultRange: MonacoRange): MonacoCompletionItem {
   const completionItem: MonacoCompletionItem = {
     label: item.label,
@@ -594,6 +651,15 @@ function toMonacoRange(range: MonacoRange): MonacoRange {
   };
 }
 
+function toCodePaneRange(range: MonacoRange): CodePaneRange {
+  return {
+    startLineNumber: range.startLineNumber,
+    startColumn: range.startColumn,
+    endLineNumber: range.endLineNumber,
+    endColumn: range.endColumn,
+  };
+}
+
 function mapDocumentHighlightKind(
   monaco: MonacoModule,
   kind?: CodePaneDocumentHighlight['kind'],
@@ -606,6 +672,19 @@ function mapDocumentHighlightKind(
     case 'text':
     default:
       return monaco.languages.DocumentHighlightKind.Text;
+  }
+}
+
+function mapInlayHintKind(
+  monaco: MonacoModule,
+  kind: NonNullable<CodePaneInlayHint['kind']>,
+): MonacoInlayHint['kind'] {
+  switch (kind) {
+    case 'parameter':
+      return monaco.languages.InlayHintKind.Parameter;
+    case 'type':
+    default:
+      return monaco.languages.InlayHintKind.Type;
   }
 }
 

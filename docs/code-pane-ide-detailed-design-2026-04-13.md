@@ -9,6 +9,10 @@
 
 目标不是再起一套新架构，而是在现有实现基础上，把 `CodePane` 演进成更接近 IntelliJ IDEA 的工作台体验，同时保持一个通用 `CodePane` 兼容 Java、Python、Go 等语言。
 
+后续阶段设计见：
+
+- `docs/code-pane-ide-p5-p9-detailed-design-2026-04-13.md`
+
 ## 2. 目标
 
 ### 2.1 产品目标

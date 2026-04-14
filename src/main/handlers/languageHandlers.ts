@@ -7,6 +7,7 @@ import type {
   CodePaneDocumentSyncConfig,
   CodePaneGetDefinitionConfig,
   CodePaneGetDocumentHighlightsConfig,
+  CodePaneGetInlayHintsConfig,
   CodePaneGetDocumentSymbolsConfig,
   CodePaneGetHoverConfig,
   CodePaneGetImplementationsConfig,
@@ -132,6 +133,18 @@ export function registerLanguageHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await languageFeatureService.getDocumentSymbols(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-inlay-hints', async (_event, config: CodePaneGetInlayHintsConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.getInlayHints(config, getCurrentWorkspace()));
     } catch (error) {
       return errorResponse(error);
     }

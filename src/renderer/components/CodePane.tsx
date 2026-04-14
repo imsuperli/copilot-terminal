@@ -10,6 +10,7 @@ import React, {
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import {
   AlertTriangle,
+  BookOpen,
   ChevronLeft,
   ChevronDown,
   ChevronRight,
@@ -35,6 +36,7 @@ import type {
   CodePaneBreakpoint,
   CodePaneCodeAction,
   CodePaneContentMatch,
+  CodePaneDocumentSymbol,
   CodePaneDebugSession,
   CodePaneDebugSessionChangedPayload,
   CodePaneDebugSessionDetails,
@@ -45,6 +47,7 @@ import type {
   CodePaneGitBlameLine,
   CodePaneGitHistoryResult,
   CodePaneGitRepositorySummary,
+  CodePaneHoverResult,
   CodePaneFsChangedPayload,
   CodePaneGitStatusEntry,
   CodePaneIndexProgressPayload,
@@ -70,14 +73,17 @@ import {
   CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
 } from '../../shared/types/electron-api';
 import { AppTooltip } from './ui/AppTooltip';
+import { BreadcrumbsBar, type CodePaneBreadcrumbItem } from './code-pane/BreadcrumbsBar';
 import { DebugToolWindow } from './code-pane/tool-windows/DebugToolWindow';
 import { GitHistoryToolWindow } from './code-pane/tool-windows/GitHistoryToolWindow';
 import { PerformanceToolWindow } from './code-pane/tool-windows/PerformanceToolWindow';
 import { ProjectToolWindow } from './code-pane/tool-windows/ProjectToolWindow';
+import { QuickDocumentationPanel } from './code-pane/QuickDocumentationPanel';
 import { RefactorPreviewToolWindow } from './code-pane/tool-windows/RefactorPreviewToolWindow';
 import { RunToolWindow } from './code-pane/tool-windows/RunToolWindow';
 import { TestsToolWindow } from './code-pane/tool-windows/TestsToolWindow';
 import { WorkspaceToolWindow } from './code-pane/tool-windows/WorkspaceToolWindow';
+import { GitBranchGraph } from './code-pane/GitBranchGraph';
 import { BlameGutter } from './code-pane/scm/BlameGutter';
 import { CommitComposer } from './code-pane/scm/CommitComposer';
 import { useI18n } from '../i18n';
@@ -743,6 +749,60 @@ function buildGitChangeSectionGroups(
   })).filter((group) => group.count > 0);
 }
 
+function isPositionWithinRange(
+  range: CodePaneDocumentSymbol['range'],
+  lineNumber: number,
+  column: number,
+): boolean {
+  if (lineNumber < range.startLineNumber || lineNumber > range.endLineNumber) {
+    return false;
+  }
+
+  if (lineNumber === range.startLineNumber && column < range.startColumn) {
+    return false;
+  }
+
+  if (lineNumber === range.endLineNumber && column > range.endColumn) {
+    return false;
+  }
+
+  return true;
+}
+
+function findActiveDocumentSymbolPathInTree(
+  symbol: CodePaneDocumentSymbol,
+  lineNumber: number,
+  column: number,
+): CodePaneDocumentSymbol[] {
+  if (!isPositionWithinRange(symbol.range, lineNumber, column)) {
+    return [];
+  }
+
+  for (const child of symbol.children ?? []) {
+    const childPath = findActiveDocumentSymbolPathInTree(child, lineNumber, column);
+    if (childPath.length > 0) {
+      return [symbol, ...childPath];
+    }
+  }
+
+  return [symbol];
+}
+
+function findActiveDocumentSymbolPath(
+  symbols: CodePaneDocumentSymbol[],
+  lineNumber: number,
+  column: number,
+): CodePaneDocumentSymbol[] {
+  for (const symbol of symbols) {
+    const path = findActiveDocumentSymbolPathInTree(symbol, lineNumber, column);
+    if (path.length > 0) {
+      return path;
+    }
+  }
+
+  return [];
+}
+
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -911,6 +971,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isBlameLoading, setIsBlameLoading] = useState(false);
   const [blameLines, setBlameLines] = useState<CodePaneGitBlameLine[]>([]);
   const [activeCursorLineNumber, setActiveCursorLineNumber] = useState(1);
+  const [activeCursorColumn, setActiveCursorColumn] = useState(1);
+  const [activeEditorTarget, setActiveEditorTarget] = useState<EditorTarget>('editor');
+  const [activeDocumentSymbols, setActiveDocumentSymbols] = useState<CodePaneDocumentSymbol[]>([]);
+  const [isActiveDocumentSymbolsLoading, setIsActiveDocumentSymbolsLoading] = useState(false);
+  const [quickDocumentation, setQuickDocumentation] = useState<CodePaneHoverResult | null>(null);
+  const [quickDocumentationError, setQuickDocumentationError] = useState<string | null>(null);
+  const [isQuickDocumentationOpen, setIsQuickDocumentationOpen] = useState(false);
+  const [isQuickDocumentationLoading, setIsQuickDocumentationLoading] = useState(false);
+  const [areInlayHintsEnabled, setAreInlayHintsEnabled] = useState(true);
   const [banner, setBanner] = useState<BannerState | null>(null);
   const [treeLoadError, setTreeLoadError] = useState<string | null>(null);
   const [externalLibrariesError, setExternalLibrariesError] = useState<string | null>(null);
@@ -918,6 +987,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [contentSearchError, setContentSearchError] = useState<string | null>(null);
   const [indexStatus, setIndexStatus] = useState<CodePaneIndexStatus | null>(null);
   const [languageWorkspaceState, setLanguageWorkspaceState] = useState<CodePaneLanguageWorkspaceState | null>(null);
+  const editorInlayHintOptions = useMemo(() => ({
+    inlayHints: {
+      enabled: (areInlayHintsEnabled ? 'on' : 'off') as 'on' | 'off',
+    },
+  }), [areInlayHintsEnabled]);
 
   const expandedDirectoriesRef = useRef(expandedDirectories);
   const loadedDirectoriesRef = useRef(loadedDirectories);
@@ -2348,11 +2422,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     cursorPositionListenerRef.current = editorInstance.onDidChangeCursorPosition?.((event: any) => {
       if (event?.position?.lineNumber) {
         setActiveCursorLineNumber(event.position.lineNumber);
+        setActiveCursorColumn(event.position.column ?? 1);
       }
     }) ?? null;
 
     mouseDownListenerRef.current = editorInstance.onMouseDown((event: any) => {
       focusedEditorTargetRef.current = target;
+      setActiveEditorTarget(target);
+      if (event?.target?.position?.lineNumber) {
+        setActiveCursorLineNumber(event.target.position.lineNumber);
+        setActiveCursorColumn(event.target.position.column ?? 1);
+      }
       const pointerEvent = event.event?.browserEvent ?? event.event ?? {};
       const monaco = monacoRef.current;
       const mouseTargetType = event.target?.type;
@@ -2475,6 +2555,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           smoothScrolling: true,
           glyphMargin: true,
           stickyScroll: { enabled: false },
+          ...editorInlayHintOptions,
         });
         diffEditorRef.current.getModifiedEditor().addCommand(
           monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS,
@@ -2494,6 +2575,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
       diffEditorRef.current.getModifiedEditor().updateOptions?.({
         readOnly: isReadOnlyFile,
+        ...editorInlayHintOptions,
       });
       applyDebugDecorations(diffEditorRef.current.getModifiedEditor(), currentActiveFilePath);
 
@@ -2506,6 +2588,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       if (isActive) {
         focusedEditorTargetRef.current = 'diff';
+        setActiveEditorTarget('diff');
         diffEditorRef.current.getModifiedEditor().focus();
       }
       return;
@@ -2534,6 +2617,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         smoothScrolling: true,
         glyphMargin: true,
         stickyScroll: { enabled: false },
+        ...editorInlayHintOptions,
       });
       nextEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         const filePath = target === 'secondary'
@@ -2561,6 +2645,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     primaryEditor.setModel(model);
     primaryEditor.updateOptions?.({
       readOnly: isReadOnlyFile,
+      ...editorInlayHintOptions,
     });
     applyDebugDecorations(primaryEditor, currentActiveFilePath);
 
@@ -2578,6 +2663,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         secondaryEditor.setModel(secondaryModel);
         secondaryEditor.updateOptions?.({
           readOnly: fileMetaRef.current.get(currentSecondaryFilePath)?.readOnly === true,
+          ...editorInlayHintOptions,
         });
 
         const savedSecondaryViewState = secondaryViewStatesRef.current.get(currentSecondaryFilePath);
@@ -2600,6 +2686,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (isActive) {
       focusedEditorTargetRef.current = 'editor';
+      setActiveEditorTarget('editor');
       primaryEditor.focus();
     }
   }, [
@@ -2607,6 +2694,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     applyPendingNavigation,
     attachDefinitionClickNavigation,
     disposeEditors,
+    editorInlayHintOptions,
     ensureMonacoReady,
     isActive,
     saveCurrentViewState,
@@ -2749,6 +2837,119 @@ export const CodePane: React.FC<CodePaneProps> = ({
       readOnly: Boolean(fileMetaRef.current.get(filePath)?.readOnly),
     };
   }, [getModelFilePath, isEditorSplitVisible, viewMode]);
+
+  const breadcrumbFilePath = useMemo(() => {
+    if (viewMode === 'diff') {
+      return activeFilePath;
+    }
+
+    if (activeEditorTarget === 'secondary' && isEditorSplitVisible) {
+      return secondaryFilePath ?? activeFilePath;
+    }
+
+    return activeFilePath;
+  }, [activeEditorTarget, activeFilePath, isEditorSplitVisible, secondaryFilePath, viewMode]);
+
+  const breadcrumbLanguage = breadcrumbFilePath
+    ? fileMetaRef.current.get(breadcrumbFilePath)?.language
+    : undefined;
+
+  const loadActiveDocumentSymbols = useCallback(async (filePath: string, language?: string) => {
+    const requestPath = getModelRequestPath(filePath);
+    const requestKey = `document-symbols:${requestPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    setIsActiveDocumentSymbolsLoading(true);
+
+    try {
+      const response = await trackRequest(
+        requestKey,
+        'Document symbols',
+        getRelativePath(rootPath, filePath),
+        async () => await window.electronAPI.codePaneGetDocumentSymbols({
+          rootPath,
+          filePath: requestPath,
+          language,
+        }),
+      );
+
+      if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+        return;
+      }
+
+      setActiveDocumentSymbols(response.success ? (response.data ?? []) : []);
+    } catch {
+      if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+        return;
+      }
+
+      setActiveDocumentSymbols([]);
+    } finally {
+      if (runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+        setIsActiveDocumentSymbolsLoading(false);
+      }
+    }
+  }, [getModelRequestPath, rootPath, trackRequest]);
+
+  const loadQuickDocumentation = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      setQuickDocumentation(null);
+      setQuickDocumentationError(null);
+      setIsQuickDocumentationLoading(false);
+      return;
+    }
+
+    const requestPath = getModelRequestPath(context.filePath);
+    const requestKey = `quick-documentation:${requestPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    setIsQuickDocumentationLoading(true);
+    setQuickDocumentationError(null);
+
+    try {
+      const response = await trackRequest(
+        requestKey,
+        'Quick documentation',
+        `${getRelativePath(rootPath, context.filePath)}:${context.position.lineNumber}`,
+        async () => await window.electronAPI.codePaneGetHover({
+          rootPath,
+          filePath: requestPath,
+          language: context.language,
+          position: {
+            lineNumber: context.position.lineNumber,
+            column: context.position.column,
+          },
+        }),
+      );
+
+      if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+        return;
+      }
+
+      setQuickDocumentation(response.success ? (response.data ?? null) : null);
+      setQuickDocumentationError(response.success ? null : (response.error || t('common.retry')));
+    } catch (error) {
+      if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+        return;
+      }
+
+      setQuickDocumentation(null);
+      setQuickDocumentationError(error instanceof Error ? error.message : t('common.retry'));
+    } finally {
+      if (runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+        setIsQuickDocumentationLoading(false);
+      }
+    }
+  }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
+
+  const toggleQuickDocumentation = useCallback(() => {
+    if (isQuickDocumentationOpen) {
+      setIsQuickDocumentationOpen(false);
+      return;
+    }
+
+    setIsQuickDocumentationOpen(true);
+    void loadQuickDocumentation();
+  }, [isQuickDocumentationOpen, loadQuickDocumentation]);
 
   const applyLanguageTextEdits = useCallback(async (edits: CodePaneTextEdit[]) => {
     if (edits.length === 0) {
@@ -4463,6 +4664,39 @@ export const CodePane: React.FC<CodePaneProps> = ({
     getPathLeafLabel(getDisplayPath(filePath)) || getDisplayPath(filePath)
   ), [getDisplayPath]);
 
+  const activeSymbolPath = useMemo(() => findActiveDocumentSymbolPath(
+    activeDocumentSymbols,
+    activeCursorLineNumber,
+    activeCursorColumn,
+  ), [activeCursorColumn, activeCursorLineNumber, activeDocumentSymbols]);
+
+  const breadcrumbItems = useMemo<CodePaneBreadcrumbItem[]>(() => {
+    if (!breadcrumbFilePath) {
+      return [];
+    }
+
+    const fileItem: CodePaneBreadcrumbItem = {
+      id: `file:${breadcrumbFilePath}`,
+      label: getRelativePath(rootPath, getDisplayPath(breadcrumbFilePath)),
+      detail: breadcrumbFilePath,
+      kind: 'file',
+      lineNumber: 1,
+      column: 1,
+    };
+
+    return [
+      fileItem,
+      ...activeSymbolPath.map((symbol) => ({
+        id: `symbol:${breadcrumbFilePath}:${symbol.name}:${symbol.selectionRange.startLineNumber}:${symbol.selectionRange.startColumn}`,
+        label: symbol.name,
+        detail: symbol.detail,
+        kind: 'symbol' as const,
+        lineNumber: symbol.selectionRange.startLineNumber,
+        column: symbol.selectionRange.startColumn,
+      })),
+    ];
+  }, [activeSymbolPath, breadcrumbFilePath, getDisplayPath, rootPath]);
+
   const visibleLocalHistoryEntries = useMemo(() => {
     const sourceEntries = activeFilePath
       ? (localHistoryEntriesRef.current.get(activeFilePath) ?? [])
@@ -5292,6 +5526,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       },
     },
     {
+      id: 'command-quick-documentation',
+      section: t('codePane.searchEverywhereCommandsSection'),
+      title: t('codePane.quickDocumentation'),
+      meta: 'F1',
+      execute: async () => {
+        setIsQuickDocumentationOpen(true);
+        await loadQuickDocumentation();
+      },
+    },
+    {
       id: 'command-find-usages',
       section: t('codePane.searchEverywhereCommandsSection'),
       title: t('codePane.findUsages'),
@@ -5379,6 +5623,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]), [
     findUsagesAtCursor,
     formatActiveDocument,
+    loadQuickDocumentation,
     navigateProblem,
     openSearchEverywhere,
     refreshLoadedDirectories,
@@ -5665,7 +5910,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     setActiveCursorLineNumber(1);
+    setActiveCursorColumn(1);
   }, [activeFilePath]);
+
+  useEffect(() => {
+    if (viewMode !== 'diff' && activeEditorTarget === 'diff') {
+      setActiveEditorTarget('editor');
+      focusedEditorTargetRef.current = 'editor';
+      return;
+    }
+
+    if ((!isEditorSplitVisible || !secondaryFilePath) && activeEditorTarget === 'secondary') {
+      setActiveEditorTarget('editor');
+      focusedEditorTargetRef.current = 'editor';
+    }
+  }, [activeEditorTarget, isEditorSplitVisible, secondaryFilePath, viewMode]);
 
   useEffect(() => {
     if (!isBlameVisible) {
@@ -5675,6 +5934,43 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     void loadBlameForActiveFile();
   }, [activeFilePath, isBlameVisible, loadBlameForActiveFile]);
+
+  useEffect(() => {
+    if (!breadcrumbFilePath) {
+      setActiveDocumentSymbols([]);
+      setIsActiveDocumentSymbolsLoading(false);
+      return;
+    }
+
+    void loadActiveDocumentSymbols(breadcrumbFilePath, breadcrumbLanguage);
+  }, [breadcrumbFilePath, breadcrumbLanguage, loadActiveDocumentSymbols]);
+
+  useEffect(() => {
+    if (!isQuickDocumentationOpen) {
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      void loadQuickDocumentation();
+    }, 120);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [
+    activeCursorColumn,
+    activeCursorLineNumber,
+    activeEditorTarget,
+    breadcrumbFilePath,
+    isQuickDocumentationOpen,
+    loadQuickDocumentation,
+  ]);
+
+  useEffect(() => {
+    editorRef.current?.updateOptions?.(editorInlayHintOptions);
+    secondaryEditorRef.current?.updateOptions?.(editorInlayHintOptions);
+    diffEditorRef.current?.getModifiedEditor().updateOptions?.(editorInlayHintOptions);
+  }, [editorInlayHintOptions]);
 
   useEffect(() => {
     const activeEditor = viewMode === 'diff'
@@ -5765,6 +6061,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
+      if (event.key === 'F1') {
+        event.preventDefault();
+        toggleQuickDocumentation();
+        return;
+      }
+
       if (event.key === 'F8') {
         event.preventDefault();
         void navigateProblem(event.shiftKey ? -1 : 1);
@@ -5783,6 +6085,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     isSearchEverywhereOpen,
     navigateProblem,
     openSearchEverywhere,
+    toggleQuickDocumentation,
   ]);
 
   useEffect(() => {
@@ -6909,6 +7212,45 @@ export const CodePane: React.FC<CodePaneProps> = ({
               Impl
             </button>
           </AppTooltip>
+          <AppTooltip content={t('codePane.quickDocumentation')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.quickDocumentation')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleQuickDocumentation();
+              }}
+              disabled={!activeFilePath}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                isQuickDocumentationOpen
+                  ? 'bg-sky-500/20 text-sky-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
+              }`}
+            >
+              <BookOpen size={11} className="mr-1" />
+              Doc
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.inlayHints')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.inlayHints')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                setAreInlayHintsEnabled((currentValue) => !currentValue);
+              }}
+              disabled={!activeFilePath}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                areInlayHintsEnabled
+                  ? 'bg-emerald-500/20 text-emerald-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
+              }`}
+            >
+              Hint
+            </button>
+          </AppTooltip>
           <AppTooltip content={t('codePane.codeActions')} placement="pane-corner">
             <button
               type="button"
@@ -7727,61 +8069,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         <div className="text-[10px] text-zinc-500">{gitGraph.length}</div>
                       </div>
                       {gitGraph.length > 0 ? (
-                        <div className="space-y-1">
-                          {gitGraph.map((commit) => {
-                            const laneWidth = Math.max(commit.laneCount, 1) * 12;
-                            const visibleRefs = commit.refs.slice(0, 4);
-                            return (
-                              <div key={commit.sha} className="flex items-start gap-3 rounded px-1 py-1 text-xs hover:bg-zinc-800/60">
-                                <div className="relative mt-1 h-5 shrink-0" style={{ width: `${laneWidth}px` }}>
-                                  {Array.from({ length: Math.max(commit.laneCount, 1) }).map((_, laneIndex) => (
-                                    <span
-                                      key={`${commit.sha}-lane-${laneIndex}`}
-                                      className="absolute inset-y-0 w-px bg-zinc-700/70"
-                                      style={{ left: `${(laneIndex * 12) + 5}px` }}
-                                    />
-                                  ))}
-                                  <span
-                                    className={`absolute top-1 h-2.5 w-2.5 rounded-full border ${commit.isMergeCommit ? 'border-sky-300 bg-sky-400' : commit.isHead ? 'border-emerald-300 bg-emerald-400' : 'border-zinc-300 bg-zinc-400'}`}
-                                    style={{ left: `${(commit.lane * 12) + 1}px` }}
-                                  />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    <span className="truncate text-zinc-100">{commit.subject || commit.shortSha}</span>
-                                    {visibleRefs.map((ref) => (
-                                      <span
-                                        key={`${commit.sha}-${ref}`}
-                                        className="rounded bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-300"
-                                      >
-                                        {ref}
-                                      </span>
-                                    ))}
-                                    {commit.refs.length > visibleRefs.length && (
-                                      <span className="text-[10px] text-zinc-500">+{commit.refs.length - visibleRefs.length}</span>
-                                    )}
-                                  </div>
-                                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
-                                    <span>{commit.author}</span>
-                                    <span>{new Date(commit.timestamp * 1000).toLocaleString()}</span>
-                                    <span>{commit.shortSha}</span>
-                                  </div>
-                                </div>
-                                <div className="flex shrink-0 items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void cherryPickCommit(commit.sha);
-                                    }}
-                                    className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                                  >
-                                    {t('codePane.gitCherryPick')}
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        <GitBranchGraph
+                          commits={gitGraph}
+                          onCherryPick={cherryPickCommit}
+                        />
                       ) : (
                         <div className="text-xs text-zinc-500">{t('codePane.gitCommitGraphEmpty')}</div>
                       )}
@@ -7957,13 +8248,49 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 {t('codePane.openEditors')}
               </div>
             )}
-          </div>
+	          </div>
 
-          <div className="relative min-h-0 flex-1 overflow-hidden bg-zinc-950">
-            {activeFilePath ? (
-              <div className="flex h-full min-h-0 flex-col">
-                {isBlameVisible && (
-                  <BlameGutter
+	          {activeFilePath && (
+	            <BreadcrumbsBar
+	              items={breadcrumbItems}
+	              emptyLabel={isActiveDocumentSymbolsLoading
+	                ? t('codePane.loading')
+	                : t('codePane.breadcrumbsEmpty')}
+	              onSelect={(item) => {
+	                if (!breadcrumbFilePath) {
+	                  return;
+	                }
+
+	                void openFileLocation({
+	                  filePath: breadcrumbFilePath,
+	                  lineNumber: item.lineNumber,
+	                  column: item.column,
+	                });
+	              }}
+	            />
+	          )}
+
+	          <div className="relative min-h-0 flex-1 overflow-hidden bg-zinc-950">
+	            {activeFilePath ? (
+	              <div className="flex h-full min-h-0 flex-col">
+	                {isQuickDocumentationOpen && (
+	                  <QuickDocumentationPanel
+	                    title={t('codePane.quickDocumentation')}
+	                    loadingLabel={t('codePane.quickDocumentationLoading')}
+	                    emptyLabel={t('codePane.quickDocumentationEmpty')}
+	                    error={quickDocumentationError}
+	                    loading={isQuickDocumentationLoading}
+	                    result={quickDocumentation}
+	                    onRefresh={() => {
+	                      void loadQuickDocumentation();
+	                    }}
+	                    onClose={() => {
+	                      setIsQuickDocumentationOpen(false);
+	                    }}
+	                  />
+	                )}
+	                {isBlameVisible && (
+	                  <BlameGutter
                     enabled={isBlameVisible}
                     loading={isBlameLoading}
                     entry={activeBlameEntry}

@@ -4,6 +4,7 @@ import type {
   CodePaneCompletionItem,
   CodePaneDocumentCloseConfig,
   CodePaneDocumentHighlight,
+  CodePaneInlayHint,
   CodePaneDocumentSyncConfig,
   CodePaneDocumentSymbol,
   CodePaneFormatDocumentConfig,
@@ -11,6 +12,7 @@ import type {
   CodePaneGetCompletionItemsConfig,
   CodePaneGetDefinitionConfig,
   CodePaneGetDocumentHighlightsConfig,
+  CodePaneGetInlayHintsConfig,
   CodePaneGetDocumentSymbolsConfig,
   CodePaneGetHoverConfig,
   CodePaneGetImplementationsConfig,
@@ -140,6 +142,12 @@ export class LanguageFeatureService {
   async getDocumentSymbols(config: CodePaneGetDocumentSymbolsConfig, workspace: Workspace | null): Promise<CodePaneDocumentSymbol[]> {
     return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
       await this.supervisor.getDocumentSymbols(resolution, config.filePath)
+    ));
+  }
+
+  async getInlayHints(config: CodePaneGetInlayHintsConfig, workspace: Workspace | null): Promise<CodePaneInlayHint[]> {
+    return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
+      await this.supervisor.getInlayHints(resolution, config.filePath, config.range)
     ));
   }
 

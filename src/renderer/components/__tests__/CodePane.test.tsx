@@ -206,6 +206,7 @@ const fakeMonacoState = {
   referenceProviders: new Map<string, { provideReferences: (...args: any[]) => Promise<unknown> }>(),
   documentHighlightProviders: new Map<string, { provideDocumentHighlights: (...args: any[]) => Promise<unknown> }>(),
   documentSymbolProviders: new Map<string, { provideDocumentSymbols: (...args: any[]) => Promise<unknown> }>(),
+  inlayHintsProviders: new Map<string, { provideInlayHints: (...args: any[]) => Promise<unknown> }>(),
   implementationProviders: new Map<string, { provideImplementation: (...args: any[]) => Promise<unknown> }>(),
   completionProviders: new Map<string, { provideCompletionItems: (...args: any[]) => Promise<unknown> }>(),
   signatureHelpProviders: new Map<string, { provideSignatureHelp: (...args: any[]) => Promise<unknown> }>(),
@@ -249,6 +250,7 @@ const fakeMonacoState = {
     this.referenceProviders.clear();
     this.documentHighlightProviders.clear();
     this.documentSymbolProviders.clear();
+    this.inlayHintsProviders.clear();
     this.implementationProviders.clear();
     this.completionProviders.clear();
     this.signatureHelpProviders.clear();
@@ -271,6 +273,10 @@ const fakeMonaco = {
       Read: 1,
       Write: 2,
     },
+    InlayHintKind: {
+      Type: 1,
+      Parameter: 2,
+    },
     registerDefinitionProvider: vi.fn((language: string, provider: { provideDefinition: (...args: any[]) => Promise<unknown> }) => {
       fakeMonacoState.definitionProviders.set(language, provider);
       return { dispose: vi.fn() };
@@ -289,6 +295,10 @@ const fakeMonaco = {
     }),
     registerDocumentSymbolProvider: vi.fn((language: string, provider: { provideDocumentSymbols: (...args: any[]) => Promise<unknown> }) => {
       fakeMonacoState.documentSymbolProviders.set(language, provider);
+      return { dispose: vi.fn() };
+    }),
+    registerInlayHintsProvider: vi.fn((language: string, provider: { provideInlayHints: (...args: any[]) => Promise<unknown> }) => {
+      fakeMonacoState.inlayHintsProviders.set(language, provider);
       return { dispose: vi.fn() };
     }),
     registerImplementationProvider: vi.fn((language: string, provider: { provideImplementation: (...args: any[]) => Promise<unknown> }) => {
@@ -644,6 +654,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetReferences).mockReset();
     vi.mocked(window.electronAPI.codePaneGetDocumentHighlights).mockReset();
     vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetInlayHints).mockReset();
     vi.mocked(window.electronAPI.codePaneGetImplementations).mockReset();
     vi.mocked(window.electronAPI.codePaneGetCompletionItems).mockReset();
     vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockReset();
@@ -796,6 +807,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetReferences).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetDocumentHighlights).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetInlayHints).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetImplementations).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetCompletionItems).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockResolvedValue({ success: true, data: null });
@@ -3242,6 +3254,145 @@ describe('CodePane', () => {
       targetPath: '/workspace/project/src',
     });
     expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders breadcrumbs for the active document symbol path', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export function hello() {\n  return 1;\n}\n',
+        mtimeMs: 100,
+        size: 40,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'hello',
+          kind: 12,
+          range: {
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: 3,
+            endColumn: 2,
+          },
+          selectionRange: {
+            startLineNumber: 1,
+            startColumn: 17,
+            endLineNumber: 1,
+            endColumn: 22,
+          },
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetDocumentSymbols).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+      });
+    });
+
+    expect((await screen.findAllByText('src/index.ts')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('hello')).toBeInTheDocument();
+  });
+
+  it('opens quick documentation and renders hover content', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneGetHover).mockResolvedValue({
+      success: true,
+      data: {
+        contents: [
+          {
+            kind: 'markdown',
+            value: 'Returns the active value.',
+          },
+        ],
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+    await user.click(await screen.findByRole('button', { name: 'codePane.quickDocumentation' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetHover).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        position: {
+          lineNumber: 1,
+          column: 1,
+        },
+      });
+    });
+
+    expect(await screen.findByText('Returns the active value.')).toBeInTheDocument();
+  });
+
+  it('bridges Monaco inlay hints requests through the language service API', async () => {
+    vi.mocked(window.electronAPI.codePaneGetInlayHints).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          position: {
+            lineNumber: 1,
+            column: 14,
+          },
+          label: ': number',
+          kind: 'type',
+          paddingLeft: true,
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+
+    const provider = fakeMonacoState.inlayHintsProviders.get('typescript');
+    const model = fakeMonacoState.lastEditorModel;
+    if (!provider || !model) {
+      throw new Error('expected the TypeScript inlay hints provider to be registered');
+    }
+
+    const result = await provider.provideInlayHints(model, {
+      startLineNumber: 1,
+      startColumn: 1,
+      endLineNumber: 1,
+      endColumn: 20,
+    });
+
+    expect(window.electronAPI.codePaneGetInlayHints).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      language: 'typescript',
+      range: {
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: 1,
+        endColumn: 20,
+      },
+    });
+    expect(result).toEqual({
+      hints: [
+        expect.objectContaining({
+          label: ': number',
+          paddingLeft: true,
+          kind: 1,
+        }),
+      ],
+      dispose: expect.any(Function),
+    });
   });
 
   it('pins tabs from the context menu and keeps them first', async () => {

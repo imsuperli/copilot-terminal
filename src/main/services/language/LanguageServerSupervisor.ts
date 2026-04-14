@@ -6,6 +6,7 @@ import type {
   CodePaneDiagnostic,
   CodePaneDiagnosticsChangedPayload,
   CodePaneDocumentHighlight,
+  CodePaneInlayHint,
   CodePaneDocumentSymbol,
   CodePaneHoverResult,
   CodePaneLocation,
@@ -46,6 +47,7 @@ const JAVA_SLOW_REQUEST_METHODS = new Set([
   'textDocument/references',
   'textDocument/documentHighlight',
   'textDocument/documentSymbol',
+  'textDocument/inlayHint',
   'textDocument/implementation',
   'textDocument/codeAction',
   'codeAction/resolve',
@@ -148,6 +150,18 @@ interface LspDocumentSymbol {
   range: LspRange;
   selectionRange: LspRange;
   children?: LspDocumentSymbol[];
+}
+
+interface LspInlayHintLabelPart {
+  value: string;
+}
+
+interface LspInlayHint {
+  position: LspPosition;
+  label: string | LspInlayHintLabelPart[];
+  kind?: number;
+  paddingLeft?: boolean;
+  paddingRight?: boolean;
 }
 
 interface LspSymbolInformation {
@@ -317,6 +331,14 @@ export class LanguageServerSupervisor {
 
   async getDocumentSymbols(resolution: ResolvedLanguagePlugin, filePath: string): Promise<CodePaneDocumentSymbol[]> {
     return await this.getOrCreateSession(resolution).getDocumentSymbols(filePath);
+  }
+
+  async getInlayHints(
+    resolution: ResolvedLanguagePlugin,
+    filePath: string,
+    range: CodePaneRange,
+  ): Promise<CodePaneInlayHint[]> {
+    return await this.getOrCreateSession(resolution).getInlayHints(filePath, range);
   }
 
   async getImplementations(
@@ -695,6 +717,18 @@ class LanguageServerSession {
     }) as Array<LspDocumentSymbol | LspSymbolInformation> | null;
 
     return (result ?? []).map(normalizeDocumentSymbol).filter((symbol): symbol is CodePaneDocumentSymbol => Boolean(symbol));
+  }
+
+  async getInlayHints(filePath: string, range: CodePaneRange): Promise<CodePaneInlayHint[]> {
+    await this.ensureInitialized();
+    const result = await this.sendRequest('textDocument/inlayHint', {
+      textDocument: {
+        uri: filePathToUri(filePath),
+      },
+      range: toLspRange(range),
+    }) as LspInlayHint[] | null;
+
+    return (result ?? []).map(normalizeInlayHint).filter((hint): hint is CodePaneInlayHint => Boolean(hint));
   }
 
   async getImplementations(filePath: string, position: CodePanePosition): Promise<CodePaneLocation[]> {
@@ -1654,6 +1688,34 @@ function normalizeDocumentSymbol(
             .filter((child): child is CodePaneDocumentSymbol => Boolean(child)),
         }
       : {}),
+  };
+}
+
+function normalizeInlayHint(value: LspInlayHint): CodePaneInlayHint | null {
+  if (!value?.position) {
+    return null;
+  }
+
+  const label = typeof value.label === 'string'
+    ? value.label
+    : value.label.map((part) => part.value ?? '').join('');
+  if (!label) {
+    return null;
+  }
+
+  return {
+    position: {
+      lineNumber: value.position.line + 1,
+      column: value.position.character + 1,
+    },
+    label,
+    ...(value.kind === 1
+      ? { kind: 'type' as const }
+      : value.kind === 2
+        ? { kind: 'parameter' as const }
+        : {}),
+    ...(value.paddingLeft !== undefined ? { paddingLeft: value.paddingLeft } : {}),
+    ...(value.paddingRight !== undefined ? { paddingRight: value.paddingRight } : {}),
   };
 }
 

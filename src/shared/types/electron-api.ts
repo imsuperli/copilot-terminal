@@ -629,6 +629,23 @@ export interface CodePaneGetDocumentSymbolsConfig {
   language?: string;
 }
 
+export type CodePaneInlayHintKind = 'type' | 'parameter';
+
+export interface CodePaneInlayHint {
+  position: CodePanePosition;
+  label: string;
+  kind?: CodePaneInlayHintKind;
+  paddingLeft?: boolean;
+  paddingRight?: boolean;
+}
+
+export interface CodePaneGetInlayHintsConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  range: CodePaneRange;
+}
+
 export interface CodePaneGetImplementationsConfig {
   rootPath: string;
   filePath: string;
@@ -1345,6 +1362,7 @@ export interface ElectronAPI {
   codePaneGetReferences: (config: CodePaneGetReferencesConfig) => Promise<IpcResponse<CodePaneReference[]>>;
   codePaneGetDocumentHighlights: (config: CodePaneGetDocumentHighlightsConfig) => Promise<IpcResponse<CodePaneDocumentHighlight[]>>;
   codePaneGetDocumentSymbols: (config: CodePaneGetDocumentSymbolsConfig) => Promise<IpcResponse<CodePaneDocumentSymbol[]>>;
+  codePaneGetInlayHints: (config: CodePaneGetInlayHintsConfig) => Promise<IpcResponse<CodePaneInlayHint[]>>;
   codePaneGetImplementations: (config: CodePaneGetImplementationsConfig) => Promise<IpcResponse<CodePaneLocation[]>>;
   codePaneGetCompletionItems: (config: CodePaneGetCompletionItemsConfig) => Promise<IpcResponse<CodePaneCompletionItem[]>>;
   codePaneGetSignatureHelp: (config: CodePaneGetSignatureHelpConfig) => Promise<IpcResponse<CodePaneSignatureHelpResult | null>>;
