@@ -13,15 +13,20 @@ import type {
   CodePaneListDebugSessionsConfig,
   CodePaneGetProjectContributionConfig,
   CodePaneGitBlameConfig,
+  CodePaneGitApplyRebasePlanConfig,
+  CodePaneGitBranchListConfig,
   CodePaneGitCheckoutConfig,
   CodePaneGitCherryPickConfig,
   CodePaneGitCommitConfig,
+  CodePaneGitDeleteBranchConfig,
   CodePaneGitDiscardConfig,
   CodePaneGitDiffHunksConfig,
   CodePaneGitGraphConfig,
   CodePaneGitHistoryConfig,
   CodePaneGitHunkActionConfig,
+  CodePaneGitRenameBranchConfig,
   CodePaneGitRebaseControlConfig,
+  CodePaneGitRebasePlanConfig,
   CodePaneGitResolveConflictConfig,
   CodePaneGitStageConfig,
   CodePaneGitStashConfig,
@@ -294,6 +299,69 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       await codeGitOperationService.checkout(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-branches', async (_event, config: CodePaneGitBranchListConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.getBranches(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-rename-branch', async (_event, config: CodePaneGitRenameBranchConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.renameBranch(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-delete-branch', async (_event, config: CodePaneGitDeleteBranchConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.deleteBranch(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-rebase-plan', async (_event, config: CodePaneGitRebasePlanConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.getRebasePlan(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-apply-rebase-plan', async (_event, config: CodePaneGitApplyRebasePlanConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.applyRebasePlan(config);
       return successResponse();
     } catch (error) {
       return errorResponse(error);

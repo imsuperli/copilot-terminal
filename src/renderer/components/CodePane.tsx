@@ -46,9 +46,12 @@ import type {
   CodePaneDebugStackFrame,
   CodePaneExternalLibrarySection,
   CodePaneGitDiffHunk,
+  CodePaneGitBranchEntry,
   CodePaneGitGraphCommit,
   CodePaneGitBlameLine,
   CodePaneGitHistoryResult,
+  CodePaneGitRebasePlanEntry,
+  CodePaneGitRebasePlanResult,
   CodePaneGitRepositorySummary,
   CodePaneHoverResult,
   CodePaneFsChangedPayload,
@@ -100,10 +103,10 @@ import {
 } from './code-pane/tool-windows/SemanticToolWindow';
 import { TestsToolWindow } from './code-pane/tool-windows/TestsToolWindow';
 import { WorkspaceToolWindow } from './code-pane/tool-windows/WorkspaceToolWindow';
-import { GitBranchGraph } from './code-pane/GitBranchGraph';
 import { BlameGutter } from './code-pane/scm/BlameGutter';
 import { CommitComposer } from './code-pane/scm/CommitComposer';
 import { GitHunkList } from './code-pane/scm/GitHunkList';
+import { GitToolWindow } from './code-pane/tool-windows/GitToolWindow';
 import { useI18n } from '../i18n';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { useWindowStore } from '../stores/windowStore';
@@ -130,6 +133,7 @@ type BottomPanelMode =
   | 'debug'
   | 'tests'
   | 'project'
+  | 'git'
   | 'preview'
   | 'history'
   | 'workspace'
@@ -1186,6 +1190,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [gitStatusByPath, setGitStatusByPath] = useState<Record<string, CodePaneGitStatusEntry>>({});
   const [gitRepositorySummary, setGitRepositorySummary] = useState<CodePaneGitRepositorySummary | null>(null);
   const [gitGraph, setGitGraph] = useState<CodePaneGitGraphCommit[]>([]);
+  const [gitBranches, setGitBranches] = useState<CodePaneGitBranchEntry[]>([]);
+  const [selectedGitBranchName, setSelectedGitBranchName] = useState<string | null>(null);
+  const [selectedGitLogCommitSha, setSelectedGitLogCommitSha] = useState<string | null>(null);
+  const [isGitBranchesLoading, setIsGitBranchesLoading] = useState(false);
+  const [gitBranchesError, setGitBranchesError] = useState<string | null>(null);
+  const [gitRebasePlan, setGitRebasePlan] = useState<CodePaneGitRebasePlanResult | null>(null);
+  const [gitRebaseBaseRef, setGitRebaseBaseRef] = useState('');
+  const [isGitRebaseLoading, setIsGitRebaseLoading] = useState(false);
+  const [gitRebaseError, setGitRebaseError] = useState<string | null>(null);
   const [selectedGitChangePath, setSelectedGitChangePath] = useState<string | null>(null);
   const [gitStagedHunks, setGitStagedHunks] = useState<CodePaneGitDiffHunk[]>([]);
   const [gitUnstagedHunks, setGitUnstagedHunks] = useState<CodePaneGitDiffHunk[]>([]);
@@ -2301,10 +2314,81 @@ export const CodePane: React.FC<CodePaneProps> = ({
       );
       setGitRepositorySummary(summaryResponse?.success ? summaryResponse.data ?? null : null);
       if (includeGraph) {
-        setGitGraph(graphResponse?.success ? graphResponse.data ?? [] : []);
+        const nextGraph = graphResponse?.success ? graphResponse.data ?? [] : [];
+        setGitGraph(nextGraph);
+        setSelectedGitLogCommitSha((currentCommitSha) => (
+          currentCommitSha && nextGraph.some((commit) => commit.sha === currentCommitSha)
+            ? currentCommitSha
+            : nextGraph[0]?.sha ?? null
+        ));
       }
     });
   }, [rootPath]);
+
+  const loadGitBranches = useCallback(async (options?: { preferredBaseRef?: string }) => {
+    setIsGitBranchesLoading(true);
+    setGitBranchesError(null);
+
+    const response = await window.electronAPI.codePaneGetGitBranches({ rootPath });
+    if (!response.success || !response.data) {
+      setGitBranches([]);
+      setGitBranchesError(response.error || t('common.retry'));
+      setIsGitBranchesLoading(false);
+      return;
+    }
+
+    const branches = response.data;
+    startTransition(() => {
+      setGitBranches(branches);
+      setSelectedGitBranchName((currentBranchName) => (
+        currentBranchName && branches.some((branch) => branch.name === currentBranchName)
+          ? currentBranchName
+          : branches.find((branch) => branch.current)?.name ?? branches[0]?.name ?? null
+      ));
+      setGitRebaseBaseRef((currentBaseRef) => {
+        const preferredBaseRef = options?.preferredBaseRef ?? currentBaseRef;
+        if (preferredBaseRef && branches.some((branch) => branch.name === preferredBaseRef)) {
+          return preferredBaseRef;
+        }
+
+        return branches.find((branch) => branch.current)?.upstream
+          ?? branches.find((branch) => branch.kind === 'local' && !branch.current)?.name
+          ?? branches[0]?.name
+          ?? '';
+      });
+    });
+    setIsGitBranchesLoading(false);
+  }, [rootPath, t]);
+
+  const loadGitRebasePlan = useCallback(async (baseRef: string) => {
+    if (!baseRef) {
+      setGitRebasePlan(null);
+      setGitRebaseError(null);
+      setIsGitRebaseLoading(false);
+      return;
+    }
+
+    setIsGitRebaseLoading(true);
+    setGitRebaseError(null);
+    const response = await window.electronAPI.codePaneGetGitRebasePlan({
+      rootPath,
+      baseRef,
+    });
+
+    if (!response.success || !response.data) {
+      setGitRebasePlan(null);
+      setGitRebaseError(response.error || t('common.retry'));
+      setIsGitRebaseLoading(false);
+      return;
+    }
+
+    const rebasePlan = response.data;
+    startTransition(() => {
+      setGitRebasePlan(rebasePlan);
+      setGitRebaseBaseRef(rebasePlan.baseRef);
+    });
+    setIsGitRebaseLoading(false);
+  }, [rootPath, t]);
 
   const loadGitDiffHunks = useCallback(async (filePath: string | null) => {
     if (!filePath) {
@@ -4396,22 +4480,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [refreshGitSnapshot, refreshLoadedDirectories, rootPath, t]);
 
-  const checkoutGitBranch = useCallback(async (config: { branchName: string; createBranch: boolean }) => {
-    await runGitOperation(
+  const checkoutGitBranch = useCallback(async (config: { branchName: string; createBranch: boolean; startPoint?: string }) => {
+    const didCheckout = await runGitOperation(
       async () => await window.electronAPI.codePaneGitCheckout({
         rootPath,
         branchName: config.branchName,
         createBranch: config.createBranch,
+        startPoint: config.startPoint,
       }),
       {
         successMessage: t('codePane.gitCheckoutSuccess'),
         refreshGraph: true,
       },
     );
-  }, [rootPath, runGitOperation, t]);
+    if (didCheckout) {
+      await loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+    }
+  }, [gitRebaseBaseRef, loadGitBranches, rootPath, runGitOperation, t]);
 
   const controlGitRebase = useCallback(async (action: 'continue' | 'abort') => {
-    await runGitOperation(
+    const didControl = await runGitOperation(
       async () => await window.electronAPI.codePaneGitRebaseControl({
         rootPath,
         action,
@@ -4421,7 +4509,79 @@ export const CodePane: React.FC<CodePaneProps> = ({
         refreshGraph: true,
       },
     );
-  }, [rootPath, runGitOperation, t]);
+    if (didControl) {
+      await loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+      await loadGitRebasePlan(gitRebaseBaseRef);
+    }
+  }, [gitRebaseBaseRef, loadGitBranches, loadGitRebasePlan, rootPath, runGitOperation, t]);
+
+  const renameGitBranch = useCallback(async (branchName: string, nextBranchName: string) => {
+    const didRename = await runGitOperation(
+      async () => await window.electronAPI.codePaneGitRenameBranch({
+        rootPath,
+        branchName,
+        nextBranchName,
+      }),
+      {
+        successMessage: t('codePane.gitRenameBranchSuccess'),
+        refreshGraph: true,
+      },
+    );
+    if (didRename) {
+      await loadGitBranches({
+        preferredBaseRef: gitRebaseBaseRef === branchName ? nextBranchName : gitRebaseBaseRef,
+      });
+    }
+  }, [gitRebaseBaseRef, loadGitBranches, rootPath, runGitOperation, t]);
+
+  const deleteGitBranch = useCallback(async (branchName: string, force?: boolean) => {
+    const didDelete = await runGitOperation(
+      async () => await window.electronAPI.codePaneGitDeleteBranch({
+        rootPath,
+        branchName,
+        force,
+      }),
+      {
+        successMessage: t('codePane.gitDeleteBranchSuccess'),
+        refreshGraph: true,
+      },
+    );
+    if (didDelete) {
+      await loadGitBranches({
+        preferredBaseRef: gitRebaseBaseRef === branchName ? '' : gitRebaseBaseRef,
+      });
+    }
+  }, [gitRebaseBaseRef, loadGitBranches, rootPath, runGitOperation, t]);
+
+  const applyGitRebasePlan = useCallback(async (
+    baseRef: string,
+    entries: CodePaneGitRebasePlanEntry[],
+  ) => {
+    const response = await window.electronAPI.codePaneGitApplyRebasePlan({
+      rootPath,
+      baseRef,
+      entries,
+    });
+
+    await Promise.all([
+      refreshGitSnapshot({ includeGraph: true }),
+      loadGitBranches({ preferredBaseRef: baseRef }),
+      loadGitRebasePlan(baseRef),
+    ]);
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    setBanner({
+      tone: 'info',
+      message: t('codePane.gitApplyRebasePlanSuccess'),
+    });
+  }, [loadGitBranches, loadGitRebasePlan, refreshGitSnapshot, rootPath, t]);
 
   const cherryPickCommit = useCallback(async (commitSha: string) => {
     await runGitOperation(
@@ -4881,6 +5041,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setProjectContributions([]);
       setIsProjectLoading(false);
       setProjectError(null);
+      setGitBranches([]);
+      setSelectedGitBranchName(null);
+      setSelectedGitLogCommitSha(null);
+      setIsGitBranchesLoading(false);
+      setGitBranchesError(null);
+      setGitRebasePlan(null);
+      setGitRebaseBaseRef('');
+      setIsGitRebaseLoading(false);
+      setGitRebaseError(null);
       setSelectedGitChangePath(null);
       setGitStagedHunks([]);
       setGitUnstagedHunks([]);
@@ -7624,6 +7793,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    if (bottomPanelMode === 'git') {
+      void refreshGitSnapshot({ includeGraph: true });
+      void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+      if (gitRebaseBaseRef) {
+        void loadGitRebasePlan(gitRebaseBaseRef);
+      }
+      return;
+    }
+
     if (bottomPanelMode === 'history') {
       void loadGitHistory({
         filePath: gitHistory?.targetFilePath,
@@ -7652,9 +7830,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [
     bottomPanelMode,
+    gitRebaseBaseRef,
     gitHistory?.targetFilePath,
     gitHistory?.targetLineNumber,
+    loadGitBranches,
     loadGitHistory,
+    loadGitRebasePlan,
     loadHierarchyRoot,
     loadDebugSessions,
     loadDebugSessionDetails,
@@ -7662,6 +7843,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     loadSemanticSummary,
     loadTodoEntries,
     loadProjectContributions,
+    refreshGitSnapshot,
     loadRunTargets,
     loadTests,
     selectedDebugSessionId,
@@ -7679,6 +7861,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       void loadTests();
     } else if (bottomPanelMode === 'project') {
       void loadProjectContributions();
+    } else if (bottomPanelMode === 'git') {
+      void refreshGitSnapshot({ includeGraph: true });
+      void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
     } else if (bottomPanelMode === 'history' && gitHistory?.targetFilePath) {
       void loadGitHistory({
         filePath: gitHistory.targetFilePath,
@@ -7694,19 +7879,31 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [
     activeFilePath,
     bottomPanelMode,
+    gitRebaseBaseRef,
     gitHistory?.targetFilePath,
     gitHistory?.targetLineNumber,
+    loadGitBranches,
     loadGitHistory,
+    loadGitRebasePlan,
     loadHierarchyRoot,
     loadDebugSessions,
     loadExceptionBreakpoints,
     loadTodoEntries,
     loadProjectContributions,
+    refreshGitSnapshot,
     loadRunTargets,
     loadSemanticSummary,
     loadTests,
     selectedHierarchyMode,
   ]);
+
+  useEffect(() => {
+    if (bottomPanelMode !== 'git' || !gitRebaseBaseRef) {
+      return;
+    }
+
+    void loadGitRebasePlan(gitRebaseBaseRef);
+  }, [bottomPanelMode, gitRebaseBaseRef, loadGitRebasePlan]);
 
   useEffect(() => {
     void loadDebugSessionDetails(selectedDebugSessionId);
@@ -8276,6 +8473,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
               }`}
             >
               Proj
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.gitWorkbenchTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.gitWorkbenchTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleBottomPanelMode('git');
+              }}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'git'
+                  ? 'bg-sky-500/20 text-sky-100'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
+              }`}
+            >
+              Git
             </button>
           </AppTooltip>
           <AppTooltip content={t('codePane.refactorPreviewTab')} placement="pane-corner">
@@ -9002,20 +9217,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     />
 
                     <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                          {t('codePane.gitBranchGraph')}
-                        </div>
-                        <div className="text-[10px] text-zinc-500">{gitGraph.length}</div>
+                      <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                        {t('codePane.gitWorkbenchTab')}
                       </div>
-                      {gitGraph.length > 0 ? (
-                        <GitBranchGraph
-                          commits={gitGraph}
-                          onCherryPick={cherryPickCommit}
-                        />
-                      ) : (
-                        <div className="text-xs text-zinc-500">{t('codePane.gitCommitGraphEmpty')}</div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBottomPanelMode('git');
+                        }}
+                        className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
+                      >
+                        <span>{t('codePane.gitOpenWorkbench')}</span>
+                        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{gitGraph.length}</span>
+                      </button>
                     </div>
 
                     <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
@@ -9469,6 +9683,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
               error={refactorPreviewError}
               onSelectChange={setSelectedPreviewChangeId}
               onApply={applyRefactorPreview}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+            />
+          ) : bottomPanelMode === 'git' ? (
+            <GitToolWindow
+              branches={gitBranches}
+              selectedBranchName={selectedGitBranchName}
+              commits={gitGraph}
+              selectedCommitSha={selectedGitLogCommitSha}
+              rebasePlan={gitRebasePlan}
+              rebaseBaseRef={gitRebaseBaseRef}
+              isBranchesLoading={isGitBranchesLoading}
+              branchesError={gitBranchesError}
+              isRebaseLoading={isGitRebaseLoading}
+              rebaseError={gitRebaseError}
+              onSelectBranch={setSelectedGitBranchName}
+              onSelectCommit={setSelectedGitLogCommitSha}
+              onChangeRebaseBaseRef={setGitRebaseBaseRef}
+              onRefresh={refreshBottomPanel}
+              onRefreshRebase={() => {
+                void loadGitRebasePlan(gitRebaseBaseRef);
+              }}
+              onCheckoutBranch={checkoutGitBranch}
+              onRenameBranch={renameGitBranch}
+              onDeleteBranch={deleteGitBranch}
+              onCherryPick={cherryPickCommit}
+              onApplyRebasePlan={applyGitRebasePlan}
               onClose={() => {
                 setBottomPanelMode(null);
               }}

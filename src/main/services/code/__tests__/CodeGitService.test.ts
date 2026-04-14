@@ -126,6 +126,42 @@ describeGit('CodeGitService', () => {
     });
   });
 
+  it('lists branches and builds an interactive rebase plan', async () => {
+    const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
+    execFileSync('git', ['checkout', '-b', 'feature/rebase'], { cwd: repoRootPath, stdio: 'ignore' });
+    await fsPromises.writeFile(trackedFilePath, 'export const version = 2;\n', 'utf-8');
+    execFileSync('git', ['commit', '-am', 'feature commit 1'], { cwd: repoRootPath, stdio: 'ignore' });
+    await fsPromises.writeFile(trackedFilePath, 'export const version = 3;\n', 'utf-8');
+    execFileSync('git', ['commit', '-am', 'feature commit 2'], { cwd: repoRootPath, stdio: 'ignore' });
+
+    const branches = await service.getBranches({ rootPath: repoRootPath });
+    expect(branches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: 'feature/rebase',
+        kind: 'local',
+        current: true,
+      }),
+      expect.objectContaining({
+        name: initialBranchName,
+        kind: 'local',
+      }),
+    ]));
+
+    const rebasePlan = await service.getRebasePlan({
+      rootPath: repoRootPath,
+      baseRef: initialBranchName,
+    });
+    expect(rebasePlan).toMatchObject({
+      baseRef: initialBranchName,
+      currentBranch: 'feature/rebase',
+      hasMergeCommits: false,
+    });
+    expect(rebasePlan.commits.map((entry) => entry.subject)).toEqual([
+      'feature commit 1',
+      'feature commit 2',
+    ]);
+  });
+
   it('builds a recent commit graph with merge commits', async () => {
     await fsPromises.writeFile(path.join(repoRootPath, 'tracked.ts'), 'export const version = 2;\n', 'utf-8');
     execFileSync('git', ['checkout', '-b', 'feature/scm'], { cwd: repoRootPath, stdio: 'ignore' });

@@ -647,6 +647,11 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGitCommit).mockReset();
     vi.mocked(window.electronAPI.codePaneGitStash).mockReset();
     vi.mocked(window.electronAPI.codePaneGitCheckout).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitRenameBranch).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitDeleteBranch).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetGitRebasePlan).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitApplyRebasePlan).mockReset();
     vi.mocked(window.electronAPI.codePaneGitCherryPick).mockReset();
     vi.mocked(window.electronAPI.codePaneGitRebaseControl).mockReset();
     vi.mocked(window.electronAPI.codePaneGitResolveConflict).mockReset();
@@ -807,6 +812,22 @@ describe('CodePane', () => {
       },
     });
     vi.mocked(window.electronAPI.codePaneGitCheckout).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(window.electronAPI.codePaneGitRenameBranch).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitDeleteBranch).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGetGitRebasePlan).mockResolvedValue({
+      success: true,
+      data: {
+        baseRef: 'origin/main',
+        currentBranch: 'main',
+        hasMergeCommits: false,
+        commits: [],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGitApplyRebasePlan).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitCherryPick).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitRebaseControl).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitResolveConflict).mockResolvedValue({ success: true });
@@ -2229,7 +2250,7 @@ describe('CodePane', () => {
     });
 
     expect((await screen.findAllByText('feature/scm')).length).toBeGreaterThan(0);
-    expect(screen.getByText('Merge feature branch')).toBeInTheDocument();
+    expect(screen.getByText('codePane.gitOpenWorkbench')).toBeInTheDocument();
     expect(screen.getByText('codePane.gitSectionUnstaged')).toBeInTheDocument();
     expect(await screen.findByText('index.ts')).toBeInTheDocument();
     expect(window.electronAPI.codePaneGetGitGraph).toHaveBeenCalledWith({
@@ -2445,6 +2466,251 @@ describe('CodePane', () => {
       });
     });
     expect(await screen.findByText(/Test User · Refine index flow/)).toBeInTheDocument();
+  });
+
+  it('opens the git workbench below the editor and loads branches with a one-line log list', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/workbench',
+        upstreamBranch: 'origin/main',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 2,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'feature/workbench',
+          refName: 'refs/heads/feature/workbench',
+          shortName: 'feature/workbench',
+          kind: 'local',
+          current: true,
+          upstream: 'origin/main',
+          aheadCount: 2,
+          behindCount: 0,
+          commitSha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          subject: 'Feature commit 2',
+          timestamp: 1_710_000_100,
+          mergedIntoCurrent: false,
+        },
+        {
+          name: 'main',
+          refName: 'refs/heads/main',
+          shortName: 'main',
+          kind: 'local',
+          current: false,
+          upstream: 'origin/main',
+          aheadCount: 0,
+          behindCount: 0,
+          commitSha: '1234567890abcdef',
+          shortSha: '1234567',
+          subject: 'Base commit',
+          timestamp: 1_710_000_000,
+          mergedIntoCurrent: true,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitGraph).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          sha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          parents: ['1234567890abcdef'],
+          subject: 'Feature commit 2',
+          author: 'Test User',
+          timestamp: 1_710_000_100,
+          refs: ['HEAD -> feature/workbench'],
+          isHead: true,
+          isMergeCommit: false,
+          lane: 0,
+          laneCount: 1,
+        },
+        {
+          sha: '1234567890abcdef',
+          shortSha: '1234567',
+          parents: [],
+          subject: 'Base commit',
+          author: 'Test User',
+          timestamp: 1_710_000_000,
+          refs: ['main', 'origin/main'],
+          isHead: false,
+          isMergeCommit: false,
+          lane: 0,
+          laneCount: 1,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitRebasePlan).mockResolvedValue({
+      success: true,
+      data: {
+        baseRef: 'origin/main',
+        currentBranch: 'feature/workbench',
+        hasMergeCommits: false,
+        commits: [
+          {
+            commitSha: '1111111111111111',
+            shortSha: '1111111',
+            subject: 'Feature commit 1',
+            author: 'Test User',
+            timestamp: 1_710_000_010,
+            action: 'pick',
+          },
+          {
+            commitSha: 'abcdef1234567890',
+            shortSha: 'abcdef1',
+            subject: 'Feature commit 2',
+            author: 'Test User',
+            timestamp: 1_710_000_100,
+            action: 'pick',
+          },
+        ],
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitWorkbenchTab' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitBranches).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+      });
+    });
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitRebasePlan).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        baseRef: 'origin/main',
+      });
+    });
+    expect(await screen.findByText('codePane.gitBranchManager')).toBeInTheDocument();
+    expect(screen.getAllByText('Feature commit 2').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('feature/workbench').length).toBeGreaterThan(0);
+  });
+
+  it('applies a git rebase plan from the bottom workbench', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/workbench',
+        upstreamBranch: 'origin/main',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 2,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'feature/workbench',
+          refName: 'refs/heads/feature/workbench',
+          shortName: 'feature/workbench',
+          kind: 'local',
+          current: true,
+          upstream: 'origin/main',
+          aheadCount: 2,
+          behindCount: 0,
+          commitSha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          subject: 'Feature commit 2',
+          timestamp: 1_710_000_100,
+          mergedIntoCurrent: false,
+        },
+        {
+          name: 'origin/main',
+          refName: 'refs/remotes/origin/main',
+          shortName: 'origin/main',
+          kind: 'remote',
+          current: false,
+          upstream: undefined,
+          aheadCount: 0,
+          behindCount: 0,
+          commitSha: '1234567890abcdef',
+          shortSha: '1234567',
+          subject: 'Base commit',
+          timestamp: 1_710_000_000,
+          mergedIntoCurrent: false,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitGraph).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitRebasePlan).mockResolvedValue({
+      success: true,
+      data: {
+        baseRef: 'origin/main',
+        currentBranch: 'feature/workbench',
+        hasMergeCommits: false,
+        commits: [
+          {
+            commitSha: '1111111111111111',
+            shortSha: '1111111',
+            subject: 'Feature commit 1',
+            author: 'Test User',
+            timestamp: 1_710_000_010,
+            action: 'pick',
+          },
+          {
+            commitSha: 'abcdef1234567890',
+            shortSha: 'abcdef1',
+            subject: 'Feature commit 2',
+            author: 'Test User',
+            timestamp: 1_710_000_100,
+            action: 'pick',
+          },
+        ],
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitWorkbenchTab' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitRebasePlanner' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitApplyRebasePlan).not.toHaveBeenCalled();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitApplyRebasePlan' }));
+    });
+
+    expect(window.electronAPI.codePaneGitApplyRebasePlan).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      baseRef: 'origin/main',
+      entries: [
+        expect.objectContaining({
+          commitSha: '1111111111111111',
+          action: 'pick',
+        }),
+        expect.objectContaining({
+          commitSha: 'abcdef1234567890',
+          action: 'pick',
+        }),
+      ],
+    });
   });
 
   it('loads and applies git hunks for the selected SCM file', async () => {

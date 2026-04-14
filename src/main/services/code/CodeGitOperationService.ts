@@ -3,12 +3,15 @@ import { tmpdir } from 'os';
 import path from 'path';
 import fs from 'fs-extra';
 import type {
+  CodePaneGitApplyRebasePlanConfig,
   CodePaneGitCheckoutConfig,
   CodePaneGitCherryPickConfig,
   CodePaneGitCommitConfig,
+  CodePaneGitDeleteBranchConfig,
   CodePaneGitCommitResult,
   CodePaneGitDiscardConfig,
   CodePaneGitHunkActionConfig,
+  CodePaneGitRenameBranchConfig,
   CodePaneGitRebaseControlConfig,
   CodePaneGitResolveConflictConfig,
   CodePaneGitStageConfig,
@@ -150,6 +153,63 @@ export class CodeGitOperationService {
     await execFileAsync('git', args, { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 });
   }
 
+  async renameBranch(config: CodePaneGitRenameBranchConfig): Promise<void> {
+    const repoContext = await requireRepoContext(config.rootPath);
+    await execFileAsync(
+      'git',
+      ['-C', repoContext.repoRootPath, 'branch', '-m', config.branchName, config.nextBranchName],
+      { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+    );
+  }
+
+  async deleteBranch(config: CodePaneGitDeleteBranchConfig): Promise<void> {
+    const repoContext = await requireRepoContext(config.rootPath);
+    await execFileAsync(
+      'git',
+      ['-C', repoContext.repoRootPath, 'branch', config.force ? '-D' : '-d', config.branchName],
+      { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+    );
+  }
+
+  async applyRebasePlan(config: CodePaneGitApplyRebasePlanConfig): Promise<void> {
+    const repoContext = await requireRepoContext(config.rootPath);
+    const todoContent = buildRebaseTodo(config.entries);
+    const todoFilePath = path.join(tmpdir(), `code-pane-rebase-plan-${randomUUID()}.txt`);
+    const sequenceEditorPath = path.join(tmpdir(), `code-pane-rebase-editor-${randomUUID()}.cjs`);
+
+    await fs.writeFile(todoFilePath, todoContent, 'utf-8');
+    await fs.writeFile(sequenceEditorPath, buildSequenceEditorScript(), 'utf-8');
+
+    try {
+      const sequenceEditorCommand = `${quoteShellArgument(process.execPath)} ${quoteShellArgument(sequenceEditorPath)}`;
+      await execFileAsync(
+        'git',
+        [
+          '-C',
+          repoContext.repoRootPath,
+          '-c',
+          `sequence.editor=${sequenceEditorCommand}`,
+          'rebase',
+          '-i',
+          config.baseRef,
+        ],
+        {
+          encoding: 'utf-8',
+          maxBuffer: 8 * 1024 * 1024,
+          env: {
+            ...process.env,
+            CODE_PANE_REBASE_TODO_PATH: todoFilePath,
+          },
+        },
+      );
+    } finally {
+      await Promise.all([
+        fs.rm(todoFilePath, { force: true }),
+        fs.rm(sequenceEditorPath, { force: true }),
+      ]);
+    }
+  }
+
   async cherryPick(config: CodePaneGitCherryPickConfig): Promise<void> {
     const repoContext = await requireRepoContext(config.rootPath);
     await execFileAsync(
@@ -247,4 +307,50 @@ async function requireRepoContext(rootPath: string) {
   }
 
   return repoContext;
+}
+
+function buildRebaseTodo(entries: CodePaneGitApplyRebasePlanConfig['entries']): string {
+  let sawReplayableCommit = false;
+  const todoLines: string[] = [];
+
+  for (const entry of entries) {
+    if (!entry.commitSha) {
+      continue;
+    }
+
+    if (entry.action === 'drop') {
+      todoLines.push(`drop ${entry.commitSha} ${entry.subject}`);
+      continue;
+    }
+
+    if ((entry.action === 'squash' || entry.action === 'fixup') && !sawReplayableCommit) {
+      throw new Error('The first remaining rebase commit must use pick');
+    }
+
+    todoLines.push(`${entry.action} ${entry.commitSha} ${entry.subject}`);
+    sawReplayableCommit = true;
+  }
+
+  if (!sawReplayableCommit) {
+    throw new Error('At least one commit must remain in the rebase plan');
+  }
+
+  return `${todoLines.join('\n')}\n`;
+}
+
+function buildSequenceEditorScript(): string {
+  return [
+    "const fs = require('fs');",
+    "const todoPath = process.argv[2];",
+    "const sourcePath = process.env.CODE_PANE_REBASE_TODO_PATH;",
+    "if (!todoPath || !sourcePath) {",
+    "  throw new Error('Missing rebase todo editor paths');",
+    "}",
+    "fs.copyFileSync(sourcePath, todoPath);",
+    '',
+  ].join('\n');
+}
+
+function quoteShellArgument(value: string): string {
+  return `\"${value.replace(/([\"\\\\$`])/g, '\\\\$1')}\"`;
 }

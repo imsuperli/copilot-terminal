@@ -167,4 +167,64 @@ describeGit('Code Git workflow services', () => {
       lineNumber: 1,
     });
   });
+
+  it('renames and deletes branches, then applies an interactive rebase plan', async () => {
+    const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
+    const initialBranchName = execFileSync('git', ['branch', '--show-current'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    }).trim();
+
+    execFileSync('git', ['checkout', '-b', 'feature/rebase'], { cwd: repoRootPath, stdio: 'ignore' });
+    await fsPromises.writeFile(trackedFilePath, 'export const value = 2;\n', 'utf-8');
+    execFileSync('git', ['commit', '-am', 'feature commit 1'], { cwd: repoRootPath, stdio: 'ignore' });
+    await fsPromises.writeFile(trackedFilePath, 'export const value = 3;\n', 'utf-8');
+    execFileSync('git', ['commit', '-am', 'feature commit 2'], { cwd: repoRootPath, stdio: 'ignore' });
+
+    await operationService.renameBranch({
+      rootPath: repoRootPath,
+      branchName: 'feature/rebase',
+      nextBranchName: 'feature/rewritten',
+    });
+    expect(execFileSync('git', ['branch', '--show-current'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    }).trim()).toBe('feature/rewritten');
+
+    execFileSync('git', ['checkout', initialBranchName], { cwd: repoRootPath, stdio: 'ignore' });
+    execFileSync('git', ['branch', 'temp/delete'], { cwd: repoRootPath, stdio: 'ignore' });
+    await operationService.deleteBranch({
+      rootPath: repoRootPath,
+      branchName: 'temp/delete',
+    });
+    expect(execFileSync('git', ['branch', '--list', 'temp/delete'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    }).trim()).toBe('');
+
+    execFileSync('git', ['checkout', 'feature/rewritten'], { cwd: repoRootPath, stdio: 'ignore' });
+    const rebasePlan = await gitService.getRebasePlan({
+      rootPath: repoRootPath,
+      baseRef: initialBranchName,
+    });
+    await operationService.applyRebasePlan({
+      rootPath: repoRootPath,
+      baseRef: initialBranchName,
+      entries: [
+        {
+          ...rebasePlan.commits[0],
+          action: 'pick',
+        },
+        {
+          ...rebasePlan.commits[1],
+          action: 'fixup',
+        },
+      ],
+    });
+
+    expect(execFileSync('git', ['rev-list', '--count', `${initialBranchName}..HEAD`], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    }).trim()).toBe('1');
+  });
 });

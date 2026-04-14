@@ -171,6 +171,16 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-stash', config),
   codePaneGitCheckout: (config) =>
     ipcRenderer.invoke('code-pane-git-checkout', config),
+  codePaneGetGitBranches: (config) =>
+    ipcRenderer.invoke('code-pane-git-branches', config),
+  codePaneGitRenameBranch: (config) =>
+    ipcRenderer.invoke('code-pane-git-rename-branch', config),
+  codePaneGitDeleteBranch: (config) =>
+    ipcRenderer.invoke('code-pane-git-delete-branch', config),
+  codePaneGetGitRebasePlan: (config) =>
+    ipcRenderer.invoke('code-pane-git-rebase-plan', config),
+  codePaneGitApplyRebasePlan: (config) =>
+    ipcRenderer.invoke('code-pane-git-apply-rebase-plan', config),
   codePaneGitCherryPick: (config) =>
     ipcRenderer.invoke('code-pane-git-cherry-pick', config),
   codePaneGitRebaseControl: (config) =>

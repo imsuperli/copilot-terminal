@@ -3,11 +3,15 @@ import fs from 'fs-extra';
 import path from 'path';
 import { promisify } from 'util';
 import type {
+  CodePaneGitBranchEntry,
+  CodePaneGitBranchListConfig,
   CodePaneGitDiffHunk,
   CodePaneGitDiffHunksConfig,
   CodePaneGitDiffHunksResult,
   CodePaneGitGraphCommit,
   CodePaneGitGraphConfig,
+  CodePaneGitRebasePlanConfig,
+  CodePaneGitRebasePlanResult,
   CodePaneGitRepositorySummary,
   CodePaneGitStatusConfig,
   CodePaneGitStatusEntry,
@@ -100,6 +104,92 @@ export class CodeGitService {
       return buildCommitGraph(stdout as string);
     } catch {
       return [];
+    }
+  }
+
+  async getBranches(config: CodePaneGitBranchListConfig): Promise<CodePaneGitBranchEntry[]> {
+    const repoContext = await this.resolveRepoContext(config.rootPath);
+    if (!repoContext) {
+      return [];
+    }
+
+    try {
+      const currentBranch = await this.readCurrentBranchName(repoContext);
+      const mergedBranchNames = currentBranch
+        ? await this.readMergedBranchNames(repoContext, currentBranch)
+        : new Set<string>();
+      const { stdout } = await execFileAsync(
+        'git',
+        [
+          '-C',
+          repoContext.repoRootPath,
+          'for-each-ref',
+          '--format=%(refname)\t%(refname:short)\t%(HEAD)\t%(upstream:short)\t%(upstream:track)\t%(objectname)\t%(committerdate:unix)\t%(subject)',
+          'refs/heads',
+          'refs/remotes',
+        ],
+        { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+      );
+
+      return parseBranchEntries(stdout as string, mergedBranchNames);
+    } catch {
+      return [];
+    }
+  }
+
+  async getRebasePlan(config: CodePaneGitRebasePlanConfig): Promise<CodePaneGitRebasePlanResult> {
+    const repoContext = await this.resolveRepoContext(config.rootPath);
+    if (!repoContext) {
+      return {
+        baseRef: config.baseRef?.trim() || '',
+        hasMergeCommits: false,
+        commits: [],
+      };
+    }
+
+    const currentBranch = await this.readCurrentBranchName(repoContext);
+    const baseRef = (config.baseRef?.trim() || await this.resolveDefaultRebaseBaseRef(repoContext)).trim();
+    if (!baseRef) {
+      return {
+        baseRef: '',
+        currentBranch: currentBranch || undefined,
+        hasMergeCommits: false,
+        commits: [],
+      };
+    }
+
+    try {
+      await execFileAsync(
+        'git',
+        ['-C', repoContext.repoRootPath, 'rev-parse', '--verify', baseRef],
+        { encoding: 'utf-8' },
+      );
+      const [{ stdout: mergeCountOutput }, { stdout: commitOutput }] = await Promise.all([
+        execFileAsync(
+          'git',
+          ['-C', repoContext.repoRootPath, 'rev-list', '--count', '--merges', `${baseRef}..HEAD`],
+          { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+        ),
+        execFileAsync(
+          'git',
+          ['-C', repoContext.repoRootPath, 'log', '--reverse', '--format=%H%x1f%s%x1f%an%x1f%ct', '--no-merges', `${baseRef}..HEAD`],
+          { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+        ),
+      ]);
+
+      return {
+        baseRef,
+        currentBranch: currentBranch || undefined,
+        hasMergeCommits: Number((mergeCountOutput as string).trim() || '0') > 0,
+        commits: parseRebasePlanEntries(commitOutput as string),
+      };
+    } catch {
+      return {
+        baseRef,
+        currentBranch: currentBranch || undefined,
+        hasMergeCommits: false,
+        commits: [],
+      };
     }
   }
 
@@ -262,6 +352,68 @@ export class CodeGitService {
     }
 
     return 'idle';
+  }
+
+  private async readCurrentBranchName(repoContext: RepoContext): Promise<string> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', repoContext.repoRootPath, 'branch', '--show-current'],
+        { encoding: 'utf-8' },
+      );
+      return (stdout as string).trim();
+    } catch {
+      return '';
+    }
+  }
+
+  private async readMergedBranchNames(repoContext: RepoContext, currentBranch: string): Promise<Set<string>> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', repoContext.repoRootPath, 'branch', '--format=%(refname:short)', '--merged', currentBranch],
+        { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+      );
+      return new Set(
+        (stdout as string)
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean),
+      );
+    } catch {
+      return new Set<string>();
+    }
+  }
+
+  private async resolveDefaultRebaseBaseRef(repoContext: RepoContext): Promise<string> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', repoContext.repoRootPath, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
+        { encoding: 'utf-8' },
+      );
+      const upstreamRef = (stdout as string).trim();
+      if (upstreamRef) {
+        return upstreamRef;
+      }
+    } catch {
+      // fall through to local default branches
+    }
+
+    for (const candidateRef of ['origin/main', 'origin/master', 'main', 'master']) {
+      try {
+        await execFileAsync(
+          'git',
+          ['-C', repoContext.repoRootPath, 'rev-parse', '--verify', candidateRef],
+          { encoding: 'utf-8' },
+        );
+        return candidateRef;
+      } catch {
+        // try next candidate
+      }
+    }
+
+    return '';
   }
 
   private parsePorcelainOutput(output: Buffer, repoContext: RepoContext): CodePaneGitStatusEntry[] {
@@ -492,6 +644,83 @@ function buildCommitGraph(output: string): CodePaneGitGraphCommit[] {
       laneCount,
     };
   });
+}
+
+function parseTrackCounts(trackSummary: string | undefined): { aheadCount: number; behindCount: number } {
+  if (!trackSummary) {
+    return {
+      aheadCount: 0,
+      behindCount: 0,
+    };
+  }
+
+  const aheadMatch = trackSummary.match(/ahead (\d+)/);
+  const behindMatch = trackSummary.match(/behind (\d+)/);
+  return {
+    aheadCount: Number(aheadMatch?.[1] ?? 0),
+    behindCount: Number(behindMatch?.[1] ?? 0),
+  };
+}
+
+function parseBranchEntries(output: string, mergedBranchNames: Set<string>): CodePaneGitBranchEntry[] {
+  return output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      const [refName = '', shortName = '', headMarker = '', upstream = '', trackSummary = '', commitSha = '', timestamp = '0', subject = ''] = line.split('\t');
+      if (!refName || shortName.endsWith('/HEAD')) {
+        return [];
+      }
+
+      const kind = refName.startsWith('refs/remotes/') ? 'remote' : 'local';
+      const trackCounts = parseTrackCounts(trackSummary);
+      return [{
+        name: shortName,
+        refName,
+        shortName,
+        kind,
+        current: headMarker === '*',
+        upstream: upstream || undefined,
+        aheadCount: trackCounts.aheadCount,
+        behindCount: trackCounts.behindCount,
+        commitSha,
+        shortSha: commitSha.slice(0, 7),
+        subject,
+        timestamp: Number(timestamp || '0'),
+        mergedIntoCurrent: kind === 'local' && mergedBranchNames.has(shortName),
+      } satisfies CodePaneGitBranchEntry];
+    })
+    .sort((left, right) => {
+      if (left.current !== right.current) {
+        return left.current ? -1 : 1;
+      }
+      if (left.kind !== right.kind) {
+        return left.kind === 'local' ? -1 : 1;
+      }
+      return left.shortName.localeCompare(right.shortName, undefined, { sensitivity: 'base' });
+    });
+}
+
+function parseRebasePlanEntries(output: string): CodePaneGitRebasePlanResult['commits'] {
+  if (!output.trim()) {
+    return [];
+  }
+
+  return output
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [commitSha = '', subject = '', author = '', timestamp = '0'] = line.split('\u001f');
+      return {
+        commitSha,
+        shortSha: commitSha.slice(0, 7),
+        subject,
+        author,
+        timestamp: Number(timestamp || '0'),
+        action: 'pick',
+      };
+    });
 }
 
 function parseGitDiffHunks(

@@ -433,6 +433,68 @@ export interface CodePaneGitCheckoutConfig {
   startPoint?: string;
 }
 
+export interface CodePaneGitBranchListConfig {
+  rootPath: string;
+}
+
+export interface CodePaneGitBranchEntry {
+  name: string;
+  refName: string;
+  shortName: string;
+  kind: 'local' | 'remote';
+  current: boolean;
+  upstream?: string;
+  aheadCount: number;
+  behindCount: number;
+  commitSha: string;
+  shortSha: string;
+  subject: string;
+  timestamp: number;
+  mergedIntoCurrent: boolean;
+}
+
+export interface CodePaneGitRenameBranchConfig {
+  rootPath: string;
+  branchName: string;
+  nextBranchName: string;
+}
+
+export interface CodePaneGitDeleteBranchConfig {
+  rootPath: string;
+  branchName: string;
+  force?: boolean;
+}
+
+export type CodePaneGitRebasePlanAction = 'pick' | 'squash' | 'fixup' | 'drop';
+
+export interface CodePaneGitRebasePlanEntry {
+  commitSha: string;
+  shortSha: string;
+  subject: string;
+  author: string;
+  timestamp: number;
+  action: CodePaneGitRebasePlanAction;
+}
+
+export interface CodePaneGitRebasePlanConfig {
+  rootPath: string;
+  baseRef?: string;
+  limit?: number;
+}
+
+export interface CodePaneGitRebasePlanResult {
+  baseRef: string;
+  currentBranch?: string;
+  hasMergeCommits: boolean;
+  commits: CodePaneGitRebasePlanEntry[];
+}
+
+export interface CodePaneGitApplyRebasePlanConfig {
+  rootPath: string;
+  baseRef: string;
+  entries: CodePaneGitRebasePlanEntry[];
+}
+
 export interface CodePaneGitCherryPickConfig {
   rootPath: string;
   commitSha: string;
@@ -1493,6 +1555,11 @@ export interface ElectronAPI {
   codePaneGitCommit: (config: CodePaneGitCommitConfig) => Promise<IpcResponse<CodePaneGitCommitResult>>;
   codePaneGitStash: (config: CodePaneGitStashConfig) => Promise<IpcResponse<CodePaneGitStashResult>>;
   codePaneGitCheckout: (config: CodePaneGitCheckoutConfig) => Promise<IpcResponse<void>>;
+  codePaneGetGitBranches: (config: CodePaneGitBranchListConfig) => Promise<IpcResponse<CodePaneGitBranchEntry[]>>;
+  codePaneGitRenameBranch: (config: CodePaneGitRenameBranchConfig) => Promise<IpcResponse<void>>;
+  codePaneGitDeleteBranch: (config: CodePaneGitDeleteBranchConfig) => Promise<IpcResponse<void>>;
+  codePaneGetGitRebasePlan: (config: CodePaneGitRebasePlanConfig) => Promise<IpcResponse<CodePaneGitRebasePlanResult>>;
+  codePaneGitApplyRebasePlan: (config: CodePaneGitApplyRebasePlanConfig) => Promise<IpcResponse<void>>;
   codePaneGitCherryPick: (config: CodePaneGitCherryPickConfig) => Promise<IpcResponse<void>>;
   codePaneGitRebaseControl: (config: CodePaneGitRebaseControlConfig) => Promise<IpcResponse<void>>;
   codePaneGitResolveConflict: (config: CodePaneGitResolveConflictConfig) => Promise<IpcResponse<void>>;
