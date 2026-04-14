@@ -305,8 +305,9 @@ describe('AgentTimeline', () => {
     const indicator = screen.getByTestId('agent-thinking-indicator');
     const assistantReply = screen.getByText('正在读取服务输出');
 
-    expect(indicator).toHaveClass('sticky');
-    expect(indicator).toHaveTextContent('Thinking ...');
+    expect(indicator).not.toHaveClass('sticky');
+    expect(indicator).toHaveTextContent('Thinking');
+    expect(indicator).toHaveTextContent('0s');
     expect(screen.queryByText('codex · Thinking')).not.toBeInTheDocument();
     expect(assistantReply.compareDocumentPosition(indicator) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
