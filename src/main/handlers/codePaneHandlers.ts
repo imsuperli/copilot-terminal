@@ -3,17 +3,29 @@ import path from 'path';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import type {
+  CodePaneApplyRefactorConfig,
   CodePaneDebugControlConfig,
   CodePaneDebugEvaluateConfig,
   CodePaneDebugStartConfig,
   CodePaneGetExternalLibrarySectionsConfig,
   CodePaneGetDebugSessionDetailsConfig,
   CodePaneGetProjectContributionConfig,
+  CodePaneGitBlameConfig,
+  CodePaneGitCheckoutConfig,
+  CodePaneGitCherryPickConfig,
+  CodePaneGitCommitConfig,
+  CodePaneGitDiscardConfig,
   CodePaneGitGraphConfig,
+  CodePaneGitHistoryConfig,
+  CodePaneGitRebaseControlConfig,
+  CodePaneGitResolveConflictConfig,
+  CodePaneGitStageConfig,
+  CodePaneGitStashConfig,
   CodePaneGitStatusConfig,
   CodePaneListDirectoryConfig,
   CodePaneListRunTargetsConfig,
   CodePaneListTestsConfig,
+  CodePanePrepareRefactorConfig,
   CodePaneReadFileConfig,
   CodePaneReadGitBaseFileConfig,
   CodePaneRerunFailedTestsConfig,
@@ -32,9 +44,13 @@ import type {
 export function registerCodePaneHandlers(ctx: HandlerContext) {
   const {
     codeFileService,
+    codeGitBlameService,
+    codeGitHistoryService,
+    codeGitOperationService,
     codeGitService,
     codePaneWatcherService,
     codeProjectIndexService,
+    codeRefactorService,
     codeRunProfileService,
     codeTestService,
     debugAdapterSupervisor,
@@ -152,6 +168,145 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('code-pane-git-stage', async (_event, config: CodePaneGitStageConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.stage(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-unstage', async (_event, config: CodePaneGitStageConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.unstage(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-discard', async (_event, config: CodePaneGitDiscardConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.discard(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-commit', async (_event, config: CodePaneGitCommitConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      return successResponse(await codeGitOperationService.commit(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-stash', async (_event, config: CodePaneGitStashConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      return successResponse(await codeGitOperationService.stash(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-checkout', async (_event, config: CodePaneGitCheckoutConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.checkout(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-cherry-pick', async (_event, config: CodePaneGitCherryPickConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.cherryPick(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-rebase-control', async (_event, config: CodePaneGitRebaseControlConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.controlRebase(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-resolve-conflict', async (_event, config: CodePaneGitResolveConflictConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.resolveConflict(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-history', async (_event, config: CodePaneGitHistoryConfig) => {
+    try {
+      if (!codeGitHistoryService) {
+        throw new Error('CodeGitHistoryService not initialized');
+      }
+
+      return successResponse(await codeGitHistoryService.getHistory(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-blame', async (_event, config: CodePaneGitBlameConfig) => {
+    try {
+      if (!codeGitBlameService) {
+        throw new Error('CodeGitBlameService not initialized');
+      }
+
+      return successResponse(await codeGitBlameService.getBlame(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('code-pane-read-git-base-file', async (_event, config: CodePaneReadGitBaseFileConfig) => {
     try {
       if (!codeGitService) {
@@ -159,6 +314,30 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await codeGitService.readGitBaseFile(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-prepare-refactor', async (_event, config: CodePanePrepareRefactorConfig) => {
+    try {
+      if (!codeRefactorService) {
+        throw new Error('CodeRefactorService not initialized');
+      }
+
+      return successResponse(await codeRefactorService.prepareRefactor(config, ctx.getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-apply-refactor', async (_event, config: CodePaneApplyRefactorConfig) => {
+    try {
+      if (!codeRefactorService) {
+        throw new Error('CodeRefactorService not initialized');
+      }
+
+      return successResponse(await codeRefactorService.applyRefactor(config));
     } catch (error) {
       return errorResponse(error);
     }

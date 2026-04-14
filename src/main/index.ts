@@ -20,9 +20,13 @@ import { SSHKnownHostsStore } from './services/ssh/SSHKnownHostsStore';
 import { ElectronSSHHostKeyPromptService } from './services/ssh/SSHHostKeyPromptService';
 import { ChatProviderVaultService } from './services/chat/ChatProviderVaultService';
 import { CodeFileService } from './services/code/CodeFileService';
+import { CodeGitBlameService } from './services/code/CodeGitBlameService';
+import { CodeGitHistoryService } from './services/code/CodeGitHistoryService';
+import { CodeGitOperationService } from './services/code/CodeGitOperationService';
 import { CodeGitService } from './services/code/CodeGitService';
 import { CodeProjectIndexService } from './services/code/CodeProjectIndexService';
 import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
+import { CodeRefactorService } from './services/code/CodeRefactorService';
 import { CodeRunProfileService } from './services/code/CodeRunProfileService';
 import { CodeTestService } from './services/code/CodeTestService';
 import { DebugAdapterSupervisor } from './services/debug/DebugAdapterSupervisor';
@@ -64,8 +68,12 @@ let chatProviderVaultService: ChatProviderVaultService | null = null;
 let sshHostKeyPromptService: ElectronSSHHostKeyPromptService | null = null;
 let codeFileService: CodeFileService | null = null;
 let codeGitService: CodeGitService | null = null;
+let codeGitBlameService: CodeGitBlameService | null = null;
+let codeGitHistoryService: CodeGitHistoryService | null = null;
+let codeGitOperationService: CodeGitOperationService | null = null;
 let codeProjectIndexService: CodeProjectIndexService | null = null;
 let codePaneWatcherService: CodePaneWatcherService | null = null;
+let codeRefactorService: CodeRefactorService | null = null;
 let codeRunProfileService: CodeRunProfileService | null = null;
 let codeTestService: CodeTestService | null = null;
 let debugAdapterSupervisor: DebugAdapterSupervisor | null = null;
@@ -557,6 +565,9 @@ app.whenReady().then(async () => {
   );
   codeFileService = new CodeFileService(codeProjectIndexService);
   codeGitService = new CodeGitService();
+  codeGitOperationService = new CodeGitOperationService();
+  codeGitHistoryService = new CodeGitHistoryService();
+  codeGitBlameService = new CodeGitBlameService();
   codePaneWatcherService = new CodePaneWatcherService(
     () => mainWindow,
     (rootPath, changes) => {
@@ -611,6 +622,10 @@ app.whenReady().then(async () => {
     codeFileService,
     resolver: languagePluginResolver,
     supervisor: languageServerSupervisor,
+  });
+  codeRefactorService = new CodeRefactorService({
+    codeFileService,
+    languageFeatureService,
   });
   codeRunProfileService = new CodeRunProfileService({
     emitSessionChanged: (payload) => {
@@ -714,8 +729,12 @@ app.whenReady().then(async () => {
     chatProviderVaultService,
     codeFileService,
     codeGitService,
+    codeGitBlameService,
+    codeGitHistoryService,
+    codeGitOperationService,
     codeProjectIndexService,
     codePaneWatcherService,
+    codeRefactorService,
     codeRunProfileService,
     codeTestService,
     debugAdapterSupervisor,

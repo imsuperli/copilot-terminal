@@ -615,6 +615,17 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitGraph).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitStage).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitUnstage).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitDiscard).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitCommit).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitStash).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitCheckout).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitCherryPick).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitRebaseControl).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitResolveConflict).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitHistory).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitBlame).mockReset();
     vi.mocked(window.electronAPI.codePaneReadGitBaseFile).mockReset();
     vi.mocked(window.electronAPI.codePaneWatchRoot).mockReset();
     vi.mocked(window.electronAPI.codePaneUnwatchRoot).mockReset();
@@ -637,6 +648,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockReset();
     vi.mocked(window.electronAPI.codePaneGetCodeActions).mockReset();
     vi.mocked(window.electronAPI.codePaneRunCodeAction).mockReset();
+    vi.mocked(window.electronAPI.codePanePrepareRefactor).mockReset();
+    vi.mocked(window.electronAPI.codePaneApplyRefactor).mockReset();
     vi.mocked(window.electronAPI.codePaneListRunTargets).mockReset();
     vi.mocked(window.electronAPI.codePaneRunTarget).mockReset();
     vi.mocked(window.electronAPI.codePaneStopRunTarget).mockReset();
@@ -728,6 +741,37 @@ describe('CodePane', () => {
       success: true,
       data: [],
     });
+    vi.mocked(window.electronAPI.codePaneGitStage).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitUnstage).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitDiscard).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitCommit).mockResolvedValue({
+      success: true,
+      data: {
+        commitSha: 'abcdef1234567890',
+        shortSha: 'abcdef1',
+        summary: 'Commit summary',
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGitStash).mockResolvedValue({
+      success: true,
+      data: {
+        reference: 'stash@{0}',
+        message: 'WIP',
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGitCheckout).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitCherryPick).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitRebaseControl).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitResolveConflict).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitHistory).mockResolvedValue({
+      success: true,
+      data: {
+        scope: 'file',
+        targetFilePath: '/workspace/project/src/index.ts',
+        entries: [],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGitBlame).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneReadGitBaseFile).mockResolvedValue({
       success: true,
       data: {
@@ -756,6 +800,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetCodeActions).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneRunCodeAction).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePanePrepareRefactor).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneApplyRefactor).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneListRunTargets).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneRunTarget).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneStopRunTarget).mockResolvedValue({ success: true });
@@ -1848,6 +1894,204 @@ describe('CodePane', () => {
     });
   });
 
+  it('opens a rename refactor preview and applies it', async () => {
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('nextValue');
+    vi.mocked(window.electronAPI.codePanePrepareRefactor).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'preview-rename-1',
+        title: 'Rename symbol to nextValue',
+        source: 'refactor',
+        createdAt: '2026-04-13T00:00:00.000Z',
+        files: [
+          {
+            id: 'preview-rename-1:/workspace/project/src/index.ts',
+            kind: 'modify',
+            filePath: '/workspace/project/src/index.ts',
+            language: 'typescript',
+            beforeContent: 'export const value = 1;\n',
+            afterContent: 'export const nextValue = 1;\n',
+            edits: [],
+          },
+        ],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneApplyRefactor).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'preview-rename-1',
+        title: 'Rename symbol to nextValue',
+        source: 'refactor',
+        createdAt: '2026-04-13T00:00:00.000Z',
+        files: [
+          {
+            id: 'preview-rename-1:/workspace/project/src/index.ts',
+            kind: 'modify',
+            filePath: '/workspace/project/src/index.ts',
+            language: 'typescript',
+            beforeContent: 'export const value = 1;\n',
+            afterContent: 'export const nextValue = 1;\n',
+            edits: [],
+          },
+        ],
+      },
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.renameSymbol' }));
+    });
+
+    expect(window.electronAPI.codePanePrepareRefactor).toHaveBeenCalledWith({
+      kind: 'rename-symbol',
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      language: 'typescript',
+      position: {
+        lineNumber: 1,
+        column: 1,
+      },
+      newName: 'nextValue',
+    });
+    expect(await screen.findByText('Rename symbol to nextValue')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.refactorApply' }));
+    });
+
+    expect(window.electronAPI.codePaneApplyRefactor).toHaveBeenCalledWith({
+      previewId: 'preview-rename-1',
+    });
+    promptSpy.mockRestore();
+  });
+
+  it('runs git stage, commit, history, and blame workflows from the code pane', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGitHistory).mockResolvedValue({
+      success: true,
+      data: {
+        scope: 'file',
+        targetFilePath: '/workspace/project/src/index.ts',
+        entries: [
+          {
+            commitSha: 'abcdef1234567890',
+            shortSha: 'abcdef1',
+            subject: 'Refine index flow',
+            author: 'Test User',
+            timestamp: 1_710_000_000,
+            refs: ['HEAD -> feature/scm'],
+            scope: 'file',
+            filePath: '/workspace/project/src/index.ts',
+          },
+        ],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGitBlame).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          lineNumber: 1,
+          commitSha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          author: 'Test User',
+          summary: 'Refine index flow',
+          timestamp: 1_710_000_000,
+          text: 'export const value = 1;',
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitStage' }));
+    });
+
+    expect(window.electronAPI.codePaneGitStage).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      paths: ['/workspace/project/src/index.ts'],
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('codePane.gitCommitPlaceholder'), {
+        target: { value: 'Add git workflow' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitCommit' }));
+    });
+
+    expect(window.electronAPI.codePaneGitCommit).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      message: 'Add git workflow',
+      amend: false,
+      includeAll: true,
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitFileHistory' }));
+    });
+
+    expect(window.electronAPI.codePaneGitHistory).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      lineNumber: undefined,
+      limit: 30,
+    });
+    expect((await screen.findAllByText('Refine index flow')).length).toBeGreaterThan(1);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.filesTab' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitBlame' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitBlame).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+    expect(await screen.findByText(/Test User · Refine index flow/)).toBeInTheDocument();
+  });
+
   it('shows Monaco diagnostics in the problems tab', async () => {
     renderCodePane(createPane());
 
@@ -1985,20 +2229,45 @@ describe('CodePane', () => {
   });
 
   it('renames the symbol under the caret with workspace edits', async () => {
-    vi.mocked(window.electronAPI.codePaneRenameSymbol).mockResolvedValue({
+    vi.mocked(window.electronAPI.codePanePrepareRefactor).mockResolvedValue({
       success: true,
-      data: [
-        {
-          filePath: '/workspace/project/src/index.ts',
-          range: {
-            startLineNumber: 1,
-            startColumn: 14,
-            endLineNumber: 1,
-            endColumn: 19,
+      data: {
+        id: 'preview-rename-positioned',
+        title: 'Rename symbol to renamedValue',
+        source: 'refactor',
+        createdAt: '2026-04-13T00:00:00.000Z',
+        files: [
+          {
+            id: 'preview-rename-positioned:/workspace/project/src/index.ts',
+            kind: 'modify',
+            filePath: '/workspace/project/src/index.ts',
+            language: 'typescript',
+            beforeContent: 'export const value = 1;\n',
+            afterContent: 'export const renamedValue = 1;\n',
+            edits: [],
           },
-          newText: 'renamedValue',
-        },
-      ],
+        ],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneApplyRefactor).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'preview-rename-positioned',
+        title: 'Rename symbol to renamedValue',
+        source: 'refactor',
+        createdAt: '2026-04-13T00:00:00.000Z',
+        files: [
+          {
+            id: 'preview-rename-positioned:/workspace/project/src/index.ts',
+            kind: 'modify',
+            filePath: '/workspace/project/src/index.ts',
+            language: 'typescript',
+            beforeContent: 'export const value = 1;\n',
+            afterContent: 'export const renamedValue = 1;\n',
+            edits: [],
+          },
+        ],
+      },
     });
     const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('renamedValue');
 
@@ -2013,7 +2282,8 @@ describe('CodePane', () => {
     });
 
     await waitFor(() => {
-      expect(window.electronAPI.codePaneRenameSymbol).toHaveBeenCalledWith({
+      expect(window.electronAPI.codePanePrepareRefactor).toHaveBeenCalledWith({
+        kind: 'rename-symbol',
         rootPath: '/workspace/project',
         filePath: '/workspace/project/src/index.ts',
         language: 'typescript',
@@ -2025,12 +2295,13 @@ describe('CodePane', () => {
       });
     });
 
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.refactorApply' }));
+    });
+
     await waitFor(() => {
-      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalledWith({
-        rootPath: '/workspace/project',
-        filePath: '/workspace/project/src/index.ts',
-        content: 'export const renamedValue = 1;\n',
-        expectedMtimeMs: 100,
+      expect(window.electronAPI.codePaneApplyRefactor).toHaveBeenCalledWith({
+        previewId: 'preview-rename-positioned',
       });
     });
 

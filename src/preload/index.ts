@@ -151,6 +151,28 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-repository-summary', config),
   codePaneGetGitGraph: (config) =>
     ipcRenderer.invoke('code-pane-git-graph', config),
+  codePaneGitStage: (config) =>
+    ipcRenderer.invoke('code-pane-git-stage', config),
+  codePaneGitUnstage: (config) =>
+    ipcRenderer.invoke('code-pane-git-unstage', config),
+  codePaneGitDiscard: (config) =>
+    ipcRenderer.invoke('code-pane-git-discard', config),
+  codePaneGitCommit: (config) =>
+    ipcRenderer.invoke('code-pane-git-commit', config),
+  codePaneGitStash: (config) =>
+    ipcRenderer.invoke('code-pane-git-stash', config),
+  codePaneGitCheckout: (config) =>
+    ipcRenderer.invoke('code-pane-git-checkout', config),
+  codePaneGitCherryPick: (config) =>
+    ipcRenderer.invoke('code-pane-git-cherry-pick', config),
+  codePaneGitRebaseControl: (config) =>
+    ipcRenderer.invoke('code-pane-git-rebase-control', config),
+  codePaneGitResolveConflict: (config) =>
+    ipcRenderer.invoke('code-pane-git-resolve-conflict', config),
+  codePaneGitHistory: (config) =>
+    ipcRenderer.invoke('code-pane-git-history', config),
+  codePaneGitBlame: (config) =>
+    ipcRenderer.invoke('code-pane-git-blame', config),
   codePaneReadGitBaseFile: (config) =>
     ipcRenderer.invoke('code-pane-read-git-base-file', config),
   codePaneWatchRoot: (config) =>
@@ -195,6 +217,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-get-code-actions', config),
   codePaneRunCodeAction: (config) =>
     ipcRenderer.invoke('code-pane-run-code-action', config),
+  codePanePrepareRefactor: (config) =>
+    ipcRenderer.invoke('code-pane-prepare-refactor', config),
+  codePaneApplyRefactor: (config) =>
+    ipcRenderer.invoke('code-pane-apply-refactor', config),
   codePaneListRunTargets: (config) =>
     ipcRenderer.invoke('code-pane-list-run-targets', config),
   codePaneRunTarget: (config) =>

@@ -358,6 +358,133 @@ export interface CodePaneGitGraphCommit {
   laneCount: number;
 }
 
+export interface CodePaneGitStageConfig {
+  rootPath: string;
+  paths: string[];
+}
+
+export interface CodePaneGitDiscardConfig {
+  rootPath: string;
+  paths: string[];
+  restoreStaged?: boolean;
+}
+
+export interface CodePaneGitCommitConfig {
+  rootPath: string;
+  message: string;
+  amend?: boolean;
+  includeAll?: boolean;
+}
+
+export interface CodePaneGitCommitResult {
+  commitSha: string;
+  shortSha: string;
+  summary: string;
+}
+
+export interface CodePaneGitStashConfig {
+  rootPath: string;
+  message?: string;
+  includeUntracked?: boolean;
+}
+
+export interface CodePaneGitStashResult {
+  reference: string;
+  message: string;
+}
+
+export interface CodePaneGitCheckoutConfig {
+  rootPath: string;
+  branchName: string;
+  createBranch?: boolean;
+  startPoint?: string;
+}
+
+export interface CodePaneGitCherryPickConfig {
+  rootPath: string;
+  commitSha: string;
+}
+
+export interface CodePaneGitRebaseControlConfig {
+  rootPath: string;
+  action: 'continue' | 'abort';
+}
+
+export type CodePaneGitResolveConflictStrategy = 'ours' | 'theirs' | 'mark-resolved';
+
+export interface CodePaneGitResolveConflictConfig {
+  rootPath: string;
+  filePath: string;
+  strategy: CodePaneGitResolveConflictStrategy;
+}
+
+export interface CodePaneGitHistoryConfig {
+  rootPath: string;
+  filePath?: string;
+  lineNumber?: number;
+  limit?: number;
+}
+
+export interface CodePaneGitHistoryEntry {
+  commitSha: string;
+  shortSha: string;
+  subject: string;
+  author: string;
+  email?: string;
+  timestamp: number;
+  refs: string[];
+  scope: 'file' | 'line';
+  filePath?: string;
+  lineNumber?: number;
+}
+
+export interface CodePaneGitHistoryResult {
+  scope: 'repository' | 'file' | 'line';
+  targetFilePath?: string;
+  targetLineNumber?: number;
+  entries: CodePaneGitHistoryEntry[];
+}
+
+export interface CodePaneGitBlameConfig {
+  rootPath: string;
+  filePath: string;
+  startLineNumber?: number;
+  endLineNumber?: number;
+}
+
+export interface CodePaneGitBlameLine {
+  lineNumber: number;
+  commitSha: string;
+  shortSha: string;
+  author: string;
+  summary: string;
+  timestamp: number;
+  text: string;
+}
+
+export type CodePanePreviewSource = 'refactor' | 'git';
+export type CodePanePreviewFileChangeKind = 'modify' | 'rename' | 'move' | 'delete';
+
+export interface CodePanePreviewFileChange {
+  id: string;
+  kind: CodePanePreviewFileChangeKind;
+  filePath: string;
+  targetFilePath?: string;
+  language: string;
+  beforeContent: string;
+  afterContent: string;
+  edits: CodePaneTextEdit[];
+}
+
+export interface CodePanePreviewChangeSet {
+  id: string;
+  title: string;
+  source: CodePanePreviewSource;
+  description?: string;
+  createdAt: string;
+  files: CodePanePreviewFileChange[];
+}
+
 export interface CodePaneReadGitBaseFileConfig {
   rootPath: string;
   filePath: string;
@@ -566,6 +693,47 @@ export interface CodePaneRenameSymbolConfig {
   language?: string;
   position: CodePanePosition;
   newName: string;
+}
+
+export interface CodePanePrepareRenameSymbolRefactorConfig {
+  kind: 'rename-symbol';
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  position: CodePanePosition;
+  newName: string;
+}
+
+export interface CodePanePrepareCodeActionRefactorConfig {
+  kind: 'code-action';
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  actionId: string;
+  title?: string;
+}
+
+export interface CodePanePrepareRenamePathRefactorConfig {
+  kind: 'rename-path' | 'move-path';
+  rootPath: string;
+  filePath: string;
+  nextFilePath: string;
+}
+
+export interface CodePanePrepareSafeDeleteRefactorConfig {
+  kind: 'safe-delete';
+  rootPath: string;
+  filePath: string;
+}
+
+export type CodePanePrepareRefactorConfig =
+  | CodePanePrepareRenameSymbolRefactorConfig
+  | CodePanePrepareCodeActionRefactorConfig
+  | CodePanePrepareRenamePathRefactorConfig
+  | CodePanePrepareSafeDeleteRefactorConfig;
+
+export interface CodePaneApplyRefactorConfig {
+  previewId: string;
 }
 
 export interface CodePaneFormatDocumentConfig {
@@ -1141,6 +1309,17 @@ export interface ElectronAPI {
   codePaneGetGitStatus: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitStatusEntry[]>>;
   codePaneGetGitRepositorySummary: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitRepositorySummary | null>>;
   codePaneGetGitGraph: (config: CodePaneGitGraphConfig) => Promise<IpcResponse<CodePaneGitGraphCommit[]>>;
+  codePaneGitStage: (config: CodePaneGitStageConfig) => Promise<IpcResponse<void>>;
+  codePaneGitUnstage: (config: CodePaneGitStageConfig) => Promise<IpcResponse<void>>;
+  codePaneGitDiscard: (config: CodePaneGitDiscardConfig) => Promise<IpcResponse<void>>;
+  codePaneGitCommit: (config: CodePaneGitCommitConfig) => Promise<IpcResponse<CodePaneGitCommitResult>>;
+  codePaneGitStash: (config: CodePaneGitStashConfig) => Promise<IpcResponse<CodePaneGitStashResult>>;
+  codePaneGitCheckout: (config: CodePaneGitCheckoutConfig) => Promise<IpcResponse<void>>;
+  codePaneGitCherryPick: (config: CodePaneGitCherryPickConfig) => Promise<IpcResponse<void>>;
+  codePaneGitRebaseControl: (config: CodePaneGitRebaseControlConfig) => Promise<IpcResponse<void>>;
+  codePaneGitResolveConflict: (config: CodePaneGitResolveConflictConfig) => Promise<IpcResponse<void>>;
+  codePaneGitHistory: (config: CodePaneGitHistoryConfig) => Promise<IpcResponse<CodePaneGitHistoryResult>>;
+  codePaneGitBlame: (config: CodePaneGitBlameConfig) => Promise<IpcResponse<CodePaneGitBlameLine[]>>;
   codePaneReadGitBaseFile: (config: CodePaneReadGitBaseFileConfig) => Promise<IpcResponse<CodePaneReadGitBaseFileResult>>;
   codePaneWatchRoot: (config: CodePaneWatchRootConfig) => Promise<IpcResponse<void>>;
   codePaneUnwatchRoot: (paneId: string) => Promise<IpcResponse<void>>;
@@ -1163,6 +1342,8 @@ export interface ElectronAPI {
   codePaneGetWorkspaceSymbols: (config: CodePaneGetWorkspaceSymbolsConfig) => Promise<IpcResponse<CodePaneWorkspaceSymbol[]>>;
   codePaneGetCodeActions: (config: CodePaneGetCodeActionsConfig) => Promise<IpcResponse<CodePaneCodeAction[]>>;
   codePaneRunCodeAction: (config: CodePaneRunCodeActionConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
+  codePanePrepareRefactor: (config: CodePanePrepareRefactorConfig) => Promise<IpcResponse<CodePanePreviewChangeSet>>;
+  codePaneApplyRefactor: (config: CodePaneApplyRefactorConfig) => Promise<IpcResponse<CodePanePreviewChangeSet>>;
   codePaneListRunTargets: (config: CodePaneListRunTargetsConfig) => Promise<IpcResponse<CodePaneRunTarget[]>>;
   codePaneRunTarget: (config: CodePaneRunTargetConfig) => Promise<IpcResponse<CodePaneRunSession>>;
   codePaneStopRunTarget: (config: CodePaneStopRunTargetConfig) => Promise<IpcResponse<void>>;
