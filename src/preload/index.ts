@@ -201,6 +201,28 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-run-target', config),
   codePaneStopRunTarget: (config) =>
     ipcRenderer.invoke('code-pane-stop-run-target', config),
+  codePaneDebugStart: (config) =>
+    ipcRenderer.invoke('code-pane-debug-start', config),
+  codePaneDebugStop: (config) =>
+    ipcRenderer.invoke('code-pane-debug-stop', config),
+  codePaneDebugPause: (config) =>
+    ipcRenderer.invoke('code-pane-debug-pause', config),
+  codePaneDebugContinue: (config) =>
+    ipcRenderer.invoke('code-pane-debug-continue', config),
+  codePaneDebugStepOver: (config) =>
+    ipcRenderer.invoke('code-pane-debug-step-over', config),
+  codePaneDebugStepInto: (config) =>
+    ipcRenderer.invoke('code-pane-debug-step-into', config),
+  codePaneDebugStepOut: (config) =>
+    ipcRenderer.invoke('code-pane-debug-step-out', config),
+  codePaneGetDebugSessionDetails: (config) =>
+    ipcRenderer.invoke('code-pane-get-debug-session-details', config),
+  codePaneDebugEvaluate: (config) =>
+    ipcRenderer.invoke('code-pane-debug-evaluate', config),
+  codePaneSetBreakpoint: (config) =>
+    ipcRenderer.invoke('code-pane-set-breakpoint', config),
+  codePaneRemoveBreakpoint: (config) =>
+    ipcRenderer.invoke('code-pane-remove-breakpoint', config),
   codePaneListTests: (config) =>
     ipcRenderer.invoke('code-pane-list-tests', config),
   codePaneRunTests: (config) =>
@@ -233,6 +255,16 @@ const electronAPI: ElectronAPI = {
   },
   offCodePaneRunSessionOutput: (callback) =>
     ipcRenderer.removeListener('code-pane-run-session-output', callback),
+  onCodePaneDebugSessionChanged: (callback) => {
+    ipcRenderer.on('code-pane-debug-session-changed', callback);
+  },
+  offCodePaneDebugSessionChanged: (callback) =>
+    ipcRenderer.removeListener('code-pane-debug-session-changed', callback),
+  onCodePaneDebugSessionOutput: (callback) => {
+    ipcRenderer.on('code-pane-debug-session-output', callback);
+  },
+  offCodePaneDebugSessionOutput: (callback) =>
+    ipcRenderer.removeListener('code-pane-debug-session-output', callback),
   onCodePaneDiagnosticsChanged: (callback) => {
     ipcRenderer.on('code-pane-diagnostics-changed', callback);
   },

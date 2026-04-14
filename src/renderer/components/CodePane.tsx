@@ -29,8 +29,14 @@ import {
 } from 'lucide-react';
 import type { Pane } from '../types/window';
 import type {
+  CodePaneBreakpoint,
   CodePaneCodeAction,
   CodePaneContentMatch,
+  CodePaneDebugSession,
+  CodePaneDebugSessionChangedPayload,
+  CodePaneDebugSessionDetails,
+  CodePaneDebugSessionOutputPayload,
+  CodePaneDebugStackFrame,
   CodePaneExternalLibrarySection,
   CodePaneGitGraphCommit,
   CodePaneGitRepositorySummary,
@@ -58,6 +64,7 @@ import {
   CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
 } from '../../shared/types/electron-api';
 import { AppTooltip } from './ui/AppTooltip';
+import { DebugToolWindow } from './code-pane/tool-windows/DebugToolWindow';
 import { ProjectToolWindow } from './code-pane/tool-windows/ProjectToolWindow';
 import { RunToolWindow } from './code-pane/tool-windows/RunToolWindow';
 import { TestsToolWindow } from './code-pane/tool-windows/TestsToolWindow';
@@ -81,7 +88,7 @@ type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
 type SearchEverywhereMode = 'all' | 'commands' | 'recent';
-type BottomPanelMode = 'run' | 'tests' | 'project';
+type BottomPanelMode = 'run' | 'debug' | 'tests' | 'project';
 
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
 const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
@@ -155,6 +162,12 @@ type GitChangeSectionGroup = {
   roots: GitChangeTreeNode[];
 };
 
+type DebugEvaluationEntry = {
+  id: string;
+  expression: string;
+  value: string;
+};
+
 const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
 
 export interface CodePaneProps {
@@ -192,6 +205,43 @@ function normalizeSidebarMode(mode: string | undefined): SidebarMode {
     default:
       return 'files';
   }
+}
+
+function getBreakpointKey(breakpoint: CodePaneBreakpoint): string {
+  return `${normalizePath(breakpoint.filePath)}:${breakpoint.lineNumber}`;
+}
+
+function normalizeBreakpoints(
+  breakpoints: Array<{
+    filePath: string;
+    lineNumber: number;
+  }> | undefined | null,
+): CodePaneBreakpoint[] {
+  const normalizedBreakpoints: CodePaneBreakpoint[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const breakpoint of breakpoints ?? []) {
+    if (!breakpoint?.filePath || !Number.isFinite(breakpoint.lineNumber)) {
+      continue;
+    }
+
+    const normalizedBreakpoint: CodePaneBreakpoint = {
+      filePath: normalizePath(breakpoint.filePath),
+      lineNumber: Math.max(1, Math.round(breakpoint.lineNumber)),
+    };
+    const breakpointKey = getBreakpointKey(normalizedBreakpoint);
+    if (seenKeys.has(breakpointKey)) {
+      continue;
+    }
+
+    seenKeys.add(breakpointKey);
+    normalizedBreakpoints.push(normalizedBreakpoint);
+  }
+
+  return normalizedBreakpoints.sort((left, right) => {
+    const pathOrder = left.filePath.localeCompare(right.filePath);
+    return pathOrder !== 0 ? pathOrder : left.lineNumber - right.lineNumber;
+  });
 }
 
 function clampSidebarWidth(width: number | undefined | null): number {
@@ -625,6 +675,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const diffEditorMouseLeaveListenerRef = useRef<MonacoDisposable | null>(null);
   const definitionLinkDecorationEditorRef = useRef<MonacoEditor | null>(null);
   const definitionLinkDecorationIdsRef = useRef<string[]>([]);
+  const debugDecorationEditorRef = useRef<MonacoEditor | null>(null);
+  const debugDecorationIdsRef = useRef<string[]>([]);
   const definitionHoverRequestKeyRef = useRef<string | null>(null);
   const definitionLookupCacheRef = useRef(new Map<string, Promise<DefinitionLookupResult>>());
   const sidebarResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -677,9 +729,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [codeActionMenuError, setCodeActionMenuError] = useState<string | null>(null);
   const [selectedCodeActionIndex, setSelectedCodeActionIndex] = useState(0);
   const [bottomPanelMode, setBottomPanelMode] = useState<BottomPanelMode | null>(null);
+  const [breakpoints, setBreakpoints] = useState<CodePaneBreakpoint[]>(() => normalizeBreakpoints(pane.code?.breakpoints));
   const [runTargets, setRunTargets] = useState<CodePaneRunTarget[]>([]);
   const [isRunTargetsLoading, setIsRunTargetsLoading] = useState(false);
   const [runTargetsError, setRunTargetsError] = useState<string | null>(null);
+  const [debugSessions, setDebugSessions] = useState<CodePaneDebugSession[]>([]);
+  const [debugSessionOutputs, setDebugSessionOutputs] = useState<Record<string, string>>({});
+  const [selectedDebugSessionId, setSelectedDebugSessionId] = useState<string | null>(null);
+  const [debugSessionDetails, setDebugSessionDetails] = useState<CodePaneDebugSessionDetails | null>(null);
+  const [isDebugDetailsLoading, setIsDebugDetailsLoading] = useState(false);
+  const [debugEvaluations, setDebugEvaluations] = useState<DebugEvaluationEntry[]>([]);
   const [testItems, setTestItems] = useState<CodePaneTestItem[]>([]);
   const [isTestsLoading, setIsTestsLoading] = useState(false);
   const [testsError, setTestsError] = useState<string | null>(null);
@@ -712,6 +771,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const expandedDirectoriesRef = useRef(expandedDirectories);
   const loadedDirectoriesRef = useRef(loadedDirectories);
   const loadedExternalDirectoriesRef = useRef(loadedExternalDirectories);
+  const breakpointsRef = useRef(breakpoints);
+  const debugCurrentFrameRef = useRef<CodePaneDebugStackFrame | null>(null);
   const dirtyPathsRef = useRef(dirtyPaths);
   const savingPathsRef = useRef(savingPaths);
   const activeFilePathRef = useRef(activeFilePath);
@@ -730,6 +791,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const navigateForwardRef = useRef<() => Promise<void>>(async () => {});
   const goToImplementationAtCursorRef = useRef<() => Promise<void>>(async () => {});
   const openCodeActionMenuRef = useRef<() => Promise<void>>(async () => {});
+  const loadDebugSessionDetailsRef = useRef<(sessionId: string | null) => Promise<void>>(async () => {});
+  const toggleBreakpointRef = useRef<(filePath: string, lineNumber: number) => Promise<void>>(async () => {});
   const runSelectedCodeActionRef = useRef<(action: CodePaneCodeAction | undefined) => Promise<void>>(async () => {});
 
   useEffect(() => {
@@ -755,6 +818,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     loadedExternalDirectoriesRef.current = loadedExternalDirectories;
   }, [loadedExternalDirectories]);
+
+  useEffect(() => {
+    setBreakpoints(normalizeBreakpoints(pane.code?.breakpoints));
+  }, [pane.id, pane.code?.breakpoints]);
+
+  useEffect(() => {
+    breakpointsRef.current = breakpoints;
+  }, [breakpoints]);
 
   useEffect(() => {
     dirtyPathsRef.current = dirtyPaths;
@@ -837,6 +908,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const getPersistedExpandedPaths = useCallback((paths: Set<string>) => (
     Array.from(paths).filter((directoryPath) => isPathInside(rootPath, directoryPath))
   ), [rootPath]);
+
+  const persistDebugBreakpoints = useCallback((nextBreakpoints: CodePaneBreakpoint[]) => {
+    const normalizedBreakpoints = normalizeBreakpoints(nextBreakpoints);
+    setBreakpoints(normalizedBreakpoints);
+    persistCodeState({
+      breakpoints: normalizedBreakpoints.map((breakpoint) => ({
+        filePath: breakpoint.filePath,
+        lineNumber: breakpoint.lineNumber,
+      })),
+    });
+  }, [persistCodeState]);
+
+  useEffect(() => {
+    for (const breakpoint of breakpointsRef.current) {
+      void window.electronAPI.codePaneSetBreakpoint({
+        rootPath,
+        breakpoint,
+      });
+    }
+  }, [rootPath]);
 
   const toggleSidebarVisibility = useCallback((nextVisible?: boolean) => {
     const shouldShowSidebar = nextVisible ?? !sidebarVisibleRef.current;
@@ -1234,6 +1325,70 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }, [clearDefinitionLinkDecoration]);
 
+  const clearDebugDecorations = useCallback((editorInstance?: MonacoEditor | null) => {
+    const targetEditor = editorInstance ?? debugDecorationEditorRef.current;
+    if (targetEditor && typeof targetEditor.deltaDecorations === 'function') {
+      debugDecorationIdsRef.current = targetEditor.deltaDecorations(debugDecorationIdsRef.current, []);
+    } else {
+      debugDecorationIdsRef.current = [];
+    }
+
+    if (!editorInstance || targetEditor === debugDecorationEditorRef.current) {
+      debugDecorationEditorRef.current = null;
+    }
+  }, []);
+
+  const applyDebugDecorations = useCallback((editorInstance: MonacoEditor | null, filePath: string | null) => {
+    if (!editorInstance || !filePath) {
+      clearDebugDecorations(editorInstance);
+      return;
+    }
+
+    if (debugDecorationEditorRef.current && debugDecorationEditorRef.current !== editorInstance) {
+      clearDebugDecorations(debugDecorationEditorRef.current);
+    }
+
+    const normalizedFilePath = normalizePath(filePath);
+    const breakpointDecorations = breakpointsRef.current
+      .filter((breakpoint) => normalizePath(breakpoint.filePath) === normalizedFilePath)
+      .map((breakpoint) => ({
+        range: {
+          startLineNumber: breakpoint.lineNumber,
+          startColumn: 1,
+          endLineNumber: breakpoint.lineNumber,
+          endColumn: 1,
+        },
+        options: {
+          isWholeLine: true,
+          glyphMarginClassName: 'code-pane-breakpoint-glyph',
+          glyphMarginHoverMessage: [{ value: `Breakpoint ${breakpoint.lineNumber}` }],
+        },
+      }));
+    const currentFrame = debugCurrentFrameRef.current;
+    const currentFrameDecorations = currentFrame?.filePath && normalizePath(currentFrame.filePath) === normalizedFilePath && currentFrame.lineNumber
+      ? [{
+        range: {
+          startLineNumber: currentFrame.lineNumber,
+          startColumn: 1,
+          endLineNumber: currentFrame.lineNumber,
+          endColumn: 1,
+        },
+        options: {
+          isWholeLine: true,
+          className: 'code-pane-debug-current-line',
+          glyphMarginClassName: 'code-pane-debug-current-glyph',
+          glyphMarginHoverMessage: [{ value: `Paused at ${currentFrame.lineNumber}` }],
+        },
+      }]
+      : [];
+
+    debugDecorationEditorRef.current = editorInstance;
+    debugDecorationIdsRef.current = editorInstance.deltaDecorations(
+      debugDecorationIdsRef.current,
+      [...breakpointDecorations, ...currentFrameDecorations],
+    );
+  }, [clearDebugDecorations]);
+
   const updateDefinitionLinkHover = useCallback(async (
     editorInstance: MonacoEditor | null,
     lineNumber: number,
@@ -1316,11 +1471,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     diffEditorMouseLeaveListenerRef.current?.dispose();
     diffEditorMouseLeaveListenerRef.current = null;
     clearDefinitionLinkDecoration();
+    clearDebugDecorations();
     editorRef.current?.dispose();
     diffEditorRef.current?.dispose();
     editorRef.current = null;
     diffEditorRef.current = null;
-  }, [clearDefinitionLinkDecoration, saveCurrentViewState]);
+  }, [clearDebugDecorations, clearDefinitionLinkDecoration, saveCurrentViewState]);
 
   const disposeAllModels = useCallback(() => {
     for (const timer of autoSaveTimersRef.current.values()) {
@@ -1818,6 +1974,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     mouseDownListenerRef.current = editorInstance.onMouseDown((event: any) => {
       const pointerEvent = event.event?.browserEvent ?? event.event ?? {};
+      const monaco = monacoRef.current;
+      const mouseTargetType = event.target?.type;
+      const gutterGlyphMarginType = monaco?.editor?.MouseTargetType?.GUTTER_GLYPH_MARGIN;
+      const gutterLineDecorationType = monaco?.editor?.MouseTargetType?.GUTTER_LINE_DECORATIONS;
+      const isGutterBreakpointTarget = (gutterGlyphMarginType !== undefined && mouseTargetType === gutterGlyphMarginType)
+        || (gutterLineDecorationType !== undefined && mouseTargetType === gutterLineDecorationType)
+        || mouseTargetType === 'gutterGlyphMargin'
+        || event.target?.detail?.isBreakpointMargin === true;
+      if (isGutterBreakpointTarget && event.target?.position?.lineNumber) {
+        const model = editorInstance.getModel?.();
+        const filePath = activeFilePathRef.current ?? model?.uri.fsPath ?? model?.uri.path;
+        const isReadOnlyFile = filePath
+          ? fileMetaRef.current.get(filePath)?.readOnly === true
+          : false;
+        if (filePath && !isReadOnlyFile) {
+          pointerEvent.preventDefault?.();
+          pointerEvent.stopPropagation?.();
+          event.event?.preventDefault?.();
+          event.event?.stopPropagation?.();
+          void toggleBreakpointRef.current(filePath, event.target.position.lineNumber);
+        }
+        return;
+      }
+
       const hasModifier = isMac
         ? pointerEvent.metaKey === true && pointerEvent.ctrlKey !== true
         : pointerEvent.ctrlKey === true && pointerEvent.metaKey !== true;
@@ -1891,7 +2071,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           fontSize: 13,
           scrollBeyondLastLine: false,
           smoothScrolling: true,
-          glyphMargin: false,
+          glyphMargin: true,
           stickyScroll: { enabled: false },
         });
         diffEditorRef.current.getModifiedEditor().addCommand(
@@ -1913,6 +2093,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       diffEditorRef.current.getModifiedEditor().updateOptions?.({
         readOnly: isReadOnlyFile,
       });
+      applyDebugDecorations(diffEditorRef.current.getModifiedEditor(), currentActiveFilePath);
 
       const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
       if (savedViewState) {
@@ -1943,7 +2124,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         tabSize: 2,
         scrollBeyondLastLine: false,
         smoothScrolling: true,
-        glyphMargin: false,
+        glyphMargin: true,
         stickyScroll: { enabled: false },
       });
       editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
@@ -1968,6 +2149,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     editorRef.current.updateOptions?.({
       readOnly: isReadOnlyFile,
     });
+    applyDebugDecorations(editorRef.current, currentActiveFilePath);
 
     const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
     if (savedViewState) {
@@ -1980,6 +2162,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       editorRef.current.focus();
     }
   }, [
+    applyDebugDecorations,
     applyPendingNavigation,
     attachDefinitionClickNavigation,
     disposeEditors,
@@ -4180,6 +4363,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const canNavigateForward = navigationForwardStackRef.current.length > 0;
   const selectedSearchEverywhereItem = searchEverywhereItems[searchEverywhereSelectedIndex] ?? null;
   const selectedCodeAction = codeActionItems[selectedCodeActionIndex] ?? null;
+  const visibleDebugSessions = debugSessions;
+  const selectedDebugSession = visibleDebugSessions.find((session) => session.id === selectedDebugSessionId) ?? visibleDebugSessions[0] ?? null;
+  const selectedDebugSessionOutput = selectedDebugSession ? (debugSessionOutputs[selectedDebugSession.id] ?? '') : '';
+  const debugTargets = useMemo(() => (
+    runTargets.filter((target) => target.canDebug)
+  ), [runTargets]);
   const visibleRunSessions = useMemo(() => {
     if (bottomPanelMode === 'tests') {
       return runSessions.filter((session) => session.kind === 'test');
@@ -4198,6 +4387,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const selectedRunSession = visibleRunSessions.find((session) => session.id === selectedRunSessionId) ?? visibleRunSessions[0] ?? null;
   const selectedRunSessionOutput = selectedRunSession ? (runSessionOutputs[selectedRunSession.id] ?? '') : '';
   const hasFailedTestSessions = runSessions.some((session) => session.kind === 'test' && session.state === 'failed');
+
+  useEffect(() => {
+    debugCurrentFrameRef.current = selectedDebugSession?.currentFrame ?? null;
+  }, [selectedDebugSession?.currentFrame]);
+
+  useEffect(() => {
+    const activeEditor = viewMode === 'diff'
+      ? diffEditorRef.current?.getModifiedEditor() ?? null
+      : editorRef.current;
+    const currentFilePath = activeFilePathRef.current;
+    if (!activeEditor || !currentFilePath) {
+      clearDebugDecorations(activeEditor ?? undefined);
+      return;
+    }
+
+    applyDebugDecorations(activeEditor, currentFilePath);
+  }, [activeFilePath, applyDebugDecorations, breakpoints, clearDebugDecorations, selectedDebugSession?.currentFrame, viewMode]);
 
   useEffect(() => {
     if (!isActive) {
@@ -4366,6 +4572,45 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return () => {
       window.electronAPI.offCodePaneRunSessionChanged(handleRunSessionChanged);
       window.electronAPI.offCodePaneRunSessionOutput(handleRunSessionOutput);
+    };
+  }, [rootPath]);
+
+  useEffect(() => {
+    const handleDebugSessionChanged = (_event: unknown, payload: CodePaneDebugSessionChangedPayload) => {
+      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+        return;
+      }
+
+      setDebugSessions((currentSessions) => {
+        const nextSessions = [
+          payload.session,
+          ...currentSessions.filter((session) => session.id !== payload.session.id),
+        ];
+        return nextSessions.slice(0, 20);
+      });
+      setSelectedDebugSessionId((currentSelectedSessionId) => currentSelectedSessionId ?? payload.session.id);
+      if (payload.session.state === 'paused' || payload.session.state === 'stopped' || payload.session.state === 'error') {
+        void loadDebugSessionDetailsRef.current(payload.session.id);
+      }
+    };
+
+    const handleDebugSessionOutput = (_event: unknown, payload: CodePaneDebugSessionOutputPayload) => {
+      if (normalizePath(payload.rootPath) !== normalizePath(rootPath)) {
+        return;
+      }
+
+      setDebugSessionOutputs((currentOutputs) => ({
+        ...currentOutputs,
+        [payload.sessionId]: `${currentOutputs[payload.sessionId] ?? ''}${payload.chunk}`,
+      }));
+    };
+
+    window.electronAPI.onCodePaneDebugSessionChanged(handleDebugSessionChanged);
+    window.electronAPI.onCodePaneDebugSessionOutput(handleDebugSessionOutput);
+
+    return () => {
+      window.electronAPI.offCodePaneDebugSessionChanged(handleDebugSessionChanged);
+      window.electronAPI.offCodePaneDebugSessionOutput(handleDebugSessionOutput);
     };
   }, [rootPath]);
 
@@ -4585,6 +4830,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsRunTargetsLoading(false);
   }, [rootPath, t]);
 
+  const loadDebugSessionDetails = useCallback(async (sessionId: string | null) => {
+    if (!sessionId) {
+      setDebugSessionDetails(null);
+      return;
+    }
+
+    setIsDebugDetailsLoading(true);
+    const response = await window.electronAPI.codePaneGetDebugSessionDetails({
+      sessionId,
+    });
+    setDebugSessionDetails(response.success ? (response.data ?? null) : null);
+    setIsDebugDetailsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadDebugSessionDetailsRef.current = loadDebugSessionDetails;
+  }, [loadDebugSessionDetails]);
+
   const loadTests = useCallback(async () => {
     setIsTestsLoading(true);
     setTestsError(null);
@@ -4628,6 +4891,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setBottomPanelMode('run');
     setSelectedRunSessionId(response.data.id);
+  }, [rootPath, t]);
+
+  const debugTargetById = useCallback(async (targetId: string) => {
+    const response = await window.electronAPI.codePaneDebugStart({
+      rootPath,
+      targetId,
+    });
+
+    if (!response.success || !response.data) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    setBottomPanelMode('debug');
+    setSelectedDebugSessionId(response.data.id);
   }, [rootPath, t]);
 
   const runTestTarget = useCallback(async (targetId: string) => {
@@ -4699,6 +4980,94 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setSelectedRunSessionId(response.data.id);
   }, [rootPath, t]);
 
+  const stopDebugSession = useCallback(async (sessionId: string) => {
+    const response = await window.electronAPI.codePaneDebugStop({
+      sessionId,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+    }
+  }, [t]);
+
+  const pauseDebugSession = useCallback(async (sessionId: string) => {
+    const response = await window.electronAPI.codePaneDebugPause({
+      sessionId,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+    }
+  }, [t]);
+
+  const continueDebugSession = useCallback(async (sessionId: string) => {
+    const response = await window.electronAPI.codePaneDebugContinue({
+      sessionId,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+    }
+  }, [t]);
+
+  const stepDebugSession = useCallback(async (
+    sessionId: string,
+    step: 'over' | 'into' | 'out',
+  ) => {
+    const action = step === 'over'
+      ? window.electronAPI.codePaneDebugStepOver
+      : step === 'into'
+        ? window.electronAPI.codePaneDebugStepInto
+        : window.electronAPI.codePaneDebugStepOut;
+    const response = await action({
+      sessionId,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+    }
+  }, [t]);
+
+  const evaluateDebugExpression = useCallback(async (expression: string) => {
+    if (!selectedDebugSession) {
+      return;
+    }
+
+    const response = await window.electronAPI.codePaneDebugEvaluate({
+      sessionId: selectedDebugSession.id,
+      expression,
+    });
+
+    if (!response.success || !response.data) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    setDebugEvaluations((currentEvaluations) => [
+      {
+        id: `${selectedDebugSession.id}:${Date.now()}`,
+        expression,
+        value: response.data?.value ?? '',
+      },
+      ...currentEvaluations,
+    ].slice(0, 20));
+  }, [selectedDebugSession, t]);
+
   const openTestItem = useCallback(async (item: CodePaneTestItem) => {
     if (!item.filePath) {
       return;
@@ -4716,6 +5085,60 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [openEditorLocation]);
 
+  const openDebugFrame = useCallback(async (frameId: string) => {
+    const frame = debugSessionDetails?.stackFrames.find((candidate) => candidate.id === frameId);
+    if (!frame?.filePath || !frame.lineNumber) {
+      return;
+    }
+
+    await openEditorLocation({
+      filePath: frame.filePath,
+      lineNumber: frame.lineNumber,
+      column: frame.column ?? 1,
+    }, {
+      preserveTabs: true,
+      recordHistory: true,
+      recordRecent: true,
+      clearForward: true,
+    });
+  }, [debugSessionDetails?.stackFrames, openEditorLocation]);
+
+  const toggleBreakpoint = useCallback(async (filePath: string, lineNumber: number) => {
+    const normalizedBreakpoint: CodePaneBreakpoint = {
+      filePath: normalizePath(filePath),
+      lineNumber: Math.max(1, Math.round(lineNumber)),
+    };
+    const breakpointKey = getBreakpointKey(normalizedBreakpoint);
+    const existingBreakpoint = breakpointsRef.current.find((candidate) => getBreakpointKey(candidate) === breakpointKey);
+    const response = existingBreakpoint
+      ? await window.electronAPI.codePaneRemoveBreakpoint({
+        rootPath,
+        breakpoint: normalizedBreakpoint,
+      })
+      : await window.electronAPI.codePaneSetBreakpoint({
+        rootPath,
+        breakpoint: normalizedBreakpoint,
+      });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+        filePath,
+      });
+      return;
+    }
+
+    const nextBreakpoints = existingBreakpoint
+      ? breakpointsRef.current.filter((candidate) => getBreakpointKey(candidate) !== breakpointKey)
+      : [...breakpointsRef.current, normalizedBreakpoint];
+    persistDebugBreakpoints(nextBreakpoints);
+  }, [persistDebugBreakpoints, rootPath, t]);
+
+  useEffect(() => {
+    toggleBreakpointRef.current = toggleBreakpoint;
+  }, [toggleBreakpoint]);
+
   const toggleBottomPanelMode = useCallback((mode: BottomPanelMode) => {
     setBottomPanelMode((currentMode) => (currentMode === mode ? null : mode));
   }, []);
@@ -4723,6 +5146,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const refreshBottomPanel = useCallback(() => {
     if (bottomPanelMode === 'run') {
       void loadRunTargets();
+      return;
+    }
+
+    if (bottomPanelMode === 'debug') {
+      void loadRunTargets();
+      void loadDebugSessionDetails(selectedDebugSessionId);
       return;
     }
 
@@ -4734,10 +5163,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (bottomPanelMode === 'project') {
       void loadProjectContributions(true);
     }
-  }, [bottomPanelMode, loadProjectContributions, loadRunTargets, loadTests]);
+  }, [
+    bottomPanelMode,
+    loadDebugSessionDetails,
+    loadProjectContributions,
+    loadRunTargets,
+    loadTests,
+    selectedDebugSessionId,
+  ]);
 
   useEffect(() => {
     if (bottomPanelMode === 'run') {
+      void loadRunTargets();
+    } else if (bottomPanelMode === 'debug') {
       void loadRunTargets();
     } else if (bottomPanelMode === 'tests') {
       void loadTests();
@@ -4745,6 +5183,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       void loadProjectContributions();
     }
   }, [activeFilePath, bottomPanelMode, loadProjectContributions, loadRunTargets, loadTests]);
+
+  useEffect(() => {
+    void loadDebugSessionDetails(selectedDebugSessionId);
+  }, [loadDebugSessionDetails, selectedDebugSessionId]);
+
+  useEffect(() => {
+    setDebugEvaluations([]);
+  }, [selectedDebugSessionId]);
 
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
@@ -4867,6 +5313,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
             text-decoration: underline;
             text-decoration-thickness: 1px;
             text-underline-offset: 2px;
+          }
+
+          .code-pane-breakpoint-glyph,
+          .code-pane-debug-current-glyph {
+            border-radius: 9999px;
+            box-sizing: border-box;
+            display: block;
+            height: 10px;
+            margin: 4px auto 0;
+            width: 10px;
+          }
+
+          .code-pane-breakpoint-glyph {
+            background: #ef4444;
+            box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.45);
+          }
+
+          .code-pane-debug-current-glyph {
+            background: #f59e0b;
+            box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.45);
+          }
+
+          .code-pane-debug-current-line {
+            background: rgba(245, 158, 11, 0.14);
           }
         `}
       </style>
@@ -5044,6 +5514,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
               }`}
             >
               Run
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.debugTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.debugTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleBottomPanelMode('debug');
+              }}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'debug'
+                  ? 'bg-amber-500/20 text-amber-200'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
+              }`}
+            >
+              Dbg
             </button>
           </AppTooltip>
           <AppTooltip content={t('codePane.testsTab')} placement="pane-corner">
@@ -5909,6 +6397,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onRunTarget={runTargetById}
               onSelectSession={setSelectedRunSessionId}
               onStopSession={stopRunSession}
+            />
+          ) : bottomPanelMode === 'debug' ? (
+            <DebugToolWindow
+              targets={debugTargets}
+              sessions={visibleDebugSessions}
+              selectedSession={selectedDebugSession}
+              selectedDetails={debugSessionDetails}
+              selectedOutput={selectedDebugSessionOutput}
+              evaluations={debugEvaluations}
+              isLoading={isRunTargetsLoading}
+              isDetailsLoading={isDebugDetailsLoading}
+              error={runTargetsError}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+              onRefresh={refreshBottomPanel}
+              onStartDebug={debugTargetById}
+              onSelectSession={setSelectedDebugSessionId}
+              onStopSession={stopDebugSession}
+              onPauseSession={pauseDebugSession}
+              onContinueSession={continueDebugSession}
+              onStepOver={(sessionId) => stepDebugSession(sessionId, 'over')}
+              onStepInto={(sessionId) => stepDebugSession(sessionId, 'into')}
+              onStepOut={(sessionId) => stepDebugSession(sessionId, 'out')}
+              onOpenFrame={openDebugFrame}
+              onEvaluate={evaluateDebugExpression}
             />
           ) : bottomPanelMode === 'project' ? (
             <ProjectToolWindow

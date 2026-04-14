@@ -46,6 +46,10 @@ export interface CodePaneState {
   activeFilePath: string | null;
   selectedPath?: string | null;
   expandedPaths?: string[];
+  breakpoints?: Array<{
+    filePath: string;
+    lineNumber: number;
+  }>;
   viewMode?: 'editor' | 'diff';
   diffTargetPath?: string | null;
   layout?: CodePaneLayoutState;

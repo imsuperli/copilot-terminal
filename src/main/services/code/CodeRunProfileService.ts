@@ -13,7 +13,7 @@ import type {
   CodePaneStopRunTargetConfig,
 } from '../../../shared/types/electron-api';
 
-interface ResolvedRunTarget extends CodePaneRunTarget {
+export interface ResolvedCodeRunTarget extends CodePaneRunTarget {
   rootPath: string;
   command: string;
   args: string[];
@@ -22,7 +22,7 @@ interface ResolvedRunTarget extends CodePaneRunTarget {
 interface RunningRunSession {
   child: ChildProcessWithoutNullStreams;
   session: CodePaneRunSession;
-  target: ResolvedRunTarget;
+  target: ResolvedCodeRunTarget;
   stoppedByUser: boolean;
 }
 
@@ -36,7 +36,7 @@ export class CodeRunProfileService {
   private readonly emitSessionChanged: (payload: CodePaneRunSessionChangedPayload) => void;
   private readonly emitSessionOutput: (payload: CodePaneRunSessionOutputPayload) => void;
   private readonly now: () => string;
-  private readonly targets = new Map<string, ResolvedRunTarget>();
+  private readonly targets = new Map<string, ResolvedCodeRunTarget>();
   private readonly runningSessions = new Map<string, RunningRunSession>();
   private readonly failedTestTargetIdsByRoot = new Map<string, Set<string>>();
 
@@ -223,11 +223,15 @@ export class CodeRunProfileService {
     this.failedTestTargetIdsByRoot.set(rootPath, failedTargetIds);
   }
 
-  registerAdHocTarget(target: Omit<ResolvedRunTarget, 'id'> & { id?: string }): CodePaneRunTarget {
+  registerAdHocTarget(target: Omit<ResolvedCodeRunTarget, 'id'> & { id?: string }): CodePaneRunTarget {
     return this.storeTarget({
       ...target,
       id: target.id ?? randomUUID(),
     });
+  }
+
+  getResolvedTarget(targetId: string): ResolvedCodeRunTarget | null {
+    return this.targets.get(targetId) ?? null;
   }
 
   private registerTarget(target: {
@@ -258,7 +262,7 @@ export class CodeRunProfileService {
     });
   }
 
-  private storeTarget(target: ResolvedRunTarget): CodePaneRunTarget {
+  private storeTarget(target: ResolvedCodeRunTarget): CodePaneRunTarget {
     this.targets.set(target.id, target);
     return {
       id: target.id,

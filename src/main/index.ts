@@ -25,6 +25,7 @@ import { CodeProjectIndexService } from './services/code/CodeProjectIndexService
 import { CodePaneWatcherService } from './services/code/CodePaneWatcherService';
 import { CodeRunProfileService } from './services/code/CodeRunProfileService';
 import { CodeTestService } from './services/code/CodeTestService';
+import { DebugAdapterSupervisor } from './services/debug/DebugAdapterSupervisor';
 import { LanguageFeatureService } from './services/language/LanguageFeatureService';
 import { LanguagePluginResolver } from './services/language/LanguagePluginResolver';
 import { LanguageProjectContributionService } from './services/language/LanguageProjectContributionService';
@@ -67,6 +68,7 @@ let codeProjectIndexService: CodeProjectIndexService | null = null;
 let codePaneWatcherService: CodePaneWatcherService | null = null;
 let codeRunProfileService: CodeRunProfileService | null = null;
 let codeTestService: CodeTestService | null = null;
+let debugAdapterSupervisor: DebugAdapterSupervisor | null = null;
 let languageFeatureService: LanguageFeatureService | null = null;
 let languageProjectContributionService: LanguageProjectContributionService | null = null;
 let pluginManager: PluginManager | null = null;
@@ -629,6 +631,19 @@ app.whenReady().then(async () => {
   codeTestService = new CodeTestService({
     runProfileService: codeRunProfileService,
   });
+  debugAdapterSupervisor = new DebugAdapterSupervisor({
+    runProfileService: codeRunProfileService,
+    emitSessionChanged: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('code-pane-debug-session-changed', payload);
+      }
+    },
+    emitSessionOutput: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('code-pane-debug-session-output', payload);
+      }
+    },
+  });
 
   // 初始化 ProjectConfigWatcher（基于 FileWatcherService）
   initProjectConfigWatcher(fileWatcherService);
@@ -703,6 +718,7 @@ app.whenReady().then(async () => {
     codePaneWatcherService,
     codeRunProfileService,
     codeTestService,
+    debugAdapterSupervisor,
     languageFeatureService,
     languageProjectContributionService,
     pluginManager,

@@ -537,6 +537,57 @@ async function emitRunSessionOutput(payload: {
   });
 }
 
+async function emitDebugSessionChanged(payload: {
+  rootPath: string;
+  session: {
+    id: string;
+    targetId: string;
+    label: string;
+    detail: string;
+    languageId: string;
+    adapterType: string;
+    state: 'starting' | 'paused' | 'running' | 'stopped' | 'error';
+    workingDirectory: string;
+    startedAt: string;
+    endedAt?: string;
+    stopReason?: string;
+    currentFrame?: {
+      id: string;
+      name: string;
+      filePath?: string;
+      lineNumber?: number;
+      column?: number;
+    } | null;
+  };
+}) {
+  const callback = vi.mocked(window.electronAPI.onCodePaneDebugSessionChanged).mock.calls.at(-1)?.[0];
+  if (!callback) {
+    throw new Error('expected debug session listener to be registered');
+  }
+
+  await act(async () => {
+    callback({}, payload);
+    await Promise.resolve();
+  });
+}
+
+async function emitDebugSessionOutput(payload: {
+  rootPath: string;
+  sessionId: string;
+  chunk: string;
+  stream: 'stdout' | 'stderr' | 'system';
+}) {
+  const callback = vi.mocked(window.electronAPI.onCodePaneDebugSessionOutput).mock.calls.at(-1)?.[0];
+  if (!callback) {
+    throw new Error('expected debug session output listener to be registered');
+  }
+
+  await act(async () => {
+    callback({}, payload);
+    await Promise.resolve();
+  });
+}
+
 describe('CodePane', () => {
   beforeAll(() => {
     vi.stubGlobal('Worker', class WorkerMock {});
@@ -589,6 +640,17 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneListRunTargets).mockReset();
     vi.mocked(window.electronAPI.codePaneRunTarget).mockReset();
     vi.mocked(window.electronAPI.codePaneStopRunTarget).mockReset();
+    vi.mocked(window.electronAPI.codePaneDebugStart).mockReset();
+    vi.mocked(window.electronAPI.codePaneDebugStop).mockReset();
+    vi.mocked(window.electronAPI.codePaneDebugPause).mockReset();
+    vi.mocked(window.electronAPI.codePaneDebugContinue).mockReset();
+    vi.mocked(window.electronAPI.codePaneDebugStepOver).mockReset();
+    vi.mocked(window.electronAPI.codePaneDebugStepInto).mockReset();
+    vi.mocked(window.electronAPI.codePaneDebugStepOut).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetDebugSessionDetails).mockReset();
+    vi.mocked(window.electronAPI.codePaneDebugEvaluate).mockReset();
+    vi.mocked(window.electronAPI.codePaneSetBreakpoint).mockReset();
+    vi.mocked(window.electronAPI.codePaneRemoveBreakpoint).mockReset();
     vi.mocked(window.electronAPI.codePaneListTests).mockReset();
     vi.mocked(window.electronAPI.codePaneRunTests).mockReset();
     vi.mocked(window.electronAPI.codePaneRerunFailedTests).mockReset();
@@ -603,6 +665,10 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.offCodePaneRunSessionChanged).mockReset();
     vi.mocked(window.electronAPI.onCodePaneRunSessionOutput).mockReset();
     vi.mocked(window.electronAPI.offCodePaneRunSessionOutput).mockReset();
+    vi.mocked(window.electronAPI.onCodePaneDebugSessionChanged).mockReset();
+    vi.mocked(window.electronAPI.offCodePaneDebugSessionChanged).mockReset();
+    vi.mocked(window.electronAPI.onCodePaneDebugSessionOutput).mockReset();
+    vi.mocked(window.electronAPI.offCodePaneDebugSessionOutput).mockReset();
     vi.mocked(window.electronAPI.onCodePaneDiagnosticsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneDiagnosticsChanged).mockReset();
     vi.mocked(window.electronAPI.onCodePaneLanguageWorkspaceChanged).mockReset();
@@ -693,6 +759,29 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneListRunTargets).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneRunTarget).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneStopRunTarget).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDebugStart).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneDebugStop).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDebugPause).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDebugContinue).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDebugStepOver).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDebugStepInto).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneDebugStepOut).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGetDebugSessionDetails).mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: 'debug-session-1',
+        stackFrames: [],
+        scopes: [],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneDebugEvaluate).mockResolvedValue({
+      success: true,
+      data: {
+        value: '1',
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneSetBreakpoint).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneRemoveBreakpoint).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneListTests).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneRunTests).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneRerunFailedTests).mockResolvedValue({ success: true, data: [] });
@@ -1337,6 +1426,203 @@ describe('CodePane', () => {
     });
 
     expect(await screen.findByText(/Started successfully/)).toBeInTheDocument();
+  });
+
+  it('opens the debug tool window, starts a debug session, and evaluates an expression', async () => {
+    vi.mocked(window.electronAPI.codePaneListRunTargets).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'debug-target-python',
+          label: 'service.py',
+          detail: 'python service.py',
+          kind: 'application',
+          languageId: 'python',
+          workingDirectory: '/workspace/project',
+          filePath: '/workspace/project/src/service.py',
+          canDebug: true,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneDebugStart).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'debug-session-1',
+        targetId: 'debug-target-python',
+        label: 'service.py',
+        detail: 'python service.py',
+        languageId: 'python',
+        adapterType: 'pdb',
+        state: 'starting',
+        workingDirectory: '/workspace/project',
+        startedAt: '2026-04-13T00:00:00.000Z',
+        currentFrame: null,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetDebugSessionDetails).mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: 'debug-session-1',
+        stackFrames: [
+          {
+            id: 'frame-1',
+            name: 'main',
+            filePath: '/workspace/project/src/service.py',
+            lineNumber: 12,
+            column: 1,
+          },
+        ],
+        scopes: [
+          {
+            id: 'locals',
+            name: 'Locals',
+            variables: [
+              {
+                id: 'var-1',
+                name: 'value',
+                value: '1',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneDebugEvaluate).mockResolvedValue({
+      success: true,
+      data: {
+        value: '1',
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.debugTab' }));
+    });
+
+    expect(await screen.findByText('service.py')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('service.py'));
+    });
+
+    expect(window.electronAPI.codePaneDebugStart).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      targetId: 'debug-target-python',
+    });
+
+    await emitDebugSessionChanged({
+      rootPath: '/workspace/project',
+      session: {
+        id: 'debug-session-1',
+        targetId: 'debug-target-python',
+        label: 'service.py',
+        detail: 'python service.py',
+        languageId: 'python',
+        adapterType: 'pdb',
+        state: 'paused',
+        workingDirectory: '/workspace/project',
+        startedAt: '2026-04-13T00:00:00.000Z',
+        stopReason: 'breakpoint',
+        currentFrame: {
+          id: 'frame-1',
+          name: 'main',
+          filePath: '/workspace/project/src/service.py',
+          lineNumber: 12,
+          column: 1,
+        },
+      },
+    });
+    await emitDebugSessionOutput({
+      rootPath: '/workspace/project',
+      sessionId: 'debug-session-1',
+      chunk: 'Paused at breakpoint\n',
+      stream: 'stdout',
+    });
+
+    expect((await screen.findAllByText('value')).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Paused at breakpoint/)).toBeInTheDocument();
+    const valueOneCountBeforeEvaluate = screen.getAllByText('1').length;
+
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('codePane.debugEvaluatePlaceholder'), {
+        target: { value: 'value' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.debugEvaluateRun' }));
+    });
+
+    expect(window.electronAPI.codePaneDebugEvaluate).toHaveBeenCalledWith({
+      sessionId: 'debug-session-1',
+      expression: 'value',
+    });
+    const evaluationEntries = await screen.findAllByText('value');
+    expect(evaluationEntries.length).toBeGreaterThan(1);
+    expect((await screen.findAllByText('1')).length).toBeGreaterThan(valueOneCountBeforeEvaluate);
+  });
+
+  it('toggles breakpoints from the editor gutter', async () => {
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    expect(activeEditor).toBeDefined();
+
+    await act(async () => {
+      activeEditor.fireMouseDown({
+        target: {
+          type: 'gutterGlyphMargin',
+          position: { lineNumber: 1, column: 1 },
+        },
+        event: {
+          browserEvent: {
+            button: 0,
+            buttons: 1,
+            preventDefault: vi.fn(),
+            stopPropagation: vi.fn(),
+          },
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneSetBreakpoint).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      breakpoint: {
+        filePath: '/workspace/project/src/index.ts',
+        lineNumber: 1,
+      },
+    });
+
+    await act(async () => {
+      activeEditor.fireMouseDown({
+        target: {
+          type: 'gutterGlyphMargin',
+          position: { lineNumber: 1, column: 1 },
+        },
+        event: {
+          browserEvent: {
+            button: 0,
+            buttons: 1,
+            preventDefault: vi.fn(),
+            stopPropagation: vi.fn(),
+          },
+          preventDefault: vi.fn(),
+          stopPropagation: vi.fn(),
+        },
+      });
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneRemoveBreakpoint).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      breakpoint: {
+        filePath: '/workspace/project/src/index.ts',
+        lineNumber: 1,
+      },
+    });
   });
 
   it('opens the tests tool window, shows the test tree, and reruns failed tests', async () => {

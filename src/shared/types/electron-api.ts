@@ -675,6 +675,102 @@ export interface CodePaneRunSessionOutputPayload {
   stream: 'stdout' | 'stderr' | 'system';
 }
 
+export interface CodePaneBreakpoint {
+  filePath: string;
+  lineNumber: number;
+}
+
+export type CodePaneDebugSessionState = 'starting' | 'paused' | 'running' | 'stopped' | 'error';
+
+export interface CodePaneDebugStackFrame {
+  id: string;
+  name: string;
+  filePath?: string;
+  lineNumber?: number;
+  column?: number;
+}
+
+export interface CodePaneDebugVariable {
+  id: string;
+  name: string;
+  value: string;
+  type?: string;
+  evaluateName?: string;
+}
+
+export interface CodePaneDebugScope {
+  id: string;
+  name: string;
+  variables: CodePaneDebugVariable[];
+}
+
+export interface CodePaneDebugSessionDetails {
+  sessionId: string;
+  stackFrames: CodePaneDebugStackFrame[];
+  scopes: CodePaneDebugScope[];
+}
+
+export interface CodePaneDebugEvaluationResult {
+  value: string;
+  type?: string;
+}
+
+export interface CodePaneDebugSession {
+  id: string;
+  targetId: string;
+  label: string;
+  detail: string;
+  languageId: string;
+  adapterType: string;
+  state: CodePaneDebugSessionState;
+  workingDirectory: string;
+  startedAt: string;
+  endedAt?: string;
+  stopReason?: string;
+  error?: string;
+  currentFrame?: CodePaneDebugStackFrame | null;
+}
+
+export interface CodePaneDebugSessionChangedPayload {
+  rootPath: string;
+  session: CodePaneDebugSession;
+}
+
+export interface CodePaneDebugSessionOutputPayload {
+  rootPath: string;
+  sessionId: string;
+  chunk: string;
+  stream: 'stdout' | 'stderr' | 'system';
+}
+
+export interface CodePaneDebugStartConfig {
+  rootPath: string;
+  targetId: string;
+}
+
+export interface CodePaneDebugControlConfig {
+  sessionId: string;
+}
+
+export interface CodePaneGetDebugSessionDetailsConfig {
+  sessionId: string;
+}
+
+export interface CodePaneDebugEvaluateConfig {
+  sessionId: string;
+  expression: string;
+}
+
+export interface CodePaneSetBreakpointConfig {
+  rootPath: string;
+  breakpoint: CodePaneBreakpoint;
+}
+
+export interface CodePaneRemoveBreakpointConfig {
+  rootPath: string;
+  breakpoint: CodePaneBreakpoint;
+}
+
 export interface CodePaneTestItem {
   id: string;
   label: string;
@@ -1070,6 +1166,17 @@ export interface ElectronAPI {
   codePaneListRunTargets: (config: CodePaneListRunTargetsConfig) => Promise<IpcResponse<CodePaneRunTarget[]>>;
   codePaneRunTarget: (config: CodePaneRunTargetConfig) => Promise<IpcResponse<CodePaneRunSession>>;
   codePaneStopRunTarget: (config: CodePaneStopRunTargetConfig) => Promise<IpcResponse<void>>;
+  codePaneDebugStart: (config: CodePaneDebugStartConfig) => Promise<IpcResponse<CodePaneDebugSession>>;
+  codePaneDebugStop: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
+  codePaneDebugPause: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
+  codePaneDebugContinue: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
+  codePaneDebugStepOver: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
+  codePaneDebugStepInto: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
+  codePaneDebugStepOut: (config: CodePaneDebugControlConfig) => Promise<IpcResponse<void>>;
+  codePaneGetDebugSessionDetails: (config: CodePaneGetDebugSessionDetailsConfig) => Promise<IpcResponse<CodePaneDebugSessionDetails>>;
+  codePaneDebugEvaluate: (config: CodePaneDebugEvaluateConfig) => Promise<IpcResponse<CodePaneDebugEvaluationResult>>;
+  codePaneSetBreakpoint: (config: CodePaneSetBreakpointConfig) => Promise<IpcResponse<void>>;
+  codePaneRemoveBreakpoint: (config: CodePaneRemoveBreakpointConfig) => Promise<IpcResponse<void>>;
   codePaneListTests: (config: CodePaneListTestsConfig) => Promise<IpcResponse<CodePaneTestItem[]>>;
   codePaneRunTests: (config: CodePaneRunTestsConfig) => Promise<IpcResponse<CodePaneRunSession>>;
   codePaneRerunFailedTests: (config: CodePaneRerunFailedTestsConfig) => Promise<IpcResponse<CodePaneRunSession[]>>;
@@ -1084,6 +1191,10 @@ export interface ElectronAPI {
   offCodePaneRunSessionChanged: (callback: ElectronEventHandler<CodePaneRunSessionChangedPayload>) => void;
   onCodePaneRunSessionOutput: (callback: ElectronEventHandler<CodePaneRunSessionOutputPayload>) => void;
   offCodePaneRunSessionOutput: (callback: ElectronEventHandler<CodePaneRunSessionOutputPayload>) => void;
+  onCodePaneDebugSessionChanged: (callback: ElectronEventHandler<CodePaneDebugSessionChangedPayload>) => void;
+  offCodePaneDebugSessionChanged: (callback: ElectronEventHandler<CodePaneDebugSessionChangedPayload>) => void;
+  onCodePaneDebugSessionOutput: (callback: ElectronEventHandler<CodePaneDebugSessionOutputPayload>) => void;
+  offCodePaneDebugSessionOutput: (callback: ElectronEventHandler<CodePaneDebugSessionOutputPayload>) => void;
   onCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
   offCodePaneDiagnosticsChanged: (callback: ElectronEventHandler<CodePaneDiagnosticsChangedPayload>) => void;
   onCodePaneLanguageWorkspaceChanged: (callback: ElectronEventHandler<CodePaneLanguageWorkspaceChangedPayload>) => void;

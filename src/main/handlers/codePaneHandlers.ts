@@ -3,7 +3,11 @@ import path from 'path';
 import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import type {
+  CodePaneDebugControlConfig,
+  CodePaneDebugEvaluateConfig,
+  CodePaneDebugStartConfig,
   CodePaneGetExternalLibrarySectionsConfig,
+  CodePaneGetDebugSessionDetailsConfig,
   CodePaneGetProjectContributionConfig,
   CodePaneGitGraphConfig,
   CodePaneGitStatusConfig,
@@ -16,8 +20,10 @@ import type {
   CodePaneRunProjectCommandConfig,
   CodePaneRunTargetConfig,
   CodePaneRunTestsConfig,
+  CodePaneRemoveBreakpointConfig,
   CodePaneSearchContentsConfig,
   CodePaneSearchFilesConfig,
+  CodePaneSetBreakpointConfig,
   CodePaneStopRunTargetConfig,
   CodePaneWatchRootConfig,
   CodePaneWriteFileConfig,
@@ -31,6 +37,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     codeProjectIndexService,
     codeRunProfileService,
     codeTestService,
+    debugAdapterSupervisor,
     languageFeatureService,
     languageProjectContributionService,
     getMainWindow,
@@ -313,6 +320,146 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       await codeRunProfileService.stopRunTarget(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-debug-start', async (_event, config: CodePaneDebugStartConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      return successResponse(await debugAdapterSupervisor.startSession(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-debug-stop', async (_event, config: CodePaneDebugControlConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.stopSession(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-debug-pause', async (_event, config: CodePaneDebugControlConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.pauseSession(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-debug-continue', async (_event, config: CodePaneDebugControlConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.continueSession(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-debug-step-over', async (_event, config: CodePaneDebugControlConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.stepOver(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-debug-step-into', async (_event, config: CodePaneDebugControlConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.stepInto(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-debug-step-out', async (_event, config: CodePaneDebugControlConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.stepOut(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-debug-session-details', async (_event, config: CodePaneGetDebugSessionDetailsConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      return successResponse(await debugAdapterSupervisor.getSessionDetails(config.sessionId));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-debug-evaluate', async (_event, config: CodePaneDebugEvaluateConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      return successResponse(await debugAdapterSupervisor.evaluate(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-set-breakpoint', async (_event, config: CodePaneSetBreakpointConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.setBreakpoint(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-remove-breakpoint', async (_event, config: CodePaneRemoveBreakpointConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.removeBreakpoint(config);
       return successResponse();
     } catch (error) {
       return errorResponse(error);
