@@ -559,15 +559,16 @@ async function emitRunSessionOutput(payload: {
 
 async function emitDebugSessionChanged(payload: {
   rootPath: string;
-  session: {
-    id: string;
-    targetId: string;
-    label: string;
-    detail: string;
-    languageId: string;
-    adapterType: string;
-    state: 'starting' | 'paused' | 'running' | 'stopped' | 'error';
-    workingDirectory: string;
+    session: {
+      id: string;
+      targetId: string;
+      label: string;
+      detail: string;
+      languageId: string;
+      adapterType: string;
+      request?: 'launch' | 'attach';
+      state: 'starting' | 'paused' | 'running' | 'stopped' | 'error';
+      workingDirectory: string;
     startedAt: string;
     endedAt?: string;
     stopReason?: string;
@@ -691,6 +692,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneDebugEvaluate).mockReset();
     vi.mocked(window.electronAPI.codePaneSetBreakpoint).mockReset();
     vi.mocked(window.electronAPI.codePaneRemoveBreakpoint).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetExceptionBreakpoints).mockReset();
+    vi.mocked(window.electronAPI.codePaneSetExceptionBreakpoints).mockReset();
     vi.mocked(window.electronAPI.codePaneListTests).mockReset();
     vi.mocked(window.electronAPI.codePaneRunTests).mockReset();
     vi.mocked(window.electronAPI.codePaneRerunFailedTests).mockReset();
@@ -874,6 +877,11 @@ describe('CodePane', () => {
     });
     vi.mocked(window.electronAPI.codePaneSetBreakpoint).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneRemoveBreakpoint).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGetExceptionBreakpoints).mockResolvedValue({
+      success: true,
+      data: [{ id: 'all', label: 'All Exceptions', enabled: false }],
+    });
+    vi.mocked(window.electronAPI.codePaneSetExceptionBreakpoints).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneListTests).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneRunTests).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneRerunFailedTests).mockResolvedValue({ success: true, data: [] });

@@ -4,6 +4,7 @@ import { statSync } from 'fs';
 import type {
   CodePaneBreakpoint,
   CodePaneDebugEvaluationResult,
+  CodePaneExceptionBreakpoint,
   CodePaneDebugScope,
   CodePaneDebugStackFrame,
   CodePaneDebugVariable,
@@ -84,6 +85,7 @@ export class JavaJdbDriver implements DebugDriver {
 
     await this.debuggerProcess.waitForPrompt(30000);
     await this.applyBreakpoints(this.context.breakpoints);
+    await this.applyExceptionBreakpoints(this.context.exceptionBreakpoints);
     return await this.inspectPausedState('entry');
   }
 
@@ -115,6 +117,17 @@ export class JavaJdbDriver implements DebugDriver {
       await debuggerProcess.executeCommand(`clear ${key}`);
       this.appliedBreakpointKeys.delete(key);
     }
+  }
+
+  async applyExceptionBreakpoints(breakpoints: CodePaneExceptionBreakpoint[]): Promise<void> {
+    const debuggerProcess = this.requireDebugger();
+    const shouldCatchAll = breakpoints.some((breakpoint) => breakpoint.id === 'all' && breakpoint.enabled);
+    if (shouldCatchAll) {
+      await debuggerProcess.executeCommand('catch java.lang.Throwable');
+      return;
+    }
+
+    await debuggerProcess.executeCommand('ignore java.lang.Throwable');
   }
 
   async resume(): Promise<DebugDriverSnapshot> {

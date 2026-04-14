@@ -37,6 +37,7 @@ import type {
   CodePaneCallHierarchyDirection,
   CodePaneCodeAction,
   CodePaneContentMatch,
+  CodePaneExceptionBreakpoint,
   CodePaneDocumentSymbol,
   CodePaneDebugSession,
   CodePaneDebugSessionChangedPayload,
@@ -148,6 +149,11 @@ const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
 const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
+const CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS: CodePaneExceptionBreakpoint[] = [{
+  id: 'all',
+  label: 'All Exceptions',
+  enabled: false,
+}];
 
 type FileNavigationLocation = {
   filePath: string;
@@ -277,10 +283,40 @@ function getBreakpointKey(breakpoint: CodePaneBreakpoint): string {
   return `${normalizePath(breakpoint.filePath)}:${breakpoint.lineNumber}`;
 }
 
+function normalizeBreakpoint(
+  breakpoint: Partial<CodePaneBreakpoint> & {
+    filePath: string;
+    lineNumber: number;
+  },
+): CodePaneBreakpoint {
+  const normalizedBreakpoint: CodePaneBreakpoint = {
+    filePath: normalizePath(breakpoint.filePath),
+    lineNumber: Math.max(1, Math.round(breakpoint.lineNumber)),
+  };
+
+  if (typeof breakpoint.id === 'string' && breakpoint.id.trim().length > 0) {
+    normalizedBreakpoint.id = breakpoint.id.trim();
+  }
+  if (breakpoint.condition?.trim()) {
+    normalizedBreakpoint.condition = breakpoint.condition.trim();
+  }
+  if (breakpoint.logMessage?.trim()) {
+    normalizedBreakpoint.logMessage = breakpoint.logMessage.trim();
+  }
+  if (breakpoint.enabled === false) {
+    normalizedBreakpoint.enabled = false;
+  }
+
+  return normalizedBreakpoint;
+}
+
 function normalizeBreakpoints(
   breakpoints: Array<{
     filePath: string;
     lineNumber: number;
+    condition?: string;
+    logMessage?: string;
+    enabled?: boolean;
   }> | undefined | null,
 ): CodePaneBreakpoint[] {
   const normalizedBreakpoints: CodePaneBreakpoint[] = [];
@@ -291,10 +327,7 @@ function normalizeBreakpoints(
       continue;
     }
 
-    const normalizedBreakpoint: CodePaneBreakpoint = {
-      filePath: normalizePath(breakpoint.filePath),
-      lineNumber: Math.max(1, Math.round(breakpoint.lineNumber)),
-    };
+    const normalizedBreakpoint = normalizeBreakpoint(breakpoint);
     const breakpointKey = getBreakpointKey(normalizedBreakpoint);
     if (seenKeys.has(breakpointKey)) {
       continue;
@@ -308,6 +341,48 @@ function normalizeBreakpoints(
     const pathOrder = left.filePath.localeCompare(right.filePath);
     return pathOrder !== 0 ? pathOrder : left.lineNumber - right.lineNumber;
   });
+}
+
+function normalizeExceptionBreakpoints(
+  breakpoints: Array<{
+    id: 'all';
+    enabled: boolean;
+    label?: string;
+  }> | undefined | null,
+): CodePaneExceptionBreakpoint[] {
+  const allBreakpoint = breakpoints?.find((breakpoint) => breakpoint.id === 'all');
+  return [{
+    id: 'all',
+    label: allBreakpoint?.label ?? CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS[0].label,
+    enabled: allBreakpoint?.enabled === true,
+  }];
+}
+
+function getBreakpointGlyphClassName(breakpoint: CodePaneBreakpoint): string {
+  if (breakpoint.enabled === false) {
+    return 'code-pane-breakpoint-glyph code-pane-breakpoint-glyph-disabled';
+  }
+  if (breakpoint.logMessage?.trim()) {
+    return 'code-pane-breakpoint-glyph code-pane-breakpoint-glyph-log';
+  }
+  if (breakpoint.condition?.trim()) {
+    return 'code-pane-breakpoint-glyph code-pane-breakpoint-glyph-conditional';
+  }
+  return 'code-pane-breakpoint-glyph';
+}
+
+function formatBreakpointHoverMessage(breakpoint: CodePaneBreakpoint): string {
+  const details = [`Breakpoint ${breakpoint.lineNumber}`];
+  if (breakpoint.enabled === false) {
+    details.push('disabled');
+  }
+  if (breakpoint.condition?.trim()) {
+    details.push(`condition: ${breakpoint.condition.trim()}`);
+  }
+  if (breakpoint.logMessage?.trim()) {
+    details.push(`log: ${breakpoint.logMessage.trim()}`);
+  }
+  return details.join('\n');
 }
 
 function getHierarchyNodeKey(item: CodePaneHierarchyItem): string {
@@ -1048,6 +1123,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [selectedCodeActionIndex, setSelectedCodeActionIndex] = useState(0);
   const [bottomPanelMode, setBottomPanelMode] = useState<BottomPanelMode | null>(null);
   const [breakpoints, setBreakpoints] = useState<CodePaneBreakpoint[]>(() => normalizeBreakpoints(pane.code?.breakpoints));
+  const [exceptionBreakpoints, setExceptionBreakpoints] = useState<CodePaneExceptionBreakpoint[]>(
+    () => normalizeExceptionBreakpoints(pane.code?.debug?.exceptionBreakpoints),
+  );
   const [runTargets, setRunTargets] = useState<CodePaneRunTarget[]>([]);
   const [isRunTargetsLoading, setIsRunTargetsLoading] = useState(false);
   const [runTargetsError, setRunTargetsError] = useState<string | null>(null);
@@ -1135,6 +1213,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const loadedDirectoriesRef = useRef(loadedDirectories);
   const loadedExternalDirectoriesRef = useRef(loadedExternalDirectories);
   const breakpointsRef = useRef(breakpoints);
+  const exceptionBreakpointsRef = useRef(exceptionBreakpoints);
   const debugCurrentFrameRef = useRef<CodePaneDebugStackFrame | null>(null);
   const dirtyPathsRef = useRef(dirtyPaths);
   const savingPathsRef = useRef(savingPaths);
@@ -1214,6 +1293,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     breakpointsRef.current = breakpoints;
   }, [breakpoints]);
+
+  useEffect(() => {
+    setExceptionBreakpoints(normalizeExceptionBreakpoints(pane.code?.debug?.exceptionBreakpoints));
+  }, [pane.id, pane.code?.debug?.exceptionBreakpoints]);
+
+  useEffect(() => {
+    exceptionBreakpointsRef.current = exceptionBreakpoints;
+  }, [exceptionBreakpoints]);
 
   useEffect(() => {
     dirtyPathsRef.current = dirtyPaths;
@@ -1334,6 +1421,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [persistCodeState]);
 
+  const persistDebugState = useCallback((updates: Partial<NonNullable<NonNullable<Pane['code']>['debug']>>) => {
+    const currentDebugState = paneRef.current.code?.debug ?? {};
+    persistCodeState({
+      debug: {
+        ...currentDebugState,
+        ...updates,
+      },
+    });
+  }, [persistCodeState]);
+
   const getPersistedExpandedPaths = useCallback((paths: Set<string>) => (
     Array.from(paths).filter((directoryPath) => isPathInside(rootPath, directoryPath))
   ), [rootPath]);
@@ -1345,9 +1442,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
       breakpoints: normalizedBreakpoints.map((breakpoint) => ({
         filePath: breakpoint.filePath,
         lineNumber: breakpoint.lineNumber,
+        ...(breakpoint.condition ? { condition: breakpoint.condition } : {}),
+        ...(breakpoint.logMessage ? { logMessage: breakpoint.logMessage } : {}),
+        ...(breakpoint.enabled === false ? { enabled: false } : {}),
       })),
     });
   }, [persistCodeState]);
+
+  const persistExceptionBreakpoints = useCallback((nextBreakpoints: CodePaneExceptionBreakpoint[]) => {
+    const normalizedExceptionBreakpoints = normalizeExceptionBreakpoints(nextBreakpoints);
+    setExceptionBreakpoints(normalizedExceptionBreakpoints);
+    persistDebugState({
+      exceptionBreakpoints: normalizedExceptionBreakpoints.map((breakpoint) => ({
+        id: breakpoint.id,
+        enabled: breakpoint.enabled,
+      })),
+    });
+  }, [persistDebugState]);
 
   const updateOpenFileTabs = useCallback((
     updater: (currentOpenFiles: CodePaneOpenFile[]) => CodePaneOpenFile[],
@@ -1444,6 +1555,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, []);
 
+  const loadExceptionBreakpoints = useCallback(async () => {
+    const persistedExceptionBreakpoints = paneRef.current.code?.debug?.exceptionBreakpoints;
+    if ((persistedExceptionBreakpoints?.length ?? 0) > 0) {
+      const normalizedPersistedBreakpoints = normalizeExceptionBreakpoints(persistedExceptionBreakpoints);
+      const syncResponse = await window.electronAPI.codePaneSetExceptionBreakpoints({
+        rootPath,
+        breakpoints: normalizedPersistedBreakpoints,
+      });
+      if (syncResponse.success) {
+        setExceptionBreakpoints(normalizedPersistedBreakpoints);
+      }
+      return;
+    }
+
+    const response = await window.electronAPI.codePaneGetExceptionBreakpoints({
+      rootPath,
+    });
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    persistExceptionBreakpoints(response.data ?? CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS);
+  }, [persistExceptionBreakpoints, rootPath, t]);
+
   useEffect(() => {
     for (const breakpoint of breakpointsRef.current) {
       void window.electronAPI.codePaneSetBreakpoint({
@@ -1451,7 +1590,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         breakpoint,
       });
     }
-  }, [rootPath]);
+    void loadExceptionBreakpoints();
+  }, [loadExceptionBreakpoints, rootPath]);
 
   const toggleSidebarVisibility = useCallback((nextVisible?: boolean) => {
     const shouldShowSidebar = nextVisible ?? !sidebarVisibleRef.current;
@@ -1884,8 +2024,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         },
         options: {
           isWholeLine: true,
-          glyphMarginClassName: 'code-pane-breakpoint-glyph',
-          glyphMarginHoverMessage: [{ value: `Breakpoint ${breakpoint.lineNumber}` }],
+          glyphMarginClassName: getBreakpointGlyphClassName(breakpoint),
+          glyphMarginHoverMessage: [{ value: formatBreakpointHoverMessage(breakpoint) }],
         },
       }));
     const currentFrame = debugCurrentFrameRef.current;
@@ -7125,37 +7265,94 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [debugSessionDetails?.stackFrames, openEditorLocation]);
 
-  const toggleBreakpoint = useCallback(async (filePath: string, lineNumber: number) => {
-    const normalizedBreakpoint: CodePaneBreakpoint = {
-      filePath: normalizePath(filePath),
-      lineNumber: Math.max(1, Math.round(lineNumber)),
-    };
-    const breakpointKey = getBreakpointKey(normalizedBreakpoint);
-    const existingBreakpoint = breakpointsRef.current.find((candidate) => getBreakpointKey(candidate) === breakpointKey);
-    const response = existingBreakpoint
-      ? await window.electronAPI.codePaneRemoveBreakpoint({
-        rootPath,
-        breakpoint: normalizedBreakpoint,
-      })
-      : await window.electronAPI.codePaneSetBreakpoint({
-        rootPath,
-        breakpoint: normalizedBreakpoint,
-      });
+  const updateBreakpoint = useCallback(async (breakpoint: CodePaneBreakpoint) => {
+    const normalizedBreakpoint = normalizeBreakpoint(breakpoint);
+    const response = await window.electronAPI.codePaneSetBreakpoint({
+      rootPath,
+      breakpoint: normalizedBreakpoint,
+    });
 
     if (!response.success) {
       setBanner({
         tone: 'error',
         message: response.error || t('common.retry'),
-        filePath,
+        filePath: normalizedBreakpoint.filePath,
       });
       return;
     }
 
-    const nextBreakpoints = existingBreakpoint
-      ? breakpointsRef.current.filter((candidate) => getBreakpointKey(candidate) !== breakpointKey)
+    const breakpointKey = getBreakpointKey(normalizedBreakpoint);
+    const nextBreakpoints = breakpointsRef.current.some((candidate) => getBreakpointKey(candidate) === breakpointKey)
+      ? breakpointsRef.current.map((candidate) => (
+        getBreakpointKey(candidate) === breakpointKey
+          ? normalizedBreakpoint
+          : candidate
+      ))
       : [...breakpointsRef.current, normalizedBreakpoint];
     persistDebugBreakpoints(nextBreakpoints);
   }, [persistDebugBreakpoints, rootPath, t]);
+
+  const removeBreakpoint = useCallback(async (breakpoint: CodePaneBreakpoint) => {
+    const normalizedBreakpoint = normalizeBreakpoint(breakpoint);
+    const response = await window.electronAPI.codePaneRemoveBreakpoint({
+      rootPath,
+      breakpoint: normalizedBreakpoint,
+    });
+
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+        filePath: normalizedBreakpoint.filePath,
+      });
+      return;
+    }
+
+    persistDebugBreakpoints(
+      breakpointsRef.current.filter((candidate) => getBreakpointKey(candidate) !== getBreakpointKey(normalizedBreakpoint)),
+    );
+  }, [persistDebugBreakpoints, rootPath, t]);
+
+  const setExceptionBreakpoint = useCallback(async (
+    breakpointId: CodePaneExceptionBreakpoint['id'],
+    enabled: boolean,
+  ) => {
+    const nextBreakpoints = normalizeExceptionBreakpoints(
+      exceptionBreakpointsRef.current.map((breakpoint) => (
+        breakpoint.id === breakpointId
+          ? { ...breakpoint, enabled }
+          : breakpoint
+      )),
+    );
+    const response = await window.electronAPI.codePaneSetExceptionBreakpoints({
+      rootPath,
+      breakpoints: nextBreakpoints,
+    });
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    persistExceptionBreakpoints(nextBreakpoints);
+  }, [persistExceptionBreakpoints, rootPath, t]);
+
+  const toggleBreakpoint = useCallback(async (filePath: string, lineNumber: number) => {
+    const normalizedBreakpoint = normalizeBreakpoint({
+      filePath,
+      lineNumber,
+    });
+    const breakpointKey = getBreakpointKey(normalizedBreakpoint);
+    const existingBreakpoint = breakpointsRef.current.find((candidate) => getBreakpointKey(candidate) === breakpointKey);
+    if (existingBreakpoint) {
+      await removeBreakpoint(existingBreakpoint);
+      return;
+    }
+
+    await updateBreakpoint(normalizedBreakpoint);
+  }, [removeBreakpoint, updateBreakpoint]);
 
   useEffect(() => {
     toggleBreakpointRef.current = toggleBreakpoint;
@@ -7174,6 +7371,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (bottomPanelMode === 'debug') {
       void loadRunTargets();
       void loadDebugSessionDetails(selectedDebugSessionId);
+      void loadExceptionBreakpoints();
       return;
     }
 
@@ -7220,6 +7418,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     loadGitHistory,
     loadHierarchyRoot,
     loadDebugSessionDetails,
+    loadExceptionBreakpoints,
     loadSemanticSummary,
     loadTodoEntries,
     loadProjectContributions,
@@ -7234,6 +7433,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       void loadRunTargets();
     } else if (bottomPanelMode === 'debug') {
       void loadRunTargets();
+      void loadExceptionBreakpoints();
     } else if (bottomPanelMode === 'tests') {
       void loadTests();
     } else if (bottomPanelMode === 'project') {
@@ -7257,6 +7457,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitHistory?.targetLineNumber,
     loadGitHistory,
     loadHierarchyRoot,
+    loadExceptionBreakpoints,
     loadTodoEntries,
     loadProjectContributions,
     loadRunTargets,
@@ -7476,6 +7677,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
           .code-pane-breakpoint-glyph {
             background: #ef4444;
             box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.45);
+          }
+
+          .code-pane-breakpoint-glyph-disabled {
+            background: #71717a;
+            box-shadow: 0 0 0 1px rgba(161, 161, 170, 0.4);
+          }
+
+          .code-pane-breakpoint-glyph-conditional {
+            background: #f97316;
+            box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.45);
+          }
+
+          .code-pane-breakpoint-glyph-log {
+            background: #06b6d4;
+            box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.45);
           }
 
           .code-pane-debug-current-glyph {
@@ -8864,6 +9080,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
           ) : bottomPanelMode === 'debug' ? (
             <DebugToolWindow
               targets={debugTargets}
+              breakpoints={breakpoints}
+              exceptionBreakpoints={exceptionBreakpoints}
               sessions={visibleDebugSessions}
               selectedSession={selectedDebugSession}
               selectedDetails={debugSessionDetails}
@@ -8886,6 +9104,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onStepOut={(sessionId) => stepDebugSession(sessionId, 'out')}
               onOpenFrame={openDebugFrame}
               onEvaluate={evaluateDebugExpression}
+              onUpdateBreakpoint={updateBreakpoint}
+              onRemoveBreakpoint={removeBreakpoint}
+              onSetExceptionBreakpoint={setExceptionBreakpoint}
             />
           ) : bottomPanelMode === 'hierarchy' ? (
             <HierarchyToolWindow

@@ -9,6 +9,7 @@ import type {
   CodePaneDebugStartConfig,
   CodePaneGetExternalLibrarySectionsConfig,
   CodePaneGetDebugSessionDetailsConfig,
+  CodePaneGetExceptionBreakpointsConfig,
   CodePaneGetProjectContributionConfig,
   CodePaneGitBlameConfig,
   CodePaneGitCheckoutConfig,
@@ -35,6 +36,7 @@ import type {
   CodePaneRemoveBreakpointConfig,
   CodePaneSearchContentsConfig,
   CodePaneSearchFilesConfig,
+  CodePaneSetExceptionBreakpointsConfig,
   CodePaneSetBreakpointConfig,
   CodePaneStopRunTargetConfig,
   CodePaneWatchRootConfig,
@@ -639,6 +641,31 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       await debugAdapterSupervisor.removeBreakpoint(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-exception-breakpoints', async (_event, config: CodePaneGetExceptionBreakpointsConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      return successResponse(await debugAdapterSupervisor.getExceptionBreakpoints(config.rootPath));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-set-exception-breakpoints', async (_event, config: CodePaneSetExceptionBreakpointsConfig) => {
+    try {
+      if (!debugAdapterSupervisor) {
+        throw new Error('DebugAdapterSupervisor not initialized');
+      }
+
+      await debugAdapterSupervisor.setExceptionBreakpoints(config.rootPath, config.breakpoints);
       return successResponse();
     } catch (error) {
       return errorResponse(error);

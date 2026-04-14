@@ -3,6 +3,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import path from 'path';
 import fs from 'fs-extra';
 import type {
+  CodePaneDebugRequest,
   CodePaneListRunTargetsConfig,
   CodePaneRunSession,
   CodePaneRunSessionChangedPayload,
@@ -18,6 +19,7 @@ export interface ResolvedCodeRunTarget extends CodePaneRunTarget {
   rootPath: string;
   command: string;
   args: string[];
+  debugRequest?: CodePaneDebugRequest;
 }
 
 interface RunningRunSession {
@@ -284,6 +286,7 @@ export class CodeRunProfileService {
     args: string[];
     filePath?: string;
     canDebug?: boolean;
+    debugRequest?: CodePaneDebugRequest;
   }): CodePaneRunTarget {
     return this.storeTarget({
       id: `${target.rootPath}:${target.key}`,
@@ -297,6 +300,7 @@ export class CodeRunProfileService {
       command: target.command,
       args: target.args,
       canDebug: target.canDebug,
+      debugRequest: target.debugRequest,
     });
   }
 
@@ -311,6 +315,7 @@ export class CodeRunProfileService {
       workingDirectory: target.workingDirectory,
       ...(target.filePath ? { filePath: target.filePath } : {}),
       ...(target.canDebug ? { canDebug: true } : {}),
+      ...(target.debugRequest ? { debugRequest: target.debugRequest } : {}),
     };
   }
 

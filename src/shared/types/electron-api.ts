@@ -887,6 +887,7 @@ export interface CodePaneRunTarget {
   workingDirectory: string;
   filePath?: string;
   canDebug?: boolean;
+  debugRequest?: CodePaneDebugRequest;
 }
 
 export interface CodePaneListRunTargetsConfig {
@@ -930,11 +931,22 @@ export interface CodePaneRunSessionOutputPayload {
 }
 
 export interface CodePaneBreakpoint {
+  id?: string;
   filePath: string;
   lineNumber: number;
+  condition?: string;
+  logMessage?: string;
+  enabled?: boolean;
 }
 
 export type CodePaneDebugSessionState = 'starting' | 'paused' | 'running' | 'stopped' | 'error';
+export type CodePaneDebugRequest = 'launch' | 'attach';
+
+export interface CodePaneExceptionBreakpoint {
+  id: 'all';
+  label: string;
+  enabled: boolean;
+}
 
 export interface CodePaneDebugStackFrame {
   id: string;
@@ -976,6 +988,7 @@ export interface CodePaneDebugSession {
   detail: string;
   languageId: string;
   adapterType: string;
+  request: CodePaneDebugRequest;
   state: CodePaneDebugSessionState;
   workingDirectory: string;
   startedAt: string;
@@ -1023,6 +1036,15 @@ export interface CodePaneSetBreakpointConfig {
 export interface CodePaneRemoveBreakpointConfig {
   rootPath: string;
   breakpoint: CodePaneBreakpoint;
+}
+
+export interface CodePaneGetExceptionBreakpointsConfig {
+  rootPath: string;
+}
+
+export interface CodePaneSetExceptionBreakpointsConfig {
+  rootPath: string;
+  breakpoints: CodePaneExceptionBreakpoint[];
 }
 
 export interface CodePaneTestItem {
@@ -1462,6 +1484,8 @@ export interface ElectronAPI {
   codePaneDebugEvaluate: (config: CodePaneDebugEvaluateConfig) => Promise<IpcResponse<CodePaneDebugEvaluationResult>>;
   codePaneSetBreakpoint: (config: CodePaneSetBreakpointConfig) => Promise<IpcResponse<void>>;
   codePaneRemoveBreakpoint: (config: CodePaneRemoveBreakpointConfig) => Promise<IpcResponse<void>>;
+  codePaneGetExceptionBreakpoints: (config: CodePaneGetExceptionBreakpointsConfig) => Promise<IpcResponse<CodePaneExceptionBreakpoint[]>>;
+  codePaneSetExceptionBreakpoints: (config: CodePaneSetExceptionBreakpointsConfig) => Promise<IpcResponse<void>>;
   codePaneListTests: (config: CodePaneListTestsConfig) => Promise<IpcResponse<CodePaneTestItem[]>>;
   codePaneRunTests: (config: CodePaneRunTestsConfig) => Promise<IpcResponse<CodePaneRunSession>>;
   codePaneRerunFailedTests: (config: CodePaneRerunFailedTestsConfig) => Promise<IpcResponse<CodePaneRunSession[]>>;

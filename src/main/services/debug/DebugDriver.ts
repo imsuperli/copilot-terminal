@@ -1,5 +1,6 @@
 import type {
   CodePaneBreakpoint,
+  CodePaneExceptionBreakpoint,
   CodePaneDebugEvaluationResult,
   CodePaneDebugScope,
   CodePaneDebugSessionState,
@@ -25,6 +26,7 @@ export interface DebugDriverContext {
   rootPath: string;
   target: ResolvedCodeRunTarget;
   breakpoints: CodePaneBreakpoint[];
+  exceptionBreakpoints: CodePaneExceptionBreakpoint[];
   callbacks: DebugDriverCallbacks;
 }
 
@@ -32,6 +34,7 @@ export interface DebugDriver {
   readonly adapterType: string;
   start(): Promise<DebugDriverSnapshot>;
   applyBreakpoints(breakpoints: CodePaneBreakpoint[]): Promise<void>;
+  applyExceptionBreakpoints(breakpoints: CodePaneExceptionBreakpoint[]): Promise<void>;
   resume(): Promise<DebugDriverSnapshot>;
   requestPause(): Promise<void>;
   stepOver(): Promise<DebugDriverSnapshot>;

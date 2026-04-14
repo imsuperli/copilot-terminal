@@ -2,6 +2,7 @@ import path from 'path';
 import type {
   CodePaneBreakpoint,
   CodePaneDebugEvaluationResult,
+  CodePaneExceptionBreakpoint,
   CodePaneDebugScope,
   CodePaneDebugStackFrame,
   CodePaneDebugVariable,
@@ -46,6 +47,7 @@ export class GoDlvDriver implements DebugDriver {
 
     await this.process.waitForPrompt(30000);
     await this.applyBreakpoints(this.context.breakpoints);
+    await this.applyExceptionBreakpoints(this.context.exceptionBreakpoints);
     return await this.inspectPausedState('entry');
   }
 
@@ -72,6 +74,10 @@ export class GoDlvDriver implements DebugDriver {
       await process.executeCommand(`clear ${key}`);
       this.appliedBreakpointKeys.delete(key);
     }
+  }
+
+  async applyExceptionBreakpoints(_breakpoints: CodePaneExceptionBreakpoint[]): Promise<void> {
+    // Delve CLI does not expose a generic exception breakpoint model here.
   }
 
   async resume(): Promise<DebugDriverSnapshot> {

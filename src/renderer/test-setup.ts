@@ -183,6 +183,11 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneDebugEvaluate: vi.fn().mockResolvedValue({ success: true, data: { value: '' } }),
     codePaneSetBreakpoint: vi.fn().mockResolvedValue({ success: true }),
     codePaneRemoveBreakpoint: vi.fn().mockResolvedValue({ success: true }),
+    codePaneGetExceptionBreakpoints: vi.fn().mockResolvedValue({
+      success: true,
+      data: [{ id: 'all', label: 'All Exceptions', enabled: false }],
+    }),
+    codePaneSetExceptionBreakpoints: vi.fn().mockResolvedValue({ success: true }),
     codePaneListTests: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneRunTests: vi.fn().mockResolvedValue({ success: true, data: null }),
     codePaneRerunFailedTests: vi.fn().mockResolvedValue({ success: true, data: [] }),

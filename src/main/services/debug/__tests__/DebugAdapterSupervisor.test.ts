@@ -3,6 +3,7 @@ import type {
   CodePaneBreakpoint,
   CodePaneDebugScope,
   CodePaneDebugStackFrame,
+  CodePaneExceptionBreakpoint,
 } from '../../../../shared/types/electron-api';
 import { CodeRunProfileService } from '../../code/CodeRunProfileService';
 import { DebugAdapterSupervisor } from '../DebugAdapterSupervisor';
@@ -14,6 +15,7 @@ describe('DebugAdapterSupervisor', () => {
     const emittedSessions: Array<{ rootPath: string; state: string }> = [];
     const emittedOutput: Array<{ rootPath: string; chunk: string }> = [];
     let receivedBreakpoints: CodePaneBreakpoint[] = [];
+    let receivedExceptionBreakpoints: CodePaneExceptionBreakpoint[] = [];
 
     const supervisor = new DebugAdapterSupervisor({
       runProfileService,
@@ -32,6 +34,7 @@ describe('DebugAdapterSupervisor', () => {
       now: () => '2026-04-13T00:00:00.000Z',
       createDriver: (context) => {
         receivedBreakpoints = context.breakpoints;
+        receivedExceptionBreakpoints = context.exceptionBreakpoints;
         return new FakeDebugDriver(context, {
           startSnapshot: createSnapshot({
             frameLineNumber: 10,
@@ -59,6 +62,13 @@ describe('DebugAdapterSupervisor', () => {
       {
         filePath: '/workspace/project/src/app.py',
         lineNumber: 10,
+      },
+    ]);
+    expect(receivedExceptionBreakpoints).toEqual([
+      {
+        id: 'all',
+        label: 'All Exceptions',
+        enabled: false,
       },
     ]);
     const details = await supervisor.getSessionDetails(session.id);
@@ -184,12 +194,64 @@ describe('DebugAdapterSupervisor', () => {
     expect(fakeDriver?.evaluate).toHaveBeenCalledWith('value');
     expect(evaluation.value).toBe('eval:value');
   });
+
+  it('auto-resumes logpoints and emits rendered log output', async () => {
+    const { runProfileService, targetId } = createRunProfileService();
+    const emittedOutput: Array<{ rootPath: string; chunk: string; stream: string }> = [];
+
+    const supervisor = new DebugAdapterSupervisor({
+      runProfileService,
+      emitSessionChanged: vi.fn(),
+      emitSessionOutput: (payload) => {
+        emittedOutput.push({
+          rootPath: payload.rootPath,
+          chunk: payload.chunk,
+          stream: payload.stream,
+        });
+      },
+      now: () => '2026-04-13T00:00:00.000Z',
+      createDriver: (context) => new FakeDebugDriver(context, {
+        startSnapshot: createSnapshot({
+          frameLineNumber: 10,
+          variables: [{ name: 'value', value: '1' }],
+        }),
+        resumeSnapshot: createSnapshot({
+          frameLineNumber: 14,
+          variables: [{ name: 'value', value: '2' }],
+        }),
+      }),
+    });
+
+    await supervisor.setBreakpoint({
+      rootPath: '/workspace/project',
+      breakpoint: {
+        filePath: '/workspace/project/src/app.py',
+        lineNumber: 10,
+        logMessage: 'value={value}',
+      },
+    });
+
+    const session = await supervisor.startSession({
+      rootPath: '/workspace/project',
+      targetId,
+    });
+
+    expect(session.currentFrame?.lineNumber).toBe(14);
+    expect(emittedOutput).toContainEqual(expect.objectContaining({
+      rootPath: '/workspace/project',
+      stream: 'system',
+      chunk: '[logpoint] value=eval:value\n',
+    }));
+  });
 });
 
 class FakeDebugDriver implements DebugDriver {
   readonly adapterType = 'fake-debugger';
   readonly applyBreakpoints = vi.fn(async (breakpoints: CodePaneBreakpoint[]) => {
     this.options.onApplyBreakpoints?.(breakpoints);
+  });
+  readonly applyExceptionBreakpoints = vi.fn(async (breakpoints: CodePaneExceptionBreakpoint[]) => {
+    this.options.onApplyExceptionBreakpoints?.(breakpoints);
   });
   readonly requestPause = vi.fn(async () => {});
   readonly evaluate = vi.fn(async (expression: string) => ({
@@ -198,6 +260,7 @@ class FakeDebugDriver implements DebugDriver {
   readonly stop = vi.fn(async () => {});
 
   private readonly initialBreakpoints: CodePaneBreakpoint[];
+  private readonly initialExceptionBreakpoints: CodePaneExceptionBreakpoint[];
 
   constructor(
     context: DebugDriverContext,
@@ -205,13 +268,16 @@ class FakeDebugDriver implements DebugDriver {
       startSnapshot: DebugDriverSnapshot;
       resumeSnapshot?: DebugDriverSnapshot;
       onApplyBreakpoints?: (breakpoints: CodePaneBreakpoint[]) => void;
+      onApplyExceptionBreakpoints?: (breakpoints: CodePaneExceptionBreakpoint[]) => void;
     },
   ) {
     this.initialBreakpoints = context.breakpoints;
+    this.initialExceptionBreakpoints = context.exceptionBreakpoints;
   }
 
   async start(): Promise<DebugDriverSnapshot> {
     await this.applyBreakpoints(this.initialBreakpoints);
+    await this.applyExceptionBreakpoints(this.initialExceptionBreakpoints);
     return this.options.startSnapshot;
   }
 

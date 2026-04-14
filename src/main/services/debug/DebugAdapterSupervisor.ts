@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import path from 'path';
 import type {
   CodePaneBreakpoint,
   CodePaneDebugControlConfig,
@@ -8,6 +9,7 @@ import type {
   CodePaneDebugSessionChangedPayload,
   CodePaneDebugSessionDetails,
   CodePaneDebugSessionOutputPayload,
+  CodePaneExceptionBreakpoint,
   CodePaneDebugStartConfig,
   CodePaneRemoveBreakpointConfig,
   CodePaneSetBreakpointConfig,
@@ -70,7 +72,8 @@ export class DebugAdapterSupervisor {
     const driver = this.createDriver({
       rootPath: config.rootPath,
       target,
-      breakpoints: this.sessionStore.getBreakpoints(config.rootPath),
+      breakpoints: this.sessionStore.getEnabledBreakpoints(config.rootPath),
+      exceptionBreakpoints: this.sessionStore.getExceptionBreakpoints(config.rootPath),
       callbacks: {
         onOutput: (chunk, stream) => {
           this.emitSessionOutput({
@@ -93,6 +96,7 @@ export class DebugAdapterSupervisor {
       detail: target.detail,
       languageId: target.languageId,
       adapterType: driver.adapterType,
+      request: target.debugRequest ?? 'launch',
       state: 'starting',
       workingDirectory: target.workingDirectory,
       startedAt: this.now(),
@@ -101,7 +105,7 @@ export class DebugAdapterSupervisor {
     this.sessionStore.storeSession(config.rootPath, session);
     this.emitSession(config.rootPath, session);
 
-    const snapshot = await driver.start();
+    const snapshot = await this.resolvePausedSnapshot(sessionId, config.rootPath, driver, await driver.start());
     this.activeSessions.set(sessionId, {
       rootPath: config.rootPath,
       driver,
@@ -180,6 +184,15 @@ export class DebugAdapterSupervisor {
     await this.syncBreakpoints(config.rootPath);
   }
 
+  async getExceptionBreakpoints(rootPath: string): Promise<CodePaneExceptionBreakpoint[]> {
+    return this.sessionStore.getExceptionBreakpoints(rootPath);
+  }
+
+  async setExceptionBreakpoints(rootPath: string, breakpoints: CodePaneExceptionBreakpoint[]): Promise<void> {
+    this.sessionStore.setExceptionBreakpoints(rootPath, breakpoints);
+    await this.syncExceptionBreakpoints(rootPath);
+  }
+
   private async runStepCommand(
     sessionId: string,
     nextState: CodePaneDebugSession['state'],
@@ -203,11 +216,13 @@ export class DebugAdapterSupervisor {
     }
 
     try {
-      const snapshot = await task();
-      if (activeSession.pendingBreakpointSync && snapshot.state === 'paused') {
-        await activeSession.driver.applyBreakpoints(this.sessionStore.getBreakpoints(activeSession.rootPath));
-        activeSession.pendingBreakpointSync = false;
-      }
+      const snapshot = await this.resolvePausedSnapshot(
+        sessionId,
+        activeSession.rootPath,
+        activeSession.driver,
+        await task(),
+        activeSession,
+      );
       this.applySnapshot(activeSession.rootPath, sessionId, snapshot);
     } catch (error) {
       this.applyError(sessionId, activeSession.rootPath, error);
@@ -220,7 +235,7 @@ export class DebugAdapterSupervisor {
   }
 
   private async syncBreakpoints(rootPath: string): Promise<void> {
-    const breakpoints = this.sessionStore.getBreakpoints(rootPath);
+    const breakpoints = this.sessionStore.getEnabledBreakpoints(rootPath);
     await Promise.all(Array.from(this.activeSessions.entries()).map(async ([sessionId, activeSession]) => {
       if (activeSession.rootPath !== rootPath) {
         return;
@@ -234,6 +249,151 @@ export class DebugAdapterSupervisor {
 
       await activeSession.driver.applyBreakpoints(breakpoints);
     }));
+  }
+
+  private async syncExceptionBreakpoints(rootPath: string): Promise<void> {
+    const exceptionBreakpoints = this.sessionStore.getExceptionBreakpoints(rootPath);
+    await Promise.all(Array.from(this.activeSessions.entries()).map(async ([sessionId, activeSession]) => {
+      if (activeSession.rootPath !== rootPath) {
+        return;
+      }
+
+      const storedSession = this.sessionStore.getSession(sessionId);
+      if (storedSession?.session.state === 'running') {
+        activeSession.pendingBreakpointSync = true;
+        return;
+      }
+
+      await activeSession.driver.applyExceptionBreakpoints(exceptionBreakpoints);
+    }));
+  }
+
+  private async resolvePausedSnapshot(
+    sessionId: string,
+    rootPath: string,
+    driver: DebugDriver,
+    initialSnapshot: DebugDriverSnapshot,
+    activeSession?: ActiveDebugSession,
+  ): Promise<DebugDriverSnapshot> {
+    let snapshot = initialSnapshot;
+
+    while (true) {
+      if (snapshot.state !== 'paused') {
+        return snapshot;
+      }
+
+      if (activeSession?.pendingBreakpointSync) {
+        await driver.applyBreakpoints(this.sessionStore.getEnabledBreakpoints(rootPath));
+        await driver.applyExceptionBreakpoints(this.sessionStore.getExceptionBreakpoints(rootPath));
+        activeSession.pendingBreakpointSync = false;
+      }
+
+      const breakpoint = this.findMatchingBreakpoint(rootPath, snapshot.currentFrame?.filePath, snapshot.currentFrame?.lineNumber);
+      if (!breakpoint) {
+        return snapshot;
+      }
+
+      const conditionResult = await this.evaluateBreakpointCondition(driver, breakpoint, rootPath, sessionId);
+      if (conditionResult === 'error') {
+        return {
+          ...snapshot,
+          stopReason: 'condition-error',
+        };
+      }
+      if (conditionResult === false) {
+        snapshot = await driver.resume();
+        continue;
+      }
+
+      if (breakpoint.logMessage?.trim()) {
+        const renderedMessage = await this.renderLogMessage(driver, breakpoint.logMessage);
+        this.emitSessionOutput({
+          rootPath,
+          sessionId,
+          chunk: `[logpoint] ${renderedMessage}\n`,
+          stream: 'system',
+        });
+        snapshot = await driver.resume();
+        continue;
+      }
+
+      return snapshot;
+    }
+  }
+
+  private findMatchingBreakpoint(
+    rootPath: string,
+    filePath: string | undefined,
+    lineNumber: number | undefined,
+  ): CodePaneBreakpoint | null {
+    if (!filePath || !lineNumber) {
+      return null;
+    }
+
+    const normalizedFilePath = normalizePath(filePath);
+    const currentFileName = path.basename(normalizedFilePath);
+    return this.sessionStore.getEnabledBreakpoints(rootPath).find((breakpoint) => {
+      const normalizedBreakpointPath = normalizePath(breakpoint.filePath);
+      return breakpoint.lineNumber === lineNumber
+        && (
+          normalizedBreakpointPath === normalizedFilePath
+          || path.basename(normalizedBreakpointPath) === currentFileName
+        );
+    }) ?? null;
+  }
+
+  private async evaluateBreakpointCondition(
+    driver: DebugDriver,
+    breakpoint: CodePaneBreakpoint,
+    rootPath: string,
+    sessionId: string,
+  ): Promise<boolean | 'error'> {
+    const condition = breakpoint.condition?.trim();
+    if (!condition) {
+      return true;
+    }
+
+    try {
+      const evaluation = await driver.evaluate(condition);
+      return interpretTruthyValue(evaluation.value);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.emitSessionOutput({
+        rootPath,
+        sessionId,
+        chunk: `[breakpoint] condition failed at ${breakpoint.filePath}:${breakpoint.lineNumber}: ${message}\n`,
+        stream: 'system',
+      });
+      return 'error';
+    }
+  }
+
+  private async renderLogMessage(
+    driver: DebugDriver,
+    template: string,
+  ): Promise<string> {
+    const placeholders = Array.from(template.matchAll(/\{([^{}]+)\}/g));
+    if (placeholders.length === 0) {
+      return template;
+    }
+
+    let rendered = template;
+    for (const placeholder of placeholders) {
+      const expression = placeholder[1]?.trim();
+      if (!expression) {
+        continue;
+      }
+
+      try {
+        const evaluation = await driver.evaluate(expression);
+        rendered = rendered.replace(placeholder[0], evaluation.value);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        rendered = rendered.replace(placeholder[0], `<error:${message}>`);
+      }
+    }
+
+    return rendered;
   }
 
   private handleDriverTermination(sessionId: string, result: { exitCode: number | null; error?: string }): void {
@@ -362,4 +522,21 @@ function createDefaultDebugDriver(context: Parameters<DebugDriverFactory>[0]): D
     default:
       throw new Error(`No debug driver is available for language ${context.target.languageId}`);
   }
+}
+
+function normalizePath(value: string): string {
+  return value.replace(/\\/g, '/');
+}
+
+function interpretTruthyValue(value: string): boolean {
+  const normalizedValue = value.trim().toLowerCase();
+  if (!normalizedValue) {
+    return false;
+  }
+
+  if (['false', '0', 'none', 'null', 'nil'].includes(normalizedValue)) {
+    return false;
+  }
+
+  return true;
 }

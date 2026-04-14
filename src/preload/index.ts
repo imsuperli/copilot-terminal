@@ -263,6 +263,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-set-breakpoint', config),
   codePaneRemoveBreakpoint: (config) =>
     ipcRenderer.invoke('code-pane-remove-breakpoint', config),
+  codePaneGetExceptionBreakpoints: (config) =>
+    ipcRenderer.invoke('code-pane-get-exception-breakpoints', config),
+  codePaneSetExceptionBreakpoints: (config) =>
+    ipcRenderer.invoke('code-pane-set-exception-breakpoints', config),
   codePaneListTests: (config) =>
     ipcRenderer.invoke('code-pane-list-tests', config),
   codePaneRunTests: (config) =>

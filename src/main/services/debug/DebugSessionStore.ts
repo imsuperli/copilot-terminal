@@ -1,5 +1,6 @@
 import type {
   CodePaneBreakpoint,
+  CodePaneExceptionBreakpoint,
   CodePaneDebugSession,
   CodePaneDebugSessionDetails,
 } from '../../../shared/types/electron-api';
@@ -11,14 +12,14 @@ interface StoredDebugSession {
 }
 
 export class DebugSessionStore {
-  private readonly breakpointsByRoot = new Map<string, Map<string, Set<number>>>();
+  private readonly breakpointsByRoot = new Map<string, Map<string, CodePaneBreakpoint>>();
+  private readonly exceptionBreakpointsByRoot = new Map<string, CodePaneExceptionBreakpoint[]>();
   private readonly sessions = new Map<string, StoredDebugSession>();
 
   setBreakpoint(rootPath: string, breakpoint: CodePaneBreakpoint): void {
     const breakpointMap = this.ensureBreakpointMap(rootPath);
-    const lineNumbers = breakpointMap.get(breakpoint.filePath) ?? new Set<number>();
-    lineNumbers.add(breakpoint.lineNumber);
-    breakpointMap.set(breakpoint.filePath, lineNumbers);
+    const normalizedBreakpoint = normalizeBreakpoint(breakpoint);
+    breakpointMap.set(createBreakpointKey(normalizedBreakpoint), normalizedBreakpoint);
   }
 
   removeBreakpoint(rootPath: string, breakpoint: CodePaneBreakpoint): void {
@@ -27,38 +28,26 @@ export class DebugSessionStore {
       return;
     }
 
-    const lineNumbers = breakpointMap.get(breakpoint.filePath);
-    if (!lineNumbers) {
-      return;
-    }
-
-    lineNumbers.delete(breakpoint.lineNumber);
-    if (lineNumbers.size === 0) {
-      breakpointMap.delete(breakpoint.filePath);
-    }
-
+    breakpointMap.delete(createBreakpointKey(breakpoint));
     if (breakpointMap.size === 0) {
       this.breakpointsByRoot.delete(rootPath);
     }
   }
 
   getBreakpoints(rootPath: string): CodePaneBreakpoint[] {
-    const breakpointMap = this.breakpointsByRoot.get(rootPath);
-    if (!breakpointMap) {
-      return [];
-    }
+    return Array.from(this.breakpointsByRoot.get(rootPath)?.values() ?? []).sort(compareBreakpoints);
+  }
 
-    const breakpoints: CodePaneBreakpoint[] = [];
-    for (const [filePath, lineNumbers] of breakpointMap.entries()) {
-      for (const lineNumber of Array.from(lineNumbers).sort((left, right) => left - right)) {
-        breakpoints.push({
-          filePath,
-          lineNumber,
-        });
-      }
-    }
+  getEnabledBreakpoints(rootPath: string): CodePaneBreakpoint[] {
+    return this.getBreakpoints(rootPath).filter((breakpoint) => breakpoint.enabled !== false);
+  }
 
-    return breakpoints;
+  setExceptionBreakpoints(rootPath: string, breakpoints: CodePaneExceptionBreakpoint[]): void {
+    this.exceptionBreakpointsByRoot.set(rootPath, normalizeExceptionBreakpoints(breakpoints));
+  }
+
+  getExceptionBreakpoints(rootPath: string): CodePaneExceptionBreakpoint[] {
+    return normalizeExceptionBreakpoints(this.exceptionBreakpointsByRoot.get(rootPath) ?? []);
   }
 
   storeSession(rootPath: string, session: CodePaneDebugSession): void {
@@ -108,14 +97,47 @@ export class DebugSessionStore {
     this.sessions.delete(sessionId);
   }
 
-  private ensureBreakpointMap(rootPath: string): Map<string, Set<number>> {
+  private ensureBreakpointMap(rootPath: string): Map<string, CodePaneBreakpoint> {
     const existingBreakpointMap = this.breakpointsByRoot.get(rootPath);
     if (existingBreakpointMap) {
       return existingBreakpointMap;
     }
 
-    const nextBreakpointMap = new Map<string, Set<number>>();
+    const nextBreakpointMap = new Map<string, CodePaneBreakpoint>();
     this.breakpointsByRoot.set(rootPath, nextBreakpointMap);
     return nextBreakpointMap;
   }
+}
+
+function createBreakpointKey(breakpoint: CodePaneBreakpoint): string {
+  return `${normalizePath(breakpoint.filePath)}:${Math.max(1, Math.round(breakpoint.lineNumber))}`;
+}
+
+function normalizeBreakpoint(breakpoint: CodePaneBreakpoint): CodePaneBreakpoint {
+  return {
+    ...breakpoint,
+    filePath: normalizePath(breakpoint.filePath),
+    lineNumber: Math.max(1, Math.round(breakpoint.lineNumber)),
+    ...(breakpoint.condition?.trim() ? { condition: breakpoint.condition.trim() } : {}),
+    ...(breakpoint.logMessage?.trim() ? { logMessage: breakpoint.logMessage.trim() } : {}),
+    ...(breakpoint.enabled === false ? { enabled: false } : {}),
+  };
+}
+
+function compareBreakpoints(left: CodePaneBreakpoint, right: CodePaneBreakpoint): number {
+  const pathOrder = left.filePath.localeCompare(right.filePath);
+  return pathOrder !== 0 ? pathOrder : left.lineNumber - right.lineNumber;
+}
+
+function normalizeExceptionBreakpoints(breakpoints: CodePaneExceptionBreakpoint[]): CodePaneExceptionBreakpoint[] {
+  const allBreakpoint = breakpoints.find((breakpoint) => breakpoint.id === 'all');
+  return [{
+    id: 'all',
+    label: allBreakpoint?.label ?? 'All Exceptions',
+    enabled: allBreakpoint?.enabled === true,
+  }];
+}
+
+function normalizePath(value: string): string {
+  return value.replace(/\\/g, '/');
 }

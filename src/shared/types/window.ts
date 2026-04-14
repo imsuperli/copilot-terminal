@@ -55,6 +55,14 @@ export interface CodePaneLayoutState {
   };
 }
 
+export interface CodePaneDebugState {
+  watchExpressions?: string[];
+  exceptionBreakpoints?: Array<{
+    id: 'all';
+    enabled: boolean;
+  }>;
+}
+
 export interface CodePaneState {
   rootPath: string;
   openFiles: CodePaneOpenFile[];
@@ -65,10 +73,14 @@ export interface CodePaneState {
   breakpoints?: Array<{
     filePath: string;
     lineNumber: number;
+    condition?: string;
+    logMessage?: string;
+    enabled?: boolean;
   }>;
   viewMode?: 'editor' | 'diff';
   diffTargetPath?: string | null;
   layout?: CodePaneLayoutState;
+  debug?: CodePaneDebugState;
 }
 
 export interface PaneCapabilities {

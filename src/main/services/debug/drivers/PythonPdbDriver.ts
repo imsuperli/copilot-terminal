@@ -2,6 +2,7 @@ import path from 'path';
 import type {
   CodePaneBreakpoint,
   CodePaneDebugEvaluationResult,
+  CodePaneExceptionBreakpoint,
   CodePaneDebugScope,
   CodePaneDebugStackFrame,
   CodePaneDebugVariable,
@@ -46,6 +47,7 @@ export class PythonPdbDriver implements DebugDriver {
 
     await this.process.waitForPrompt();
     await this.applyBreakpoints(this.context.breakpoints);
+    await this.applyExceptionBreakpoints(this.context.exceptionBreakpoints);
     return await this.inspectPausedState('entry');
   }
 
@@ -73,6 +75,10 @@ export class PythonPdbDriver implements DebugDriver {
       await process.executeCommand(`clear ${normalizePath(breakpoint.filePath)}:${breakpoint.lineNumber}`);
       this.appliedBreakpointKeys.delete(key);
     }
+  }
+
+  async applyExceptionBreakpoints(_breakpoints: CodePaneExceptionBreakpoint[]): Promise<void> {
+    // pdb already drops into post-mortem debugging for uncaught exceptions only.
   }
 
   async resume(): Promise<DebugDriverSnapshot> {
