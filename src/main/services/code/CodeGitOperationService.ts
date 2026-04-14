@@ -3,6 +3,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 import fs from 'fs-extra';
 import type {
+  CodePaneGitApplyConflictResolutionConfig,
   CodePaneGitApplyRebasePlanConfig,
   CodePaneGitCheckoutConfig,
   CodePaneGitCherryPickConfig,
@@ -243,6 +244,21 @@ export class CodeGitOperationService {
       );
     }
 
+    await execFileAsync(
+      'git',
+      ['-C', repoContext.repoRootPath, 'add', '--', relativeFilePath],
+      { encoding: 'utf-8' },
+    );
+  }
+
+  async applyConflictResolution(config: CodePaneGitApplyConflictResolutionConfig): Promise<void> {
+    const repoContext = await requireRepoContext(config.rootPath);
+    const relativeFilePath = getRepoRelativePath(repoContext, config.filePath);
+    if (!relativeFilePath) {
+      throw new Error('Conflict target path is outside the repository root');
+    }
+
+    await fs.writeFile(config.filePath, config.mergedContent, 'utf-8');
     await execFileAsync(
       'git',
       ['-C', repoContext.repoRootPath, 'add', '--', relativeFilePath],

@@ -187,6 +187,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-rebase-control', config),
   codePaneGitResolveConflict: (config) =>
     ipcRenderer.invoke('code-pane-git-resolve-conflict', config),
+  codePaneGetGitConflictDetails: (config) =>
+    ipcRenderer.invoke('code-pane-git-conflict-details', config),
+  codePaneGitApplyConflictResolution: (config) =>
+    ipcRenderer.invoke('code-pane-git-apply-conflict-resolution', config),
   codePaneGitHistory: (config) =>
     ipcRenderer.invoke('code-pane-git-history', config),
   codePaneGitBlame: (config) =>

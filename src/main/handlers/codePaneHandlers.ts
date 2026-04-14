@@ -8,6 +8,7 @@ import type {
   CodePaneDebugEvaluateConfig,
   CodePaneDebugStartConfig,
   CodePaneGetExternalLibrarySectionsConfig,
+  CodePaneGitApplyConflictResolutionConfig,
   CodePaneGetDebugSessionDetailsConfig,
   CodePaneGetExceptionBreakpointsConfig,
   CodePaneListDebugSessionsConfig,
@@ -17,6 +18,7 @@ import type {
   CodePaneGitBranchListConfig,
   CodePaneGitCheckoutConfig,
   CodePaneGitCherryPickConfig,
+  CodePaneGitConflictDetailsConfig,
   CodePaneGitCommitConfig,
   CodePaneGitDeleteBranchConfig,
   CodePaneGitDiscardConfig,
@@ -401,6 +403,31 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       await codeGitOperationService.resolveConflict(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-conflict-details', async (_event, config: CodePaneGitConflictDetailsConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.getConflictDetails(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-apply-conflict-resolution', async (_event, config: CodePaneGitApplyConflictResolutionConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.applyConflictResolution(config);
       return successResponse();
     } catch (error) {
       return errorResponse(error);

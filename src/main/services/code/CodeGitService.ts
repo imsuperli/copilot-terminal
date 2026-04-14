@@ -3,6 +3,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import { promisify } from 'util';
 import type {
+  CodePaneGitConflictDetails,
+  CodePaneGitConflictDetailsConfig,
   CodePaneGitBranchEntry,
   CodePaneGitBranchListConfig,
   CodePaneGitDiffHunk,
@@ -261,6 +263,41 @@ export class CodeGitService {
         existsInHead: false,
       };
     }
+  }
+
+  async getConflictDetails(config: CodePaneGitConflictDetailsConfig): Promise<CodePaneGitConflictDetails> {
+    const repoContext = await this.resolveRepoContext(config.rootPath);
+    if (!repoContext) {
+      throw new Error('Git repository is not available for this code pane');
+    }
+
+    const absoluteFilePath = path.resolve(config.filePath);
+    if (!path.isAbsolute(config.filePath) || !isPathWithin(repoContext.rootPath, absoluteFilePath)) {
+      throw new Error('Target path is outside the code pane root');
+    }
+
+    const relativeFilePath = path.relative(repoContext.repoRootPath, absoluteFilePath);
+    if (!relativeFilePath || relativeFilePath.startsWith('..')) {
+      throw new Error('Target path is outside the repository root');
+    }
+
+    const gitRelativePath = toGitPath(relativeFilePath);
+    const [baseContent, oursContent, theirsContent, mergedContent] = await Promise.all([
+      readConflictStageContent(repoContext.repoRootPath, 1, gitRelativePath),
+      readConflictStageContent(repoContext.repoRootPath, 2, gitRelativePath),
+      readConflictStageContent(repoContext.repoRootPath, 3, gitRelativePath),
+      readWorkingTreeContent(absoluteFilePath),
+    ]);
+
+    return {
+      filePath: absoluteFilePath,
+      relativePath: relativeFilePath,
+      baseContent,
+      oursContent,
+      theirsContent,
+      mergedContent,
+      language: detectLanguageFromFilePath(absoluteFilePath),
+    };
   }
 
   private async readRepositoryStatus(repoContext: RepoContext): Promise<ParsedGitStatus> {
@@ -700,6 +737,79 @@ function parseBranchEntries(output: string, mergedBranchNames: Set<string>): Cod
       }
       return left.shortName.localeCompare(right.shortName, undefined, { sensitivity: 'base' });
     });
+}
+
+async function readConflictStageContent(
+  repoRootPath: string,
+  stage: 1 | 2 | 3,
+  relativeFilePath: string,
+): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync(
+      'git',
+      ['-C', repoRootPath, 'show', `:${stage}:${relativeFilePath}`],
+      { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+    );
+    return stdout as string;
+  } catch {
+    return '';
+  }
+}
+
+async function readWorkingTreeContent(filePath: string): Promise<string> {
+  try {
+    return await fs.readFile(filePath, 'utf-8');
+  } catch {
+    return '';
+  }
+}
+
+function detectLanguageFromFilePath(filePath: string): string {
+  const baseName = path.basename(filePath).toLowerCase();
+  const extension = path.extname(baseName).toLowerCase();
+
+  if (baseName === 'dockerfile') return 'dockerfile';
+  if (baseName === '.gitignore') return 'plaintext';
+  if (baseName === '.env' || baseName.startsWith('.env.')) return 'shell';
+
+  switch (extension) {
+    case '.ts':
+    case '.tsx':
+      return 'typescript';
+    case '.js':
+    case '.jsx':
+      return 'javascript';
+    case '.json':
+      return 'json';
+    case '.css':
+    case '.scss':
+    case '.less':
+      return 'css';
+    case '.html':
+    case '.htm':
+      return 'html';
+    case '.md':
+      return 'markdown';
+    case '.py':
+      return 'python';
+    case '.sh':
+    case '.bash':
+    case '.zsh':
+      return 'shell';
+    case '.yml':
+    case '.yaml':
+      return 'yaml';
+    case '.xml':
+      return 'xml';
+    case '.java':
+      return 'java';
+    case '.go':
+      return 'go';
+    case '.rs':
+      return 'rust';
+    default:
+      return 'plaintext';
+  }
 }
 
 function parseRebasePlanEntries(output: string): CodePaneGitRebasePlanResult['commits'] {

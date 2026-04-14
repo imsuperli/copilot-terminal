@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Eye, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Check, Eye, Loader2, X } from 'lucide-react';
 import type {
   CodePanePreviewChangeSet,
   CodePanePreviewFileChange,
@@ -65,6 +65,46 @@ export function RefactorPreviewToolWindow({
       {error && (
         <div className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
           {error}
+        </div>
+      )}
+
+      {changeSet?.stats && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-3 py-2 text-[11px] text-zinc-400">
+          <span className="rounded bg-zinc-900/80 px-2 py-1">
+            {t('codePane.refactorPreviewStatsFiles', { count: changeSet.stats.fileCount })}
+          </span>
+          <span className="rounded bg-zinc-900/80 px-2 py-1">
+            {t('codePane.refactorPreviewStatsEdits', { count: changeSet.stats.editCount })}
+          </span>
+          {changeSet.stats.renameCount > 0 && (
+            <span className="rounded bg-zinc-900/80 px-2 py-1">
+              {t('codePane.refactorPreviewStatsRenames', { count: changeSet.stats.renameCount })}
+            </span>
+          )}
+          {changeSet.stats.moveCount > 0 && (
+            <span className="rounded bg-zinc-900/80 px-2 py-1">
+              {t('codePane.refactorPreviewStatsMoves', { count: changeSet.stats.moveCount })}
+            </span>
+          )}
+          {changeSet.stats.deleteCount > 0 && (
+            <span className="rounded bg-zinc-900/80 px-2 py-1">
+              {t('codePane.refactorPreviewStatsDeletes', { count: changeSet.stats.deleteCount })}
+            </span>
+          )}
+        </div>
+      )}
+
+      {changeSet?.warnings && changeSet.warnings.length > 0 && (
+        <div className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle size={12} />
+            {t('codePane.refactorPreviewWarnings')}
+          </div>
+          <div className="mt-2 space-y-1">
+            {changeSet.warnings.map((warning) => (
+              <div key={warning}>{warning}</div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -513,6 +513,27 @@ export interface CodePaneGitResolveConflictConfig {
   strategy: CodePaneGitResolveConflictStrategy;
 }
 
+export interface CodePaneGitConflictDetailsConfig {
+  rootPath: string;
+  filePath: string;
+}
+
+export interface CodePaneGitConflictDetails {
+  filePath: string;
+  relativePath: string;
+  baseContent: string;
+  oursContent: string;
+  theirsContent: string;
+  mergedContent: string;
+  language: string;
+}
+
+export interface CodePaneGitApplyConflictResolutionConfig {
+  rootPath: string;
+  filePath: string;
+  mergedContent: string;
+}
+
 export interface CodePaneGitHistoryConfig {
   rootPath: string;
   filePath?: string;
@@ -560,6 +581,15 @@ export interface CodePaneGitBlameLine {
 export type CodePanePreviewSource = 'refactor' | 'git';
 export type CodePanePreviewFileChangeKind = 'modify' | 'rename' | 'move' | 'delete';
 
+export interface CodePanePreviewStats {
+  fileCount: number;
+  editCount: number;
+  renameCount: number;
+  moveCount: number;
+  deleteCount: number;
+  modifyCount: number;
+}
+
 export interface CodePanePreviewFileChange {
   id: string;
   kind: CodePanePreviewFileChangeKind;
@@ -578,6 +608,8 @@ export interface CodePanePreviewChangeSet {
   description?: string;
   createdAt: string;
   files: CodePanePreviewFileChange[];
+  warnings?: string[];
+  stats?: CodePanePreviewStats;
 }
 
 export interface CodePaneReadGitBaseFileConfig {
@@ -1563,6 +1595,8 @@ export interface ElectronAPI {
   codePaneGitCherryPick: (config: CodePaneGitCherryPickConfig) => Promise<IpcResponse<void>>;
   codePaneGitRebaseControl: (config: CodePaneGitRebaseControlConfig) => Promise<IpcResponse<void>>;
   codePaneGitResolveConflict: (config: CodePaneGitResolveConflictConfig) => Promise<IpcResponse<void>>;
+  codePaneGetGitConflictDetails: (config: CodePaneGitConflictDetailsConfig) => Promise<IpcResponse<CodePaneGitConflictDetails>>;
+  codePaneGitApplyConflictResolution: (config: CodePaneGitApplyConflictResolutionConfig) => Promise<IpcResponse<void>>;
   codePaneGitHistory: (config: CodePaneGitHistoryConfig) => Promise<IpcResponse<CodePaneGitHistoryResult>>;
   codePaneGitBlame: (config: CodePaneGitBlameConfig) => Promise<IpcResponse<CodePaneGitBlameLine[]>>;
   codePaneReadGitBaseFile: (config: CodePaneReadGitBaseFileConfig) => Promise<IpcResponse<CodePaneReadGitBaseFileResult>>;

@@ -655,6 +655,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGitCherryPick).mockReset();
     vi.mocked(window.electronAPI.codePaneGitRebaseControl).mockReset();
     vi.mocked(window.electronAPI.codePaneGitResolveConflict).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetGitConflictDetails).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitApplyConflictResolution).mockReset();
     vi.mocked(window.electronAPI.codePaneGitHistory).mockReset();
     vi.mocked(window.electronAPI.codePaneGitBlame).mockReset();
     vi.mocked(window.electronAPI.codePaneReadGitBaseFile).mockReset();
@@ -831,6 +833,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGitCherryPick).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitRebaseControl).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitResolveConflict).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGetGitConflictDetails).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneGitApplyConflictResolution).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitHistory).mockResolvedValue({
       success: true,
       data: {
@@ -2466,6 +2470,69 @@ describe('CodePane', () => {
       });
     });
     expect(await screen.findByText(/Test User · Refine index flow/)).toBeInTheDocument();
+  });
+
+  it('opens the conflict resolver below the editor and applies merged content', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          conflicted: true,
+          section: 'conflicted',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitConflictDetails).mockResolvedValue({
+      success: true,
+      data: {
+        filePath: '/workspace/project/src/index.ts',
+        relativePath: 'src/index.ts',
+        baseContent: 'export const value = 1;\n',
+        oursContent: 'export const value = 2;\n',
+        theirsContent: 'export const value = 3;\n',
+        mergedContent: 'export const value = 2;\n',
+        language: 'typescript',
+      },
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitResolveConflict' }));
+    });
+
+    expect(window.electronAPI.codePaneGetGitConflictDetails).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+    });
+    expect(await screen.findByText('codePane.gitConflictResolverTab')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitApplyConflictResolution' }));
+    });
+
+    expect(window.electronAPI.codePaneGitApplyConflictResolution).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      mergedContent: 'export const value = 2;\n',
+    });
   });
 
   it('opens the git workbench below the editor and loads branches with a one-line log list', async () => {

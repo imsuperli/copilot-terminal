@@ -49,6 +49,7 @@ import type {
   CodePaneGitBranchEntry,
   CodePaneGitGraphCommit,
   CodePaneGitBlameLine,
+  CodePaneGitConflictDetails,
   CodePaneGitHistoryResult,
   CodePaneGitRebasePlanEntry,
   CodePaneGitRebasePlanResult,
@@ -86,6 +87,7 @@ import {
 import { AppTooltip } from './ui/AppTooltip';
 import { BreadcrumbsBar, type CodePaneBreadcrumbItem } from './code-pane/BreadcrumbsBar';
 import { DebugToolWindow } from './code-pane/tool-windows/DebugToolWindow';
+import { ConflictResolutionToolWindow } from './code-pane/tool-windows/ConflictResolutionToolWindow';
 import { GitHistoryToolWindow } from './code-pane/tool-windows/GitHistoryToolWindow';
 import {
   HierarchyToolWindow,
@@ -134,6 +136,7 @@ type BottomPanelMode =
   | 'tests'
   | 'project'
   | 'git'
+  | 'conflict'
   | 'preview'
   | 'history'
   | 'workspace'
@@ -1199,6 +1202,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [gitRebaseBaseRef, setGitRebaseBaseRef] = useState('');
   const [isGitRebaseLoading, setIsGitRebaseLoading] = useState(false);
   const [gitRebaseError, setGitRebaseError] = useState<string | null>(null);
+  const [gitConflictDetails, setGitConflictDetails] = useState<CodePaneGitConflictDetails | null>(null);
+  const [selectedGitConflictPath, setSelectedGitConflictPath] = useState<string | null>(null);
+  const [isGitConflictLoading, setIsGitConflictLoading] = useState(false);
+  const [isApplyingGitConflict, setIsApplyingGitConflict] = useState(false);
+  const [gitConflictError, setGitConflictError] = useState<string | null>(null);
   const [selectedGitChangePath, setSelectedGitChangePath] = useState<string | null>(null);
   const [gitStagedHunks, setGitStagedHunks] = useState<CodePaneGitDiffHunk[]>([]);
   const [gitUnstagedHunks, setGitUnstagedHunks] = useState<CodePaneGitDiffHunk[]>([]);
@@ -2388,6 +2396,35 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setGitRebaseBaseRef(rebasePlan.baseRef);
     });
     setIsGitRebaseLoading(false);
+  }, [rootPath, t]);
+
+  const loadGitConflictDetails = useCallback(async (filePath: string | null) => {
+    if (!filePath) {
+      setGitConflictDetails(null);
+      setGitConflictError(null);
+      setIsGitConflictLoading(false);
+      return;
+    }
+
+    setIsGitConflictLoading(true);
+    setGitConflictError(null);
+    const response = await window.electronAPI.codePaneGetGitConflictDetails({
+      rootPath,
+      filePath,
+    });
+
+    if (!response.success || !response.data) {
+      setGitConflictDetails(null);
+      setGitConflictError(response.error || t('common.retry'));
+      setIsGitConflictLoading(false);
+      return;
+    }
+
+    startTransition(() => {
+      setSelectedGitConflictPath(filePath);
+      setGitConflictDetails(response.data ?? null);
+    });
+    setIsGitConflictLoading(false);
   }, [rootPath, t]);
 
   const loadGitDiffHunks = useCallback(async (filePath: string | null) => {
@@ -4608,6 +4645,42 @@ export const CodePane: React.FC<CodePaneProps> = ({
       },
     );
   }, [rootPath, runGitOperation, t]);
+
+  const openGitConflictResolver = useCallback(async (filePath: string) => {
+    setBottomPanelMode('conflict');
+    await loadGitConflictDetails(filePath);
+  }, [loadGitConflictDetails]);
+
+  const applyGitConflictResolution = useCallback(async (mergedContent: string) => {
+    if (!selectedGitConflictPath) {
+      return;
+    }
+
+    setIsApplyingGitConflict(true);
+    setGitConflictError(null);
+    const response = await window.electronAPI.codePaneGitApplyConflictResolution({
+      rootPath,
+      filePath: selectedGitConflictPath,
+      mergedContent,
+    });
+
+    await refreshGitSnapshot({ includeGraph: true });
+
+    if (!response.success) {
+      setGitConflictError(response.error || t('common.retry'));
+      setIsApplyingGitConflict(false);
+      return;
+    }
+
+    setIsApplyingGitConflict(false);
+    setGitConflictDetails(null);
+    setSelectedGitConflictPath(null);
+    setBottomPanelMode((currentMode) => (currentMode === 'conflict' ? null : currentMode));
+    setBanner({
+      tone: 'info',
+      message: t('codePane.gitConflictResolved'),
+    });
+  }, [refreshGitSnapshot, rootPath, selectedGitConflictPath, t]);
 
   const pruneRemovedDirectories = useCallback((changes: CodePaneFsChange[]) => {
     const removedFilePaths = new Set(
@@ -7802,6 +7875,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    if (bottomPanelMode === 'conflict') {
+      void loadGitConflictDetails(selectedGitConflictPath);
+      return;
+    }
+
     if (bottomPanelMode === 'history') {
       void loadGitHistory({
         filePath: gitHistory?.targetFilePath,
@@ -7830,10 +7908,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [
     bottomPanelMode,
+    selectedGitConflictPath,
     gitRebaseBaseRef,
     gitHistory?.targetFilePath,
     gitHistory?.targetLineNumber,
     loadGitBranches,
+    loadGitConflictDetails,
     loadGitHistory,
     loadGitRebasePlan,
     loadHierarchyRoot,
@@ -7864,6 +7944,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     } else if (bottomPanelMode === 'git') {
       void refreshGitSnapshot({ includeGraph: true });
       void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+    } else if (bottomPanelMode === 'conflict' && selectedGitConflictPath) {
+      void loadGitConflictDetails(selectedGitConflictPath);
     } else if (bottomPanelMode === 'history' && gitHistory?.targetFilePath) {
       void loadGitHistory({
         filePath: gitHistory.targetFilePath,
@@ -7879,10 +7961,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [
     activeFilePath,
     bottomPanelMode,
+    selectedGitConflictPath,
     gitRebaseBaseRef,
     gitHistory?.targetFilePath,
     gitHistory?.targetLineNumber,
     loadGitBranches,
+    loadGitConflictDetails,
     loadGitHistory,
     loadGitRebasePlan,
     loadHierarchyRoot,
@@ -8002,6 +8086,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 <button
                   type="button"
                   onClick={() => {
+                    void openGitConflictResolver(node.path);
+                  }}
+                  className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-500/25"
+                >
+                  {t('codePane.gitResolveConflict')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     void resolveGitConflict(node.path, 'ours');
                   }}
                   className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200 hover:bg-amber-500/25"
@@ -8096,7 +8189,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         </div>
       </div>
     );
-  }), [activateFile, discardGitPaths, loadGitDiffHunks, loadGitHistory, openDiffForFile, resolveGitConflict, revealPathInExplorer, rootPath, selectedGitChangePath, stageGitPaths, t, unstageGitPaths]);
+  }), [activateFile, discardGitPaths, loadGitDiffHunks, loadGitHistory, openDiffForFile, openGitConflictResolver, resolveGitConflict, revealPathInExplorer, rootPath, selectedGitChangePath, stageGitPaths, t, unstageGitPaths]);
 
   return (
     <>
@@ -9711,6 +9804,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onDeleteBranch={deleteGitBranch}
               onCherryPick={cherryPickCommit}
               onApplyRebasePlan={applyGitRebasePlan}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+            />
+          ) : bottomPanelMode === 'conflict' ? (
+            <ConflictResolutionToolWindow
+              conflict={gitConflictDetails}
+              isLoading={isGitConflictLoading}
+              isApplying={isApplyingGitConflict}
+              error={gitConflictError}
+              onRefresh={refreshBottomPanel}
+              onApply={applyGitConflictResolution}
               onClose={() => {
                 setBottomPanelMode(null);
               }}

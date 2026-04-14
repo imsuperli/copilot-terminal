@@ -148,6 +148,8 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneGitCherryPick: vi.fn().mockResolvedValue({ success: true }),
     codePaneGitRebaseControl: vi.fn().mockResolvedValue({ success: true }),
     codePaneGitResolveConflict: vi.fn().mockResolvedValue({ success: true }),
+    codePaneGetGitConflictDetails: vi.fn().mockResolvedValue({ success: true, data: null }),
+    codePaneGitApplyConflictResolution: vi.fn().mockResolvedValue({ success: true }),
     codePaneGitHistory: vi.fn().mockResolvedValue({ success: true, data: { scope: 'file', targetFilePath: '', entries: [] } }),
     codePaneGitBlame: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneReadGitBaseFile: vi.fn().mockResolvedValue({ success: true, data: { content: '', existsInHead: false } }),

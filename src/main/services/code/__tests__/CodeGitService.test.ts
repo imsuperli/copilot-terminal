@@ -126,6 +126,33 @@ describeGit('CodeGitService', () => {
     });
   });
 
+  it('loads three-way conflict details for a conflicted file', async () => {
+    const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
+    execFileSync('git', ['checkout', '-b', 'feature/conflict'], { cwd: repoRootPath, stdio: 'ignore' });
+    await fsPromises.writeFile(trackedFilePath, 'export const version = 2;\n', 'utf-8');
+    execFileSync('git', ['commit', '-am', 'feature change'], { cwd: repoRootPath, stdio: 'ignore' });
+    execFileSync('git', ['checkout', initialBranchName], { cwd: repoRootPath, stdio: 'ignore' });
+    await fsPromises.writeFile(trackedFilePath, 'export const version = 3;\n', 'utf-8');
+    execFileSync('git', ['commit', '-am', 'main change'], { cwd: repoRootPath, stdio: 'ignore' });
+
+    try {
+      execFileSync('git', ['merge', 'feature/conflict'], { cwd: repoRootPath, stdio: 'ignore' });
+    } catch {
+      // Expected merge conflict.
+    }
+
+    const conflict = await service.getConflictDetails({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+    });
+
+    expect(conflict.relativePath).toBe('tracked.ts');
+    expect(conflict.baseContent).toContain('version = 1');
+    expect(conflict.oursContent).toContain('version = 3');
+    expect(conflict.theirsContent).toContain('version = 2');
+    expect(conflict.mergedContent).toContain('<<<<<<<');
+  });
+
   it('lists branches and builds an interactive rebase plan', async () => {
     const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
     execFileSync('git', ['checkout', '-b', 'feature/rebase'], { cwd: repoRootPath, stdio: 'ignore' });

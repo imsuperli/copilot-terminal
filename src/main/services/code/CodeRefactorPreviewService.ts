@@ -3,6 +3,7 @@ import { promises as fsPromises } from 'fs';
 import type {
   CodePanePreviewChangeSet,
   CodePanePreviewFileChange,
+  CodePanePreviewStats,
   CodePaneTextEdit,
 } from '../../../shared/types/electron-api';
 
@@ -164,27 +165,9 @@ export class CodeRefactorPreviewService {
     createdAt: string;
     description?: string;
     edits: CodePaneTextEdit[];
+    warnings?: string[];
   }): Promise<CodePanePreviewChangeSet> {
-    const editsByFilePath = new Map<string, CodePaneTextEdit[]>();
-    for (const edit of config.edits) {
-      const fileEdits = editsByFilePath.get(edit.filePath) ?? [];
-      fileEdits.push(edit);
-      editsByFilePath.set(edit.filePath, fileEdits);
-    }
-
-    const files: CodePanePreviewFileChange[] = [];
-    for (const [filePath, fileEdits] of editsByFilePath.entries()) {
-      const beforeContent = await readPreviewContent(filePath);
-      files.push({
-        id: `${config.previewId}:${filePath}`,
-        kind: 'modify',
-        filePath,
-        language: detectLanguage(filePath),
-        beforeContent,
-        afterContent: applyTextEditsToContent(beforeContent, fileEdits),
-        edits: fileEdits,
-      });
-    }
+    const files = await buildTextEditFileChanges(config.previewId, config.edits);
 
     return {
       id: config.previewId,
@@ -193,6 +176,8 @@ export class CodeRefactorPreviewService {
       description: config.description,
       createdAt: config.createdAt,
       files,
+      ...(config.warnings && config.warnings.length > 0 ? { warnings: config.warnings } : {}),
+      stats: buildPreviewStats(files),
     };
   }
 
@@ -205,6 +190,8 @@ export class CodeRefactorPreviewService {
     operation: 'rename' | 'move' | 'delete';
     sourcePath: string;
     targetPath?: string;
+    extraEdits?: CodePaneTextEdit[];
+    warnings?: string[];
   }): Promise<CodePanePreviewChangeSet> {
     const descendants = await collectDescendantFilePaths(config.sourcePath);
     const filePaths = descendants.length > 0 ? descendants : [config.sourcePath];
@@ -231,6 +218,29 @@ export class CodeRefactorPreviewService {
       });
     }
 
+    if ((config.extraEdits ?? []).length > 0) {
+      const editFiles = await buildTextEditFileChanges(config.previewId, config.extraEdits ?? []);
+      const editFilesByPath = new Map(editFiles.map((change) => [change.filePath, change]));
+      const mergedFiles = files.map((change) => {
+        const mergeKey = change.targetFilePath ?? change.filePath;
+        const editChange = editFilesByPath.get(mergeKey);
+        if (!editChange) {
+          return change;
+        }
+
+        editFilesByPath.delete(mergeKey);
+        return {
+          ...change,
+          language: editChange.language,
+          afterContent: editChange.afterContent,
+          edits: editChange.edits,
+        };
+      });
+
+      files.length = 0;
+      files.push(...mergedFiles, ...Array.from(editFilesByPath.values()));
+    }
+
     return {
       id: config.previewId,
       title: config.title,
@@ -238,6 +248,47 @@ export class CodeRefactorPreviewService {
       description: config.description,
       createdAt: config.createdAt,
       files,
+      ...(config.warnings && config.warnings.length > 0 ? { warnings: config.warnings } : {}),
+      stats: buildPreviewStats(files),
     };
   }
+}
+
+async function buildTextEditFileChanges(
+  previewId: string,
+  edits: CodePaneTextEdit[],
+): Promise<CodePanePreviewFileChange[]> {
+  const editsByFilePath = new Map<string, CodePaneTextEdit[]>();
+  for (const edit of edits) {
+    const fileEdits = editsByFilePath.get(edit.filePath) ?? [];
+    fileEdits.push(edit);
+    editsByFilePath.set(edit.filePath, fileEdits);
+  }
+
+  const files: CodePanePreviewFileChange[] = [];
+  for (const [filePath, fileEdits] of editsByFilePath.entries()) {
+    const beforeContent = await readPreviewContent(filePath);
+    files.push({
+      id: `${previewId}:${filePath}`,
+      kind: 'modify',
+      filePath,
+      language: detectLanguage(filePath),
+      beforeContent,
+      afterContent: applyTextEditsToContent(beforeContent, fileEdits),
+      edits: fileEdits,
+    });
+  }
+
+  return files;
+}
+
+function buildPreviewStats(files: CodePanePreviewFileChange[]): CodePanePreviewStats {
+  return {
+    fileCount: files.length,
+    editCount: files.reduce((totalCount, file) => totalCount + file.edits.length, 0),
+    renameCount: files.filter((file) => file.kind === 'rename').length,
+    moveCount: files.filter((file) => file.kind === 'move').length,
+    deleteCount: files.filter((file) => file.kind === 'delete').length,
+    modifyCount: files.filter((file) => file.kind === 'modify').length,
+  };
 }

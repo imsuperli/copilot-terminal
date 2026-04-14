@@ -227,4 +227,40 @@ describeGit('Code Git workflow services', () => {
       encoding: 'utf-8',
     }).trim()).toBe('1');
   });
+
+  it('applies merged conflict content and stages the resolved file', async () => {
+    const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
+    const initialBranchName = execFileSync('git', ['branch', '--show-current'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    }).trim();
+    execFileSync('git', ['checkout', '-b', 'feature/conflict'], { cwd: repoRootPath, stdio: 'ignore' });
+    await fsPromises.writeFile(trackedFilePath, 'export const value = 2;\n', 'utf-8');
+    execFileSync('git', ['commit', '-am', 'feature change'], { cwd: repoRootPath, stdio: 'ignore' });
+    execFileSync('git', ['checkout', initialBranchName], { cwd: repoRootPath, stdio: 'ignore' });
+    await fsPromises.writeFile(trackedFilePath, 'export const value = 3;\n', 'utf-8');
+    execFileSync('git', ['commit', '-am', 'main change'], { cwd: repoRootPath, stdio: 'ignore' });
+
+    try {
+      execFileSync('git', ['merge', 'feature/conflict'], { cwd: repoRootPath, stdio: 'ignore' });
+    } catch {
+      // Expected merge conflict.
+    }
+
+    await operationService.applyConflictResolution({
+      rootPath: repoRootPath,
+      filePath: trackedFilePath,
+      mergedContent: 'export const value = 42;\n',
+    });
+
+    expect(await fsPromises.readFile(trackedFilePath, 'utf-8')).toBe('export const value = 42;\n');
+    expect(execFileSync('git', ['diff', '--name-only', '--diff-filter=U'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    }).trim()).toBe('');
+    expect(execFileSync('git', ['diff', '--cached', '--name-only'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    })).toContain('tracked.ts');
+  });
 });
