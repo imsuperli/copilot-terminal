@@ -38,6 +38,7 @@ import { LanguageWorkspaceService } from './services/language/LanguageWorkspaceS
 import { PluginCatalogService } from './services/plugins/PluginCatalogService';
 import { PluginInstallerService } from './services/plugins/PluginInstallerService';
 import { PluginManager } from './services/plugins/PluginManager';
+import { PluginCapabilityRuntimeService } from './services/plugins/PluginCapabilityRuntimeService';
 import { PluginRegistryStore } from './services/plugins/PluginRegistryStore';
 import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
@@ -618,10 +619,21 @@ app.whenReady().then(async () => {
     },
     workspaceService: languageWorkspaceService,
   });
+  const pluginCapabilityRuntimeService = new PluginCapabilityRuntimeService({
+    registryStore: pluginRegistryStore,
+    codeFileService,
+    runtimeRootPath: path.join(pluginDataPath, 'runtime'),
+    emitRuntimeState: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('plugin-runtime-state-changed', payload);
+      }
+    },
+  });
   languageFeatureService = new LanguageFeatureService({
     codeFileService,
     resolver: languagePluginResolver,
     supervisor: languageServerSupervisor,
+    pluginRuntimeService: pluginCapabilityRuntimeService,
   });
   codeRefactorService = new CodeRefactorService({
     codeFileService,
@@ -645,6 +657,7 @@ app.whenReady().then(async () => {
   });
   codeTestService = new CodeTestService({
     runProfileService: codeRunProfileService,
+    pluginRuntimeService: pluginCapabilityRuntimeService,
   });
   debugAdapterSupervisor = new DebugAdapterSupervisor({
     runProfileService: codeRunProfileService,
@@ -658,6 +671,7 @@ app.whenReady().then(async () => {
         mainWindow.webContents.send('code-pane-debug-session-output', payload);
       }
     },
+    pluginRuntimeService: pluginCapabilityRuntimeService,
   });
 
   // 初始化 ProjectConfigWatcher（基于 FileWatcherService）

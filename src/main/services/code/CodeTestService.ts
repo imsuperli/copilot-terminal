@@ -7,21 +7,48 @@ import type {
   CodePaneRunTestsConfig,
   CodePaneTestItem,
 } from '../../../shared/types/electron-api';
+import type { WorkspacePluginSettings } from '../../../shared/types/plugin';
+import {
+  PluginCapabilityRuntimeService,
+  type PluginRuntimeTargetSpec,
+  type PluginRuntimeTestItem,
+} from '../plugins/PluginCapabilityRuntimeService';
 import { CodeRunProfileService } from './CodeRunProfileService';
 
 export interface CodeTestServiceOptions {
   runProfileService: CodeRunProfileService;
+  pluginRuntimeService?: PluginCapabilityRuntimeService;
 }
 
 export class CodeTestService {
   private readonly runProfileService: CodeRunProfileService;
+  private readonly pluginRuntimeService?: PluginCapabilityRuntimeService;
 
   constructor(options: CodeTestServiceOptions) {
     this.runProfileService = options.runProfileService;
+    this.pluginRuntimeService = options.pluginRuntimeService;
   }
 
-  async listTests(config: CodePaneListTestsConfig): Promise<CodePaneTestItem[]> {
+  async listTests(
+    config: CodePaneListTestsConfig,
+    workspacePluginSettings?: WorkspacePluginSettings,
+  ): Promise<CodePaneTestItem[]> {
     const activeFilePath = config.activeFilePath ?? null;
+
+    if (this.pluginRuntimeService) {
+      try {
+        const pluginItems = await this.pluginRuntimeService.listTests({
+          rootPath: config.rootPath,
+          activeFilePath,
+          workspacePluginSettings,
+        });
+        if (pluginItems) {
+          return this.materializePluginTestItems(config.rootPath, pluginItems);
+        }
+      } catch {
+        // Fall back to built-in test discovery when a plugin runtime fails.
+      }
+    }
 
     if (activeFilePath && await fs.pathExists(activeFilePath)) {
       const activeTestItem = await this.createTestItemForFile(config.rootPath, activeFilePath);
@@ -52,6 +79,48 @@ export class CodeTestService {
 
   async rerunFailedTests(rootPath: string): Promise<CodePaneRunSession[]> {
     return await this.runProfileService.rerunFailedTargets(rootPath);
+  }
+
+  private materializePluginTestItems(rootPath: string, items: PluginRuntimeTestItem[]): CodePaneTestItem[] {
+    return items.map((item) => this.materializePluginTestItem(rootPath, item)).filter((item): item is CodePaneTestItem => Boolean(item));
+  }
+
+  private materializePluginTestItem(rootPath: string, item: PluginRuntimeTestItem): CodePaneTestItem | null {
+    const runnableTargetId = item.target
+      ? this.registerPluginTarget(rootPath, item, item.target)
+      : undefined;
+    const children = (item.children ?? [])
+      .map((child) => this.materializePluginTestItem(rootPath, child))
+      .filter((child): child is CodePaneTestItem => Boolean(child));
+
+    return {
+      id: item.id,
+      label: item.label,
+      kind: item.kind,
+      ...(item.filePath ? { filePath: item.filePath } : {}),
+      ...(runnableTargetId ? { runnableTargetId } : {}),
+      ...(children.length > 0 ? { children } : {}),
+    };
+  }
+
+  private registerPluginTarget(rootPath: string, item: PluginRuntimeTestItem, target: PluginRuntimeTargetSpec): string | undefined {
+    if (!target.command) {
+      return undefined;
+    }
+
+    return this.runProfileService.registerAdHocTarget({
+      rootPath,
+      label: target.label ?? item.label,
+      detail: target.detail ?? `${target.command} ${(target.args ?? []).join(' ')}`.trim(),
+      kind: target.kind ?? 'test',
+      languageId: target.languageId ?? inferLanguageFromPath(target.filePath ?? item.filePath),
+      workingDirectory: target.workingDirectory ?? rootPath,
+      ...(target.filePath ?? item.filePath ? { filePath: target.filePath ?? item.filePath } : {}),
+      command: target.command,
+      args: target.args ?? [],
+      ...(target.canDebug === true ? { canDebug: true } : {}),
+      ...(target.debugRequest ? { debugRequest: target.debugRequest } : {}),
+    }).id;
   }
 
   private async createTestItemForFile(rootPath: string, filePath: string): Promise<CodePaneTestItem | null> {
@@ -483,4 +552,23 @@ function resolveExecutable(command: string): string {
   }
 
   return command;
+}
+
+function inferLanguageFromPath(filePath?: string): string {
+  switch (path.extname(filePath ?? '').toLowerCase()) {
+    case '.java':
+      return 'java';
+    case '.py':
+      return 'python';
+    case '.go':
+      return 'go';
+    case '.ts':
+    case '.tsx':
+      return 'typescript';
+    case '.js':
+    case '.jsx':
+      return 'javascript';
+    default:
+      return 'plaintext';
+  }
 }

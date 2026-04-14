@@ -68,6 +68,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     debugAdapterSupervisor,
     languageFeatureService,
     languageProjectContributionService,
+    getCurrentWorkspace,
     getMainWindow,
   } = ctx;
 
@@ -662,7 +663,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
         throw new Error('DebugAdapterSupervisor not initialized');
       }
 
-      return successResponse(await debugAdapterSupervisor.startSession(config));
+      return successResponse(await debugAdapterSupervisor.startSession(config, getCurrentWorkspace()?.settings.plugins));
     } catch (error) {
       return errorResponse(error);
     }
@@ -839,7 +840,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
         throw new Error('CodeTestService not initialized');
       }
 
-      return successResponse(await codeTestService.listTests(config));
+      return successResponse(await codeTestService.listTests(config, getCurrentWorkspace()?.settings.plugins));
     } catch (error) {
       return errorResponse(error);
     }

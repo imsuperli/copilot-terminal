@@ -3,6 +3,7 @@ import type {
   CodePaneCallHierarchyDirection,
   CodePaneCodeAction,
   CodePaneCompletionItem,
+  CodePaneDiagnostic,
   CodePaneDocumentCloseConfig,
   CodePaneDocumentHighlight,
   CodePaneGetCallHierarchyConfig,
@@ -10,6 +11,7 @@ import type {
   CodePaneDocumentSyncConfig,
   CodePaneDocumentSymbol,
   CodePaneFormatDocumentConfig,
+  CodePaneLintDocumentConfig,
   CodePaneGetCodeActionsConfig,
   CodePaneGetCompletionItemsConfig,
   CodePaneGetDefinitionConfig,
@@ -44,6 +46,7 @@ import type {
 } from '../../../shared/types/electron-api';
 import type { Workspace } from '../../types/workspace';
 import { CodeFileService } from '../code/CodeFileService';
+import { PluginCapabilityRuntimeService } from '../plugins/PluginCapabilityRuntimeService';
 import { LanguagePluginResolver, type ResolvedLanguagePlugin } from './LanguagePluginResolver';
 import { LanguageServerSupervisor } from './LanguageServerSupervisor';
 
@@ -53,17 +56,20 @@ export interface LanguageFeatureServiceOptions {
   codeFileService: CodeFileService;
   resolver: LanguagePluginResolver;
   supervisor: LanguageServerSupervisor;
+  pluginRuntimeService?: PluginCapabilityRuntimeService;
 }
 
 export class LanguageFeatureService {
   private readonly codeFileService: CodeFileService;
   private readonly resolver: LanguagePluginResolver;
   private readonly supervisor: LanguageServerSupervisor;
+  private readonly pluginRuntimeService?: PluginCapabilityRuntimeService;
 
   constructor(options: LanguageFeatureServiceOptions) {
     this.codeFileService = options.codeFileService;
     this.resolver = options.resolver;
     this.supervisor = options.supervisor;
+    this.pluginRuntimeService = options.pluginRuntimeService;
   }
 
   async openDocument(config: CodePaneDocumentSyncConfig, workspace: Workspace | null): Promise<void> {
@@ -266,12 +272,33 @@ export class LanguageFeatureService {
   }
 
   async formatDocument(config: CodePaneFormatDocumentConfig, workspace: Workspace | null): Promise<CodePaneTextEdit[]> {
+    if (this.pluginRuntimeService) {
+      const pluginEdits = await this.pluginRuntimeService.formatDocument({
+        ...config,
+        workspacePluginSettings: workspace?.settings.plugins,
+      });
+      if (pluginEdits) {
+        return pluginEdits;
+      }
+    }
+
     return await this.withResolvedDocument(config.rootPath, config.filePath, config.language, workspace, [], async (resolution) => (
       await this.supervisor.formatDocument(resolution, config.filePath, {
         tabSize: config.tabSize,
         insertSpaces: config.insertSpaces,
       })
     ));
+  }
+
+  async lintDocument(config: CodePaneLintDocumentConfig, workspace: Workspace | null): Promise<CodePaneDiagnostic[]> {
+    if (!this.pluginRuntimeService) {
+      return [];
+    }
+
+    return await this.pluginRuntimeService.lintDocument({
+      ...config,
+      workspacePluginSettings: workspace?.settings.plugins,
+    }) ?? [];
   }
 
   async getWorkspaceSymbols(config: CodePaneGetWorkspaceSymbolsConfig, workspace: Workspace | null): Promise<CodePaneWorkspaceSymbol[]> {
@@ -316,6 +343,7 @@ export class LanguageFeatureService {
 
   async resetSessions(pluginId?: string): Promise<void> {
     this.resolver.invalidate();
+    await this.pluginRuntimeService?.resetSessions(pluginId);
     await this.supervisor.resetSessions(pluginId);
   }
 

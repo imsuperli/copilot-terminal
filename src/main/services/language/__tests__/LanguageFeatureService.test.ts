@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CodePaneLocation } from '../../../../shared/types/electron-api';
+import type { CodePaneDiagnostic, CodePaneLocation } from '../../../../shared/types/electron-api';
 import type { CodeFileService } from '../../code/CodeFileService';
+import type { PluginCapabilityRuntimeService } from '../../plugins/PluginCapabilityRuntimeService';
 import type { ResolvedLanguagePlugin } from '../LanguagePluginResolver';
 import type { LanguagePluginResolver } from '../LanguagePluginResolver';
 import type { LanguageServerSupervisor } from '../LanguageServerSupervisor';
@@ -177,12 +178,78 @@ describe('LanguageFeatureService', () => {
   });
 
   it('invalidates resolver cache and clears running sessions on reset', async () => {
-    const { service, resolver, supervisor } = createService();
+    const { service, resolver, supervisor, pluginRuntimeService } = createService();
 
     await service.resetSessions('acme.java-language');
 
     expect(resolver.invalidate).toHaveBeenCalledTimes(1);
+    expect(pluginRuntimeService.resetSessions).toHaveBeenCalledWith('acme.java-language');
     expect(supervisor.resetSessions).toHaveBeenCalledWith('acme.java-language');
+  });
+
+  it('prefers formatter plugins before the language server fallback', async () => {
+    const { service, pluginRuntimeService, supervisor } = createService();
+    pluginRuntimeService.formatDocument.mockResolvedValue([
+      {
+        filePath: '/workspace/project/src/Main.java',
+        range: {
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 1,
+        },
+        newText: 'formatted',
+      },
+    ]);
+
+    const edits = await service.formatDocument({
+      rootPath: '/workspace',
+      filePath: '/workspace/project/src/Main.java',
+      language: 'java',
+      content: 'class Main {}',
+      tabSize: 2,
+      insertSpaces: true,
+    }, null);
+
+    expect(edits).toEqual([
+      expect.objectContaining({
+        newText: 'formatted',
+      }),
+    ]);
+    expect(pluginRuntimeService.formatDocument).toHaveBeenCalledWith(expect.objectContaining({
+      content: 'class Main {}',
+    }));
+    expect(supervisor.formatDocument).not.toHaveBeenCalled();
+  });
+
+  it('returns linter diagnostics from the plugin runtime service', async () => {
+    const { service, pluginRuntimeService } = createService();
+    const diagnostics: CodePaneDiagnostic[] = [
+      {
+        filePath: '/workspace/project/src/Main.java',
+        owner: 'acme.java-linter',
+        severity: 'warning',
+        message: 'Unused import',
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: 1,
+        endColumn: 7,
+      },
+    ];
+    pluginRuntimeService.lintDocument.mockResolvedValue(diagnostics);
+
+    const result = await service.lintDocument({
+      rootPath: '/workspace',
+      filePath: '/workspace/project/src/Main.java',
+      language: 'java',
+      content: 'import foo.Bar;',
+    }, null);
+
+    expect(result).toEqual(diagnostics);
+    expect(pluginRuntimeService.lintDocument).toHaveBeenCalledWith(expect.objectContaining({
+      filePath: '/workspace/project/src/Main.java',
+      content: 'import foo.Bar;',
+    }));
   });
 
   it('reads virtual dependency documents through the language supervisor', async () => {
@@ -240,6 +307,7 @@ function createService() {
     getDocumentSymbols: vi.fn(),
     readVirtualDocument: vi.fn(),
     resetSessions: vi.fn(),
+    formatDocument: vi.fn(),
   } as unknown as LanguageServerSupervisor & {
     syncDocument: ReturnType<typeof vi.fn>;
     closeDocument: ReturnType<typeof vi.fn>;
@@ -250,6 +318,16 @@ function createService() {
     getDocumentSymbols: ReturnType<typeof vi.fn>;
     readVirtualDocument: ReturnType<typeof vi.fn>;
     resetSessions: ReturnType<typeof vi.fn>;
+    formatDocument: ReturnType<typeof vi.fn>;
+  };
+  const pluginRuntimeService = {
+    formatDocument: vi.fn().mockResolvedValue(null),
+    lintDocument: vi.fn().mockResolvedValue(null),
+    resetSessions: vi.fn().mockResolvedValue(undefined),
+  } as unknown as PluginCapabilityRuntimeService & {
+    formatDocument: ReturnType<typeof vi.fn>;
+    lintDocument: ReturnType<typeof vi.fn>;
+    resetSessions: ReturnType<typeof vi.fn>;
   };
 
   return {
@@ -257,9 +335,11 @@ function createService() {
       codeFileService,
       resolver,
       supervisor,
+      pluginRuntimeService,
     }),
     codeFileService,
     resolver,
     supervisor,
+    pluginRuntimeService,
   };
 }

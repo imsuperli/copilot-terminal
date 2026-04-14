@@ -3,6 +3,7 @@ import type {
   CodePaneGetCallHierarchyConfig,
   CodePaneGetCodeActionsConfig,
   CodePaneFormatDocumentConfig,
+  CodePaneLintDocumentConfig,
   CodePaneGetCompletionItemsConfig,
   CodePaneDocumentCloseConfig,
   CodePaneDocumentSyncConfig,
@@ -283,6 +284,18 @@ export function registerLanguageHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await languageFeatureService.formatDocument(config, getCurrentWorkspace()));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-lint-document', async (_event, config: CodePaneLintDocumentConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      return successResponse(await languageFeatureService.lintDocument(config, getCurrentWorkspace()));
     } catch (error) {
       return errorResponse(error);
     }

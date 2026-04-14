@@ -247,6 +247,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-rename-symbol', config),
   codePaneFormatDocument: (config) =>
     ipcRenderer.invoke('code-pane-format-document', config),
+  codePaneLintDocument: (config) =>
+    ipcRenderer.invoke('code-pane-lint-document', config),
   codePaneGetWorkspaceSymbols: (config) =>
     ipcRenderer.invoke('code-pane-get-workspace-symbols', config),
   codePaneGetCodeActions: (config) =>

@@ -3879,6 +3879,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       rootPath,
       filePath: context.filePath,
       language: context.language,
+      content: context.model.getValue(),
       tabSize: 2,
       insertSpaces: true,
     });

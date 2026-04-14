@@ -190,4 +190,58 @@ describe('CodeTestService', () => {
       ]),
     });
   });
+
+  it('materializes plugin-provided test items into runnable targets', async () => {
+    const runProfileService = new CodeRunProfileService({
+      emitSessionChanged: () => {},
+      emitSessionOutput: () => {},
+      now: () => '2026-04-13T00:00:00.000Z',
+    });
+    const testServiceWithPlugin = new CodeTestService({
+      runProfileService,
+      pluginRuntimeService: {
+        listTests: async () => ([
+          {
+            id: 'plugin:test:file',
+            label: 'math_test.py',
+            kind: 'file',
+            filePath: path.join(tempRootPath, 'tests', 'math_test.py'),
+            target: {
+              command: 'python',
+              args: ['-m', 'pytest', 'tests/math_test.py'],
+              canDebug: true,
+            },
+            children: [{
+              id: 'plugin:test:case',
+              label: 'test_add',
+              kind: 'case',
+              filePath: path.join(tempRootPath, 'tests', 'math_test.py'),
+              target: {
+                command: 'python',
+                args: ['-m', 'pytest', 'tests/math_test.py::test_add'],
+              },
+            }],
+          },
+        ]),
+      } as never,
+    });
+
+    const items = await testServiceWithPlugin.listTests({
+      rootPath: tempRootPath,
+      activeFilePath: path.join(tempRootPath, 'tests', 'math_test.py'),
+    });
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        label: 'math_test.py',
+        runnableTargetId: expect.any(String),
+        children: [
+          expect.objectContaining({
+            label: 'test_add',
+            runnableTargetId: expect.any(String),
+          }),
+        ],
+      }),
+    ]);
+  });
 });

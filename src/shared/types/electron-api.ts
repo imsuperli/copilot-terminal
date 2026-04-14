@@ -953,8 +953,16 @@ export interface CodePaneFormatDocumentConfig {
   rootPath: string;
   filePath: string;
   language?: string;
+  content?: string;
   tabSize?: number;
   insertSpaces?: boolean;
+}
+
+export interface CodePaneLintDocumentConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+  content?: string;
 }
 
 export interface CodePaneWorkspaceSymbol {
@@ -1625,6 +1633,7 @@ export interface ElectronAPI {
   codePaneGetSignatureHelp: (config: CodePaneGetSignatureHelpConfig) => Promise<IpcResponse<CodePaneSignatureHelpResult | null>>;
   codePaneRenameSymbol: (config: CodePaneRenameSymbolConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
   codePaneFormatDocument: (config: CodePaneFormatDocumentConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;
+  codePaneLintDocument: (config: CodePaneLintDocumentConfig) => Promise<IpcResponse<CodePaneDiagnostic[]>>;
   codePaneGetWorkspaceSymbols: (config: CodePaneGetWorkspaceSymbolsConfig) => Promise<IpcResponse<CodePaneWorkspaceSymbol[]>>;
   codePaneGetCodeActions: (config: CodePaneGetCodeActionsConfig) => Promise<IpcResponse<CodePaneCodeAction[]>>;
   codePaneRunCodeAction: (config: CodePaneRunCodeActionConfig) => Promise<IpcResponse<CodePaneTextEdit[]>>;

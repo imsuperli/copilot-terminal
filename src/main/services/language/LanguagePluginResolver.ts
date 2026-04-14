@@ -10,6 +10,7 @@ import type {
 import { normalizeOptionalString } from '../ssh/storeUtils';
 import { PluginManifestValidator } from '../plugins/PluginManifestValidator';
 import { PluginRegistryStore } from '../plugins/PluginRegistryStore';
+import { resolvePluginSettings } from '../plugins/PluginSettingsResolver';
 import { ProjectRootResolver } from './ProjectRootResolver';
 
 export interface ResolveLanguagePluginConfig {
@@ -134,18 +135,17 @@ export class LanguagePluginResolver {
       filePath: args.config.filePath,
       projectIndicators: args.capability.projectIndicators,
     });
-
-    const globalSettings = args.registry.globalPluginSettings?.[args.plugin.pluginId] ?? {};
-    const workspaceSettings = args.workspacePluginSettings.pluginSettings?.[args.plugin.pluginId] ?? {};
-    const defaultSettings = getDefaultPluginSettings(args.plugin.manifest);
-    const computedDefaults = await getComputedPluginDefaults(
-      args.plugin.pluginId,
+    const {
+      globalSettings,
+      workspaceSettings,
+      mergedSettings,
+    } = await resolvePluginSettings({
+      pluginId: args.plugin.pluginId,
+      manifest: args.plugin.manifest,
       projectRoot,
-      {
-        ...globalSettings,
-        ...workspaceSettings,
-      },
-    );
+      registry: args.registry,
+      workspacePluginSettings: args.workspacePluginSettings,
+    });
 
     return {
       pluginId: args.plugin.pluginId,
@@ -158,12 +158,7 @@ export class LanguagePluginResolver {
       registry: args.registry,
       globalSettings,
       workspaceSettings,
-      mergedSettings: {
-        ...defaultSettings,
-        ...computedDefaults,
-        ...globalSettings,
-        ...workspaceSettings,
-      },
+      mergedSettings,
     };
   }
 
@@ -301,64 +296,6 @@ function inferLanguageFromPath(filePath: string): string {
     default:
       return 'plaintext';
   }
-}
-
-function getDefaultPluginSettings(manifest: PluginManifest): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(manifest.settingsSchema ?? {})
-      .filter(([, entry]) => entry.defaultValue !== undefined)
-      .map(([key, entry]) => [key, entry.defaultValue]),
-  );
-}
-
-async function getComputedPluginDefaults(
-  pluginId: string,
-  projectRoot: string,
-  currentSettings: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  if (pluginId !== 'official.java-jdtls') {
-    return {};
-  }
-
-  const defaults: Record<string, unknown> = {};
-
-  if (currentSettings['extendedClientCapabilities.classFileContentsSupport'] === undefined) {
-    defaults['extendedClientCapabilities.classFileContentsSupport'] = true;
-  }
-
-  if (currentSettings['java.import.exclusions'] === undefined) {
-    defaults['java.import.exclusions'] = [
-      '**/.git/**',
-      '**/.idea/**',
-      '**/.gradle/**',
-      '**/.settings/**',
-      '**/.mvn/**',
-      '**/node_modules/**',
-      '**/target/**',
-      '**/build/**',
-      '**/out/**',
-      '**/dist/**',
-    ];
-  }
-
-  const [hasPom, hasBuildGradle, hasBuildGradleKts, hasSettingsGradle, hasGradlew] = await Promise.all([
-    fs.pathExists(path.join(projectRoot, 'pom.xml')),
-    fs.pathExists(path.join(projectRoot, 'build.gradle')),
-    fs.pathExists(path.join(projectRoot, 'build.gradle.kts')),
-    fs.pathExists(path.join(projectRoot, 'settings.gradle')),
-    fs.pathExists(path.join(projectRoot, 'gradlew')),
-  ]);
-  const hasGradle = hasBuildGradle || hasBuildGradleKts || hasSettingsGradle || hasGradlew;
-
-  if (hasPom && !hasGradle && currentSettings['java.import.gradle.enabled'] === undefined) {
-    defaults['java.import.gradle.enabled'] = false;
-  }
-
-  if (hasGradle && !hasPom && currentSettings['java.import.maven.enabled'] === undefined) {
-    defaults['java.import.maven.enabled'] = false;
-  }
-
-  return defaults;
 }
 
 function normalizeLanguageId(languageId: string): string {

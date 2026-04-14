@@ -15,7 +15,9 @@ import type {
   CodePaneRemoveBreakpointConfig,
   CodePaneSetBreakpointConfig,
 } from '../../../shared/types/electron-api';
+import type { WorkspacePluginSettings } from '../../../shared/types/plugin';
 import { CodeRunProfileService } from '../code/CodeRunProfileService';
+import { PluginCapabilityRuntimeService } from '../plugins/PluginCapabilityRuntimeService';
 import type {
   DebugDriver,
   DebugDriverFactory,
@@ -40,6 +42,7 @@ export interface DebugAdapterSupervisorOptions {
   now?: () => string;
   sessionStore?: DebugSessionStore;
   createDriver?: DebugDriverFactory;
+  pluginRuntimeService?: PluginCapabilityRuntimeService;
 }
 
 export class DebugAdapterSupervisor {
@@ -48,7 +51,8 @@ export class DebugAdapterSupervisor {
   private readonly emitSessionOutput: (payload: CodePaneDebugSessionOutputPayload) => void;
   private readonly now: () => string;
   private readonly sessionStore: DebugSessionStore;
-  private readonly createDriver: DebugDriverFactory;
+  private readonly customCreateDriver?: DebugDriverFactory;
+  private readonly pluginRuntimeService?: PluginCapabilityRuntimeService;
   private readonly activeSessions = new Map<string, ActiveDebugSession>();
 
   constructor(options: DebugAdapterSupervisorOptions) {
@@ -57,10 +61,14 @@ export class DebugAdapterSupervisor {
     this.emitSessionOutput = options.emitSessionOutput;
     this.now = options.now ?? (() => new Date().toISOString());
     this.sessionStore = options.sessionStore ?? new DebugSessionStore();
-    this.createDriver = options.createDriver ?? createDefaultDebugDriver;
+    this.customCreateDriver = options.createDriver;
+    this.pluginRuntimeService = options.pluginRuntimeService;
   }
 
-  async startSession(config: CodePaneDebugStartConfig): Promise<CodePaneDebugSession> {
+  async startSession(
+    config: CodePaneDebugStartConfig,
+    workspacePluginSettings?: WorkspacePluginSettings,
+  ): Promise<CodePaneDebugSession> {
     const target = this.runProfileService.getResolvedTarget(config.targetId);
     if (!target) {
       throw new Error(`Unknown debug target: ${config.targetId}`);
@@ -70,13 +78,13 @@ export class DebugAdapterSupervisor {
     }
 
     const sessionId = randomUUID();
-    const driver = this.createDriver({
+    const driverContext = {
       rootPath: config.rootPath,
       target,
       breakpoints: this.sessionStore.getEnabledBreakpoints(config.rootPath),
       exceptionBreakpoints: this.sessionStore.getExceptionBreakpoints(config.rootPath),
       callbacks: {
-        onOutput: (chunk, stream) => {
+        onOutput: (chunk: string, stream: 'stdout' | 'stderr' | 'system') => {
           this.sessionStore.appendSessionOutput(sessionId, chunk);
           this.emitSessionOutput({
             rootPath: config.rootPath,
@@ -85,11 +93,14 @@ export class DebugAdapterSupervisor {
             stream,
           });
         },
-        onTerminated: (result) => {
+        onTerminated: (result: { exitCode: number | null; error?: string }) => {
           this.handleDriverTermination(sessionId, result);
         },
       },
-    });
+    };
+    const driver = this.customCreateDriver
+      ? this.customCreateDriver(driverContext)
+      : await this.createDriver(driverContext, workspacePluginSettings);
 
     const session: CodePaneDebugSession = {
       id: sessionId,
@@ -197,6 +208,33 @@ export class DebugAdapterSupervisor {
   async setExceptionBreakpoints(rootPath: string, breakpoints: CodePaneExceptionBreakpoint[]): Promise<void> {
     this.sessionStore.setExceptionBreakpoints(rootPath, breakpoints);
     await this.syncExceptionBreakpoints(rootPath);
+  }
+
+  private async createDriver(
+    context: Parameters<DebugDriverFactory>[0],
+    workspacePluginSettings?: WorkspacePluginSettings,
+  ): Promise<DebugDriver> {
+    let pluginError: unknown;
+
+    if (this.pluginRuntimeService) {
+      try {
+        const pluginDriver = await this.pluginRuntimeService.createDebugDriver({
+          ...context,
+          workspacePluginSettings,
+        });
+        if (pluginDriver) {
+          return pluginDriver;
+        }
+      } catch (error) {
+        pluginError = error;
+      }
+    }
+
+    try {
+      return createBuiltinDebugDriver(context);
+    } catch (error) {
+      throw pluginError ?? error;
+    }
   }
 
   private async runStepCommand(
@@ -517,7 +555,7 @@ export class DebugAdapterSupervisor {
   }
 }
 
-function createDefaultDebugDriver(context: Parameters<DebugDriverFactory>[0]): DebugDriver {
+function createBuiltinDebugDriver(context: Parameters<DebugDriverFactory>[0]): DebugDriver {
   switch (context.target.languageId) {
     case 'python':
       return new PythonPdbDriver(context);
