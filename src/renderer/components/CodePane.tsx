@@ -40,6 +40,7 @@ import type {
   CodePaneLanguageWorkspaceChangedPayload,
   CodePaneLanguageWorkspaceState,
   CodePaneLocation,
+  CodePaneProjectContribution,
   CodePaneReadFileResult,
   CodePaneReference,
   CodePaneRunSession,
@@ -57,6 +58,7 @@ import {
   CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
 } from '../../shared/types/electron-api';
 import { AppTooltip } from './ui/AppTooltip';
+import { ProjectToolWindow } from './code-pane/tool-windows/ProjectToolWindow';
 import { RunToolWindow } from './code-pane/tool-windows/RunToolWindow';
 import { TestsToolWindow } from './code-pane/tool-windows/TestsToolWindow';
 import { useI18n } from '../i18n';
@@ -79,7 +81,7 @@ type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
 type SearchEverywhereMode = 'all' | 'commands' | 'recent';
-type BottomPanelMode = 'run' | 'tests';
+type BottomPanelMode = 'run' | 'tests' | 'project';
 
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
 const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
@@ -681,6 +683,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [testItems, setTestItems] = useState<CodePaneTestItem[]>([]);
   const [isTestsLoading, setIsTestsLoading] = useState(false);
   const [testsError, setTestsError] = useState<string | null>(null);
+  const [projectContributions, setProjectContributions] = useState<CodePaneProjectContribution[]>([]);
+  const [isProjectLoading, setIsProjectLoading] = useState(false);
+  const [projectError, setProjectError] = useState<string | null>(null);
   const [runSessions, setRunSessions] = useState<CodePaneRunSession[]>([]);
   const [runSessionOutputs, setRunSessionOutputs] = useState<Record<string, string>>({});
   const [selectedRunSessionId, setSelectedRunSessionId] = useState<string | null>(null);
@@ -2807,6 +2812,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setTestItems([]);
       setIsTestsLoading(false);
       setTestsError(null);
+      setProjectContributions([]);
+      setIsProjectLoading(false);
+      setProjectError(null);
       setRunSessions([]);
       setRunSessionOutputs({});
       setSelectedRunSessionId(null);
@@ -4177,8 +4185,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return runSessions.filter((session) => session.kind === 'test');
     }
 
+    if (bottomPanelMode === 'project') {
+      return runSessions.filter((session) => session.kind === 'task');
+    }
+
     if (bottomPanelMode === 'run') {
-      return runSessions.filter((session) => session.kind !== 'test');
+      return runSessions.filter((session) => session.kind !== 'test' && session.kind !== 'task');
     }
 
     return runSessions;
@@ -4587,6 +4599,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsTestsLoading(false);
   }, [rootPath, t]);
 
+  const loadProjectContributions = useCallback(async (refresh = false) => {
+    setIsProjectLoading(true);
+    setProjectError(null);
+
+    const response = refresh
+      ? await window.electronAPI.codePaneRefreshProjectModel({ rootPath })
+      : await window.electronAPI.codePaneGetProjectContribution({ rootPath });
+
+    setProjectContributions(response.success ? (response.data ?? []) : []);
+    setProjectError(response.success ? null : (response.error || t('common.retry')));
+    setIsProjectLoading(false);
+  }, [rootPath, t]);
+
   const runTargetById = useCallback(async (targetId: string) => {
     const response = await window.electronAPI.codePaneRunTarget({
       rootPath,
@@ -4656,6 +4681,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [t]);
 
+  const runProjectCommandById = useCallback(async (commandId: string) => {
+    const response = await window.electronAPI.codePaneRunProjectCommand({
+      rootPath,
+      commandId,
+    });
+
+    if (!response.success || !response.data) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    setBottomPanelMode('project');
+    setSelectedRunSessionId(response.data.id);
+  }, [rootPath, t]);
+
   const openTestItem = useCallback(async (item: CodePaneTestItem) => {
     if (!item.filePath) {
       return;
@@ -4685,16 +4728,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (bottomPanelMode === 'tests') {
       void loadTests();
+      return;
     }
-  }, [bottomPanelMode, loadRunTargets, loadTests]);
+
+    if (bottomPanelMode === 'project') {
+      void loadProjectContributions(true);
+    }
+  }, [bottomPanelMode, loadProjectContributions, loadRunTargets, loadTests]);
 
   useEffect(() => {
     if (bottomPanelMode === 'run') {
       void loadRunTargets();
     } else if (bottomPanelMode === 'tests') {
       void loadTests();
+    } else if (bottomPanelMode === 'project') {
+      void loadProjectContributions();
     }
-  }, [activeFilePath, bottomPanelMode, loadRunTargets, loadTests]);
+  }, [activeFilePath, bottomPanelMode, loadProjectContributions, loadRunTargets, loadTests]);
 
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
@@ -5012,6 +5062,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
               }`}
             >
               Test
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.projectTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.projectTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleBottomPanelMode('project');
+              }}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'project'
+                  ? 'bg-amber-500/20 text-amber-200'
+                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
+              }`}
+            >
+              Proj
             </button>
           </AppTooltip>
           <AppTooltip content={t('codePane.formatDocument')} placement="pane-corner">
@@ -5839,6 +5907,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
               }}
               onRefresh={refreshBottomPanel}
               onRunTarget={runTargetById}
+              onSelectSession={setSelectedRunSessionId}
+              onStopSession={stopRunSession}
+            />
+          ) : bottomPanelMode === 'project' ? (
+            <ProjectToolWindow
+              contributions={projectContributions}
+              sessions={visibleRunSessions}
+              selectedSession={selectedRunSession}
+              selectedOutput={selectedRunSessionOutput}
+              isLoading={isProjectLoading}
+              error={projectError}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+              onRefresh={refreshBottomPanel}
+              onRunCommand={runProjectCommandById}
               onSelectSession={setSelectedRunSessionId}
               onStopSession={stopRunSession}
             />

@@ -207,6 +207,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-run-tests', config),
   codePaneRerunFailedTests: (config) =>
     ipcRenderer.invoke('code-pane-rerun-failed-tests', config),
+  codePaneGetProjectContribution: (config) =>
+    ipcRenderer.invoke('code-pane-get-project-contribution', config),
+  codePaneRefreshProjectModel: (config) =>
+    ipcRenderer.invoke('code-pane-refresh-project-model', config),
+  codePaneRunProjectCommand: (config) =>
+    ipcRenderer.invoke('code-pane-run-project-command', config),
   onCodePaneFsChanged: (callback) => {
     ipcRenderer.on('code-pane-fs-changed', callback);
   },

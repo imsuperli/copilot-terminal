@@ -4,6 +4,7 @@ import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import type {
   CodePaneGetExternalLibrarySectionsConfig,
+  CodePaneGetProjectContributionConfig,
   CodePaneGitGraphConfig,
   CodePaneGitStatusConfig,
   CodePaneListDirectoryConfig,
@@ -12,6 +13,7 @@ import type {
   CodePaneReadFileConfig,
   CodePaneReadGitBaseFileConfig,
   CodePaneRerunFailedTestsConfig,
+  CodePaneRunProjectCommandConfig,
   CodePaneRunTargetConfig,
   CodePaneRunTestsConfig,
   CodePaneSearchContentsConfig,
@@ -239,6 +241,42 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await languageProjectContributionService.getExternalLibrarySections(config.rootPath));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-project-contribution', async (_event, config: CodePaneGetProjectContributionConfig) => {
+    try {
+      if (!languageProjectContributionService) {
+        throw new Error('LanguageProjectContributionService not initialized');
+      }
+
+      return successResponse(await languageProjectContributionService.getProjectContributions(config.rootPath));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-refresh-project-model', async (_event, config: CodePaneGetProjectContributionConfig) => {
+    try {
+      if (!languageProjectContributionService) {
+        throw new Error('LanguageProjectContributionService not initialized');
+      }
+
+      return successResponse(await languageProjectContributionService.refreshProjectModel(config.rootPath));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-run-project-command', async (_event, config: CodePaneRunProjectCommandConfig) => {
+    try {
+      if (!languageProjectContributionService) {
+        throw new Error('LanguageProjectContributionService not initialized');
+      }
+
+      return successResponse(await languageProjectContributionService.runProjectCommand(config.rootPath, config.commandId));
     } catch (error) {
       return errorResponse(error);
     }

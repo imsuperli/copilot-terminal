@@ -610,9 +610,6 @@ app.whenReady().then(async () => {
     resolver: languagePluginResolver,
     supervisor: languageServerSupervisor,
   });
-  languageProjectContributionService = new LanguageProjectContributionService({
-    codeFileService,
-  });
   codeRunProfileService = new CodeRunProfileService({
     emitSessionChanged: (payload) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -624,6 +621,10 @@ app.whenReady().then(async () => {
         mainWindow.webContents.send('code-pane-run-session-output', payload);
       }
     },
+  });
+  languageProjectContributionService = new LanguageProjectContributionService({
+    codeFileService,
+    runProfileService: codeRunProfileService,
   });
   codeTestService = new CodeTestService({
     runProfileService: codeRunProfileService,

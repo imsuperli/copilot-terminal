@@ -592,6 +592,9 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneListTests).mockReset();
     vi.mocked(window.electronAPI.codePaneRunTests).mockReset();
     vi.mocked(window.electronAPI.codePaneRerunFailedTests).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetProjectContribution).mockReset();
+    vi.mocked(window.electronAPI.codePaneRefreshProjectModel).mockReset();
+    vi.mocked(window.electronAPI.codePaneRunProjectCommand).mockReset();
     vi.mocked(window.electronAPI.onCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.offCodePaneFsChanged).mockReset();
     vi.mocked(window.electronAPI.onCodePaneIndexProgress).mockReset();
@@ -693,6 +696,9 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneListTests).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneRunTests).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneRerunFailedTests).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneGetProjectContribution).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneRefreshProjectModel).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneRunProjectCommand).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.openFolder).mockResolvedValue(undefined);
     vi.mocked(window.electronAPI.writeClipboardText).mockResolvedValue(undefined);
   });
@@ -1404,6 +1410,83 @@ describe('CodePane', () => {
 
     expect(window.electronAPI.codePaneRerunFailedTests).toHaveBeenCalledWith({
       rootPath: '/workspace/project',
+    });
+  });
+
+  it('opens the project tool window and runs project commands', async () => {
+    vi.mocked(window.electronAPI.codePaneGetProjectContribution).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'java-project',
+          title: 'Java Project',
+          languageId: 'java',
+          statusItems: [
+            {
+              id: 'build-tool',
+              label: 'Build: Maven',
+              tone: 'info',
+            },
+          ],
+          commandGroups: [
+            {
+              id: 'java-commands',
+              title: 'Maven',
+              commands: [
+                {
+                  id: 'java-maven-test',
+                  title: 'Test',
+                  detail: 'mvn test',
+                },
+              ],
+            },
+          ],
+          detailCards: [
+            {
+              id: 'java-details',
+              title: 'Project Files',
+              lines: ['Root: /workspace/project'],
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneRunProjectCommand).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'project-session-1',
+        targetId: 'project-command-target-1',
+        label: 'Test',
+        detail: 'mvn test',
+        kind: 'task',
+        languageId: 'java',
+        state: 'starting',
+        workingDirectory: '/workspace/project',
+        startedAt: '2026-04-13T00:00:00.000Z',
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.projectTab' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetProjectContribution).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+      });
+    });
+
+    expect(await screen.findByText('Java Project')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Test\s*mvn test/i }));
+    });
+
+    expect(window.electronAPI.codePaneRunProjectCommand).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      commandId: 'java-maven-test',
     });
   });
 

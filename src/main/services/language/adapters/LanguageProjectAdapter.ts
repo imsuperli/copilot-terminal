@@ -3,11 +3,35 @@ import path from 'path';
 import type {
   CodePaneExternalLibraryRoot,
   CodePaneExternalLibrarySection,
+  CodePaneProjectContribution,
+  CodePaneProjectDetailCard,
+  CodePaneProjectStatusItem,
+  CodePaneProjectTreeSection,
+  CodePaneRunTargetKind,
 } from '../../../../shared/types/electron-api';
+
+export interface LanguageProjectCommandDefinition {
+  id: string;
+  title: string;
+  detail?: string;
+  command: string;
+  args: string[];
+  workingDirectory: string;
+  languageId: string;
+  kind?: CodePaneRunTargetKind;
+}
+
+export interface LanguageProjectCommandGroupDefinition {
+  id: string;
+  title: string;
+  commands: LanguageProjectCommandDefinition[];
+}
 
 export interface LanguageProjectAdapter {
   readonly languageId: string;
   getExternalLibrarySection(workspaceRoot: string): Promise<CodePaneExternalLibrarySection | null>;
+  getProjectContribution(workspaceRoot: string): Promise<CodePaneProjectContribution | null>;
+  resolveProjectCommand(workspaceRoot: string, commandId: string): Promise<LanguageProjectCommandDefinition | null>;
 }
 
 export function createExternalLibrarySection(
@@ -85,6 +109,46 @@ export async function listDirectoryNames(directoryPath: string): Promise<string[
   } catch {
     return [];
   }
+}
+
+export async function readTextFile(targetPath: string): Promise<string | null> {
+  try {
+    return await fsPromises.readFile(targetPath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+export function createProjectContribution(
+  id: string,
+  languageId: string,
+  title: string,
+  options: {
+    statusItems?: CodePaneProjectStatusItem[];
+    commandGroups?: LanguageProjectCommandGroupDefinition[];
+    detailCards?: CodePaneProjectDetailCard[];
+    treeSections?: CodePaneProjectTreeSection[];
+  },
+): CodePaneProjectContribution {
+  return {
+    id,
+    title,
+    languageId,
+    ...(options.statusItems && options.statusItems.length > 0 ? { statusItems: options.statusItems } : {}),
+    ...(options.commandGroups && options.commandGroups.length > 0 ? {
+      commandGroups: options.commandGroups.map((group) => ({
+        id: group.id,
+        title: group.title,
+        commands: group.commands.map((command) => ({
+          id: command.id,
+          title: command.title,
+          ...(command.detail ? { detail: command.detail } : {}),
+        })),
+      })),
+    } : {}),
+    ...(options.detailCards && options.detailCards.length > 0 ? { detailCards: options.detailCards } : {}),
+    ...(options.treeSections && options.treeSections.length > 0 ? { treeSections: options.treeSections } : {}),
+  };
 }
 
 function deduplicateRoots(roots: CodePaneExternalLibraryRoot[]): CodePaneExternalLibraryRoot[] {

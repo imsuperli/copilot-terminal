@@ -3,15 +3,19 @@ import type {
   CodePaneExternalLibraryRoot,
   CodePaneExternalLibrarySection,
   CodePaneListDirectoryConfig,
+  CodePaneProjectContribution,
   CodePaneReadFileConfig,
   CodePaneReadFileResult,
+  CodePaneRunSession,
   CodePaneTreeEntry,
 } from '../../../shared/types/electron-api';
 import { CodeFileService } from '../code/CodeFileService';
+import { CodeRunProfileService } from '../code/CodeRunProfileService';
 import { LanguageProjectAdapterRegistry } from './adapters/LanguageProjectAdapterRegistry';
 
 export interface LanguageProjectContributionServiceOptions {
   codeFileService: CodeFileService;
+  runProfileService?: CodeRunProfileService;
   adapterRegistry?: LanguageProjectAdapterRegistry;
 }
 
@@ -22,15 +26,52 @@ type MatchedExternalRoot = {
 
 export class LanguageProjectContributionService {
   private readonly codeFileService: CodeFileService;
+  private readonly runProfileService: CodeRunProfileService | null;
   private readonly adapterRegistry: LanguageProjectAdapterRegistry;
 
   constructor(options: LanguageProjectContributionServiceOptions) {
     this.codeFileService = options.codeFileService;
+    this.runProfileService = options.runProfileService ?? null;
     this.adapterRegistry = options.adapterRegistry ?? new LanguageProjectAdapterRegistry();
   }
 
   async getExternalLibrarySections(rootPath: string): Promise<CodePaneExternalLibrarySection[]> {
     return await this.adapterRegistry.getExternalLibrarySections(rootPath);
+  }
+
+  async getProjectContributions(rootPath: string): Promise<CodePaneProjectContribution[]> {
+    return await this.adapterRegistry.getProjectContributions(rootPath);
+  }
+
+  async refreshProjectModel(rootPath: string): Promise<CodePaneProjectContribution[]> {
+    return await this.getProjectContributions(rootPath);
+  }
+
+  async runProjectCommand(rootPath: string, commandId: string): Promise<CodePaneRunSession> {
+    if (!this.runProfileService) {
+      throw new Error('CodeRunProfileService not initialized');
+    }
+
+    const command = await this.adapterRegistry.resolveProjectCommand(rootPath, commandId);
+    if (!command) {
+      throw new Error(`Unknown project command: ${commandId}`);
+    }
+
+    const target = this.runProfileService.registerAdHocTarget({
+      rootPath,
+      label: command.title,
+      detail: command.detail ?? `${command.command} ${command.args.join(' ')}`.trim(),
+      kind: command.kind ?? 'task',
+      languageId: command.languageId,
+      workingDirectory: command.workingDirectory,
+      command: command.command,
+      args: command.args,
+    });
+
+    return await this.runProfileService.runTarget({
+      rootPath,
+      targetId: target.id,
+    });
   }
 
   async hasExternalLibraryPath(rootPath: string, targetPath: string): Promise<boolean> {

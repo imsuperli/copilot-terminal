@@ -698,6 +698,55 @@ export interface CodePaneRerunFailedTestsConfig {
   rootPath: string;
 }
 
+export interface CodePaneProjectStatusItem {
+  id: string;
+  label: string;
+  tone?: 'info' | 'warning' | 'error';
+}
+
+export interface CodePaneProjectCommand {
+  id: string;
+  title: string;
+  detail?: string;
+}
+
+export interface CodePaneProjectCommandGroup {
+  id: string;
+  title: string;
+  commands: CodePaneProjectCommand[];
+}
+
+export interface CodePaneProjectDetailCard {
+  id: string;
+  title: string;
+  lines: string[];
+}
+
+export interface CodePaneProjectTreeSection {
+  id: string;
+  title: string;
+  items: CodePaneTestItem[];
+}
+
+export interface CodePaneProjectContribution {
+  id: string;
+  title: string;
+  languageId: string;
+  statusItems?: CodePaneProjectStatusItem[];
+  commandGroups?: CodePaneProjectCommandGroup[];
+  detailCards?: CodePaneProjectDetailCard[];
+  treeSections?: CodePaneProjectTreeSection[];
+}
+
+export interface CodePaneGetProjectContributionConfig {
+  rootPath: string;
+}
+
+export interface CodePaneRunProjectCommandConfig {
+  rootPath: string;
+  commandId: string;
+}
+
 export interface CodePaneDiagnostic {
   filePath: string;
   owner: string;
@@ -1024,6 +1073,9 @@ export interface ElectronAPI {
   codePaneListTests: (config: CodePaneListTestsConfig) => Promise<IpcResponse<CodePaneTestItem[]>>;
   codePaneRunTests: (config: CodePaneRunTestsConfig) => Promise<IpcResponse<CodePaneRunSession>>;
   codePaneRerunFailedTests: (config: CodePaneRerunFailedTestsConfig) => Promise<IpcResponse<CodePaneRunSession[]>>;
+  codePaneGetProjectContribution: (config: CodePaneGetProjectContributionConfig) => Promise<IpcResponse<CodePaneProjectContribution[]>>;
+  codePaneRefreshProjectModel: (config: CodePaneGetProjectContributionConfig) => Promise<IpcResponse<CodePaneProjectContribution[]>>;
+  codePaneRunProjectCommand: (config: CodePaneRunProjectCommandConfig) => Promise<IpcResponse<CodePaneRunSession>>;
   onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   onCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;
