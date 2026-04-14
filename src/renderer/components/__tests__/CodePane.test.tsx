@@ -3378,4 +3378,28 @@ describe('CodePane', () => {
       }),
     ]);
   });
+
+  it('tracks search requests in the performance tool window', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneSearchFiles).mockResolvedValue({
+      success: true,
+      data: ['/workspace/project/src/index.ts'],
+    });
+
+    renderCodePane(createPane());
+
+    await user.type(await screen.findByPlaceholderText('codePane.searchFilesPlaceholder'), 'index');
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneSearchFiles).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        query: 'index',
+        limit: 80,
+      });
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'codePane.performanceTab' }));
+
+    expect(await screen.findByText('codePane.performanceRequests')).toBeInTheDocument();
+    expect(await screen.findByText('File search')).toBeInTheDocument();
+  });
 });

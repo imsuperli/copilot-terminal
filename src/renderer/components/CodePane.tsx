@@ -72,6 +72,7 @@ import {
 import { AppTooltip } from './ui/AppTooltip';
 import { DebugToolWindow } from './code-pane/tool-windows/DebugToolWindow';
 import { GitHistoryToolWindow } from './code-pane/tool-windows/GitHistoryToolWindow';
+import { PerformanceToolWindow } from './code-pane/tool-windows/PerformanceToolWindow';
 import { ProjectToolWindow } from './code-pane/tool-windows/ProjectToolWindow';
 import { RefactorPreviewToolWindow } from './code-pane/tool-windows/RefactorPreviewToolWindow';
 import { RunToolWindow } from './code-pane/tool-windows/RunToolWindow';
@@ -87,6 +88,7 @@ import {
   ensureMonacoLanguageBridge,
   type MonacoLanguageBridge,
 } from '../services/code/MonacoLanguageBridge';
+import { CodePaneRuntimeStore } from '../stores/codePaneRuntimeStore';
 import { getPathLeafLabel } from '../utils/pathDisplay';
 
 type MonacoModule = typeof import('monaco-editor');
@@ -99,7 +101,7 @@ type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
 type SearchEverywhereMode = 'all' | 'commands' | 'recent';
-type BottomPanelMode = 'run' | 'debug' | 'tests' | 'project' | 'preview' | 'history' | 'workspace';
+type BottomPanelMode = 'run' | 'debug' | 'tests' | 'project' | 'preview' | 'history' | 'workspace' | 'performance';
 
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
 const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
@@ -114,6 +116,7 @@ const CODE_PANE_MAX_LOCAL_HISTORY_PER_FILE = 12;
 const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
 const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
+const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
 
 type FileNavigationLocation = {
   filePath: string;
@@ -807,6 +810,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const editorSplitResizeStartRef = useRef<{ startX: number; startSize: number } | null>(null);
   const editorSplitResizeCleanupRef = useRef<(() => void) | null>(null);
   const focusedEditorTargetRef = useRef<EditorTarget>('editor');
+  const runtimeStoreRef = useRef(new CodePaneRuntimeStore());
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
@@ -902,6 +906,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isTodoLoading, setIsTodoLoading] = useState(false);
   const [todoError, setTodoError] = useState<string | null>(null);
   const [localHistoryVersion, setLocalHistoryVersion] = useState(0);
+  const [runtimeStoreVersion, setRuntimeStoreVersion] = useState(0);
   const [isBlameVisible, setIsBlameVisible] = useState(false);
   const [isBlameLoading, setIsBlameLoading] = useState(false);
   const [blameLines, setBlameLines] = useState<CodePaneGitBlameLine[]>([]);
@@ -950,6 +955,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     paneRef.current = pane;
   }, [pane]);
+
+  useEffect(() => runtimeStoreRef.current.subscribe(() => {
+    setRuntimeStoreVersion((currentVersion) => currentVersion + 1);
+  }), []);
 
   useEffect(() => {
     localHistoryEntriesRef.current.clear();
@@ -1200,6 +1209,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
       addLocalHistoryEntry(filePath, 'draft', model.getValue());
     }, CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS));
   }, [addLocalHistoryEntry]);
+
+  const trackRequest = useCallback(async <T,>(
+    key: string,
+    label: string,
+    meta: string | undefined,
+    request: () => Promise<T>,
+  ) => {
+    const handle = runtimeStoreRef.current.beginRequest(key, label, meta);
+
+    try {
+      const result = await request();
+      runtimeStoreRef.current.finishRequest(handle, 'completed');
+      return result;
+    } catch (error) {
+      runtimeStoreRef.current.finishRequest(handle, 'error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }, []);
 
   useEffect(() => {
     for (const breakpoint of breakpointsRef.current) {
@@ -3325,12 +3354,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsGitHistoryLoading(true);
     setGitHistoryError(null);
 
-    const response = await window.electronAPI.codePaneGitHistory({
-      rootPath,
-      filePath: config.filePath,
-      lineNumber: config.lineNumber,
-      limit: 30,
-    });
+    const response = await trackRequest(
+      `git-history:${rootPath}`,
+      'Git history',
+      config.filePath ? getRelativePath(rootPath, config.filePath) : undefined,
+      async () => await window.electronAPI.codePaneGitHistory({
+        rootPath,
+        filePath: config.filePath,
+        lineNumber: config.lineNumber,
+        limit: 30,
+      }),
+    );
     if (!response.success || !response.data) {
       setGitHistoryError(response.error || t('common.retry'));
       setIsGitHistoryLoading(false);
@@ -3341,7 +3375,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setSelectedHistoryCommitSha(response.data.entries[0]?.commitSha ?? null);
     setBottomPanelMode('history');
     setIsGitHistoryLoading(false);
-  }, [rootPath, t]);
+  }, [rootPath, t, trackRequest]);
 
   const loadBlameForActiveFile = useCallback(async () => {
     const filePath = activeFilePathRef.current;
@@ -3729,12 +3763,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const responses = await Promise.all(
       CODE_PANE_TODO_TOKENS.map(async (token) => ({
         token,
-        response: await window.electronAPI.codePaneSearchContents({
-          rootPath,
-          query: token,
-          limit: 120,
-          maxMatchesPerFile: 20,
-        }),
+        response: await trackRequest(
+          `todo-scan:${rootPath}:${token}`,
+          'TODO scan',
+          token,
+          async () => await window.electronAPI.codePaneSearchContents({
+            rootPath,
+            query: token,
+            limit: 120,
+            maxMatchesPerFile: 20,
+          }),
+        ),
       })),
     );
 
@@ -3771,7 +3810,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setTodoItems(uniqueTodoItems);
     setTodoError(firstError);
     setIsTodoLoading(false);
-  }, [rootPath]);
+  }, [rootPath, trackRequest]);
 
   const toggleBookmarkAtCursor = useCallback(() => {
     const context = getActiveEditorContext();
@@ -4146,18 +4185,37 @@ export const CodePane: React.FC<CodePaneProps> = ({
     let cancelled = false;
     setIsSearching(true);
     setSearchError(null);
+    const requestKey = `search-files:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${trimmedQuery}`;
+    const cachedResults = runtimeStoreRef.current.getCache<string[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
+    if (cachedResults) {
+      const handle = runtimeStoreRef.current.beginRequest(requestKey, 'File search', trimmedQuery);
+      runtimeStoreRef.current.finishRequest(handle, 'completed', { fromCache: true });
+      setSearchResults(cachedResults);
+      setIsSearching(false);
+      return undefined;
+    }
 
     const timer = setTimeout(async () => {
-      const response = await window.electronAPI.codePaneSearchFiles({
-        rootPath,
-        query: trimmedQuery,
-        limit: 80,
-      });
+      const response = await trackRequest(
+        requestKey,
+        'File search',
+        trimmedQuery,
+        async () => await window.electronAPI.codePaneSearchFiles({
+          rootPath,
+          query: trimmedQuery,
+          limit: 80,
+        }),
+      );
 
-      if (cancelled) {
+      if (cancelled || !runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
         return;
       }
 
+      if (response.success) {
+        runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
+      }
       startTransition(() => {
         setSearchResults(response.success ? (response.data ?? []) : []);
       });
@@ -4169,7 +4227,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [deferredSearchQuery, rootPath, t]);
+  }, [deferredSearchQuery, rootPath, t, trackRequest]);
 
   useEffect(() => {
     const trimmedQuery = deferredContentSearchQuery.trim();
@@ -4183,19 +4241,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
     let cancelled = false;
     setIsContentSearching(true);
     setContentSearchError(null);
+    const requestKey = `search-contents:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${trimmedQuery}`;
+    const cachedResults = runtimeStoreRef.current.getCache<CodePaneContentMatch[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
+    if (cachedResults) {
+      const handle = runtimeStoreRef.current.beginRequest(requestKey, 'Content search', trimmedQuery);
+      runtimeStoreRef.current.finishRequest(handle, 'completed', { fromCache: true });
+      setContentSearchResults(cachedResults);
+      setIsContentSearching(false);
+      return undefined;
+    }
 
     const timer = setTimeout(async () => {
-      const response = await window.electronAPI.codePaneSearchContents({
-        rootPath,
-        query: trimmedQuery,
-        limit: 120,
-        maxMatchesPerFile: 6,
-      });
+      const response = await trackRequest(
+        requestKey,
+        'Content search',
+        trimmedQuery,
+        async () => await window.electronAPI.codePaneSearchContents({
+          rootPath,
+          query: trimmedQuery,
+          limit: 120,
+          maxMatchesPerFile: 6,
+        }),
+      );
 
-      if (cancelled) {
+      if (cancelled || !runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
         return;
       }
 
+      if (response.success) {
+        runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
+      }
       startTransition(() => {
         setContentSearchResults(response.success ? (response.data ?? []) : []);
       });
@@ -4207,7 +4284,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [deferredContentSearchQuery, rootPath, t]);
+  }, [deferredContentSearchQuery, rootPath, t, trackRequest]);
 
   useEffect(() => {
     const trimmedQuery = deferredWorkspaceSymbolQuery.trim();
@@ -4221,18 +4298,37 @@ export const CodePane: React.FC<CodePaneProps> = ({
     let cancelled = false;
     setIsWorkspaceSymbolSearching(true);
     setWorkspaceSymbolError(null);
+    const requestKey = `workspace-symbols:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${trimmedQuery}`;
+    const cachedResults = runtimeStoreRef.current.getCache<CodePaneWorkspaceSymbol[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
+    if (cachedResults) {
+      const handle = runtimeStoreRef.current.beginRequest(requestKey, 'Workspace symbols', trimmedQuery);
+      runtimeStoreRef.current.finishRequest(handle, 'completed', { fromCache: true });
+      setWorkspaceSymbolResults(cachedResults);
+      setIsWorkspaceSymbolSearching(false);
+      return undefined;
+    }
 
     const timer = setTimeout(async () => {
-      const response = await window.electronAPI.codePaneGetWorkspaceSymbols({
-        rootPath,
-        query: trimmedQuery,
-        limit: 120,
-      });
+      const response = await trackRequest(
+        requestKey,
+        'Workspace symbols',
+        trimmedQuery,
+        async () => await window.electronAPI.codePaneGetWorkspaceSymbols({
+          rootPath,
+          query: trimmedQuery,
+          limit: 120,
+        }),
+      );
 
-      if (cancelled) {
+      if (cancelled || !runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
         return;
       }
 
+      if (response.success) {
+        runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
+      }
       startTransition(() => {
         setWorkspaceSymbolResults(response.success ? (response.data ?? []) : []);
       });
@@ -4244,7 +4340,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [deferredWorkspaceSymbolQuery, rootPath, t]);
+  }, [deferredWorkspaceSymbolQuery, rootPath, t, trackRequest]);
 
   const getCurrentNavigationLocation = useCallback((): NavigationHistoryEntry | null => {
     const context = getActiveEditorContext();
@@ -4375,6 +4471,78 @@ export const CodePane: React.FC<CodePaneProps> = ({
       .sort((left, right) => right.timestamp - left.timestamp)
       .slice(0, 24);
   }, [activeFilePath, localHistoryVersion]);
+
+  const runtimeRequests = useMemo(() => (
+    runtimeStoreRef.current.getRecentRequests()
+  ), [runtimeStoreVersion]);
+
+  const activePerformanceTasks = useMemo(() => {
+    const nextTasks = [];
+
+    if (isRunTargetsLoading) {
+      nextTasks.push({
+        id: 'run-targets',
+        label: 'Run targets',
+        detail: activeFilePath ? getRelativePath(rootPath, activeFilePath) : rootPath,
+        status: 'running' as const,
+      });
+    }
+    if (isTestsLoading) {
+      nextTasks.push({
+        id: 'tests',
+        label: 'Test discovery',
+        detail: activeFilePath ? getRelativePath(rootPath, activeFilePath) : rootPath,
+        status: 'running' as const,
+      });
+    }
+    if (isProjectLoading) {
+      nextTasks.push({
+        id: 'project',
+        label: 'Project model',
+        detail: rootPath,
+        status: 'running' as const,
+      });
+    }
+    if (isDebugDetailsLoading) {
+      nextTasks.push({
+        id: 'debug-details',
+        label: 'Debug session details',
+        detail: selectedDebugSessionId ?? 'session',
+        status: 'running' as const,
+      });
+    }
+    if (isTodoLoading) {
+      nextTasks.push({
+        id: 'todo',
+        label: 'TODO scan',
+        detail: rootPath,
+        status: 'running' as const,
+      });
+    }
+    if (isGitHistoryLoading) {
+      nextTasks.push({
+        id: 'git-history',
+        label: 'Git history',
+        detail: gitHistory?.targetFilePath ? getRelativePath(rootPath, gitHistory.targetFilePath) : rootPath,
+        status: 'running' as const,
+      });
+    }
+
+    return nextTasks;
+  }, [
+    activeFilePath,
+    gitHistory?.targetFilePath,
+    isDebugDetailsLoading,
+    isGitHistoryLoading,
+    isProjectLoading,
+    isRunTargetsLoading,
+    isTestsLoading,
+    isTodoLoading,
+    rootPath,
+    selectedDebugSessionId,
+  ]);
+
+  const hasRuntimeActivity = runtimeRequests.some((request) => request.status === 'running') || activePerformanceTasks.length > 0;
 
   const currentLineBookmarkId = activeFilePath
     ? `${activeFilePath}:${activeCursorLineNumber}`
@@ -5951,15 +6119,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsRunTargetsLoading(true);
     setRunTargetsError(null);
 
-    const response = await window.electronAPI.codePaneListRunTargets({
-      rootPath,
-      activeFilePath: activeFilePathRef.current,
-    });
+    const response = await trackRequest(
+      `run-targets:${rootPath}`,
+      'Run targets',
+      activeFilePathRef.current ? getRelativePath(rootPath, activeFilePathRef.current) : undefined,
+      async () => await window.electronAPI.codePaneListRunTargets({
+        rootPath,
+        activeFilePath: activeFilePathRef.current,
+      }),
+    );
 
     setRunTargets(response.success ? (response.data ?? []) : []);
     setRunTargetsError(response.success ? null : (response.error || t('common.retry')));
     setIsRunTargetsLoading(false);
-  }, [rootPath, t]);
+  }, [rootPath, t, trackRequest]);
 
   const loadDebugSessionDetails = useCallback(async (sessionId: string | null) => {
     if (!sessionId) {
@@ -5968,12 +6141,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     setIsDebugDetailsLoading(true);
-    const response = await window.electronAPI.codePaneGetDebugSessionDetails({
+    const response = await trackRequest(
+      `debug-details:${sessionId}`,
+      'Debug session details',
       sessionId,
-    });
+      async () => await window.electronAPI.codePaneGetDebugSessionDetails({
+        sessionId,
+      }),
+    );
     setDebugSessionDetails(response.success ? (response.data ?? null) : null);
     setIsDebugDetailsLoading(false);
-  }, []);
+  }, [trackRequest]);
 
   useEffect(() => {
     loadDebugSessionDetailsRef.current = loadDebugSessionDetails;
@@ -5983,28 +6161,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsTestsLoading(true);
     setTestsError(null);
 
-    const response = await window.electronAPI.codePaneListTests({
-      rootPath,
-      activeFilePath: activeFilePathRef.current,
-    });
+    const response = await trackRequest(
+      `tests:${rootPath}`,
+      'Test discovery',
+      activeFilePathRef.current ? getRelativePath(rootPath, activeFilePathRef.current) : undefined,
+      async () => await window.electronAPI.codePaneListTests({
+        rootPath,
+        activeFilePath: activeFilePathRef.current,
+      }),
+    );
 
     setTestItems(response.success ? (response.data ?? []) : []);
     setTestsError(response.success ? null : (response.error || t('common.retry')));
     setIsTestsLoading(false);
-  }, [rootPath, t]);
+  }, [rootPath, t, trackRequest]);
 
   const loadProjectContributions = useCallback(async (refresh = false) => {
     setIsProjectLoading(true);
     setProjectError(null);
 
-    const response = refresh
-      ? await window.electronAPI.codePaneRefreshProjectModel({ rootPath })
-      : await window.electronAPI.codePaneGetProjectContribution({ rootPath });
+    const response = await trackRequest(
+      `project-model:${rootPath}`,
+      refresh ? 'Refresh project model' : 'Project contribution',
+      rootPath,
+      async () => refresh
+        ? await window.electronAPI.codePaneRefreshProjectModel({ rootPath })
+        : await window.electronAPI.codePaneGetProjectContribution({ rootPath }),
+    );
 
     setProjectContributions(response.success ? (response.data ?? []) : []);
     setProjectError(response.success ? null : (response.error || t('common.retry')));
     setIsProjectLoading(false);
-  }, [rootPath, t]);
+  }, [rootPath, t, trackRequest]);
 
   const runTargetById = useCallback(async (targetId: string) => {
     const response = await window.electronAPI.codePaneRunTarget({
@@ -6306,6 +6494,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (bottomPanelMode === 'workspace') {
       void loadTodoEntries();
+      return;
+    }
+
+    if (bottomPanelMode === 'performance') {
+      setRuntimeStoreVersion((currentVersion) => currentVersion + 1);
+      return;
     }
   }, [
     bottomPanelMode,
@@ -6838,6 +7032,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
               }`}
             >
               Hist
+            </button>
+          </AppTooltip>
+          <AppTooltip content={t('codePane.performanceTab')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.performanceTab')}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                toggleBottomPanelMode('performance');
+              }}
+              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
+                bottomPanelMode === 'performance'
+                  ? 'bg-emerald-500/20 text-emerald-100'
+                  : hasRuntimeActivity
+                    ? 'bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
+                    : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
+              }`}
+            >
+              Perf
             </button>
           </AppTooltip>
           <AppTooltip content={t('codePane.workspaceTab')} placement="pane-corner">
@@ -7980,6 +8194,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
               getFileLabel={getFileLabel}
               getRelativePath={(filePath) => getRelativePath(rootPath, filePath)}
             />
+          ) : bottomPanelMode === 'performance' ? (
+            <PerformanceToolWindow
+              requests={runtimeRequests}
+              activeTasks={activePerformanceTasks}
+              indexStatus={indexStatus}
+              languageWorkspaceState={languageWorkspaceState}
+              onClose={() => {
+                setBottomPanelMode(null);
+              }}
+              onRefresh={refreshBottomPanel}
+            />
           ) : null}
 
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 py-2 text-[11px] text-zinc-500">
@@ -8018,6 +8243,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 <span className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 ${gitStatusChip.className}`}>
                   <GitBranch size={11} className="shrink-0" />
                   <span>{gitStatusChip.text}</span>
+                </span>
+              )}
+              {hasRuntimeActivity && (
+                <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-200">
+                  {t('codePane.performanceBusy')}
                 </span>
               )}
               <span>{activeStatusText}</span>
