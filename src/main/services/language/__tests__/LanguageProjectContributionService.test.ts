@@ -6,6 +6,7 @@ import { CodeFileService } from '../../code/CodeFileService';
 import { CodeRunProfileService } from '../../code/CodeRunProfileService';
 import { LanguageProjectContributionService } from '../LanguageProjectContributionService';
 import { LanguageProjectAdapterRegistry } from '../adapters/LanguageProjectAdapterRegistry';
+import { resolvePythonEnvironment } from '../adapters/PythonProjectAdapter';
 
 describe('LanguageProjectContributionService', () => {
   let workspaceRootPath: string;
@@ -309,6 +310,81 @@ describe('LanguageProjectContributionService', () => {
         }),
       ]),
     });
+  });
+
+  it('surfaces environment control commands and applies python interpreter overrides without a run session', async () => {
+    const dotVenvInterpreterPath = path.join(workspaceRootPath, '.venv', 'bin', 'python');
+    const venvInterpreterPath = path.join(workspaceRootPath, 'venv', 'bin', 'python');
+
+    await fsPromises.mkdir(path.dirname(dotVenvInterpreterPath), { recursive: true });
+    await fsPromises.mkdir(path.dirname(venvInterpreterPath), { recursive: true });
+    await fsPromises.writeFile(dotVenvInterpreterPath, '#!/usr/bin/env python\n', 'utf8');
+    await fsPromises.writeFile(venvInterpreterPath, '#!/usr/bin/env python\n', 'utf8');
+    await fsPromises.writeFile(path.join(workspaceRootPath, 'requirements.txt'), 'fastapi\n', 'utf8');
+    await fsPromises.writeFile(path.join(workspaceRootPath, 'pom.xml'), '<project></project>\n', 'utf8');
+    await fsPromises.writeFile(path.join(workspaceRootPath, 'go.mod'), 'module example.com/demo\n', 'utf8');
+
+    const service = new LanguageProjectContributionService({
+      codeFileService: new CodeFileService(),
+    });
+
+    const contributions = await service.getProjectContributions(workspaceRootPath);
+    const pythonContribution = contributions.find((item) => item.languageId === 'python');
+    const javaContribution = contributions.find((item) => item.languageId === 'java');
+    const goContribution = contributions.find((item) => item.languageId === 'go');
+
+    expect(pythonContribution).toMatchObject({
+      commandGroups: expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Environment',
+          commands: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'python-project-refresh-model',
+              kind: 'refresh',
+            }),
+            expect.objectContaining({
+              id: 'python-project-interpreter:auto',
+              kind: 'configure',
+            }),
+          ]),
+        }),
+      ]),
+    });
+    expect(javaContribution).toMatchObject({
+      commandGroups: expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Project Sync',
+          commands: expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'refresh',
+            }),
+          ]),
+        }),
+      ]),
+    });
+    expect(goContribution).toMatchObject({
+      commandGroups: expect.arrayContaining([
+        expect.objectContaining({
+          title: 'Workspace Sync',
+          commands: expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'refresh',
+            }),
+          ]),
+        }),
+      ]),
+    });
+
+    const selectedInterpreterCommand = pythonContribution?.commandGroups
+      ?.flatMap((group) => group.commands)
+      .find((command) => command.id.startsWith('python-project-interpreter:') && command.detail?.includes('/venv/bin/python'));
+    expect(selectedInterpreterCommand).toBeDefined();
+
+    expect(await service.runProjectCommand(workspaceRootPath, 'python-project-refresh-model')).toBeNull();
+    expect(await service.runProjectCommand(workspaceRootPath, selectedInterpreterCommand!.id)).toBeNull();
+
+    const resolvedEnvironment = await resolvePythonEnvironment(workspaceRootPath);
+    expect(resolvedEnvironment.interpreterPath).toBe(venvInterpreterPath);
   });
 });
 

@@ -158,6 +158,11 @@ export class JavaProjectAdapter implements LanguageProjectAdapter {
   ): Promise<LanguageProjectCommandGroupDefinition[]> {
     return [
       {
+        id: 'java-project-sync',
+        title: 'Project Sync',
+        commands: buildJavaSyncCommands(workspaceRoot, projectInfo),
+      },
+      {
         id: 'java-build',
         title: projectInfo.buildToolLabel,
         commands: buildJavaCommandDefinitions(workspaceRoot, projectInfo),
@@ -211,11 +216,41 @@ function buildJavaCommandDefinitions(
     const gradleCommand = resolveGradleCommand(workspaceRoot);
     return [
       createJavaCommand('java-gradle-build', 'Build', `${gradleCommand} build`, gradleCommand, ['build'], workspaceRoot),
-      createJavaCommand('java-gradle-test', 'Test', `${gradleCommand} test`, gradleCommand, ['test'], workspaceRoot),
+      createJavaCommand(
+        'java-gradle-test',
+        'Test',
+        `${gradleCommand} test`,
+        gradleCommand,
+        ['test'],
+        workspaceRoot,
+        {
+          runKind: 'test',
+        },
+      ),
       createJavaCommand('java-gradle-dependencies', 'Dependencies', `${gradleCommand} dependencies`, gradleCommand, ['dependencies'], workspaceRoot),
       ...(projectInfo.isSpringBoot ? [
-        createJavaCommand('java-gradle-bootrun', 'Boot Run', `${gradleCommand} bootRun`, gradleCommand, ['bootRun'], workspaceRoot),
-        createJavaCommand('java-gradle-boottest', 'Boot Test', `${gradleCommand} test --tests *`, gradleCommand, ['test', '--tests', '*'], workspaceRoot),
+        createJavaCommand(
+          'java-gradle-bootrun',
+          'Boot Run',
+          `${gradleCommand} bootRun`,
+          gradleCommand,
+          ['bootRun'],
+          workspaceRoot,
+          {
+            runKind: 'application',
+          },
+        ),
+        createJavaCommand(
+          'java-gradle-boottest',
+          'Boot Test',
+          `${gradleCommand} test --tests *`,
+          gradleCommand,
+          ['test', '--tests', '*'],
+          workspaceRoot,
+          {
+            runKind: 'test',
+          },
+        ),
       ] : []),
     ];
   }
@@ -223,13 +258,94 @@ function buildJavaCommandDefinitions(
   const mavenCommand = resolveMavenCommand(workspaceRoot);
   return [
     createJavaCommand('java-maven-compile', 'Compile', `${mavenCommand} compile`, mavenCommand, ['compile'], workspaceRoot),
-    createJavaCommand('java-maven-test', 'Test', `${mavenCommand} test`, mavenCommand, ['test'], workspaceRoot),
+    createJavaCommand(
+      'java-maven-test',
+      'Test',
+      `${mavenCommand} test`,
+      mavenCommand,
+      ['test'],
+      workspaceRoot,
+      {
+        runKind: 'test',
+      },
+    ),
     createJavaCommand('java-maven-package', 'Package', `${mavenCommand} package`, mavenCommand, ['package'], workspaceRoot),
     createJavaCommand('java-maven-dependency-tree', 'Dependency Tree', `${mavenCommand} dependency:tree`, mavenCommand, ['dependency:tree'], workspaceRoot),
     ...(projectInfo.isSpringBoot ? [
-      createJavaCommand('java-maven-spring-boot-run', 'Spring Boot Run', `${mavenCommand} spring-boot:run`, mavenCommand, ['spring-boot:run'], workspaceRoot),
-      createJavaCommand('java-maven-spring-boot-test', 'Spring Boot Test', `${mavenCommand} test -Dspring.profiles.active=dev`, mavenCommand, ['test', '-Dspring.profiles.active=dev'], workspaceRoot),
+      createJavaCommand(
+        'java-maven-spring-boot-run',
+        'Spring Boot Run',
+        `${mavenCommand} spring-boot:run`,
+        mavenCommand,
+        ['spring-boot:run'],
+        workspaceRoot,
+        {
+          runKind: 'application',
+        },
+      ),
+      createJavaCommand(
+        'java-maven-spring-boot-test',
+        'Spring Boot Test',
+        `${mavenCommand} test -Dspring.profiles.active=dev`,
+        mavenCommand,
+        ['test', '-Dspring.profiles.active=dev'],
+        workspaceRoot,
+        {
+          runKind: 'test',
+        },
+      ),
     ] : []),
+  ];
+}
+
+function buildJavaSyncCommands(
+  workspaceRoot: string,
+  projectInfo: JavaProjectInfo,
+): LanguageProjectCommandDefinition[] {
+  if (projectInfo.buildTool === 'gradle') {
+    const gradleCommand = resolveGradleCommand(workspaceRoot);
+    return [
+      createJavaProjectActionCommand(
+        'java-gradle-refresh-model',
+        'Refresh Gradle Model',
+        'Reload Gradle project import and refresh workspace metadata',
+        'refresh',
+        'refresh-model',
+      ),
+      createJavaCommand(
+        'java-gradle-refresh-dependencies',
+        'Refresh Dependencies',
+        `${gradleCommand} --refresh-dependencies classes`,
+        gradleCommand,
+        ['--refresh-dependencies', 'classes'],
+        workspaceRoot,
+        {
+          kind: 'refresh',
+        },
+      ),
+    ];
+  }
+
+  const mavenCommand = resolveMavenCommand(workspaceRoot);
+  return [
+    createJavaProjectActionCommand(
+      'java-maven-refresh-model',
+      'Reimport Maven Model',
+      'Reload Maven project import and refresh workspace metadata',
+      'refresh',
+      'refresh-model',
+    ),
+    createJavaCommand(
+      'java-maven-refresh-dependencies',
+      'Refresh Dependencies',
+      `${mavenCommand} -U dependency:resolve`,
+      mavenCommand,
+      ['-U', 'dependency:resolve'],
+      workspaceRoot,
+      {
+        kind: 'refresh',
+      },
+    ),
   ];
 }
 
@@ -545,7 +661,10 @@ function createJavaCommand(
   command: string,
   args: string[],
   workingDirectory: string,
-  kind: LanguageProjectCommandDefinition['kind'] = 'task',
+  options: {
+    kind?: LanguageProjectCommandDefinition['kind'];
+    runKind?: LanguageProjectCommandDefinition['runKind'];
+  } = {},
 ): LanguageProjectCommandDefinition {
   return {
     id,
@@ -555,7 +674,25 @@ function createJavaCommand(
     args,
     workingDirectory,
     languageId: 'java',
+    kind: options.kind ?? 'run',
+    runKind: options.runKind ?? 'task',
+  };
+}
+
+function createJavaProjectActionCommand(
+  id: string,
+  title: string,
+  detail: string,
+  kind: LanguageProjectCommandDefinition['kind'],
+  actionType: LanguageProjectCommandDefinition['actionType'],
+): LanguageProjectCommandDefinition {
+  return {
+    id,
+    title,
+    detail,
+    languageId: 'java',
     kind,
+    actionType,
   };
 }
 

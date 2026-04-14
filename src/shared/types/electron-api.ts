@@ -1089,6 +1089,7 @@ export interface CodePaneProjectCommand {
   id: string;
   title: string;
   detail?: string;
+  kind?: 'run' | 'refresh' | 'configure' | 'repair';
 }
 
 export interface CodePaneProjectCommandGroup {
@@ -1501,7 +1502,7 @@ export interface ElectronAPI {
   codePaneRerunFailedTests: (config: CodePaneRerunFailedTestsConfig) => Promise<IpcResponse<CodePaneRunSession[]>>;
   codePaneGetProjectContribution: (config: CodePaneGetProjectContributionConfig) => Promise<IpcResponse<CodePaneProjectContribution[]>>;
   codePaneRefreshProjectModel: (config: CodePaneGetProjectContributionConfig) => Promise<IpcResponse<CodePaneProjectContribution[]>>;
-  codePaneRunProjectCommand: (config: CodePaneRunProjectCommandConfig) => Promise<IpcResponse<CodePaneRunSession>>;
+  codePaneRunProjectCommand: (config: CodePaneRunProjectCommandConfig) => Promise<IpcResponse<CodePaneRunSession | null>>;
   onCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   offCodePaneFsChanged: (callback: ElectronEventHandler<CodePaneFsChangedPayload>) => void;
   onCodePaneIndexProgress: (callback: ElectronEventHandler<CodePaneIndexProgressPayload>) => void;

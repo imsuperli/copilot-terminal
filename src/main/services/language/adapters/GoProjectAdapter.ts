@@ -152,19 +152,60 @@ export class GoProjectAdapter implements LanguageProjectAdapter {
     projectInfo: GoProjectInfo,
   ): LanguageProjectCommandGroupDefinition[] {
     const commands: LanguageProjectCommandDefinition[] = [
-      createGoCommand('go-project-test', 'Go Test', 'go test ./...', 'go', ['test', './...'], workspaceRoot),
+      createGoCommand(
+        'go-project-test',
+        'Go Test',
+        'go test ./...',
+        'go',
+        ['test', './...'],
+        workspaceRoot,
+        {
+          runKind: 'test',
+        },
+      ),
       createGoCommand('go-project-build', 'Go Build', 'go build ./...', 'go', ['build', './...'], workspaceRoot),
-      createGoCommand('go-project-env', 'Go Env', 'go env', 'go', ['env'], workspaceRoot),
-      createGoCommand('go-project-mod-tidy', 'Go Mod Tidy', 'go mod tidy', 'go', ['mod', 'tidy'], workspaceRoot),
+      createGoCommand(
+        'go-project-env',
+        'Go Env',
+        'go env',
+        'go',
+        ['env'],
+        workspaceRoot,
+        {
+          kind: 'configure',
+        },
+      ),
+      createGoCommand(
+        'go-project-mod-tidy',
+        'Go Mod Tidy',
+        'go mod tidy',
+        'go',
+        ['mod', 'tidy'],
+        workspaceRoot,
+        {
+          kind: 'refresh',
+        },
+      ),
       createGoCommand('go-project-generate', 'Go Generate', 'go generate ./...', 'go', ['generate', './...'], workspaceRoot),
-      createGoCommand('go-project-bench', 'Go Bench', 'go test ./... -bench .', 'go', ['test', './...', '-bench', '.'], workspaceRoot),
+      createGoCommand(
+        'go-project-bench',
+        'Go Bench',
+        'go test ./... -bench .',
+        'go',
+        ['test', './...', '-bench', '.'],
+        workspaceRoot,
+        {
+          runKind: 'test',
+        },
+      ),
     ];
 
-    if (projectInfo.goWorkPath) {
-      commands.push(createGoCommand('go-project-work-sync', 'Go Work Sync', 'go work sync', 'go', ['work', 'sync'], workspaceRoot));
-    }
-
     return [
+      {
+        id: 'go-project-sync',
+        title: 'Workspace Sync',
+        commands: buildGoSyncCommands(workspaceRoot, projectInfo),
+      },
       {
         id: 'go-project-commands',
         title: 'Go',
@@ -329,6 +370,48 @@ function buildGoTreeSections(insights: GoProjectInsights) {
   return sections;
 }
 
+function buildGoSyncCommands(
+  workspaceRoot: string,
+  projectInfo: GoProjectInfo,
+): LanguageProjectCommandDefinition[] {
+  const commands: LanguageProjectCommandDefinition[] = [
+    createGoProjectActionCommand(
+      'go-project-refresh-model',
+      'Refresh Go Workspace',
+      'Reload Go module/workspace metadata and rescan project structure',
+      'refresh',
+      'refresh-model',
+    ),
+    createGoCommand(
+      'go-project-mod-download',
+      'Download Modules',
+      'go mod download',
+      'go',
+      ['mod', 'download'],
+      workspaceRoot,
+      {
+        kind: 'refresh',
+      },
+    ),
+  ];
+
+  if (projectInfo.goWorkPath) {
+    commands.push(createGoCommand(
+      'go-project-work-sync',
+      'Go Work Sync',
+      'go work sync',
+      'go',
+      ['work', 'sync'],
+      workspaceRoot,
+      {
+        kind: 'refresh',
+      },
+    ));
+  }
+
+  return commands;
+}
+
 function createGoCommand(
   id: string,
   title: string,
@@ -336,7 +419,10 @@ function createGoCommand(
   command: string,
   args: string[],
   workingDirectory: string,
-  kind: LanguageProjectCommandDefinition['kind'] = 'task',
+  options: {
+    kind?: LanguageProjectCommandDefinition['kind'];
+    runKind?: LanguageProjectCommandDefinition['runKind'];
+  } = {},
 ): LanguageProjectCommandDefinition {
   return {
     id,
@@ -346,7 +432,25 @@ function createGoCommand(
     args,
     workingDirectory,
     languageId: 'go',
+    kind: options.kind ?? 'run',
+    runKind: options.runKind ?? 'task',
+  };
+}
+
+function createGoProjectActionCommand(
+  id: string,
+  title: string,
+  detail: string,
+  kind: LanguageProjectCommandDefinition['kind'],
+  actionType: LanguageProjectCommandDefinition['actionType'],
+): LanguageProjectCommandDefinition {
+  return {
+    id,
+    title,
+    detail,
+    languageId: 'go',
     kind,
+    actionType,
   };
 }
 

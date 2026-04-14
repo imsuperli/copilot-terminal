@@ -1909,6 +1909,7 @@ describe('CodePane', () => {
                   id: 'java-maven-test',
                   title: 'Test',
                   detail: 'mvn test',
+                  kind: 'run',
                 },
               ],
             },
@@ -1970,7 +1971,7 @@ describe('CodePane', () => {
     expect(screen.getByText('Request Mappings')).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Test\s*mvn test/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Test.*mvn test/i }));
     });
 
     expect(window.electronAPI.codePaneRunProjectCommand).toHaveBeenCalledWith({
@@ -1988,6 +1989,92 @@ describe('CodePane', () => {
         filePath: '/workspace/project/src/main/java/com/example/UserController.java',
       });
     });
+  });
+
+  it('refreshes the project model after non-run project commands complete', async () => {
+    vi.mocked(window.electronAPI.codePaneGetProjectContribution).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'python-project',
+          title: 'Python Project',
+          languageId: 'python',
+          commandGroups: [
+            {
+              id: 'python-project-environment',
+              title: 'Environment',
+              commands: [
+                {
+                  id: 'python-project-refresh-model',
+                  title: 'Refresh Project Model',
+                  detail: 'Rescan interpreters and project files',
+                  kind: 'refresh',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneRunProjectCommand).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.codePaneRefreshProjectModel).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'python-project',
+          title: 'Python Project',
+          languageId: 'python',
+          statusItems: [
+            {
+              id: 'python-environment',
+              label: 'Environment: .venv',
+              tone: 'info',
+            },
+          ],
+          commandGroups: [
+            {
+              id: 'python-project-environment',
+              title: 'Environment',
+              commands: [
+                {
+                  id: 'python-project-refresh-model',
+                  title: 'Refresh Project Model',
+                  detail: 'Rescan interpreters and project files',
+                  kind: 'refresh',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.projectTab' }));
+    });
+
+    expect(await screen.findByText('Python Project')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Refresh Project Model.*Rescan interpreters and project files/i }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneRunProjectCommand).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        commandId: 'python-project-refresh-model',
+      });
+      expect(window.electronAPI.codePaneRefreshProjectModel).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+      });
+    });
+
+    expect(await screen.findByText('Environment: .venv')).toBeInTheDocument();
   });
 
   it('shows repository summary, branch graph, and changed files in the SCM tab', async () => {

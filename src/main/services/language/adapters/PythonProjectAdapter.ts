@@ -33,6 +33,19 @@ const PYTHON_PROJECT_INDICATORS = [
   'env',
 ];
 
+type PythonInterpreterSource = 'workspace' | 'poetry' | 'virtualenv' | 'conda' | 'system';
+
+export interface PythonInterpreterCandidate {
+  id: string;
+  label: string;
+  detail: string;
+  interpreterPath: string;
+  environmentRoot: string;
+  source: PythonInterpreterSource;
+}
+
+const pythonInterpreterOverrides = new Map<string, string>();
+
 export class PythonProjectAdapter implements LanguageProjectAdapter {
   readonly languageId = 'python';
 
@@ -43,13 +56,11 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
     }
 
     const roots = [];
-    const environmentRoots = [
-      path.join(workspaceRoot, '.venv'),
-      path.join(workspaceRoot, 'venv'),
-      path.join(workspaceRoot, 'env'),
-      process.env.VIRTUAL_ENV,
-      process.env.CONDA_PREFIX,
-    ].filter((value): value is string => Boolean(value));
+    const environmentResolution = await resolvePythonEnvironmentDetails(workspaceRoot);
+    const environmentRoots = deduplicateEnvironmentRoots([
+      ...environmentResolution.candidates.map((candidate) => candidate.environmentRoot),
+      environmentResolution.environmentRoot,
+    ]);
 
     for (const environmentRoot of environmentRoots) {
       const normalizedEnvironmentRoot = path.resolve(environmentRoot);
@@ -119,9 +130,19 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
     return createProjectContribution('python-project', this.languageId, 'Python Project', {
       statusItems: [
         {
+          id: 'python-interpreter',
+          label: projectInfo.interpreterSelectionLabel,
+          tone: projectInfo.interpreterTone,
+        },
+        {
           id: 'python-environment',
           label: projectInfo.environmentLabel,
           tone: projectInfo.hasEnvironment ? 'info' : 'warning',
+        },
+        {
+          id: 'python-environment-count',
+          label: `Environments: ${projectInfo.environmentCount}`,
+          tone: projectInfo.environmentCount > 0 ? 'info' : 'warning',
         },
         {
           id: 'python-tests',
@@ -141,7 +162,10 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
           title: 'Environment',
           lines: [
             `Root: ${workspaceRoot}`,
-            `Interpreter: ${projectInfo.interpreterPath ?? 'python'}`,
+            `Interpreter: ${projectInfo.interpreterPath ?? resolveExecutable('python')}`,
+            `Selection: ${projectInfo.interpreterSourceLabel}`,
+            `Environment root: ${projectInfo.environmentRoot ?? 'Not detected'}`,
+            `Detected environments: ${projectInfo.environmentCount}`,
             `Project file: ${projectInfo.projectFilePath ?? 'Not detected'}`,
           ],
         },
@@ -185,11 +209,44 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
   ): LanguageProjectCommandGroupDefinition[] {
     const pythonCommand = projectInfo.interpreterPath ?? resolveExecutable('python');
     const groups: LanguageProjectCommandGroupDefinition[] = [];
+    const environmentCommands = buildPythonEnvironmentCommands(workspaceRoot, projectInfo);
     const pythonCommands: LanguageProjectCommandDefinition[] = [
-      createPythonCommand('python-project-pytest', 'Pytest', `${pythonCommand} -m pytest`, pythonCommand, ['-m', 'pytest'], workspaceRoot),
-      createPythonCommand('python-project-pip-list', 'Pip List', `${pythonCommand} -m pip list`, pythonCommand, ['-m', 'pip', 'list'], workspaceRoot),
-      createPythonCommand('python-project-pip-version', 'Pip Version', `${pythonCommand} -m pip --version`, pythonCommand, ['-m', 'pip', '--version'], workspaceRoot),
+      createPythonCommand(
+        'python-project-pytest',
+        'Pytest',
+        `${pythonCommand} -m pytest`,
+        pythonCommand,
+        ['-m', 'pytest'],
+        workspaceRoot,
+        {
+          runKind: 'test',
+        },
+      ),
+      createPythonCommand(
+        'python-project-pip-list',
+        'Pip List',
+        `${pythonCommand} -m pip list`,
+        pythonCommand,
+        ['-m', 'pip', 'list'],
+        workspaceRoot,
+      ),
+      createPythonCommand(
+        'python-project-pip-version',
+        'Pip Version',
+        `${pythonCommand} -m pip --version`,
+        pythonCommand,
+        ['-m', 'pip', '--version'],
+        workspaceRoot,
+      ),
     ];
+
+    if (environmentCommands.length > 0) {
+      groups.push({
+        id: 'python-project-environment',
+        title: 'Environment',
+        commands: environmentCommands,
+      });
+    }
 
     if (projectInfo.managePyPath) {
       groups.push({
@@ -203,7 +260,9 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
             pythonCommand,
             ['manage.py', 'runserver'],
             workspaceRoot,
-            'application',
+            {
+              runKind: 'application',
+            },
           ),
           createPythonCommand(
             'python-project-migrate',
@@ -237,7 +296,9 @@ export class PythonProjectAdapter implements LanguageProjectAdapter {
             pythonCommand,
             ['-m', 'uvicorn', projectInfo.frameworkInsights.fastApiEntrypoint.importTarget, '--reload'],
             workspaceRoot,
-            'application',
+            {
+              runKind: 'application',
+            },
           ),
         ],
       });
@@ -257,10 +318,19 @@ interface PythonProjectInfo {
   hasEnvironment: boolean;
   environmentLabel: string;
   interpreterPath: string | null;
+  interpreterSelectionLabel: string;
+  interpreterTone: 'info' | 'warning' | 'error';
+  interpreterSourceLabel: string;
+  interpreterOverride: boolean;
+  interpreterOverrideMissing: boolean;
+  environmentRoot: string | null;
+  environmentCount: number;
   projectFilePath: string | null;
+  hasRequirementsFile: boolean;
   hasTests: boolean;
   managePyPath: string | null;
   entrypointLabel: string;
+  interpreterCandidates: PythonInterpreterCandidate[];
   frameworkInsights?: PythonFrameworkInsights;
 }
 
@@ -284,13 +354,23 @@ interface PythonFrameworkInsights {
   fastApiEntrypoint?: PythonFastApiEntrypoint;
 }
 
+interface PythonEnvironmentResolution {
+  environmentRoot: string | null;
+  interpreterPath: string | null;
+  source: PythonInterpreterSource | null;
+  candidates: PythonInterpreterCandidate[];
+  overridePath: string | null;
+  isOverrideActive: boolean;
+  isOverrideMissing: boolean;
+}
+
 async function detectPythonProject(workspaceRoot: string): Promise<PythonProjectInfo | null> {
   const looksLikePythonProject = await isPythonWorkspace(workspaceRoot);
   if (!looksLikePythonProject) {
     return null;
   }
 
-  const environmentInfo = await resolvePythonEnvironment(workspaceRoot);
+  const environmentInfo = await resolvePythonEnvironmentDetails(workspaceRoot);
   const projectFilePath = await detectFirstExistingFile(workspaceRoot, [
     'pyproject.toml',
     'requirements.txt',
@@ -307,12 +387,21 @@ async function detectPythonProject(workspaceRoot: string): Promise<PythonProject
     hasEnvironment: Boolean(environmentInfo.environmentRoot),
     environmentLabel: environmentInfo.environmentRoot
       ? `Environment: ${path.basename(environmentInfo.environmentRoot)}`
-      : 'Environment: Not detected',
+      : (environmentInfo.isOverrideMissing ? 'Environment: Selected interpreter missing' : 'Environment: Not detected'),
     interpreterPath: environmentInfo.interpreterPath,
+    interpreterSelectionLabel: buildInterpreterSelectionLabel(environmentInfo),
+    interpreterTone: resolveInterpreterTone(environmentInfo),
+    interpreterSourceLabel: buildInterpreterSourceLabel(environmentInfo),
+    interpreterOverride: environmentInfo.isOverrideActive || environmentInfo.isOverrideMissing,
+    interpreterOverrideMissing: environmentInfo.isOverrideMissing,
+    environmentRoot: environmentInfo.environmentRoot,
+    environmentCount: environmentInfo.candidates.length,
     projectFilePath,
+    hasRequirementsFile: await fileExists(path.join(workspaceRoot, 'requirements.txt')),
     hasTests: await directoryExists(path.join(workspaceRoot, 'tests')),
     managePyPath: hasManagePy ? managePyPath : null,
     entrypointLabel: `Entrypoint: ${primaryEntrypoint}`,
+    interpreterCandidates: environmentInfo.candidates,
     ...(frameworkInsights ? { frameworkInsights } : {}),
   };
 }
@@ -492,40 +581,21 @@ export async function resolvePythonEnvironment(workspaceRoot: string): Promise<{
   environmentRoot: string | null;
   interpreterPath: string | null;
 }> {
-  const candidates = [
-    path.join(workspaceRoot, '.venv'),
-    path.join(workspaceRoot, 'venv'),
-    path.join(workspaceRoot, 'env'),
-    process.env.VIRTUAL_ENV,
-    process.env.CONDA_PREFIX,
-  ].filter((value): value is string => Boolean(value));
+  const environment = await resolvePythonEnvironmentDetails(workspaceRoot);
+  return {
+    environmentRoot: environment.environmentRoot,
+    interpreterPath: environment.interpreterPath,
+  };
+}
 
-  for (const candidate of candidates) {
-    const environmentRoot = path.resolve(candidate);
-    if (!await directoryExists(environmentRoot)) {
-      continue;
-    }
-
-    const interpreterPath = process.platform === 'win32'
-      ? path.join(environmentRoot, 'Scripts', 'python.exe')
-      : path.join(environmentRoot, 'bin', 'python');
-    if (await fileExists(interpreterPath)) {
-      return {
-        environmentRoot,
-        interpreterPath,
-      };
-    }
-
-    return {
-      environmentRoot,
-      interpreterPath: null,
-    };
+export function setPythonInterpreterOverride(workspaceRoot: string, interpreterPath: string | null): void {
+  const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+  if (!interpreterPath) {
+    pythonInterpreterOverrides.delete(normalizedWorkspaceRoot);
+    return;
   }
 
-  return {
-    environmentRoot: null,
-    interpreterPath: null,
-  };
+  pythonInterpreterOverrides.set(normalizedWorkspaceRoot, normalizeInterpreterPath(interpreterPath));
 }
 
 async function detectFirstExistingFile(workspaceRoot: string, fileNames: string[]): Promise<string | null> {
@@ -546,7 +616,10 @@ function createPythonCommand(
   command: string,
   args: string[],
   workingDirectory: string,
-  kind: LanguageProjectCommandDefinition['kind'] = 'task',
+  options: {
+    kind?: LanguageProjectCommandDefinition['kind'];
+    runKind?: LanguageProjectCommandDefinition['runKind'];
+  } = {},
 ): LanguageProjectCommandDefinition {
   return {
     id,
@@ -556,8 +629,342 @@ function createPythonCommand(
     args,
     workingDirectory,
     languageId: 'python',
-    kind,
+    kind: options.kind ?? 'run',
+    runKind: options.runKind ?? 'task',
   };
+}
+
+function createPythonProjectActionCommand(
+  id: string,
+  title: string,
+  detail: string,
+  kind: LanguageProjectCommandDefinition['kind'],
+  actionType: LanguageProjectCommandDefinition['actionType'],
+  interpreterPath?: string | null,
+): LanguageProjectCommandDefinition {
+  return {
+    id,
+    title,
+    detail,
+    languageId: 'python',
+    kind,
+    actionType,
+    ...(interpreterPath !== undefined ? { interpreterPath } : {}),
+  };
+}
+
+function buildPythonEnvironmentCommands(
+  workspaceRoot: string,
+  projectInfo: PythonProjectInfo,
+): LanguageProjectCommandDefinition[] {
+  const commands: LanguageProjectCommandDefinition[] = [
+    createPythonProjectActionCommand(
+      'python-project-refresh-model',
+      'Refresh Project Model',
+      'Rescan interpreters, project files, and framework entrypoints',
+      'refresh',
+      'refresh-model',
+    ),
+    createPythonProjectActionCommand(
+      'python-project-interpreter:auto',
+      projectInfo.interpreterOverride ? 'Use Auto-detected Interpreter' : 'Auto-detected Interpreter',
+      projectInfo.interpreterPath
+        ? `Clear manual override and use ${projectInfo.interpreterPath}`
+        : 'Clear manual override and fall back to PATH resolution',
+      'configure',
+      'set-python-interpreter',
+      null,
+    ),
+  ];
+
+  for (const candidate of projectInfo.interpreterCandidates) {
+    const isSelected = projectInfo.interpreterPath
+      ? isSameInterpreterPath(projectInfo.interpreterPath, candidate.interpreterPath)
+      : false;
+
+    commands.push(createPythonProjectActionCommand(
+      `python-project-interpreter:${toSafeCommandSegment(candidate.interpreterPath)}`,
+      isSelected
+        ? (projectInfo.interpreterOverride ? `Selected: ${candidate.label}` : `Auto: ${candidate.label}`)
+        : `Use ${candidate.label}`,
+      candidate.detail,
+      'configure',
+      'set-python-interpreter',
+      candidate.interpreterPath,
+    ));
+  }
+
+  if (projectInfo.interpreterPath && projectInfo.hasRequirementsFile) {
+    commands.push(createPythonCommand(
+      'python-project-install-requirements',
+      'Install Requirements',
+      `${projectInfo.interpreterPath} -m pip install -r requirements.txt`,
+      projectInfo.interpreterPath,
+      ['-m', 'pip', 'install', '-r', 'requirements.txt'],
+      workspaceRoot,
+      {
+        kind: 'configure',
+      },
+    ));
+  }
+
+  return commands;
+}
+
+async function resolvePythonEnvironmentDetails(workspaceRoot: string): Promise<PythonEnvironmentResolution> {
+  const candidates = await listPythonInterpreterCandidates(workspaceRoot);
+  const overridePath = getPythonInterpreterOverride(workspaceRoot);
+  if (overridePath) {
+    const matchingCandidate = candidates.find((candidate) => (
+      isSameInterpreterPath(candidate.interpreterPath, overridePath)
+    ));
+    if (matchingCandidate) {
+      return {
+        environmentRoot: matchingCandidate.environmentRoot,
+        interpreterPath: matchingCandidate.interpreterPath,
+        source: matchingCandidate.source,
+        candidates,
+        overridePath,
+        isOverrideActive: true,
+        isOverrideMissing: false,
+      };
+    }
+
+    if (await fileExists(overridePath)) {
+      return {
+        environmentRoot: deriveEnvironmentRootFromInterpreter(overridePath),
+        interpreterPath: overridePath,
+        source: 'system',
+        candidates,
+        overridePath,
+        isOverrideActive: true,
+        isOverrideMissing: false,
+      };
+    }
+
+    return {
+      environmentRoot: null,
+      interpreterPath: null,
+      source: null,
+      candidates,
+      overridePath,
+      isOverrideActive: false,
+      isOverrideMissing: true,
+    };
+  }
+
+  const primaryCandidate = candidates[0] ?? null;
+  return {
+    environmentRoot: primaryCandidate?.environmentRoot ?? null,
+    interpreterPath: primaryCandidate?.interpreterPath ?? null,
+    source: primaryCandidate?.source ?? null,
+    candidates,
+    overridePath: null,
+    isOverrideActive: false,
+    isOverrideMissing: false,
+  };
+}
+
+async function listPythonInterpreterCandidates(workspaceRoot: string): Promise<PythonInterpreterCandidate[]> {
+  const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+  const pyprojectContent = await readTextFile(path.join(normalizedWorkspaceRoot, 'pyproject.toml')) ?? '';
+  const hasPoetry = /\[tool\.poetry(?:\.|])/i.test(pyprojectContent)
+    || await fileExists(path.join(normalizedWorkspaceRoot, 'poetry.lock'));
+  const candidateRoots: Array<{ environmentRoot: string; source: PythonInterpreterSource }> = [
+    {
+      environmentRoot: path.join(normalizedWorkspaceRoot, '.venv'),
+      source: hasPoetry ? 'poetry' : 'workspace',
+    },
+    {
+      environmentRoot: path.join(normalizedWorkspaceRoot, 'venv'),
+      source: 'workspace',
+    },
+    {
+      environmentRoot: path.join(normalizedWorkspaceRoot, 'env'),
+      source: 'workspace',
+    },
+    ...(process.env.VIRTUAL_ENV ? [{
+      environmentRoot: process.env.VIRTUAL_ENV,
+      source: 'virtualenv' as const,
+    }] : []),
+    ...(process.env.CONDA_PREFIX ? [{
+      environmentRoot: process.env.CONDA_PREFIX,
+      source: 'conda' as const,
+    }] : []),
+  ];
+  const candidates: PythonInterpreterCandidate[] = [];
+  const seenInterpreterPaths = new Set<string>();
+
+  for (const candidateRoot of candidateRoots) {
+    const environmentRoot = path.resolve(candidateRoot.environmentRoot);
+    if (!await directoryExists(environmentRoot)) {
+      continue;
+    }
+
+    const interpreterPath = await resolveEnvironmentInterpreterPath(environmentRoot);
+    if (!interpreterPath) {
+      continue;
+    }
+
+    const normalizedInterpreterPath = normalizeInterpreterPath(interpreterPath);
+    const comparisonKey = toInterpreterComparisonKey(normalizedInterpreterPath);
+    if (seenInterpreterPaths.has(comparisonKey)) {
+      continue;
+    }
+
+    seenInterpreterPaths.add(comparisonKey);
+    candidates.push({
+      id: `python-interpreter:${candidateRoot.source}:${toSafeCommandSegment(normalizedInterpreterPath)}`,
+      label: formatPythonInterpreterLabel(candidateRoot.source, environmentRoot),
+      detail: `${formatInterpreterSourceLabel(candidateRoot.source)} · ${normalizedInterpreterPath}`,
+      interpreterPath: normalizedInterpreterPath,
+      environmentRoot,
+      source: candidateRoot.source,
+    });
+  }
+
+  return candidates;
+}
+
+async function resolveEnvironmentInterpreterPath(environmentRoot: string): Promise<string | null> {
+  const candidates = process.platform === 'win32'
+    ? [path.join(environmentRoot, 'Scripts', 'python.exe')]
+    : [path.join(environmentRoot, 'bin', 'python'), path.join(environmentRoot, 'bin', 'python3')];
+
+  for (const interpreterPath of candidates) {
+    if (await fileExists(interpreterPath)) {
+      return path.resolve(interpreterPath);
+    }
+  }
+
+  return null;
+}
+
+function getPythonInterpreterOverride(workspaceRoot: string): string | null {
+  return pythonInterpreterOverrides.get(path.resolve(workspaceRoot)) ?? null;
+}
+
+function buildInterpreterSelectionLabel(environment: PythonEnvironmentResolution): string {
+  if (environment.isOverrideMissing) {
+    return 'Interpreter: Missing override';
+  }
+
+  if (environment.interpreterPath) {
+    return `Interpreter: ${path.basename(environment.interpreterPath)}`;
+  }
+
+  return 'Interpreter: python (PATH)';
+}
+
+function resolveInterpreterTone(environment: PythonEnvironmentResolution): 'info' | 'warning' | 'error' {
+  if (environment.isOverrideMissing) {
+    return 'error';
+  }
+
+  if (environment.interpreterPath) {
+    return 'info';
+  }
+
+  return 'warning';
+}
+
+function buildInterpreterSourceLabel(environment: PythonEnvironmentResolution): string {
+  if (environment.isOverrideMissing) {
+    return `Manual override missing: ${environment.overridePath ?? 'Unknown interpreter'}`;
+  }
+
+  const sourceLabel = environment.source ? formatInterpreterSourceLabel(environment.source) : 'PATH fallback';
+  if (environment.isOverrideActive) {
+    return `Manual override · ${sourceLabel}`;
+  }
+
+  return `Auto-detected · ${sourceLabel}`;
+}
+
+function formatInterpreterSourceLabel(source: PythonInterpreterSource): string {
+  switch (source) {
+    case 'poetry':
+      return 'Poetry';
+    case 'virtualenv':
+      return 'Virtualenv';
+    case 'conda':
+      return 'Conda';
+    case 'workspace':
+      return 'Workspace';
+    case 'system':
+    default:
+      return 'System';
+  }
+}
+
+function formatPythonInterpreterLabel(source: PythonInterpreterSource, environmentRoot: string): string {
+  const environmentName = path.basename(environmentRoot);
+  switch (source) {
+    case 'poetry':
+      return `Poetry (${environmentName})`;
+    case 'virtualenv':
+      return `Virtualenv (${environmentName})`;
+    case 'conda':
+      return `Conda (${environmentName})`;
+    case 'workspace':
+      return `Workspace (${environmentName})`;
+    case 'system':
+    default:
+      return `System (${environmentName})`;
+  }
+}
+
+function deriveEnvironmentRootFromInterpreter(interpreterPath: string): string | null {
+  const normalizedInterpreterPath = normalizeInterpreterPath(interpreterPath);
+  const parentDirectory = path.dirname(normalizedInterpreterPath);
+  const parentName = path.basename(parentDirectory).toLowerCase();
+  if (parentName === 'bin' || parentName === 'scripts') {
+    return path.dirname(parentDirectory);
+  }
+
+  return path.dirname(normalizedInterpreterPath);
+}
+
+function normalizeInterpreterPath(interpreterPath: string): string {
+  return path.resolve(interpreterPath);
+}
+
+function deduplicateEnvironmentRoots(environmentRoots: Array<string | null | undefined>): string[] {
+  const seenRoots = new Set<string>();
+  const deduplicatedRoots: string[] = [];
+
+  for (const environmentRoot of environmentRoots) {
+    if (!environmentRoot) {
+      continue;
+    }
+
+    const normalizedEnvironmentRoot = path.resolve(environmentRoot);
+    if (seenRoots.has(toInterpreterComparisonKey(normalizedEnvironmentRoot))) {
+      continue;
+    }
+
+    seenRoots.add(toInterpreterComparisonKey(normalizedEnvironmentRoot));
+    deduplicatedRoots.push(normalizedEnvironmentRoot);
+  }
+
+  return deduplicatedRoots;
+}
+
+function isSameInterpreterPath(left: string, right: string): boolean {
+  return toInterpreterComparisonKey(left) === toInterpreterComparisonKey(right);
+}
+
+function toInterpreterComparisonKey(value: string): string {
+  const normalizedValue = normalizeInterpreterPath(value);
+  return process.platform === 'win32' ? normalizedValue.toLowerCase() : normalizedValue;
+}
+
+function toSafeCommandSegment(value: string): string {
+  return value
+    .replace(/\./g, '-dot-')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'default';
 }
 
 function resolveExecutable(command: string): string {

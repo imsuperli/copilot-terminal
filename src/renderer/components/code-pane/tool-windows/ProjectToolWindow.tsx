@@ -117,24 +117,40 @@ export function ProjectToolWindow({
                           {group.title}
                         </div>
                         <div className="space-y-1">
-                          {group.commands.map((command) => (
-                            <button
-                              key={command.id}
-                              type="button"
-                              onClick={() => {
-                                void onRunCommand(command.id);
-                              }}
-                              className="flex w-full items-center justify-between gap-3 rounded border border-zinc-800 bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate font-medium">{command.title}</div>
-                                {command.detail && (
-                                  <div className="mt-1 truncate text-[10px] text-zinc-500">{command.detail}</div>
+                          {group.commands.map((command) => {
+                            const commandTone = getProjectCommandTone(command.kind);
+                            return (
+                              <button
+                                key={command.id}
+                                type="button"
+                                onClick={() => {
+                                  void onRunCommand(command.id);
+                                }}
+                                className={`flex w-full items-center justify-between gap-3 rounded border px-2 py-2 text-left text-xs transition-colors ${commandTone.buttonClassName}`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className="truncate font-medium text-zinc-100">{command.title}</div>
+                                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${commandTone.badgeClassName}`}>
+                                      {commandTone.badgeLabel}
+                                    </span>
+                                  </div>
+                                  {command.detail && (
+                                    <div className="mt-1 truncate text-[10px] text-zinc-500">{command.detail}</div>
+                                  )}
+                                </div>
+                                {commandTone.icon === 'refresh' ? (
+                                  <RefreshCw size={12} className="shrink-0 text-sky-300" />
+                                ) : commandTone.icon === 'configure' ? (
+                                  <ChevronRight size={12} className="shrink-0 text-amber-300" />
+                                ) : commandTone.icon === 'repair' ? (
+                                  <Square size={11} className="shrink-0 text-red-300" />
+                                ) : (
+                                  <Play size={12} className="shrink-0 text-emerald-300" />
                                 )}
-                              </div>
-                              <Play size={12} className="shrink-0 text-emerald-300" />
-                            </button>
-                          ))}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -338,6 +354,45 @@ function formatLanguageLabel(languageId: string): string {
 
 function isSessionActive(session: CodePaneRunSession): boolean {
   return session.state === 'starting' || session.state === 'running';
+}
+
+function getProjectCommandTone(kind: 'run' | 'refresh' | 'configure' | 'repair' | undefined): {
+  badgeLabel: string;
+  badgeClassName: string;
+  buttonClassName: string;
+  icon: 'run' | 'refresh' | 'configure' | 'repair';
+} {
+  switch (kind) {
+    case 'refresh':
+      return {
+        badgeLabel: 'Refresh',
+        badgeClassName: 'bg-sky-500/15 text-sky-300',
+        buttonClassName: 'border-sky-500/20 bg-sky-500/5 text-zinc-300 hover:border-sky-400/30 hover:bg-sky-500/10 hover:text-zinc-100',
+        icon: 'refresh',
+      };
+    case 'configure':
+      return {
+        badgeLabel: 'Config',
+        badgeClassName: 'bg-amber-500/15 text-amber-300',
+        buttonClassName: 'border-amber-500/20 bg-amber-500/5 text-zinc-300 hover:border-amber-400/30 hover:bg-amber-500/10 hover:text-zinc-100',
+        icon: 'configure',
+      };
+    case 'repair':
+      return {
+        badgeLabel: 'Repair',
+        badgeClassName: 'bg-red-500/15 text-red-300',
+        buttonClassName: 'border-red-500/20 bg-red-500/5 text-zinc-300 hover:border-red-400/30 hover:bg-red-500/10 hover:text-zinc-100',
+        icon: 'repair',
+      };
+    case 'run':
+    default:
+      return {
+        badgeLabel: 'Run',
+        badgeClassName: 'bg-emerald-500/15 text-emerald-300',
+        buttonClassName: 'border-zinc-800 bg-zinc-950/60 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100',
+        icon: 'run',
+      };
+  }
 }
 
 function getStatusTone(tone: 'info' | 'warning' | 'error' | undefined): string {

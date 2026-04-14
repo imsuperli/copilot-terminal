@@ -4,6 +4,7 @@ import fg from 'fast-glob';
 import type {
   CodePaneExternalLibraryRoot,
   CodePaneExternalLibrarySection,
+  CodePaneProjectCommand,
   CodePaneProjectContribution,
   CodePaneProjectDetailCard,
   CodePaneProjectStatusItem,
@@ -15,11 +16,14 @@ export interface LanguageProjectCommandDefinition {
   id: string;
   title: string;
   detail?: string;
-  command: string;
-  args: string[];
-  workingDirectory: string;
   languageId: string;
-  kind?: CodePaneRunTargetKind;
+  kind?: CodePaneProjectCommand['kind'];
+  runKind?: CodePaneRunTargetKind;
+  actionType?: 'run' | 'refresh-model' | 'set-python-interpreter';
+  interpreterPath?: string | null;
+  command?: string;
+  args?: string[];
+  workingDirectory?: string;
 }
 
 export interface LanguageProjectCommandGroupDefinition {
@@ -179,6 +183,7 @@ export function createProjectContribution(
           id: command.id,
           title: command.title,
           ...(command.detail ? { detail: command.detail } : {}),
+          ...(command.kind ? { kind: command.kind } : {}),
         })),
       })),
     } : {}),

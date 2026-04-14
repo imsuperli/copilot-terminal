@@ -12,6 +12,7 @@ import type {
 import { CodeFileService } from '../code/CodeFileService';
 import { CodeRunProfileService } from '../code/CodeRunProfileService';
 import { LanguageProjectAdapterRegistry } from './adapters/LanguageProjectAdapterRegistry';
+import { setPythonInterpreterOverride } from './adapters/PythonProjectAdapter';
 
 export interface LanguageProjectContributionServiceOptions {
   codeFileService: CodeFileService;
@@ -47,21 +48,34 @@ export class LanguageProjectContributionService {
     return await this.getProjectContributions(rootPath);
   }
 
-  async runProjectCommand(rootPath: string, commandId: string): Promise<CodePaneRunSession> {
-    if (!this.runProfileService) {
-      throw new Error('CodeRunProfileService not initialized');
-    }
-
+  async runProjectCommand(rootPath: string, commandId: string): Promise<CodePaneRunSession | null> {
     const command = await this.adapterRegistry.resolveProjectCommand(rootPath, commandId);
     if (!command) {
       throw new Error(`Unknown project command: ${commandId}`);
+    }
+
+    if (command.actionType === 'refresh-model') {
+      await this.refreshProjectModel(rootPath);
+      return null;
+    }
+
+    if (command.actionType === 'set-python-interpreter') {
+      setPythonInterpreterOverride(rootPath, command.interpreterPath ?? null);
+      return null;
+    }
+
+    if (!this.runProfileService) {
+      throw new Error('CodeRunProfileService not initialized');
+    }
+    if (!command.command || !command.args || !command.workingDirectory) {
+      throw new Error(`Project command ${commandId} is missing execution details`);
     }
 
     const target = this.runProfileService.registerAdHocTarget({
       rootPath,
       label: command.title,
       detail: command.detail ?? `${command.command} ${command.args.join(' ')}`.trim(),
-      kind: command.kind ?? 'task',
+      kind: command.runKind ?? 'task',
       languageId: command.languageId,
       workingDirectory: command.workingDirectory,
       command: command.command,

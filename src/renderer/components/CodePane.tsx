@@ -7199,7 +7199,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       commandId,
     });
 
-    if (!response.success || !response.data) {
+    if (!response.success) {
       setBanner({
         tone: 'error',
         message: response.error || t('common.retry'),
@@ -7208,8 +7208,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     setBottomPanelMode('project');
-    setSelectedRunSessionId(response.data.id);
-  }, [rootPath, t]);
+    if (response.data) {
+      setSelectedRunSessionId(response.data.id);
+      return;
+    }
+
+    void loadProjectContributions(true);
+  }, [loadProjectContributions, rootPath, t]);
 
   const stopDebugSession = useCallback(async (sessionId: string) => {
     const response = await window.electronAPI.codePaneDebugStop({
