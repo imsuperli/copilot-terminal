@@ -5930,6 +5930,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [commitGitChanges, rootPath, t]);
 
+  const showHistoryForCurrentSelection = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      return;
+    }
+
+    await loadGitHistory({
+      filePath: context.filePath,
+      lineNumber: context.position.lineNumber,
+    });
+  }, [getActiveEditorContext, loadGitHistory]);
+
+  const comparePathWithRevision = useCallback(async (filePath: string) => {
+    const revisionRef = window.prompt(t('codePane.gitCompareWithRevisionPrompt'), '')?.trim();
+    if (!revisionRef) {
+      return;
+    }
+
+    await openGitRevisionDiff({
+      filePath,
+      leftCommitSha: revisionRef,
+      leftLabel: revisionRef,
+      rightLabel: t('codePane.modified'),
+    });
+  }, [openGitRevisionDiff, t]);
+
   const stashGitChanges = useCallback(async (config: { message: string; includeUntracked: boolean }) => {
     const response = await window.electronAPI.codePaneGitStash({
       rootPath,
@@ -6092,6 +6118,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       },
     );
   }, [rootPath, runGitOperation, t]);
+
+  const cherryPickPathCommit = useCallback(async () => {
+    const commitSha = window.prompt(t('codePane.gitCherryPickPrompt'), '')?.trim();
+    if (!commitSha) {
+      return;
+    }
+
+    await cherryPickCommit(commitSha);
+  }, [cherryPickCommit, t]);
 
   const resolveGitConflict = useCallback(async (filePath: string, strategy: 'ours' | 'theirs' | 'mark-resolved') => {
     await runGitOperation(
@@ -6319,6 +6354,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     }
   }, [t]);
+
+  const copyRelativePath = useCallback(async (targetPath: string) => {
+    const relativePath = getRelativePath(rootPath, targetPath) || getPathLeafLabel(targetPath) || targetPath;
+    await copyTextValue(relativePath, targetPath);
+  }, [copyTextValue, rootPath]);
 
   const togglePinnedTab = useCallback((filePath: string) => {
     updateOpenFileTabs((currentOpenFiles) => currentOpenFiles.map((tab) => {
@@ -7631,6 +7671,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
           <ContextMenu.Item
             className={contextMenuItemClassName}
             onClick={() => {
+              void copyRelativePath(filePath);
+            }}
+          >
+            {t('codePane.copyRelativePath')}
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            className={contextMenuItemClassName}
+            onClick={() => {
               void copyTextValue(filePath, filePath);
             }}
           >
@@ -7727,6 +7775,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   >
                     {t('codePane.gitFileHistory')}
                   </ContextMenu.Item>
+                  {entryType === 'file' && (
+                    <ContextMenu.Item
+                      className={contextMenuItemClassName}
+                      onClick={() => {
+                        void comparePathWithRevision(filePath);
+                      }}
+                    >
+                      {t('codePane.gitCompareWithRevision')}
+                    </ContextMenu.Item>
+                  )}
+                  <ContextMenu.Item
+                    className={contextMenuItemClassName}
+                    onClick={() => {
+                      void cherryPickPathCommit();
+                    }}
+                  >
+                    {t('codePane.gitCherryPick')}
+                  </ContextMenu.Item>
                 </ContextMenu.SubContent>
               </ContextMenu.Portal>
             </ContextMenu.Sub>
@@ -7754,30 +7820,40 @@ export const CodePane: React.FC<CodePaneProps> = ({
           {options?.allowMutations !== false && (
             <>
               <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
-              <ContextMenu.Item
-                className={contextMenuItemClassName}
-                onSelect={() => {
-                  void renamePathWithPreview(filePath);
-                }}
-              >
-                {t('codePane.renamePath')}
-              </ContextMenu.Item>
-              <ContextMenu.Item
-                className={contextMenuItemClassName}
-                onSelect={() => {
-                  void movePathWithPreview(filePath);
-                }}
-              >
-                {t('codePane.movePath')}
-              </ContextMenu.Item>
-              <ContextMenu.Item
-                className={contextMenuItemClassName}
-                onSelect={() => {
-                  void safeDeletePathWithPreview(filePath);
-                }}
-              >
-                {t('codePane.deletePath')}
-              </ContextMenu.Item>
+              <ContextMenu.Sub>
+                <ContextMenu.SubTrigger className={`${contextMenuItemClassName} justify-between`}>
+                  {t('codePane.refactorMenu')}
+                  <ChevronRight size={13} className="text-zinc-500" />
+                </ContextMenu.SubTrigger>
+                <ContextMenu.Portal>
+                  <ContextMenu.SubContent className={contextMenuContentClassName}>
+                    <ContextMenu.Item
+                      className={contextMenuItemClassName}
+                      onSelect={() => {
+                        void renamePathWithPreview(filePath);
+                      }}
+                    >
+                      {t('codePane.renamePath')}
+                    </ContextMenu.Item>
+                    <ContextMenu.Item
+                      className={contextMenuItemClassName}
+                      onSelect={() => {
+                        void movePathWithPreview(filePath);
+                      }}
+                    >
+                      {t('codePane.movePath')}
+                    </ContextMenu.Item>
+                    <ContextMenu.Item
+                      className={contextMenuItemClassName}
+                      onSelect={() => {
+                        void safeDeletePathWithPreview(filePath);
+                      }}
+                    >
+                      {t('codePane.deletePath')}
+                    </ContextMenu.Item>
+                  </ContextMenu.SubContent>
+                </ContextMenu.Portal>
+              </ContextMenu.Sub>
             </>
           )}
           {entryType === 'file' && options?.showPinToggle && (
@@ -10542,6 +10618,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
           setIsBlameVisible((currentValue) => !currentValue);
         },
       },
+      {
+        id: 'git-history-selection',
+        label: t('codePane.gitShowHistoryForSelection'),
+        disabled: !activeFilePath,
+        onSelect: () => {
+          void showHistoryForCurrentSelection();
+        },
+      },
     ],
   ]), [
     activeFilePath,
@@ -10558,6 +10642,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     openFileStructurePanel,
     openHierarchyPanel,
     renameSymbolAtCursor,
+    showHistoryForCurrentSelection,
     t,
     toggleEditorSplit,
     toggleQuickDocumentation,

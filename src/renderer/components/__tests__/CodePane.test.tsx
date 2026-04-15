@@ -1994,16 +1994,28 @@ describe('CodePane', () => {
     expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('index.ts');
 
     fireEvent.contextMenu(treeButton);
+    await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyRelativePath' }));
+    expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('src/index.ts');
+
+    fireEvent.contextMenu(treeButton);
     await user.click(await screen.findByText('codePane.revealInFolder'));
     expect(window.electronAPI.openFolder).toHaveBeenCalledWith('/workspace/project/src');
 
     fireEvent.contextMenu(treeButton);
     await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
     expect(await screen.findByRole('menuitem', { name: 'codePane.gitRevert' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithRevision' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCherryPick' })).toBeInTheDocument();
 
     fireEvent.contextMenu(treeButton);
     await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
     expect(await screen.findByRole('menuitem', { name: 'codePane.gitCommit' })).toBeInTheDocument();
+
+    fireEvent.contextMenu(treeButton);
+    await user.hover(await screen.findByRole('menuitem', { name: 'codePane.refactorMenu' }));
+    expect(await screen.findByRole('menuitem', { name: 'codePane.renamePath' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'codePane.movePath' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'codePane.deletePath' })).toBeInTheDocument();
 
     promptSpy.mockRestore();
   });
