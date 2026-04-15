@@ -47,6 +47,12 @@ export interface LanguagePluginResolverOptions {
   projectRootResolver?: ProjectRootResolver;
 }
 
+export interface WarmupLanguageWorkspaceResolution {
+  languageId: string;
+  projectRoot: string;
+  matchedIndicator: string;
+}
+
 export class LanguagePluginResolver {
   private readonly registryStore: PluginRegistryStore;
   private readonly manifestValidator: PluginManifestValidator;
@@ -120,6 +126,68 @@ export class LanguagePluginResolver {
       registry,
       workspacePluginSettings,
     });
+  }
+
+  async resolveWorkspaceWarmup(
+    rootPath: string,
+    workspacePluginSettings?: WorkspacePluginSettings,
+  ): Promise<WarmupLanguageWorkspaceResolution | null> {
+    const registry = await this.registryStore.readRegistry();
+    const installedPlugins = await this.readInstalledLanguagePlugins(registry);
+    const enabledEntries = installedPlugins
+      .filter((plugin) => isPluginEnabled(plugin.record, plugin.pluginId, workspacePluginSettings ?? {}))
+      .flatMap((plugin) => plugin.capabilities.map((capability) => ({
+        plugin,
+        capability,
+      })))
+      .filter(({ capability }) => Array.isArray(capability.projectIndicators) && capability.projectIndicators.length > 0);
+
+    if (enabledEntries.length === 0) {
+      return null;
+    }
+
+    const matches = await Promise.all(enabledEntries.map(async ({ capability }) => {
+      const primaryLanguageId = normalizeLanguageId(capability.languages[0] ?? '');
+      if (!primaryLanguageId) {
+        return null;
+      }
+
+      const projectMatch = await findWorkspaceProjectIndicator(rootPath, capability.projectIndicators ?? []);
+      if (!projectMatch) {
+        return null;
+      }
+
+      return {
+        languageId: primaryLanguageId,
+        projectRoot: projectMatch.projectRoot,
+        matchedIndicator: projectMatch.matchedIndicator,
+        priority: capability.priority ?? 0,
+      };
+    }));
+
+    const uniqueMatches = matches
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort((left, right) => (
+        right.priority - left.priority
+        || compareIndicatorSpecificity(right.matchedIndicator, left.matchedIndicator)
+        || left.languageId.localeCompare(right.languageId)
+      ));
+
+    if (uniqueMatches.length === 0) {
+      return null;
+    }
+
+    const topMatch = uniqueMatches[0];
+    const competingMatch = uniqueMatches.find((entry) => entry.languageId !== topMatch.languageId && entry.projectRoot === topMatch.projectRoot);
+    if (competingMatch) {
+      return null;
+    }
+
+    return {
+      languageId: topMatch.languageId,
+      projectRoot: topMatch.projectRoot,
+      matchedIndicator: topMatch.matchedIndicator,
+    };
   }
 
   private async createResolution(args: {
@@ -309,4 +377,51 @@ function normalizeLanguageId(languageId: string): string {
     default:
       return languageId;
   }
+}
+
+function compareIndicatorSpecificity(left: string, right: string): number {
+  return right.length - left.length;
+}
+
+async function findFirstExistingIndicator(rootPath: string, indicators: string[]): Promise<string | null> {
+  for (const indicator of indicators) {
+    if (await fs.pathExists(path.join(rootPath, indicator))) {
+      return indicator;
+    }
+  }
+
+  return null;
+}
+
+async function findWorkspaceProjectIndicator(
+  workspaceRoot: string,
+  indicators: string[],
+): Promise<{ projectRoot: string; matchedIndicator: string } | null> {
+  const normalizedWorkspaceRoot = path.resolve(workspaceRoot);
+  const candidateRoots = [normalizedWorkspaceRoot];
+
+  try {
+    const children = await fs.readdir(normalizedWorkspaceRoot, { withFileTypes: true });
+    for (const entry of children) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      candidateRoots.push(path.join(normalizedWorkspaceRoot, entry.name));
+    }
+  } catch {
+    // Ignore unreadable workspace roots and fall back to the root-only check.
+  }
+
+  for (const candidateRoot of candidateRoots) {
+    const matchedIndicator = await findFirstExistingIndicator(candidateRoot, indicators);
+    if (matchedIndicator) {
+      return {
+        projectRoot: candidateRoot,
+        matchedIndicator,
+      };
+    }
+  }
+
+  return null;
 }

@@ -258,6 +258,72 @@ describe('LanguagePluginResolver', () => {
 
     expect(resolution?.pluginId).toBe('acme.python-b');
   });
+
+  it('resolves a single-language workspace warmup candidate from project indicators', async () => {
+    await writePlugin(tempDir, registryStore, {
+      id: 'official.java-jdtls',
+      enabledByDefault: true,
+      capability: {
+        languages: ['java'],
+        priority: 60,
+        projectIndicators: ['pom.xml', 'build.gradle'],
+        runtime: {
+          type: 'node',
+          entry: 'bin/jdtls-proxy.cjs',
+        },
+      },
+    });
+
+    const workspaceRoot = path.join(tempDir, 'workspace');
+    const projectRoot = path.join(workspaceRoot, 'orders-service');
+    await fs.ensureDir(projectRoot);
+    await fs.writeFile(path.join(projectRoot, 'pom.xml'), '<project />');
+
+    const warmup = await resolver.resolveWorkspaceWarmup(workspaceRoot);
+
+    expect(warmup).toEqual({
+      languageId: 'java',
+      projectRoot,
+      matchedIndicator: 'pom.xml',
+    });
+  });
+
+  it('skips workspace warmup when multiple language plugins match the same project root', async () => {
+    await writePlugin(tempDir, registryStore, {
+      id: 'official.java-jdtls',
+      enabledByDefault: true,
+      capability: {
+        languages: ['java'],
+        priority: 60,
+        projectIndicators: ['pom.xml'],
+        runtime: {
+          type: 'node',
+          entry: 'bin/jdtls-proxy.cjs',
+        },
+      },
+    });
+    await writePlugin(tempDir, registryStore, {
+      id: 'official.python-pyright',
+      enabledByDefault: true,
+      capability: {
+        languages: ['python'],
+        priority: 60,
+        projectIndicators: ['pom.xml'],
+        runtime: {
+          type: 'node',
+          entry: 'bin/pyright-proxy.cjs',
+        },
+      },
+    });
+
+    const workspaceRoot = path.join(tempDir, 'workspace');
+    await fs.ensureDir(workspaceRoot);
+    await fs.writeFile(path.join(workspaceRoot, 'pom.xml'), '<project />');
+
+    const warmup = await resolver.resolveWorkspaceWarmup(workspaceRoot);
+
+    expect(warmup).toBeNull();
+  });
 });
 
 async function writePlugin(

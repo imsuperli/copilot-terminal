@@ -81,6 +81,27 @@ describe('LanguageWorkspaceHostService', () => {
     });
     expect(result).toMatchObject({ phase: 'ready' });
   });
+
+  it('prewarms a detected project language workspace from the project root', async () => {
+    const { service, languageFeatureService, languagePluginResolver } = createService();
+    vi.mocked(languagePluginResolver.resolveWorkspaceWarmup).mockResolvedValue({
+      languageId: 'java',
+      projectRoot: '/workspace/project',
+      matchedIndicator: 'pom.xml',
+    });
+    vi.mocked(languageFeatureService.getWorkspaceState)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(createReadyState());
+
+    await service.prewarmProject('/workspace/project');
+
+    expect(languagePluginResolver.resolveWorkspaceWarmup).toHaveBeenCalledWith('/workspace/project', undefined);
+    expect(languageFeatureService.prewarmWorkspace).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/__workspace__.java',
+      language: 'java',
+    }, null);
+  });
 });
 
 function createService() {
@@ -91,15 +112,20 @@ function createService() {
     prewarmWorkspace: ReturnType<typeof vi.fn>;
     getWorkspaceState: ReturnType<typeof vi.fn>;
   };
+  const languagePluginResolver = {
+    resolveWorkspaceWarmup: vi.fn().mockResolvedValue(null),
+  };
 
   const workspace = null as Workspace | null;
 
   return {
     service: new LanguageWorkspaceHostService({
       languageFeatureService,
+      languagePluginResolver: languagePluginResolver as any,
       getCurrentWorkspace: () => workspace,
     }),
     languageFeatureService,
+    languagePluginResolver,
   };
 }
 

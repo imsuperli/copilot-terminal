@@ -170,6 +170,22 @@ export class LanguageWorkspaceService {
     return this.states.get(this.getSessionKey(resolution)) ?? null;
   }
 
+  getStateByRoot(rootPath: string, language?: string): CodePaneLanguageWorkspaceState | null {
+    const normalizedRootPath = normalizePath(rootPath);
+    const matchingStates = Array.from(this.states.values())
+      .filter((state) => (
+        normalizePath(state.workspaceRoot) === normalizedRootPath
+        || normalizePath(state.projectRoot) === normalizedRootPath
+      ))
+      .filter((state) => !language || state.languageId === language);
+
+    if (matchingStates.length === 0) {
+      return null;
+    }
+
+    return matchingStates.sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))[0] ?? null;
+  }
+
   private syncFromProgress(resolution: ResolvedLanguagePlugin): void {
     const primaryProgress = this.getPrimaryProgress(resolution);
     if (!primaryProgress) {
@@ -314,4 +330,8 @@ function formatProgressText(progress: ProgressEntry): string {
   }
 
   return summary;
+}
+
+function normalizePath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/\/+$/, '');
 }

@@ -68,6 +68,7 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     debugAdapterSupervisor,
     languageFeatureService,
     languageProjectContributionService,
+    languageWorkspaceHostService,
     getCurrentWorkspace,
     getMainWindow,
   } = ctx;
@@ -522,6 +523,9 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
           reusedPersistedIndex: false,
           error: error instanceof Error ? error.message : String(error),
         });
+      });
+      void languageWorkspaceHostService?.prewarmProject(config.rootPath).catch((error) => {
+        console.warn('[CodePaneHandlers] Failed to prewarm language workspace:', error);
       });
       return successResponse();
     } catch (error) {

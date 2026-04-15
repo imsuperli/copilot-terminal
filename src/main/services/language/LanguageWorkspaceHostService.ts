@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/types/electron-api';
 import type { Workspace } from '../../types/workspace';
 import type { LanguageFeatureService } from './LanguageFeatureService';
+import type { LanguagePluginResolver } from './LanguagePluginResolver';
 
 export interface AttachLanguageWorkspaceConfig extends CodePaneLanguagePrewarmConfig {
   paneId: string;
@@ -16,11 +17,13 @@ interface HostRecord {
 
 export interface LanguageWorkspaceHostServiceOptions {
   languageFeatureService: LanguageFeatureService;
+  languagePluginResolver: LanguagePluginResolver;
   getCurrentWorkspace: () => Workspace | null;
 }
 
 export class LanguageWorkspaceHostService {
   private readonly languageFeatureService: LanguageFeatureService;
+  private readonly languagePluginResolver: LanguagePluginResolver;
   private readonly getCurrentWorkspace: () => Workspace | null;
   private readonly hosts = new Map<string, HostRecord>();
   private readonly paneWorkspaceKeys = new Map<string, string>();
@@ -28,6 +31,7 @@ export class LanguageWorkspaceHostService {
 
   constructor(options: LanguageWorkspaceHostServiceOptions) {
     this.languageFeatureService = options.languageFeatureService;
+    this.languagePluginResolver = options.languagePluginResolver;
     this.getCurrentWorkspace = options.getCurrentWorkspace;
   }
 
@@ -65,6 +69,26 @@ export class LanguageWorkspaceHostService {
 
   async getState(config: CodePaneLanguagePrewarmConfig): Promise<CodePaneLanguageWorkspaceState | null> {
     return await this.languageFeatureService.getWorkspaceState(config, this.getCurrentWorkspace());
+  }
+
+  async prewarmProject(rootPath: string): Promise<void> {
+    const workspace = this.getCurrentWorkspace();
+    const warmupResolution = await this.languagePluginResolver.resolveWorkspaceWarmup(
+      rootPath,
+      workspace?.settings.plugins,
+    );
+    if (!warmupResolution) {
+      return;
+    }
+
+    await this.ensurePrewarmed(
+      createWorkspaceKey(rootPath, warmupResolution.languageId),
+      {
+        rootPath,
+        filePath: `${warmupResolution.projectRoot}/__workspace__.${extensionForLanguage(warmupResolution.languageId)}`,
+        language: warmupResolution.languageId,
+      },
+    );
   }
 
   detachPane(paneId: string): void {
@@ -108,4 +132,21 @@ export class LanguageWorkspaceHostService {
 
 function createWorkspaceKey(rootPath: string, language?: string): string {
   return `${rootPath}::${language ?? ''}`;
+}
+
+function extensionForLanguage(languageId: string): string {
+  switch (languageId) {
+    case 'java':
+      return 'java';
+    case 'python':
+      return 'py';
+    case 'go':
+      return 'go';
+    case 'javascript':
+      return 'js';
+    case 'typescript':
+      return 'ts';
+    default:
+      return 'txt';
+  }
 }

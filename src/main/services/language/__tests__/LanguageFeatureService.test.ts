@@ -430,8 +430,10 @@ function createService() {
   };
   const workspaceService = {
     getState: vi.fn().mockReturnValue(null),
+    getStateByRoot: vi.fn().mockReturnValue(null),
   } as unknown as LanguageWorkspaceService & {
     getState: ReturnType<typeof vi.fn>;
+    getStateByRoot: ReturnType<typeof vi.fn>;
   };
 
   return {

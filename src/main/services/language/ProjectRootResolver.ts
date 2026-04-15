@@ -7,21 +7,36 @@ export interface ProjectRootResolverConfig {
   projectIndicators?: string[];
 }
 
+export interface ProjectRootResolution {
+  projectRoot: string;
+  matchedIndicator: string | null;
+}
+
 export class ProjectRootResolver {
   async resolve(config: ProjectRootResolverConfig): Promise<string> {
+    return (await this.resolveDetailed(config)).projectRoot;
+  }
+
+  async resolveDetailed(config: ProjectRootResolverConfig): Promise<ProjectRootResolution> {
     const workspaceRoot = normalizePath(config.workspaceRoot);
     const fileDirectory = normalizePath(path.dirname(config.filePath));
     const indicators = Array.from(new Set(config.projectIndicators ?? [])).filter(Boolean);
 
     if (indicators.length === 0) {
-      return workspaceRoot;
+      return {
+        projectRoot: workspaceRoot,
+        matchedIndicator: null,
+      };
     }
 
     let currentPath = fileDirectory;
     while (isPathInside(workspaceRoot, currentPath)) {
       for (const indicator of indicators) {
         if (await fs.pathExists(path.join(currentPath, indicator))) {
-          return currentPath;
+          return {
+            projectRoot: currentPath,
+            matchedIndicator: indicator,
+          };
         }
       }
 
@@ -36,7 +51,10 @@ export class ProjectRootResolver {
       currentPath = normalizePath(parentPath);
     }
 
-    return workspaceRoot;
+    return {
+      projectRoot: workspaceRoot,
+      matchedIndicator: null,
+    };
   }
 }
 

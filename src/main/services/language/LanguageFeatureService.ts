@@ -150,6 +150,13 @@ export class LanguageFeatureService {
     config: CodePaneLanguagePrewarmConfig,
     workspace: Workspace | null,
   ): Promise<CodePaneLanguageWorkspaceState | null> {
+    if (this.workspaceService) {
+      const currentState = this.workspaceService.getStateByRoot(config.rootPath, config.language);
+      if (currentState) {
+        return currentState;
+      }
+    }
+
     const resolution = await this.resolve(config.rootPath, config.filePath, config.language, workspace);
     if (!resolution || !this.workspaceService) {
       return null;

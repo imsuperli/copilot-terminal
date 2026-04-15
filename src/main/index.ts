@@ -640,6 +640,7 @@ app.whenReady().then(async () => {
   });
   languageWorkspaceHostService = new LanguageWorkspaceHostService({
     languageFeatureService,
+    languagePluginResolver,
     getCurrentWorkspace: () => currentWorkspace,
   });
   codeRefactorService = new CodeRefactorService({
