@@ -164,11 +164,11 @@ const CODE_PANE_SIDEBAR_MAX_WIDTH = 520;
 const CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE = 0.5;
 const CODE_PANE_EDITOR_SPLIT_MIN_SIZE = 0.3;
 const CODE_PANE_EDITOR_SPLIT_MAX_SIZE = 0.7;
-const CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT = 320;
+const CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT = 260;
 const CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT = 180;
 const CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT = 680;
 const CODE_PANE_TOP_REGION_MIN_HEIGHT = 180;
-const CODE_PANE_STATUS_BAR_RESERVED_HEIGHT = 40;
+const CODE_PANE_STATUS_BAR_RESERVED_HEIGHT = 30;
 const CODE_PANE_MAX_RECENT_FILES = 20;
 const CODE_PANE_MAX_RECENT_LOCATIONS = 30;
 const CODE_PANE_MAX_NAVIGATION_HISTORY = 50;
@@ -1536,6 +1536,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     bottomPanelHeightRef.current = bottomPanelHeight;
   }, [bottomPanelHeight]);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      editorRef.current?.layout?.();
+      secondaryEditorRef.current?.layout?.();
+      diffEditorRef.current?.layout?.();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    bottomPanelHeight,
+    bottomPanelMode,
+    editorSplitSize,
+    isEditorSplitVisible,
+    isSidebarVisible,
+    sidebarWidth,
+    viewMode,
+  ]);
 
   const persistCodeState = useCallback((updates: Partial<NonNullable<Pane['code']>>) => {
     const currentCodeState = {
@@ -9597,7 +9617,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       >
         <div
           data-testid="code-pane-activity-rail"
-          className="flex h-full w-11 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/85"
+          className="flex h-full w-12 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/85"
         >
           <div className="flex flex-col items-center gap-1 px-1 py-2">
             {sidebarTabs.map((tab) => {
@@ -9612,7 +9632,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     onClick={() => {
                       handleSidebarModeSelect(tab.mode);
                     }}
-                    className={`flex h-8 w-8 items-center justify-center rounded text-zinc-400 transition-colors ${isSelected ? 'bg-zinc-800 text-zinc-100' : 'hover:bg-zinc-900 hover:text-zinc-100'}`}
+                    className={`flex h-9 w-9 items-center justify-center rounded text-zinc-400 transition-colors ${isSelected ? 'bg-zinc-800 text-zinc-100' : 'hover:bg-zinc-900 hover:text-zinc-100'}`}
                   >
                     <Icon size={15} />
                   </button>
@@ -9631,7 +9651,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     aria-pressed={item.active}
                     onClick={item.onClick}
                     disabled={item.disabled}
-                    className={`flex h-8 w-8 items-center justify-center rounded transition-colors ${
+                    className={`flex h-9 w-9 items-center justify-center rounded transition-colors ${
                       item.active
                         ? 'bg-zinc-800 text-zinc-100'
                         : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
@@ -10468,7 +10488,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             </>
           )}
 
-          <div className="flex items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 py-2 text-[11px] text-zinc-500">
+          <div className="flex h-[30px] items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 text-[11px] text-zinc-500">
             <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
               <span className="truncate">
                 {activeFilePath
