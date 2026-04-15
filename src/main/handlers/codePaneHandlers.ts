@@ -18,14 +18,17 @@ import type {
   CodePaneGitBranchListConfig,
   CodePaneGitCheckoutConfig,
   CodePaneGitCherryPickConfig,
+  CodePaneGitCommitDetailsConfig,
   CodePaneGitConflictDetailsConfig,
   CodePaneGitCommitConfig,
+  CodePaneGitCompareCommitsConfig,
   CodePaneGitDeleteBranchConfig,
   CodePaneGitDiscardConfig,
   CodePaneGitDiffHunksConfig,
   CodePaneGitGraphConfig,
   CodePaneGitHistoryConfig,
   CodePaneGitHunkActionConfig,
+  CodePaneGitPushConfig,
   CodePaneGitRenameBranchConfig,
   CodePaneGitRebaseControlConfig,
   CodePaneGitRebasePlanConfig,
@@ -39,6 +42,7 @@ import type {
   CodePanePrepareRefactorConfig,
   CodePaneReadFileConfig,
   CodePaneReadGitBaseFileConfig,
+  CodePaneReadGitRevisionFileConfig,
   CodePaneRerunFailedTestsConfig,
   CodePaneRunProjectCommandConfig,
   CodePaneRunTargetConfig,
@@ -182,6 +186,30 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
     }
   });
 
+  ipcMain.handle('code-pane-git-commit-details', async (_event, config: CodePaneGitCommitDetailsConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.getCommitDetails(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-compare-git-commits', async (_event, config: CodePaneGitCompareCommitsConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.compareCommits(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
   ipcMain.handle('code-pane-git-diff-hunks', async (_event, config: CodePaneGitDiffHunksConfig) => {
     try {
       if (!codeGitService) {
@@ -291,6 +319,18 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await codeGitOperationService.stash(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-push', async (_event, config: CodePaneGitPushConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      return successResponse(await codeGitOperationService.push(config));
     } catch (error) {
       return errorResponse(error);
     }
@@ -467,6 +507,18 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await codeGitService.readGitBaseFile(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-read-git-revision-file', async (_event, config: CodePaneReadGitRevisionFileConfig) => {
+    try {
+      if (!codeGitService) {
+        throw new Error('CodeGitService not initialized');
+      }
+
+      return successResponse(await codeGitService.readGitRevisionFile(config));
     } catch (error) {
       return errorResponse(error);
     }

@@ -7,6 +7,11 @@ import type {
   CodePaneGitConflictDetailsConfig,
   CodePaneGitBranchEntry,
   CodePaneGitBranchListConfig,
+  CodePaneGitCommitDetails,
+  CodePaneGitCommitDetailsConfig,
+  CodePaneGitCommitFileChange,
+  CodePaneGitCompareCommitsConfig,
+  CodePaneGitCompareCommitsResult,
   CodePaneGitDiffHunk,
   CodePaneGitDiffHunksConfig,
   CodePaneGitDiffHunksResult,
@@ -19,6 +24,8 @@ import type {
   CodePaneGitStatusEntry,
   CodePaneReadGitBaseFileConfig,
   CodePaneReadGitBaseFileResult,
+  CodePaneReadGitRevisionFileConfig,
+  CodePaneReadGitRevisionFileResult,
 } from '../../../shared/types/electron-api';
 import { PathValidator } from '../../utils/pathValidator';
 
@@ -107,6 +114,79 @@ export class CodeGitService {
     } catch {
       return [];
     }
+  }
+
+  async getCommitDetails(config: CodePaneGitCommitDetailsConfig): Promise<CodePaneGitCommitDetails> {
+    const repoContext = await this.resolveRepoContext(config.rootPath);
+    if (!repoContext) {
+      throw new Error('Git repository is not available for this code pane');
+    }
+
+    const commitSha = config.commitSha.trim();
+    if (!commitSha) {
+      throw new Error('Commit SHA is required');
+    }
+
+    const [{ stdout: commitOutput }, files] = await Promise.all([
+      execFileAsync(
+        'git',
+        [
+          '-C',
+          repoContext.repoRootPath,
+          'show',
+          '--quiet',
+          '--decorate=short',
+          `--pretty=format:%H%x1f%D%x1f%s%x1f%an%x1f%ae%x1f%ct%x1f%b`,
+          commitSha,
+        ],
+        { encoding: 'utf-8', maxBuffer: 16 * 1024 * 1024 },
+      ),
+      this.readCommitFileChanges(repoContext, `${commitSha}^!`),
+    ]);
+
+    const [
+      resolvedCommitSha = commitSha,
+      refsRaw = '',
+      subject = '',
+      author = '',
+      email = '',
+      timestampRaw = '0',
+      body = '',
+    ] = (commitOutput as string).split('\x1f');
+
+    return {
+      commitSha: resolvedCommitSha,
+      shortSha: resolvedCommitSha.slice(0, 7),
+      subject,
+      author,
+      email: email || undefined,
+      timestamp: Number(timestampRaw) || 0,
+      body: body.trim() || undefined,
+      refs: refsRaw
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean),
+      files,
+    };
+  }
+
+  async compareCommits(config: CodePaneGitCompareCommitsConfig): Promise<CodePaneGitCompareCommitsResult> {
+    const repoContext = await this.resolveRepoContext(config.rootPath);
+    if (!repoContext) {
+      throw new Error('Git repository is not available for this code pane');
+    }
+
+    const baseCommitSha = config.baseCommitSha.trim();
+    const targetCommitSha = config.targetCommitSha.trim();
+    if (!baseCommitSha || !targetCommitSha) {
+      throw new Error('Both commit SHAs are required');
+    }
+
+    return {
+      baseCommitSha,
+      targetCommitSha,
+      files: await this.readCommitFileChanges(repoContext, `${baseCommitSha}..${targetCommitSha}`),
+    };
   }
 
   async getBranches(config: CodePaneGitBranchListConfig): Promise<CodePaneGitBranchEntry[]> {
@@ -261,6 +341,44 @@ export class CodeGitService {
       return {
         content: '',
         existsInHead: false,
+      };
+    }
+  }
+
+  async readGitRevisionFile(config: CodePaneReadGitRevisionFileConfig): Promise<CodePaneReadGitRevisionFileResult> {
+    const repoContext = await this.resolveRepoContext(config.rootPath);
+    if (!repoContext) {
+      return {
+        content: '',
+        exists: false,
+      };
+    }
+
+    const absoluteFilePath = path.resolve(config.filePath);
+    if (!path.isAbsolute(config.filePath) || !isPathWithin(repoContext.rootPath, absoluteFilePath)) {
+      throw new Error('Target path is outside the code pane root');
+    }
+
+    const relativeFilePath = path.relative(repoContext.repoRootPath, absoluteFilePath);
+    if (!relativeFilePath || relativeFilePath.startsWith('..')) {
+      throw new Error('Target path is outside the repository root');
+    }
+
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', repoContext.repoRootPath, 'show', `${config.commitSha}:${toGitPath(relativeFilePath)}`],
+        { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+      );
+
+      return {
+        content: stdout as string,
+        exists: true,
+      };
+    } catch {
+      return {
+        content: '',
+        exists: false,
       };
     }
   }
@@ -547,6 +665,36 @@ export class CodeGitService {
       return '';
     }
   }
+
+  private async readCommitFileChanges(
+    repoContext: RepoContext,
+    revisionRange: string,
+  ): Promise<CodePaneGitCommitFileChange[]> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        [
+          '-C',
+          repoContext.repoRootPath,
+          'diff',
+          '--numstat',
+          '--find-renames',
+          '--find-copies',
+          '--format=',
+          '--name-status',
+          '-z',
+          revisionRange,
+          '--',
+          repoContext.repoPrefixFromRoot || '.',
+        ],
+        { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 },
+      );
+
+      return parseCommitFileChanges(stdout as Buffer, repoContext);
+    } catch {
+      return [];
+    }
+  }
 }
 
 function parseRepositorySummary(
@@ -697,6 +845,101 @@ function parseTrackCounts(trackSummary: string | undefined): { aheadCount: numbe
     aheadCount: Number(aheadMatch?.[1] ?? 0),
     behindCount: Number(behindMatch?.[1] ?? 0),
   };
+}
+
+function parseCommitFileChanges(output: Buffer, repoContext: RepoContext): CodePaneGitCommitFileChange[] {
+  const tokens = output.toString('utf-8').split('\0').filter(Boolean);
+  const fileChanges = new Map<string, CodePaneGitCommitFileChange>();
+
+  let index = 0;
+  while (index < tokens.length) {
+    const currentToken = tokens[index] ?? '';
+    if (/^\d+|-/.test(currentToken)) {
+      const additionsRaw = currentToken;
+      const deletionsRaw = tokens[index + 1] ?? '0';
+      const pathToken = tokens[index + 2] ?? '';
+      const nextToken = tokens[index + 3] ?? '';
+      let pathValue = pathToken;
+      let previousPathValue: string | undefined;
+
+      if (nextToken && !/^[A-Z?]/.test(nextToken)) {
+        previousPathValue = pathToken;
+        pathValue = nextToken;
+        index += 4;
+      } else {
+        index += 3;
+      }
+
+      const absolutePath = path.resolve(repoContext.repoRootPath, pathValue);
+      if (!isPathWithin(repoContext.rootPath, absolutePath)) {
+        continue;
+      }
+
+      const relativePath = path.relative(repoContext.rootPath, absolutePath).split(path.sep).join('/');
+      fileChanges.set(pathValue, {
+        path: absolutePath,
+        relativePath,
+        status: previousPathValue ? 'renamed' : 'modified',
+        additions: additionsRaw === '-' ? 0 : Number(additionsRaw) || 0,
+        deletions: deletionsRaw === '-' ? 0 : Number(deletionsRaw) || 0,
+        previousPath: previousPathValue
+          ? path.resolve(repoContext.repoRootPath, previousPathValue)
+          : undefined,
+      });
+      continue;
+    }
+
+    const statusToken = currentToken;
+    const statusCode = statusToken[0] ?? 'M';
+    const sourcePath = tokens[index + 1] ?? '';
+    let targetPath = sourcePath;
+    if (statusCode === 'R' || statusCode === 'C') {
+      targetPath = tokens[index + 2] ?? sourcePath;
+      index += 3;
+    } else {
+      index += 2;
+    }
+
+    const absolutePath = path.resolve(repoContext.repoRootPath, targetPath);
+    if (!isPathWithin(repoContext.rootPath, absolutePath)) {
+      continue;
+    }
+
+    const relativePath = path.relative(repoContext.rootPath, absolutePath).split(path.sep).join('/');
+    const existing = fileChanges.get(targetPath);
+    fileChanges.set(targetPath, {
+      path: absolutePath,
+      relativePath,
+      status: mapCommitFileStatus(statusCode),
+      additions: existing?.additions ?? 0,
+      deletions: existing?.deletions ?? 0,
+      previousPath: statusCode === 'R' || statusCode === 'C'
+        ? path.resolve(repoContext.repoRootPath, sourcePath)
+        : existing?.previousPath,
+    });
+  }
+
+  return Array.from(fileChanges.values()).sort((left, right) => (
+    left.relativePath.localeCompare(right.relativePath, undefined, { sensitivity: 'base' })
+  ));
+}
+
+function mapCommitFileStatus(statusCode: string): CodePaneGitCommitFileChange['status'] {
+  switch (statusCode) {
+    case 'A':
+      return 'added';
+    case 'D':
+      return 'deleted';
+    case 'R':
+      return 'renamed';
+    case 'C':
+      return 'copied';
+    case 'T':
+      return 'type-changed';
+    case 'M':
+    default:
+      return 'modified';
+  }
 }
 
 function parseBranchEntries(output: string, mergedBranchNames: Set<string>): CodePaneGitBranchEntry[] {

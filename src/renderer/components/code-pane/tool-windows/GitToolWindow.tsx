@@ -16,6 +16,9 @@ import {
 } from 'lucide-react';
 import type {
   CodePaneGitBranchEntry,
+  CodePaneGitCommitDetails,
+  CodePaneGitCommitFileChange,
+  CodePaneGitCompareCommitsResult,
   CodePaneGitGraphCommit,
   CodePaneGitRebasePlanEntry,
   CodePaneGitRebasePlanResult,
@@ -36,8 +39,13 @@ interface GitToolWindowProps {
   branchesError: string | null;
   isRebaseLoading: boolean;
   rebaseError: string | null;
+  selectedCommitDetails: CodePaneGitCommitDetails | null;
+  comparedCommits: CodePaneGitCompareCommitsResult | null;
+  selectedCommitOrder: string[];
+  isCommitDetailsLoading: boolean;
+  commitDetailsError: string | null;
   onSelectBranch: (branchName: string) => void;
-  onSelectCommit: (commitSha: string) => void;
+  onSelectCommit: (commitSha: string, event?: { metaKey?: boolean; ctrlKey?: boolean }) => void;
   onChangeRebaseBaseRef: (baseRef: string) => void;
   onRefresh: () => void | Promise<void>;
   onRefreshRebase: () => void | Promise<void>;
@@ -45,6 +53,14 @@ interface GitToolWindowProps {
   onRenameBranch: (branchName: string, nextBranchName: string) => void | Promise<void>;
   onDeleteBranch: (branchName: string, force?: boolean) => void | Promise<void>;
   onCherryPick: (commitSha: string) => void | Promise<void>;
+  onCompareSelectedCommits: () => void | Promise<void>;
+  onOpenCommitFileDiff: (config: {
+    filePath: string;
+    leftCommitSha?: string;
+    rightCommitSha?: string;
+    rightLabel?: string;
+    leftLabel?: string;
+  }) => void | Promise<void>;
   onApplyRebasePlan: (baseRef: string, entries: CodePaneGitRebasePlanEntry[]) => void | Promise<void>;
   onClose: () => void;
 }
@@ -97,6 +113,11 @@ export function GitToolWindow({
   branchesError,
   isRebaseLoading,
   rebaseError,
+  selectedCommitDetails,
+  comparedCommits,
+  selectedCommitOrder,
+  isCommitDetailsLoading,
+  commitDetailsError,
   onSelectBranch,
   onSelectCommit,
   onChangeRebaseBaseRef,
@@ -106,6 +127,8 @@ export function GitToolWindow({
   onRenameBranch,
   onDeleteBranch,
   onCherryPick,
+  onCompareSelectedCommits,
+  onOpenCommitFileDiff,
   onApplyRebasePlan,
   onClose,
 }: GitToolWindowProps) {
@@ -250,7 +273,9 @@ export function GitToolWindow({
             <CommitLogSection
               commits={commits}
               selectedCommitSha={selectedCommit?.sha ?? null}
+              selectedCommitOrder={selectedCommitOrder}
               onSelectCommit={onSelectCommit}
+              onCompareSelectedCommits={onCompareSelectedCommits}
               t={t}
             />
           ) : (
@@ -269,10 +294,16 @@ export function GitToolWindow({
             <GitWorkbenchDetails
               selectedBranch={selectedBranch}
               selectedCommit={selectedCommit}
+              selectedCommitDetails={selectedCommitDetails}
+              comparedCommits={comparedCommits}
+              selectedCommitOrder={selectedCommitOrder}
+              isCommitDetailsLoading={isCommitDetailsLoading}
+              commitDetailsError={commitDetailsError}
               onCheckoutBranch={onCheckoutBranch}
               onRenameBranch={onRenameBranch}
               onDeleteBranch={onDeleteBranch}
               onCherryPick={onCherryPick}
+              onOpenCommitFileDiff={onOpenCommitFileDiff}
               t={t}
             />
           ) : (
@@ -491,45 +522,72 @@ function BranchTreeRow({
 function CommitLogSection({
   commits,
   selectedCommitSha,
+  selectedCommitOrder,
   onSelectCommit,
+  onCompareSelectedCommits,
   t,
 }: {
   commits: CodePaneGitGraphCommit[];
   selectedCommitSha: string | null;
-  onSelectCommit: (commitSha: string) => void;
+  selectedCommitOrder: string[];
+  onSelectCommit: (commitSha: string, event?: { metaKey?: boolean; ctrlKey?: boolean }) => void;
+  onCompareSelectedCommits: () => void | Promise<void>;
   t: ReturnType<typeof useI18n>['t'];
 }) {
   const layout = useMemo(() => buildGitGraphLayout(commits), [commits]);
   const graphWidth = Math.max(layout.maxColumns, 1) * GRAPH_LANE_WIDTH;
   const gridTemplateColumns = `${graphWidth + 24}px minmax(0,1fr) 110px 138px`;
+  const selectedCommitSet = useMemo(() => new Set(selectedCommitOrder), [selectedCommitOrder]);
 
   return (
     <div className="flex h-full flex-col">
-      <div
-        className="grid gap-2 border-b border-zinc-800 px-3 py-2 text-[11px] font-medium text-zinc-500"
-        style={{ gridTemplateColumns }}
-      >
-        <span>{t('codePane.gitGraph')}</span>
-        <span>{t('codePane.gitCommit')}</span>
-        <span>{t('codePane.gitAuthor')}</span>
-        <span>{t('codePane.gitDate')}</span>
+      <div className="border-b border-zinc-800 px-3 py-2">
+        <div
+          className="grid gap-2 text-[11px] font-medium text-zinc-500"
+          style={{ gridTemplateColumns }}
+        >
+          <span>{t('codePane.gitGraph')}</span>
+          <span>{t('codePane.gitCommit')}</span>
+          <span>{t('codePane.gitAuthor')}</span>
+          <span>{t('codePane.gitDate')}</span>
+        </div>
+        {selectedCommitOrder.length > 1 && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded bg-zinc-900/70 px-2 py-1.5 text-[11px] text-zinc-400">
+            <span>{t('codePane.gitCompareSelectionCount', { count: selectedCommitOrder.length })}</span>
+            <button
+              type="button"
+              onClick={() => {
+                void onCompareSelectedCommits();
+              }}
+              className="rounded bg-zinc-800 px-2 py-1 text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            >
+              {t('codePane.gitCompareSelectedCommits')}
+            </button>
+          </div>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
         {layout.rows.length > 0 ? (
           <div className="space-y-0.5">
             {layout.rows.map((row) => {
               const isSelected = row.commit.sha === selectedCommitSha;
+              const isCompared = selectedCommitSet.has(row.commit.sha);
               const visibleRefs = row.commit.refs.slice(0, 3);
               return (
                 <button
                   key={row.commit.sha}
                   type="button"
-                  onClick={() => {
-                    onSelectCommit(row.commit.sha);
+                  onClick={(event) => {
+                    onSelectCommit(row.commit.sha, {
+                      metaKey: event.metaKey,
+                      ctrlKey: event.ctrlKey,
+                    });
                   }}
                   className={`grid w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${
                     isSelected
                       ? 'bg-sky-500/15 text-sky-100'
+                      : isCompared
+                        ? 'bg-amber-500/10 text-amber-100'
                       : 'text-zinc-300 hover:bg-zinc-900/80 hover:text-zinc-100'
                   }`}
                   style={{ gridTemplateColumns }}
@@ -539,6 +597,11 @@ function CommitLogSection({
                     <span className="min-w-0 flex-1 truncate text-zinc-100">
                       {row.commit.subject || row.commit.shortSha}
                     </span>
+                    {isCompared && (
+                      <span className="shrink-0 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] text-amber-200">
+                        {selectedCommitOrder.indexOf(row.commit.sha) + 1}
+                      </span>
+                    )}
                     {visibleRefs.map((ref) => (
                       <span
                         key={`${row.commit.sha}-${ref}`}
@@ -626,18 +689,36 @@ function GitCommitGraphCell({
 function GitWorkbenchDetails({
   selectedBranch,
   selectedCommit,
+  selectedCommitDetails,
+  comparedCommits,
+  selectedCommitOrder,
+  isCommitDetailsLoading,
+  commitDetailsError,
   onCheckoutBranch,
   onRenameBranch,
   onDeleteBranch,
   onCherryPick,
+  onOpenCommitFileDiff,
   t,
 }: {
   selectedBranch: CodePaneGitBranchEntry | null;
   selectedCommit: CodePaneGitGraphCommit | null;
+  selectedCommitDetails: CodePaneGitCommitDetails | null;
+  comparedCommits: CodePaneGitCompareCommitsResult | null;
+  selectedCommitOrder: string[];
+  isCommitDetailsLoading: boolean;
+  commitDetailsError: string | null;
   onCheckoutBranch: (config: { branchName: string; createBranch: boolean; startPoint?: string }) => void | Promise<void>;
   onRenameBranch: (branchName: string, nextBranchName: string) => void | Promise<void>;
   onDeleteBranch: (branchName: string, force?: boolean) => void | Promise<void>;
   onCherryPick: (commitSha: string) => void | Promise<void>;
+  onOpenCommitFileDiff: (config: {
+    filePath: string;
+    leftCommitSha?: string;
+    rightCommitSha?: string;
+    rightLabel?: string;
+    leftLabel?: string;
+  }) => void | Promise<void>;
   t: ReturnType<typeof useI18n>['t'];
 }) {
   return (
@@ -772,10 +853,108 @@ function GitWorkbenchDetails({
               ))}
             </div>
           )}
+          {selectedCommitDetails?.body && (
+            <div className="mt-3 whitespace-pre-wrap rounded bg-zinc-950/60 px-2 py-2 text-xs text-zinc-400">
+              {selectedCommitDetails.body}
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-xs text-zinc-500">{t('codePane.gitCommitGraphEmpty')}</div>
       )}
+
+      <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+            {comparedCommits ? t('codePane.gitCompareFiles') : t('codePane.gitCommitFiles')}
+          </div>
+          {selectedCommitOrder.length > 1 && (
+            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+              {selectedCommitOrder.map((sha) => sha.slice(0, 7)).join(' -> ')}
+            </span>
+          )}
+        </div>
+        {commitDetailsError ? (
+          <div className="text-xs text-red-300">{commitDetailsError}</div>
+        ) : isCommitDetailsLoading ? (
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <Loader2 size={12} className="animate-spin" />
+            {t('codePane.loading')}
+          </div>
+        ) : (
+          <CommitFileList
+            files={comparedCommits?.files ?? selectedCommitDetails?.files ?? []}
+            comparedCommits={comparedCommits}
+            selectedCommitDetails={selectedCommitDetails}
+            onOpenDiff={onOpenCommitFileDiff}
+            t={t}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CommitFileList({
+  files,
+  comparedCommits,
+  selectedCommitDetails,
+  onOpenDiff,
+  t,
+}: {
+  files: CodePaneGitCommitFileChange[];
+  comparedCommits: CodePaneGitCompareCommitsResult | null;
+  selectedCommitDetails: CodePaneGitCommitDetails | null;
+  onOpenDiff: (config: {
+    filePath: string;
+    leftCommitSha?: string;
+    rightCommitSha?: string;
+    rightLabel?: string;
+    leftLabel?: string;
+  }) => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  if (files.length === 0) {
+    return (
+      <div className="text-xs text-zinc-500">
+        {comparedCommits ? t('codePane.gitCompareFilesEmpty') : t('codePane.gitCommitFilesEmpty')}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {files.map((file) => (
+        <button
+          key={`${file.path}:${file.previousPath ?? ''}`}
+          type="button"
+          onDoubleClick={() => {
+            void onOpenDiff({
+              filePath: file.path,
+              leftCommitSha: comparedCommits?.baseCommitSha,
+              rightCommitSha: comparedCommits?.targetCommitSha ?? selectedCommitDetails?.commitSha,
+              leftLabel: comparedCommits?.baseCommitSha.slice(0, 7),
+              rightLabel: (comparedCommits?.targetCommitSha ?? selectedCommitDetails?.commitSha)?.slice(0, 7),
+            });
+          }}
+          className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-950/70 hover:text-zinc-100"
+        >
+          <span className={`mt-0.5 shrink-0 rounded px-1 py-0.5 text-[10px] ${getCommitFileStatusClassName(file.status)}`}>
+            {getCommitFileStatusLabel(file.status)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-zinc-100">{file.relativePath}</div>
+            {file.previousPath && (
+              <div className="mt-0.5 truncate text-[10px] text-zinc-500">
+                {t('codePane.gitComparePreviousPath')}: {file.previousPath}
+              </div>
+            )}
+          </div>
+          <div className="shrink-0 text-[10px] text-zinc-500">
+            +{file.additions} -{file.deletions}
+          </div>
+        </button>
+      ))}
     </div>
   );
 }
@@ -1074,6 +1253,41 @@ function getRefClassName(ref: string): string {
   }
 
   return 'bg-zinc-800 text-zinc-300';
+}
+
+function getCommitFileStatusLabel(status: CodePaneGitCommitFileChange['status']): string {
+  switch (status) {
+    case 'added':
+      return 'A';
+    case 'deleted':
+      return 'D';
+    case 'renamed':
+      return 'R';
+    case 'copied':
+      return 'C';
+    case 'type-changed':
+      return 'T';
+    case 'modified':
+    default:
+      return 'M';
+  }
+}
+
+function getCommitFileStatusClassName(status: CodePaneGitCommitFileChange['status']): string {
+  switch (status) {
+    case 'added':
+      return 'bg-emerald-500/15 text-emerald-200';
+    case 'deleted':
+      return 'bg-red-500/15 text-red-200';
+    case 'renamed':
+    case 'copied':
+      return 'bg-sky-500/15 text-sky-200';
+    case 'type-changed':
+      return 'bg-amber-500/15 text-amber-200';
+    case 'modified':
+    default:
+      return 'bg-zinc-800 text-zinc-300';
+  }
 }
 
 function formatTimestamp(timestamp: number): string {

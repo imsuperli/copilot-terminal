@@ -648,6 +648,8 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitGraph).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetGitCommitDetails).mockReset();
+    vi.mocked(window.electronAPI.codePaneCompareGitCommits).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitDiffHunks).mockReset();
     vi.mocked(window.electronAPI.codePaneGitStage).mockReset();
     vi.mocked(window.electronAPI.codePaneGitUnstage).mockReset();
@@ -671,6 +673,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGitHistory).mockReset();
     vi.mocked(window.electronAPI.codePaneGitBlame).mockReset();
     vi.mocked(window.electronAPI.codePaneReadGitBaseFile).mockReset();
+    vi.mocked(window.electronAPI.codePaneReadGitRevisionFile).mockReset();
     vi.mocked(window.electronAPI.codePaneWatchRoot).mockReset();
     vi.mocked(window.electronAPI.codePaneUnwatchRoot).mockReset();
     vi.mocked(window.electronAPI.codePaneSearchFiles).mockReset();
@@ -800,6 +803,27 @@ describe('CodePane', () => {
       success: true,
       data: [],
     });
+    vi.mocked(window.electronAPI.codePaneGetGitCommitDetails).mockResolvedValue({
+      success: true,
+      data: {
+        commitSha: 'abcdef1234567890',
+        shortSha: 'abcdef1',
+        subject: 'Commit summary',
+        author: 'Test User',
+        email: 'test@example.com',
+        timestamp: 1_710_000_000,
+        refs: [],
+        files: [],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneCompareGitCommits).mockResolvedValue({
+      success: true,
+      data: {
+        baseCommitSha: 'abcdef1234567890',
+        targetCommitSha: '1234567890abcdef',
+        files: [],
+      },
+    });
     vi.mocked(window.electronAPI.codePaneGetGitDiffHunks).mockResolvedValue({
       success: true,
       data: {
@@ -865,6 +889,13 @@ describe('CodePane', () => {
       data: {
         content: 'export const value = 0;\n',
         existsInHead: true,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneReadGitRevisionFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 0;\n',
+        exists: true,
       },
     });
     vi.mocked(window.electronAPI.codePaneWatchRoot).mockResolvedValue({ success: true });
@@ -1099,7 +1130,7 @@ describe('CodePane', () => {
 
     renderCodePane(createPane());
 
-    expect(await screen.findByRole('button', { name: 'index.ts' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'index.ts' }, { timeout: 3000 })).toBeInTheDocument();
 
     await act(async () => {
       resolveMonaco?.(fakeMonaco);
@@ -3294,6 +3325,192 @@ describe('CodePane', () => {
     expect((await screen.findAllByText('codePane.gitBranchManager')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Feature commit 2').length).toBeGreaterThan(0);
     expect(screen.getAllByText('feature/workbench').length).toBeGreaterThan(0);
+  });
+
+  it('renders the current branch in the editor header', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/workbench',
+        upstreamBranch: 'origin/main',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 1,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'feature/workbench',
+          refName: 'refs/heads/feature/workbench',
+          shortName: 'feature/workbench',
+          kind: 'local',
+          current: true,
+          upstream: 'origin/main',
+          aheadCount: 1,
+          behindCount: 0,
+          commitSha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          subject: 'Feature commit',
+          timestamp: 1_710_000_100,
+          mergedIntoCurrent: false,
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    const branchButtons = await screen.findAllByRole('button', { name: 'codePane.gitBranchManager' });
+    expect(branchButtons.length).toBeGreaterThan(0);
+    expect(branchButtons[0]).toHaveTextContent('codePane.gitDetachedHead');
+
+  });
+
+  it('compares selected commits in click order and opens revision diff from the git workbench', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/workbench',
+        upstreamBranch: 'origin/main',
+        detachedHead: false,
+        headSha: '2222222222222222',
+        aheadCount: 2,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'feature/workbench',
+          refName: 'refs/heads/feature/workbench',
+          shortName: 'feature/workbench',
+          kind: 'local',
+          current: true,
+          upstream: 'origin/main',
+          aheadCount: 2,
+          behindCount: 0,
+          commitSha: '2222222222222222',
+          shortSha: '2222222',
+          subject: 'Feature head',
+          timestamp: 1_710_000_200,
+          mergedIntoCurrent: false,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitGraph).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          sha: '2222222222222222',
+          shortSha: '2222222',
+          parents: ['1111111111111111'],
+          subject: 'Feature head',
+          author: 'Test User',
+          timestamp: 1_710_000_200,
+          refs: ['HEAD -> feature/workbench'],
+          isHead: true,
+          isMergeCommit: false,
+          lane: 0,
+          laneCount: 1,
+        },
+        {
+          sha: '1111111111111111',
+          shortSha: '1111111',
+          parents: [],
+          subject: 'Base commit',
+          author: 'Test User',
+          timestamp: 1_710_000_000,
+          refs: ['main'],
+          isHead: false,
+          isMergeCommit: false,
+          lane: 0,
+          laneCount: 1,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneCompareGitCommits).mockResolvedValue({
+      success: true,
+      data: {
+        baseCommitSha: '1111111111111111',
+        targetCommitSha: '2222222222222222',
+        files: [
+          {
+            path: '/workspace/project/src/index.ts',
+            relativePath: 'src/index.ts',
+            status: 'modified',
+            additions: 3,
+            deletions: 1,
+          },
+        ],
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneReadGitRevisionFile)
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: 'export const value = 0;\n',
+          exists: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          content: 'export const value = 2;\n',
+          exists: true,
+        },
+      });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitWorkbenchTab' }));
+    });
+
+    const baseCommitButton = await screen.findByRole('button', { name: /Base commit/i });
+    const headCommitButton = await screen.findByRole('button', { name: /Feature head/i });
+
+    await act(async () => {
+      fireEvent.click(baseCommitButton);
+    });
+
+    await act(async () => {
+      fireEvent.click(headCommitButton, { ctrlKey: true });
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneCompareGitCommits).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        baseCommitSha: '1111111111111111',
+        targetCommitSha: '2222222222222222',
+      });
+    });
+
+    const diffRow = await screen.findByText('src/index.ts');
+    await act(async () => {
+      fireEvent.doubleClick(diffRow);
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadGitRevisionFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        commitSha: '1111111111111111',
+      });
+      expect(window.electronAPI.codePaneReadGitRevisionFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        commitSha: '2222222222222222',
+      });
+    });
   });
 
   it('applies a git rebase plan from the bottom workbench', async () => {

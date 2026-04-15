@@ -60,6 +60,9 @@ import type {
   CodePaneExternalLibrarySection,
   CodePaneGitDiffHunk,
   CodePaneGitBranchEntry,
+  CodePaneGitCommitDetails,
+  CodePaneGitCommitFileChange,
+  CodePaneGitCompareCommitsResult,
   CodePaneGitGraphCommit,
   CodePaneGitBlameLine,
   CodePaneGitConflictDetails,
@@ -327,6 +330,22 @@ type ToolWindowLauncher = {
 type SaveFileOptions = {
   overwrite?: boolean;
   skipQualityPipeline?: boolean;
+};
+
+type GitRevisionDiffRequest = {
+  filePath: string;
+  leftCommitSha?: string;
+  rightCommitSha?: string;
+  leftLabel?: string;
+  rightLabel?: string;
+};
+
+type GitBranchActionMenuItem = {
+  id: string;
+  label: string;
+  disabled?: boolean;
+  tone?: 'danger';
+  onSelect: () => void;
 };
 
 const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
@@ -1302,6 +1321,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const diffEditorRef = useRef<MonacoDiffEditor | null>(null);
   const fileModelsRef = useRef(new Map<string, MonacoModel>());
   const diffModelsRef = useRef(new Map<string, MonacoModel>());
+  const revisionModifiedModelsRef = useRef(new Map<string, MonacoModel>());
+  const revisionDiffFilePathRef = useRef<string | null>(null);
+  const pendingGitRevisionDiffRef = useRef<GitRevisionDiffRequest | null>(null);
   const modelDisposersRef = useRef(new Map<string, MonacoDisposable>());
   const fileMetaRef = useRef(new Map<string, FileRuntimeMeta>());
   const modelFilePathRef = useRef(new Map<string, string>());
@@ -1438,6 +1460,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [gitBranches, setGitBranches] = useState<CodePaneGitBranchEntry[]>([]);
   const [selectedGitBranchName, setSelectedGitBranchName] = useState<string | null>(null);
   const [selectedGitLogCommitSha, setSelectedGitLogCommitSha] = useState<string | null>(null);
+  const [selectedGitCommitOrder, setSelectedGitCommitOrder] = useState<string[]>([]);
+  const [selectedGitCommitDetails, setSelectedGitCommitDetails] = useState<CodePaneGitCommitDetails | null>(null);
+  const [comparedGitCommits, setComparedGitCommits] = useState<CodePaneGitCompareCommitsResult | null>(null);
+  const [isGitCommitDetailsLoading, setIsGitCommitDetailsLoading] = useState(false);
+  const [gitCommitDetailsError, setGitCommitDetailsError] = useState<string | null>(null);
   const [isGitBranchesLoading, setIsGitBranchesLoading] = useState(false);
   const [gitBranchesError, setGitBranchesError] = useState<string | null>(null);
   const [gitRebasePlan, setGitRebasePlan] = useState<CodePaneGitRebasePlanResult | null>(null);
@@ -1462,6 +1489,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [selectedHistoryCommitSha, setSelectedHistoryCommitSha] = useState<string | null>(null);
   const [isGitHistoryLoading, setIsGitHistoryLoading] = useState(false);
   const [gitHistoryError, setGitHistoryError] = useState<string | null>(null);
+  const [pendingGitRevisionDiff, setPendingGitRevisionDiff] = useState<GitRevisionDiffRequest | null>(null);
   const [todoItems, setTodoItems] = useState<CodePaneTodoItem[]>([]);
   const [isTodoLoading, setIsTodoLoading] = useState(false);
   const [todoError, setTodoError] = useState<string | null>(null);
@@ -1655,6 +1683,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     secondaryFilePathRef.current = secondaryFilePath;
   }, [secondaryFilePath]);
+
+  useEffect(() => {
+    revisionDiffFilePathRef.current = pendingGitRevisionDiff?.filePath ?? null;
+    pendingGitRevisionDiffRef.current = pendingGitRevisionDiff;
+  }, [pendingGitRevisionDiff]);
 
   useEffect(() => {
     bottomPanelHeightRef.current = bottomPanelHeight;
@@ -2025,6 +2058,59 @@ export const CodePane: React.FC<CodePaneProps> = ({
       throw error;
     }
   }, []);
+
+  const loadSelectedGitCommitDetails = useCallback(async (commitSha: string) => {
+    setIsGitCommitDetailsLoading(true);
+    setGitCommitDetailsError(null);
+    try {
+      const response = await trackRequest(
+        `git-commit-details:${rootPath}`,
+        'Git commit details',
+        commitSha.slice(0, 7),
+        async () => await window.electronAPI.codePaneGetGitCommitDetails({
+          rootPath,
+          commitSha,
+        }),
+      );
+      if (!response.success || !response.data) {
+        throw new Error(response.error || t('common.retry'));
+      }
+      setSelectedGitCommitDetails(response.data);
+      setComparedGitCommits(null);
+    } catch (error) {
+      setGitCommitDetailsError(error instanceof Error ? error.message : t('common.retry'));
+      setSelectedGitCommitDetails(null);
+    } finally {
+      setIsGitCommitDetailsLoading(false);
+    }
+  }, [rootPath, t, trackRequest]);
+
+  const compareSelectedGitCommits = useCallback(async (baseCommitSha: string, targetCommitSha: string) => {
+    setIsGitCommitDetailsLoading(true);
+    setGitCommitDetailsError(null);
+    try {
+      const response = await trackRequest(
+        `git-compare:${rootPath}`,
+        'Git compare commits',
+        `${baseCommitSha.slice(0, 7)}..${targetCommitSha.slice(0, 7)}`,
+        async () => await window.electronAPI.codePaneCompareGitCommits({
+          rootPath,
+          baseCommitSha,
+          targetCommitSha,
+        }),
+      );
+      if (!response.success || !response.data) {
+        throw new Error(response.error || t('common.retry'));
+      }
+      setComparedGitCommits(response.data);
+      setSelectedGitCommitDetails(null);
+    } catch (error) {
+      setGitCommitDetailsError(error instanceof Error ? error.message : t('common.retry'));
+      setComparedGitCommits(null);
+    } finally {
+      setIsGitCommitDetailsLoading(false);
+    }
+  }, [rootPath, t, trackRequest]);
 
   const loadExceptionBreakpoints = useCallback(async () => {
     const persistedExceptionBreakpoints = paneRef.current.code?.debug?.exceptionBreakpoints;
@@ -2724,6 +2810,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       model.dispose();
     }
     diffModelsRef.current.clear();
+    for (const model of revisionModifiedModelsRef.current.values()) {
+      model.dispose();
+    }
+    revisionModifiedModelsRef.current.clear();
+    revisionDiffFilePathRef.current = null;
 
     fileMetaRef.current.clear();
     preloadedReadResultsRef.current.clear();
@@ -2920,6 +3011,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
     setIsGitBranchesLoading(false);
   }, [rootPath, t]);
+
+  const selectGitLogCommit = useCallback((commitSha: string, event?: { metaKey?: boolean; ctrlKey?: boolean }) => {
+    setSelectedGitLogCommitSha(commitSha);
+
+    if (event?.metaKey || event?.ctrlKey) {
+      setSelectedGitCommitOrder((currentOrder) => {
+        if (currentOrder.includes(commitSha)) {
+          return currentOrder.filter((candidateSha) => candidateSha !== commitSha);
+        }
+
+        return [...currentOrder, commitSha].slice(-2);
+      });
+      return;
+    }
+
+    setSelectedGitCommitOrder([commitSha]);
+  }, []);
 
   const handleSelectGitBranch = useCallback((branchName: string) => {
     setSelectedGitBranchName(branchName);
@@ -3732,6 +3840,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
         disposeEditors();
         return;
       }
+      const revisionRequest = pendingGitRevisionDiffRef.current;
+      const modifiedRevisionModel = revisionModifiedModelsRef.current.get(currentActiveFilePath);
+      const modifiedModel = revisionRequest?.filePath === currentActiveFilePath
+        ? modifiedRevisionModel
+        : model;
+      if (!modifiedModel) {
+        disposeEditors();
+        return;
+      }
 
       secondaryEditorMouseDownListenerRef.current?.dispose();
       secondaryEditorMouseDownListenerRef.current = null;
@@ -3775,10 +3892,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       diffEditorRef.current.setModel({
         original: diffModel,
-        modified: model,
+        modified: modifiedModel,
       });
       diffEditorRef.current.getModifiedEditor().updateOptions?.({
-        readOnly: isReadOnlyFile,
+        readOnly: revisionRequest?.filePath === currentActiveFilePath ? true : isReadOnlyFile,
         ...editorInlayHintOptions,
       });
       applyDebugDecorations(diffEditorRef.current.getModifiedEditor(), currentActiveFilePath);
@@ -4846,6 +4963,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       promote: options?.promotePreview,
     });
 
+    setPendingGitRevisionDiff(null);
     persistCodeState({
       openFiles: nextTabs,
       activeFilePath: filePath,
@@ -4952,6 +5070,148 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return true;
   }, [clearBannerForFile, ensureMonacoReady, gitStatusByPath, rootPath, supportsMonaco, t]);
 
+  const ensureRevisionDiffModel = useCallback(async (
+    request: GitRevisionDiffRequest,
+    options?: {
+      showBanner?: boolean;
+    },
+  ) => {
+    if (!monacoRef.current && supportsMonaco) {
+      const monaco = await ensureMonacoReady();
+      if (!monaco) {
+        if (options?.showBanner !== false) {
+          setBanner({
+            tone: 'info',
+            message: t('codePane.gitUnavailable'),
+            filePath: request.filePath,
+          });
+        }
+        return false;
+      }
+    }
+
+    if (!monacoRef.current) {
+      if (options?.showBanner !== false) {
+        setBanner({
+          tone: 'info',
+          message: t('codePane.gitUnavailable'),
+          filePath: request.filePath,
+        });
+      }
+      return false;
+    }
+
+    const leftCommitSha = request.leftCommitSha?.trim();
+    const rightCommitSha = request.rightCommitSha?.trim();
+    if (!leftCommitSha && !rightCommitSha) {
+      return ensureDiffModel(request.filePath, {
+        showBanner: options?.showBanner,
+      });
+    }
+
+    const activeFile = request.filePath;
+    const workspaceModel = fileModelsRef.current.get(activeFile);
+    const language = fileMetaRef.current.get(activeFile)?.language
+      ?? workspaceModel?.getLanguageId()
+      ?? 'plaintext';
+
+    const [leftRevisionResponse, rightRevisionResponse] = await Promise.all([
+      leftCommitSha
+        ? window.electronAPI.codePaneReadGitRevisionFile({
+          rootPath,
+          filePath: activeFile,
+          commitSha: leftCommitSha,
+        })
+        : Promise.resolve({
+          success: true,
+          data: {
+            content: '',
+            exists: false,
+          },
+        }),
+      rightCommitSha
+        ? window.electronAPI.codePaneReadGitRevisionFile({
+          rootPath,
+          filePath: activeFile,
+          commitSha: rightCommitSha,
+        })
+        : Promise.resolve({
+          success: true,
+          data: {
+            content: '',
+            exists: false,
+          },
+        }),
+    ]);
+
+    if (!leftRevisionResponse.success || !rightRevisionResponse.success) {
+      const leftError = 'error' in leftRevisionResponse ? leftRevisionResponse.error : undefined;
+      const rightError = 'error' in rightRevisionResponse ? rightRevisionResponse.error : undefined;
+      if (options?.showBanner !== false) {
+        setBanner({
+          tone: 'info',
+          message: leftError || rightError || t('codePane.gitUnavailable'),
+          filePath: activeFile,
+        });
+      }
+      return false;
+    }
+
+    const leftContent = leftRevisionResponse.data?.content ?? '';
+    const rightContent = rightRevisionResponse.data?.content ?? '';
+    const modelKey = activeFile;
+    const monaco = monacoRef.current;
+    if (!monaco) {
+      return false;
+    }
+
+    let diffModel = diffModelsRef.current.get(modelKey);
+    let modifiedRevisionModel = revisionModifiedModelsRef.current.get(modelKey);
+    const leftLabel = request.leftLabel ?? leftCommitSha?.slice(0, 7) ?? 'left';
+    const rightLabel = request.rightLabel ?? rightCommitSha?.slice(0, 7) ?? 'right';
+    const originalUri = monaco.Uri.parse(
+      `code-pane-git://${encodeURIComponent(activeFile)}?left=${encodeURIComponent(leftLabel)}&right=${encodeURIComponent(rightLabel)}`,
+    );
+    const modifiedUri = monaco.Uri.parse(
+      `code-pane-git-modified://${encodeURIComponent(activeFile)}?left=${encodeURIComponent(leftLabel)}&right=${encodeURIComponent(rightLabel)}`,
+    );
+
+    if (!diffModel) {
+      diffModel = monaco.editor.createModel(leftContent, language, originalUri);
+      diffModelsRef.current.set(modelKey, diffModel);
+    } else {
+      if (diffModel.getLanguageId() !== language) {
+        monaco.editor.setModelLanguage(diffModel, language);
+      }
+      if (diffModel.uri.toString() !== originalUri.toString()) {
+        diffModel.dispose();
+        diffModel = monaco.editor.createModel(leftContent, language, originalUri);
+        diffModelsRef.current.set(modelKey, diffModel);
+      } else if (diffModel.getValue() !== leftContent) {
+        diffModel.setValue(leftContent);
+      }
+    }
+
+    if (!modifiedRevisionModel) {
+      modifiedRevisionModel = monaco.editor.createModel(rightContent, language, modifiedUri);
+      revisionModifiedModelsRef.current.set(modelKey, modifiedRevisionModel);
+    } else {
+      if (modifiedRevisionModel.getLanguageId() !== language) {
+        monaco.editor.setModelLanguage(modifiedRevisionModel, language);
+      }
+      if (modifiedRevisionModel.uri.toString() !== modifiedUri.toString()) {
+        modifiedRevisionModel.dispose();
+        modifiedRevisionModel = monaco.editor.createModel(rightContent, language, modifiedUri);
+        revisionModifiedModelsRef.current.set(modelKey, modifiedRevisionModel);
+      } else if (modifiedRevisionModel.getValue() !== rightContent) {
+        modifiedRevisionModel.setValue(rightContent);
+      }
+    }
+
+    clearBannerForFile(activeFile);
+    return true;
+  }, [clearBannerForFile, ensureDiffModel, ensureMonacoReady, rootPath, supportsMonaco, t]);
+
   const openDiffForFile = useCallback(async (filePath: string, options?: { preserveTabs?: boolean }) => {
     if (!isPathInside(rootPath, filePath)) {
       setBanner({
@@ -4972,6 +5232,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const didEnsureDiffModel = await ensureDiffModel(filePath);
     if (!didEnsureDiffModel) {
+      setPendingGitRevisionDiff(null);
       return;
     }
 
@@ -4990,6 +5251,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
     await refreshEditorSurface();
   }, [ensureDiffModel, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, rootPath, t]);
+
+  const openGitRevisionDiff = useCallback(async (request: GitRevisionDiffRequest) => {
+    setPendingGitRevisionDiff(request);
+    const didEnsureRevisionDiffModel = await ensureRevisionDiffModel(request);
+    if (!didEnsureRevisionDiffModel) {
+      setPendingGitRevisionDiff(null);
+      return;
+    }
+
+    const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
+    const nextTabs = upsertOpenFileTab(currentOpenFiles, request.filePath, {
+      promote: true,
+    });
+
+    persistCodeState({
+      openFiles: nextTabs,
+      activeFilePath: request.filePath,
+      selectedPath: request.filePath,
+      viewMode: 'diff',
+      diffTargetPath: request.filePath,
+    });
+    setBanner(null);
+    await refreshEditorSurface();
+  }, [ensureRevisionDiffModel, openFiles, persistCodeState, refreshEditorSurface]);
 
   const closeFileTab = useCallback(async (filePath: string) => {
     const didFlush = await flushDirtyFiles([filePath]);
@@ -5236,6 +5521,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (!filePath) {
       return;
     }
+    setPendingGitRevisionDiff(null);
     await openDiffForFile(filePath, { preserveTabs: true });
   }, [openDiffForFile]);
 
@@ -5496,6 +5782,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
       await loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
     }
   }, [gitRebaseBaseRef, loadGitBranches, rootPath, runGitOperation, t]);
+
+  const pushGitBranch = useCallback(async (config?: { remote?: string; branchName?: string; setUpstream?: boolean }) => {
+    const response = await window.electronAPI.codePaneGitPush({
+      rootPath,
+      remote: config?.remote,
+      branchName: config?.branchName,
+      setUpstream: config?.setUpstream,
+    });
+    if (!response.success) {
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    await refreshGitSnapshot({ includeGraph: true, force: true });
+    await loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+    setBanner({
+      tone: 'info',
+      message: t('codePane.gitPushSuccess'),
+    });
+  }, [gitRebaseBaseRef, loadGitBranches, refreshGitSnapshot, rootPath, t]);
 
   const controlGitRebase = useCallback(async (action: 'continue' | 'abort') => {
     const didControl = await runGitOperation(
@@ -6083,6 +6392,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setGitBranches([]);
       setSelectedGitBranchName(null);
       setSelectedGitLogCommitSha(null);
+      setSelectedGitCommitOrder([]);
+      setSelectedGitCommitDetails(null);
+      setComparedGitCommits(null);
+      setIsGitCommitDetailsLoading(false);
+      setGitCommitDetailsError(null);
       setIsGitBranchesLoading(false);
       setGitBranchesError(null);
       setGitRebasePlan(null);
@@ -6097,6 +6411,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setRunSessions([]);
       setRunSessionOutputs({});
       setSelectedRunSessionId(null);
+      setPendingGitRevisionDiff(null);
       recentFilesRef.current = [];
       recentLocationsRef.current = [];
       navigationBackStackRef.current = [];
@@ -6272,6 +6587,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [isSidebarVisible, refreshGitSnapshot, sidebarMode]);
 
   useEffect(() => {
+    const normalizedSelectedOrder = selectedGitCommitOrder.filter((commitSha) => (
+      gitGraph.some((commit) => commit.sha === commitSha)
+    ));
+    if (normalizedSelectedOrder.length !== selectedGitCommitOrder.length) {
+      setSelectedGitCommitOrder(normalizedSelectedOrder);
+      return;
+    }
+
+    if (normalizedSelectedOrder.length >= 2) {
+      void compareSelectedGitCommits(normalizedSelectedOrder[0]!, normalizedSelectedOrder[1]!);
+      return;
+    }
+
+    const commitShaToLoad = normalizedSelectedOrder[0] ?? selectedGitLogCommitSha;
+    if (!commitShaToLoad) {
+      setSelectedGitCommitDetails(null);
+      setComparedGitCommits(null);
+      setGitCommitDetailsError(null);
+      setIsGitCommitDetailsLoading(false);
+      return;
+    }
+
+    void loadSelectedGitCommitDetails(commitShaToLoad);
+  }, [
+    compareSelectedGitCommits,
+    gitGraph,
+    loadSelectedGitCommitDetails,
+    selectedGitCommitOrder,
+    selectedGitLogCommitSha,
+  ]);
+
+  useEffect(() => {
     if (!activeFilePath) {
       void refreshEditorSurface();
       return;
@@ -6287,10 +6634,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       if (currentViewMode === 'diff') {
-        const didEnsureDiffModel = await ensureDiffModel(activeFilePath, {
-          baseFilePath: currentDiffTargetPath,
-          showBanner: false,
-        });
+        const pendingRevisionRequest = pendingGitRevisionDiff;
+        const didEnsureDiffModel = pendingRevisionRequest && pendingRevisionRequest.filePath === activeFilePath
+          ? await ensureRevisionDiffModel(pendingRevisionRequest, {
+            showBanner: false,
+          })
+          : await ensureDiffModel(activeFilePath, {
+            baseFilePath: currentDiffTargetPath,
+            showBanner: false,
+          });
         if (!didEnsureDiffModel) {
           persistCodeState({
             viewMode: 'editor',
@@ -6311,8 +6663,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     activeFilePath,
     diffTargetPath,
     ensureDiffModel,
+    ensureRevisionDiffModel,
     isEditorSplitVisible,
     loadFileIntoModel,
+    pendingGitRevisionDiff,
     persistCodeState,
     refreshEditorSurface,
     secondaryFilePath,
@@ -6709,6 +7063,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const activeTabStatus = activeFilePath ? getEntryStatus(activeFilePath, 'file') : undefined;
   const activeFileReadOnly = activeFilePath ? Boolean(fileMetaRef.current.get(activeFilePath)?.readOnly) : false;
   const activeFileDisplayPath = activeFilePath ? getDisplayPath(activeFilePath) : null;
+  const currentGitBranch = useMemo(() => (
+    gitBranches.find((branch) => branch.current)
+    ?? gitBranches.find((branch) => branch.name === gitRepositorySummary?.currentBranch)
+    ?? null
+  ), [gitBranches, gitRepositorySummary?.currentBranch]);
   const indexStatusText = indexStatus?.state === 'building'
     ? t('codePane.indexingProgress', {
       processed: indexStatus.processedDirectoryCount,
@@ -7364,39 +7723,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return t('codePane.gitDetachedHead');
   }, [gitRepositorySummary, t]);
 
-  const gitBranchCopyValue = useMemo(
-    () => gitRepositorySummary?.currentBranch ?? gitRepositorySummary?.headSha ?? '',
-    [gitRepositorySummary],
-  );
-
-  const gitStatusChip = useMemo(() => {
-    if (!gitRepositorySummary) {
-      return null;
-    }
-
-    if (gitRepositorySummary.hasConflicts) {
-      return {
-        className: 'bg-red-500/15 text-red-300',
-        text: `${gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')} · ${t('codePane.gitConflictsActive')}`,
-      };
-    }
-
-    if (gitRepositorySummary.operation !== 'idle') {
-      return {
-        className: 'bg-amber-500/15 text-amber-300',
-        text: `${gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')} · ${gitOperationLabel}`,
-      };
-    }
-
-    const aheadBehindText = gitRepositorySummary.aheadCount > 0 || gitRepositorySummary.behindCount > 0
-      ? ` ↑${gitRepositorySummary.aheadCount} ↓${gitRepositorySummary.behindCount}`
-      : '';
-
-    return {
-      className: 'bg-emerald-500/15 text-emerald-300',
-      text: `${gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}${aheadBehindText}`,
-    };
-  }, [gitOperationLabel, gitRepositorySummary, gitSummaryBranchLabel, t]);
   const activeBlameEntry = useMemo(() => (
     blameLines.find((entry) => entry.lineNumber === activeCursorLineNumber)
     ?? blameLines[0]
@@ -9578,8 +9904,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
             branchesError={gitBranchesError}
             isRebaseLoading={isGitRebaseLoading}
             rebaseError={gitRebaseError}
+            selectedCommitDetails={selectedGitCommitDetails}
+            comparedCommits={comparedGitCommits}
+            selectedCommitOrder={selectedGitCommitOrder}
+            isCommitDetailsLoading={isGitCommitDetailsLoading}
+            commitDetailsError={gitCommitDetailsError}
             onSelectBranch={handleSelectGitBranch}
-            onSelectCommit={setSelectedGitLogCommitSha}
+            onSelectCommit={selectGitLogCommit}
             onChangeRebaseBaseRef={setGitRebaseBaseRef}
             onRefresh={refreshBottomPanel}
             onRefreshRebase={() => {
@@ -9589,6 +9920,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
             onRenameBranch={renameGitBranch}
             onDeleteBranch={deleteGitBranch}
             onCherryPick={cherryPickCommit}
+            onCompareSelectedCommits={() => {
+              if (selectedGitCommitOrder.length >= 2) {
+                void compareSelectedGitCommits(selectedGitCommitOrder[0]!, selectedGitCommitOrder[1]!);
+              }
+            }}
+            onOpenCommitFileDiff={(config) => {
+              void openGitRevisionDiff({
+                filePath: config.filePath,
+                leftCommitSha: config.leftCommitSha,
+                rightCommitSha: config.rightCommitSha,
+                leftLabel: config.leftLabel,
+                rightLabel: config.rightLabel,
+              });
+            }}
             onApplyRebasePlan={applyGitRebasePlan}
             onClose={() => {
               setBottomPanelMode(null);
@@ -9794,6 +10139,103 @@ export const CodePane: React.FC<CodePaneProps> = ({
     toggleBookmarkAtCursor,
   ]);
 
+  const branchActionMenuSections = useMemo<GitBranchActionMenuItem[][]>(() => {
+    const localBranches = gitBranches.filter((branch) => branch.kind === 'local');
+    const remoteBranches = gitBranches.filter((branch) => branch.kind === 'remote');
+    const currentBranchName = currentGitBranch?.name ?? gitRepositorySummary?.currentBranch ?? '';
+
+    return [
+      [
+        {
+          id: 'git-workbench',
+          label: t('codePane.gitOpenWorkbench'),
+          onSelect: () => {
+            setBottomPanelMode('git');
+          },
+        },
+        {
+          id: 'source-control',
+          label: t('codePane.sourceControl'),
+          onSelect: () => {
+            handleSidebarModeSelect('scm');
+          },
+        },
+      ],
+      [
+        {
+          id: 'create-branch',
+          label: t('codePane.gitCreateBranch'),
+          onSelect: () => {
+            const nextBranchName = window.prompt(t('codePane.gitCheckoutPlaceholder'), '');
+            if (!nextBranchName?.trim()) {
+              return;
+            }
+
+            void checkoutGitBranch({
+              branchName: nextBranchName.trim(),
+              createBranch: true,
+              startPoint: currentBranchName || undefined,
+            });
+          },
+        },
+        {
+          id: 'commit',
+          label: t('codePane.gitCommit'),
+          onSelect: () => {
+            handleSidebarModeSelect('scm');
+          },
+        },
+        {
+          id: 'push',
+          label: t('codePane.gitPush'),
+          disabled: !currentBranchName,
+          onSelect: () => {
+            void pushGitBranch({
+              branchName: currentBranchName || undefined,
+              setUpstream: !currentGitBranch?.upstream,
+            });
+          },
+        },
+      ],
+      [
+        ...localBranches
+          .filter((branch) => !branch.current)
+          .slice(0, 12)
+          .map((branch) => ({
+            id: `local-${branch.name}`,
+            label: `${t('codePane.gitCheckout')} ${branch.name}`,
+            onSelect: () => {
+              void checkoutGitBranch({
+                branchName: branch.name,
+                createBranch: false,
+              });
+            },
+          })),
+        ...remoteBranches.slice(0, 12).map((branch) => ({
+          id: `remote-${branch.name}`,
+          label: `${t('codePane.gitCreateTrackingBranch')} ${branch.name}`,
+          onSelect: () => {
+            const suggestedBranchName = branch.name.split('/').slice(1).join('/') || branch.name;
+            void checkoutGitBranch({
+              branchName: suggestedBranchName,
+              createBranch: true,
+              startPoint: branch.name,
+            });
+          },
+        })),
+      ],
+    ].filter((section) => section.length > 0);
+  }, [
+    checkoutGitBranch,
+    currentGitBranch?.name,
+    currentGitBranch?.upstream,
+    gitBranches,
+    gitRepositorySummary?.currentBranch,
+    handleSidebarModeSelect,
+    pushGitBranch,
+    t,
+  ]);
+
   return (
     <>
       <style>
@@ -9850,7 +10292,65 @@ export const CodePane: React.FC<CodePaneProps> = ({
         className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
         onMouseDown={onActivate}
       >
-      <div className="flex items-center justify-end gap-1 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <DropdownMenu.Root
+            onOpenChange={(open) => {
+              if (open && gitBranches.length === 0 && !isGitBranchesLoading) {
+                void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+              }
+            }}
+          >
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={t('codePane.gitBranchManager')}
+                onMouseDown={preventMouseButtonFocus}
+                className="flex h-6 max-w-[280px] items-center gap-1 rounded bg-zinc-800/90 px-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+              >
+                <GitBranch size={12} className="shrink-0 text-sky-300" />
+                <span className="truncate">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</span>
+                <ChevronDown size={12} className="shrink-0 text-zinc-500" />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className={`${contextMenuContentClassName} max-h-[420px] min-w-[280px] overflow-y-auto`}
+                sideOffset={6}
+                align="start"
+              >
+                {branchActionMenuSections.map((section, sectionIndex) => (
+                  <React.Fragment key={`branch-actions-${sectionIndex}`}>
+                    {section.map((item) => (
+                      <DropdownMenu.Item
+                        key={item.id}
+                        disabled={item.disabled}
+                        onSelect={item.onSelect}
+                        className={`${contextMenuItemClassName} ${item.tone === 'danger' ? 'text-red-200 focus:text-red-100 data-[highlighted]:text-red-100' : ''} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
+                      >
+                        {item.label}
+                      </DropdownMenu.Item>
+                    ))}
+                    {sectionIndex < branchActionMenuSections.length - 1 && (
+                      <DropdownMenu.Separator className="my-1 h-px bg-zinc-800" />
+                    )}
+                  </React.Fragment>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+          {gitRepositorySummary && gitRepositorySummary.operation !== 'idle' && (
+            <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
+              {gitOperationLabel}
+            </span>
+          )}
+          {gitRepositorySummary?.hasConflicts && (
+            <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200">
+              {t('codePane.gitConflictsActive')}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <AppTooltip content={t('codePane.navigateBack')} placement="pane-corner">
             <button
@@ -9924,6 +10424,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onMouseDown={preventMouseButtonFocus}
               onClick={() => {
                 if (viewMode === 'diff') {
+                  setPendingGitRevisionDiff(null);
                   persistCodeState({
                     viewMode: 'editor',
                     diffTargetPath: null,
@@ -10533,10 +11034,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         </button>
                         <button
                           type="button"
-                          disabled={!gitBranchCopyValue}
+                          disabled={!currentGitBranch?.name && !gitRepositorySummary?.headSha}
                           onClick={() => {
-                            if (gitBranchCopyValue) {
-                              void window.electronAPI.writeClipboardText(gitBranchCopyValue);
+                            const copyValue = currentGitBranch?.name ?? gitRepositorySummary?.headSha ?? '';
+                            if (copyValue) {
+                              void window.electronAPI.writeClipboardText(copyValue);
                             }
                           }}
                           className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
@@ -10907,12 +11409,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     <Loader2 size={11} className="shrink-0 animate-spin" />
                   )}
                   <span>{languageStatusText}</span>
-                </span>
-              )}
-              {gitStatusChip && (
-                <span className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 ${gitStatusChip.className}`}>
-                  <GitBranch size={11} className="shrink-0" />
-                  <span>{gitStatusChip.text}</span>
                 </span>
               )}
               {hasRuntimeActivity && (

@@ -12,6 +12,8 @@ import type {
   CodePaneGitCommitResult,
   CodePaneGitDiscardConfig,
   CodePaneGitHunkActionConfig,
+  CodePaneGitPushConfig,
+  CodePaneGitPushResult,
   CodePaneGitRenameBranchConfig,
   CodePaneGitRebaseControlConfig,
   CodePaneGitResolveConflictConfig,
@@ -143,6 +145,33 @@ export class CodeGitOperationService {
     return {
       reference,
       message,
+    };
+  }
+
+  async push(config: CodePaneGitPushConfig): Promise<CodePaneGitPushResult> {
+    const repoContext = await requireRepoContext(config.rootPath);
+    const remote = config.remote?.trim() || 'origin';
+    const branchName = config.branchName?.trim() || await this.resolveCurrentBranchName(repoContext.repoRootPath);
+    if (!branchName) {
+      throw new Error('No branch is currently checked out');
+    }
+
+    await execFileAsync(
+      'git',
+      [
+        '-C',
+        repoContext.repoRootPath,
+        'push',
+        ...(config.setUpstream ? ['--set-upstream'] : []),
+        remote,
+        branchName,
+      ],
+      { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+    );
+
+    return {
+      remote,
+      branchName,
     };
   }
 
@@ -312,6 +341,19 @@ export class CodeGitOperationService {
       );
     } finally {
       await fs.rm(patchFilePath, { force: true });
+    }
+  }
+
+  private async resolveCurrentBranchName(repoRootPath: string): Promise<string> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', repoRootPath, 'branch', '--show-current'],
+        { encoding: 'utf-8' },
+      );
+      return (stdout as string).trim();
+    } catch {
+      return '';
     }
   }
 }

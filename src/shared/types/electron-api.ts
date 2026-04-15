@@ -358,6 +358,44 @@ export interface CodePaneGitGraphCommit {
   laneCount: number;
 }
 
+export interface CodePaneGitCommitFileChange {
+  path: string;
+  relativePath: string;
+  status: 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'type-changed';
+  additions: number;
+  deletions: number;
+  previousPath?: string;
+}
+
+export interface CodePaneGitCommitDetailsConfig {
+  rootPath: string;
+  commitSha: string;
+}
+
+export interface CodePaneGitCommitDetails {
+  commitSha: string;
+  shortSha: string;
+  subject: string;
+  author: string;
+  email?: string;
+  timestamp: number;
+  body?: string;
+  refs: string[];
+  files: CodePaneGitCommitFileChange[];
+}
+
+export interface CodePaneGitCompareCommitsConfig {
+  rootPath: string;
+  baseCommitSha: string;
+  targetCommitSha: string;
+}
+
+export interface CodePaneGitCompareCommitsResult {
+  baseCommitSha: string;
+  targetCommitSha: string;
+  files: CodePaneGitCommitFileChange[];
+}
+
 export interface CodePaneGitDiffHunkLine {
   type: 'context' | 'add' | 'delete';
   text: string;
@@ -424,6 +462,18 @@ export interface CodePaneGitStashConfig {
 export interface CodePaneGitStashResult {
   reference: string;
   message: string;
+}
+
+export interface CodePaneGitPushConfig {
+  rootPath: string;
+  remote?: string;
+  branchName?: string;
+  setUpstream?: boolean;
+}
+
+export interface CodePaneGitPushResult {
+  remote: string;
+  branchName: string;
 }
 
 export interface CodePaneGitCheckoutConfig {
@@ -620,6 +670,17 @@ export interface CodePaneReadGitBaseFileConfig {
 export interface CodePaneReadGitBaseFileResult {
   content: string;
   existsInHead: boolean;
+}
+
+export interface CodePaneReadGitRevisionFileConfig {
+  rootPath: string;
+  filePath: string;
+  commitSha: string;
+}
+
+export interface CodePaneReadGitRevisionFileResult {
+  content: string;
+  exists: boolean;
 }
 
 export interface CodePaneWatchRootConfig {
@@ -1606,6 +1667,8 @@ export interface ElectronAPI {
   codePaneGetGitStatus: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitStatusEntry[]>>;
   codePaneGetGitRepositorySummary: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitRepositorySummary | null>>;
   codePaneGetGitGraph: (config: CodePaneGitGraphConfig) => Promise<IpcResponse<CodePaneGitGraphCommit[]>>;
+  codePaneGetGitCommitDetails: (config: CodePaneGitCommitDetailsConfig) => Promise<IpcResponse<CodePaneGitCommitDetails>>;
+  codePaneCompareGitCommits: (config: CodePaneGitCompareCommitsConfig) => Promise<IpcResponse<CodePaneGitCompareCommitsResult>>;
   codePaneGetGitDiffHunks: (config: CodePaneGitDiffHunksConfig) => Promise<IpcResponse<CodePaneGitDiffHunksResult>>;
   codePaneGitStage: (config: CodePaneGitStageConfig) => Promise<IpcResponse<void>>;
   codePaneGitUnstage: (config: CodePaneGitStageConfig) => Promise<IpcResponse<void>>;
@@ -1615,6 +1678,7 @@ export interface ElectronAPI {
   codePaneGitDiscardHunk: (config: CodePaneGitHunkActionConfig) => Promise<IpcResponse<void>>;
   codePaneGitCommit: (config: CodePaneGitCommitConfig) => Promise<IpcResponse<CodePaneGitCommitResult>>;
   codePaneGitStash: (config: CodePaneGitStashConfig) => Promise<IpcResponse<CodePaneGitStashResult>>;
+  codePaneGitPush: (config: CodePaneGitPushConfig) => Promise<IpcResponse<CodePaneGitPushResult>>;
   codePaneGitCheckout: (config: CodePaneGitCheckoutConfig) => Promise<IpcResponse<void>>;
   codePaneGetGitBranches: (config: CodePaneGitBranchListConfig) => Promise<IpcResponse<CodePaneGitBranchEntry[]>>;
   codePaneGitRenameBranch: (config: CodePaneGitRenameBranchConfig) => Promise<IpcResponse<void>>;
@@ -1629,6 +1693,7 @@ export interface ElectronAPI {
   codePaneGitHistory: (config: CodePaneGitHistoryConfig) => Promise<IpcResponse<CodePaneGitHistoryResult>>;
   codePaneGitBlame: (config: CodePaneGitBlameConfig) => Promise<IpcResponse<CodePaneGitBlameLine[]>>;
   codePaneReadGitBaseFile: (config: CodePaneReadGitBaseFileConfig) => Promise<IpcResponse<CodePaneReadGitBaseFileResult>>;
+  codePaneReadGitRevisionFile: (config: CodePaneReadGitRevisionFileConfig) => Promise<IpcResponse<CodePaneReadGitRevisionFileResult>>;
   codePaneWatchRoot: (config: CodePaneWatchRootConfig) => Promise<IpcResponse<void>>;
   codePaneUnwatchRoot: (paneId: string) => Promise<IpcResponse<void>>;
   codePaneSearchFiles: (config: CodePaneSearchFilesConfig) => Promise<IpcResponse<string[]>>;

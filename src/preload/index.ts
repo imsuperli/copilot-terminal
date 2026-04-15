@@ -151,6 +151,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-repository-summary', config),
   codePaneGetGitGraph: (config) =>
     ipcRenderer.invoke('code-pane-git-graph', config),
+  codePaneGetGitCommitDetails: (config) =>
+    ipcRenderer.invoke('code-pane-git-commit-details', config),
+  codePaneCompareGitCommits: (config) =>
+    ipcRenderer.invoke('code-pane-compare-git-commits', config),
   codePaneGetGitDiffHunks: (config) =>
     ipcRenderer.invoke('code-pane-git-diff-hunks', config),
   codePaneGitStage: (config) =>
@@ -169,6 +173,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-commit', config),
   codePaneGitStash: (config) =>
     ipcRenderer.invoke('code-pane-git-stash', config),
+  codePaneGitPush: (config) =>
+    ipcRenderer.invoke('code-pane-git-push', config),
   codePaneGitCheckout: (config) =>
     ipcRenderer.invoke('code-pane-git-checkout', config),
   codePaneGetGitBranches: (config) =>
@@ -197,6 +203,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-blame', config),
   codePaneReadGitBaseFile: (config) =>
     ipcRenderer.invoke('code-pane-read-git-base-file', config),
+  codePaneReadGitRevisionFile: (config) =>
+    ipcRenderer.invoke('code-pane-read-git-revision-file', config),
   codePaneWatchRoot: (config) =>
     ipcRenderer.invoke('code-pane-watch-root', config),
   codePaneUnwatchRoot: (paneId: string) =>
