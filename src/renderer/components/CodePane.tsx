@@ -802,8 +802,17 @@ function resolvePathFromRoot(rootPath: string, relativePath: string): string {
 function isPathInside(parentPath: string, candidatePath: string): boolean {
   const normalizedParentPath = normalizePath(parentPath);
   const normalizedCandidatePath = normalizePath(candidatePath);
+  if (normalizedParentPath.includes('://') || normalizedCandidatePath.includes('://')) {
+    return normalizedCandidatePath === normalizedParentPath
+      || normalizedCandidatePath.startsWith(`${normalizedParentPath}/`);
+  }
+
   return normalizedCandidatePath === normalizedParentPath
     || normalizedCandidatePath.startsWith(`${normalizedParentPath}/`);
+}
+
+function isExternalTreePath(rootPath: string, targetPath: string): boolean {
+  return !isPathInside(rootPath, targetPath);
 }
 
 function matchesLanguageWorkspaceRoot(
@@ -894,6 +903,10 @@ function createExpandedDirectorySet(rootPath: string, expandedPaths?: string[] |
 }
 
 function isCompactPackageCandidate(rootPath: string, directoryPath: string): boolean {
+  if (isExternalTreePath(rootPath, directoryPath)) {
+    return false;
+  }
+
   const relativePath = getRelativePath(rootPath, directoryPath);
   if (!relativePath) {
     return false;
@@ -7496,6 +7509,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     entryType: CodePaneTreeEntry['type'],
     options?: {
       allowDiff?: boolean;
+      allowMutations?: boolean;
       pinned?: boolean;
       showPinToggle?: boolean;
     },
@@ -7538,31 +7552,35 @@ export const CodePane: React.FC<CodePaneProps> = ({
             {t('codePane.openDiff')}
           </ContextMenu.Item>
         )}
-        <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
-        <ContextMenu.Item
-          className={contextMenuItemClassName}
-          onSelect={() => {
-            void renamePathWithPreview(filePath);
-          }}
-        >
-          {t('codePane.renamePath')}
-        </ContextMenu.Item>
-        <ContextMenu.Item
-          className={contextMenuItemClassName}
-          onSelect={() => {
-            void movePathWithPreview(filePath);
-          }}
-        >
-          {t('codePane.movePath')}
-        </ContextMenu.Item>
-        <ContextMenu.Item
-          className={contextMenuItemClassName}
-          onSelect={() => {
-            void safeDeletePathWithPreview(filePath);
-          }}
-        >
-          {t('codePane.safeDelete')}
-        </ContextMenu.Item>
+        {options?.allowMutations !== false && (
+          <>
+            <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+            <ContextMenu.Item
+              className={contextMenuItemClassName}
+              onSelect={() => {
+                void renamePathWithPreview(filePath);
+              }}
+            >
+              {t('codePane.renamePath')}
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className={contextMenuItemClassName}
+              onSelect={() => {
+                void movePathWithPreview(filePath);
+              }}
+            >
+              {t('codePane.movePath')}
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className={contextMenuItemClassName}
+              onSelect={() => {
+                void safeDeletePathWithPreview(filePath);
+              }}
+            >
+              {t('codePane.safeDelete')}
+            </ContextMenu.Item>
+          </>
+        )}
         {entryType === 'file' && options?.showPinToggle && (
           <>
             <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
@@ -7648,6 +7666,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             </ContextMenu.Trigger>
             {renderFileContextMenu(resolvedEntry.path, resolvedEntry.type, {
               allowDiff: isPathInside(rootPath, entry.path),
+              allowMutations: !isExternalTreePath(rootPath, resolvedEntry.path),
             })}
           </ContextMenu.Root>
           {isDirectory && isExpanded && renderTree(resolvedEntry.path, depth + 1)}
@@ -7707,7 +7726,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         )}
                       </button>
                     </ContextMenu.Trigger>
-                    {renderFileContextMenu(root.path, 'directory', { allowDiff: false })}
+                    {renderFileContextMenu(root.path, 'directory', { allowDiff: false, allowMutations: false })}
                   </ContextMenu.Root>
                   <div className="truncate px-8 pb-1 text-[10px] text-zinc-600">{helperText}</div>
                   {isExpanded ? renderTree(root.path, 1) : null}

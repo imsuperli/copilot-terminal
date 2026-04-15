@@ -1,6 +1,8 @@
 import path from 'path';
 import { tmpdir } from 'os';
 import { promises as fsPromises } from 'fs';
+import { createWriteStream } from 'fs';
+import yazl from 'yazl';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CodeFileService } from '../../code/CodeFileService';
 import { CodeRunProfileService } from '../../code/CodeRunProfileService';
@@ -76,6 +78,94 @@ describe('LanguageProjectContributionService', () => {
     expect(readResult.language).toBe('python');
     expect(readResult.readOnly).toBe(true);
     expect(readResult.displayPath).toBe('External Libraries/Python/site-packages/requests/api.py');
+  });
+
+  it('expands Maven sources jars and reads source entries as external libraries', async () => {
+    const mavenArtifactDirectory = path.join(externalRootPath, 'com', 'example', 'demo', '1.0.0');
+    const sourceRootDirectoryPath = path.join(workspaceRootPath, 'jar-source');
+    const classRootDirectoryPath = path.join(workspaceRootPath, 'jar-class');
+    const sourceDirectoryPath = path.join(sourceRootDirectoryPath, 'com', 'example');
+    const classDirectoryPath = path.join(classRootDirectoryPath, 'com', 'example');
+    const jarPath = path.join(mavenArtifactDirectory, 'demo-1.0.0.jar');
+    const sourcesJarPath = path.join(mavenArtifactDirectory, 'demo-1.0.0-sources.jar');
+
+    await fsPromises.mkdir(sourceDirectoryPath, { recursive: true });
+    await fsPromises.mkdir(classDirectoryPath, { recursive: true });
+    await fsPromises.mkdir(mavenArtifactDirectory, { recursive: true });
+    await fsPromises.writeFile(
+      path.join(sourceDirectoryPath, 'Demo.java'),
+      'package com.example;\npublic class Demo {}\n',
+      'utf-8',
+    );
+    await fsPromises.writeFile(
+      path.join(classDirectoryPath, 'Demo.class'),
+      Buffer.from([0xca, 0xfe, 0xba, 0xbe]),
+    );
+    await createZipArchive(sourceRootDirectoryPath, sourcesJarPath);
+    await createZipArchive(classRootDirectoryPath, jarPath);
+
+    const service = new LanguageProjectContributionService({
+      codeFileService: new CodeFileService(),
+      adapterRegistry: new LanguageProjectAdapterRegistry({
+        adapters: [
+          {
+            languageId: 'java',
+            getExternalLibrarySection: async () => ({
+              id: 'java-external-libraries',
+              label: 'External Libraries',
+              languageId: 'java',
+              roots: [
+                {
+                  id: 'maven-repository',
+                  label: 'Maven Repository',
+                  path: externalRootPath,
+                },
+              ],
+            }),
+            getProjectContribution: async () => null,
+            resolveProjectCommand: async () => null,
+          },
+        ],
+      }),
+    });
+
+    const artifactEntries = await service.listDirectory({
+      rootPath: workspaceRootPath,
+      targetPath: mavenArtifactDirectory,
+    });
+    const jarEntry = artifactEntries.find((entry) => entry.name === 'demo-1.0.0.jar');
+    expect(jarEntry).toEqual(expect.objectContaining({
+      type: 'directory',
+      hasChildren: true,
+    }));
+    expect(jarEntry?.path).toContain(encodeURIComponent(sourcesJarPath));
+
+    const packageEntries = await service.listDirectory({
+      rootPath: workspaceRootPath,
+      targetPath: jarEntry?.path,
+    });
+    const comEntry = packageEntries.find((entry) => entry.name === 'com');
+    expect(comEntry).toEqual(expect.objectContaining({
+      type: 'directory',
+    }));
+
+    const exampleEntries = await service.listDirectory({
+      rootPath: workspaceRootPath,
+      targetPath: `${comEntry?.path}/example`,
+    });
+    const sourceEntry = exampleEntries.find((entry) => entry.name === 'Demo.java');
+    expect(sourceEntry).toEqual(expect.objectContaining({
+      type: 'file',
+    }));
+
+    const readResult = await service.readFile({
+      rootPath: workspaceRootPath,
+      filePath: sourceEntry?.path ?? '',
+    });
+    expect(readResult.content).toContain('public class Demo');
+    expect(readResult.language).toBe('java');
+    expect(readResult.readOnly).toBe(true);
+    expect(readResult.displayPath).toBe('External Libraries/demo-1.0.0-sources.jar/com/example/Demo.java');
   });
 
   it('rejects files outside the declared external library roots', async () => {
@@ -447,4 +537,37 @@ async function waitForCondition(predicate: () => boolean, timeoutMs = 5000): Pro
 
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
+}
+
+async function createZipArchive(sourceDirectoryPath: string, targetArchivePath: string): Promise<void> {
+  const zipFile = new yazl.ZipFile();
+  const filePaths = await collectFilePaths(sourceDirectoryPath);
+  for (const filePath of filePaths) {
+    zipFile.addFile(filePath, path.relative(sourceDirectoryPath, filePath).split(path.sep).join('/'));
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    zipFile.outputStream
+      .pipe(createWriteStream(targetArchivePath))
+      .on('close', resolve)
+      .on('error', reject);
+    zipFile.on('error', reject);
+    zipFile.end();
+  });
+}
+
+async function collectFilePaths(directoryPath: string): Promise<string[]> {
+  const entries = await fsPromises.readdir(directoryPath, { withFileTypes: true });
+  const results: string[] = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(directoryPath, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...await collectFilePaths(entryPath));
+    } else if (entry.isFile()) {
+      results.push(entryPath);
+    }
+  }
+
+  return results;
 }

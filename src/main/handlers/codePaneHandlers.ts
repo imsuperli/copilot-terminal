@@ -104,6 +104,18 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
 
   ipcMain.handle('code-pane-read-file', async (_event, config: CodePaneReadFileConfig) => {
     try {
+      const isExternalLibraryPath = languageProjectContributionService
+        ? await languageProjectContributionService.hasExternalLibraryPath(config.rootPath, config.filePath)
+        : false;
+
+      if (isExternalLibraryPath) {
+        if (!languageProjectContributionService) {
+          throw new Error('LanguageProjectContributionService not initialized');
+        }
+
+        return successResponse(await languageProjectContributionService.readFile(config));
+      }
+
       if (config.documentUri) {
         if (!languageFeatureService) {
           throw new Error('LanguageFeatureService not initialized');
@@ -115,10 +127,6 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
         }
         return successResponse(result);
       }
-
-      const isExternalLibraryPath = languageProjectContributionService
-        ? await languageProjectContributionService.hasExternalLibraryPath(config.rootPath, config.filePath)
-        : false;
 
       if (!isExternalLibraryPath && isPathWithin(config.rootPath, config.filePath)) {
         if (!codeFileService) {

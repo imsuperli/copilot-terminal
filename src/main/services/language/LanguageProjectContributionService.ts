@@ -13,6 +13,7 @@ import { CodeFileService } from '../code/CodeFileService';
 import { CodeRunProfileService } from '../code/CodeRunProfileService';
 import { LanguageProjectAdapterRegistry } from './adapters/LanguageProjectAdapterRegistry';
 import { setPythonInterpreterOverride } from './adapters/PythonProjectAdapter';
+import { ExternalJarService } from './ExternalJarService';
 
 export interface LanguageProjectContributionServiceOptions {
   codeFileService: CodeFileService;
@@ -29,11 +30,13 @@ export class LanguageProjectContributionService {
   private readonly codeFileService: CodeFileService;
   private readonly runProfileService: CodeRunProfileService | null;
   private readonly adapterRegistry: LanguageProjectAdapterRegistry;
+  private readonly externalJarService: ExternalJarService;
 
   constructor(options: LanguageProjectContributionServiceOptions) {
     this.codeFileService = options.codeFileService;
     this.runProfileService = options.runProfileService ?? null;
     this.adapterRegistry = options.adapterRegistry ?? new LanguageProjectAdapterRegistry();
+    this.externalJarService = new ExternalJarService();
   }
 
   async getExternalLibrarySections(rootPath: string): Promise<CodePaneExternalLibrarySection[]> {
@@ -89,6 +92,11 @@ export class LanguageProjectContributionService {
   }
 
   async hasExternalLibraryPath(rootPath: string, targetPath: string): Promise<boolean> {
+    if (this.externalJarService.isJarUri(targetPath)) {
+      const jarPath = this.externalJarService.getJarUriJarPath(targetPath);
+      return jarPath ? (await this.matchExternalRoot(rootPath, jarPath)) !== null : false;
+    }
+
     return (await this.matchExternalRoot(rootPath, targetPath)) !== null;
   }
 
@@ -98,19 +106,51 @@ export class LanguageProjectContributionService {
       throw new Error('Missing external library directory path');
     }
 
+    if (this.externalJarService.isJarUri(targetPath)) {
+      const parsedJarPath = this.externalJarService.getJarUriJarPath(targetPath);
+      if (!parsedJarPath || !await this.matchExternalRoot(config.rootPath, parsedJarPath)) {
+        throw new Error('Target jar is outside the workspace and not part of External Libraries');
+      }
+
+      return await this.externalJarService.listJarDirectory(targetPath);
+    }
+
     const matchedRoot = await this.matchExternalRoot(config.rootPath, targetPath);
     if (!matchedRoot) {
       throw new Error('Target path is outside the workspace and not part of External Libraries');
     }
 
-    return await this.codeFileService.listDirectoryFromAllowedRoots({
+    const entries = await this.codeFileService.listDirectoryFromAllowedRoots({
       allowedRootPaths: [matchedRoot.root.path],
       targetPath,
       includeHidden: config.includeHidden,
     });
+
+    return await Promise.all(entries.map(async (entry) => {
+      if (entry.type !== 'file' || !this.externalJarService.isJarFilePath(entry.path)) {
+        return entry;
+      }
+
+      const jarPath = await this.externalJarService.resolveBrowsableJarPath(entry.path);
+      return {
+        ...entry,
+        path: this.externalJarService.createJarUri(jarPath),
+        type: 'directory' as const,
+        hasChildren: true,
+      };
+    }));
   }
 
   async readFile(config: CodePaneReadFileConfig): Promise<CodePaneReadFileResult> {
+    if (this.externalJarService.isJarUri(config.filePath)) {
+      const parsedJarPath = this.externalJarService.getJarUriJarPath(config.filePath);
+      if (!parsedJarPath || !await this.matchExternalRoot(config.rootPath, parsedJarPath)) {
+        throw new Error('Target jar is outside the workspace and not part of External Libraries');
+      }
+
+      return await this.externalJarService.readJarFile(config.filePath);
+    }
+
     const matchedRoot = await this.matchExternalRoot(config.rootPath, config.filePath);
     if (!matchedRoot) {
       throw new Error('Target path is outside the workspace and not part of External Libraries');

@@ -1114,6 +1114,153 @@ describe('CodePane', () => {
     expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('def get(url: str):\n    return url\n');
   });
 
+  it('expands Maven jar sources from external libraries and opens source files read-only', async () => {
+    const jarRootUri = 'jar://%2Fhome%2Fuser%2F.m2%2Frepository%2Fcom%2Fexample%2Fdemo%2F1.0.0%2Fdemo-1.0.0-sources.jar!/';
+    const comUri = `${jarRootUri}com`;
+    const exampleUri = `${jarRootUri}com/example`;
+    const sourceUri = `${jarRootUri}com/example/Demo.java`;
+
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'java-external-libraries',
+          label: 'External Libraries',
+          languageId: 'java',
+          roots: [
+            {
+              id: 'maven-repository',
+              label: 'Maven Repository',
+              path: '/home/user/.m2/repository',
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (!targetPath || targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/home/user/.m2/repository') {
+        return {
+          success: true,
+          data: [
+            {
+              path: jarRootUri,
+              name: 'demo-1.0.0.jar',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+
+      if (targetPath === jarRootUri) {
+        return {
+          success: true,
+          data: [
+            {
+              path: comUri,
+              name: 'com',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+
+      if (targetPath === comUri) {
+        return {
+          success: true,
+          data: [
+            {
+              path: exampleUri,
+              name: 'example',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+
+      if (targetPath === exampleUri) {
+        return {
+          success: true,
+          data: [
+            {
+              path: sourceUri,
+              name: 'Demo.java',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockImplementation(async ({ filePath }) => ({
+      success: true,
+      data: filePath === sourceUri
+        ? {
+            content: 'package com.example;\npublic class Demo {}\n',
+            mtimeMs: 100,
+            size: 41,
+            language: 'java',
+            isBinary: false,
+            readOnly: true,
+            documentUri: sourceUri,
+            displayPath: 'External Libraries/demo-1.0.0-sources.jar/com/example/Demo.java',
+          }
+        : {
+            content: 'export const value = 1;\n',
+            mtimeMs: 100,
+            size: 24,
+            language: 'typescript',
+            isBinary: false,
+          },
+    }));
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByText('codePane.externalLibraries · Java')).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.doubleClick(screen.getByRole('button', { name: 'Maven Repository' }));
+    });
+    await act(async () => {
+      fireEvent.doubleClick(await screen.findByRole('button', { name: 'demo-1.0.0.jar' }));
+    });
+    await act(async () => {
+      fireEvent.doubleClick(await screen.findByRole('button', { name: 'com' }));
+    });
+    await act(async () => {
+      fireEvent.doubleClick(await screen.findByRole('button', { name: 'example' }));
+    });
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Demo.java' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: sourceUri,
+        documentUri: sourceUri,
+      });
+    });
+    expect(window.electronAPI.codePaneDidOpenDocument).not.toHaveBeenCalled();
+    expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('package com.example;\npublic class Demo {}\n');
+  });
+
   it('does not render an outer active border', () => {
     const view = renderCodePane(createPane());
     const root = view.container.firstElementChild;
