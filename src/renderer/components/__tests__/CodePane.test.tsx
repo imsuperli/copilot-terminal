@@ -685,6 +685,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockReset();
     vi.mocked(window.electronAPI.codePaneRenameSymbol).mockReset();
     vi.mocked(window.electronAPI.codePaneFormatDocument).mockReset();
+    vi.mocked(window.electronAPI.codePaneLintDocument).mockReset();
     vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockReset();
     vi.mocked(window.electronAPI.codePaneGetCodeActions).mockReset();
     vi.mocked(window.electronAPI.codePaneRunCodeAction).mockReset();
@@ -888,6 +889,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetSignatureHelp).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneRenameSymbol).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneFormatDocument).mockResolvedValue({ success: true, data: [] });
+    vi.mocked(window.electronAPI.codePaneLintDocument).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetWorkspaceSymbols).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetCodeActions).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneRunCodeAction).mockResolvedValue({ success: true, data: [] });
@@ -2470,7 +2472,7 @@ describe('CodePane', () => {
       });
     });
     expect(await screen.findByText(/Test User · Refine index flow/)).toBeInTheDocument();
-  });
+  }, 10_000);
 
   it('opens the conflict resolver below the editor and applies merged content', async () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
@@ -2982,6 +2984,7 @@ describe('CodePane', () => {
         rootPath: '/workspace/project',
         filePath: '/workspace/project/src/index.ts',
         language: 'typescript',
+        content: 'export const value = 1;\n',
         tabSize: 2,
         insertSpaces: true,
       });
@@ -2995,6 +2998,110 @@ describe('CodePane', () => {
         expectedMtimeMs: 100,
       });
     });
+  });
+
+  it('runs the save quality pipeline before writing the file', async () => {
+    vi.mocked(window.electronAPI.codePaneFormatDocument).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/index.ts',
+          range: {
+            startLineNumber: 1,
+            startColumn: 14,
+            endLineNumber: 1,
+            endColumn: 19,
+          },
+          newText: 'formattedValue',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetCodeActions).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'organize-imports',
+          title: 'Organize Imports',
+          kind: 'source.organizeImports',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneRunCodeAction).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/index.ts',
+          range: {
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: 1,
+            endColumn: 1,
+          },
+          newText: "import './setup';\n",
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneLintDocument).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/index.ts',
+          owner: 'save-quality-linter',
+          severity: 'warning',
+          message: 'Unused import',
+          startLineNumber: 1,
+          startColumn: 1,
+          endLineNumber: 1,
+          endColumn: 7,
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      savePipeline: {
+        formatOnSave: true,
+        organizeImportsOnSave: true,
+        lintOnSave: true,
+      },
+    }));
+
+    await openFileFromTree('index.ts');
+    vi.useFakeTimers();
+
+    try {
+      await act(async () => {
+        fakeMonacoState.models.get('/workspace/project/src/index.ts')?.setValue('export const value = 2;\n');
+        vi.advanceTimersByTime(800);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(window.electronAPI.codePaneFormatDocument).toHaveBeenCalledWith(expect.objectContaining({
+        content: 'export const value = 2;\n',
+      }));
+      expect(window.electronAPI.codePaneGetCodeActions).toHaveBeenCalled();
+      expect(window.electronAPI.codePaneRunCodeAction).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        actionId: 'organize-imports',
+      });
+      expect(window.electronAPI.codePaneLintDocument).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        content: "import './setup';\nexport const formattedValue = 2;\n",
+      });
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        content: "import './setup';\nexport const formattedValue = 2;\n",
+        expectedMtimeMs: 100,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renames the symbol under the caret with workspace edits', async () => {

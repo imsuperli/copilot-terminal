@@ -30,12 +30,17 @@ import {
 } from 'lucide-react';
 import type {
   CodePaneOpenFile,
+  CodePaneSavePipelineState,
+  CodePaneSaveQualityState,
+  CodePaneSaveQualityStep,
+  CodePaneSaveQualityStepId,
   Pane,
 } from '../types/window';
 import type {
   CodePaneBreakpoint,
   CodePaneCallHierarchyDirection,
   CodePaneCodeAction,
+  CodePaneDiagnostic,
   CodePaneContentMatch,
   CodePaneExceptionBreakpoint,
   CodePaneDocumentSymbol,
@@ -158,6 +163,7 @@ const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
 const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
+const CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER = 'save-quality-linter';
 const CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS: CodePaneExceptionBreakpoint[] = [{
   id: 'all',
   label: 'All Exceptions',
@@ -254,6 +260,11 @@ type LocalHistoryEntry = {
   timestamp: number;
   content: string;
   preview: string;
+};
+
+type SaveFileOptions = {
+  overwrite?: boolean;
+  skipQualityPipeline?: boolean;
 };
 
 const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
@@ -566,6 +577,68 @@ function getInitialSidebarLayout(pane: Pane): {
     width,
     lastExpandedWidth: clampSidebarWidth(sidebarState?.lastExpandedWidth ?? width),
   };
+}
+
+function getInitialSavePipelineState(pane: Pane): Required<CodePaneSavePipelineState> {
+  return {
+    formatOnSave: pane.code?.savePipeline?.formatOnSave ?? false,
+    organizeImportsOnSave: pane.code?.savePipeline?.organizeImportsOnSave ?? false,
+    lintOnSave: pane.code?.savePipeline?.lintOnSave ?? false,
+  };
+}
+
+function createFullDocumentRange(content: string) {
+  const lines = content.split(/\r?\n/);
+  const lastLine = lines.at(-1) ?? '';
+  return {
+    startLineNumber: 1,
+    startColumn: 1,
+    endLineNumber: lines.length,
+    endColumn: lastLine.length + 1,
+  };
+}
+
+function createSaveQualityState(config: {
+  status: CodePaneSaveQualityState['status'];
+  message?: string;
+  steps?: CodePaneSaveQualityStep[];
+}): CodePaneSaveQualityState {
+  return {
+    status: config.status,
+    ...(config.message ? { message: config.message } : {}),
+    ...(config.steps ? { steps: config.steps } : {}),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function resolveSaveQualityStatus(steps: CodePaneSaveQualityStep[]): CodePaneSaveQualityState['status'] {
+  if (steps.some((step) => step.status === 'error')) {
+    return 'error';
+  }
+  if (steps.some((step) => step.status === 'warning')) {
+    return 'warning';
+  }
+  if (steps.some((step) => step.status === 'running')) {
+    return 'running';
+  }
+  if (steps.some((step) => step.status === 'passed')) {
+    return 'passed';
+  }
+  return 'idle';
+}
+
+function updateSaveQualityStep(
+  steps: CodePaneSaveQualityStep[],
+  nextStep: CodePaneSaveQualityStep,
+): CodePaneSaveQualityStep[] {
+  const existingIndex = steps.findIndex((step) => step.id === nextStep.id);
+  if (existingIndex === -1) {
+    return [...steps, nextStep];
+  }
+
+  const nextSteps = [...steps];
+  nextSteps.splice(existingIndex, 1, nextStep);
+  return nextSteps;
 }
 
 function getRelativePath(rootPath: string, targetPath: string): string {
@@ -1055,6 +1128,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const selectedPath = pane.code?.selectedPath ?? null;
   const viewMode = pane.code?.viewMode ?? 'editor';
   const diffTargetPath = pane.code?.diffTargetPath ?? null;
+  const savePipelineState = getInitialSavePipelineState(pane);
+  const qualityGateState = pane.code?.qualityGate ?? null;
   const initialSidebarLayout = useMemo(() => getInitialSidebarLayout(pane), [pane]);
   const initialEditorSplitLayout = useMemo(() => getInitialEditorSplitLayout(pane), [pane]);
 
@@ -1293,7 +1368,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const renameSymbolAtCursorRef = useRef<() => Promise<void>>(async () => {});
   const findUsagesAtCursorRef = useRef<() => Promise<void>>(async () => {});
   const formatActiveDocumentRef = useRef<() => Promise<void>>(async () => {});
-  const saveFileRef = useRef<(filePath: string, options?: { overwrite?: boolean }) => Promise<boolean>>(async () => true);
+  const saveFileRef = useRef<(filePath: string, options?: SaveFileOptions) => Promise<boolean>>(async () => true);
   const openCodeActionMenuRef = useRef<() => Promise<void>>(async () => {});
   const loadDebugSessionDetailsRef = useRef<(sessionId: string | null) => Promise<void>>(async () => {});
   const toggleBreakpointRef = useRef<(filePath: string, lineNumber: number) => Promise<void>>(async () => {});
@@ -1488,6 +1563,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ...currentDebugState,
         ...updates,
       },
+    });
+  }, [persistCodeState]);
+
+  const persistSavePipelineState = useCallback((updates: Partial<Required<CodePaneSavePipelineState>>) => {
+    const currentSavePipelineState = getInitialSavePipelineState(paneRef.current);
+    persistCodeState({
+      savePipeline: {
+        ...currentSavePipelineState,
+        ...updates,
+      },
+    });
+  }, [persistCodeState]);
+
+  const persistQualityGateState = useCallback((qualityGate: CodePaneSaveQualityState) => {
+    persistCodeState({
+      qualityGate,
     });
   }, [persistCodeState]);
 
@@ -3237,7 +3328,277 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return true;
   }, [createOrUpdateModel, refreshEditorSurface, rootPath, t]);
 
-  const saveFile = useCallback(async (filePath: string, options?: { overwrite?: boolean }) => {
+  const applySaveQualityDiagnostics = useCallback((filePath: string, diagnostics: CodePaneDiagnostic[]) => {
+    const monaco = monacoRef.current;
+    const model = fileModelsRef.current.get(filePath);
+    if (!monaco || !model) {
+      return;
+    }
+
+    monaco.editor.setModelMarkers(
+      model,
+      CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER,
+      diagnostics.map((diagnostic) => ({
+        message: diagnostic.message,
+        severity: diagnostic.severity === 'error'
+          ? monaco.MarkerSeverity.Error
+          : diagnostic.severity === 'warning'
+            ? monaco.MarkerSeverity.Warning
+            : diagnostic.severity === 'info'
+              ? monaco.MarkerSeverity.Info
+              : monaco.MarkerSeverity.Hint,
+        startLineNumber: diagnostic.startLineNumber,
+        startColumn: diagnostic.startColumn,
+        endLineNumber: diagnostic.endLineNumber,
+        endColumn: diagnostic.endColumn,
+        ...(diagnostic.source ? { source: diagnostic.source } : {}),
+        ...(diagnostic.code ? { code: diagnostic.code } : {}),
+      })),
+    );
+  }, []);
+
+  const clearSaveQualityDiagnostics = useCallback((filePath: string) => {
+    const monaco = monacoRef.current;
+    const model = fileModelsRef.current.get(filePath);
+    if (!monaco || !model) {
+      return;
+    }
+
+    monaco.editor.setModelMarkers(model, CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER, []);
+  }, []);
+
+  const applyLanguageTextEditsWithoutSaving = useCallback(async (edits: CodePaneTextEdit[]) => {
+    if (edits.length === 0) {
+      return true;
+    }
+
+    const editsByFilePath = new Map<string, CodePaneTextEdit[]>();
+    for (const edit of edits) {
+      const fileEdits = editsByFilePath.get(edit.filePath) ?? [];
+      fileEdits.push(edit);
+      editsByFilePath.set(edit.filePath, fileEdits);
+    }
+
+    for (const [filePath, fileEdits] of editsByFilePath.entries()) {
+      const existingModel = fileModelsRef.current.get(filePath);
+      if (existingModel) {
+        const nextContent = applyTextEditsToContent(existingModel.getValue(), fileEdits);
+        suppressModelEventsRef.current.add(filePath);
+        existingModel.setValue(nextContent);
+        suppressModelEventsRef.current.delete(filePath);
+        clearDefinitionLookupCache();
+        markDirty(filePath, true);
+        await syncLanguageDocument(filePath, 'change');
+        continue;
+      }
+
+      const readResponse = await window.electronAPI.codePaneReadFile({
+        rootPath,
+        filePath,
+      });
+      if (!readResponse.success || !readResponse.data || readResponse.data.isBinary) {
+        setBanner({
+          tone: 'error',
+          message: readResponse.error || t('common.retry'),
+          filePath,
+        });
+        return false;
+      }
+
+      const nextContent = applyTextEditsToContent(readResponse.data.content, fileEdits);
+      const writeResponse = await window.electronAPI.codePaneWriteFile({
+        rootPath,
+        filePath,
+        content: nextContent,
+        expectedMtimeMs: readResponse.data.mtimeMs,
+      });
+      if (!writeResponse.success) {
+        setBanner({
+          tone: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE ? 'warning' : 'error',
+          message: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE
+            ? t('codePane.saveConflict')
+            : (writeResponse.error || t('common.retry')),
+          filePath,
+          showReload: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
+          showOverwrite: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
+        });
+        return false;
+      }
+    }
+
+    void refreshGitSnapshot();
+    return true;
+  }, [clearDefinitionLookupCache, markDirty, refreshGitSnapshot, rootPath, syncLanguageDocument, t]);
+
+  const runSaveQualityPipeline = useCallback(async (filePath: string) => {
+    const model = fileModelsRef.current.get(filePath);
+    const fileMeta = fileMetaRef.current.get(filePath);
+    if (!model || !fileMeta) {
+      return createSaveQualityState({
+        status: 'idle',
+      });
+    }
+
+    const steps: CodePaneSaveQualityStep[] = [];
+    const language = fileMeta.language ?? model.getLanguageId();
+
+    if (savePipelineState.formatOnSave) {
+      try {
+        const response = await window.electronAPI.codePaneFormatDocument({
+          rootPath,
+          filePath,
+          language,
+          content: model.getValue(),
+          tabSize: 2,
+          insertSpaces: true,
+        });
+        if (!response.success) {
+          throw new Error(response.error || t('common.retry'));
+        }
+
+        const edits = response.data ?? [];
+        if (edits.length > 0) {
+          const didApply = await applyLanguageTextEditsWithoutSaving(edits);
+          if (!didApply) {
+            throw new Error(t('common.retry'));
+          }
+        }
+        steps.push({
+          id: 'format',
+          status: 'passed',
+          message: edits.length > 0 ? t('codePane.saveQualityFormatted') : t('codePane.saveQualityNoChanges'),
+        });
+      } catch (error) {
+        steps.push({
+          id: 'format',
+          status: 'error',
+          message: error instanceof Error ? error.message : t('common.retry'),
+        });
+      }
+    } else {
+      steps.push({
+        id: 'format',
+        status: 'skipped',
+        message: t('codePane.saveQualityDisabled'),
+      });
+    }
+
+    if (savePipelineState.organizeImportsOnSave) {
+      try {
+        const response = await window.electronAPI.codePaneGetCodeActions({
+          rootPath,
+          filePath,
+          language,
+          range: createFullDocumentRange(model.getValue()),
+        });
+        if (!response.success) {
+          throw new Error(response.error || t('common.retry'));
+        }
+
+        const organizeImportsAction = (response.data ?? []).find((action) => (
+          action.kind === 'source.organizeImports'
+          || action.kind?.startsWith('source.organizeImports')
+        ));
+        if (!organizeImportsAction) {
+          steps.push({
+            id: 'organize-imports',
+            status: 'skipped',
+            message: t('codePane.saveQualityUnavailable'),
+          });
+        } else {
+          const runResponse = await window.electronAPI.codePaneRunCodeAction({
+            rootPath,
+            filePath,
+            language,
+            actionId: organizeImportsAction.id,
+          });
+          if (!runResponse.success) {
+            throw new Error(runResponse.error || t('common.retry'));
+          }
+
+          const didApply = await applyLanguageTextEditsWithoutSaving(runResponse.data ?? []);
+          if (!didApply) {
+            throw new Error(t('common.retry'));
+          }
+          steps.push({
+            id: 'organize-imports',
+            status: 'passed',
+            message: t('codePane.saveQualityImportsOrganized'),
+          });
+        }
+      } catch (error) {
+        steps.push({
+          id: 'organize-imports',
+          status: 'error',
+          message: error instanceof Error ? error.message : t('common.retry'),
+        });
+      }
+    } else {
+      steps.push({
+        id: 'organize-imports',
+        status: 'skipped',
+        message: t('codePane.saveQualityDisabled'),
+      });
+    }
+
+    if (savePipelineState.lintOnSave) {
+      try {
+        const lintResponse = await window.electronAPI.codePaneLintDocument({
+          rootPath,
+          filePath,
+          language,
+          content: model.getValue(),
+        });
+        if (!lintResponse.success) {
+          throw new Error(lintResponse.error || t('common.retry'));
+        }
+
+        const diagnostics = lintResponse.data ?? [];
+        applySaveQualityDiagnostics(filePath, diagnostics);
+        const errorCount = diagnostics.filter((diagnostic) => diagnostic.severity === 'error').length;
+        const warningCount = diagnostics.filter((diagnostic) => diagnostic.severity === 'warning').length;
+        const issueCount = diagnostics.length;
+        steps.push({
+          id: 'lint',
+          status: errorCount > 0 ? 'error' : warningCount > 0 ? 'warning' : 'passed',
+          message: issueCount > 0
+            ? t('codePane.saveQualityIssues', { count: issueCount })
+            : t('codePane.saveQualityClean'),
+          issueCount,
+        });
+      } catch (error) {
+        clearSaveQualityDiagnostics(filePath);
+        steps.push({
+          id: 'lint',
+          status: 'error',
+          message: error instanceof Error ? error.message : t('common.retry'),
+        });
+      }
+    } else {
+      clearSaveQualityDiagnostics(filePath);
+      steps.push({
+        id: 'lint',
+        status: 'skipped',
+        message: t('codePane.saveQualityDisabled'),
+      });
+    }
+
+    return createSaveQualityState({
+      status: resolveSaveQualityStatus(steps),
+      steps,
+    });
+  }, [
+    applyLanguageTextEditsWithoutSaving,
+    applySaveQualityDiagnostics,
+    clearSaveQualityDiagnostics,
+    rootPath,
+    savePipelineState.formatOnSave,
+    savePipelineState.lintOnSave,
+    savePipelineState.organizeImportsOnSave,
+    t,
+  ]);
+
+  const saveFile = useCallback(async (filePath: string, options?: SaveFileOptions) => {
     const model = fileModelsRef.current.get(filePath);
     const fileMeta = fileMetaRef.current.get(filePath);
     if (!model || !fileMeta) {
@@ -3253,6 +3614,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     await flushPendingLanguageSync(filePath);
+    let qualityGateStateBeforeWrite: CodePaneSaveQualityState | null = null;
+    if (!options?.skipQualityPipeline) {
+      persistQualityGateState(createSaveQualityState({
+        status: 'running',
+        message: t('codePane.saveQualityRunning'),
+      }));
+      qualityGateStateBeforeWrite = await runSaveQualityPipeline(filePath);
+      await flushPendingLanguageSync(filePath);
+    }
+
     markSaving(filePath, true);
 
     const response = await window.electronAPI.codePaneWriteFile({
@@ -3265,6 +3636,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
     markSaving(filePath, false);
 
     if (!response.success || !response.data) {
+      if (qualityGateStateBeforeWrite) {
+        const nextSteps = updateSaveQualityStep(qualityGateStateBeforeWrite.steps ?? [], {
+          id: 'write',
+          status: 'error',
+          message: response.error || t('common.retry'),
+        });
+        persistQualityGateState(createSaveQualityState({
+          status: resolveSaveQualityStatus(nextSteps),
+          message: response.error || t('common.retry'),
+          steps: nextSteps,
+        }));
+      }
       if (response.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE) {
         setBanner({
           tone: 'warning',
@@ -3291,6 +3674,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
     addLocalHistoryEntry(filePath, 'save', model.getValue());
     markDirty(filePath, false);
     clearBannerForFile(filePath);
+    if (qualityGateStateBeforeWrite) {
+      const nextSteps = updateSaveQualityStep(qualityGateStateBeforeWrite.steps ?? [], {
+        id: 'write',
+        status: 'passed',
+        message: t('codePane.saveQualityWritten'),
+      });
+      const nextStatus = resolveSaveQualityStatus(nextSteps);
+      persistQualityGateState(createSaveQualityState({
+        status: nextStatus,
+        message: nextStatus === 'error'
+          ? nextSteps.find((step) => step.status === 'error')?.message
+          : nextStatus === 'warning'
+            ? nextSteps.find((step) => step.status === 'warning')?.message ?? t('codePane.saveQualitySavedWithIssues')
+            : t('codePane.saveQualitySaved'),
+        steps: nextSteps,
+      }));
+    }
     await syncLanguageDocument(filePath, 'save');
     void refreshGitSnapshot();
     return true;
@@ -3302,8 +3702,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     markSaving,
     refreshGitSnapshot,
     rootPath,
+    runSaveQualityPipeline,
     syncLanguageDocument,
     t,
+    persistQualityGateState,
   ]);
 
   const flushDirtyFiles = useCallback(async (targetFilePaths?: string[]) => {
@@ -3727,72 +4129,37 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
 
-  const applyLanguageTextEdits = useCallback(async (edits: CodePaneTextEdit[]) => {
-    if (edits.length === 0) {
+  const applyLanguageTextEdits = useCallback(async (
+    edits: CodePaneTextEdit[],
+    options?: {
+      saveAfterApply?: boolean;
+    },
+  ) => {
+    const didApply = await applyLanguageTextEditsWithoutSaving(edits);
+    if (!didApply) {
+      return false;
+    }
+
+    if (options?.saveAfterApply === false || edits.length === 0) {
       return true;
     }
 
-    const editsByFilePath = new Map<string, CodePaneTextEdit[]>();
-    for (const edit of edits) {
-      const fileEdits = editsByFilePath.get(edit.filePath) ?? [];
-      fileEdits.push(edit);
-      editsByFilePath.set(edit.filePath, fileEdits);
-    }
-
-    for (const [filePath, fileEdits] of editsByFilePath.entries()) {
-      const existingModel = fileModelsRef.current.get(filePath);
-      if (existingModel) {
-        const nextContent = applyTextEditsToContent(existingModel.getValue(), fileEdits);
-        suppressModelEventsRef.current.add(filePath);
-        existingModel.setValue(nextContent);
-        suppressModelEventsRef.current.delete(filePath);
-        clearDefinitionLookupCache();
-        markDirty(filePath, true);
-        await syncLanguageDocument(filePath, 'change');
-        const didSave = await saveFile(filePath);
-        if (!didSave) {
-          return false;
-        }
+    const editedFilePaths = Array.from(new Set(edits.map((edit) => edit.filePath)));
+    for (const editedFilePath of editedFilePaths) {
+      if (!fileModelsRef.current.has(editedFilePath)) {
         continue;
       }
 
-      const readResponse = await window.electronAPI.codePaneReadFile({
-        rootPath,
-        filePath,
+      const didSave = await saveFile(editedFilePath, {
+        skipQualityPipeline: true,
       });
-      if (!readResponse.success || !readResponse.data || readResponse.data.isBinary) {
-        setBanner({
-          tone: 'error',
-          message: readResponse.error || t('common.retry'),
-          filePath,
-        });
-        return false;
-      }
-
-      const nextContent = applyTextEditsToContent(readResponse.data.content, fileEdits);
-      const writeResponse = await window.electronAPI.codePaneWriteFile({
-        rootPath,
-        filePath,
-        content: nextContent,
-        expectedMtimeMs: readResponse.data.mtimeMs,
-      });
-      if (!writeResponse.success) {
-        setBanner({
-          tone: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE ? 'warning' : 'error',
-          message: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE
-            ? t('codePane.saveConflict')
-            : (writeResponse.error || t('common.retry')),
-          filePath,
-          showReload: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
-          showOverwrite: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
-        });
+      if (!didSave) {
         return false;
       }
     }
 
-    void refreshGitSnapshot();
     return true;
-  }, [clearDefinitionLookupCache, markDirty, refreshGitSnapshot, rootPath, saveFile, syncLanguageDocument, t]);
+  }, [applyLanguageTextEditsWithoutSaving, saveFile]);
 
   const prepareRefactorPreview = useCallback(async (config: Parameters<typeof window.electronAPI.codePanePrepareRefactor>[0]) => {
     setRefactorPreviewError(null);
@@ -5797,6 +6164,39 @@ export const CodePane: React.FC<CodePaneProps> = ({
       showSpinner: true,
     };
   }, [languageWorkspaceState]);
+  const qualityGateChip = useMemo(() => {
+    if (!qualityGateState || qualityGateState.status === 'idle') {
+      return null;
+    }
+
+    switch (qualityGateState.status) {
+      case 'running':
+        return {
+          className: 'bg-sky-500/15 text-sky-300',
+          showSpinner: true,
+          text: qualityGateState.message || t('codePane.saveQualityRunning'),
+        };
+      case 'error':
+        return {
+          className: 'bg-red-500/15 text-red-300',
+          showSpinner: false,
+          text: qualityGateState.message || t('codePane.saveQualityFailed'),
+        };
+      case 'warning':
+        return {
+          className: 'bg-amber-500/15 text-amber-300',
+          showSpinner: false,
+          text: qualityGateState.message || t('codePane.saveQualitySavedWithIssues'),
+        };
+      case 'passed':
+      default:
+        return {
+          className: 'bg-emerald-500/15 text-emerald-300',
+          showSpinner: false,
+          text: qualityGateState.message || t('codePane.saveQualitySaved'),
+        };
+    }
+  }, [qualityGateState, t]);
   const statusTone = getStatusTone(activeTabStatus);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
   const hasExternalLibraries = externalLibrarySections.some((section) => section.roots.length > 0);
@@ -9908,6 +10308,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   {statusTone.badge}
                 </span>
               )}
+              {qualityGateChip && (
+                <span
+                  title={(qualityGateState?.steps ?? [])
+                    .map((step) => `${step.id}: ${step.message ?? step.status}`)
+                    .join('\n')}
+                  className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 ${qualityGateChip.className}`}
+                >
+                  {qualityGateChip.showSpinner ? (
+                    <Loader2 size={11} className="shrink-0 animate-spin" />
+                  ) : (
+                    <AlertTriangle size={11} className="shrink-0" />
+                  )}
+                  <span>{qualityGateChip.text}</span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3">
               {indexStatus && (
@@ -9939,7 +10354,53 @@ export const CodePane: React.FC<CodePaneProps> = ({
               )}
               <span>{activeStatusText}</span>
               <span>{viewMode === 'diff' ? t('codePane.diffView') : t('codePane.editorView')}</span>
-              <span>{t('codePane.autoSave')}</span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    persistSavePipelineState({
+                      formatOnSave: !savePipelineState.formatOnSave,
+                    });
+                  }}
+                  className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+                    savePipelineState.formatOnSave
+                      ? 'bg-emerald-500/15 text-emerald-300'
+                      : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {t('codePane.saveQualityFormatToggle')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    persistSavePipelineState({
+                      organizeImportsOnSave: !savePipelineState.organizeImportsOnSave,
+                    });
+                  }}
+                  className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+                    savePipelineState.organizeImportsOnSave
+                      ? 'bg-sky-500/15 text-sky-300'
+                      : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {t('codePane.saveQualityImportsToggle')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    persistSavePipelineState({
+                      lintOnSave: !savePipelineState.lintOnSave,
+                    });
+                  }}
+                  className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+                    savePipelineState.lintOnSave
+                      ? 'bg-amber-500/15 text-amber-300'
+                      : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {t('codePane.saveQualityLintToggle')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

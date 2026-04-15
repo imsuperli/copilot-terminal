@@ -63,6 +63,29 @@ export interface CodePaneDebugState {
   }>;
 }
 
+export interface CodePaneSavePipelineState {
+  formatOnSave?: boolean;
+  organizeImportsOnSave?: boolean;
+  lintOnSave?: boolean;
+}
+
+export type CodePaneSaveQualityStepId = 'format' | 'organize-imports' | 'lint' | 'write';
+export type CodePaneSaveQualityStepStatus = 'running' | 'passed' | 'skipped' | 'warning' | 'error';
+
+export interface CodePaneSaveQualityStep {
+  id: CodePaneSaveQualityStepId;
+  status: CodePaneSaveQualityStepStatus;
+  message?: string;
+  issueCount?: number;
+}
+
+export interface CodePaneSaveQualityState {
+  status: 'idle' | 'running' | 'passed' | 'warning' | 'error';
+  message?: string;
+  updatedAt?: string;
+  steps?: CodePaneSaveQualityStep[];
+}
+
 export interface CodePaneState {
   rootPath: string;
   openFiles: CodePaneOpenFile[];
@@ -81,6 +104,8 @@ export interface CodePaneState {
   diffTargetPath?: string | null;
   layout?: CodePaneLayoutState;
   debug?: CodePaneDebugState;
+  savePipeline?: CodePaneSavePipelineState;
+  qualityGate?: CodePaneSaveQualityState;
 }
 
 export interface PaneCapabilities {
