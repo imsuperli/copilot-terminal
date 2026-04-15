@@ -125,12 +125,18 @@ describe('LanguageFeatureService', () => {
     }, null);
 
     expect(result).toEqual(definition);
+    expect(supervisor.attachDocumentOwner).toHaveBeenCalledWith(
+      resolution,
+      '__language-request__:/workspace/project/src/Main.java:1',
+      '/workspace',
+      '/workspace/project/src/Main.java',
+    );
     expect(codeFileService.readFile).toHaveBeenCalledWith({
       rootPath: '/workspace',
       filePath: '/workspace/project/src/Main.java',
     });
     expect(supervisor.syncDocument).toHaveBeenCalledWith(resolution, {
-      ownerId: '__language-request__:/workspace/project/src/Main.java',
+      ownerId: '__language-request__:/workspace/project/src/Main.java:1',
       rootPath: '/workspace',
       filePath: '/workspace/project/src/Main.java',
       languageId: 'java',
@@ -138,12 +144,12 @@ describe('LanguageFeatureService', () => {
     }, 'open');
     expect(supervisor.closeDocument).toHaveBeenCalledWith(
       resolution,
-      '__language-request__:/workspace/project/src/Main.java',
+      '__language-request__:/workspace/project/src/Main.java:1',
       '/workspace/project/src/Main.java',
     );
   });
 
-  it('reuses already tracked documents without reading from disk again', async () => {
+  it('attaches a transient owner to already tracked documents without reading from disk again', async () => {
     const { service, resolver, codeFileService, supervisor } = createService();
     const references = [
       {
@@ -158,7 +164,7 @@ describe('LanguageFeatureService', () => {
     ];
 
     resolver.resolve.mockResolvedValue(resolution);
-    supervisor.hasDocument.mockReturnValue(true);
+    supervisor.attachDocumentOwner.mockReturnValue(true);
     supervisor.getReferences.mockResolvedValue(references);
 
     const result = await service.getReferences({
@@ -173,8 +179,71 @@ describe('LanguageFeatureService', () => {
 
     expect(result).toEqual(references);
     expect(codeFileService.readFile).not.toHaveBeenCalled();
+    expect(supervisor.attachDocumentOwner).toHaveBeenCalledWith(
+      resolution,
+      '__language-request__:/workspace/project/src/Main.java:1',
+      '/workspace',
+      '/workspace/project/src/Main.java',
+    );
     expect(supervisor.syncDocument).not.toHaveBeenCalled();
-    expect(supervisor.closeDocument).not.toHaveBeenCalled();
+    expect(supervisor.closeDocument).toHaveBeenCalledWith(
+      resolution,
+      '__language-request__:/workspace/project/src/Main.java:1',
+      '/workspace/project/src/Main.java',
+    );
+  });
+
+  it('uses unique transient owner ids for concurrent feature requests on the same file', async () => {
+    const { service, resolver, codeFileService, supervisor } = createService();
+    resolver.resolve.mockResolvedValue(resolution);
+    supervisor.attachDocumentOwner.mockReturnValue(true);
+    supervisor.getHover.mockResolvedValue(null);
+    supervisor.getDocumentSymbols.mockResolvedValue([]);
+
+    await Promise.all([
+      service.getHover({
+        rootPath: '/workspace',
+        filePath: '/workspace/project/src/Main.java',
+        language: 'java',
+        position: {
+          lineNumber: 1,
+          column: 1,
+        },
+      }, null),
+      service.getDocumentSymbols({
+        rootPath: '/workspace',
+        filePath: '/workspace/project/src/Main.java',
+        language: 'java',
+      }, null),
+    ]);
+
+    expect(codeFileService.readFile).not.toHaveBeenCalled();
+    expect(supervisor.attachDocumentOwner).toHaveBeenNthCalledWith(
+      1,
+      resolution,
+      '__language-request__:/workspace/project/src/Main.java:1',
+      '/workspace',
+      '/workspace/project/src/Main.java',
+    );
+    expect(supervisor.attachDocumentOwner).toHaveBeenNthCalledWith(
+      2,
+      resolution,
+      '__language-request__:/workspace/project/src/Main.java:2',
+      '/workspace',
+      '/workspace/project/src/Main.java',
+    );
+    expect(supervisor.closeDocument).toHaveBeenNthCalledWith(
+      1,
+      resolution,
+      '__language-request__:/workspace/project/src/Main.java:1',
+      '/workspace/project/src/Main.java',
+    );
+    expect(supervisor.closeDocument).toHaveBeenNthCalledWith(
+      2,
+      resolution,
+      '__language-request__:/workspace/project/src/Main.java:2',
+      '/workspace/project/src/Main.java',
+    );
   });
 
   it('invalidates resolver cache and clears running sessions on reset', async () => {
@@ -300,6 +369,7 @@ function createService() {
   const supervisor = {
     syncDocument: vi.fn(),
     closeDocument: vi.fn(),
+    attachDocumentOwner: vi.fn().mockReturnValue(false),
     hasDocument: vi.fn(),
     getDefinition: vi.fn(),
     getHover: vi.fn(),
@@ -311,6 +381,7 @@ function createService() {
   } as unknown as LanguageServerSupervisor & {
     syncDocument: ReturnType<typeof vi.fn>;
     closeDocument: ReturnType<typeof vi.fn>;
+    attachDocumentOwner: ReturnType<typeof vi.fn>;
     hasDocument: ReturnType<typeof vi.fn>;
     getDefinition: ReturnType<typeof vi.fn>;
     getHover: ReturnType<typeof vi.fn>;

@@ -64,6 +64,7 @@ export class LanguageFeatureService {
   private readonly resolver: LanguagePluginResolver;
   private readonly supervisor: LanguageServerSupervisor;
   private readonly pluginRuntimeService?: PluginCapabilityRuntimeService;
+  private nextTransientOwnerSequence = 1;
 
   constructor(options: LanguageFeatureServiceOptions) {
     this.codeFileService = options.codeFileService;
@@ -363,31 +364,35 @@ export class LanguageFeatureService {
       return fallback;
     }
 
-    if (this.supervisor.hasDocument(resolution, filePath)) {
-      return await callback(resolution);
-    }
-
-    const readResponse = isVirtualDocument
-      ? await this.supervisor.readVirtualDocument(resolution, filePath)
-      : await this.codeFileService.readFile({
-        rootPath,
-        filePath,
-      });
-    if (!readResponse) {
-      return fallback;
-    }
-    if (readResponse.isBinary) {
-      return fallback;
-    }
-
-    const transientOwnerId = `${TRANSIENT_DOCUMENT_OWNER_PREFIX}:${filePath}`;
-    await this.supervisor.syncDocument(resolution, {
-      ownerId: transientOwnerId,
+    const transientOwnerId = `${TRANSIENT_DOCUMENT_OWNER_PREFIX}:${filePath}:${this.nextTransientOwnerSequence++}`;
+    const didAttachToTrackedDocument = this.supervisor.attachDocumentOwner(
+      resolution,
+      transientOwnerId,
       rootPath,
       filePath,
-      languageId: language ?? readResponse.language,
-      content: readResponse.content,
-    }, 'open');
+    );
+    if (!didAttachToTrackedDocument) {
+      const readResponse = isVirtualDocument
+        ? await this.supervisor.readVirtualDocument(resolution, filePath)
+        : await this.codeFileService.readFile({
+          rootPath,
+          filePath,
+        });
+      if (!readResponse) {
+        return fallback;
+      }
+      if (readResponse.isBinary) {
+        return fallback;
+      }
+
+      await this.supervisor.syncDocument(resolution, {
+        ownerId: transientOwnerId,
+        rootPath,
+        filePath,
+        languageId: language ?? readResponse.language,
+        content: readResponse.content,
+      }, 'open');
+    }
 
     try {
       return await callback(resolution);

@@ -378,6 +378,15 @@ export class LanguageServerSupervisor {
     }
   }
 
+  attachDocumentOwner(
+    resolution: ResolvedLanguagePlugin,
+    ownerId: string,
+    rootPath: string,
+    filePath: string,
+  ): boolean {
+    return this.getOrCreateSession(resolution).attachDocumentOwner(ownerId, rootPath, filePath);
+  }
+
   hasDocument(resolution: ResolvedLanguagePlugin, filePath: string): boolean {
     const session = this.sessions.get(this.getSessionKey(resolution));
     return session?.hasDocument(filePath) ?? false;
@@ -657,6 +666,16 @@ class LanguageServerSession {
 
   hasDocument(filePath: string): boolean {
     return this.documents.has(filePath);
+  }
+
+  attachDocumentOwner(ownerId: string, rootPath: string, filePath: string): boolean {
+    const document = this.documents.get(filePath);
+    if (!document) {
+      return false;
+    }
+
+    document.owners.set(ownerId, rootPath);
+    return true;
   }
 
   async syncDocument(config: DocumentSyncConfig): Promise<void> {
