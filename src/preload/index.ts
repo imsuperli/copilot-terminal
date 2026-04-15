@@ -161,6 +161,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-stage', config),
   codePaneGitUnstage: (config) =>
     ipcRenderer.invoke('code-pane-git-unstage', config),
+  codePaneGitRemove: (config) =>
+    ipcRenderer.invoke('code-pane-git-remove', config),
   codePaneGitDiscard: (config) =>
     ipcRenderer.invoke('code-pane-git-discard', config),
   codePaneGitStageHunk: (config) =>

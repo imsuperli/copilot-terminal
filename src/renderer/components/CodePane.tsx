@@ -977,6 +977,42 @@ function shouldAutoLoadCompactDirectoryChildren(rootPath: string, directoryPath:
   ));
 }
 
+function getQualifiedNameForTreePath(
+  rootPath: string,
+  targetPath: string,
+  entryType: CodePaneTreeEntry['type'],
+): string | null {
+  if (isExternalTreePath(rootPath, targetPath)) {
+    return null;
+  }
+
+  const relativePath = getRelativePath(rootPath, targetPath);
+  if (!relativePath) {
+    return null;
+  }
+
+  const segments = relativePath.split('/').filter(Boolean);
+  if (segments.length <= 3) {
+    return null;
+  }
+
+  const matchedSourceRoot = CODE_PANE_COMPACT_PACKAGE_SOURCE_ROOTS.find((sourceRoot) => (
+    sourceRoot.every((segment, index) => segments[index] === segment)
+  ));
+  if (!matchedSourceRoot) {
+    return null;
+  }
+
+  const packageSegments = entryType === 'directory'
+    ? segments.slice(matchedSourceRoot.length)
+    : segments.slice(matchedSourceRoot.length, -1);
+  if (packageSegments.length === 0) {
+    return null;
+  }
+
+  return packageSegments.join('.');
+}
+
 function sortOpenFilesByPinned<T extends { pinned?: boolean; preview?: boolean }>(openFiles: T[]): T[] {
   const pinnedOpenFiles = openFiles.filter((tab) => tab.pinned);
   const regularOpenFiles = openFiles.filter((tab) => !tab.pinned && !tab.preview);
@@ -5797,6 +5833,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }, [rootPath, runGitOperation, t]);
 
+  const removeGitPaths = useCallback(async (paths: string[], cached?: boolean) => {
+    await runGitOperation(
+      async () => await window.electronAPI.codePaneGitRemove({ rootPath, paths, cached }),
+      { successMessage: t('codePane.gitRemoveSuccess') },
+    );
+  }, [rootPath, runGitOperation, t]);
+
   const discardGitPaths = useCallback(async (paths: string[], restoreStaged?: boolean) => {
     await runGitOperation(
       async () => await window.electronAPI.codePaneGitDiscard({ rootPath, paths, restoreStaged }),
@@ -5870,6 +5913,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
         : t('codePane.gitCommitSuccess'),
     });
   }, [refreshGitSnapshot, refreshLoadedDirectories, rootPath, t]);
+
+  const commitPathChanges = useCallback(async (filePath: string) => {
+    const nextMessage = window.prompt(
+      t('codePane.gitCommitPrompt'),
+      getPathLeafLabel(filePath) || getRelativePath(rootPath, filePath) || filePath,
+    )?.trim();
+    if (!nextMessage) {
+      return;
+    }
+
+    await commitGitChanges({
+      message: nextMessage,
+      amend: false,
+      includeAll: true,
+    });
+  }, [commitGitChanges, rootPath, t]);
 
   const stashGitChanges = useCallback(async (config: { message: string; includeUntracked: boolean }) => {
     const response = await window.electronAPI.codePaneGitStash({
@@ -6228,6 +6287,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
         tone: 'info',
         message: t('codePane.pathCopied'),
         filePath: targetPath,
+      });
+    } catch (error) {
+      setBanner({
+        tone: 'error',
+        message: error instanceof Error ? error.message : t('common.retry'),
+      });
+    }
+  }, [t]);
+
+  const copyTextValue = useCallback(async (value: string, filePath?: string) => {
+    try {
+      const response = await window.electronAPI.writeClipboardText(value);
+      if (response && response.success === false) {
+        setBanner({
+          tone: 'error',
+          message: response.error || t('common.retry'),
+        });
+        return;
+      }
+
+      setBanner({
+        tone: 'info',
+        message: t('codePane.valueCopied'),
+        filePath,
       });
     } catch (error) {
       setBanner({
@@ -7510,115 +7593,228 @@ export const CodePane: React.FC<CodePaneProps> = ({
     options?: {
       allowDiff?: boolean;
       allowMutations?: boolean;
+      allowGitActions?: boolean;
       pinned?: boolean;
+      qualifiedName?: string | null;
       showPinToggle?: boolean;
     },
-  ) => (
-    <ContextMenu.Portal>
-      <ContextMenu.Content className={contextMenuContentClassName}>
-        <ContextMenu.Item
-          className={contextMenuItemClassName}
-          onSelect={() => {
-            void revealPath(filePath, entryType);
-          }}
-        >
-          {t('codePane.revealInFolder')}
-        </ContextMenu.Item>
-        <ContextMenu.Item
-          className={contextMenuItemClassName}
-          onSelect={() => {
-            void copyPath(filePath);
-          }}
-        >
-          {t('codePane.copyPath')}
-        </ContextMenu.Item>
-        <ContextMenu.Item
-          className={contextMenuItemClassName}
-          onSelect={() => {
-            void loadGitHistory({
-              filePath,
-            });
-          }}
-        >
-          {t('codePane.gitFileHistory')}
-        </ContextMenu.Item>
-        {entryType === 'file' && (
+  ) => {
+    const statusEntry = options?.allowGitActions === false ? undefined : gitStatusByPath[filePath];
+    const canGitStage = Boolean(
+      statusEntry && (statusEntry.unstaged || statusEntry.status === 'untracked' || statusEntry.status === 'added'),
+    );
+    const canGitUnstage = Boolean(statusEntry?.staged);
+    const canGitRemove = Boolean(statusEntry && (statusEntry.status === 'untracked' || statusEntry.status === 'added'));
+    const canGitRevert = Boolean(
+      statusEntry && (statusEntry.unstaged || statusEntry.status === 'deleted' || statusEntry.status === 'modified' || statusEntry.status === 'renamed'),
+    );
+
+    return (
+      <ContextMenu.Portal>
+        <ContextMenu.Content className={contextMenuContentClassName}>
           <ContextMenu.Item
             className={contextMenuItemClassName}
             onSelect={() => {
-              void openFileInSplit(filePath);
+              void revealPath(filePath, entryType);
             }}
           >
-            {t('codePane.openInSplit')}
+            {t('codePane.revealInFolder')}
           </ContextMenu.Item>
-        )}
-        {entryType === 'file' && options?.allowDiff !== false && (
+          <ContextMenu.Item
+            className={contextMenuItemClassName}
+            onClick={() => {
+              void copyPath(filePath);
+            }}
+          >
+            {t('codePane.copyPath')}
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            className={contextMenuItemClassName}
+            onClick={() => {
+              void copyTextValue(filePath, filePath);
+            }}
+          >
+            {t('codePane.copyAbsolutePath')}
+          </ContextMenu.Item>
+          <ContextMenu.Item
+            className={contextMenuItemClassName}
+            onClick={() => {
+              void copyTextValue(getPathLeafLabel(filePath) || filePath, filePath);
+            }}
+          >
+            {t('codePane.copyFileName')}
+          </ContextMenu.Item>
+          {options?.qualifiedName ? (
+            <ContextMenu.Item
+              className={contextMenuItemClassName}
+              onClick={() => {
+                void copyTextValue(options.qualifiedName ?? '', filePath);
+              }}
+            >
+              {t('codePane.copyQualifiedName')}
+            </ContextMenu.Item>
+          ) : null}
           <ContextMenu.Item
             className={contextMenuItemClassName}
             onSelect={() => {
-              void openDiffForFile(filePath);
+              void loadGitHistory({
+                filePath,
+              });
             }}
           >
-            {t('codePane.openDiff')}
+            {t('codePane.gitFileHistory')}
           </ContextMenu.Item>
-        )}
-        {options?.allowMutations !== false && (
-          <>
-            <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+          {options?.allowGitActions !== false && (
+            <ContextMenu.Sub>
+              <ContextMenu.SubTrigger className={`${contextMenuItemClassName} justify-between`}>
+                {t('codePane.gitMenu')}
+                <ChevronRight size={13} className="text-zinc-500" />
+              </ContextMenu.SubTrigger>
+              <ContextMenu.Portal>
+                <ContextMenu.SubContent className={contextMenuContentClassName}>
+                  <ContextMenu.Item
+                    className={contextMenuItemClassName}
+                    disabled={!canGitStage}
+                    onClick={() => {
+                      void stageGitPaths([filePath]);
+                    }}
+                  >
+                    {statusEntry?.status === 'untracked' ? t('codePane.gitAdd') : t('codePane.gitStage')}
+                  </ContextMenu.Item>
+                  <ContextMenu.Item
+                    className={contextMenuItemClassName}
+                    disabled={!canGitUnstage}
+                    onClick={() => {
+                      void unstageGitPaths([filePath]);
+                    }}
+                  >
+                    {t('codePane.gitUnstage')}
+                  </ContextMenu.Item>
+                  <ContextMenu.Item
+                    className={contextMenuItemClassName}
+                    disabled={!canGitRevert}
+                    onClick={() => {
+                      void discardGitPaths([filePath], Boolean(statusEntry?.staged));
+                    }}
+                  >
+                    {t('codePane.gitRevert')}
+                  </ContextMenu.Item>
+                  <ContextMenu.Item
+                    className={contextMenuItemClassName}
+                    disabled={!canGitRemove}
+                    onClick={() => {
+                      void removeGitPaths([filePath], statusEntry?.status === 'untracked');
+                    }}
+                  >
+                    {t('codePane.gitRemove')}
+                  </ContextMenu.Item>
+                  <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+                  <ContextMenu.Item
+                    className={contextMenuItemClassName}
+                    onClick={() => {
+                      void commitPathChanges(filePath);
+                    }}
+                  >
+                    {t('codePane.gitCommit')}
+                  </ContextMenu.Item>
+                  <ContextMenu.Item
+                    className={contextMenuItemClassName}
+                    onClick={() => {
+                      void loadGitHistory({
+                        filePath,
+                      });
+                    }}
+                  >
+                    {t('codePane.gitFileHistory')}
+                  </ContextMenu.Item>
+                </ContextMenu.SubContent>
+              </ContextMenu.Portal>
+            </ContextMenu.Sub>
+          )}
+          {entryType === 'file' && (
             <ContextMenu.Item
               className={contextMenuItemClassName}
               onSelect={() => {
-                void renamePathWithPreview(filePath);
+                void openFileInSplit(filePath);
               }}
             >
-              {t('codePane.renamePath')}
+              {t('codePane.openInSplit')}
             </ContextMenu.Item>
+          )}
+          {entryType === 'file' && options?.allowDiff !== false && (
             <ContextMenu.Item
               className={contextMenuItemClassName}
               onSelect={() => {
-                void movePathWithPreview(filePath);
+                void openDiffForFile(filePath);
               }}
             >
-              {t('codePane.movePath')}
+              {t('codePane.openDiff')}
             </ContextMenu.Item>
-            <ContextMenu.Item
-              className={contextMenuItemClassName}
-              onSelect={() => {
-                void safeDeletePathWithPreview(filePath);
-              }}
-            >
-              {t('codePane.safeDelete')}
-            </ContextMenu.Item>
-          </>
-        )}
-        {entryType === 'file' && options?.showPinToggle && (
-          <>
-            <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
-            <ContextMenu.Item
-              className={contextMenuItemClassName}
-              onSelect={() => {
-                togglePinnedTab(filePath);
-              }}
-            >
-              {options.pinned ? t('codePane.unpinTab') : t('codePane.pinTab')}
-            </ContextMenu.Item>
-          </>
-        )}
-      </ContextMenu.Content>
-    </ContextMenu.Portal>
-  ), [
+          )}
+          {options?.allowMutations !== false && (
+            <>
+              <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void renamePathWithPreview(filePath);
+                }}
+              >
+                {t('codePane.renamePath')}
+              </ContextMenu.Item>
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void movePathWithPreview(filePath);
+                }}
+              >
+                {t('codePane.movePath')}
+              </ContextMenu.Item>
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void safeDeletePathWithPreview(filePath);
+                }}
+              >
+                {t('codePane.deletePath')}
+              </ContextMenu.Item>
+            </>
+          )}
+          {entryType === 'file' && options?.showPinToggle && (
+            <>
+              <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  togglePinnedTab(filePath);
+                }}
+              >
+                {options.pinned ? t('codePane.unpinTab') : t('codePane.pinTab')}
+              </ContextMenu.Item>
+            </>
+          )}
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    );
+  }, [
     contextMenuContentClassName,
     contextMenuItemClassName,
+    commitPathChanges,
+    copyTextValue,
     copyPath,
+    gitStatusByPath,
     loadGitHistory,
     movePathWithPreview,
     openFileInSplit,
     openDiffForFile,
+    removeGitPaths,
     renamePathWithPreview,
     revealPath,
     safeDeletePathWithPreview,
+    stageGitPaths,
     t,
     togglePinnedTab,
+    unstageGitPaths,
   ]);
 
   const renderTree = useCallback((directoryPath: string, depth: number): React.ReactNode => {
@@ -7678,6 +7874,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
             {renderFileContextMenu(resolvedEntry.path, resolvedEntry.type, {
               allowDiff: isPathInside(rootPath, entry.path),
               allowMutations: !isExternalTreePath(rootPath, resolvedEntry.path),
+              allowGitActions: !isExternalTreePath(rootPath, resolvedEntry.path),
+              qualifiedName: getQualifiedNameForTreePath(rootPath, resolvedEntry.path, resolvedEntry.type),
             })}
           </ContextMenu.Root>
           {isDirectory && isExpanded && renderTree(resolvedEntry.path, depth + 1)}
@@ -7737,7 +7935,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         )}
                       </button>
                     </ContextMenu.Trigger>
-                    {renderFileContextMenu(root.path, 'directory', { allowDiff: false, allowMutations: false })}
+                    {renderFileContextMenu(root.path, 'directory', {
+                      allowDiff: false,
+                      allowMutations: false,
+                      allowGitActions: false,
+                    })}
                   </ContextMenu.Root>
                   <div className="truncate px-8 pb-1 text-[10px] text-zinc-600">{helperText}</div>
                   {isExpanded ? renderTree(root.path, 1) : null}
@@ -7773,7 +7975,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
             </span>
           </button>
         </ContextMenu.Trigger>
-        {renderFileContextMenu(filePath, 'file')}
+        {renderFileContextMenu(filePath, 'file', {
+          qualifiedName: getQualifiedNameForTreePath(rootPath, filePath, 'file'),
+        })}
       </ContextMenu.Root>
     );
   }), [activateFile, getEntryStatus, renderFileContextMenu, rootPath, searchResults, selectedPath]);

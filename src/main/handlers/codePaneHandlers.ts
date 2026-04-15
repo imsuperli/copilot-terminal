@@ -28,6 +28,7 @@ import type {
   CodePaneGitGraphConfig,
   CodePaneGitHistoryConfig,
   CodePaneGitHunkActionConfig,
+  CodePaneGitRemoveConfig,
   CodePaneGitPushConfig,
   CodePaneGitRenameBranchConfig,
   CodePaneGitRebaseControlConfig,
@@ -250,6 +251,19 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       await codeGitOperationService.unstage(config);
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-remove', async (_event, config: CodePaneGitRemoveConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      await codeGitOperationService.remove(config);
       return successResponse();
     } catch (error) {
       return errorResponse(error);

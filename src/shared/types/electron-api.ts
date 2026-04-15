@@ -428,6 +428,12 @@ export interface CodePaneGitStageConfig {
   paths: string[];
 }
 
+export interface CodePaneGitRemoveConfig {
+  rootPath: string;
+  paths: string[];
+  cached?: boolean;
+}
+
 export interface CodePaneGitHunkActionConfig {
   rootPath: string;
   filePath: string;
@@ -1672,6 +1678,7 @@ export interface ElectronAPI {
   codePaneGetGitDiffHunks: (config: CodePaneGitDiffHunksConfig) => Promise<IpcResponse<CodePaneGitDiffHunksResult>>;
   codePaneGitStage: (config: CodePaneGitStageConfig) => Promise<IpcResponse<void>>;
   codePaneGitUnstage: (config: CodePaneGitStageConfig) => Promise<IpcResponse<void>>;
+  codePaneGitRemove: (config: CodePaneGitRemoveConfig) => Promise<IpcResponse<void>>;
   codePaneGitDiscard: (config: CodePaneGitDiscardConfig) => Promise<IpcResponse<void>>;
   codePaneGitStageHunk: (config: CodePaneGitHunkActionConfig) => Promise<IpcResponse<void>>;
   codePaneGitUnstageHunk: (config: CodePaneGitHunkActionConfig) => Promise<IpcResponse<void>>;

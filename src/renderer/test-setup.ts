@@ -151,6 +151,7 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneGetGitDiffHunks: vi.fn().mockResolvedValue({ success: true, data: { filePath: '', stagedHunks: [], unstagedHunks: [] } }),
     codePaneGitStage: vi.fn().mockResolvedValue({ success: true }),
     codePaneGitUnstage: vi.fn().mockResolvedValue({ success: true }),
+    codePaneGitRemove: vi.fn().mockResolvedValue({ success: true }),
     codePaneGitDiscard: vi.fn().mockResolvedValue({ success: true }),
     codePaneGitStageHunk: vi.fn().mockResolvedValue({ success: true }),
     codePaneGitUnstageHunk: vi.fn().mockResolvedValue({ success: true }),

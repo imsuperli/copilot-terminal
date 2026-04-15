@@ -14,6 +14,7 @@ import type {
   CodePaneGitHunkActionConfig,
   CodePaneGitPushConfig,
   CodePaneGitPushResult,
+  CodePaneGitRemoveConfig,
   CodePaneGitRenameBranchConfig,
   CodePaneGitRebaseControlConfig,
   CodePaneGitResolveConflictConfig,
@@ -53,6 +54,24 @@ export class CodeGitOperationService {
     await execFileAsync(
       'git',
       ['-C', repoContext.repoRootPath, 'restore', '--staged', ...pathspecArgs],
+      { encoding: 'utf-8' },
+    );
+  }
+
+  async remove(config: CodePaneGitRemoveConfig): Promise<void> {
+    const repoContext = await requireRepoContext(config.rootPath);
+    const pathspecArgs = this.getRepoPathspecArgs(repoContext, config.paths);
+    await execFileAsync(
+      'git',
+      [
+        '-C',
+        repoContext.repoRootPath,
+        'rm',
+        ...(config.cached ? ['--cached'] : []),
+        '-r',
+        '--ignore-unmatch',
+        ...pathspecArgs,
+      ],
       { encoding: 'utf-8' },
     );
   }

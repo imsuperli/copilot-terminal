@@ -82,6 +82,21 @@ describeGit('Code Git workflow services', () => {
     expect(await fsPromises.readFile(trackedFilePath, 'utf-8')).toBe('export const value = 2;\n');
   });
 
+  it('removes tracked files through the operation service', async () => {
+    const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
+
+    await operationService.remove({
+      rootPath: repoRootPath,
+      paths: [trackedFilePath],
+    });
+
+    expect(await fsPromises.stat(trackedFilePath).then(() => true).catch(() => false)).toBe(false);
+    expect(execFileSync('git', ['diff', '--cached', '--name-status'], {
+      cwd: repoRootPath,
+      encoding: 'utf-8',
+    })).toContain('D\ttracked.ts');
+  });
+
   it('stages, unstages, and discards a single git hunk', async () => {
     const trackedFilePath = path.join(repoRootPath, 'tracked.ts');
     const baseLines = Array.from({ length: 20 }, (_item, index) => `export const value${index + 1} = ${index + 1};`);

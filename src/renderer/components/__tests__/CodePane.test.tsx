@@ -655,6 +655,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGetGitDiffHunks).mockReset();
     vi.mocked(window.electronAPI.codePaneGitStage).mockReset();
     vi.mocked(window.electronAPI.codePaneGitUnstage).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitRemove).mockReset();
     vi.mocked(window.electronAPI.codePaneGitDiscard).mockReset();
     vi.mocked(window.electronAPI.codePaneGitStageHunk).mockReset();
     vi.mocked(window.electronAPI.codePaneGitUnstageHunk).mockReset();
@@ -836,6 +837,7 @@ describe('CodePane', () => {
     });
     vi.mocked(window.electronAPI.codePaneGitStage).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitUnstage).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneGitRemove).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitDiscard).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitStageHunk).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGitUnstageHunk).mockResolvedValue({ success: true });
@@ -1967,28 +1969,43 @@ describe('CodePane', () => {
         ],
       },
     });
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+        },
+      ],
+    });
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Commit index');
     renderCodePane(createPane());
 
     const treeButton = await screen.findByRole('button', { name: 'index.ts' });
 
-    await user.pointer({ keys: '[MouseRight]', target: treeButton });
-    await user.click(await screen.findByText('codePane.copyPath'));
+    fireEvent.contextMenu(treeButton);
+    await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyAbsolutePath' }));
     expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('/workspace/project/src/index.ts');
-    expect(screen.getByText('codePane.pathCopied')).toBeInTheDocument();
+    expect(screen.getByText('codePane.valueCopied')).toBeInTheDocument();
 
-    await user.pointer({ keys: '[MouseRight]', target: treeButton });
+    fireEvent.contextMenu(treeButton);
+    await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyFileName' }));
+    expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('index.ts');
+
+    fireEvent.contextMenu(treeButton);
     await user.click(await screen.findByText('codePane.revealInFolder'));
     expect(window.electronAPI.openFolder).toHaveBeenCalledWith('/workspace/project/src');
 
-    await user.pointer({ keys: '[MouseRight]', target: treeButton });
-    await user.click(await screen.findByText('codePane.gitFileHistory'));
-    expect(window.electronAPI.codePaneGitHistory).toHaveBeenCalledWith({
-      rootPath: '/workspace/project',
-      filePath: '/workspace/project/src/index.ts',
-      lineNumber: undefined,
-      limit: 30,
-    });
-    expect((await screen.findAllByText('Refine index flow')).length).toBeGreaterThan(0);
+    fireEvent.contextMenu(treeButton);
+    await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
+    expect(await screen.findByRole('menuitem', { name: 'codePane.gitRevert' })).toBeInTheDocument();
+
+    fireEvent.contextMenu(treeButton);
+    await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
+    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCommit' })).toBeInTheDocument();
+
+    promptSpy.mockRestore();
   });
 
   it('opens git history from directory context menus', async () => {
@@ -2057,6 +2074,107 @@ describe('CodePane', () => {
       limit: 30,
     });
     expect((await screen.findAllByText('Create main package')).length).toBeGreaterThan(0);
+  });
+
+  it('copies qualified package names from compact package directories', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (!targetPath || targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main',
+              name: 'main',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+      if (targetPath === '/workspace/project/src/main') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java',
+              name: 'java',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+      if (targetPath === '/workspace/project/src/main/java') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com',
+              name: 'com',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+      if (targetPath === '/workspace/project/src/main/java/com') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com/iflytek',
+              name: 'iflytek',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+      if (targetPath === '/workspace/project/src/main/java/com/iflytek') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com/iflytek/tjpt',
+              name: 'tjpt',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+
+    renderCodePane(createPane());
+
+    const srcButton = await screen.findByRole('button', { name: 'src' });
+    fireEvent.doubleClick(srcButton);
+    const mainButton = await screen.findByRole('button', { name: 'main' });
+    fireEvent.doubleClick(mainButton);
+    const javaButton = await screen.findByRole('button', { name: 'java' });
+    fireEvent.doubleClick(javaButton);
+    const packageButton = await screen.findByRole('button', { name: 'com.iflytek.tjpt' });
+
+    await user.pointer({ keys: '[MouseRight]', target: packageButton });
+    await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyQualifiedName' }));
+
+    expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('com.iflytek.tjpt');
   });
 
   it('searches project contents and opens a selected match', async () => {
