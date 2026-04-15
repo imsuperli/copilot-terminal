@@ -6575,13 +6575,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       showSpinner: true,
     };
   }, [languageWorkspaceState]);
-  const statusTone = getStatusTone(activeTabStatus);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
   const hasExternalLibraries = externalLibrarySections.some((section) => section.roots.length > 0);
   const rootLabel = useMemo(() => getPathLeafLabel(rootPath) || rootPath, [rootPath]);
   const isRootExpanded = expandedDirectories.has(rootPath);
   const isRootSelected = selectedPath === rootPath;
-  const rootBadge = getStatusTone(getEntryStatus(rootPath, 'directory'));
   const orderedOpenFiles = useMemo(() => sortOpenFilesByPinned(openFiles), [openFiles]);
   const contextMenuContentClassName = 'z-50 min-w-[180px] rounded border border-zinc-800 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur';
   const contextMenuItemClassName = 'flex items-center gap-2 rounded px-3 py-2 text-xs text-zinc-200 outline-none transition-colors focus:bg-zinc-800 data-[highlighted]:bg-zinc-800';
@@ -9979,11 +9977,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                               <span className="min-w-0 flex-1 truncate">{rootLabel}</span>
                               {isDirectoryLoading(rootPath) && (
                                 <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
-                              )}
-                              {rootBadge && (
-                                <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${rootBadge.className}`}>
-                                  {rootBadge.badge}
-                                </span>
                               )}
                             </button>
                           </ContextMenu.Trigger>
