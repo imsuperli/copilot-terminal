@@ -8,9 +8,9 @@ import React, {
   useState,
 } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   AlertTriangle,
-  BookOpen,
   ChevronLeft,
   ChevronDown,
   ChevronRight,
@@ -22,6 +22,7 @@ import {
   GitCompareArrows,
   GripVertical,
   Loader2,
+  MoreHorizontal,
   Pin,
   RefreshCw,
   Save,
@@ -33,7 +34,6 @@ import type {
   CodePaneSavePipelineState,
   CodePaneSaveQualityState,
   CodePaneSaveQualityStep,
-  CodePaneSaveQualityStepId,
   Pane,
 } from '../types/window';
 import type {
@@ -260,6 +260,22 @@ type LocalHistoryEntry = {
   timestamp: number;
   content: string;
   preview: string;
+};
+
+type EditorActionMenuItem = {
+  id: string;
+  label: string;
+  disabled?: boolean;
+  active?: boolean;
+  onSelect: () => void;
+};
+
+type ToolWindowLauncher = {
+  id: string;
+  label: string;
+  disabled?: boolean;
+  active?: boolean;
+  onClick: () => void;
 };
 
 type SaveFileOptions = {
@@ -8251,6 +8267,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setBottomPanelMode((currentMode) => (currentMode === mode ? null : mode));
   }, []);
 
+  const toggleHierarchyToolWindow = useCallback(() => {
+    if (!activeFilePath) {
+      return;
+    }
+
+    if (bottomPanelMode === 'hierarchy') {
+      setBottomPanelMode(null);
+      return;
+    }
+
+    void openHierarchyPanel(selectedHierarchyMode);
+  }, [activeFilePath, bottomPanelMode, openHierarchyPanel, selectedHierarchyMode]);
+
   const refreshBottomPanel = useCallback(() => {
     if (bottomPanelMode === 'run') {
       void loadRunTargets();
@@ -8600,6 +8629,228 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }), [activateFile, discardGitPaths, loadGitDiffHunks, loadGitHistory, openDiffForFile, openGitConflictResolver, resolveGitConflict, revealPathInExplorer, rootPath, selectedGitChangePath, stageGitPaths, t, unstageGitPaths]);
 
+  const toolWindowLaunchers = useMemo<ToolWindowLauncher[]>(() => {
+    const items: ToolWindowLauncher[] = [
+      {
+        id: 'run',
+        label: t('codePane.runTab'),
+        active: bottomPanelMode === 'run',
+        onClick: () => {
+          toggleBottomPanelMode('run');
+        },
+      },
+      {
+        id: 'debug',
+        label: t('codePane.debugTab'),
+        active: bottomPanelMode === 'debug',
+        onClick: () => {
+          toggleBottomPanelMode('debug');
+        },
+      },
+      {
+        id: 'tests',
+        label: t('codePane.testsTab'),
+        active: bottomPanelMode === 'tests',
+        onClick: () => {
+          toggleBottomPanelMode('tests');
+        },
+      },
+      {
+        id: 'project',
+        label: t('codePane.projectTab'),
+        active: bottomPanelMode === 'project',
+        onClick: () => {
+          toggleBottomPanelMode('project');
+        },
+      },
+      {
+        id: 'git',
+        label: t('codePane.gitWorkbenchTab'),
+        active: bottomPanelMode === 'git',
+        onClick: () => {
+          toggleBottomPanelMode('git');
+        },
+      },
+      {
+        id: 'workspace',
+        label: t('codePane.workspaceTab'),
+        active: bottomPanelMode === 'workspace',
+        onClick: () => {
+          toggleBottomPanelMode('workspace');
+        },
+      },
+      {
+        id: 'hierarchy',
+        label: t('codePane.hierarchyTab'),
+        active: bottomPanelMode === 'hierarchy',
+        disabled: !activeFilePath,
+        onClick: () => {
+          toggleHierarchyToolWindow();
+        },
+      },
+      {
+        id: 'semantic',
+        label: t('codePane.semanticTab'),
+        active: bottomPanelMode === 'semantic',
+        disabled: !activeFilePath,
+        onClick: () => {
+          toggleBottomPanelMode('semantic');
+        },
+      },
+      {
+        id: 'performance',
+        label: t('codePane.performanceTab'),
+        active: bottomPanelMode === 'performance',
+        onClick: () => {
+          toggleBottomPanelMode('performance');
+        },
+      },
+    ];
+
+    if (gitHistory || bottomPanelMode === 'history') {
+      items.splice(5, 0, {
+        id: 'history',
+        label: t('codePane.gitHistoryTab'),
+        active: bottomPanelMode === 'history',
+        onClick: () => {
+          toggleBottomPanelMode('history');
+        },
+      });
+    }
+
+    if (refactorPreview || bottomPanelMode === 'preview') {
+      items.splice(items.length - 1, 0, {
+        id: 'preview',
+        label: t('codePane.refactorPreviewTab'),
+        active: bottomPanelMode === 'preview',
+        onClick: () => {
+          toggleBottomPanelMode('preview');
+        },
+      });
+    }
+
+    return items;
+  }, [
+    activeFilePath,
+    bottomPanelMode,
+    gitHistory,
+    refactorPreview,
+    t,
+    toggleBottomPanelMode,
+    toggleHierarchyToolWindow,
+  ]);
+
+  const editorActionMenuSections = useMemo<EditorActionMenuItem[][]>(() => ([
+    [
+      {
+        id: 'find-usages',
+        label: t('codePane.findUsages'),
+        disabled: !activeFilePath,
+        onSelect: () => {
+          void findUsagesAtCursor();
+        },
+      },
+      {
+        id: 'rename-symbol',
+        label: t('codePane.renameSymbol'),
+        disabled: !activeFilePath || activeFileReadOnly,
+        onSelect: () => {
+          void renameSymbolAtCursor();
+        },
+      },
+      {
+        id: 'go-to-implementation',
+        label: t('codePane.goToImplementation'),
+        disabled: !activeFilePath,
+        onSelect: () => {
+          void goToImplementationAtCursor();
+        },
+      },
+      {
+        id: 'code-actions',
+        label: t('codePane.codeActions'),
+        disabled: !activeFilePath,
+        onSelect: () => {
+          void openCodeActionMenu();
+        },
+      },
+      {
+        id: 'format-document',
+        label: t('codePane.formatDocument'),
+        disabled: !activeFilePath || activeFileReadOnly,
+        onSelect: () => {
+          void formatActiveDocument();
+        },
+      },
+    ],
+    [
+      {
+        id: 'quick-documentation',
+        label: t('codePane.quickDocumentation'),
+        disabled: !activeFilePath,
+        active: isQuickDocumentationOpen,
+        onSelect: () => {
+          toggleQuickDocumentation();
+        },
+      },
+      {
+        id: 'toggle-inlay-hints',
+        label: t('codePane.inlayHints'),
+        disabled: !activeFilePath,
+        active: areInlayHintsEnabled,
+        onSelect: () => {
+          setAreInlayHintsEnabled((currentValue) => !currentValue);
+        },
+      },
+      {
+        id: 'toggle-split-editor',
+        label: t('codePane.editorSplitToggle'),
+        disabled: !activeFilePath,
+        active: isEditorSplitVisible,
+        onSelect: () => {
+          void toggleEditorSplit();
+        },
+      },
+    ],
+    [
+      {
+        id: 'toggle-bookmark',
+        label: t('codePane.bookmarkToggle'),
+        disabled: !activeFilePath,
+        active: isCurrentLineBookmarked,
+        onSelect: () => {
+          toggleBookmarkAtCursor();
+        },
+      },
+      {
+        id: 'toggle-git-blame',
+        label: t('codePane.gitBlame'),
+        disabled: !activeFilePath,
+        active: isBlameVisible,
+        onSelect: () => {
+          setIsBlameVisible((currentValue) => !currentValue);
+        },
+      },
+    ],
+  ]), [
+    activeFilePath,
+    activeFileReadOnly,
+    areInlayHintsEnabled,
+    findUsagesAtCursor,
+    formatActiveDocument,
+    goToImplementationAtCursor,
+    isBlameVisible,
+    isCurrentLineBookmarked,
+    isEditorSplitVisible,
+    isQuickDocumentationOpen,
+    openCodeActionMenu,
+    renameSymbolAtCursor,
+    t,
+    toggleEditorSplit,
+    toggleQuickDocumentation,
+    toggleBookmarkAtCursor,
+  ]);
+
   return (
     <>
       <style>
@@ -8712,6 +8963,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             <button
               type="button"
               tabIndex={-1}
+              aria-label={t('codePane.refresh')}
               onMouseDown={preventMouseButtonFocus}
               onClick={() => {
                 setIsRefreshing(true);
@@ -8731,6 +8983,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             <button
               type="button"
               tabIndex={-1}
+              aria-label={viewMode === 'diff' ? t('codePane.showEditor') : t('codePane.showDiff')}
               onMouseDown={preventMouseButtonFocus}
               onClick={() => {
                 if (viewMode === 'diff') {
@@ -8749,404 +9002,52 @@ export const CodePane: React.FC<CodePaneProps> = ({
               <GitCompareArrows size={13} />
             </button>
           </AppTooltip>
-          <AppTooltip content={t('codePane.findUsages')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.findUsages')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                void findUsagesAtCursor();
-              }}
-              disabled={!activeFilePath}
-              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Use
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.renameSymbol')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.renameSymbol')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                void renameSymbolAtCursor();
-              }}
-              disabled={!activeFilePath || activeFileReadOnly}
-              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Ren
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.goToImplementation')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.goToImplementation')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                void goToImplementationAtCursor();
-              }}
-              disabled={!activeFilePath}
-              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Impl
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.quickDocumentation')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.quickDocumentation')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleQuickDocumentation();
-              }}
-              disabled={!activeFilePath}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                isQuickDocumentationOpen
-                  ? 'bg-sky-500/20 text-sky-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              <BookOpen size={11} className="mr-1" />
-              Doc
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.inlayHints')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.inlayHints')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                setAreInlayHintsEnabled((currentValue) => !currentValue);
-              }}
-              disabled={!activeFilePath}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                areInlayHintsEnabled
-                  ? 'bg-emerald-500/20 text-emerald-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Hint
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.hierarchyTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.hierarchyTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                openHierarchyPanel('call-outgoing');
-              }}
-              disabled={!activeFilePath}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'hierarchy' && selectedHierarchyMode.startsWith('call')
-                  ? 'bg-sky-500/20 text-sky-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Call
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.typeHierarchy')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.typeHierarchy')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                openHierarchyPanel('type-parents');
-              }}
-              disabled={!activeFilePath}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'hierarchy' && selectedHierarchyMode.startsWith('type')
-                  ? 'bg-violet-500/20 text-violet-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Type
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.semanticTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.semanticTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                setBottomPanelMode('semantic');
-              }}
-              disabled={!activeFilePath}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'semantic'
-                  ? 'bg-fuchsia-500/20 text-fuchsia-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Sem
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.codeActions')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.codeActions')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                void openCodeActionMenu();
-              }}
-              disabled={!activeFilePath}
-              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Fix
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.runTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.runTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('run');
-              }}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'run'
-                  ? 'bg-emerald-500/20 text-emerald-200'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
-              }`}
-            >
-              Run
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.debugTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.debugTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('debug');
-              }}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'debug'
-                  ? 'bg-amber-500/20 text-amber-200'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
-              }`}
-            >
-              Dbg
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.testsTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.testsTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('tests');
-              }}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'tests'
-                  ? 'bg-sky-500/20 text-sky-200'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
-              }`}
-            >
-              Test
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.projectTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.projectTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('project');
-              }}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'project'
-                  ? 'bg-amber-500/20 text-amber-200'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
-              }`}
-            >
-              Proj
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.gitWorkbenchTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.gitWorkbenchTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('git');
-              }}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'git'
-                  ? 'bg-sky-500/20 text-sky-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
-              }`}
-            >
-              Git
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.refactorPreviewTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.refactorPreviewTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('preview');
-              }}
-              disabled={!refactorPreview}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'preview'
-                  ? 'bg-violet-500/20 text-violet-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Prev
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.gitHistoryTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.gitHistoryTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('history');
-              }}
-              disabled={!gitHistory}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'history'
-                  ? 'bg-sky-500/20 text-sky-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Hist
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.performanceTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.performanceTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('performance');
-              }}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'performance'
-                  ? 'bg-emerald-500/20 text-emerald-100'
-                  : hasRuntimeActivity
-                    ? 'bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
-                    : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
-              }`}
-            >
-              Perf
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.workspaceTab')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.workspaceTab')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBottomPanelMode('workspace');
-              }}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                bottomPanelMode === 'workspace'
-                  ? 'bg-fuchsia-500/20 text-fuchsia-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50'
-              }`}
-            >
-              Work
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.editorSplitToggle')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.editorSplitToggle')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                void toggleEditorSplit();
-              }}
-              disabled={!activeFilePath}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                isEditorSplitVisible
-                  ? 'bg-sky-500/20 text-sky-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Split
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.bookmarkToggle')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.bookmarkToggle')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                toggleBookmarkAtCursor();
-              }}
-              disabled={!activeFilePath}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                isCurrentLineBookmarked
-                  ? 'bg-amber-500/20 text-amber-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Bmk
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.gitBlame')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.gitBlame')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                setIsBlameVisible((currentValue) => !currentValue);
-              }}
-              disabled={!activeFilePath}
-              className={`flex h-6 items-center justify-center rounded px-1.5 text-[10px] font-medium transition-colors ${
-                isBlameVisible
-                  ? 'bg-sky-500/20 text-sky-100'
-                  : 'bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40'
-              }`}
-            >
-              Blm
-            </button>
-          </AppTooltip>
-          <AppTooltip content={t('codePane.formatDocument')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('codePane.formatDocument')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={() => {
-                void formatActiveDocument();
-              }}
-              disabled={!activeFilePath || activeFileReadOnly}
-              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Fmt
-            </button>
-          </AppTooltip>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                tabIndex={-1}
+                title={t('codePane.editorActionsMenu')}
+                aria-label={t('codePane.editorActionsMenu')}
+                onMouseDown={preventMouseButtonFocus}
+                className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+              >
+                <MoreHorizontal size={13} className="mr-1" />
+                {t('common.more')}
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className={contextMenuContentClassName}
+                sideOffset={6}
+                align="end"
+              >
+                {editorActionMenuSections.map((section, sectionIndex) => (
+                  <React.Fragment key={`editor-actions-${sectionIndex}`}>
+                    {section.map((item) => (
+                      <DropdownMenu.Item
+                        key={item.id}
+                        disabled={item.disabled}
+                        onSelect={item.onSelect}
+                        className={`${contextMenuItemClassName} justify-between ${item.active ? 'bg-zinc-800/80 text-zinc-50' : ''} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
+                      >
+                        <span>{item.label}</span>
+                        {item.active && <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />}
+                      </DropdownMenu.Item>
+                    ))}
+                    {sectionIndex < editorActionMenuSections.length - 1 && (
+                      <DropdownMenu.Separator className="my-1 h-px bg-zinc-800" />
+                    )}
+                  </React.Fragment>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
           <AppTooltip content={t('common.save')} placement="pane-corner">
             <button
               type="button"
               tabIndex={-1}
+              aria-label={t('common.save')}
               onMouseDown={preventMouseButtonFocus}
               onClick={() => {
                 if (activeFilePath) {
@@ -10295,7 +10196,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
           ) : null}
 
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 py-2 text-[11px] text-zinc-500">
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+              <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded border border-zinc-800 bg-zinc-950/80 px-1 py-0.5">
+                {toolWindowLaunchers.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    aria-label={item.label}
+                    onClick={item.onClick}
+                    disabled={item.disabled}
+                    className={`shrink-0 rounded px-1.5 py-0.5 font-medium transition-colors ${
+                      item.active
+                        ? 'bg-zinc-800 text-zinc-100'
+                        : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
+                    } disabled:cursor-not-allowed disabled:opacity-40`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="h-4 w-px shrink-0 bg-zinc-800" />
               <span className="truncate">
                 {activeFilePath
                   ? (activeFileDisplayPath && isPathInside(rootPath, activeFileDisplayPath)

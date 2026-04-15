@@ -451,6 +451,15 @@ async function openFileFromTree(fileName: string, options?: { doubleClick?: bool
   });
 }
 
+async function triggerEditorAction(actionLabel: string) {
+  const user = userEvent.setup();
+  const menuTrigger = await screen.findByRole('button', { name: 'codePane.editorActionsMenu' }, { timeout: 3000 });
+  await user.click(menuTrigger);
+
+  const menuItem = await screen.findByRole('menuitem', { name: actionLabel }, { timeout: 3000 });
+  await user.click(menuItem);
+}
+
 async function emitFsChanged(payload: CodePaneFsChangedPayload) {
   const callback = vi.mocked(window.electronAPI.onCodePaneFsChanged).mock.calls.at(-1)?.[0];
   if (!callback) {
@@ -2332,9 +2341,7 @@ describe('CodePane', () => {
       });
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'codePane.renameSymbol' }));
-    });
+    await triggerEditorAction('codePane.renameSymbol');
 
     expect(window.electronAPI.codePanePrepareRefactor).toHaveBeenCalledWith({
       kind: 'rename-symbol',
@@ -2461,9 +2468,7 @@ describe('CodePane', () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.filesTab' }));
     });
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitBlame' }));
-    });
+    await triggerEditorAction('codePane.gitBlame');
 
     await waitFor(() => {
       expect(window.electronAPI.codePaneGitBlame).toHaveBeenCalledWith({
@@ -2975,9 +2980,7 @@ describe('CodePane', () => {
 
     await openFileFromTree('index.ts');
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'codePane.formatDocument' }));
-    });
+    await triggerEditorAction('codePane.formatDocument');
 
     await waitFor(() => {
       expect(window.electronAPI.codePaneFormatDocument).toHaveBeenCalledWith({
@@ -3154,8 +3157,8 @@ describe('CodePane', () => {
     const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
     await act(async () => {
       activeEditor.setPosition({ lineNumber: 1, column: 15 });
-      fireEvent.click(screen.getByRole('button', { name: 'codePane.renameSymbol' }));
     });
+    await triggerEditorAction('codePane.renameSymbol');
 
     await waitFor(() => {
       expect(window.electronAPI.codePanePrepareRefactor).toHaveBeenCalledWith({
@@ -3208,8 +3211,8 @@ describe('CodePane', () => {
     const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
     await act(async () => {
       activeEditor.setPosition({ lineNumber: 1, column: 15 });
-      fireEvent.click(screen.getByRole('button', { name: 'codePane.findUsages' }));
     });
+    await triggerEditorAction('codePane.findUsages');
 
     await waitFor(() => {
       expect(window.electronAPI.codePaneGetReferences).toHaveBeenCalledWith({
@@ -3334,8 +3337,8 @@ describe('CodePane', () => {
     const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
     await act(async () => {
       activeEditor.setPosition({ lineNumber: 1, column: 15 });
-      fireEvent.click(screen.getByRole('button', { name: 'codePane.codeActions' }));
     });
+    await triggerEditorAction('codePane.codeActions');
 
     await waitFor(() => {
       expect(window.electronAPI.codePaneGetCodeActions).toHaveBeenCalledWith({
@@ -4138,7 +4141,6 @@ describe('CodePane', () => {
   });
 
   it('opens quick documentation and renders hover content', async () => {
-    const user = userEvent.setup();
     vi.mocked(window.electronAPI.codePaneGetHover).mockResolvedValue({
       success: true,
       data: {
@@ -4154,7 +4156,7 @@ describe('CodePane', () => {
     renderCodePane(createPane());
 
     await openFileFromTree('index.ts', { doubleClick: true });
-    await user.click(await screen.findByRole('button', { name: 'codePane.quickDocumentation' }));
+    await triggerEditorAction('codePane.quickDocumentation');
 
     await waitFor(() => {
       expect(window.electronAPI.codePaneGetHover).toHaveBeenCalledWith({
@@ -4346,7 +4348,7 @@ describe('CodePane', () => {
     const view = renderCodePane(createPane());
 
     await openFileFromTree('index.ts', { doubleClick: true });
-    await user.click(await screen.findByRole('button', { name: 'codePane.bookmarkToggle' }));
+    await triggerEditorAction('codePane.bookmarkToggle');
     await user.click(await screen.findByRole('button', { name: 'codePane.workspaceTab' }));
 
     expect(await screen.findByText('codePane.bookmarksTitle')).toBeInTheDocument();
