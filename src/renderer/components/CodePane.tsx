@@ -6956,7 +6956,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 )}
                 <span className="min-w-0 flex-1 truncate">
                   {compactPresentation.displayName}
-                  {compactPresentation.isCompacted ? '/' : ''}
                 </span>
                 {isLoading && (
                   <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />

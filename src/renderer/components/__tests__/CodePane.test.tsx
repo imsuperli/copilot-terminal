@@ -1393,7 +1393,7 @@ describe('CodePane', () => {
       fireEvent.click(javaButton);
     });
 
-    const compactedPackageButton = await screen.findByRole('button', { name: 'com.iflytek.tjpt/' });
+    const compactedPackageButton = await screen.findByRole('button', { name: 'com.iflytek.tjpt' });
     expect(compactedPackageButton).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'com' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'iflytek' })).not.toBeInTheDocument();
