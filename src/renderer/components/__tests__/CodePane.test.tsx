@@ -124,6 +124,7 @@ function createFakeEditor() {
   let decorationIds: string[] = [];
 
   return {
+    addAction: vi.fn(),
     addCommand: vi.fn(),
     deltaDecorations: vi.fn((oldDecorations: string[], newDecorations: Array<{ range: unknown }>) => {
       decorationIds = newDecorations.map((_, index) => `decoration-${index + 1}`);
@@ -325,6 +326,7 @@ const fakeMonaco = {
   KeyCode: {
     KeyS: 49,
     KeyF: 33,
+    KeyH: 35,
     F2: 60,
     F12: 70,
   },
@@ -5064,6 +5066,185 @@ describe('CodePane', () => {
     });
     expect(window.electronAPI.codePaneGetDocumentSymbols).not.toHaveBeenCalled();
     expect(screen.queryByText('hello')).not.toBeInTheDocument();
+  });
+
+  it('opens the file structure tool window and navigates to symbols', async () => {
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export class UserService {\n  private repo = 1;\n  listUsers() {\n    return [];\n  }\n}\n',
+        mtimeMs: 100,
+        size: 90,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'UserService',
+          kind: 5,
+          range: {
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: 6,
+            endColumn: 2,
+          },
+          selectionRange: {
+            startLineNumber: 1,
+            startColumn: 14,
+            endLineNumber: 1,
+            endColumn: 25,
+          },
+          children: [
+            {
+              name: 'repo',
+              kind: 8,
+              range: {
+                startLineNumber: 2,
+                startColumn: 3,
+                endLineNumber: 2,
+                endColumn: 19,
+              },
+              selectionRange: {
+                startLineNumber: 2,
+                startColumn: 11,
+                endLineNumber: 2,
+                endColumn: 15,
+              },
+            },
+            {
+              name: 'listUsers',
+              kind: 6,
+              range: {
+                startLineNumber: 3,
+                startColumn: 3,
+                endLineNumber: 5,
+                endColumn: 4,
+              },
+              selectionRange: {
+                startLineNumber: 3,
+                startColumn: 3,
+                endLineNumber: 3,
+                endColumn: 12,
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+    await triggerEditorAction('codePane.fileStructureAction');
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetDocumentSymbols).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+      });
+    });
+    expect(await screen.findByText('UserService')).toBeInTheDocument();
+    expect(await screen.findByText('repo')).toBeInTheDocument();
+    expect(await screen.findByText('listUsers')).toBeInTheDocument();
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    await act(async () => {
+      fireEvent.click(screen.getByText('listUsers'));
+      await Promise.resolve();
+    });
+
+    expect(activeEditor.setPosition).toHaveBeenCalledWith({
+      lineNumber: 3,
+      column: 3,
+    });
+    expect(activeEditor.revealLineInCenter).toHaveBeenCalledWith(3);
+  });
+
+  it('registers IDEA-style Monaco navigation actions for file structure and hierarchy', async () => {
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    expect(activeEditor.addAction).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'code-pane-file-structure',
+      label: 'codePane.fileStructureAction',
+    }));
+    expect(activeEditor.addAction).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'code-pane-type-hierarchy',
+      label: 'codePane.typeHierarchyAction',
+    }));
+    expect(activeEditor.addAction).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'code-pane-call-hierarchy',
+      label: 'codePane.callHierarchyAction',
+    }));
+  });
+
+  it('opens type hierarchy from the editor actions menu', async () => {
+    vi.mocked(window.electronAPI.codePaneGetTypeHierarchy).mockResolvedValue({
+      success: true,
+      data: {
+        root: {
+          name: 'UserService',
+          filePath: '/workspace/project/src/index.ts',
+          range: {
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: 6,
+            endColumn: 2,
+          },
+          selectionRange: {
+            startLineNumber: 1,
+            startColumn: 14,
+            endLineNumber: 1,
+            endColumn: 25,
+          },
+        },
+        items: [
+          {
+            name: 'BaseService',
+            detail: 'src/base.ts',
+            filePath: '/workspace/project/src/base.ts',
+            range: {
+              startLineNumber: 1,
+              startColumn: 1,
+              endLineNumber: 3,
+              endColumn: 2,
+            },
+            selectionRange: {
+              startLineNumber: 1,
+              startColumn: 14,
+              endLineNumber: 1,
+              endColumn: 25,
+            },
+          },
+        ],
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+    await triggerEditorAction('codePane.typeHierarchyAction');
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetTypeHierarchy).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        language: 'typescript',
+        position: {
+          lineNumber: 1,
+          column: 1,
+        },
+        direction: 'parents',
+      });
+    });
+    expect((await screen.findAllByText('UserService')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('BaseService')).toBeInTheDocument();
   });
 
   it('opens quick documentation and renders hover content', async () => {

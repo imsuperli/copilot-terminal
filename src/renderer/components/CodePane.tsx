@@ -51,6 +51,7 @@ import type {
   CodePaneCodeAction,
   CodePaneDiagnostic,
   CodePaneContentMatch,
+  CodePaneDocumentSymbol,
   CodePaneExceptionBreakpoint,
   CodePaneDebugSession,
   CodePaneDebugSessionChangedPayload,
@@ -121,6 +122,7 @@ import {
 } from './code-pane/tool-windows/SemanticToolWindow';
 import { TestsToolWindow } from './code-pane/tool-windows/TestsToolWindow';
 import { WorkspaceToolWindow } from './code-pane/tool-windows/WorkspaceToolWindow';
+import { OutlineToolWindow } from './code-pane/tool-windows/OutlineToolWindow';
 import { BlameGutter } from './code-pane/scm/BlameGutter';
 import { CommitComposer } from './code-pane/scm/CommitComposer';
 import { GitHunkList } from './code-pane/scm/GitHunkList';
@@ -166,6 +168,7 @@ type BottomPanelMode =
   | 'debug'
   | 'tests'
   | 'project'
+  | 'outline'
   | 'git'
   | 'conflict'
   | 'preview'
@@ -1447,6 +1450,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isFindingUsages, setIsFindingUsages] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [usagesTargetLabel, setUsagesTargetLabel] = useState<string | null>(null);
+  const [documentSymbols, setDocumentSymbols] = useState<CodePaneDocumentSymbol[]>([]);
+  const [documentSymbolsFilePath, setDocumentSymbolsFilePath] = useState<string | null>(null);
+  const [isDocumentSymbolsLoading, setIsDocumentSymbolsLoading] = useState(false);
+  const [documentSymbolsError, setDocumentSymbolsError] = useState<string | null>(null);
   const [problems, setProblems] = useState<Array<MonacoMarker & { filePath: string }>>([]);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -1569,12 +1576,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const renameSymbolAtCursorRef = useRef<() => Promise<void>>(async () => {});
   const findUsagesAtCursorRef = useRef<() => Promise<void>>(async () => {});
   const formatActiveDocumentRef = useRef<() => Promise<void>>(async () => {});
+  const openFileStructurePanelRef = useRef<() => void>(() => {});
+  const openHierarchyPanelRef = useRef<(mode: HierarchyMode) => void>(() => {});
   const saveFileRef = useRef<(filePath: string, options?: SaveFileOptions) => Promise<boolean>>(async () => true);
   const openCodeActionMenuRef = useRef<() => Promise<void>>(async () => {});
   const loadDebugSessionDetailsRef = useRef<(sessionId: string | null) => Promise<void>>(async () => {});
   const toggleBreakpointRef = useRef<(filePath: string, lineNumber: number) => Promise<void>>(async () => {});
   const runSelectedCodeActionRef = useRef<(action: CodePaneCodeAction | undefined) => Promise<void>>(async () => {});
   const hierarchyRequestIdRef = useRef(0);
+  const documentSymbolsRequestIdRef = useRef(0);
   const semanticRequestIdRef = useRef(0);
 
   useEffect(() => {
@@ -3954,8 +3964,47 @@ export const CodePane: React.FC<CodePaneProps> = ({
       nextEditor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.F12, () => {
         void findUsagesAtCursorRef.current();
       });
+      nextEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.F12, () => {
+        openFileStructurePanelRef.current();
+      });
+      nextEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => {
+        openHierarchyPanelRef.current('type-parents');
+      });
+      nextEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyH, () => {
+        openHierarchyPanelRef.current('call-outgoing');
+      });
       nextEditor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => {
         void formatActiveDocumentRef.current();
+      });
+      nextEditor.addAction({
+        id: 'code-pane-file-structure',
+        label: t('codePane.fileStructureAction'),
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.F12],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.4,
+        run: () => {
+          openFileStructurePanelRef.current();
+        },
+      });
+      nextEditor.addAction({
+        id: 'code-pane-type-hierarchy',
+        label: t('codePane.typeHierarchyAction'),
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: () => {
+          openHierarchyPanelRef.current('type-parents');
+        },
+      });
+      nextEditor.addAction({
+        id: 'code-pane-call-hierarchy',
+        label: t('codePane.callHierarchyAction'),
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyH],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.6,
+        run: () => {
+          openHierarchyPanelRef.current('call-outgoing');
+        },
       });
       attachDefinitionClickNavigation(nextEditor, target);
       editorInstanceRef.current = nextEditor;
@@ -4531,6 +4580,66 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void loadQuickDocumentation();
   }, [isQuickDocumentationOpen, loadQuickDocumentation]);
 
+  const loadDocumentSymbols = useCallback(async () => {
+    const context = getActiveEditorContext();
+    if (!context) {
+      documentSymbolsRequestIdRef.current += 1;
+      setDocumentSymbols([]);
+      setDocumentSymbolsFilePath(null);
+      setDocumentSymbolsError(null);
+      setIsDocumentSymbolsLoading(false);
+      return;
+    }
+
+    const requestPath = getModelRequestPath(context.filePath);
+    const requestKey = `document-symbols:${requestPath}`;
+    const requestVersion = ++documentSymbolsRequestIdRef.current;
+    const requestFilePath = context.filePath;
+    setIsDocumentSymbolsLoading(true);
+    setDocumentSymbolsError(null);
+    setDocumentSymbolsFilePath(requestFilePath);
+
+    try {
+      const response = await trackRequest(
+        requestKey,
+        'Document symbols',
+        getRelativePath(rootPath, context.filePath),
+        async () => await window.electronAPI.codePaneGetDocumentSymbols({
+          rootPath,
+          filePath: requestPath,
+          language: context.language,
+        }),
+      );
+
+      if (documentSymbolsRequestIdRef.current !== requestVersion) {
+        return;
+      }
+
+      setDocumentSymbols(response.success ? (response.data ?? []) : []);
+      setDocumentSymbolsError(response.success ? null : (response.error || t('common.retry')));
+    } catch (error) {
+      if (documentSymbolsRequestIdRef.current !== requestVersion) {
+        return;
+      }
+
+      setDocumentSymbols([]);
+      setDocumentSymbolsError(error instanceof Error ? error.message : t('common.retry'));
+    } finally {
+      if (documentSymbolsRequestIdRef.current === requestVersion) {
+        setIsDocumentSymbolsLoading(false);
+      }
+    }
+  }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
+
+  const openFileStructurePanel = useCallback(() => {
+    if (!activeFilePath) {
+      return;
+    }
+
+    setBottomPanelMode('outline');
+    void loadDocumentSymbols();
+  }, [activeFilePath, loadDocumentSymbols]);
+
   const loadHierarchyRoot = useCallback(async (mode: HierarchyMode) => {
     const context = getActiveEditorContext();
     if (!context) {
@@ -4618,6 +4727,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setSelectedHierarchyMode(mode);
     setBottomPanelMode('hierarchy');
   }, []);
+
+  useEffect(() => {
+    openFileStructurePanelRef.current = openFileStructurePanel;
+  }, [openFileStructurePanel]);
+
+  useEffect(() => {
+    openHierarchyPanelRef.current = openHierarchyPanel;
+  }, [openHierarchyPanel]);
 
   const toggleHierarchyNode = useCallback(async (nodeKey: string) => {
     const currentRootNode = hierarchyRootNode;
@@ -9279,6 +9396,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    if (bottomPanelMode === 'outline') {
+      void loadDocumentSymbols();
+      return;
+    }
+
     if (bottomPanelMode === 'git') {
       void refreshGitSnapshot({ includeGraph: true });
       void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
@@ -9333,6 +9455,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     loadDebugSessions,
     loadDebugSessionDetails,
     loadExceptionBreakpoints,
+    loadDocumentSymbols,
     loadSemanticSummary,
     loadTodoEntries,
     loadProjectContributions,
@@ -9354,6 +9477,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       void loadTests();
     } else if (bottomPanelMode === 'project') {
       void loadProjectContributions();
+    } else if (bottomPanelMode === 'outline') {
+      void loadDocumentSymbols();
     } else if (bottomPanelMode === 'git') {
       void refreshGitSnapshot({ includeGraph: true });
       void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
@@ -9385,6 +9510,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     loadHierarchyRoot,
     loadDebugSessions,
     loadExceptionBreakpoints,
+    loadDocumentSymbols,
     loadTodoEntries,
     loadProjectContributions,
     refreshGitSnapshot,
@@ -9638,6 +9764,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
         },
       },
       {
+        id: 'outline',
+        label: t('codePane.fileStructureTab'),
+        icon: <FileCode2 size={15} />,
+        active: bottomPanelMode === 'outline',
+        disabled: !activeFilePath,
+        onClick: () => {
+          if (bottomPanelMode === 'outline') {
+            setBottomPanelMode(null);
+          } else {
+            openFileStructurePanel();
+          }
+        },
+      },
+      {
         id: 'git',
         label: t('codePane.gitWorkbenchTab'),
         icon: <GitBranch size={15} />,
@@ -9715,6 +9855,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     activeFilePath,
     bottomPanelMode,
     gitHistory,
+    openFileStructurePanel,
     refactorPreview,
     t,
     toggleBottomPanelMode,
@@ -9852,6 +9993,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 filePath: item.filePath,
                 lineNumber: item.lineNumber ?? 1,
                 column: item.column ?? 1,
+              });
+            }}
+          />
+        );
+      case 'outline':
+        return (
+          <OutlineToolWindow
+            fileLabel={documentSymbolsFilePath ? getFileLabel(documentSymbolsFilePath) : null}
+            symbols={documentSymbols}
+            isLoading={isDocumentSymbolsLoading}
+            error={documentSymbolsError}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={loadDocumentSymbols}
+            onOpenSymbol={(range) => {
+              if (!documentSymbolsFilePath) {
+                return;
+              }
+
+              void openFileLocation({
+                filePath: documentSymbolsFilePath,
+                lineNumber: range.startLineNumber,
+                column: range.startColumn,
               });
             }}
           />
@@ -10055,6 +10220,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
         },
       },
       {
+        id: 'file-structure',
+        label: t('codePane.fileStructureAction'),
+        disabled: !activeFilePath,
+        onSelect: () => {
+          openFileStructurePanel();
+        },
+      },
+      {
+        id: 'type-hierarchy',
+        label: t('codePane.typeHierarchyAction'),
+        disabled: !activeFilePath,
+        onSelect: () => {
+          openHierarchyPanel('type-parents');
+        },
+      },
+      {
+        id: 'call-hierarchy',
+        label: t('codePane.callHierarchyAction'),
+        disabled: !activeFilePath,
+        onSelect: () => {
+          openHierarchyPanel('call-outgoing');
+        },
+      },
+      {
         id: 'code-actions',
         label: t('codePane.codeActions'),
         disabled: !activeFilePath,
@@ -10132,6 +10321,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     isEditorSplitVisible,
     isQuickDocumentationOpen,
     openCodeActionMenu,
+    openFileStructurePanel,
+    openHierarchyPanel,
     renameSymbolAtCursor,
     t,
     toggleEditorSplit,
