@@ -10,24 +10,32 @@ import React, {
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
+  Activity,
   AlertTriangle,
+  Binary,
+  Bug,
   ChevronLeft,
   ChevronDown,
   ChevronRight,
   File as FileIcon,
   FileCode2,
+  FlaskConical,
   Folder,
   FolderOpen,
+  FolderTree,
   GitBranch,
   GitCompareArrows,
   GripHorizontal,
   GripVertical,
+  History,
   Loader2,
   MoreHorizontal,
   Pin,
+  Play,
   RefreshCw,
   Save,
   Search,
+  Workflow,
   X,
 } from 'lucide-react';
 import type {
@@ -279,6 +287,7 @@ type EditorActionMenuItem = {
 type ToolWindowLauncher = {
   id: string;
   label: string;
+  icon: React.ReactNode;
   disabled?: boolean;
   active?: boolean;
   onClick: () => void;
@@ -8797,6 +8806,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'run',
         label: t('codePane.runTab'),
+        icon: <Play size={15} />,
         active: bottomPanelMode === 'run',
         onClick: () => {
           toggleBottomPanelMode('run');
@@ -8805,6 +8815,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'debug',
         label: t('codePane.debugTab'),
+        icon: <Bug size={15} />,
         active: bottomPanelMode === 'debug',
         onClick: () => {
           toggleBottomPanelMode('debug');
@@ -8813,6 +8824,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'tests',
         label: t('codePane.testsTab'),
+        icon: <FlaskConical size={15} />,
         active: bottomPanelMode === 'tests',
         onClick: () => {
           toggleBottomPanelMode('tests');
@@ -8821,6 +8833,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'project',
         label: t('codePane.projectTab'),
+        icon: <FolderTree size={15} />,
         active: bottomPanelMode === 'project',
         onClick: () => {
           toggleBottomPanelMode('project');
@@ -8829,6 +8842,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'git',
         label: t('codePane.gitWorkbenchTab'),
+        icon: <GitBranch size={15} />,
         active: bottomPanelMode === 'git',
         onClick: () => {
           toggleBottomPanelMode('git');
@@ -8837,6 +8851,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'workspace',
         label: t('codePane.workspaceTab'),
+        icon: <FileCode2 size={15} />,
         active: bottomPanelMode === 'workspace',
         onClick: () => {
           toggleBottomPanelMode('workspace');
@@ -8845,6 +8860,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'hierarchy',
         label: t('codePane.hierarchyTab'),
+        icon: <Workflow size={15} />,
         active: bottomPanelMode === 'hierarchy',
         disabled: !activeFilePath,
         onClick: () => {
@@ -8854,6 +8870,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'semantic',
         label: t('codePane.semanticTab'),
+        icon: <Binary size={15} />,
         active: bottomPanelMode === 'semantic',
         disabled: !activeFilePath,
         onClick: () => {
@@ -8863,6 +8880,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'performance',
         label: t('codePane.performanceTab'),
+        icon: <Activity size={15} />,
         active: bottomPanelMode === 'performance',
         onClick: () => {
           toggleBottomPanelMode('performance');
@@ -8874,6 +8892,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       items.splice(5, 0, {
         id: 'history',
         label: t('codePane.gitHistoryTab'),
+        icon: <History size={15} />,
         active: bottomPanelMode === 'history',
         onClick: () => {
           toggleBottomPanelMode('history');
@@ -8885,6 +8904,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       items.splice(items.length - 1, 0, {
         id: 'preview',
         label: t('codePane.refactorPreviewTab'),
+        icon: <GitCompareArrows size={15} />,
         active: bottomPanelMode === 'preview',
         onClick: () => {
           toggleBottomPanelMode('preview');
@@ -9573,14 +9593,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       <div
         ref={workspaceLayoutRef}
         data-testid="code-pane-workspace-layout"
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        className="flex min-h-0 flex-1 overflow-hidden"
       >
         <div
-          data-testid="code-pane-workspace-top"
-          className="flex min-h-[180px] flex-1 overflow-hidden"
+          data-testid="code-pane-activity-rail"
+          className="flex h-full w-11 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/85"
         >
-          <div className="flex h-full shrink-0">
-          <div className="flex h-full w-11 shrink-0 flex-col items-center gap-1 border-r border-zinc-800 bg-zinc-950/85 px-1 py-2">
+          <div className="flex flex-col items-center gap-1 px-1 py-2">
             {sidebarTabs.map((tab) => {
               const Icon = tab.icon;
               const isSelected = sidebarMode === tab.mode && isSidebarVisible;
@@ -9602,6 +9621,35 @@ export const CodePane: React.FC<CodePaneProps> = ({
             })}
           </div>
 
+          <div className="mt-auto border-t border-zinc-800">
+            <div className="flex max-h-full flex-col items-center gap-1 overflow-y-auto px-1 py-2">
+              {toolWindowLaunchers.map((item) => (
+                <AppTooltip key={item.id} content={item.label} placement="pane-corner">
+                  <button
+                    type="button"
+                    aria-label={item.label}
+                    aria-pressed={item.active}
+                    onClick={item.onClick}
+                    disabled={item.disabled}
+                    className={`flex h-8 w-8 items-center justify-center rounded transition-colors ${
+                      item.active
+                        ? 'bg-zinc-800 text-zinc-100'
+                        : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
+                    } disabled:cursor-not-allowed disabled:opacity-40`}
+                  >
+                    {item.icon}
+                  </button>
+                </AppTooltip>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div
+          data-testid="code-pane-workspace-top"
+          className="flex min-h-[180px] flex-1 overflow-hidden"
+        >
           {isSidebarVisible && (
             <>
               <aside
@@ -10206,7 +10254,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
               </div>
             </>
           )}
-        </div>
 
           <div data-testid="code-pane-editor-region" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-[34px] items-stretch overflow-x-auto border-b border-zinc-800 bg-zinc-950/70">
@@ -10395,7 +10442,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
             )}
           </div>
         </div>
-      </div>
 
           {bottomPanelMode && (
             <>
@@ -10424,25 +10470,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 py-2 text-[11px] text-zinc-500">
             <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
-              <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded border border-zinc-800 bg-zinc-950/80 px-1 py-0.5">
-                {toolWindowLaunchers.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-label={item.label}
-                    onClick={item.onClick}
-                    disabled={item.disabled}
-                    className={`shrink-0 rounded px-1.5 py-0.5 font-medium transition-colors ${
-                      item.active
-                        ? 'bg-zinc-800 text-zinc-100'
-                        : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
-                    } disabled:cursor-not-allowed disabled:opacity-40`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-              <div className="h-4 w-px shrink-0 bg-zinc-800" />
               <span className="truncate">
                 {activeFilePath
                   ? (activeFileDisplayPath && isPathInside(rootPath, activeFileDisplayPath)
@@ -10548,8 +10575,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   {t('codePane.saveQualityLintToggle')}
                 </button>
               </div>
+              </div>
             </div>
           </div>
+        </div>
       </div>
 
       {isSearchEverywhereOpen && (

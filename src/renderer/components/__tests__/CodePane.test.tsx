@@ -1599,6 +1599,7 @@ describe('CodePane', () => {
     }));
 
     const workspaceLayout = screen.getByTestId('code-pane-workspace-layout');
+    const activityRail = screen.getByTestId('code-pane-activity-rail');
     Object.defineProperty(workspaceLayout, 'getBoundingClientRect', {
       configurable: true,
       value: () => ({
@@ -1614,9 +1615,13 @@ describe('CodePane', () => {
       }),
     });
 
+    expect(await screen.findByRole('button', { name: 'codePane.runTab' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.runTab' }).closest('[data-testid="code-pane-activity-rail"]')).toBe(activityRail);
+
     await user.click(await screen.findByRole('button', { name: 'codePane.runTab' }));
 
     const bottomPanel = await screen.findByTestId('code-pane-bottom-panel');
+    expect(bottomPanel.closest('[data-testid="code-pane-activity-rail"]')).toBeNull();
     expect(bottomPanel.closest('[data-testid="code-pane-editor-region"]')).toBeNull();
     expect(screen.getByTestId('code-pane-bottom-panel-resize-handle')).toBeInTheDocument();
     expect(bottomPanel).toHaveStyle({ height: '280px' });
