@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { spawn, type ChildProcessWithoutNullStreams, type SpawnOptionsWithoutStdio } from 'child_process';
 import path from 'path';
 import fs from 'fs-extra';
 import type {
@@ -27,6 +27,13 @@ interface RunningRunSession {
   session: CodePaneRunSession;
   target: ResolvedCodeRunTarget;
   stoppedByUser: boolean;
+}
+
+interface PreparedSpawnCommand {
+  command: string;
+  args: string[];
+  options: SpawnOptionsWithoutStdio;
+  displayCommand: string;
 }
 
 export interface CodeRunProfileServiceOptions {
@@ -179,11 +186,30 @@ export class CodeRunProfileService {
       startedAt: this.now(),
     };
 
-    const child = spawn(target.command, target.args, {
-      cwd: target.workingDirectory,
-      env: process.env,
-      stdio: 'pipe',
-    });
+    const preparedCommand = prepareSpawnCommand(target.command, target.args, target.workingDirectory, process.env);
+    let child: ChildProcessWithoutNullStreams;
+
+    try {
+      child = spawn(preparedCommand.command, preparedCommand.args, {
+        ...preparedCommand.options,
+        stdio: 'pipe',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failedSession: CodePaneRunSession = {
+        ...session,
+        state: 'failed',
+        endedAt: this.now(),
+      };
+
+      this.emitSessionChanged({
+        rootPath: target.rootPath,
+        session: failedSession,
+      });
+      this.emitOutput(session.id, target.rootPath, `$ ${preparedCommand.displayCommand}\n`, 'system');
+      this.emitOutput(session.id, target.rootPath, `${message}\n`, 'stderr');
+      return failedSession;
+    }
 
     const runningSession: RunningRunSession = {
       child,
@@ -201,7 +227,7 @@ export class CodeRunProfileService {
       this.updateSession(session.id, {
         state: 'running',
       });
-      this.emitOutput(session.id, target.rootPath, `$ ${target.command} ${target.args.join(' ')}\n`, 'system');
+      this.emitOutput(session.id, target.rootPath, `$ ${preparedCommand.displayCommand}\n`, 'system');
     });
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -397,6 +423,61 @@ function resolveExecutable(command: string): string {
   }
 
   return command;
+}
+
+export function prepareSpawnCommand(
+  command: string,
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+): PreparedSpawnCommand {
+  if (process.platform !== 'win32' || !requiresWindowsCommandShell(command)) {
+    return {
+      command,
+      args,
+      options: {
+        cwd,
+        env,
+      },
+      displayCommand: formatDisplayCommand(command, args),
+    };
+  }
+
+  return {
+    command,
+    args,
+    options: {
+      cwd,
+      env,
+      shell: true,
+      windowsHide: true,
+    },
+    displayCommand: formatDisplayCommand(command, args),
+  };
+}
+
+function requiresWindowsCommandShell(command: string): boolean {
+  const normalized = command.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized.endsWith('.cmd')
+    || normalized.endsWith('.bat')
+    || normalized === 'mvn'
+    || normalized === 'mvn.cmd'
+    || normalized === 'gradle'
+    || normalized === 'gradle.bat'
+    || normalized === 'mvnw'
+    || normalized.endsWith(`${path.win32.sep}mvnw`)
+    || normalized === 'mvnw.cmd'
+    || normalized === 'gradlew'
+    || normalized.endsWith(`${path.win32.sep}gradlew`)
+    || normalized === 'gradlew.bat';
+}
+
+function formatDisplayCommand(command: string, args: string[]): string {
+  return [command, ...args].join(' ').trim();
 }
 
 async function isGoMainFile(filePath: string): Promise<boolean> {

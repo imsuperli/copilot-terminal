@@ -642,6 +642,7 @@ class LanguageServerSession {
   private isInitialized = false;
   private textSyncKind: TextSyncKind = 1;
   private serverCapabilities: any = null;
+  private transportClosed = false;
   private expectedExit = false;
   private disposed = false;
   private recentStartFailure: { message: string; timestampMs: number } | null = null;
@@ -1342,6 +1343,7 @@ class LanguageServerSession {
     this.stdoutBuffer = Buffer.alloc(0);
     this.isInitialized = false;
     this.expectedExit = false;
+    this.transportClosed = false;
     this.lastRuntimeErrorMessage = null;
     this.serverCapabilities = null;
     this.codeActions.clear();
@@ -1472,6 +1474,11 @@ class LanguageServerSession {
   }
 
   private attachProcessListeners(spawnedProcess: SpawnedRuntimeProcess): void {
+    spawnedProcess.child.stdin.on('error', (error) => {
+      const runtimeError = error instanceof Error ? error : new Error(String(error));
+      this.handleTransportFailure(runtimeError);
+    });
+
     spawnedProcess.child.stdout.on('data', (chunk: Buffer) => {
       this.stdoutBuffer = Buffer.concat([this.stdoutBuffer, chunk]);
       this.flushBufferedMessages();
@@ -1486,6 +1493,7 @@ class LanguageServerSession {
     });
 
     spawnedProcess.child.on('error', (error) => {
+      this.transportClosed = true;
       const runtimeError = error instanceof Error ? error : new Error(String(error));
       const message = this.lastRuntimeErrorMessage ?? runtimeError.message;
       const propagatedError = new Error(message);
@@ -1495,6 +1503,7 @@ class LanguageServerSession {
     });
 
     spawnedProcess.child.on('exit', (code, signal) => {
+      this.transportClosed = true;
       this.spawnedProcess = null;
       this.isInitialized = false;
       const exitMessage = signal
@@ -1799,13 +1808,6 @@ class LanguageServerSession {
     const resolvedTimeoutMs = this.resolveRequestTimeoutMs(method, timeoutMs);
 
     const requestId = this.nextRequestId++;
-    this.sendMessage({
-      jsonrpc: '2.0',
-      id: requestId,
-      method,
-      params,
-    });
-
     return await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingRequests.delete(requestId);
@@ -1817,6 +1819,19 @@ class LanguageServerSession {
         reject,
         timer,
       });
+
+      try {
+        this.sendMessage({
+          jsonrpc: '2.0',
+          id: requestId,
+          method,
+          params,
+        });
+      } catch (error) {
+        clearTimeout(timer);
+        this.pendingRequests.delete(requestId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
@@ -1837,9 +1852,24 @@ class LanguageServerSession {
       return;
     }
 
+    if (this.transportClosed) {
+      throw new Error(this.lastRuntimeErrorMessage ?? 'Language server transport is closed');
+    }
+
+    const stdin = this.spawnedProcess.child.stdin;
+    if (stdin.destroyed || !stdin.writable || stdin.writableEnded) {
+      const transportError = new Error(this.lastRuntimeErrorMessage ?? 'Language server stdin is not writable');
+      this.handleTransportFailure(transportError);
+      throw transportError;
+    }
+
     const payload = Buffer.from(JSON.stringify(message), 'utf8');
     const header = Buffer.from(`Content-Length: ${payload.length}\r\n\r\n`, 'utf8');
-    this.spawnedProcess.child.stdin.write(Buffer.concat([header, payload]));
+    stdin.write(Buffer.concat([header, payload]), (error) => {
+      if (error) {
+        this.handleTransportFailure(error);
+      }
+    });
   }
 
   private async ensureTransportReady(): Promise<void> {
@@ -1858,6 +1888,18 @@ class LanguageServerSession {
       pendingRequest.reject(error);
       this.pendingRequests.delete(requestId);
     }
+  }
+
+  private handleTransportFailure(error: Error): void {
+    if (this.transportClosed) {
+      return;
+    }
+
+    this.transportClosed = true;
+    const message = this.lastRuntimeErrorMessage ?? error.message;
+    this.rememberRecentStartFailure(message);
+    this.rejectPendingRequests(new Error(message));
+    this.emitRuntimeStateChange('error', message);
   }
 
   private clearRecentStartFailure(): void {

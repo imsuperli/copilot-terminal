@@ -6,7 +6,7 @@ import type {
   CodePaneRunSessionChangedPayload,
   CodePaneRunSessionOutputPayload,
 } from '../../../../shared/types/electron-api';
-import { CodeRunProfileService } from '../CodeRunProfileService';
+import { CodeRunProfileService, prepareSpawnCommand } from '../CodeRunProfileService';
 
 describe('CodeRunProfileService', () => {
   let tempRootPath: string;
@@ -157,6 +157,30 @@ describe('CodeRunProfileService', () => {
     const rerunSessions = await service.rerunFailedTargets(tempRootPath);
     expect(rerunSessions).toHaveLength(1);
     expect(rerunSessions[0].targetId).toBe(target.id);
+  });
+
+  it('uses shell execution for Windows command-wrapper targets', async () => {
+    const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+
+    try {
+      expect(prepareSpawnCommand('mvn.cmd', ['spring-boot:run'], tempRootPath, process.env)).toEqual({
+        command: 'mvn.cmd',
+        args: ['spring-boot:run'],
+        options: expect.objectContaining({
+          cwd: tempRootPath,
+          env: process.env,
+          shell: true,
+          windowsHide: true,
+        }),
+        displayCommand: 'mvn.cmd spring-boot:run',
+      });
+    } finally {
+      if (originalPlatformDescriptor) {
+        Object.defineProperty(process, 'platform', originalPlatformDescriptor);
+      }
+    }
   });
 });
 

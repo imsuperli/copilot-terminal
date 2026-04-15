@@ -384,6 +384,44 @@ describe('LanguageServerSupervisor', () => {
     expect(spawnCount).toBe(1);
   });
 
+  it('surfaces transport failures without uncaught EPIPE crashes', async () => {
+    const workspaceRoot = path.join(tempDir, 'workspace');
+    const installPath = path.join(tempDir, 'plugin-install');
+    const filePath = path.join(workspaceRoot, 'src', 'main.py');
+    await fs.ensureDir(path.dirname(filePath));
+    await fs.ensureDir(installPath);
+    await fs.writeFile(filePath, 'print("hello")\n');
+
+    const runtimeEvents: PluginRuntimeStateChangedPayload[] = [];
+
+    supervisor = new LanguageServerSupervisor({
+      runtimeRootPath: path.join(tempDir, 'runtime'),
+      adapters: [createShortLivedNodeAdapter()],
+      emitDiagnostics: () => {},
+      emitRuntimeState: (payload) => {
+        runtimeEvents.push(payload);
+      },
+      requestTimeoutMs: 1000,
+    });
+
+    const resolution = createResolution(workspaceRoot, installPath);
+
+    await expect(supervisor.syncDocument(resolution, {
+      ownerId: 'pane-1:/workspace/src/main.py',
+      rootPath: workspaceRoot,
+      filePath,
+      languageId: 'python',
+      content: 'print("hello")\n',
+    }, 'open')).rejects.toThrow();
+
+    await waitForCondition(() => runtimeEvents.some((event) => event.state === 'error'));
+
+    await expect(supervisor.getHover(resolution, filePath, {
+      lineNumber: 1,
+      column: 1,
+    })).rejects.toThrow();
+  });
+
   it('returns read-only virtual class definitions for JDTLS dependency symbols', async () => {
     const workspaceRoot = path.join(tempDir, 'workspace');
     const installPath = path.join(tempDir, 'plugin-install');
@@ -456,6 +494,18 @@ function createFailingNodeAdapter(onSpawn: () => void): LanguageRuntimeAdapter {
     async spawn(_runtime, context) {
       onSpawn();
       return spawnRuntimeProcess(process.execPath, ['-e', 'process.stderr.write("startup failed\\n"); process.exit(1);'], {
+        cwd: context.projectRoot,
+        env: process.env,
+      });
+    },
+  };
+}
+
+function createShortLivedNodeAdapter(): LanguageRuntimeAdapter {
+  return {
+    supports: (runtime) => runtime.type === 'node',
+    async spawn(_runtime, context) {
+      return spawnRuntimeProcess(process.execPath, ['-e', 'setTimeout(() => process.exit(0), 10)'], {
         cwd: context.projectRoot,
         env: process.env,
       });

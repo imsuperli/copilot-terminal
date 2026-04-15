@@ -1514,6 +1514,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const dirtyPathsRef = useRef(dirtyPaths);
   const savingPathsRef = useRef(savingPaths);
   const activeFilePathRef = useRef(activeFilePath);
+  const activeCursorLineNumberRef = useRef(activeCursorLineNumber);
+  const activeCursorColumnRef = useRef(activeCursorColumn);
+  const activeCursorAnimationFrameRef = useRef<number | null>(null);
   const pendingNavigationRef = useRef<FileNavigationLocation | null>(null);
   const openFileLocationRef = useRef<(location: FileNavigationLocation) => Promise<void>>(async () => {});
   const sidebarModeRef = useRef(sidebarMode);
@@ -1616,6 +1619,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     activeFilePathRef.current = activeFilePath;
   }, [activeFilePath]);
+
+  useEffect(() => {
+    activeCursorLineNumberRef.current = activeCursorLineNumber;
+  }, [activeCursorLineNumber]);
+
+  useEffect(() => {
+    activeCursorColumnRef.current = activeCursorColumn;
+  }, [activeCursorColumn]);
 
   useEffect(() => {
     sidebarModeRef.current = sidebarMode;
@@ -2142,6 +2153,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const markDirty = useCallback((filePath: string, dirty: boolean) => {
+    if (dirtyPathsRef.current.has(filePath) === dirty) {
+      return;
+    }
+
     const nextDirtyPaths = new Set(dirtyPathsRef.current);
     if (dirty) {
       nextDirtyPaths.add(filePath);
@@ -2152,6 +2167,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setDirtyPaths((currentDirtyPaths) => {
       return new Set(nextDirtyPaths);
+    });
+  }, []);
+
+  const scheduleActiveCursorUpdate = useCallback((lineNumber: number, column: number) => {
+    activeCursorLineNumberRef.current = lineNumber;
+    activeCursorColumnRef.current = column;
+
+    if (activeCursorAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    activeCursorAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      activeCursorAnimationFrameRef.current = null;
+      const nextLineNumber = activeCursorLineNumberRef.current;
+      const nextColumn = activeCursorColumnRef.current;
+
+      startTransition(() => {
+        setActiveCursorLineNumber((currentLineNumber) => (
+          currentLineNumber === nextLineNumber ? currentLineNumber : nextLineNumber
+        ));
+        setActiveCursorColumn((currentColumn) => (
+          currentColumn === nextColumn ? currentColumn : nextColumn
+        ));
+      });
     });
   }, []);
 
@@ -3362,8 +3401,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     cursorPositionListenerRef.current = editorInstance.onDidChangeCursorPosition?.((event: any) => {
       if (event?.position?.lineNumber) {
-        setActiveCursorLineNumber(event.position.lineNumber);
-        setActiveCursorColumn(event.position.column ?? 1);
+        scheduleActiveCursorUpdate(event.position.lineNumber, event.position.column ?? 1);
       }
     }) ?? null;
 
@@ -3371,8 +3409,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       focusedEditorTargetRef.current = target;
       setActiveEditorTarget(target);
       if (event?.target?.position?.lineNumber) {
-        setActiveCursorLineNumber(event.target.position.lineNumber);
-        setActiveCursorColumn(event.target.position.column ?? 1);
+        scheduleActiveCursorUpdate(event.target.position.lineNumber, event.target.position.column ?? 1);
       }
       const pointerEvent = event.event?.browserEvent ?? event.event ?? {};
       const monaco = monacoRef.current;
@@ -3427,6 +3464,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     getModelFilePath,
     handleDefinitionClick,
     isMac,
+    scheduleActiveCursorUpdate,
     updateDefinitionLinkHover,
   ]);
 
@@ -7726,9 +7764,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [selectedDebugSession?.currentFrame]);
 
   useEffect(() => {
+    activeCursorLineNumberRef.current = 1;
+    activeCursorColumnRef.current = 1;
     setActiveCursorLineNumber(1);
     setActiveCursorColumn(1);
   }, [activeFilePath]);
+
+  useEffect(() => () => {
+    if (activeCursorAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(activeCursorAnimationFrameRef.current);
+      activeCursorAnimationFrameRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (viewMode !== 'diff' && activeEditorTarget === 'diff') {
