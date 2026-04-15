@@ -1382,15 +1382,15 @@ describe('CodePane', () => {
     const srcButton = await screen.findByRole('button', { name: 'src' }, { timeout: 3000 });
 
     await act(async () => {
-      fireEvent.click(srcButton);
+      fireEvent.doubleClick(srcButton);
     });
     const mainButton = await screen.findByRole('button', { name: 'main' }, { timeout: 3000 });
     await act(async () => {
-      fireEvent.click(mainButton);
+      fireEvent.doubleClick(mainButton);
     });
     const javaButton = await screen.findByRole('button', { name: 'java' }, { timeout: 3000 });
     await act(async () => {
-      fireEvent.click(javaButton);
+      fireEvent.doubleClick(javaButton);
     });
 
     const compactedPackageButton = await screen.findByRole('button', { name: 'com.iflytek.tjpt' });
@@ -1400,7 +1400,7 @@ describe('CodePane', () => {
     expect(screen.queryByRole('button', { name: 'tjpt' })).not.toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(compactedPackageButton);
+      fireEvent.doubleClick(compactedPackageButton);
     });
 
     expect(await screen.findByRole('button', { name: 'Application.java' })).toBeInTheDocument();
@@ -1436,11 +1436,19 @@ describe('CodePane', () => {
       fireEvent.click(rootButton);
     });
 
+    expect(await screen.findByRole('button', { name: 'src' })).toBeInTheDocument();
+    expect(view.getPane().code?.selectedPath).toBe('/workspace/project');
+    expect(view.getPane().code?.expandedPaths).toEqual(['/workspace/project']);
+
+    await act(async () => {
+      fireEvent.doubleClick(rootButton);
+    });
+
     expect(screen.queryByRole('button', { name: 'src' })).not.toBeInTheDocument();
     expect(view.getPane().code?.expandedPaths).toEqual([]);
 
     await act(async () => {
-      fireEvent.click(rootButton);
+      fireEvent.doubleClick(rootButton);
     });
 
     expect(await screen.findByRole('button', { name: 'src' })).toBeInTheDocument();

@@ -4958,6 +4958,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     rootPath,
   ]);
 
+  const selectExplorerPath = useCallback((targetPath: string) => {
+    persistCodeState({
+      selectedPath: targetPath,
+    });
+  }, [persistCodeState]);
+
   const openDiffForActiveFile = useCallback(async () => {
     const filePath = activeFilePathRef.current;
     if (!filePath) {
@@ -6799,13 +6805,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 type="button"
                 onClick={() => {
                   if (isDirectory) {
-                    void toggleDirectory(entry.path);
+                    selectExplorerPath(resolvedEntry.path);
                   } else {
                     void activateFile(resolvedEntry.path, { preview: true });
                   }
                 }}
                 onDoubleClick={() => {
-                  if (!isDirectory) {
+                  if (isDirectory) {
+                    void toggleDirectory(entry.path);
+                  } else {
                     void activateFile(resolvedEntry.path, { promotePreview: true });
                   }
                 }}
@@ -6839,7 +6847,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         </React.Fragment>
       );
     });
-  }, [activateFile, expandedDirectories, getDirectoryEntries, getEntryStatus, isDirectoryLoading, renderFileContextMenu, rootPath, selectedPath, toggleDirectory]);
+  }, [activateFile, expandedDirectories, getDirectoryEntries, getEntryStatus, isDirectoryLoading, renderFileContextMenu, rootPath, selectExplorerPath, selectedPath, toggleDirectory]);
 
   const renderedExternalLibrarySections = useMemo(() => {
     if (!hasExternalLibraries && !externalLibrariesError) {
@@ -6869,7 +6877,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         type="button"
                         title={root.path}
                         onClick={() => {
-                          toggleDirectory(root.path);
+                          selectExplorerPath(root.path);
+                        }}
+                        onDoubleClick={() => {
+                          void toggleDirectory(root.path);
                         }}
                         className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                       >
@@ -6900,7 +6911,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ))}
       </div>
     );
-  }, [expandedDirectories, externalLibrariesError, externalLibrarySections, hasExternalLibraries, isDirectoryLoading, renderFileContextMenu, renderTree, selectedPath, t, toggleDirectory]);
+  }, [expandedDirectories, externalLibrariesError, externalLibrarySections, hasExternalLibraries, isDirectoryLoading, renderFileContextMenu, renderTree, selectExplorerPath, selectedPath, t, toggleDirectory]);
 
   const renderedSearchResults = useMemo(() => searchResults.map((filePath) => {
     const entryStatus = getEntryStatus(filePath, 'file');
@@ -9806,7 +9817,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                               type="button"
                               title={rootPath}
                               onClick={() => {
-                                toggleDirectory(rootPath);
+                                selectExplorerPath(rootPath);
+                              }}
+                              onDoubleClick={() => {
+                                void toggleDirectory(rootPath);
                               }}
                               className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                             >
