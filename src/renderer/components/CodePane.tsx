@@ -52,7 +52,6 @@ import type {
   CodePaneDiagnostic,
   CodePaneContentMatch,
   CodePaneExceptionBreakpoint,
-  CodePaneDocumentSymbol,
   CodePaneDebugSession,
   CodePaneDebugSessionChangedPayload,
   CodePaneDebugSessionDetails,
@@ -99,7 +98,6 @@ import {
   CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
 } from '../../shared/types/electron-api';
 import { AppTooltip } from './ui/AppTooltip';
-import { BreadcrumbsBar, type CodePaneBreadcrumbItem } from './code-pane/BreadcrumbsBar';
 import { DebugToolWindow } from './code-pane/tool-windows/DebugToolWindow';
 import { ConflictResolutionToolWindow } from './code-pane/tool-windows/ConflictResolutionToolWindow';
 import { GitHistoryToolWindow } from './code-pane/tool-windows/GitHistoryToolWindow';
@@ -1224,60 +1222,6 @@ function buildGitChangeSectionGroups(
   })).filter((group) => group.count > 0);
 }
 
-function isPositionWithinRange(
-  range: CodePaneDocumentSymbol['range'],
-  lineNumber: number,
-  column: number,
-): boolean {
-  if (lineNumber < range.startLineNumber || lineNumber > range.endLineNumber) {
-    return false;
-  }
-
-  if (lineNumber === range.startLineNumber && column < range.startColumn) {
-    return false;
-  }
-
-  if (lineNumber === range.endLineNumber && column > range.endColumn) {
-    return false;
-  }
-
-  return true;
-}
-
-function findActiveDocumentSymbolPathInTree(
-  symbol: CodePaneDocumentSymbol,
-  lineNumber: number,
-  column: number,
-): CodePaneDocumentSymbol[] {
-  if (!isPositionWithinRange(symbol.range, lineNumber, column)) {
-    return [];
-  }
-
-  for (const child of symbol.children ?? []) {
-    const childPath = findActiveDocumentSymbolPathInTree(child, lineNumber, column);
-    if (childPath.length > 0) {
-      return [symbol, ...childPath];
-    }
-  }
-
-  return [symbol];
-}
-
-function findActiveDocumentSymbolPath(
-  symbols: CodePaneDocumentSymbol[],
-  lineNumber: number,
-  column: number,
-): CodePaneDocumentSymbol[] {
-  for (const symbol of symbols) {
-    const path = findActiveDocumentSymbolPathInTree(symbol, lineNumber, column);
-    if (path.length > 0) {
-      return path;
-    }
-  }
-
-  return [];
-}
-
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -1483,8 +1427,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [activeCursorLineNumber, setActiveCursorLineNumber] = useState(1);
   const [activeCursorColumn, setActiveCursorColumn] = useState(1);
   const [activeEditorTarget, setActiveEditorTarget] = useState<EditorTarget>('editor');
-  const [activeDocumentSymbols, setActiveDocumentSymbols] = useState<CodePaneDocumentSymbol[]>([]);
-  const [isActiveDocumentSymbolsLoading, setIsActiveDocumentSymbolsLoading] = useState(false);
   const [quickDocumentation, setQuickDocumentation] = useState<CodePaneHoverResult | null>(null);
   const [quickDocumentationError, setQuickDocumentationError] = useState<string | null>(null);
   const [isQuickDocumentationOpen, setIsQuickDocumentationOpen] = useState(false);
@@ -4144,58 +4086,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
   }, [getModelFilePath, isEditorSplitVisible, viewMode]);
 
-  const breadcrumbFilePath = useMemo(() => {
-    if (viewMode === 'diff') {
-      return activeFilePath;
-    }
-
-    if (activeEditorTarget === 'secondary' && isEditorSplitVisible) {
-      return secondaryFilePath ?? activeFilePath;
-    }
-
-    return activeFilePath;
-  }, [activeEditorTarget, activeFilePath, isEditorSplitVisible, secondaryFilePath, viewMode]);
-
-  const breadcrumbLanguage = breadcrumbFilePath
-    ? fileMetaRef.current.get(breadcrumbFilePath)?.language
-    : undefined;
-
-  const loadActiveDocumentSymbols = useCallback(async (filePath: string, language?: string) => {
-    const requestPath = getModelRequestPath(filePath);
-    const requestKey = `document-symbols:${requestPath}`;
-    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
-    setIsActiveDocumentSymbolsLoading(true);
-
-    try {
-      const response = await trackRequest(
-        requestKey,
-        'Document symbols',
-        getRelativePath(rootPath, filePath),
-        async () => await window.electronAPI.codePaneGetDocumentSymbols({
-          rootPath,
-          filePath: requestPath,
-          language,
-        }),
-      );
-
-      if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-        return;
-      }
-
-      setActiveDocumentSymbols(response.success ? (response.data ?? []) : []);
-    } catch {
-      if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-        return;
-      }
-
-      setActiveDocumentSymbols([]);
-    } finally {
-      if (runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-        setIsActiveDocumentSymbolsLoading(false);
-      }
-    }
-  }, [getModelRequestPath, rootPath, trackRequest]);
-
   const loadQuickDocumentation = useCallback(async () => {
     const context = getActiveEditorContext();
     if (!context) {
@@ -6394,39 +6284,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     getPathLeafLabel(getDisplayPath(filePath)) || getDisplayPath(filePath)
   ), [getDisplayPath]);
 
-  const activeSymbolPath = useMemo(() => findActiveDocumentSymbolPath(
-    activeDocumentSymbols,
-    activeCursorLineNumber,
-    activeCursorColumn,
-  ), [activeCursorColumn, activeCursorLineNumber, activeDocumentSymbols]);
-
-  const breadcrumbItems = useMemo<CodePaneBreadcrumbItem[]>(() => {
-    if (!breadcrumbFilePath) {
-      return [];
-    }
-
-    const fileItem: CodePaneBreadcrumbItem = {
-      id: `file:${breadcrumbFilePath}`,
-      label: getRelativePath(rootPath, getDisplayPath(breadcrumbFilePath)),
-      detail: breadcrumbFilePath,
-      kind: 'file',
-      lineNumber: 1,
-      column: 1,
-    };
-
-    return [
-      fileItem,
-      ...activeSymbolPath.map((symbol) => ({
-        id: `symbol:${breadcrumbFilePath}:${symbol.name}:${symbol.selectionRange.startLineNumber}:${symbol.selectionRange.startColumn}`,
-        label: symbol.name,
-        detail: symbol.detail,
-        kind: 'symbol' as const,
-        lineNumber: symbol.selectionRange.startLineNumber,
-        column: symbol.selectionRange.startColumn,
-      })),
-    ];
-  }, [activeSymbolPath, breadcrumbFilePath, getDisplayPath, rootPath]);
-
   const visibleLocalHistoryEntries = useMemo(() => {
     const sourceEntries = activeFilePath
       ? (localHistoryEntriesRef.current.get(activeFilePath) ?? [])
@@ -7764,16 +7621,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [activeFilePath, isBlameVisible, loadBlameForActiveFile]);
 
   useEffect(() => {
-    if (!breadcrumbFilePath) {
-      setActiveDocumentSymbols([]);
-      setIsActiveDocumentSymbolsLoading(false);
-      return;
-    }
-
-    void loadActiveDocumentSymbols(breadcrumbFilePath, breadcrumbLanguage);
-  }, [breadcrumbFilePath, breadcrumbLanguage, loadActiveDocumentSymbols]);
-
-  useEffect(() => {
     if (!isQuickDocumentationOpen) {
       return undefined;
     }
@@ -7789,7 +7636,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     activeCursorColumn,
     activeCursorLineNumber,
     activeEditorTarget,
-    breadcrumbFilePath,
     isQuickDocumentationOpen,
     loadQuickDocumentation,
   ]);
@@ -10550,26 +10396,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
               </div>
             )}
 	          </div>
-
-	          {activeFilePath && breadcrumbItems.length > 1 && (
-	            <BreadcrumbsBar
-	              items={breadcrumbItems}
-	              emptyLabel={isActiveDocumentSymbolsLoading
-	                ? t('codePane.loading')
-	                : t('codePane.breadcrumbsEmpty')}
-	              onSelect={(item) => {
-	                if (!breadcrumbFilePath) {
-	                  return;
-	                }
-
-	                void openFileLocation({
-	                  filePath: breadcrumbFilePath,
-	                  lineNumber: item.lineNumber,
-	                  column: item.column,
-	                });
-	              }}
-	            />
-	          )}
 
 	          <div className="relative min-h-0 flex-1 overflow-hidden bg-zinc-950">
 	            {activeFilePath ? (
