@@ -10462,6 +10462,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             )}
           </div>
         </div>
+        </div>
 
           {bottomPanelMode && (
             <>
@@ -10814,7 +10815,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
           </div>
         </div>
       )}
-      </div>
     </>
   );
 };

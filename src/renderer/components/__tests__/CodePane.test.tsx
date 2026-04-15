@@ -1638,6 +1638,50 @@ describe('CodePane', () => {
     });
   });
 
+  it('opens project and git workbenches in the bottom panel instead of replacing the editor region', async () => {
+    const user = userEvent.setup();
+    renderCodePane(createPane({
+      openFiles: [
+        { path: '/workspace/project/src/index.ts' },
+      ],
+      activeFilePath: '/workspace/project/src/index.ts',
+      layout: {
+        sidebar: {
+          visible: true,
+          activeView: 'files',
+          width: 300,
+          lastExpandedWidth: 300,
+        },
+      },
+    }));
+
+    const workspaceLayout = screen.getByTestId('code-pane-workspace-layout');
+    Object.defineProperty(workspaceLayout, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 1280,
+        bottom: 900,
+        width: 1280,
+        height: 900,
+        toJSON: () => ({}),
+      }),
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'codePane.projectTab' }));
+    expect(await screen.findByText('codePane.projectTab')).toBeInTheDocument();
+    expect(screen.getByTestId('code-pane-bottom-panel').closest('[data-testid="code-pane-workspace-top"]')).toBeNull();
+    expect(screen.getByTestId('code-pane-bottom-panel').closest('[data-testid="code-pane-activity-rail"]')).toBeNull();
+
+    await user.click(await screen.findByRole('button', { name: 'codePane.gitWorkbenchTab' }));
+    expect(await screen.findByText('codePane.gitLogTab')).toBeInTheDocument();
+    expect(screen.getByTestId('code-pane-bottom-panel').closest('[data-testid="code-pane-workspace-top"]')).toBeNull();
+    expect(screen.getByTestId('code-pane-bottom-panel').closest('[data-testid="code-pane-activity-rail"]')).toBeNull();
+  });
+
   it('opens the debug tool window, starts a debug session, and evaluates an expression', async () => {
     vi.mocked(window.electronAPI.codePaneListRunTargets).mockResolvedValue({
       success: true,
