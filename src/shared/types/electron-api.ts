@@ -661,6 +661,12 @@ export interface CodePaneDocumentCloseConfig {
   filePath: string;
 }
 
+export interface CodePaneLanguagePrewarmConfig {
+  rootPath: string;
+  filePath: string;
+  language?: string;
+}
+
 export interface CodePaneFsChangedPayload {
   rootPath: string;
   changes: Array<{
@@ -1319,6 +1325,7 @@ export interface CodePaneDiagnosticsChangedPayload {
 export type CodePaneLanguageWorkspacePhase =
   | 'idle'
   | 'starting'
+  | 'starting-runtime'
   | 'detecting-project'
   | 'importing-project'
   | 'indexing-workspace'
@@ -1626,6 +1633,7 @@ export interface ElectronAPI {
   codePaneDidChangeDocument: (config: CodePaneDocumentSyncConfig) => Promise<IpcResponse<void>>;
   codePaneDidSaveDocument: (config: CodePaneDocumentSyncConfig) => Promise<IpcResponse<void>>;
   codePaneDidCloseDocument: (config: CodePaneDocumentCloseConfig) => Promise<IpcResponse<void>>;
+  codePanePrewarmLanguageWorkspace: (config: CodePaneLanguagePrewarmConfig) => Promise<IpcResponse<void>>;
   codePaneGetDefinition: (config: CodePaneGetDefinitionConfig) => Promise<IpcResponse<CodePaneLocation[]>>;
   codePaneGetHover: (config: CodePaneGetHoverConfig) => Promise<IpcResponse<CodePaneHoverResult | null>>;
   codePaneGetReferences: (config: CodePaneGetReferencesConfig) => Promise<IpcResponse<CodePaneReference[]>>;

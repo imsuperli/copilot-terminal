@@ -161,6 +161,7 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneDidChangeDocument: vi.fn().mockResolvedValue({ success: true }),
     codePaneDidSaveDocument: vi.fn().mockResolvedValue({ success: true }),
     codePaneDidCloseDocument: vi.fn().mockResolvedValue({ success: true }),
+    codePanePrewarmLanguageWorkspace: vi.fn().mockResolvedValue({ success: true }),
     codePaneGetDefinition: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGetHover: vi.fn().mockResolvedValue({ success: true, data: null }),
     codePaneGetReferences: vi.fn().mockResolvedValue({ success: true, data: [] }),

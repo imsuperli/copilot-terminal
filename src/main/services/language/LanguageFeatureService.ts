@@ -6,6 +6,7 @@ import type {
   CodePaneDiagnostic,
   CodePaneDocumentCloseConfig,
   CodePaneDocumentHighlight,
+  CodePaneLanguagePrewarmConfig,
   CodePaneGetCallHierarchyConfig,
   CodePaneInlayHint,
   CodePaneDocumentSyncConfig,
@@ -129,6 +130,15 @@ export class LanguageFeatureService {
       createOwnerId(config.paneId, config.filePath),
       config.filePath,
     );
+  }
+
+  async prewarmWorkspace(config: CodePaneLanguagePrewarmConfig, workspace: Workspace | null): Promise<void> {
+    const resolution = await this.resolve(config.rootPath, config.filePath, config.language, workspace);
+    if (!resolution) {
+      return;
+    }
+
+    await this.supervisor.prewarmSession(resolution);
   }
 
   async getDefinition(config: CodePaneGetDefinitionConfig, workspace: Workspace | null): Promise<CodePaneLocation[]> {

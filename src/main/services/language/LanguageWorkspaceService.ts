@@ -69,7 +69,7 @@ export class LanguageWorkspaceService {
     if (runtimeState === 'starting') {
       this.emitNextState(resolution, {
         runtimeState,
-        phase: 'starting',
+        phase: 'starting-runtime',
         ...(message ? { message } : {}),
         progressText: undefined,
       });
@@ -176,7 +176,11 @@ export class LanguageWorkspaceService {
       const currentState = this.getState(resolution);
       this.emitNextState(resolution, {
         runtimeState: currentState?.runtimeState ?? 'running',
-        phase: currentState?.runtimeState === 'error' ? 'error' : 'ready',
+        phase: currentState?.runtimeState === 'error'
+          ? 'error'
+          : (currentState?.runtimeState === 'idle' || currentState?.runtimeState === 'stopped')
+            ? 'idle'
+            : 'ready',
         progressText: undefined,
       });
       return;
@@ -264,7 +268,7 @@ function classifyProgressPhase(
 ): CodePaneLanguageWorkspacePhase {
   const source = `${title ?? ''} ${message ?? ''}`.toLowerCase();
   if (!source.trim()) {
-    return 'starting';
+    return 'starting-runtime';
   }
 
   if (
@@ -300,7 +304,7 @@ function classifyProgressPhase(
     return 'detecting-project';
   }
 
-  return 'starting';
+  return 'starting-runtime';
 }
 
 function formatProgressText(progress: ProgressEntry): string {

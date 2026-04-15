@@ -2960,6 +2960,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return nextSections;
   }, [rootPath, t]);
 
+  const prewarmLanguageWorkspace = useCallback(async (seedEntries?: CodePaneTreeEntry[]) => {
+    const candidatePath = activeFilePathRef.current
+      ?? seedEntries?.find((entry) => entry.type === 'file' && isPathInside(rootPath, entry.path))?.path
+      ?? paneRef.current.code?.openFiles?.[0]?.path
+      ?? resolvePathFromRoot(rootPath, '__workspace__.java');
+    const response = await window.electronAPI.codePanePrewarmLanguageWorkspace({
+      rootPath,
+      filePath: candidatePath,
+    });
+    if (!response.success) {
+      console.warn(`[CodePane] codePanePrewarmLanguageWorkspace failed: ${response.error ?? 'unknown error'}`);
+    }
+  }, [rootPath]);
+
   const loadExternalDirectory = useCallback(async (
     directoryPath: string,
     options?: { showLoadingIndicator?: boolean },
@@ -5910,16 +5924,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
           });
         });
 
-        await Promise.all([
-          loadDirectory(rootPath),
-          loadExternalLibrarySections(),
-          refreshGitSnapshot(),
-        ]);
+        const rootEntries = await loadDirectory(rootPath);
+
+        if (mounted) {
+          setIsBootstrapping(false);
+        }
+
+        void loadExternalLibrarySections().catch((error) => {
+          if (mounted) {
+            setExternalLibrariesError(error instanceof Error ? error.message : t('common.retry'));
+          }
+        });
+        void refreshGitSnapshot().catch(() => {});
+        void prewarmLanguageWorkspace(rootEntries).catch(() => {});
 
         const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
           .filter((directoryPath) => directoryPath !== rootPath);
         if (nestedExpandedDirectories.length > 0) {
-          await Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectory(directoryPath)));
+          void Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectory(directoryPath)))
+            .catch(() => {});
         }
       } catch (error) {
         if (mounted) {
@@ -5930,7 +5953,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
       }
 
-      if (mounted) {
+      if (mounted && isBootstrapping) {
         setIsBootstrapping(false);
       }
     };
@@ -6426,6 +6449,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const progressText = languageWorkspaceState.progressText || languageWorkspaceState.message;
 
     switch (languageWorkspaceState.phase) {
+      case 'idle':
+        return null;
       case 'ready':
         return `${languageLabel}: ready`;
       case 'error':
@@ -6436,9 +6461,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: indexing workspace`;
       case 'detecting-project':
         return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: detecting project`;
+      case 'starting-runtime':
+        return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: starting`;
       case 'starting':
       case 'degraded':
-      case 'idle':
       default:
         return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: starting`;
     }

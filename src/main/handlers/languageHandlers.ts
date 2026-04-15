@@ -7,6 +7,7 @@ import type {
   CodePaneGetCompletionItemsConfig,
   CodePaneDocumentCloseConfig,
   CodePaneDocumentSyncConfig,
+  CodePaneLanguagePrewarmConfig,
   CodePaneGetDefinitionConfig,
   CodePaneGetDocumentHighlightsConfig,
   CodePaneGetInlayHintsConfig,
@@ -76,6 +77,19 @@ export function registerLanguageHandlers(ctx: HandlerContext) {
       }
 
       await languageFeatureService.closeDocument(config, getCurrentWorkspace());
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-prewarm-language-workspace', async (_event, config: CodePaneLanguagePrewarmConfig) => {
+    try {
+      if (!languageFeatureService) {
+        throw new Error('LanguageFeatureService not initialized');
+      }
+
+      await languageFeatureService.prewarmWorkspace(config, getCurrentWorkspace());
       return successResponse();
     } catch (error) {
       return errorResponse(error);

@@ -56,6 +56,7 @@ describe('LanguageServerSupervisor', () => {
       workspaceService,
       now: () => '2026-04-12T00:00:00.000Z',
       requestTimeoutMs: 5000,
+      idleSessionTtlMs: 0,
     });
 
     const resolution = createResolution(workspaceRoot, installPath);
@@ -72,7 +73,7 @@ describe('LanguageServerSupervisor', () => {
     expect(runtimeEvents.map((event) => event.state)).toEqual(expect.arrayContaining(['starting', 'running']));
     await waitForCondition(() => workspaceEvents.some((event) => event.state.phase === 'ready'));
     expect(workspaceEvents.map((event) => event.state.phase)).toEqual(expect.arrayContaining([
-      'starting',
+      'starting-runtime',
       'importing-project',
       'ready',
     ]));
@@ -420,6 +421,61 @@ describe('LanguageServerSupervisor', () => {
       lineNumber: 1,
       column: 1,
     })).rejects.toThrow();
+  });
+
+  it('keeps idle sessions warm until the configured ttl expires', async () => {
+    const workspaceRoot = path.join(tempDir, 'workspace');
+    const installPath = path.join(tempDir, 'plugin-install');
+    const filePath = path.join(workspaceRoot, 'src', 'Main.java');
+    await fs.ensureDir(path.dirname(filePath));
+    await fs.ensureDir(installPath);
+    await fs.writeFile(filePath, 'class Main {}');
+
+    const runtimeEvents: PluginRuntimeStateChangedPayload[] = [];
+
+    supervisor = new LanguageServerSupervisor({
+      runtimeRootPath: path.join(tempDir, 'runtime'),
+      adapters: [createNodeFixtureAdapter()],
+      emitDiagnostics: () => {},
+      emitRuntimeState: (payload) => {
+        runtimeEvents.push(payload);
+      },
+      idleSessionTtlMs: 120,
+      requestTimeoutMs: 5000,
+    });
+
+    const resolution = createResolution(workspaceRoot, installPath);
+
+    await supervisor.syncDocument(resolution, {
+      ownerId: 'pane-1:/workspace/src/Main.java',
+      rootPath: workspaceRoot,
+      filePath,
+      languageId: 'java',
+      content: 'class Main {}',
+    }, 'open');
+
+    await waitForCondition(() => runtimeEvents.some((event) => event.state === 'running'));
+    runtimeEvents.length = 0;
+
+    await supervisor.closeDocument(resolution, 'pane-1:/workspace/src/Main.java', filePath);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    expect(runtimeEvents.some((event) => event.state === 'stopped')).toBe(false);
+
+    await supervisor.prewarmSession(resolution);
+    expect(runtimeEvents.some((event) => event.state === 'starting')).toBe(false);
+
+    await supervisor.syncDocument(resolution, {
+      ownerId: 'pane-1:/workspace/src/Main.java',
+      rootPath: workspaceRoot,
+      filePath,
+      languageId: 'java',
+      content: 'class Main {}',
+    }, 'open');
+    await supervisor.closeDocument(resolution, 'pane-1:/workspace/src/Main.java', filePath);
+    await new Promise((resolve) => setTimeout(resolve, 140));
+
+    expect(runtimeEvents.some((event) => event.state === 'stopped')).toBe(true);
   });
 
   it('returns read-only virtual class definitions for JDTLS dependency symbols', async () => {

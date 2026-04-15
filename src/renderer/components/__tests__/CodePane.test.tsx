@@ -677,6 +677,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneDidChangeDocument).mockReset();
     vi.mocked(window.electronAPI.codePaneDidSaveDocument).mockReset();
     vi.mocked(window.electronAPI.codePaneDidCloseDocument).mockReset();
+    vi.mocked(window.electronAPI.codePanePrewarmLanguageWorkspace).mockReset();
     vi.mocked(window.electronAPI.codePaneGetDefinition).mockReset();
     vi.mocked(window.electronAPI.codePaneGetHover).mockReset();
     vi.mocked(window.electronAPI.codePaneGetReferences).mockReset();
@@ -869,6 +870,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneDidChangeDocument).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneDidSaveDocument).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneDidCloseDocument).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePanePrewarmLanguageWorkspace).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetHover).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneGetReferences).mockResolvedValue({ success: true, data: [] });
@@ -1052,10 +1054,10 @@ describe('CodePane', () => {
     expect(await screen.findByText('codePane.externalLibraries · Python')).toBeInTheDocument();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'site-packages' }));
+      fireEvent.doubleClick(screen.getByRole('button', { name: 'site-packages' }));
     });
     await act(async () => {
-      fireEvent.click(await screen.findByRole('button', { name: 'requests' }));
+      fireEvent.doubleClick(await screen.findByRole('button', { name: 'requests' }));
     });
     await act(async () => {
       fireEvent.click(await screen.findByRole('button', { name: 'api.py' }));
@@ -1093,6 +1095,38 @@ describe('CodePane', () => {
 
     await act(async () => {
       resolveMonaco?.(fakeMonaco);
+      await Promise.resolve();
+    });
+  });
+
+  it('does not block initial tree rendering on background workspace tasks', async () => {
+    let resolveExternalLibraries: (() => void) | null = null;
+    let resolveGitStatus: (() => void) | null = null;
+
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockImplementation(() => (
+      new Promise((resolve) => {
+        resolveExternalLibraries = () => resolve({ success: true, data: [] });
+      })
+    ));
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockImplementation(() => (
+      new Promise((resolve) => {
+        resolveGitStatus = () => resolve({ success: true, data: [] });
+      })
+    ));
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByRole('button', { name: 'index.ts' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.electronAPI.codePanePrewarmLanguageWorkspace).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    await act(async () => {
+      resolveExternalLibraries?.();
+      resolveGitStatus?.();
       await Promise.resolve();
     });
   });
@@ -1267,7 +1301,7 @@ describe('CodePane', () => {
 
     const directoryButton = await screen.findByRole('button', { name: 'src' });
     await act(async () => {
-      fireEvent.click(directoryButton);
+      fireEvent.doubleClick(directoryButton);
     });
 
     await waitFor(() => {
@@ -4370,7 +4404,7 @@ describe('CodePane', () => {
 
     const directoryButton = await screen.findByRole('button', { name: 'src' });
     await act(async () => {
-      fireEvent.click(directoryButton);
+      fireEvent.doubleClick(directoryButton);
     });
 
     await waitFor(() => {
@@ -4404,7 +4438,7 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
   });
 
-  it('renders breadcrumbs for the active document symbol path', async () => {
+  it('does not request removed breadcrumb symbols for the active file', async () => {
     vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
       success: true,
       data: {
@@ -4440,17 +4474,14 @@ describe('CodePane', () => {
     renderCodePane(createPane());
 
     await openFileFromTree('index.ts', { doubleClick: true });
-
     await waitFor(() => {
-      expect(window.electronAPI.codePaneGetDocumentSymbols).toHaveBeenCalledWith({
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
         rootPath: '/workspace/project',
         filePath: '/workspace/project/src/index.ts',
-        language: 'typescript',
       });
     });
-
-    expect((await screen.findAllByText('src/index.ts')).length).toBeGreaterThan(0);
-    expect(await screen.findByText('hello')).toBeInTheDocument();
+    expect(window.electronAPI.codePaneGetDocumentSymbols).not.toHaveBeenCalled();
+    expect(screen.queryByText('hello')).not.toBeInTheDocument();
   });
 
   it('opens quick documentation and renders hover content', async () => {

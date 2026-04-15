@@ -324,6 +324,8 @@ export interface LanguageServerSupervisorOptions {
   now?: () => string;
   requestTimeoutMs?: number;
   restartBackoffMs?: number;
+  idleSessionTtlMs?: number;
+  maxIdleSessions?: number;
 }
 
 export interface DocumentOwnerConfig {
@@ -343,7 +345,10 @@ export class LanguageServerSupervisor {
   private readonly now: () => string;
   private readonly requestTimeoutMs: number;
   private readonly restartBackoffMs: number;
+  private readonly idleSessionTtlMs: number;
+  private readonly maxIdleSessions: number;
   private readonly sessions = new Map<string, LanguageServerSession>();
+  private readonly pendingIdleDisposals = new Map<string, NodeJS.Timeout>();
 
   constructor(options: LanguageServerSupervisorOptions) {
     this.runtimeRootPath = options.runtimeRootPath;
@@ -359,6 +364,8 @@ export class LanguageServerSupervisor {
     this.now = options.now ?? (() => new Date().toISOString());
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15000;
     this.restartBackoffMs = options.restartBackoffMs ?? 10_000;
+    this.idleSessionTtlMs = Math.max(0, options.idleSessionTtlMs ?? 15 * 60_000);
+    this.maxIdleSessions = Math.max(1, options.maxIdleSessions ?? 4);
   }
 
   async syncDocument(resolution: ResolvedLanguagePlugin, config: DocumentOwnerConfig, reason: 'open' | 'change' | 'save'): Promise<void> {
@@ -373,9 +380,13 @@ export class LanguageServerSupervisor {
     const session = this.getOrCreateSession(resolution);
     await session.closeDocument(ownerId, filePath);
     if (!session.hasTrackedDocuments()) {
-      await session.dispose();
-      this.sessions.delete(this.getSessionKey(resolution));
+      this.scheduleIdleSessionDisposal(resolution, session);
     }
+  }
+
+  async prewarmSession(resolution: ResolvedLanguagePlugin): Promise<void> {
+    const session = this.getOrCreateSession(resolution);
+    await session.prewarm();
   }
 
   attachDocumentOwner(
@@ -554,6 +565,7 @@ export class LanguageServerSupervisor {
   }
 
   async resetSessions(pluginId?: string): Promise<void> {
+    this.clearIdleSessionDisposals(pluginId);
     const sessionsToDispose = Array.from(this.sessions.values())
       .filter((session) => !pluginId || session.pluginId === pluginId);
 
@@ -576,8 +588,10 @@ export class LanguageServerSupervisor {
 
   private getOrCreateSession(resolution: ResolvedLanguagePlugin): LanguageServerSession {
     const sessionKey = this.getSessionKey(resolution);
+    this.cancelIdleSessionDisposal(sessionKey);
     const existingSession = this.sessions.get(sessionKey);
     if (existingSession) {
+      existingSession.markTouched();
       return existingSession;
     }
 
@@ -602,6 +616,7 @@ export class LanguageServerSupervisor {
     });
 
     this.sessions.set(sessionKey, session);
+    this.evictIdleSessionsIfNeeded(sessionKey);
     return session;
   }
 
@@ -614,6 +629,72 @@ export class LanguageServerSupervisor {
         settings: resolution.mergedSettings,
       }),
     ].join(':');
+  }
+
+  private scheduleIdleSessionDisposal(resolution: ResolvedLanguagePlugin, session: LanguageServerSession): void {
+    const sessionKey = this.getSessionKey(resolution);
+    this.cancelIdleSessionDisposal(sessionKey);
+
+    if (this.idleSessionTtlMs <= 0) {
+      void this.disposeSession(sessionKey, session);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.pendingIdleDisposals.delete(sessionKey);
+      void this.disposeSession(sessionKey, session);
+    }, this.idleSessionTtlMs);
+    timer.unref?.();
+    this.pendingIdleDisposals.set(sessionKey, timer);
+  }
+
+  private async disposeSession(sessionKey: string, session: LanguageServerSession): Promise<void> {
+    const currentSession = this.sessions.get(sessionKey);
+    if (!currentSession || currentSession !== session || currentSession.hasTrackedDocuments()) {
+      return;
+    }
+
+    await currentSession.dispose();
+    if (this.sessions.get(sessionKey) === currentSession) {
+      this.sessions.delete(sessionKey);
+    }
+  }
+
+  private evictIdleSessionsIfNeeded(preferredSessionKey?: string): void {
+    const idleSessions = Array.from(this.sessions.entries())
+      .filter(([key, session]) => key !== preferredSessionKey && !session.hasTrackedDocuments());
+    if (idleSessions.length <= this.maxIdleSessions) {
+      return;
+    }
+
+    idleSessions
+      .sort((left, right) => left[1].getLastTouchedAtMs() - right[1].getLastTouchedAtMs())
+      .slice(0, idleSessions.length - this.maxIdleSessions)
+      .forEach(([sessionKey, session]) => {
+        this.cancelIdleSessionDisposal(sessionKey);
+        void this.disposeSession(sessionKey, session);
+      });
+  }
+
+  private clearIdleSessionDisposals(pluginId?: string): void {
+    for (const [sessionKey, timer] of Array.from(this.pendingIdleDisposals.entries())) {
+      if (pluginId && !sessionKey.startsWith(`${pluginId}:`)) {
+        continue;
+      }
+
+      clearTimeout(timer);
+      this.pendingIdleDisposals.delete(sessionKey);
+    }
+  }
+
+  private cancelIdleSessionDisposal(sessionKey: string): void {
+    const timer = this.pendingIdleDisposals.get(sessionKey);
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    this.pendingIdleDisposals.delete(sessionKey);
   }
 }
 
@@ -647,6 +728,7 @@ class LanguageServerSession {
   private disposed = false;
   private recentStartFailure: { message: string; timestampMs: number } | null = null;
   private lastRuntimeErrorMessage: string | null = null;
+  private lastTouchedAtMs = Date.now();
 
   constructor(options: LanguageServerSessionOptions) {
     this.resolution = options.resolution;
@@ -665,6 +747,19 @@ class LanguageServerSession {
     return this.documents.size > 0;
   }
 
+  getLastTouchedAtMs(): number {
+    return this.lastTouchedAtMs;
+  }
+
+  markTouched(): void {
+    this.lastTouchedAtMs = Date.now();
+  }
+
+  async prewarm(): Promise<void> {
+    this.markTouched();
+    await this.ensureInitialized();
+  }
+
   hasDocument(filePath: string): boolean {
     return this.documents.has(filePath);
   }
@@ -680,6 +775,7 @@ class LanguageServerSession {
   }
 
   async syncDocument(config: DocumentSyncConfig): Promise<void> {
+    this.markTouched();
     const document = this.documents.get(config.filePath);
     if (!document) {
       await this.ensureInitialized();
@@ -747,6 +843,7 @@ class LanguageServerSession {
   }
 
   async closeDocument(ownerId: string, filePath: string): Promise<void> {
+    this.markTouched();
     const document = this.documents.get(filePath);
     if (!document) {
       return;
@@ -775,6 +872,7 @@ class LanguageServerSession {
   }
 
   async getDefinition(filePath: string, position: CodePanePosition): Promise<CodePaneLocation[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/definition', {
       textDocument: {
@@ -791,6 +889,7 @@ class LanguageServerSession {
   }
 
   async getHover(filePath: string, position: CodePanePosition): Promise<CodePaneHoverResult | null> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/hover', {
       textDocument: {
@@ -815,6 +914,7 @@ class LanguageServerSession {
   }
 
   async getReferences(filePath: string, position: CodePanePosition): Promise<CodePaneReference[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/references', {
       textDocument: {
@@ -836,6 +936,7 @@ class LanguageServerSession {
     filePath: string,
     position: CodePanePosition,
   ): Promise<CodePaneDocumentHighlight[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/documentHighlight', {
       textDocument: {
@@ -850,6 +951,7 @@ class LanguageServerSession {
   }
 
   async getDocumentSymbols(filePath: string): Promise<CodePaneDocumentSymbol[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/documentSymbol', {
       textDocument: {
@@ -861,6 +963,7 @@ class LanguageServerSession {
   }
 
   async getInlayHints(filePath: string, range: CodePaneRange): Promise<CodePaneInlayHint[]> {
+    this.markTouched();
     await this.ensureInitialized();
     if (!this.serverCapabilities?.inlayHintProvider) {
       return [];
@@ -881,6 +984,7 @@ class LanguageServerSession {
     position: CodePanePosition,
     direction: CodePaneCallHierarchyDirection,
   ): Promise<CodePaneHierarchyResult> {
+    this.markTouched();
     await this.ensureInitialized();
     if (!this.serverCapabilities?.callHierarchyProvider) {
       return {
@@ -924,6 +1028,7 @@ class LanguageServerSession {
     item: CodePaneHierarchyItem,
     direction: CodePaneCallHierarchyDirection,
   ): Promise<CodePaneHierarchyItem[]> {
+    this.markTouched();
     await this.ensureInitialized();
     if (!this.serverCapabilities?.callHierarchyProvider) {
       return [];
@@ -960,6 +1065,7 @@ class LanguageServerSession {
     position: CodePanePosition,
     direction: CodePaneTypeHierarchyDirection,
   ): Promise<CodePaneHierarchyResult> {
+    this.markTouched();
     await this.ensureInitialized();
     if (!this.serverCapabilities?.typeHierarchyProvider) {
       return {
@@ -1003,6 +1109,7 @@ class LanguageServerSession {
     item: CodePaneHierarchyItem,
     direction: CodePaneTypeHierarchyDirection,
   ): Promise<CodePaneHierarchyItem[]> {
+    this.markTouched();
     await this.ensureInitialized();
     if (!this.serverCapabilities?.typeHierarchyProvider) {
       return [];
@@ -1022,11 +1129,13 @@ class LanguageServerSession {
   }
 
   async getSemanticTokenLegend(): Promise<CodePaneSemanticTokensLegend | null> {
+    this.markTouched();
     await this.ensureInitialized();
     return normalizeSemanticTokensLegend(this.serverCapabilities?.semanticTokensProvider?.legend);
   }
 
   async getSemanticTokens(filePath: string): Promise<CodePaneSemanticTokensResult | null> {
+    this.markTouched();
     await this.ensureInitialized();
     const legend = normalizeSemanticTokensLegend(this.serverCapabilities?.semanticTokensProvider?.legend);
     if (!legend) {
@@ -1053,6 +1162,7 @@ class LanguageServerSession {
   }
 
   async getImplementations(filePath: string, position: CodePanePosition): Promise<CodePaneLocation[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/implementation', {
       textDocument: {
@@ -1076,6 +1186,7 @@ class LanguageServerSession {
       triggerKind?: number;
     },
   ): Promise<CodePaneCompletionItem[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/completion', {
       textDocument: {
@@ -1102,6 +1213,7 @@ class LanguageServerSession {
       triggerCharacter?: string;
     },
   ): Promise<CodePaneSignatureHelpResult | null> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/signatureHelp', {
       textDocument: {
@@ -1146,6 +1258,7 @@ class LanguageServerSession {
     position: CodePanePosition,
     newName: string,
   ): Promise<CodePaneTextEdit[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/rename', {
       textDocument: {
@@ -1165,6 +1278,7 @@ class LanguageServerSession {
       insertSpaces?: boolean;
     },
   ): Promise<CodePaneTextEdit[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/formatting', {
       textDocument: {
@@ -1183,6 +1297,7 @@ class LanguageServerSession {
   }
 
   async getWorkspaceSymbols(query: string, limit?: number): Promise<CodePaneWorkspaceSymbol[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('workspace/symbol', {
       query,
@@ -1196,6 +1311,7 @@ class LanguageServerSession {
   }
 
   async getCodeActions(filePath: string, range: CodePaneRange): Promise<CodePaneCodeAction[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const result = await this.sendRequest('textDocument/codeAction', {
       textDocument: {
@@ -1222,6 +1338,7 @@ class LanguageServerSession {
   }
 
   async runCodeAction(_filePath: string, actionId: string): Promise<CodePaneTextEdit[]> {
+    this.markTouched();
     await this.ensureInitialized();
     const storedAction = this.codeActions.get(actionId);
     if (!storedAction) {
