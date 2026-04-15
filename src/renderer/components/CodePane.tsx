@@ -581,15 +581,30 @@ function clampEditorSplitSize(size: number | undefined | null): number {
   );
 }
 
-function clampBottomPanelHeight(height: number | undefined | null, maxHeight = CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT): number {
-  const resolvedMaxHeight = Math.max(CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT, Math.round(maxHeight));
-  if (!Number.isFinite(height)) {
-    return Math.min(CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT, resolvedMaxHeight);
+function getBottomPanelAvailableHeight(containerHeight: number | undefined | null): number {
+  if (!Number.isFinite(containerHeight) || (containerHeight as number) <= 0) {
+    return CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT;
   }
 
   return Math.min(
+    CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT,
+    Math.max(
+      0,
+      Math.round(containerHeight as number) - CODE_PANE_TOP_REGION_MIN_HEIGHT - CODE_PANE_STATUS_BAR_RESERVED_HEIGHT,
+    ),
+  );
+}
+
+function clampBottomPanelHeight(height: number | undefined | null, maxHeight = CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT): number {
+  const resolvedMaxHeight = Math.max(0, Math.round(maxHeight));
+  const resolvedMinHeight = Math.min(CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT, resolvedMaxHeight);
+  const resolvedHeight = Number.isFinite(height)
+    ? Math.round(height as number)
+    : CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT;
+
+  return Math.min(
     resolvedMaxHeight,
-    Math.max(CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT, Math.round(height as number)),
+    Math.max(resolvedMinHeight, resolvedHeight),
   );
 }
 
@@ -1258,6 +1273,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [secondaryFilePath, setSecondaryFilePath] = useState<string | null>(initialEditorSplitLayout.secondaryFilePath);
   const [isEditorSplitResizing, setIsEditorSplitResizing] = useState(false);
   const [bottomPanelHeight, setBottomPanelHeight] = useState(initialBottomPanelLayout.height);
+  const [bottomPanelAvailableHeight, setBottomPanelAvailableHeight] = useState(CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT);
   const [isBottomPanelResizing, setIsBottomPanelResizing] = useState(false);
   const [searchPanelMode, setSearchPanelMode] = useState<'contents' | 'symbols' | 'usages'>('contents');
   const [contentSearchQuery, setContentSearchQuery] = useState('');
@@ -1388,6 +1404,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [contentSearchError, setContentSearchError] = useState<string | null>(null);
   const [indexStatus, setIndexStatus] = useState<CodePaneIndexStatus | null>(null);
   const [languageWorkspaceState, setLanguageWorkspaceState] = useState<CodePaneLanguageWorkspaceState | null>(null);
+  const effectiveBottomPanelHeight = useMemo(
+    () => clampBottomPanelHeight(bottomPanelHeight, bottomPanelAvailableHeight),
+    [bottomPanelAvailableHeight, bottomPanelHeight],
+  );
   const editorInlayHintOptions = useMemo(() => ({
     inlayHints: {
       enabled: (areInlayHintsEnabled ? 'on' : 'off') as 'on' | 'off',
@@ -1654,13 +1674,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ...getInitialEditorSplitLayout(paneRef.current),
       ...(paneRef.current.code?.layout?.editorSplit ?? {}),
     };
+    const availableHeight = getBottomPanelAvailableHeight(
+      workspaceLayoutRef.current?.getBoundingClientRect().height,
+    );
 
     const nextBottomPanelLayout = {
       ...currentBottomPanelLayout,
       ...updates,
-      height: clampBottomPanelHeight(updates.height ?? currentBottomPanelLayout.height),
+      height: clampBottomPanelHeight(
+        updates.height ?? currentBottomPanelLayout.height,
+        availableHeight,
+      ),
     };
 
+    setBottomPanelAvailableHeight((currentHeight) => (
+      currentHeight === availableHeight ? currentHeight : availableHeight
+    ));
     bottomPanelHeightRef.current = nextBottomPanelLayout.height;
     setBottomPanelHeight(nextBottomPanelLayout.height);
 
@@ -1673,6 +1702,40 @@ export const CodePane: React.FC<CodePaneProps> = ({
       },
     });
   }, [persistCodeState]);
+
+  useEffect(() => {
+    const syncBottomPanelLayout = () => {
+      const availableHeight = getBottomPanelAvailableHeight(
+        workspaceLayoutRef.current?.getBoundingClientRect().height,
+      );
+      setBottomPanelAvailableHeight((currentHeight) => (
+        currentHeight === availableHeight ? currentHeight : availableHeight
+      ));
+
+      const nextHeight = clampBottomPanelHeight(bottomPanelHeightRef.current, availableHeight);
+      if (nextHeight !== bottomPanelHeightRef.current) {
+        persistBottomPanelLayout({
+          height: nextHeight,
+        });
+      }
+    };
+
+    syncBottomPanelLayout();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncBottomPanelLayout();
+    });
+    const workspaceLayout = workspaceLayoutRef.current;
+    if (workspaceLayout) {
+      resizeObserver.observe(workspaceLayout);
+    }
+
+    window.addEventListener('resize', syncBottomPanelLayout);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', syncBottomPanelLayout);
+    };
+  }, [bottomPanelMode, persistBottomPanelLayout]);
 
   const persistDebugState = useCallback((updates: Partial<NonNullable<NonNullable<Pane['code']>['debug']>>) => {
     const currentDebugState = paneRef.current.code?.debug ?? {};
@@ -6351,8 +6414,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       label: t('codePane.problemsTab'),
     },
   ]), [t]);
-  const activeSidebarTab = sidebarTabs.find((tab) => tab.mode === sidebarMode) ?? sidebarTabs[0];
-
   const startSidebarResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     sidebarResizeCleanupRef.current?.();
@@ -6481,25 +6542,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     window.addEventListener('mouseup', handleMouseUp);
   }, [persistEditorSplitLayout]);
 
-  const getBottomPanelMaxHeight = useCallback(() => {
-    const containerHeight = workspaceLayoutRef.current?.getBoundingClientRect().height ?? 0;
-    if (containerHeight <= 0) {
-      return CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT;
-    }
-
-    return Math.min(
-      CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT,
-      Math.max(
-        CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT,
-        containerHeight - CODE_PANE_TOP_REGION_MIN_HEIGHT - CODE_PANE_STATUS_BAR_RESERVED_HEIGHT,
-      ),
+  const getBottomPanelAvailableHeightForLayout = useCallback(() => {
+    return getBottomPanelAvailableHeight(
+      workspaceLayoutRef.current?.getBoundingClientRect().height,
     );
   }, []);
 
   const resetBottomPanelHeight = useCallback(() => {
     const nextHeight = clampBottomPanelHeight(
       CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT,
-      getBottomPanelMaxHeight(),
+      getBottomPanelAvailableHeightForLayout(),
     );
 
     bottomPanelHeightRef.current = nextHeight;
@@ -6507,14 +6559,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
     persistBottomPanelLayout({
       height: nextHeight,
     });
-  }, [getBottomPanelMaxHeight, persistBottomPanelLayout]);
+  }, [getBottomPanelAvailableHeightForLayout, persistBottomPanelLayout]);
 
   const startBottomPanelResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     bottomPanelResizeCleanupRef.current?.();
+    const availableHeight = getBottomPanelAvailableHeightForLayout();
+    const currentHeight = clampBottomPanelHeight(bottomPanelHeightRef.current, availableHeight);
+    setBottomPanelAvailableHeight((currentAvailableHeight) => (
+      currentAvailableHeight === availableHeight ? currentAvailableHeight : availableHeight
+    ));
+    bottomPanelHeightRef.current = currentHeight;
+    setBottomPanelHeight(currentHeight);
     bottomPanelResizeStartRef.current = {
       startY: event.clientY,
-      startHeight: bottomPanelHeightRef.current,
+      startHeight: currentHeight,
     };
     setIsBottomPanelResizing(true);
     document.body.style.cursor = 'row-resize';
@@ -6526,10 +6585,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
+      const currentAvailableHeight = getBottomPanelAvailableHeightForLayout();
       const nextHeight = clampBottomPanelHeight(
         resizeStart.startHeight - (nextEvent.clientY - resizeStart.startY),
-        getBottomPanelMaxHeight(),
+        currentAvailableHeight,
       );
+      setBottomPanelAvailableHeight((availableHeightValue) => (
+        availableHeightValue === currentAvailableHeight ? availableHeightValue : currentAvailableHeight
+      ));
       bottomPanelHeightRef.current = nextHeight;
       setBottomPanelHeight(nextHeight);
     };
@@ -6550,7 +6613,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (resizeStart) {
         const nextHeight = clampBottomPanelHeight(
           bottomPanelHeightRef.current,
-          getBottomPanelMaxHeight(),
+          getBottomPanelAvailableHeightForLayout(),
         );
         bottomPanelHeightRef.current = nextHeight;
         setBottomPanelHeight(nextHeight);
@@ -6565,9 +6628,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     bottomPanelResizeCleanupRef.current = cleanup;
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [getBottomPanelMaxHeight, persistBottomPanelLayout]);
-
-  const ActiveSidebarIcon = activeSidebarTab.icon;
+  }, [getBottomPanelAvailableHeightForLayout, persistBottomPanelLayout]);
 
   const renderFileContextMenu = useCallback((
     filePath: string,
@@ -9395,13 +9456,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
         onMouseDown={onActivate}
       >
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
-        <div className="flex min-w-0 items-center gap-2 text-zinc-200">
-          <FileCode2 size={14} className="shrink-0 text-[rgb(var(--primary))]" />
-          <span className="truncate text-xs font-medium">
-            {rootPath || t('codePane.title')}
-          </span>
-        </div>
+      <div className="flex items-center justify-end gap-1 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
         <div className="flex items-center gap-1">
           <AppTooltip content={t('codePane.navigateBack')} placement="pane-corner">
             <button
@@ -9676,30 +9731,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 className="flex h-full shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/70"
                 style={{ width: `${sidebarWidth}px` }}
               >
-                <div className="flex items-center justify-between border-b border-zinc-800 px-2 py-2">
-                  <div className="flex min-w-0 items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
-                    <ActiveSidebarIcon size={12} />
-                    <span className="truncate">{activeSidebarTab.label}</span>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Collapse code pane sidebar"
-                    onClick={() => {
-                      toggleSidebarVisibility(false);
-                    }}
-                    className="rounded p-1 text-zinc-500 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                </div>
-
           {sidebarMode === 'files' ? (
             <>
               <div className="border-b border-zinc-800 px-2 py-2">
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                  <Search size={12} />
-                  {t('codePane.searchFiles')}
-                </div>
                 <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
                   <Search size={12} className="shrink-0 text-zinc-500" />
                   <input
@@ -9711,70 +9745,65 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   {isSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
                 </div>
               </div>
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                  {t('codePane.explorer')}
-                </div>
-                <div className="min-h-0 flex-1 overflow-auto px-1 py-2">
-                  {isBootstrapping ? (
-                    <div className="flex items-center gap-2 px-2 text-xs text-zinc-500">
-                      <Loader2 size={12} className="animate-spin" />
-                      {t('codePane.loading')}
-                    </div>
-                  ) : deferredSearchQuery.trim() && searchError ? (
-                    <div className="px-2 text-xs text-red-300">{searchError}</div>
-                  ) : deferredSearchQuery.trim() ? (
-                    renderedSearchResults.length > 0 ? renderedSearchResults : (
-                      <div className="px-2 text-xs text-zinc-500">{t('common.noMatchingWindows')}</div>
-                    )
-                  ) : treeLoadError ? (
-                    <div className="px-2 text-xs text-red-300">{treeLoadError}</div>
-                  ) : sidebarEntries.length > 0 || hasExternalLibraries || externalLibrariesError ? (
-                    <>
-                      {sidebarEntries.length > 0 ? (
-                        <>
-                          <ContextMenu.Root>
-                            <ContextMenu.Trigger asChild>
-                              <button
-                                type="button"
-                                title={rootPath}
-                                onClick={() => {
-                                  toggleDirectory(rootPath);
-                                }}
-                                className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
-                              >
-                                {isRootExpanded ? (
-                                  <ChevronDown size={14} className="shrink-0 text-zinc-500" />
-                                ) : (
-                                  <ChevronRight size={14} className="shrink-0 text-zinc-500" />
-                                )}
-                                {isRootExpanded ? (
-                                  <FolderOpen size={14} className="shrink-0 text-amber-300" />
-                                ) : (
-                                  <Folder size={14} className="shrink-0 text-amber-300" />
-                                )}
-                                <span className="min-w-0 flex-1 truncate">{rootLabel}</span>
-                                {isDirectoryLoading(rootPath) && (
-                                  <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
-                                )}
-                                {rootBadge && (
-                                  <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${rootBadge.className}`}>
-                                    {rootBadge.badge}
-                                  </span>
-                                )}
-                              </button>
-                            </ContextMenu.Trigger>
-                            {renderFileContextMenu(rootPath, 'directory')}
-                          </ContextMenu.Root>
-                          {isRootExpanded && renderTree(rootPath, 1)}
-                        </>
-                      ) : null}
-                      {renderedExternalLibrarySections}
-                    </>
-                  ) : (
-                    <div className="px-2 text-xs text-zinc-500">{t('codePane.emptyFolder')}</div>
-                  )}
-                </div>
+              <div className="min-h-0 flex-1 overflow-auto px-1 py-2">
+                {isBootstrapping ? (
+                  <div className="flex items-center gap-2 px-2 text-xs text-zinc-500">
+                    <Loader2 size={12} className="animate-spin" />
+                    {t('codePane.loading')}
+                  </div>
+                ) : deferredSearchQuery.trim() && searchError ? (
+                  <div className="px-2 text-xs text-red-300">{searchError}</div>
+                ) : deferredSearchQuery.trim() ? (
+                  renderedSearchResults.length > 0 ? renderedSearchResults : (
+                    <div className="px-2 text-xs text-zinc-500">{t('common.noMatchingWindows')}</div>
+                  )
+                ) : treeLoadError ? (
+                  <div className="px-2 text-xs text-red-300">{treeLoadError}</div>
+                ) : sidebarEntries.length > 0 || hasExternalLibraries || externalLibrariesError ? (
+                  <>
+                    {sidebarEntries.length > 0 ? (
+                      <>
+                        <ContextMenu.Root>
+                          <ContextMenu.Trigger asChild>
+                            <button
+                              type="button"
+                              title={rootPath}
+                              onClick={() => {
+                                toggleDirectory(rootPath);
+                              }}
+                              className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+                            >
+                              {isRootExpanded ? (
+                                <ChevronDown size={14} className="shrink-0 text-zinc-500" />
+                              ) : (
+                                <ChevronRight size={14} className="shrink-0 text-zinc-500" />
+                              )}
+                              {isRootExpanded ? (
+                                <FolderOpen size={14} className="shrink-0 text-amber-300" />
+                              ) : (
+                                <Folder size={14} className="shrink-0 text-amber-300" />
+                              )}
+                              <span className="min-w-0 flex-1 truncate">{rootLabel}</span>
+                              {isDirectoryLoading(rootPath) && (
+                                <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
+                              )}
+                              {rootBadge && (
+                                <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${rootBadge.className}`}>
+                                  {rootBadge.badge}
+                                </span>
+                              )}
+                            </button>
+                          </ContextMenu.Trigger>
+                          {renderFileContextMenu(rootPath, 'directory')}
+                        </ContextMenu.Root>
+                        {isRootExpanded && renderTree(rootPath, 1)}
+                      </>
+                    ) : null}
+                    {renderedExternalLibrarySections}
+                  </>
+                ) : (
+                  <div className="px-2 text-xs text-zinc-500">{t('codePane.emptyFolder')}</div>
+                )}
               </div>
             </>
           ) : sidebarMode === 'search' ? (
@@ -10343,7 +10372,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             )}
 	          </div>
 
-	          {activeFilePath && (
+	          {activeFilePath && breadcrumbItems.length > 1 && (
 	            <BreadcrumbsBar
 	              items={breadcrumbItems}
 	              emptyLabel={isActiveDocumentSymbolsLoading
@@ -10480,8 +10509,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 data-testid="code-pane-bottom-panel"
                 className="min-h-0 shrink-0 overflow-hidden"
                 style={{
-                  height: `${bottomPanelHeight}px`,
-                  maxHeight: `calc(100% - ${CODE_PANE_TOP_REGION_MIN_HEIGHT + CODE_PANE_STATUS_BAR_RESERVED_HEIGHT}px)`,
+                  height: `${effectiveBottomPanelHeight}px`,
                 }}
               >
                 {renderBottomPanel()}

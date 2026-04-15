@@ -1638,6 +1638,46 @@ describe('CodePane', () => {
     });
   });
 
+  it('reconciles bottom panel height to the actual available dock space in short panes', async () => {
+    const user = userEvent.setup();
+    const view = renderCodePane(createPane({
+      layout: {
+        sidebar: {
+          visible: true,
+          activeView: 'files',
+          width: 300,
+          lastExpandedWidth: 300,
+        },
+        bottomPanel: {
+          height: 280,
+        },
+      },
+    }));
+
+    const workspaceLayout = screen.getByTestId('code-pane-workspace-layout');
+    Object.defineProperty(workspaceLayout, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 1280,
+        bottom: 390,
+        width: 1280,
+        height: 390,
+        toJSON: () => ({}),
+      }),
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'codePane.runTab' }));
+
+    await waitFor(() => {
+      expect(view.getPane().code?.layout?.bottomPanel?.height).toBe(180);
+      expect(screen.getByTestId('code-pane-bottom-panel')).toHaveStyle({ height: '180px' });
+    });
+  });
+
   it('opens project and git workbenches in the bottom panel instead of replacing the editor region', async () => {
     const user = userEvent.setup();
     renderCodePane(createPane({
@@ -4384,8 +4424,11 @@ describe('CodePane', () => {
 
   it('uses preview tabs for single-click tree navigation and promotes them on double click', async () => {
     const view = renderCodePane(createPane());
+    const treeButton = await screen.findByRole('button', { name: 'index.ts' }, { timeout: 3000 });
 
-    await openFileFromTree('index.ts');
+    await act(async () => {
+      fireEvent.click(treeButton);
+    });
 
     expect(view.getPane().code?.openFiles).toEqual([
       {
@@ -4395,7 +4438,9 @@ describe('CodePane', () => {
     ]);
     expect(await screen.findByText('codePane.previewTabBadge')).toBeInTheDocument();
 
-    await openFileFromTree('index.ts', { doubleClick: true });
+    await act(async () => {
+      fireEvent.doubleClick(treeButton);
+    });
 
     expect(view.getPane().code?.openFiles).toEqual([
       {
