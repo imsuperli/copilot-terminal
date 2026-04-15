@@ -10,6 +10,7 @@ import type {
   CodePaneLanguageWorkspaceChangedPayload,
 } from '../../../shared/types/electron-api';
 import { resetMonacoLanguageBridgeForTests } from '../../services/code/MonacoLanguageBridge';
+import { resetCodePaneProjectCacheForTests } from '../../stores/codePaneProjectCache';
 import type { Pane } from '../../types/window';
 import { WindowStatus } from '../../types/window';
 
@@ -630,6 +631,7 @@ describe('CodePane', () => {
 
   beforeEach(() => {
     resetMonacoLanguageBridgeForTests();
+    resetCodePaneProjectCacheForTests();
     fakeMonacoState.reset();
     updatePaneImpl = null;
     hoisted.updatePaneSpy.mockReset();
@@ -1129,6 +1131,93 @@ describe('CodePane', () => {
       resolveGitStatus?.();
       await Promise.resolve();
     });
+  });
+
+  it('reuses cached external libraries when opening a second pane for the same project', async () => {
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'java-external-libraries',
+          label: 'External Libraries',
+          languageId: 'java',
+          roots: [
+            {
+              id: 'maven-cache',
+              label: 'Maven',
+              path: '/home/user/.m2/repository',
+            },
+          ],
+        },
+      ],
+    });
+
+    const firstView = renderCodePane(createPane());
+    expect(await screen.findByText('codePane.externalLibraries · Java')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetExternalLibrarySections).toHaveBeenCalledTimes(1);
+    });
+    firstView.unmount();
+
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockClear();
+
+    renderCodePane(createPane({
+      activeFilePath: '/workspace/project/src/index.ts',
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    expect(await screen.findByText('codePane.externalLibraries · Java')).toBeInTheDocument();
+    expect(window.electronAPI.codePaneGetExternalLibrarySections).not.toHaveBeenCalled();
+  });
+
+  it('reuses cached git snapshot when opening a second pane for the same project', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/cache',
+        upstreamBranch: 'origin/feature/cache',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 1,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+
+    const firstView = renderCodePane(createPane());
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
+      expect(window.electronAPI.codePaneGetGitRepositorySummary).toHaveBeenCalledTimes(1);
+    });
+    firstView.unmount();
+
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockClear();
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockClear();
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    expect((await screen.findAllByText('feature/cache')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('index.ts')).toBeInTheDocument();
+    expect(window.electronAPI.codePaneGetGitStatus).not.toHaveBeenCalled();
+    expect(window.electronAPI.codePaneGetGitRepositorySummary).not.toHaveBeenCalled();
   });
 
   it('shows index progress in the bottom status bar while building', async () => {

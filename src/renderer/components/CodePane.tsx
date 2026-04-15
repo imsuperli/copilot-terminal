@@ -131,6 +131,18 @@ import {
   type MonacoLanguageBridge,
 } from '../services/code/MonacoLanguageBridge';
 import { CodePaneRuntimeStore } from '../stores/codePaneRuntimeStore';
+import {
+  dedupeProjectRequest,
+  getExternalLibraryCache,
+  getGitGraphCache,
+  getGitStatusCache,
+  getGitSummaryCache,
+  invalidateProjectCache,
+  setExternalLibraryCache,
+  setGitGraphCache,
+  setGitStatusCache,
+  setGitSummaryCache,
+} from '../stores/codePaneProjectCache';
 import { getPathLeafLabel } from '../utils/pathDisplay';
 
 type MonacoModule = typeof import('monaco-editor');
@@ -1223,6 +1235,18 @@ function buildGitChangeSectionGroups(
   })).filter((group) => group.count > 0);
 }
 
+function mapGitStatusEntriesByPath(
+  entries: CodePaneGitStatusEntry[],
+): Record<string, CodePaneGitStatusEntry> {
+  return Object.fromEntries(entries.map((entry) => [entry.path, entry]));
+}
+
+function collectExternalRootPaths(
+  sections: CodePaneExternalLibrarySection[],
+): string[] {
+  return sections.flatMap((section) => section.roots.map((root) => root.path));
+}
+
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -1238,6 +1262,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const rootContainerRef = useRef<HTMLDivElement | null>(null);
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const rootPath = pane.code?.rootPath ?? pane.cwd;
+  const cachedExternalLibrarySections = useMemo(
+    () => getExternalLibraryCache(rootPath) ?? [],
+    [rootPath],
+  );
+  const cachedGitStatusEntries = useMemo(
+    () => getGitStatusCache(rootPath) ?? [],
+    [rootPath],
+  );
+  const cachedGitSummary = useMemo(
+    () => getGitSummaryCache(rootPath),
+    [rootPath],
+  );
+  const cachedGitGraph = useMemo(
+    () => getGitGraphCache(rootPath) ?? [],
+    [rootPath],
+  );
   const openFiles = pane.code?.openFiles ?? [];
   const bookmarks = pane.code?.bookmarks ?? [];
   const activeFilePath = pane.code?.activeFilePath ?? null;
@@ -1307,7 +1347,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [loadedExternalDirectories, setLoadedExternalDirectories] = useState<Set<string>>(() => new Set());
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(() => new Set([rootPath]));
   const [loadingExternalDirectories, setLoadingExternalDirectories] = useState<Set<string>>(() => new Set());
-  const [externalLibrarySections, setExternalLibrarySections] = useState<CodePaneExternalLibrarySection[]>([]);
+  const [externalLibrarySections, setExternalLibrarySections] = useState<CodePaneExternalLibrarySection[]>(cachedExternalLibrarySections);
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [searchResults, setSearchResults] = useState<string[]>([]);
@@ -1387,9 +1427,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(createEmptySet);
   const [savingPaths, setSavingPaths] = useState<Set<string>>(createEmptySet);
-  const [gitStatusByPath, setGitStatusByPath] = useState<Record<string, CodePaneGitStatusEntry>>({});
-  const [gitRepositorySummary, setGitRepositorySummary] = useState<CodePaneGitRepositorySummary | null>(null);
-  const [gitGraph, setGitGraph] = useState<CodePaneGitGraphCommit[]>([]);
+  const [gitStatusByPath, setGitStatusByPath] = useState<Record<string, CodePaneGitStatusEntry>>(
+    () => mapGitStatusEntriesByPath(cachedGitStatusEntries),
+  );
+  const [gitRepositorySummary, setGitRepositorySummary] = useState<CodePaneGitRepositorySummary | null>(cachedGitSummary);
+  const [gitGraph, setGitGraph] = useState<CodePaneGitGraphCommit[]>(cachedGitGraph);
   const [gitBranches, setGitBranches] = useState<CodePaneGitBranchEntry[]>([]);
   const [selectedGitBranchName, setSelectedGitBranchName] = useState<string | null>(null);
   const [selectedGitLogCommitSha, setSelectedGitLogCommitSha] = useState<string | null>(null);
@@ -2687,32 +2729,59 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setProblems([]);
   }, [clearDefinitionLookupCache]);
 
-  const refreshGitSnapshot = useCallback(async (options?: { includeGraph?: boolean }) => {
-    const includeGraph = options?.includeGraph ?? (
-      sidebarVisibleRef.current && sidebarModeRef.current === 'scm'
-    );
+  const applyExternalLibrarySections = useCallback((nextSections: CodePaneExternalLibrarySection[]) => {
+    const nextExternalRootPaths = collectExternalRootPaths(nextSections);
 
-    const statusPromise = window.electronAPI.codePaneGetGitStatus({ rootPath });
-    const summaryPromise = window.electronAPI.codePaneGetGitRepositorySummary({ rootPath });
-    const graphPromise = includeGraph
-      ? window.electronAPI.codePaneGetGitGraph({ rootPath, limit: 60 })
-      : Promise.resolve(null);
+    setExternalLibrariesError(null);
+    setExternalLibrarySections(nextSections);
+    setExternalEntriesByDirectory((currentEntries) => (
+      Object.fromEntries(
+        Object.entries(currentEntries).filter(([directoryPath]) => (
+          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+        )),
+      )
+    ));
+    setLoadedExternalDirectories((currentLoadedDirectories) => (
+      new Set(
+        Array.from(currentLoadedDirectories).filter((directoryPath) => (
+          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+        )),
+      )
+    ));
+    setLoadingExternalDirectories((currentLoadingDirectories) => (
+      new Set(
+        Array.from(currentLoadingDirectories).filter((directoryPath) => (
+          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+        )),
+      )
+    ));
+    setExpandedDirectories((currentExpandedDirectories) => (
+      new Set(
+        Array.from(currentExpandedDirectories).filter((directoryPath) => (
+          isPathInside(rootPath, directoryPath)
+          || nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+        )),
+      )
+    ));
+  }, [rootPath]);
 
-    const [statusResponse, summaryResponse, graphResponse] = await Promise.all([
-      statusPromise,
-      summaryPromise,
-      graphPromise,
-    ]);
+  const resetExternalLibrarySections = useCallback((nextSections: CodePaneExternalLibrarySection[]) => {
+    applyExternalLibrarySections(nextSections);
+  }, [applyExternalLibrarySections]);
 
+  const applyGitSnapshot = useCallback((
+    nextStatusEntries: CodePaneGitStatusEntry[],
+    nextSummary: CodePaneGitRepositorySummary | null,
+    nextGraph: CodePaneGitGraphCommit[] | null,
+    options?: {
+      includeGraph?: boolean;
+    },
+  ) => {
+    const includeGraph = options?.includeGraph ?? false;
     startTransition(() => {
-      setGitStatusByPath(
-        statusResponse?.success
-          ? Object.fromEntries((statusResponse.data ?? []).map((entry) => [entry.path, entry]))
-          : {},
-      );
-      setGitRepositorySummary(summaryResponse?.success ? summaryResponse.data ?? null : null);
-      if (includeGraph) {
-        const nextGraph = graphResponse?.success ? graphResponse.data ?? [] : [];
+      setGitStatusByPath(mapGitStatusEntriesByPath(nextStatusEntries));
+      setGitRepositorySummary(nextSummary);
+      if (includeGraph && nextGraph) {
         setGitGraph(nextGraph);
         setSelectedGitLogCommitSha((currentCommitSha) => (
           currentCommitSha && nextGraph.some((commit) => commit.sha === currentCommitSha)
@@ -2721,7 +2790,98 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ));
       }
     });
-  }, [rootPath]);
+  }, []);
+
+  const resetGitSnapshot = useCallback((options?: { includeGraph?: boolean }) => {
+    applyGitSnapshot([], null, options?.includeGraph ? [] : null, options);
+  }, [applyGitSnapshot]);
+
+  const refreshGitSnapshot = useCallback(async (options?: {
+    includeGraph?: boolean;
+    force?: boolean;
+  }) => {
+    const includeGraph = options?.includeGraph ?? (
+      sidebarVisibleRef.current && sidebarModeRef.current === 'scm'
+    );
+
+    if (options?.force) {
+      invalidateProjectCache(rootPath, 'git');
+    }
+
+    const cachedStatusEntries = getGitStatusCache(rootPath);
+    const cachedSummary = getGitSummaryCache(rootPath);
+    const cachedGraph = includeGraph ? getGitGraphCache(rootPath) : null;
+    const shouldFetchStatus = options?.force === true || cachedStatusEntries === null;
+    const shouldFetchSummary = options?.force === true || cachedSummary === null;
+    const shouldFetchGraph = includeGraph && (options?.force === true || cachedGraph === null);
+
+    if (!shouldFetchStatus && !shouldFetchSummary && !shouldFetchGraph) {
+      applyGitSnapshot(
+        cachedStatusEntries ?? [],
+        cachedSummary,
+        includeGraph ? (cachedGraph ?? []) : null,
+        { includeGraph },
+      );
+      return;
+    }
+
+    const gitSnapshot = await dedupeProjectRequest(
+      rootPath,
+      [
+        'git-snapshot',
+        shouldFetchStatus ? 'status' : null,
+        shouldFetchSummary ? 'summary' : null,
+        shouldFetchGraph ? 'graph' : null,
+      ].filter(Boolean).join(':'),
+      async () => {
+        const statusPromise = shouldFetchStatus
+          ? window.electronAPI.codePaneGetGitStatus({ rootPath })
+          : Promise.resolve(null);
+        const summaryPromise = shouldFetchSummary
+          ? window.electronAPI.codePaneGetGitRepositorySummary({ rootPath })
+          : Promise.resolve(null);
+        const graphPromise = shouldFetchGraph
+          ? window.electronAPI.codePaneGetGitGraph({ rootPath, limit: 60 })
+          : Promise.resolve(null);
+
+        const [statusResponse, summaryResponse, graphResponse] = await Promise.all([
+          statusPromise,
+          summaryPromise,
+          graphPromise,
+        ]);
+
+        const nextStatusEntries = shouldFetchStatus
+          ? (statusResponse?.success ? (statusResponse.data ?? []) : [])
+          : (cachedStatusEntries ?? []);
+        const nextSummary = shouldFetchSummary
+          ? (summaryResponse?.success ? (summaryResponse.data ?? null) : null)
+          : cachedSummary;
+        const nextGraph = includeGraph
+          ? (shouldFetchGraph ? (graphResponse?.success ? graphResponse.data ?? [] : []) : (cachedGraph ?? []))
+          : null;
+
+        if (shouldFetchStatus) {
+          setGitStatusCache(rootPath, nextStatusEntries);
+        }
+        if (shouldFetchSummary) {
+          setGitSummaryCache(rootPath, nextSummary);
+        }
+        if (includeGraph && shouldFetchGraph && nextGraph) {
+          setGitGraphCache(rootPath, nextGraph);
+        }
+
+        return {
+          statusEntries: nextStatusEntries,
+          summary: nextSummary,
+          graph: nextGraph,
+        };
+      },
+    );
+
+    applyGitSnapshot(gitSnapshot.statusEntries, gitSnapshot.summary, gitSnapshot.graph, {
+      includeGraph,
+    });
+  }, [applyGitSnapshot, rootPath]);
 
   const loadGitBranches = useCallback(async (options?: { preferredBaseRef?: string }) => {
     setIsGitBranchesLoading(true);
@@ -2912,53 +3072,51 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return nextEntries;
   }, [rootPath, t]);
 
-  const loadExternalLibrarySections = useCallback(async () => {
-    const response = await window.electronAPI.codePaneGetExternalLibrarySections({
-      rootPath,
-    });
-
-    if (!response.success) {
-      setExternalLibrariesError(response.error || t('common.retry'));
-      setExternalLibrarySections([]);
-      return [];
+  const loadExternalLibrarySections = useCallback(async (options?: { force?: boolean }) => {
+    if (options?.force) {
+      invalidateProjectCache(rootPath, 'external-libraries');
     }
 
-    const nextSections = response.data ?? [];
-    const nextExternalRootPaths = nextSections.flatMap((section) => section.roots.map((root) => root.path));
+    const cachedSections = getExternalLibraryCache(rootPath);
+    if (!options?.force && cachedSections !== null) {
+      applyExternalLibrarySections(cachedSections);
+      return cachedSections;
+    }
 
-    setExternalLibrariesError(null);
-    setExternalLibrarySections(nextSections);
-    setExternalEntriesByDirectory((currentEntries) => (
-      Object.fromEntries(
-        Object.entries(currentEntries).filter(([directoryPath]) => (
-          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
-        )),
-      )
-    ));
-    setLoadedExternalDirectories((currentLoadedDirectories) => (
-      new Set(
-        Array.from(currentLoadedDirectories).filter((directoryPath) => (
-          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
-        )),
-      )
-    ));
-    setLoadingExternalDirectories((currentLoadingDirectories) => (
-      new Set(
-        Array.from(currentLoadingDirectories).filter((directoryPath) => (
-          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
-        )),
-      )
-    ));
-    setExpandedDirectories((currentExpandedDirectories) => (
-      new Set(
-        Array.from(currentExpandedDirectories).filter((directoryPath) => (
-          isPathInside(rootPath, directoryPath)
-          || nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
-        )),
-      )
-    ));
+    const nextSections = await dedupeProjectRequest(
+      rootPath,
+      'external-libraries',
+      async () => {
+        const response = await window.electronAPI.codePaneGetExternalLibrarySections({
+          rootPath,
+        });
+
+        if (!response.success) {
+          throw new Error(response.error || t('common.retry'));
+        }
+
+        const resolvedSections = response.data ?? [];
+        setExternalLibraryCache(rootPath, resolvedSections);
+        return resolvedSections;
+      },
+    );
+
+    applyExternalLibrarySections(nextSections);
     return nextSections;
-  }, [rootPath, t]);
+  }, [applyExternalLibrarySections, rootPath, t]);
+
+  const refreshProjectBootstrapCaches = useCallback(async () => {
+    try {
+      await Promise.all([
+        loadExternalLibrarySections(),
+        refreshGitSnapshot(),
+      ]);
+    } catch (error) {
+      if (error instanceof Error) {
+        setExternalLibrariesError((currentError) => currentError ?? error.message);
+      }
+    }
+  }, [loadExternalLibrarySections, refreshGitSnapshot]);
 
   const prewarmLanguageWorkspace = useCallback(async (seedEntries?: CodePaneTreeEntry[]) => {
     const candidatePath = activeFilePathRef.current
@@ -3799,7 +3957,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    void refreshGitSnapshot();
+    void refreshGitSnapshot({ force: true });
     return true;
   }, [clearDefinitionLookupCache, markDirty, refreshGitSnapshot, rootPath, syncLanguageDocument, t]);
 
@@ -4065,7 +4223,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }));
     }
     await syncLanguageDocument(filePath, 'save');
-    void refreshGitSnapshot();
+    void refreshGitSnapshot({ force: true });
     return true;
   }, [
     addLocalHistoryEntry,
@@ -4884,7 +5042,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    await refreshGitSnapshot({ includeGraph: true });
+    await refreshGitSnapshot({ includeGraph: true, force: true });
     setRefactorPreview(null);
     setSelectedPreviewChangeId(null);
     setRefactorPreviewError(null);
@@ -5030,11 +5188,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (options?.refreshGitStatus !== false) {
-      await refreshGitSnapshot();
+      await refreshGitSnapshot({ force: true });
     }
   }, [loadExplorerDirectory, refreshGitSnapshot]);
 
   const refreshLoadedDirectories = useCallback(async () => {
+    invalidateProjectCache(rootPath, 'external-libraries');
     const directoriesToRefresh = Array.from(new Set([
       rootPath,
       ...loadedDirectoriesRef.current,
@@ -5043,7 +5202,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     await Promise.all([
       refreshDirectoryPaths(directoriesToRefresh),
-      loadExternalLibrarySections(),
+      loadExternalLibrarySections({ force: true }),
     ]);
   }, [loadExternalLibrarySections, refreshDirectoryPaths, rootPath]);
 
@@ -5217,7 +5376,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     await refreshLoadedDirectories();
-    await refreshGitSnapshot({ includeGraph: true });
+    await refreshGitSnapshot({ includeGraph: true, force: true });
     setBanner({
       tone: 'info',
       message: response.data?.summary
@@ -5241,7 +5400,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     await refreshLoadedDirectories();
-    await refreshGitSnapshot({ includeGraph: true });
+    await refreshGitSnapshot({ includeGraph: true, force: true });
     setBanner({
       tone: 'info',
       message: response.data?.reference
@@ -5334,7 +5493,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
 
     await Promise.all([
-      refreshGitSnapshot({ includeGraph: true }),
+      refreshGitSnapshot({ includeGraph: true, force: true }),
       loadGitBranches({ preferredBaseRef: baseRef }),
       loadGitRebasePlan(baseRef),
     ]);
@@ -5397,7 +5556,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       mergedContent,
     });
 
-    await refreshGitSnapshot({ includeGraph: true });
+    await refreshGitSnapshot({ includeGraph: true, force: true });
 
     if (!response.success) {
       setGitConflictError(response.error || t('common.retry'));
@@ -5821,8 +5980,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setContentSearchError(null);
       setTreeEntriesByDirectory({});
       setExternalEntriesByDirectory({});
-      setExternalLibrarySections([]);
       setExternalLibrariesError(null);
+      resetExternalLibrarySections(getExternalLibraryCache(rootPath) ?? []);
       setIndexStatus(null);
       setLanguageWorkspaceState(null);
       setExpandedDirectories(initialExpandedDirectories);
@@ -5871,6 +6030,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setRecentFiles([]);
       setRecentLocations([]);
       setNavigationStateVersion((currentVersion) => currentVersion + 1);
+      const cachedGitStatusEntries = getGitStatusCache(rootPath) ?? [];
+      const cachedGitSummary = getGitSummaryCache(rootPath);
+      const cachedGitGraph = getGitGraphCache(rootPath) ?? [];
+      applyGitSnapshot(cachedGitStatusEntries, cachedGitSummary, cachedGitGraph, {
+        includeGraph: true,
+      });
       disposeEditorsRef.current();
       disposeAllModelsRef.current();
 
@@ -5930,12 +6095,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
           setIsBootstrapping(false);
         }
 
-        void loadExternalLibrarySections().catch((error) => {
+        void refreshProjectBootstrapCaches().catch((error) => {
           if (mounted) {
             setExternalLibrariesError(error instanceof Error ? error.message : t('common.retry'));
           }
         });
-        void refreshGitSnapshot().catch(() => {});
         void prewarmLanguageWorkspace(rootEntries).catch(() => {});
 
         const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
@@ -5975,7 +6139,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
       });
     };
-  }, [loadDirectory, loadExternalLibrarySections, pane.id, refreshGitSnapshot, rootPath, supportsMonaco, t]);
+  }, [
+    applyGitSnapshot,
+    loadDirectory,
+    pane.id,
+    refreshProjectBootstrapCaches,
+    resetExternalLibrarySections,
+    rootPath,
+    supportsMonaco,
+    t,
+  ]);
 
   useEffect(() => {
     if (!isSidebarVisible || sidebarMode !== 'scm') {
@@ -8223,6 +8396,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsProjectLoading(true);
     setProjectError(null);
 
+    if (refresh) {
+      invalidateProjectCache(rootPath, 'external-libraries');
+    }
+
     const response = await trackRequest(
       `project-model:${rootPath}`,
       refresh ? 'Refresh project model' : 'Project contribution',
@@ -8235,7 +8412,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setProjectContributions(response.success ? (response.data ?? []) : []);
     setProjectError(response.success ? null : (response.error || t('common.retry')));
     setIsProjectLoading(false);
-  }, [rootPath, t, trackRequest]);
+
+    if (refresh && response.success) {
+      void loadExternalLibrarySections({ force: true });
+      void refreshGitSnapshot({ force: true });
+    }
+  }, [loadExternalLibrarySections, refreshGitSnapshot, rootPath, t, trackRequest]);
 
   const runTargetById = useCallback(async (targetId: string) => {
     const response = await window.electronAPI.codePaneRunTarget({
@@ -10166,7 +10348,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              void refreshGitSnapshot({ includeGraph: true });
+                              void refreshGitSnapshot({ includeGraph: true, force: true });
                             }}
                             className="rounded bg-zinc-800 p-1 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
                             aria-label={t('codePane.gitRefreshStatus')}
@@ -10231,7 +10413,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            void refreshGitSnapshot({ includeGraph: true });
+                            void refreshGitSnapshot({ includeGraph: true, force: true });
                           }}
                           className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
                         >
