@@ -74,6 +74,7 @@ export class CodeTestService {
     return await this.runProfileService.runTarget({
       rootPath: config.rootPath,
       targetId: config.targetId,
+      customization: config.customization,
     });
   }
 

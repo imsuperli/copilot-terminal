@@ -281,6 +281,17 @@ function buildJavaDebugLaunch(
     const propertyName = target.args.some((arg) => arg.includes('spring-boot:run'))
       ? 'spring-boot.run.jvmArguments'
       : 'exec.jvmArgs';
+    const existingJvmArgsIndex = target.args.findIndex((arg) => arg.startsWith(`-D${propertyName}=`));
+    if (existingJvmArgsIndex >= 0) {
+      const existingValue = target.args[existingJvmArgsIndex].slice(`-D${propertyName}=`.length).trim();
+      const nextArgs = [...target.args];
+      nextArgs[existingJvmArgsIndex] = `-D${propertyName}=${[existingValue, debugAgent].filter(Boolean).join(' ')}`;
+      return {
+        command: target.command,
+        args: nextArgs,
+      };
+    }
+
     return {
       command: target.command,
       args: [`-D${propertyName}=${debugAgent}`, ...target.args],

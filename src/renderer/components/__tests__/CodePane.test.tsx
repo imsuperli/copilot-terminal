@@ -1657,6 +1657,11 @@ describe('CodePane', () => {
           languageId: 'java',
           workingDirectory: '/workspace/project',
           canDebug: true,
+          customization: {
+            profiles: '',
+            programArgs: '',
+            vmArgs: '',
+          },
         },
       ],
     });
@@ -1691,12 +1696,29 @@ describe('CodePane', () => {
     expect(await screen.findByText('Spring Boot')).toBeInTheDocument();
 
     await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('codePane.runProfilesPlaceholder'), {
+        target: { value: 'dev' },
+      });
+      fireEvent.change(screen.getByPlaceholderText('codePane.runProgramArgsPlaceholder'), {
+        target: { value: '--server.port=8081' },
+      });
+      fireEvent.change(screen.getByPlaceholderText('codePane.runVmArgsPlaceholder'), {
+        target: { value: '-Xmx1g' },
+      });
+    });
+
+    await act(async () => {
       fireEvent.click(screen.getByLabelText('codePane.runAction'));
     });
 
     expect(window.electronAPI.codePaneRunTarget).toHaveBeenCalledWith({
       rootPath: '/workspace/project',
       targetId: 'run-target-spring-boot',
+      customization: {
+        profiles: 'dev',
+        programArgs: '--server.port=8081',
+        vmArgs: '-Xmx1g',
+      },
     });
 
     await emitRunSessionChanged({
@@ -1876,6 +1898,11 @@ describe('CodePane', () => {
           workingDirectory: '/workspace/project',
           filePath: '/workspace/project/src/service.py',
           canDebug: true,
+          customization: {
+            profiles: '',
+            programArgs: '',
+            vmArgs: '',
+          },
         },
       ],
     });
@@ -1944,6 +1971,11 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneDebugStart).toHaveBeenCalledWith({
       rootPath: '/workspace/project',
       targetId: 'debug-target-python',
+      customization: {
+        profiles: '',
+        programArgs: '',
+        vmArgs: '',
+      },
     });
 
     await emitDebugSessionChanged({

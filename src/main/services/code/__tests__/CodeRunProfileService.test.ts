@@ -63,8 +63,75 @@ describe('CodeRunProfileService', () => {
         detail: 'mvn spring-boot:run',
         kind: 'application',
         languageId: 'java',
+        customization: {
+          profiles: '',
+          programArgs: '',
+          vmArgs: '',
+        },
       }),
     ]));
+  });
+
+  it('applies Spring Boot customization to Maven run targets', () => {
+    const target = service.registerAdHocTarget({
+      rootPath: tempRootPath,
+      label: 'Spring Boot',
+      detail: 'mvn spring-boot:run',
+      kind: 'application',
+      languageId: 'java',
+      workingDirectory: tempRootPath,
+      command: 'mvn',
+      args: ['spring-boot:run'],
+      customization: {
+        profiles: '',
+        programArgs: '',
+        vmArgs: '',
+      },
+    });
+
+    const executionTarget = service.getExecutionTarget(target.id, {
+      profiles: 'dev,local',
+      programArgs: '--server.port=8081 --debug',
+      vmArgs: '-Xms256m -Xmx1g',
+    });
+
+    expect(executionTarget).toEqual(expect.objectContaining({
+      detail: 'mvn spring-boot:run -Dspring-boot.run.profiles=dev,local -Dspring-boot.run.arguments=--server.port=8081 --debug -Dspring-boot.run.jvmArguments=-Xms256m -Xmx1g',
+      args: [
+        'spring-boot:run',
+        '-Dspring-boot.run.profiles=dev,local',
+        '-Dspring-boot.run.arguments=--server.port=8081 --debug',
+        '-Dspring-boot.run.jvmArguments=-Xms256m -Xmx1g',
+      ],
+    }));
+  });
+
+  it('builds customized execution targets for Spring Boot tests', () => {
+    const target = service.registerAdHocTarget({
+      rootPath: tempRootPath,
+      label: 'Spring Boot Test',
+      detail: 'mvn test',
+      kind: 'test',
+      languageId: 'java',
+      workingDirectory: tempRootPath,
+      command: 'mvn',
+      args: ['test'],
+      customization: {
+        profiles: '',
+        programArgs: '',
+        vmArgs: '',
+      },
+    });
+
+    const executionTarget = service.getExecutionTarget(target.id, {
+      profiles: 'test',
+      vmArgs: '-Xmx1g',
+    });
+
+    expect(executionTarget).toEqual(expect.objectContaining({
+      detail: 'mvn test -Dspring.profiles.active=test -DargLine=-Xmx1g',
+      args: ['test', '-Dspring.profiles.active=test', '-DargLine=-Xmx1g'],
+    }));
   });
 
   it('binds Django run targets to the detected interpreter', async () => {

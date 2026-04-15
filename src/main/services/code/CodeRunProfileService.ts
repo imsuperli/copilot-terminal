@@ -9,6 +9,7 @@ import type {
   CodePaneRunSessionChangedPayload,
   CodePaneRunSessionOutputPayload,
   CodePaneRunTarget,
+  CodePaneRunTargetCustomization,
   CodePaneRunTargetConfig,
   CodePaneRunTargetKind,
   CodePaneStopRunTargetConfig,
@@ -20,6 +21,7 @@ export interface ResolvedCodeRunTarget extends CodePaneRunTarget {
   command: string;
   args: string[];
   debugRequest?: CodePaneDebugRequest;
+  customization?: CodePaneRunTargetCustomization;
 }
 
 interface RunningRunSession {
@@ -34,6 +36,12 @@ interface PreparedSpawnCommand {
   args: string[];
   options: SpawnOptionsWithoutStdio;
   displayCommand: string;
+}
+
+interface EffectiveCommandLine {
+  command: string;
+  args: string[];
+  detail: string;
 }
 
 export interface CodeRunProfileServiceOptions {
@@ -92,6 +100,27 @@ export class CodeRunProfileService {
         command: resolveExecutable('mvn'),
         args: ['spring-boot:run'],
         canDebug: true,
+        customization: {
+          profiles: '',
+          programArgs: '',
+          vmArgs: '',
+        },
+      }));
+      targets.push(this.registerTarget({
+        rootPath,
+        key: 'java:spring-boot-test',
+        label: 'Spring Boot Test',
+        detail: 'mvn test',
+        kind: 'test',
+        languageId: 'java',
+        workingDirectory: rootPath,
+        command: resolveExecutable('mvn'),
+        args: ['test'],
+        customization: {
+          profiles: '',
+          programArgs: '',
+          vmArgs: '',
+        },
       }));
     }
 
@@ -168,7 +197,7 @@ export class CodeRunProfileService {
   }
 
   async runTarget(config: CodePaneRunTargetConfig): Promise<CodePaneRunSession> {
-    const target = this.targets.get(config.targetId);
+    const target = this.getExecutionTarget(config.targetId, config.customization);
     if (!target) {
       throw new Error(`Unknown run target: ${config.targetId}`);
     }
@@ -186,7 +215,12 @@ export class CodeRunProfileService {
       startedAt: this.now(),
     };
 
-    const preparedCommand = prepareSpawnCommand(target.command, target.args, target.workingDirectory, process.env);
+    const preparedCommand = prepareSpawnCommand(
+      target.command,
+      target.args,
+      target.workingDirectory,
+      process.env,
+    );
     let child: ChildProcessWithoutNullStreams;
 
     try {
@@ -300,6 +334,25 @@ export class CodeRunProfileService {
     return this.targets.get(targetId) ?? null;
   }
 
+  getExecutionTarget(
+    targetId: string,
+    customization?: CodePaneRunTargetCustomization,
+  ): ResolvedCodeRunTarget | null {
+    const target = this.targets.get(targetId);
+    if (!target) {
+      return null;
+    }
+
+    const effectiveTarget = this.resolveTargetCommandLine(target, customization);
+    return {
+      ...target,
+      command: effectiveTarget.command,
+      args: effectiveTarget.args,
+      detail: effectiveTarget.detail,
+      customization: mergeRunTargetCustomization(target.customization, customization),
+    };
+  }
+
   private registerTarget(target: {
     rootPath: string;
     key: string;
@@ -313,6 +366,7 @@ export class CodeRunProfileService {
     filePath?: string;
     canDebug?: boolean;
     debugRequest?: CodePaneDebugRequest;
+    customization?: CodePaneRunTargetCustomization;
   }): CodePaneRunTarget {
     return this.storeTarget({
       id: `${target.rootPath}:${target.key}`,
@@ -327,6 +381,7 @@ export class CodeRunProfileService {
       args: target.args,
       canDebug: target.canDebug,
       debugRequest: target.debugRequest,
+      customization: target.customization,
     });
   }
 
@@ -342,6 +397,28 @@ export class CodeRunProfileService {
       ...(target.filePath ? { filePath: target.filePath } : {}),
       ...(target.canDebug ? { canDebug: true } : {}),
       ...(target.debugRequest ? { debugRequest: target.debugRequest } : {}),
+      ...(target.customization ? { customization: target.customization } : {}),
+    };
+  }
+
+  private resolveTargetCommandLine(
+    target: ResolvedCodeRunTarget,
+    customization?: CodePaneRunTargetCustomization,
+  ): EffectiveCommandLine {
+    const mergedCustomization = mergeRunTargetCustomization(target.customization, customization);
+
+    if (target.languageId === 'java' && target.command.toLowerCase().includes('mvn') && target.args.includes('spring-boot:run')) {
+      return buildSpringBootMavenRunCommand(target, mergedCustomization);
+    }
+
+    if (target.languageId === 'java' && target.command.toLowerCase().includes('mvn') && target.kind === 'test' && target.customization) {
+      return buildSpringBootMavenTestCommand(target, mergedCustomization);
+    }
+
+    return {
+      command: target.command,
+      args: target.args,
+      detail: target.detail,
     };
   }
 
@@ -407,6 +484,21 @@ export class CodeRunProfileService {
     const pomContent = await fs.readFile(pomPath, 'utf8');
     return /spring-boot/i.test(pomContent);
   }
+}
+
+function mergeRunTargetCustomization(
+  base?: CodePaneRunTargetCustomization,
+  override?: CodePaneRunTargetCustomization,
+): CodePaneRunTargetCustomization | undefined {
+  if (!base && !override) {
+    return undefined;
+  }
+
+  return {
+    profiles: override?.profiles ?? base?.profiles ?? '',
+    programArgs: override?.programArgs ?? base?.programArgs ?? '',
+    vmArgs: override?.vmArgs ?? base?.vmArgs ?? '',
+  };
 }
 
 function resolveExecutable(command: string): string {
@@ -478,6 +570,62 @@ function requiresWindowsCommandShell(command: string): boolean {
 
 function formatDisplayCommand(command: string, args: string[]): string {
   return [command, ...args].join(' ').trim();
+}
+
+function buildSpringBootMavenRunCommand(
+  target: ResolvedCodeRunTarget,
+  customization?: CodePaneRunTargetCustomization,
+): EffectiveCommandLine {
+  const args = [...target.args];
+  const profiles = normalizeRunOptionValue(customization?.profiles);
+  const programArgs = normalizeRunOptionValue(customization?.programArgs);
+  const vmArgs = normalizeRunOptionValue(customization?.vmArgs);
+
+  if (profiles) {
+    args.push(`-Dspring-boot.run.profiles=${profiles}`);
+  }
+  if (programArgs) {
+    args.push(`-Dspring-boot.run.arguments=${programArgs}`);
+  }
+  if (vmArgs) {
+    args.push(`-Dspring-boot.run.jvmArguments=${vmArgs}`);
+  }
+
+  return {
+    command: target.command,
+    args,
+    detail: formatDisplayCommand(target.command, args),
+  };
+}
+
+function buildSpringBootMavenTestCommand(
+  target: ResolvedCodeRunTarget,
+  customization?: CodePaneRunTargetCustomization,
+): EffectiveCommandLine {
+  const args = [...target.args];
+  const profiles = normalizeRunOptionValue(customization?.profiles);
+  const programArgs = normalizeRunOptionValue(customization?.programArgs);
+  const vmArgs = normalizeRunOptionValue(customization?.vmArgs);
+
+  if (profiles) {
+    args.push(`-Dspring.profiles.active=${profiles}`);
+  }
+  if (programArgs) {
+    args.push(`-Dspring-boot.run.arguments=${programArgs}`);
+  }
+  if (vmArgs) {
+    args.push(`-DargLine=${vmArgs}`);
+  }
+
+  return {
+    command: target.command,
+    args,
+    detail: formatDisplayCommand(target.command, args),
+  };
+}
+
+function normalizeRunOptionValue(value?: string): string {
+  return value?.trim() ?? '';
 }
 
 async function isGoMainFile(filePath: string): Promise<boolean> {

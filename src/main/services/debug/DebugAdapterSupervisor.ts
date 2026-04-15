@@ -69,7 +69,7 @@ export class DebugAdapterSupervisor {
     config: CodePaneDebugStartConfig,
     workspacePluginSettings?: WorkspacePluginSettings,
   ): Promise<CodePaneDebugSession> {
-    const target = this.runProfileService.getResolvedTarget(config.targetId);
+    const target = this.runProfileService.getExecutionTarget(config.targetId, config.customization);
     if (!target) {
       throw new Error(`Unknown debug target: ${config.targetId}`);
     }

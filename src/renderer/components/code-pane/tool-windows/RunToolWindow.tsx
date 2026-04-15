@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Bug,
   Loader2,
   Play,
   RefreshCw,
@@ -9,6 +10,7 @@ import {
 import type {
   CodePaneRunSession,
   CodePaneRunTarget,
+  CodePaneRunTargetCustomization,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
 
@@ -22,8 +24,11 @@ interface RunToolWindowProps {
   onClose: () => void;
   onRefresh: () => void;
   onRunTarget: (targetId: string) => void | Promise<void>;
+  onDebugTarget: (targetId: string) => void | Promise<void>;
   onSelectSession: (sessionId: string) => void;
   onStopSession: (sessionId: string) => void | Promise<void>;
+  getCustomization: (targetId: string) => CodePaneRunTargetCustomization;
+  onCustomizationChange: (targetId: string, updates: Partial<CodePaneRunTargetCustomization>) => void;
 }
 
 export function RunToolWindow({
@@ -36,8 +41,11 @@ export function RunToolWindow({
   onClose,
   onRefresh,
   onRunTarget,
+  onDebugTarget,
   onSelectSession,
   onStopSession,
+  getCustomization,
+  onCustomizationChange,
 }: RunToolWindowProps) {
   const { t } = useI18n();
 
@@ -85,33 +93,82 @@ export function RunToolWindow({
           <div className="text-xs text-red-300">{error}</div>
         ) : targets.length > 0 ? (
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {targets.map((target) => (
-              <div
-                key={target.id}
-                className="min-w-[220px] rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-medium text-zinc-100">{target.label}</div>
-                    <div className="mt-1 line-clamp-2 text-[11px] text-zinc-500">{target.detail}</div>
+            {targets.map((target) => {
+              const customization = getCustomization(target.id);
+              const supportsCustomization = Boolean(target.customization);
+
+              return (
+                <div
+                  key={target.id}
+                  className="min-w-[320px] max-w-[360px] rounded border border-zinc-800 bg-zinc-900/60 px-3 py-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-medium text-zinc-100">{target.label}</div>
+                      <div className="mt-1 line-clamp-2 text-[11px] text-zinc-500">{target.detail}</div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void onRunTarget(target.id);
+                        }}
+                        className="shrink-0 rounded bg-emerald-500/15 p-1 text-emerald-300 transition-colors hover:bg-emerald-500/25 hover:text-emerald-200"
+                        aria-label={t('codePane.runAction')}
+                      >
+                        <Play size={12} />
+                      </button>
+                      {target.canDebug && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void onDebugTarget(target.id);
+                          }}
+                          className="shrink-0 rounded bg-amber-500/15 p-1 text-amber-300 transition-colors hover:bg-amber-500/25 hover:text-amber-200"
+                          aria-label={t('codePane.debugAction')}
+                        >
+                          <Bug size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void onRunTarget(target.id);
-                    }}
-                    className="shrink-0 rounded bg-emerald-500/15 p-1 text-emerald-300 transition-colors hover:bg-emerald-500/25 hover:text-emerald-200"
-                    aria-label={t('codePane.runAction')}
-                  >
-                    <Play size={12} />
-                  </button>
+
+                  <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-zinc-500">
+                    <span className="truncate">{formatLanguageLabel(target.languageId)}</span>
+                    <span className="truncate">{target.workingDirectory}</span>
+                  </div>
+
+                  {supportsCustomization && (
+                    <div className="mt-3 space-y-2 border-t border-zinc-800 pt-3">
+                      <LabeledInput
+                        label={t('codePane.runProfiles')}
+                        value={customization.profiles ?? ''}
+                        placeholder={t('codePane.runProfilesPlaceholder')}
+                        onChange={(value) => {
+                          onCustomizationChange(target.id, { profiles: value });
+                        }}
+                      />
+                      <LabeledInput
+                        label={t('codePane.runProgramArgs')}
+                        value={customization.programArgs ?? ''}
+                        placeholder={t('codePane.runProgramArgsPlaceholder')}
+                        onChange={(value) => {
+                          onCustomizationChange(target.id, { programArgs: value });
+                        }}
+                      />
+                      <LabeledInput
+                        label={t('codePane.runVmArgs')}
+                        value={customization.vmArgs ?? ''}
+                        placeholder={t('codePane.runVmArgsPlaceholder')}
+                        onChange={(value) => {
+                          onCustomizationChange(target.id, { vmArgs: value });
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-zinc-500">
-                  <span className="truncate">{formatLanguageLabel(target.languageId)}</span>
-                  <span className="truncate">{target.workingDirectory}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="text-xs text-zinc-500">{t('codePane.runTargetsEmpty')}</div>
@@ -205,6 +262,37 @@ export function RunToolWindow({
   );
 }
 
+interface LabeledInputProps {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}
+
+function LabeledInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: LabeledInputProps) {
+  return (
+    <label className="block">
+      <div className="mb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+        {label}
+      </div>
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+        className="w-full rounded border border-zinc-800 bg-zinc-950/80 px-2 py-1.5 text-[11px] text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-zinc-700"
+      />
+    </label>
+  );
+}
+
 function formatLanguageLabel(languageId: string): string {
   if (!languageId) {
     return 'Language';
@@ -255,7 +343,7 @@ function getSessionTone(state: CodePaneRunSession['state']): { label: string; cl
       };
     default:
       return {
-        label: state,
+        label: 'RUN',
         className: 'bg-zinc-700 text-zinc-300',
       };
   }

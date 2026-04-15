@@ -83,6 +83,7 @@ import type {
   CodePaneRunSessionChangedPayload,
   CodePaneRunSessionOutputPayload,
   CodePaneRunTarget,
+  CodePaneRunTargetCustomization,
   CodePanePreviewChangeSet,
   CodePaneSemanticTokensLegend,
   CodePaneSemanticTokensResult,
@@ -1668,6 +1669,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
       code: nextCodeState,
     });
   }, [pane.id, rootPath, updatePane, windowId]);
+
+  const getRunTargetCustomization = useCallback((targetId: string): CodePaneRunTargetCustomization => ({
+    profiles: paneRef.current.code?.runConfigurations?.[targetId]?.profiles ?? '',
+    programArgs: paneRef.current.code?.runConfigurations?.[targetId]?.programArgs ?? '',
+    vmArgs: paneRef.current.code?.runConfigurations?.[targetId]?.vmArgs ?? '',
+  }), []);
+
+  const updateRunTargetCustomization = useCallback((
+    targetId: string,
+    updates: Partial<CodePaneRunTargetCustomization>,
+  ) => {
+    const currentConfigurations = paneRef.current.code?.runConfigurations ?? {};
+    const currentCustomization = currentConfigurations[targetId] ?? {
+      profiles: '',
+      programArgs: '',
+      vmArgs: '',
+    };
+
+    persistCodeState({
+      runConfigurations: {
+        ...currentConfigurations,
+        [targetId]: {
+          ...currentCustomization,
+          ...updates,
+        },
+      },
+    });
+  }, [persistCodeState]);
 
   const persistSidebarLayout = useCallback((updates: Partial<NonNullable<NonNullable<Pane['code']>['layout']>['sidebar']>) => {
     const currentSidebarLayout = {
@@ -7582,7 +7611,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (bottomPanelMode === 'run') {
-      return runSessions.filter((session) => session.kind !== 'test' && session.kind !== 'task');
+      return runSessions.filter((session) => session.kind !== 'task');
     }
 
     return runSessions;
@@ -8186,6 +8215,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const response = await window.electronAPI.codePaneRunTarget({
       rootPath,
       targetId,
+      customization: getRunTargetCustomization(targetId),
     });
 
     if (!response.success || !response.data) {
@@ -8198,13 +8228,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setBottomPanelMode('run');
     setSelectedRunSessionId(response.data.id);
-  }, [rootPath, t]);
+  }, [getRunTargetCustomization, rootPath, t]);
 
   const debugTargetById = useCallback(async (targetId: string) => {
     await loadExceptionBreakpoints();
     const response = await window.electronAPI.codePaneDebugStart({
       rootPath,
       targetId,
+      customization: getRunTargetCustomization(targetId),
     });
 
     if (!response.success || !response.data) {
@@ -8217,12 +8248,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setBottomPanelMode('debug');
     setSelectedDebugSessionId(response.data.id);
-  }, [loadExceptionBreakpoints, rootPath, t]);
+  }, [getRunTargetCustomization, loadExceptionBreakpoints, rootPath, t]);
 
   const runTestTarget = useCallback(async (targetId: string) => {
     const response = await window.electronAPI.codePaneRunTests({
       rootPath,
       targetId,
+      customization: getRunTargetCustomization(targetId),
     });
 
     if (!response.success || !response.data) {
@@ -8235,7 +8267,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setBottomPanelMode('tests');
     setSelectedRunSessionId(response.data.id);
-  }, [rootPath, t]);
+  }, [getRunTargetCustomization, rootPath, t]);
 
   const rerunFailedTests = useCallback(async () => {
     const response = await window.electronAPI.codePaneRerunFailedTests({
@@ -9068,8 +9100,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
             }}
             onRefresh={refreshBottomPanel}
             onRunTarget={runTargetById}
+            onDebugTarget={debugTargetById}
             onSelectSession={setSelectedRunSessionId}
             onStopSession={stopRunSession}
+            getCustomization={getRunTargetCustomization}
+            onCustomizationChange={updateRunTargetCustomization}
           />
         );
       case 'debug':

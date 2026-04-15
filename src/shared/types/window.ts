@@ -1,6 +1,7 @@
 import { ProjectConfig } from './project-config';
 import type { SSHAuthType } from './ssh';
 import type { ChatPaneState } from './chat';
+import type { CodePaneRunTargetCustomization } from './electron-api';
 
 /**
  * 窗口状态枚举
@@ -97,6 +98,7 @@ export interface CodePaneState {
   activeFilePath: string | null;
   selectedPath?: string | null;
   expandedPaths?: string[];
+  runConfigurations?: Record<string, CodePaneRunTargetCustomization>;
   bookmarks?: CodePaneBookmark[];
   breakpoints?: Array<{
     filePath: string;

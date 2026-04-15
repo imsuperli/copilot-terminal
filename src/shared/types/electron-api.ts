@@ -1013,6 +1013,12 @@ export interface CodePaneRunCodeActionConfig {
 export type CodePaneRunTargetKind = 'application' | 'test' | 'task';
 export type CodePaneRunSessionState = 'starting' | 'running' | 'passed' | 'failed' | 'stopped';
 
+export interface CodePaneRunTargetCustomization {
+  profiles?: string;
+  programArgs?: string;
+  vmArgs?: string;
+}
+
 export interface CodePaneRunTarget {
   id: string;
   label: string;
@@ -1023,6 +1029,7 @@ export interface CodePaneRunTarget {
   filePath?: string;
   canDebug?: boolean;
   debugRequest?: CodePaneDebugRequest;
+  customization?: CodePaneRunTargetCustomization;
 }
 
 export interface CodePaneListRunTargetsConfig {
@@ -1033,6 +1040,7 @@ export interface CodePaneListRunTargetsConfig {
 export interface CodePaneRunTargetConfig {
   rootPath: string;
   targetId: string;
+  customization?: CodePaneRunTargetCustomization;
 }
 
 export interface CodePaneStopRunTargetConfig {
@@ -1153,6 +1161,7 @@ export interface CodePaneDebugSessionSnapshot {
 export interface CodePaneDebugStartConfig {
   rootPath: string;
   targetId: string;
+  customization?: CodePaneRunTargetCustomization;
 }
 
 export interface CodePaneDebugControlConfig {
@@ -1208,6 +1217,7 @@ export interface CodePaneListTestsConfig {
 export interface CodePaneRunTestsConfig {
   rootPath: string;
   targetId: string;
+  customization?: CodePaneRunTargetCustomization;
 }
 
 export interface CodePaneRerunFailedTestsConfig {
