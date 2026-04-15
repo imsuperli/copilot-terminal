@@ -9,7 +9,7 @@ import { LanguageWorkspaceHostService } from '../LanguageWorkspaceHostService';
 
 describe('LanguageWorkspaceHostService', () => {
   it('deduplicates prewarm work for multiple panes on the same project', async () => {
-    const { service, languageFeatureService } = createService();
+    const { service, languageFeatureService, languagePluginResolver } = createService();
     const config = {
       paneId: 'pane-1',
       rootPath: '/workspace/project',
@@ -17,6 +17,7 @@ describe('LanguageWorkspaceHostService', () => {
       language: 'java',
     };
 
+    vi.mocked(languagePluginResolver.resolveWorkspaceWarmup).mockResolvedValue(null);
     vi.mocked(languageFeatureService.getWorkspaceState)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
@@ -35,6 +36,7 @@ describe('LanguageWorkspaceHostService', () => {
     });
 
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(languageFeatureService.prewarmWorkspace).toHaveBeenCalledTimes(1);
 
@@ -43,6 +45,41 @@ describe('LanguageWorkspaceHostService', () => {
     const [firstResult, secondResult] = await Promise.all([firstAttach, secondAttach]);
     expect(firstResult).toMatchObject({ phase: 'ready' });
     expect(secondResult).toMatchObject({ phase: 'ready' });
+  });
+
+  it('reuses the project-level warmup key when a pane attaches without an explicit language', async () => {
+    const { service, languageFeatureService, languagePluginResolver } = createService();
+    vi.mocked(languagePluginResolver.resolveWorkspaceWarmup).mockResolvedValue({
+      languageId: 'java',
+      projectRoot: '/workspace/project',
+      matchedIndicator: 'pom.xml',
+    });
+    vi.mocked(languageFeatureService.getWorkspaceState)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(createReadyState());
+    let resolvePrewarm: (() => void) | null = null;
+    vi.mocked(languageFeatureService.prewarmWorkspace).mockImplementation(() => (
+      new Promise((resolve) => {
+        resolvePrewarm = () => resolve();
+      })
+    ));
+
+    const projectWarmup = service.prewarmProject('/workspace/project');
+    await Promise.resolve();
+    const paneAttach = service.attachPane({
+      paneId: 'pane-1',
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/Main.java',
+    });
+
+    expect(languageFeatureService.prewarmWorkspace).toHaveBeenCalledTimes(1);
+
+    resolvePrewarm?.();
+
+    await projectWarmup;
+    const result = await paneAttach;
+    expect(result).toMatchObject({ phase: 'ready' });
   });
 
   it('returns current workspace state without prewarming when already ready', async () => {

@@ -36,7 +36,8 @@ export class LanguageWorkspaceHostService {
   }
 
   async attachPane(config: AttachLanguageWorkspaceConfig): Promise<CodePaneLanguageWorkspaceState | null> {
-    const workspaceKey = createWorkspaceKey(config.rootPath, config.language);
+    const normalizedConfig = await this.normalizeConfig(config);
+    const workspaceKey = createWorkspaceKey(normalizedConfig.rootPath, normalizedConfig.language);
     const existingWorkspaceKey = this.paneWorkspaceKeys.get(config.paneId);
     if (existingWorkspaceKey && existingWorkspaceKey !== workspaceKey) {
       this.detachPane(config.paneId);
@@ -54,7 +55,7 @@ export class LanguageWorkspaceHostService {
     host.paneIds.add(config.paneId);
     this.paneWorkspaceKeys.set(config.paneId, workspaceKey);
 
-    const currentState = await this.languageFeatureService.getWorkspaceState(config, this.getCurrentWorkspace());
+    const currentState = await this.languageFeatureService.getWorkspaceState(normalizedConfig, this.getCurrentWorkspace());
     if (
       currentState
       && currentState.phase !== 'error'
@@ -64,7 +65,7 @@ export class LanguageWorkspaceHostService {
       return currentState;
     }
 
-    return await this.ensurePrewarmed(workspaceKey, config);
+    return await this.ensurePrewarmed(workspaceKey, normalizedConfig);
   }
 
   async getState(config: CodePaneLanguagePrewarmConfig): Promise<CodePaneLanguageWorkspaceState | null> {
@@ -127,6 +128,34 @@ export class LanguageWorkspaceHostService {
 
     this.inflightPrewarms.set(workspaceKey, prewarmPromise);
     return await prewarmPromise;
+  }
+
+  private async normalizeConfig(config: CodePaneLanguagePrewarmConfig): Promise<CodePaneLanguagePrewarmConfig> {
+    if (config.language) {
+      return config;
+    }
+
+    const currentState = await this.languageFeatureService.getWorkspaceState(config, this.getCurrentWorkspace());
+    if (currentState?.languageId) {
+      return {
+        ...config,
+        language: currentState.languageId,
+      };
+    }
+
+    const warmupResolution = await this.languagePluginResolver.resolveWorkspaceWarmup(
+      config.rootPath,
+      this.getCurrentWorkspace()?.settings.plugins,
+    );
+    if (!warmupResolution) {
+      return config;
+    }
+
+    return {
+      ...config,
+      filePath: `${warmupResolution.projectRoot}/__workspace__.${extensionForLanguage(warmupResolution.languageId)}`,
+      language: warmupResolution.languageId,
+    };
   }
 }
 
