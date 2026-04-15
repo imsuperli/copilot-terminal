@@ -1008,6 +1008,22 @@ function getStatusTone(status?: CodePaneGitStatusEntry['status']): {
   }
 }
 
+function getStatusTextClassName(status?: CodePaneGitStatusEntry['status']): string {
+  switch (status) {
+    case 'modified':
+      return 'text-amber-300';
+    case 'untracked':
+    case 'added':
+      return 'text-emerald-300';
+    case 'deleted':
+      return 'text-red-300';
+    case 'renamed':
+      return 'text-sky-300';
+    default:
+      return '';
+  }
+}
+
 function getProblemTone(severity: number): {
   label: 'error' | 'warning' | 'info' | 'hint';
   className: string;
@@ -6501,13 +6517,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const activeTabStatus = activeFilePath ? getEntryStatus(activeFilePath, 'file') : undefined;
   const activeFileReadOnly = activeFilePath ? Boolean(fileMetaRef.current.get(activeFilePath)?.readOnly) : false;
-  const activeStatusText = activeFilePath
-    ? savingPaths.has(activeFilePath)
-      ? t('codePane.saving')
-      : dirtyPaths.has(activeFilePath)
-        ? t('codePane.unsaved')
-        : t('codePane.saved')
-    : t('codePane.autoSave');
   const activeFileDisplayPath = activeFilePath ? getDisplayPath(activeFilePath) : null;
   const indexStatusText = indexStatus?.state === 'building'
     ? t('codePane.indexingProgress', {
@@ -6566,39 +6575,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       showSpinner: true,
     };
   }, [languageWorkspaceState]);
-  const qualityGateChip = useMemo(() => {
-    if (!qualityGateState || qualityGateState.status === 'idle') {
-      return null;
-    }
-
-    switch (qualityGateState.status) {
-      case 'running':
-        return {
-          className: 'bg-sky-500/15 text-sky-300',
-          showSpinner: true,
-          text: qualityGateState.message || t('codePane.saveQualityRunning'),
-        };
-      case 'error':
-        return {
-          className: 'bg-red-500/15 text-red-300',
-          showSpinner: false,
-          text: qualityGateState.message || t('codePane.saveQualityFailed'),
-        };
-      case 'warning':
-        return {
-          className: 'bg-amber-500/15 text-amber-300',
-          showSpinner: false,
-          text: qualityGateState.message || t('codePane.saveQualitySavedWithIssues'),
-        };
-      case 'passed':
-      default:
-        return {
-          className: 'bg-emerald-500/15 text-emerald-300',
-          showSpinner: false,
-          text: qualityGateState.message || t('codePane.saveQualitySaved'),
-        };
-    }
-  }, [qualityGateState, t]);
   const statusTone = getStatusTone(activeTabStatus);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
   const hasExternalLibraries = externalLibrarySections.some((section) => section.roots.length > 0);
@@ -6956,8 +6932,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const isDirectory = resolvedEntry.type === 'directory';
       const isExpanded = expandedDirectories.has(resolvedEntry.path);
       const isSelected = selectedPath === resolvedEntry.path;
-      const entryStatus = getEntryStatus(resolvedEntry.path, resolvedEntry.type);
-      const badge = getStatusTone(entryStatus);
+      const entryStatus = isDirectory ? undefined : getEntryStatus(resolvedEntry.path, resolvedEntry.type);
+      const entryTextClassName = getStatusTextClassName(entryStatus);
       const isLoading = compactPresentation.visibleDirectoryPaths.some((visiblePath) => isDirectoryLoading(visiblePath));
 
       return (
@@ -6992,16 +6968,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 ) : (
                   <FileIcon size={14} className="shrink-0 text-zinc-500" />
                 )}
-                <span className="min-w-0 flex-1 truncate">
+                <span className={`min-w-0 flex-1 truncate ${entryTextClassName}`}>
                   {compactPresentation.displayName}
                 </span>
                 {isLoading && (
                   <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
-                )}
-                {badge && (
-                  <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                    {badge.badge}
-                  </span>
                 )}
               </button>
             </ContextMenu.Trigger>
@@ -7078,7 +7049,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const renderedSearchResults = useMemo(() => searchResults.map((filePath) => {
     const entryStatus = getEntryStatus(filePath, 'file');
-    const badge = getStatusTone(entryStatus);
+    const entryTextClassName = getStatusTextClassName(entryStatus);
     return (
       <ContextMenu.Root key={filePath}>
         <ContextMenu.Trigger asChild>
@@ -7093,15 +7064,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
             className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${selectedPath === filePath ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
           >
             <FileIcon size={14} className="shrink-0 text-zinc-500" />
-            <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(filePath)}</span>
+            <span className={`min-w-0 flex-1 truncate ${entryTextClassName}`}>{getPathLeafLabel(filePath)}</span>
             <span className="max-w-[160px] truncate text-[10px] text-zinc-500">
               {getRelativePath(rootPath, filePath)}
             </span>
-            {badge && (
-              <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                {badge.badge}
-              </span>
-            )}
           </button>
         </ContextMenu.Trigger>
         {renderFileContextMenu(filePath, 'file')}
@@ -8973,7 +8939,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
 
-    const badge = getStatusTone(entry.status);
+    const entryTextClassName = getStatusTextClassName(entry.status);
     const relativePath = getRelativePath(rootPath, node.path);
     const isSelected = selectedGitChangePath === node.path;
 
@@ -8996,12 +8962,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             className="flex min-w-0 flex-1 items-center gap-2 text-left"
           >
             <FileIcon size={13} className="shrink-0 text-zinc-500" />
-            <span className="min-w-0 flex-1 truncate">{node.name}</span>
-            {badge && (
-              <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                {badge.badge}
-              </span>
-            )}
+            <span className={`min-w-0 flex-1 truncate ${entryTextClassName}`}>{node.name}</span>
           </button>
           <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
             {entry.conflicted ? (
@@ -10540,9 +10501,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
           <div className="flex min-h-[34px] items-stretch overflow-x-auto border-b border-zinc-800 bg-zinc-950/70">
             {orderedOpenFiles.length > 0 ? orderedOpenFiles.map((tab) => {
               const isTabActive = tab.path === activeFilePath;
-              const isTabDirty = dirtyPaths.has(tab.path);
               const tabStatus = getEntryStatus(tab.path, 'file');
-              const badge = getStatusTone(tabStatus);
+              const entryTextClassName = getStatusTextClassName(tabStatus);
               const isTabPinned = Boolean(tab.pinned);
               const isTabPreview = Boolean(tab.preview);
 
@@ -10550,7 +10510,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 <ContextMenu.Root key={tab.path}>
                   <ContextMenu.Trigger asChild>
                     <div
-                      className={`group flex min-w-0 max-w-[220px] items-center gap-2 border-r border-zinc-800 px-3 py-2 text-xs ${isTabActive ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-100'}`}
+                      className={`group relative flex min-w-0 max-w-[220px] items-center gap-2 border-r border-zinc-800 px-3 py-2 text-xs ${isTabActive ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-100'}`}
                     >
                       <button
                         type="button"
@@ -10566,16 +10526,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       >
                         <FileIcon size={12} className="shrink-0" />
                         {isTabPinned && <Pin size={10} className="shrink-0 text-zinc-500" />}
-                        <span className={`truncate ${isTabPreview ? 'italic text-zinc-300' : ''}`}>{getFileLabel(tab.path)}</span>
-                        {isTabDirty && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />}
+                        <span className={`truncate ${isTabPreview ? 'italic text-zinc-300' : ''} ${entryTextClassName}`}>{getFileLabel(tab.path)}</span>
                         {isTabPreview && (
                           <span className="rounded bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-400">
                             {t('codePane.previewTabBadge')}
-                          </span>
-                        )}
-                        {badge && (
-                          <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${badge.className}`}>
-                            {badge.badge}
                           </span>
                         )}
                       </button>
@@ -10758,26 +10712,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     : activeFileDisplayPath)
                   : t('codePane.autoSave')}
               </span>
-              {statusTone && (
-                <span className={`rounded px-1.5 py-0.5 font-medium ${statusTone.className}`}>
-                  {statusTone.badge}
-                </span>
-              )}
-              {qualityGateChip && (
-                <span
-                  title={(qualityGateState?.steps ?? [])
-                    .map((step) => `${step.id}: ${step.message ?? step.status}`)
-                    .join('\n')}
-                  className={`flex items-center gap-1.5 rounded px-1.5 py-0.5 ${qualityGateChip.className}`}
-                >
-                  {qualityGateChip.showSpinner ? (
-                    <Loader2 size={11} className="shrink-0 animate-spin" />
-                  ) : (
-                    <AlertTriangle size={11} className="shrink-0" />
-                  )}
-                  <span>{qualityGateChip.text}</span>
-                </span>
-              )}
             </div>
             <div className="flex items-center gap-3">
               {indexStatus && (
@@ -10807,7 +10741,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   {t('codePane.performanceBusy')}
                 </span>
               )}
-              <span>{activeStatusText}</span>
               <span>{viewMode === 'diff' ? t('codePane.diffView') : t('codePane.editorView')}</span>
               <div className="flex items-center gap-1">
                 <button
