@@ -1582,6 +1582,57 @@ describe('CodePane', () => {
     expect(await screen.findByText(/Started successfully/)).toBeInTheDocument();
   });
 
+  it('renders the bottom tool window beneath the full workspace and persists resized height', async () => {
+    const user = userEvent.setup();
+    const view = renderCodePane(createPane({
+      layout: {
+        sidebar: {
+          visible: true,
+          activeView: 'files',
+          width: 300,
+          lastExpandedWidth: 300,
+        },
+        bottomPanel: {
+          height: 280,
+        },
+      },
+    }));
+
+    const workspaceLayout = screen.getByTestId('code-pane-workspace-layout');
+    Object.defineProperty(workspaceLayout, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 1280,
+        bottom: 900,
+        width: 1280,
+        height: 900,
+        toJSON: () => ({}),
+      }),
+    });
+
+    await user.click(await screen.findByRole('button', { name: 'codePane.runTab' }));
+
+    const bottomPanel = await screen.findByTestId('code-pane-bottom-panel');
+    expect(bottomPanel.closest('[data-testid="code-pane-editor-region"]')).toBeNull();
+    expect(screen.getByTestId('code-pane-bottom-panel-resize-handle')).toBeInTheDocument();
+    expect(bottomPanel).toHaveStyle({ height: '280px' });
+
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByTestId('code-pane-bottom-panel-resize-handle'), { clientY: 640 });
+      fireEvent.mouseMove(window, { clientY: 560 });
+      fireEvent.mouseUp(window);
+    });
+
+    await waitFor(() => {
+      expect(view.getPane().code?.layout?.bottomPanel?.height).toBe(360);
+      expect(screen.getByTestId('code-pane-bottom-panel')).toHaveStyle({ height: '360px' });
+    });
+  });
+
   it('opens the debug tool window, starts a debug session, and evaluates an expression', async () => {
     vi.mocked(window.electronAPI.codePaneListRunTargets).mockResolvedValue({
       success: true,

@@ -175,7 +175,7 @@ export function GitToolWindow({
   };
 
   return (
-    <div className="flex h-[26rem] shrink-0 flex-col border-t border-zinc-800 bg-zinc-950/95">
+    <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/95">
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">

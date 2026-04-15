@@ -46,8 +46,13 @@ export interface CodePaneSidebarState {
   lastExpandedWidth?: number;
 }
 
+export interface CodePaneBottomPanelState {
+  height: number;
+}
+
 export interface CodePaneLayoutState {
   sidebar: CodePaneSidebarState;
+  bottomPanel?: CodePaneBottomPanelState;
   editorSplit?: {
     visible: boolean;
     size: number;

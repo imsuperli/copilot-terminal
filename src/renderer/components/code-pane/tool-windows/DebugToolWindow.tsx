@@ -105,7 +105,7 @@ export function DebugToolWindow({
   const isRunning = selectedSession?.state === 'running';
 
   return (
-    <div className="flex h-72 shrink-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
+    <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">

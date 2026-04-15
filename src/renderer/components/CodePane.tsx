@@ -20,6 +20,7 @@ import {
   FolderOpen,
   GitBranch,
   GitCompareArrows,
+  GripHorizontal,
   GripVertical,
   Loader2,
   MoreHorizontal,
@@ -155,6 +156,11 @@ const CODE_PANE_SIDEBAR_MAX_WIDTH = 520;
 const CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE = 0.5;
 const CODE_PANE_EDITOR_SPLIT_MIN_SIZE = 0.3;
 const CODE_PANE_EDITOR_SPLIT_MAX_SIZE = 0.7;
+const CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT = 320;
+const CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT = 180;
+const CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT = 680;
+const CODE_PANE_TOP_REGION_MIN_HEIGHT = 180;
+const CODE_PANE_STATUS_BAR_RESERVED_HEIGHT = 40;
 const CODE_PANE_MAX_RECENT_FILES = 20;
 const CODE_PANE_MAX_RECENT_LOCATIONS = 30;
 const CODE_PANE_MAX_NAVIGATION_HISTORY = 50;
@@ -566,6 +572,18 @@ function clampEditorSplitSize(size: number | undefined | null): number {
   );
 }
 
+function clampBottomPanelHeight(height: number | undefined | null, maxHeight = CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT): number {
+  const resolvedMaxHeight = Math.max(CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT, Math.round(maxHeight));
+  if (!Number.isFinite(height)) {
+    return Math.min(CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT, resolvedMaxHeight);
+  }
+
+  return Math.min(
+    resolvedMaxHeight,
+    Math.max(CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT, Math.round(height as number)),
+  );
+}
+
 function getInitialEditorSplitLayout(pane: Pane) {
   return {
     visible: Boolean(pane.code?.layout?.editorSplit?.visible),
@@ -592,6 +610,14 @@ function getInitialSidebarLayout(pane: Pane): {
     activeView: normalizeSidebarMode(sidebarState?.activeView),
     width,
     lastExpandedWidth: clampSidebarWidth(sidebarState?.lastExpandedWidth ?? width),
+  };
+}
+
+function getInitialBottomPanelLayout(pane: Pane): {
+  height: number;
+} {
+  return {
+    height: clampBottomPanelHeight(pane.code?.layout?.bottomPanel?.height),
   };
 }
 
@@ -1137,6 +1163,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const isMac = window.electronAPI.platform === 'darwin';
   const paneRef = useRef(pane);
   const rootContainerRef = useRef<HTMLDivElement | null>(null);
+  const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const rootPath = pane.code?.rootPath ?? pane.cwd;
   const openFiles = pane.code?.openFiles ?? [];
   const bookmarks = pane.code?.bookmarks ?? [];
@@ -1148,6 +1175,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const qualityGateState = pane.code?.qualityGate ?? null;
   const initialSidebarLayout = useMemo(() => getInitialSidebarLayout(pane), [pane]);
   const initialEditorSplitLayout = useMemo(() => getInitialEditorSplitLayout(pane), [pane]);
+  const initialBottomPanelLayout = useMemo(() => getInitialBottomPanelLayout(pane), [pane]);
 
   const monacoRef = useRef<MonacoModule | null>(null);
   const languageBridgeRef = useRef<MonacoLanguageBridge | null>(null);
@@ -1192,6 +1220,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
   const editorSplitResizeStartRef = useRef<{ startX: number; startSize: number } | null>(null);
   const editorSplitResizeCleanupRef = useRef<(() => void) | null>(null);
+  const bottomPanelResizeStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const bottomPanelResizeCleanupRef = useRef<(() => void) | null>(null);
   const focusedEditorTargetRef = useRef<EditorTarget>('editor');
   const runtimeStoreRef = useRef(new CodePaneRuntimeStore());
 
@@ -1218,6 +1248,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [editorSplitSize, setEditorSplitSize] = useState(initialEditorSplitLayout.size);
   const [secondaryFilePath, setSecondaryFilePath] = useState<string | null>(initialEditorSplitLayout.secondaryFilePath);
   const [isEditorSplitResizing, setIsEditorSplitResizing] = useState(false);
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(initialBottomPanelLayout.height);
+  const [isBottomPanelResizing, setIsBottomPanelResizing] = useState(false);
   const [searchPanelMode, setSearchPanelMode] = useState<'contents' | 'symbols' | 'usages'>('contents');
   const [contentSearchQuery, setContentSearchQuery] = useState('');
   const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
@@ -1373,6 +1405,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const lastExpandedSidebarWidthRef = useRef(lastExpandedSidebarWidth);
   const editorSplitSizeRef = useRef(editorSplitSize);
   const secondaryFilePathRef = useRef(secondaryFilePath);
+  const bottomPanelHeightRef = useRef(bottomPanelHeight);
   const recentFilesRef = useRef<string[]>([]);
   const recentLocationsRef = useRef<NavigationHistoryEntry[]>([]);
   const navigationBackStackRef = useRef<NavigationHistoryEntry[]>([]);
@@ -1419,6 +1452,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsEditorSplitVisible(nextEditorSplitLayout.visible);
     setEditorSplitSize(nextEditorSplitLayout.size);
     setSecondaryFilePath(nextEditorSplitLayout.secondaryFilePath);
+    const nextBottomPanelLayout = getInitialBottomPanelLayout(pane);
+    setBottomPanelHeight(nextBottomPanelLayout.height);
   }, [pane.id, pane.code?.layout, pane]);
 
   useEffect(() => {
@@ -1489,6 +1524,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     secondaryFilePathRef.current = secondaryFilePath;
   }, [secondaryFilePath]);
 
+  useEffect(() => {
+    bottomPanelHeightRef.current = bottomPanelHeight;
+  }, [bottomPanelHeight]);
+
   const persistCodeState = useCallback((updates: Partial<NonNullable<Pane['code']>>) => {
     const currentCodeState = {
       rootPath,
@@ -1500,6 +1539,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       diffTargetPath: null,
       layout: {
         sidebar: getInitialSidebarLayout(paneRef.current),
+        bottomPanel: getInitialBottomPanelLayout(paneRef.current),
         editorSplit: getInitialEditorSplitLayout(paneRef.current),
       },
       ...(paneRef.current.code ?? {}),
@@ -1568,6 +1608,39 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ...(paneRef.current.code?.layout ?? {}),
         sidebar: currentSidebarLayout,
         editorSplit: nextEditorSplitLayout,
+      },
+    });
+  }, [persistCodeState]);
+
+  const persistBottomPanelLayout = useCallback((updates: Partial<NonNullable<NonNullable<NonNullable<Pane['code']>['layout']>['bottomPanel']>>) => {
+    const currentBottomPanelLayout = {
+      ...getInitialBottomPanelLayout(paneRef.current),
+      ...(paneRef.current.code?.layout?.bottomPanel ?? {}),
+    };
+    const currentSidebarLayout = {
+      ...getInitialSidebarLayout(paneRef.current),
+      ...(paneRef.current.code?.layout?.sidebar ?? {}),
+    };
+    const currentEditorSplitLayout = {
+      ...getInitialEditorSplitLayout(paneRef.current),
+      ...(paneRef.current.code?.layout?.editorSplit ?? {}),
+    };
+
+    const nextBottomPanelLayout = {
+      ...currentBottomPanelLayout,
+      ...updates,
+      height: clampBottomPanelHeight(updates.height ?? currentBottomPanelLayout.height),
+    };
+
+    bottomPanelHeightRef.current = nextBottomPanelLayout.height;
+    setBottomPanelHeight(nextBottomPanelLayout.height);
+
+    persistCodeState({
+      layout: {
+        ...(paneRef.current.code?.layout ?? {}),
+        sidebar: currentSidebarLayout,
+        bottomPanel: nextBottomPanelLayout,
+        editorSplit: currentEditorSplitLayout,
       },
     });
   }, [persistCodeState]);
@@ -1871,6 +1944,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     () => {
       sidebarResizeCleanupRef.current?.();
       sidebarResizeCleanupRef.current = null;
+      editorSplitResizeCleanupRef.current?.();
+      editorSplitResizeCleanupRef.current = null;
+      bottomPanelResizeCleanupRef.current?.();
+      bottomPanelResizeCleanupRef.current = null;
     }
   ), []);
 
@@ -6375,6 +6452,92 @@ export const CodePane: React.FC<CodePaneProps> = ({
     window.addEventListener('mouseup', handleMouseUp);
   }, [persistEditorSplitLayout]);
 
+  const getBottomPanelMaxHeight = useCallback(() => {
+    const containerHeight = workspaceLayoutRef.current?.getBoundingClientRect().height ?? 0;
+    if (containerHeight <= 0) {
+      return CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT;
+    }
+
+    return Math.min(
+      CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT,
+      Math.max(
+        CODE_PANE_BOTTOM_PANEL_MIN_HEIGHT,
+        containerHeight - CODE_PANE_TOP_REGION_MIN_HEIGHT - CODE_PANE_STATUS_BAR_RESERVED_HEIGHT,
+      ),
+    );
+  }, []);
+
+  const resetBottomPanelHeight = useCallback(() => {
+    const nextHeight = clampBottomPanelHeight(
+      CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT,
+      getBottomPanelMaxHeight(),
+    );
+
+    bottomPanelHeightRef.current = nextHeight;
+    setBottomPanelHeight(nextHeight);
+    persistBottomPanelLayout({
+      height: nextHeight,
+    });
+  }, [getBottomPanelMaxHeight, persistBottomPanelLayout]);
+
+  const startBottomPanelResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    bottomPanelResizeCleanupRef.current?.();
+    bottomPanelResizeStartRef.current = {
+      startY: event.clientY,
+      startHeight: bottomPanelHeightRef.current,
+    };
+    setIsBottomPanelResizing(true);
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (nextEvent: MouseEvent) => {
+      const resizeStart = bottomPanelResizeStartRef.current;
+      if (!resizeStart) {
+        return;
+      }
+
+      const nextHeight = clampBottomPanelHeight(
+        resizeStart.startHeight - (nextEvent.clientY - resizeStart.startY),
+        getBottomPanelMaxHeight(),
+      );
+      bottomPanelHeightRef.current = nextHeight;
+      setBottomPanelHeight(nextHeight);
+    };
+
+    const cleanup = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      bottomPanelResizeCleanupRef.current = null;
+    };
+
+    const handleMouseUp = () => {
+      const resizeStart = bottomPanelResizeStartRef.current;
+      bottomPanelResizeStartRef.current = null;
+      setIsBottomPanelResizing(false);
+
+      if (resizeStart) {
+        const nextHeight = clampBottomPanelHeight(
+          bottomPanelHeightRef.current,
+          getBottomPanelMaxHeight(),
+        );
+        bottomPanelHeightRef.current = nextHeight;
+        setBottomPanelHeight(nextHeight);
+        persistBottomPanelLayout({
+          height: nextHeight,
+        });
+      }
+
+      cleanup();
+    };
+
+    bottomPanelResizeCleanupRef.current = cleanup;
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [getBottomPanelMaxHeight, persistBottomPanelLayout]);
+
   const ActiveSidebarIcon = activeSidebarTab.icon;
 
   const renderFileContextMenu = useCallback((
@@ -8740,6 +8903,291 @@ export const CodePane: React.FC<CodePaneProps> = ({
     toggleHierarchyToolWindow,
   ]);
 
+  const renderBottomPanel = () => {
+    switch (bottomPanelMode) {
+      case 'run':
+        return (
+          <RunToolWindow
+            targets={runTargets}
+            sessions={visibleRunSessions}
+            selectedSession={selectedRunSession}
+            selectedOutput={selectedRunSessionOutput}
+            isLoading={isRunTargetsLoading}
+            error={runTargetsError}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={refreshBottomPanel}
+            onRunTarget={runTargetById}
+            onSelectSession={setSelectedRunSessionId}
+            onStopSession={stopRunSession}
+          />
+        );
+      case 'debug':
+        return (
+          <DebugToolWindow
+            targets={debugTargets}
+            breakpoints={breakpoints}
+            exceptionBreakpoints={exceptionBreakpoints}
+            sessions={visibleDebugSessions}
+            selectedSession={selectedDebugSession}
+            selectedDetails={debugSessionDetails}
+            selectedOutput={selectedDebugSessionOutput}
+            watchEntries={watchEntries}
+            evaluations={debugEvaluations}
+            isLoading={isRunTargetsLoading}
+            isDetailsLoading={isDebugDetailsLoading}
+            error={runTargetsError}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={refreshBottomPanel}
+            onStartDebug={debugTargetById}
+            onSelectSession={setSelectedDebugSessionId}
+            onStopSession={stopDebugSession}
+            onPauseSession={pauseDebugSession}
+            onContinueSession={continueDebugSession}
+            onStepOver={(sessionId) => stepDebugSession(sessionId, 'over')}
+            onStepInto={(sessionId) => stepDebugSession(sessionId, 'into')}
+            onStepOut={(sessionId) => stepDebugSession(sessionId, 'out')}
+            onOpenFrame={openDebugFrame}
+            onEvaluate={evaluateDebugExpression}
+            onAddWatch={addDebugWatchExpression}
+            onRemoveWatch={removeDebugWatchExpression}
+            onRefreshWatches={() => refreshDebugWatches()}
+            onUpdateBreakpoint={updateBreakpoint}
+            onRemoveBreakpoint={removeBreakpoint}
+            onSetExceptionBreakpoint={setExceptionBreakpoint}
+          />
+        );
+      case 'hierarchy':
+        return (
+          <HierarchyToolWindow
+            mode={selectedHierarchyMode}
+            root={hierarchyRootNode}
+            isLoading={isHierarchyLoading}
+            error={hierarchyError}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={() => {
+              void loadHierarchyRoot(selectedHierarchyMode);
+            }}
+            onSelectMode={(mode) => {
+              setSelectedHierarchyMode(mode);
+            }}
+            onToggleNode={(nodeKey) => {
+              void toggleHierarchyNode(nodeKey);
+            }}
+            onOpenItem={(item) => {
+              void openHierarchyItem(item);
+            }}
+          />
+        );
+      case 'semantic':
+        return (
+          <SemanticToolWindow
+            fileLabel={semanticSummaryFileLabel}
+            legend={semanticLegend}
+            summary={semanticSummary}
+            totalTokens={semanticTokenCount}
+            isEnabled={areSemanticTokensEnabled}
+            isLoading={isSemanticSummaryLoading}
+            error={semanticSummaryError}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={() => {
+              void loadSemanticSummary();
+            }}
+            onToggleEnabled={() => {
+              setAreSemanticTokensEnabled((currentValue) => !currentValue);
+            }}
+          />
+        );
+      case 'project':
+        return (
+          <ProjectToolWindow
+            contributions={projectContributions}
+            sessions={visibleRunSessions}
+            selectedSession={selectedRunSession}
+            selectedOutput={selectedRunSessionOutput}
+            languageWorkspaceState={languageWorkspaceState}
+            isLoading={isProjectLoading}
+            error={projectError}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={refreshBottomPanel}
+            onRunCommand={runProjectCommandById}
+            onSelectSession={setSelectedRunSessionId}
+            onStopSession={stopRunSession}
+            onOpenTreeItem={(item) => {
+              if (!item.filePath) {
+                return;
+              }
+
+              void openFileLocation({
+                filePath: item.filePath,
+                lineNumber: item.lineNumber ?? 1,
+                column: item.column ?? 1,
+              });
+            }}
+          />
+        );
+      case 'tests':
+        return (
+          <TestsToolWindow
+            testItems={testItems}
+            sessions={visibleRunSessions}
+            selectedSession={selectedRunSession}
+            selectedOutput={selectedRunSessionOutput}
+            isLoading={isTestsLoading}
+            error={testsError}
+            hasFailedSessions={hasFailedTestSessions}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={refreshBottomPanel}
+            onRunTest={runTestTarget}
+            onSelectSession={setSelectedRunSessionId}
+            onStopSession={stopRunSession}
+            onOpenTestItem={openTestItem}
+            onRerunFailed={rerunFailedTests}
+          />
+        );
+      case 'preview':
+        return (
+          <RefactorPreviewToolWindow
+            changeSet={refactorPreview}
+            selectedChangeId={selectedPreviewChangeId}
+            isApplying={isApplyingRefactorPreview}
+            error={refactorPreviewError}
+            onSelectChange={setSelectedPreviewChangeId}
+            onApply={applyRefactorPreview}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+          />
+        );
+      case 'git':
+        return (
+          <GitToolWindow
+            branches={gitBranches}
+            selectedBranchName={selectedGitBranchName}
+            commits={gitGraph}
+            selectedCommitSha={selectedGitLogCommitSha}
+            rebasePlan={gitRebasePlan}
+            rebaseBaseRef={gitRebaseBaseRef}
+            isBranchesLoading={isGitBranchesLoading}
+            branchesError={gitBranchesError}
+            isRebaseLoading={isGitRebaseLoading}
+            rebaseError={gitRebaseError}
+            onSelectBranch={handleSelectGitBranch}
+            onSelectCommit={setSelectedGitLogCommitSha}
+            onChangeRebaseBaseRef={setGitRebaseBaseRef}
+            onRefresh={refreshBottomPanel}
+            onRefreshRebase={() => {
+              void loadGitRebasePlan(gitRebaseBaseRef);
+            }}
+            onCheckoutBranch={checkoutGitBranch}
+            onRenameBranch={renameGitBranch}
+            onDeleteBranch={deleteGitBranch}
+            onCherryPick={cherryPickCommit}
+            onApplyRebasePlan={applyGitRebasePlan}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+          />
+        );
+      case 'conflict':
+        return (
+          <ConflictResolutionToolWindow
+            conflict={gitConflictDetails}
+            isLoading={isGitConflictLoading}
+            isApplying={isApplyingGitConflict}
+            error={gitConflictError}
+            onRefresh={refreshBottomPanel}
+            onApply={applyGitConflictResolution}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+          />
+        );
+      case 'history':
+        return (
+          <GitHistoryToolWindow
+            history={gitHistory}
+            selectedCommitSha={selectedHistoryCommitSha}
+            isLoading={isGitHistoryLoading}
+            error={gitHistoryError}
+            onSelectCommit={setSelectedHistoryCommitSha}
+            onRefresh={refreshBottomPanel}
+            onCherryPick={cherryPickCommit}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+          />
+        );
+      case 'workspace':
+        return (
+          <WorkspaceToolWindow
+            bookmarks={bookmarks}
+            todoItems={todoItems}
+            localHistoryEntries={visibleLocalHistoryEntries}
+            activeFilePath={activeFilePath}
+            isTodoLoading={isTodoLoading}
+            todoError={todoError}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={loadTodoEntries}
+            onOpenBookmark={(bookmark) => {
+              void openFileLocation({
+                filePath: bookmark.filePath,
+                lineNumber: bookmark.lineNumber,
+                column: bookmark.column,
+              });
+            }}
+            onOpenTodo={(item) => {
+              void openFileLocation({
+                filePath: item.filePath,
+                lineNumber: item.lineNumber,
+                column: item.column,
+              });
+            }}
+            onOpenHistoryEntry={(entry) => {
+              void openFileLocation({
+                filePath: entry.filePath,
+                lineNumber: 1,
+                column: 1,
+              });
+            }}
+            onRestoreHistoryEntry={(entry) => {
+              void restoreLocalHistoryEntry(entry.id);
+            }}
+            getFileLabel={getFileLabel}
+            getRelativePath={(filePath) => getRelativePath(rootPath, filePath)}
+          />
+        );
+      case 'performance':
+        return (
+          <PerformanceToolWindow
+            requests={runtimeRequests}
+            activeTasks={activePerformanceTasks}
+            indexStatus={indexStatus}
+            languageWorkspaceState={languageWorkspaceState}
+            onClose={() => {
+              setBottomPanelMode(null);
+            }}
+            onRefresh={refreshBottomPanel}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   const editorActionMenuSections = useMemo<EditorActionMenuItem[][]>(() => ([
     [
       {
@@ -9122,8 +9570,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="flex h-full shrink-0">
+      <div
+        ref={workspaceLayoutRef}
+        data-testid="code-pane-workspace-layout"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
+        <div
+          data-testid="code-pane-workspace-top"
+          className="flex min-h-[180px] flex-1 overflow-hidden"
+        >
+          <div className="flex h-full shrink-0">
           <div className="flex h-full w-11 shrink-0 flex-col items-center gap-1 border-r border-zinc-800 bg-zinc-950/85 px-1 py-2">
             {sidebarTabs.map((tab) => {
               const Icon = tab.icon;
@@ -9752,7 +10208,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           )}
         </div>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div data-testid="code-pane-editor-region" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-[34px] items-stretch overflow-x-auto border-b border-zinc-800 bg-zinc-950/70">
             {orderedOpenFiles.length > 0 ? orderedOpenFiles.map((tab) => {
               const isTabActive = tab.path === activeFilePath;
@@ -9938,262 +10394,33 @@ export const CodePane: React.FC<CodePaneProps> = ({
               </div>
             )}
           </div>
+        </div>
+      </div>
 
-          {bottomPanelMode === 'run' ? (
-            <RunToolWindow
-              targets={runTargets}
-              sessions={visibleRunSessions}
-              selectedSession={selectedRunSession}
-              selectedOutput={selectedRunSessionOutput}
-              isLoading={isRunTargetsLoading}
-              error={runTargetsError}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-              onRefresh={refreshBottomPanel}
-              onRunTarget={runTargetById}
-              onSelectSession={setSelectedRunSessionId}
-              onStopSession={stopRunSession}
-            />
-          ) : bottomPanelMode === 'debug' ? (
-            <DebugToolWindow
-              targets={debugTargets}
-              breakpoints={breakpoints}
-              exceptionBreakpoints={exceptionBreakpoints}
-              sessions={visibleDebugSessions}
-              selectedSession={selectedDebugSession}
-              selectedDetails={debugSessionDetails}
-              selectedOutput={selectedDebugSessionOutput}
-              watchEntries={watchEntries}
-              evaluations={debugEvaluations}
-              isLoading={isRunTargetsLoading}
-              isDetailsLoading={isDebugDetailsLoading}
-              error={runTargetsError}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-              onRefresh={refreshBottomPanel}
-              onStartDebug={debugTargetById}
-              onSelectSession={setSelectedDebugSessionId}
-              onStopSession={stopDebugSession}
-              onPauseSession={pauseDebugSession}
-              onContinueSession={continueDebugSession}
-              onStepOver={(sessionId) => stepDebugSession(sessionId, 'over')}
-              onStepInto={(sessionId) => stepDebugSession(sessionId, 'into')}
-              onStepOut={(sessionId) => stepDebugSession(sessionId, 'out')}
-              onOpenFrame={openDebugFrame}
-              onEvaluate={evaluateDebugExpression}
-              onAddWatch={addDebugWatchExpression}
-              onRemoveWatch={removeDebugWatchExpression}
-              onRefreshWatches={() => refreshDebugWatches()}
-              onUpdateBreakpoint={updateBreakpoint}
-              onRemoveBreakpoint={removeBreakpoint}
-              onSetExceptionBreakpoint={setExceptionBreakpoint}
-            />
-          ) : bottomPanelMode === 'hierarchy' ? (
-            <HierarchyToolWindow
-              mode={selectedHierarchyMode}
-              root={hierarchyRootNode}
-              isLoading={isHierarchyLoading}
-              error={hierarchyError}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-              onRefresh={() => {
-                void loadHierarchyRoot(selectedHierarchyMode);
-              }}
-              onSelectMode={(mode) => {
-                setSelectedHierarchyMode(mode);
-              }}
-              onToggleNode={(nodeKey) => {
-                void toggleHierarchyNode(nodeKey);
-              }}
-              onOpenItem={(item) => {
-                void openHierarchyItem(item);
-              }}
-            />
-          ) : bottomPanelMode === 'semantic' ? (
-            <SemanticToolWindow
-              fileLabel={semanticSummaryFileLabel}
-              legend={semanticLegend}
-              summary={semanticSummary}
-              totalTokens={semanticTokenCount}
-              isEnabled={areSemanticTokensEnabled}
-              isLoading={isSemanticSummaryLoading}
-              error={semanticSummaryError}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-              onRefresh={() => {
-                void loadSemanticSummary();
-              }}
-              onToggleEnabled={() => {
-                setAreSemanticTokensEnabled((currentValue) => !currentValue);
-              }}
-            />
-          ) : bottomPanelMode === 'project' ? (
-            <ProjectToolWindow
-              contributions={projectContributions}
-              sessions={visibleRunSessions}
-              selectedSession={selectedRunSession}
-              selectedOutput={selectedRunSessionOutput}
-              languageWorkspaceState={languageWorkspaceState}
-              isLoading={isProjectLoading}
-              error={projectError}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-              onRefresh={refreshBottomPanel}
-              onRunCommand={runProjectCommandById}
-              onSelectSession={setSelectedRunSessionId}
-              onStopSession={stopRunSession}
-              onOpenTreeItem={(item) => {
-                if (!item.filePath) {
-                  return;
-                }
-
-                void openFileLocation({
-                  filePath: item.filePath,
-                  lineNumber: item.lineNumber ?? 1,
-                  column: item.column ?? 1,
-                });
-              }}
-            />
-          ) : bottomPanelMode === 'tests' ? (
-            <TestsToolWindow
-              testItems={testItems}
-              sessions={visibleRunSessions}
-              selectedSession={selectedRunSession}
-              selectedOutput={selectedRunSessionOutput}
-              isLoading={isTestsLoading}
-              error={testsError}
-              hasFailedSessions={hasFailedTestSessions}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-              onRefresh={refreshBottomPanel}
-              onRunTest={runTestTarget}
-              onSelectSession={setSelectedRunSessionId}
-              onStopSession={stopRunSession}
-              onOpenTestItem={openTestItem}
-              onRerunFailed={rerunFailedTests}
-            />
-          ) : bottomPanelMode === 'preview' ? (
-            <RefactorPreviewToolWindow
-              changeSet={refactorPreview}
-              selectedChangeId={selectedPreviewChangeId}
-              isApplying={isApplyingRefactorPreview}
-              error={refactorPreviewError}
-              onSelectChange={setSelectedPreviewChangeId}
-              onApply={applyRefactorPreview}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-            />
-          ) : bottomPanelMode === 'git' ? (
-            <GitToolWindow
-              branches={gitBranches}
-              selectedBranchName={selectedGitBranchName}
-              commits={gitGraph}
-              selectedCommitSha={selectedGitLogCommitSha}
-              rebasePlan={gitRebasePlan}
-              rebaseBaseRef={gitRebaseBaseRef}
-              isBranchesLoading={isGitBranchesLoading}
-              branchesError={gitBranchesError}
-              isRebaseLoading={isGitRebaseLoading}
-              rebaseError={gitRebaseError}
-              onSelectBranch={handleSelectGitBranch}
-              onSelectCommit={setSelectedGitLogCommitSha}
-              onChangeRebaseBaseRef={setGitRebaseBaseRef}
-              onRefresh={refreshBottomPanel}
-              onRefreshRebase={() => {
-                void loadGitRebasePlan(gitRebaseBaseRef);
-              }}
-              onCheckoutBranch={checkoutGitBranch}
-              onRenameBranch={renameGitBranch}
-              onDeleteBranch={deleteGitBranch}
-              onCherryPick={cherryPickCommit}
-              onApplyRebasePlan={applyGitRebasePlan}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-            />
-          ) : bottomPanelMode === 'conflict' ? (
-            <ConflictResolutionToolWindow
-              conflict={gitConflictDetails}
-              isLoading={isGitConflictLoading}
-              isApplying={isApplyingGitConflict}
-              error={gitConflictError}
-              onRefresh={refreshBottomPanel}
-              onApply={applyGitConflictResolution}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-            />
-          ) : bottomPanelMode === 'history' ? (
-            <GitHistoryToolWindow
-              history={gitHistory}
-              selectedCommitSha={selectedHistoryCommitSha}
-              isLoading={isGitHistoryLoading}
-              error={gitHistoryError}
-              onSelectCommit={setSelectedHistoryCommitSha}
-              onRefresh={refreshBottomPanel}
-              onCherryPick={cherryPickCommit}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-            />
-          ) : bottomPanelMode === 'workspace' ? (
-            <WorkspaceToolWindow
-              bookmarks={bookmarks}
-              todoItems={todoItems}
-              localHistoryEntries={visibleLocalHistoryEntries}
-              activeFilePath={activeFilePath}
-              isTodoLoading={isTodoLoading}
-              todoError={todoError}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-              onRefresh={loadTodoEntries}
-              onOpenBookmark={(bookmark) => {
-                void openFileLocation({
-                  filePath: bookmark.filePath,
-                  lineNumber: bookmark.lineNumber,
-                  column: bookmark.column,
-                });
-              }}
-              onOpenTodo={(item) => {
-                void openFileLocation({
-                  filePath: item.filePath,
-                  lineNumber: item.lineNumber,
-                  column: item.column,
-                });
-              }}
-              onOpenHistoryEntry={(entry) => {
-                void openFileLocation({
-                  filePath: entry.filePath,
-                  lineNumber: 1,
-                  column: 1,
-                });
-              }}
-              onRestoreHistoryEntry={(entry) => {
-                void restoreLocalHistoryEntry(entry.id);
-              }}
-              getFileLabel={getFileLabel}
-              getRelativePath={(filePath) => getRelativePath(rootPath, filePath)}
-            />
-          ) : bottomPanelMode === 'performance' ? (
-            <PerformanceToolWindow
-              requests={runtimeRequests}
-              activeTasks={activePerformanceTasks}
-              indexStatus={indexStatus}
-              languageWorkspaceState={languageWorkspaceState}
-              onClose={() => {
-                setBottomPanelMode(null);
-              }}
-              onRefresh={refreshBottomPanel}
-            />
-          ) : null}
+          {bottomPanelMode && (
+            <>
+              <div
+                role="separator"
+                aria-orientation="horizontal"
+                data-testid="code-pane-bottom-panel-resize-handle"
+                onMouseDown={startBottomPanelResize}
+                onDoubleClick={resetBottomPanelHeight}
+                className={`flex h-3 shrink-0 cursor-row-resize items-center justify-center border-t border-zinc-800 bg-zinc-950/60 transition-colors ${isBottomPanelResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+              >
+                <GripHorizontal size={12} />
+              </div>
+              <div
+                data-testid="code-pane-bottom-panel"
+                className="min-h-0 shrink-0 overflow-hidden"
+                style={{
+                  height: `${bottomPanelHeight}px`,
+                  maxHeight: `calc(100% - ${CODE_PANE_TOP_REGION_MIN_HEIGHT + CODE_PANE_STATUS_BAR_RESERVED_HEIGHT}px)`,
+                }}
+              >
+                {renderBottomPanel()}
+              </div>
+            </>
+          )}
 
           <div className="flex items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 py-2 text-[11px] text-zinc-500">
             <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
@@ -10323,7 +10550,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
               </div>
             </div>
           </div>
-        </div>
       </div>
 
       {isSearchEverywhereOpen && (
