@@ -1,4 +1,5 @@
 import type {
+  CodePaneTreeEntry,
   CodePaneExternalLibrarySection,
   CodePaneGitGraphCommit,
   CodePaneGitRepositorySummary,
@@ -25,6 +26,7 @@ export const CODE_PANE_EXTERNAL_LIBRARY_CACHE_TTL_MS = 5 * 60_000;
 export const CODE_PANE_GIT_STATUS_CACHE_TTL_MS = 5_000;
 export const CODE_PANE_GIT_SUMMARY_CACHE_TTL_MS = 5_000;
 export const CODE_PANE_GIT_GRAPH_CACHE_TTL_MS = 15_000;
+export const CODE_PANE_DIRECTORY_CACHE_TTL_MS = 60_000;
 
 export function getExternalLibraryCache(rootPath: string): CodePaneExternalLibrarySection[] | null {
   return getCacheValue<CodePaneExternalLibrarySection[]>(
@@ -70,6 +72,37 @@ export function setGitGraphCache(rootPath: string, value: CodePaneGitGraphCommit
   setCacheValue(createScopedKey(rootPath, 'git-graph'), value);
 }
 
+export function getDirectoryCache(rootPath: string, directoryPath: string): CodePaneTreeEntry[] | null {
+  return getCacheValue<CodePaneTreeEntry[]>(
+    createScopedKey(rootPath, `directory:${normalizePath(directoryPath)}`),
+    CODE_PANE_DIRECTORY_CACHE_TTL_MS,
+  );
+}
+
+export function setDirectoryCache(rootPath: string, directoryPath: string, value: CodePaneTreeEntry[]): void {
+  setCacheValue(createScopedKey(rootPath, `directory:${normalizePath(directoryPath)}`), value);
+}
+
+export function invalidateDirectoryCache(rootPath: string, directoryPath?: string): void {
+  const normalizedRootPath = normalizePath(rootPath);
+  const directoryPrefix = directoryPath
+    ? createScopedKey(rootPath, `directory:${normalizePath(directoryPath)}`)
+    : `code-pane:${normalizedRootPath}:directory:`;
+
+  for (const key of Array.from(cache.keys())) {
+    if (directoryPath) {
+      if (key === directoryPrefix || key.startsWith(`${directoryPrefix}/`)) {
+        cache.delete(key);
+      }
+      continue;
+    }
+
+    if (key.startsWith(directoryPrefix)) {
+      cache.delete(key);
+    }
+  }
+}
+
 export async function dedupeProjectRequest<T>(
   rootPath: string,
   requestKey: string,
@@ -93,7 +126,7 @@ export async function dedupeProjectRequest<T>(
 
 export function invalidateProjectCache(
   rootPath: string,
-  scope: 'all' | 'git' | 'external-libraries' = 'all',
+  scope: 'all' | 'git' | 'external-libraries' | 'directories' = 'all',
 ): void {
   const normalizedRootPath = normalizePath(rootPath);
   const projectPrefix = `code-pane:${normalizedRootPath}:`;
@@ -114,6 +147,11 @@ export function invalidateProjectCache(
     }
 
     if (scope === 'external-libraries' && key.endsWith(':external-libraries')) {
+      cache.delete(key);
+      continue;
+    }
+
+    if (scope === 'directories' && key.includes(':directory:')) {
       cache.delete(key);
     }
   }

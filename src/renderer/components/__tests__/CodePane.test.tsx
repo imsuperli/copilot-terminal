@@ -1234,6 +1234,157 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneGetGitRepositorySummary).not.toHaveBeenCalled();
   });
 
+  it('hydrates the project tree from cache when opening a second pane for the same project', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          name: 'index.ts',
+          type: 'file',
+        },
+      ],
+    });
+
+    const firstView = renderCodePane(createPane());
+    expect(await screen.findByRole('button', { name: 'index.ts' }, { timeout: 3000 })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledTimes(1);
+    });
+    firstView.unmount();
+
+    let resolveRootDirectory: (() => void) | null = null;
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        await new Promise<void>((resolve) => {
+          resolveRootDirectory = resolve;
+        });
+      }
+
+      return {
+        success: true,
+        data: [
+          {
+            path: '/workspace/project/src/index.ts',
+            name: 'index.ts',
+            type: 'file',
+          },
+        ],
+      };
+    });
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByRole('button', { name: 'index.ts' }, { timeout: 3000 })).toBeInTheDocument();
+    expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveRootDirectory?.();
+      await Promise.resolve();
+    });
+  });
+
+  it('hydrates expanded directories from cache before background refresh resolves', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/nested.ts',
+              name: 'nested.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return {
+        success: true,
+        data: [
+          {
+            path: '/workspace/project/src',
+            name: 'src',
+            type: 'directory',
+          },
+        ],
+      };
+    });
+
+    const firstView = renderCodePane(createPane());
+    const directoryButton = await screen.findByRole('button', { name: 'src' });
+    await act(async () => {
+      fireEvent.doubleClick(directoryButton);
+    });
+
+    expect(await screen.findByRole('button', { name: 'nested.ts' }, { timeout: 3000 })).toBeInTheDocument();
+    firstView.unmount();
+
+    let resolveRootDirectory: (() => void) | null = null;
+    let resolveNestedDirectory: (() => void) | null = null;
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        await new Promise<void>((resolve) => {
+          resolveRootDirectory = resolve;
+        });
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src') {
+        await new Promise<void>((resolve) => {
+          resolveNestedDirectory = resolve;
+        });
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/nested.ts',
+              name: 'nested.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return {
+        success: true,
+        data: [],
+      };
+    });
+
+    renderCodePane(createPane({
+      expandedPaths: ['/workspace/project', '/workspace/project/src'],
+    }));
+
+    expect(await screen.findByRole('button', { name: 'src' }, { timeout: 3000 })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'nested.ts' }, { timeout: 3000 })).toBeInTheDocument();
+    expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      targetPath: '/workspace/project',
+    });
+    expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      targetPath: '/workspace/project/src',
+    });
+
+    await act(async () => {
+      resolveRootDirectory?.();
+      resolveNestedDirectory?.();
+      await Promise.resolve();
+    });
+  });
+
   it('shows index progress in the bottom status bar while building', async () => {
     renderCodePane(createPane());
 
@@ -4562,6 +4713,94 @@ describe('CodePane', () => {
       targetPath: '/workspace/project/src',
     });
     expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('manual refresh invalidates cached directories before reloading', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src-1',
+              name: 'src-1',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      return {
+        success: true,
+        data: [],
+      };
+    });
+
+    const firstView = renderCodePane(createPane());
+    expect(await screen.findByRole('button', { name: 'src-1' }, { timeout: 3000 })).toBeInTheDocument();
+    firstView.unmount();
+
+    let rootRequestCount = 0;
+    let resolveSecondPaneReload: (() => void) | null = null;
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        rootRequestCount += 1;
+        if (rootRequestCount === 1) {
+          await new Promise<void>((resolve) => {
+            resolveSecondPaneReload = resolve;
+          });
+          return {
+            success: true,
+            data: [
+              {
+                path: '/workspace/project/src-2',
+                name: 'src-2',
+                type: 'directory',
+              },
+            ],
+          };
+        }
+
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src-3',
+              name: 'src-3',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      return {
+        success: true,
+        data: [],
+      };
+    });
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByRole('button', { name: 'src-1' }, { timeout: 3000 })).toBeInTheDocument();
+
+    await act(async () => {
+      resolveSecondPaneReload?.();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByRole('button', { name: 'src-2' }, { timeout: 3000 })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.refresh' }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'src-3' }, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'src-2' })).not.toBeInTheDocument();
+    expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      targetPath: '/workspace/project',
+    });
   });
 
   it('does not request removed breadcrumb symbols for the active file', async () => {

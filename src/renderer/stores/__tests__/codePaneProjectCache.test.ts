@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CODE_PANE_DIRECTORY_CACHE_TTL_MS,
   CODE_PANE_EXTERNAL_LIBRARY_CACHE_TTL_MS,
   CODE_PANE_GIT_GRAPH_CACHE_TTL_MS,
   CODE_PANE_GIT_STATUS_CACHE_TTL_MS,
   dedupeProjectRequest,
+  getDirectoryCache,
   getExternalLibraryCache,
   getGitGraphCache,
   getGitStatusCache,
   getGitSummaryCache,
+  invalidateDirectoryCache,
   invalidateProjectCache,
   resetCodePaneProjectCacheForTests,
+  setDirectoryCache,
   setExternalLibraryCache,
   setGitGraphCache,
   setGitStatusCache,
@@ -94,6 +98,41 @@ describe('codePaneProjectCache', () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
+  it('returns cached directory entries before the TTL expires', () => {
+    vi.useFakeTimers();
+
+    setDirectoryCache('/workspace/project', '/workspace/project/src', [
+      {
+        path: '/workspace/project/src/index.ts',
+        name: 'index.ts',
+        type: 'file',
+      },
+    ]);
+
+    expect(getDirectoryCache('/workspace/project', '/workspace/project/src')).toEqual([
+      {
+        path: '/workspace/project/src/index.ts',
+        name: 'index.ts',
+        type: 'file',
+      },
+    ]);
+
+    vi.advanceTimersByTime(CODE_PANE_DIRECTORY_CACHE_TTL_MS + 1);
+    expect(getDirectoryCache('/workspace/project', '/workspace/project/src')).toBeNull();
+  });
+
+  it('invalidates a cached directory subtree without touching sibling directories', () => {
+    setDirectoryCache('/workspace/project', '/workspace/project/src', []);
+    setDirectoryCache('/workspace/project', '/workspace/project/src/main', []);
+    setDirectoryCache('/workspace/project', '/workspace/project/test', []);
+
+    invalidateDirectoryCache('/workspace/project', '/workspace/project/src');
+
+    expect(getDirectoryCache('/workspace/project', '/workspace/project/src')).toBeNull();
+    expect(getDirectoryCache('/workspace/project', '/workspace/project/src/main')).toBeNull();
+    expect(getDirectoryCache('/workspace/project', '/workspace/project/test')).toEqual([]);
+  });
+
   it('invalidates git cache entries without touching external libraries', () => {
     setExternalLibraryCache('/workspace/project', []);
     setGitStatusCache('/workspace/project', []);
@@ -114,5 +153,15 @@ describe('codePaneProjectCache', () => {
     expect(getExternalLibraryCache('/workspace/project')).toEqual([]);
     expect(getGitStatusCache('/workspace/project')).toBeNull();
     expect(getGitSummaryCache('/workspace/project')).toBeNull();
+  });
+
+  it('invalidates directory cache entries without touching git snapshots', () => {
+    setDirectoryCache('/workspace/project', '/workspace/project/src', []);
+    setGitStatusCache('/workspace/project', []);
+
+    invalidateProjectCache('/workspace/project', 'directories');
+
+    expect(getDirectoryCache('/workspace/project', '/workspace/project/src')).toBeNull();
+    expect(getGitStatusCache('/workspace/project')).toEqual([]);
   });
 });

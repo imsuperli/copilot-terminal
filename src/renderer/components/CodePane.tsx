@@ -133,12 +133,15 @@ import {
 import { CodePaneRuntimeStore } from '../stores/codePaneRuntimeStore';
 import {
   dedupeProjectRequest,
+  getDirectoryCache,
   getExternalLibraryCache,
   getGitGraphCache,
   getGitStatusCache,
   getGitSummaryCache,
+  invalidateDirectoryCache,
   invalidateProjectCache,
   setExternalLibraryCache,
+  setDirectoryCache,
   setGitGraphCache,
   setGitStatusCache,
   setGitSummaryCache,
@@ -3022,6 +3025,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
     options?: { showLoadingIndicator?: boolean },
   ): Promise<CodePaneTreeEntry[]> => {
     const showLoadingIndicator = options?.showLoadingIndicator ?? true;
+    const cachedEntries = getDirectoryCache(rootPath, directoryPath);
+    const hasCachedEntries = cachedEntries !== null;
+
+    if (hasCachedEntries) {
+      startTransition(() => {
+        setTreeEntriesByDirectory((currentTreeEntries) => ({
+          ...currentTreeEntries,
+          [directoryPath]: cachedEntries,
+        }));
+        setLoadedDirectories((currentLoadedDirectories) => {
+          const nextLoadedDirectories = new Set(currentLoadedDirectories);
+          nextLoadedDirectories.add(directoryPath);
+          return nextLoadedDirectories;
+        });
+      });
+
+      if (directoryPath === rootPath) {
+        setTreeLoadError(null);
+      }
+    }
 
     if (showLoadingIndicator) {
       setLoadingDirectories((currentLoadingDirectories) => {
@@ -3031,34 +3054,53 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     }
 
-    const response = await window.electronAPI.codePaneListDirectory({
+    let didRequestFail = false;
+    const nextEntries = await dedupeProjectRequest(
       rootPath,
-      targetPath: directoryPath,
-    });
-    const nextEntries = response.success ? (response.data ?? []) : [];
+      `directory:${directoryPath}`,
+      async () => {
+        const response = await window.electronAPI.codePaneListDirectory({
+          rootPath,
+          targetPath: directoryPath,
+        });
 
-    if (response.success) {
+        if (!response.success) {
+          throw new Error(response.error || t('common.retry'));
+        }
+
+        const resolvedEntries = response.data ?? [];
+        setDirectoryCache(rootPath, directoryPath, resolvedEntries);
+        return resolvedEntries;
+      },
+    ).catch((error) => {
+      didRequestFail = true;
       if (directoryPath === rootPath) {
+        setTreeLoadError(error instanceof Error ? error.message : t('common.retry'));
+      } else {
+        setBanner({
+          tone: 'error',
+          message: error instanceof Error ? error.message : t('common.retry'),
+        });
+      }
+
+      return cachedEntries ?? [];
+    });
+
+    if (nextEntries.length > 0 || hasCachedEntries || directoryPath === rootPath) {
+      if (directoryPath === rootPath && !didRequestFail) {
         setTreeLoadError(null);
       }
 
       startTransition(() => {
         setTreeEntriesByDirectory((currentTreeEntries) => ({
           ...currentTreeEntries,
-          [directoryPath]: response.data ?? [],
+          [directoryPath]: nextEntries,
         }));
         setLoadedDirectories((currentLoadedDirectories) => {
           const nextLoadedDirectories = new Set(currentLoadedDirectories);
           nextLoadedDirectories.add(directoryPath);
           return nextLoadedDirectories;
         });
-      });
-    } else if (directoryPath === rootPath) {
-      setTreeLoadError(response.error || t('common.retry'));
-    } else {
-      setBanner({
-        tone: 'error',
-        message: response.error || t('common.retry'),
       });
     }
 
@@ -5206,6 +5248,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ) => {
     const uniqueDirectoryPaths = Array.from(new Set(directoryPaths));
     if (uniqueDirectoryPaths.length > 0) {
+      for (const directoryPath of uniqueDirectoryPaths) {
+        invalidateDirectoryCache(rootPath, directoryPath);
+      }
       await Promise.all(uniqueDirectoryPaths.map((directoryPath) => loadExplorerDirectory(directoryPath, {
         showLoadingIndicator: options?.showLoadingIndicator,
       })));
@@ -5218,6 +5263,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const refreshLoadedDirectories = useCallback(async () => {
     invalidateProjectCache(rootPath, 'external-libraries');
+    invalidateProjectCache(rootPath, 'directories');
     const directoriesToRefresh = Array.from(new Set([
       rootPath,
       ...loadedDirectoriesRef.current,
@@ -5610,6 +5656,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (removedFilePaths.size === 0 && removedDirectoryPaths.length === 0) {
       return;
+    }
+
+    for (const removedDirectoryPath of removedDirectoryPaths) {
+      invalidateDirectoryCache(rootPath, removedDirectoryPath);
     }
 
     const nextLoadedDirectories = new Set(
@@ -6054,6 +6104,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setRecentFiles([]);
       setRecentLocations([]);
       setNavigationStateVersion((currentVersion) => currentVersion + 1);
+      const cachedRootEntries = getDirectoryCache(rootPath, rootPath);
+      const cachedExpandedDirectoryEntries = Object.fromEntries(
+        Array.from(initialExpandedDirectories)
+          .filter((directoryPath) => directoryPath !== rootPath)
+          .map((directoryPath) => [directoryPath, getDirectoryCache(rootPath, directoryPath)])
+          .filter((entry): entry is [string, CodePaneTreeEntry[]] => Array.isArray(entry[1])),
+      );
+      const cachedDirectoryPaths = new Set<string>([
+        ...(cachedRootEntries ? [rootPath] : []),
+        ...Object.keys(cachedExpandedDirectoryEntries),
+      ]);
       const cachedGitStatusEntries = getGitStatusCache(rootPath) ?? [];
       const cachedGitSummary = getGitSummaryCache(rootPath);
       const cachedGitGraph = getGitGraphCache(rootPath) ?? [];
@@ -6062,6 +6123,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
       disposeEditorsRef.current();
       disposeAllModelsRef.current();
+
+      if (cachedRootEntries) {
+        startTransition(() => {
+          setTreeEntriesByDirectory({
+            [rootPath]: cachedRootEntries,
+            ...cachedExpandedDirectoryEntries,
+          });
+          setLoadedDirectories(new Set(cachedDirectoryPaths));
+          setLoadingDirectories(new Set());
+        });
+        setIsBootstrapping(false);
+      }
 
       try {
         if (supportsMonaco) {
@@ -6113,9 +6186,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
           });
         });
 
-        const rootEntries = await loadDirectory(rootPath);
+        const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
+          .filter((directoryPath) => directoryPath !== rootPath);
+        if (nestedExpandedDirectories.length > 0) {
+          void Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectory(directoryPath, {
+            showLoadingIndicator: getDirectoryCache(rootPath, directoryPath) === null,
+          })))
+            .catch(() => {});
+        }
 
-        if (mounted) {
+        const rootEntries = await loadDirectory(rootPath, {
+          showLoadingIndicator: cachedRootEntries === null,
+        });
+
+        if (mounted && cachedRootEntries === null) {
           setIsBootstrapping(false);
         }
 
@@ -6125,13 +6209,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
           }
         });
         void attachLanguageWorkspace(rootEntries).catch(() => {});
-
-        const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
-          .filter((directoryPath) => directoryPath !== rootPath);
-        if (nestedExpandedDirectories.length > 0) {
-          void Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectory(directoryPath)))
-            .catch(() => {});
-        }
       } catch (error) {
         if (mounted) {
           setBanner({
