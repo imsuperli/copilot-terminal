@@ -215,6 +215,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-did-close-document', config),
   codePanePrewarmLanguageWorkspace: (config) =>
     ipcRenderer.invoke('code-pane-prewarm-language-workspace', config),
+  codePaneAttachLanguageWorkspace: (config) =>
+    ipcRenderer.invoke('code-pane-attach-language-workspace', config),
+  codePaneGetLanguageWorkspaceState: (config) =>
+    ipcRenderer.invoke('code-pane-get-language-workspace-state', config),
+  codePaneDetachLanguageWorkspace: (paneId) =>
+    ipcRenderer.invoke('code-pane-detach-language-workspace', { paneId }),
   codePaneGetDefinition: (config) =>
     ipcRenderer.invoke('code-pane-get-definition', config),
   codePaneGetHover: (config) =>

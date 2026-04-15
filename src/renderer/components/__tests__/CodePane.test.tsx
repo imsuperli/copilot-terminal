@@ -680,6 +680,9 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneDidSaveDocument).mockReset();
     vi.mocked(window.electronAPI.codePaneDidCloseDocument).mockReset();
     vi.mocked(window.electronAPI.codePanePrewarmLanguageWorkspace).mockReset();
+    vi.mocked(window.electronAPI.codePaneAttachLanguageWorkspace).mockReset();
+    vi.mocked(window.electronAPI.codePaneGetLanguageWorkspaceState).mockReset();
+    vi.mocked(window.electronAPI.codePaneDetachLanguageWorkspace).mockReset();
     vi.mocked(window.electronAPI.codePaneGetDefinition).mockReset();
     vi.mocked(window.electronAPI.codePaneGetHover).mockReset();
     vi.mocked(window.electronAPI.codePaneGetReferences).mockReset();
@@ -873,6 +876,9 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneDidSaveDocument).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneDidCloseDocument).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePanePrewarmLanguageWorkspace).mockResolvedValue({ success: true });
+    vi.mocked(window.electronAPI.codePaneAttachLanguageWorkspace).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneGetLanguageWorkspaceState).mockResolvedValue({ success: true, data: null });
+    vi.mocked(window.electronAPI.codePaneDetachLanguageWorkspace).mockResolvedValue({ success: true });
     vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({ success: true, data: [] });
     vi.mocked(window.electronAPI.codePaneGetHover).mockResolvedValue({ success: true, data: null });
     vi.mocked(window.electronAPI.codePaneGetReferences).mockResolvedValue({ success: true, data: [] });
@@ -1104,6 +1110,7 @@ describe('CodePane', () => {
   it('does not block initial tree rendering on background workspace tasks', async () => {
     let resolveExternalLibraries: (() => void) | null = null;
     let resolveGitStatus: (() => void) | null = null;
+    let resolveGitSummary: (() => void) | null = null;
 
     vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockImplementation(() => (
       new Promise((resolve) => {
@@ -1115,12 +1122,18 @@ describe('CodePane', () => {
         resolveGitStatus = () => resolve({ success: true, data: [] });
       })
     ));
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockImplementation(() => (
+      new Promise((resolve) => {
+        resolveGitSummary = () => resolve({ success: true, data: null });
+      })
+    ));
 
     renderCodePane(createPane());
 
     expect(await screen.findByRole('button', { name: 'index.ts' })).toBeInTheDocument();
     await waitFor(() => {
-      expect(window.electronAPI.codePanePrewarmLanguageWorkspace).toHaveBeenCalledWith({
+      expect(window.electronAPI.codePaneAttachLanguageWorkspace).toHaveBeenCalledWith({
+        paneId: 'pane-code-1',
         rootPath: '/workspace/project',
         filePath: '/workspace/project/src/index.ts',
       });
@@ -1129,6 +1142,7 @@ describe('CodePane', () => {
     await act(async () => {
       resolveExternalLibraries?.();
       resolveGitStatus?.();
+      resolveGitSummary?.();
       await Promise.resolve();
     });
   });
@@ -1255,6 +1269,29 @@ describe('CodePane', () => {
     });
 
     expect(await screen.findByText('Java: Resolving classpath')).toBeInTheDocument();
+  });
+
+  it('hydrates language workspace status from attach response without waiting for a later event', async () => {
+    vi.mocked(window.electronAPI.codePaneAttachLanguageWorkspace).mockResolvedValue({
+      success: true,
+      data: {
+        pluginId: 'official.java-jdtls',
+        workspaceRoot: '/workspace/project',
+        projectRoot: '/workspace/project',
+        languageId: 'java',
+        runtimeState: 'running',
+        phase: 'importing-project',
+        message: 'Importing Maven project',
+        progressText: 'Resolving classpath',
+        readyFeatures: ['definition', 'hover'],
+        timestamp: '2026-04-15T00:00:00.000Z',
+      },
+    });
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByText('Java: Resolving classpath')).toBeInTheDocument();
+    expect(window.electronAPI.codePaneGetLanguageWorkspaceState).not.toHaveBeenCalled();
   });
 
   it('toggles the workbench sidebar from the activity rail and persists the selected view', async () => {

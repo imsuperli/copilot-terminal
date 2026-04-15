@@ -34,6 +34,7 @@ import { LanguageFeatureService } from './services/language/LanguageFeatureServi
 import { LanguagePluginResolver } from './services/language/LanguagePluginResolver';
 import { LanguageProjectContributionService } from './services/language/LanguageProjectContributionService';
 import { LanguageServerSupervisor } from './services/language/LanguageServerSupervisor';
+import { LanguageWorkspaceHostService } from './services/language/LanguageWorkspaceHostService';
 import { LanguageWorkspaceService } from './services/language/LanguageWorkspaceService';
 import { PluginCatalogService } from './services/plugins/PluginCatalogService';
 import { PluginInstallerService } from './services/plugins/PluginInstallerService';
@@ -80,6 +81,7 @@ let codeTestService: CodeTestService | null = null;
 let debugAdapterSupervisor: DebugAdapterSupervisor | null = null;
 let languageFeatureService: LanguageFeatureService | null = null;
 let languageProjectContributionService: LanguageProjectContributionService | null = null;
+let languageWorkspaceHostService: LanguageWorkspaceHostService | null = null;
 let pluginManager: PluginManager | null = null;
 let currentWorkspace: Workspace | null = null; // 缓存当前工作区状态
 const forwardPtyData = createPtyDataForwarder(() => mainWindow);
@@ -634,6 +636,11 @@ app.whenReady().then(async () => {
     resolver: languagePluginResolver,
     supervisor: languageServerSupervisor,
     pluginRuntimeService: pluginCapabilityRuntimeService,
+    workspaceService: languageWorkspaceService,
+  });
+  languageWorkspaceHostService = new LanguageWorkspaceHostService({
+    languageFeatureService,
+    getCurrentWorkspace: () => currentWorkspace,
   });
   codeRefactorService = new CodeRefactorService({
     codeFileService,
@@ -754,6 +761,7 @@ app.whenReady().then(async () => {
     debugAdapterSupervisor,
     languageFeatureService,
     languageProjectContributionService,
+    languageWorkspaceHostService,
     pluginManager,
     currentWorkspace,
     getMainWindow: () => mainWindow,

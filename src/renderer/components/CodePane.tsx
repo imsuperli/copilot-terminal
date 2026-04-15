@@ -3118,19 +3118,43 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [loadExternalLibrarySections, refreshGitSnapshot]);
 
-  const prewarmLanguageWorkspace = useCallback(async (seedEntries?: CodePaneTreeEntry[]) => {
+  const attachLanguageWorkspace = useCallback(async (seedEntries?: CodePaneTreeEntry[]) => {
     const candidatePath = activeFilePathRef.current
       ?? seedEntries?.find((entry) => entry.type === 'file' && isPathInside(rootPath, entry.path))?.path
       ?? paneRef.current.code?.openFiles?.[0]?.path
       ?? resolvePathFromRoot(rootPath, '__workspace__.java');
-    const response = await window.electronAPI.codePanePrewarmLanguageWorkspace({
+    const response = await window.electronAPI.codePaneAttachLanguageWorkspace({
+      paneId: pane.id,
       rootPath,
       filePath: candidatePath,
     });
     if (!response.success) {
-      console.warn(`[CodePane] codePanePrewarmLanguageWorkspace failed: ${response.error ?? 'unknown error'}`);
+      console.warn(`[CodePane] codePaneAttachLanguageWorkspace failed: ${response.error ?? 'unknown error'}`);
+      return;
     }
-  }, [rootPath]);
+
+    if (response.data && matchesLanguageWorkspaceRoot(rootPath, response.data)) {
+      startTransition(() => {
+        setLanguageWorkspaceState(response.data ?? null);
+      });
+      return;
+    }
+
+    const snapshotResponse = await window.electronAPI.codePaneGetLanguageWorkspaceState({
+      rootPath,
+      filePath: candidatePath,
+    });
+    if (!snapshotResponse.success) {
+      console.warn(`[CodePane] codePaneGetLanguageWorkspaceState failed: ${snapshotResponse.error ?? 'unknown error'}`);
+      return;
+    }
+
+    if (snapshotResponse.data && matchesLanguageWorkspaceRoot(rootPath, snapshotResponse.data)) {
+      startTransition(() => {
+        setLanguageWorkspaceState(snapshotResponse.data ?? null);
+      });
+    }
+  }, [pane.id, rootPath]);
 
   const loadExternalDirectory = useCallback(async (
     directoryPath: string,
@@ -6100,7 +6124,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             setExternalLibrariesError(error instanceof Error ? error.message : t('common.retry'));
           }
         });
-        void prewarmLanguageWorkspace(rootEntries).catch(() => {});
+        void attachLanguageWorkspace(rootEntries).catch(() => {});
 
         const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
           .filter((directoryPath) => directoryPath !== rootPath);
@@ -6130,6 +6154,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       window.electronAPI.offCodePaneIndexProgress(handleIndexProgress);
       window.electronAPI.offCodePaneLanguageWorkspaceChanged(handleLanguageWorkspaceChanged);
       void window.electronAPI.codePaneUnwatchRoot(pane.id);
+      void window.electronAPI.codePaneDetachLanguageWorkspace(pane.id);
       markerListenerRef.current?.dispose();
       markerListenerRef.current = null;
       void flushDirtyFilesRef.current().finally(() => {
@@ -6142,6 +6167,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [
     applyGitSnapshot,
     loadDirectory,
+    attachLanguageWorkspace,
     pane.id,
     refreshProjectBootstrapCaches,
     resetExternalLibrarySections,

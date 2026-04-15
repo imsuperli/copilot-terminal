@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import type {
+  AttachCodePaneLanguageWorkspaceConfig,
   CodePaneGetCallHierarchyConfig,
   CodePaneGetCodeActionsConfig,
   CodePaneFormatDocumentConfig,
@@ -29,7 +30,7 @@ import { HandlerContext } from './HandlerContext';
 import { errorResponse, successResponse } from './HandlerResponse';
 
 export function registerLanguageHandlers(ctx: HandlerContext) {
-  const { languageFeatureService, getCurrentWorkspace } = ctx;
+  const { languageFeatureService, languageWorkspaceHostService, getCurrentWorkspace } = ctx;
 
   ipcMain.handle('code-pane-did-open-document', async (_event, config: CodePaneDocumentSyncConfig) => {
     try {
@@ -90,6 +91,46 @@ export function registerLanguageHandlers(ctx: HandlerContext) {
       }
 
       await languageFeatureService.prewarmWorkspace(config, getCurrentWorkspace());
+      return successResponse();
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-attach-language-workspace', async (
+    _event,
+    config: AttachCodePaneLanguageWorkspaceConfig,
+  ) => {
+    try {
+      if (!languageWorkspaceHostService) {
+        throw new Error('LanguageWorkspaceHostService not initialized');
+      }
+
+      return successResponse(await languageWorkspaceHostService.attachPane(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-get-language-workspace-state', async (_event, config: CodePaneLanguagePrewarmConfig) => {
+    try {
+      if (!languageWorkspaceHostService) {
+        throw new Error('LanguageWorkspaceHostService not initialized');
+      }
+
+      return successResponse(await languageWorkspaceHostService.getState(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-detach-language-workspace', async (_event, { paneId }: { paneId: string }) => {
+    try {
+      if (!languageWorkspaceHostService) {
+        throw new Error('LanguageWorkspaceHostService not initialized');
+      }
+
+      languageWorkspaceHostService.detachPane(paneId);
       return successResponse();
     } catch (error) {
       return errorResponse(error);

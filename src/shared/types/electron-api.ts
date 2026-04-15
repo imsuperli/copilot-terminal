@@ -667,6 +667,10 @@ export interface CodePaneLanguagePrewarmConfig {
   language?: string;
 }
 
+export interface AttachCodePaneLanguageWorkspaceConfig extends CodePaneLanguagePrewarmConfig {
+  paneId: string;
+}
+
 export interface CodePaneFsChangedPayload {
   rootPath: string;
   changes: Array<{
@@ -1634,6 +1638,9 @@ export interface ElectronAPI {
   codePaneDidSaveDocument: (config: CodePaneDocumentSyncConfig) => Promise<IpcResponse<void>>;
   codePaneDidCloseDocument: (config: CodePaneDocumentCloseConfig) => Promise<IpcResponse<void>>;
   codePanePrewarmLanguageWorkspace: (config: CodePaneLanguagePrewarmConfig) => Promise<IpcResponse<void>>;
+  codePaneAttachLanguageWorkspace: (config: AttachCodePaneLanguageWorkspaceConfig) => Promise<IpcResponse<CodePaneLanguageWorkspaceState | null>>;
+  codePaneGetLanguageWorkspaceState: (config: CodePaneLanguagePrewarmConfig) => Promise<IpcResponse<CodePaneLanguageWorkspaceState | null>>;
+  codePaneDetachLanguageWorkspace: (paneId: string) => Promise<IpcResponse<void>>;
   codePaneGetDefinition: (config: CodePaneGetDefinitionConfig) => Promise<IpcResponse<CodePaneLocation[]>>;
   codePaneGetHover: (config: CodePaneGetHoverConfig) => Promise<IpcResponse<CodePaneHoverResult | null>>;
   codePaneGetReferences: (config: CodePaneGetReferencesConfig) => Promise<IpcResponse<CodePaneReference[]>>;

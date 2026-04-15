@@ -24,6 +24,7 @@ import { CodeTestService } from '../services/code/CodeTestService';
 import { DebugAdapterSupervisor } from '../services/debug/DebugAdapterSupervisor';
 import { LanguageFeatureService } from '../services/language/LanguageFeatureService';
 import { LanguageProjectContributionService } from '../services/language/LanguageProjectContributionService';
+import { LanguageWorkspaceHostService } from '../services/language/LanguageWorkspaceHostService';
 import { PluginManager } from '../services/plugins/PluginManager';
 import { Workspace } from '../types/workspace';
 
@@ -58,6 +59,7 @@ export interface HandlerContext {
   debugAdapterSupervisor?: DebugAdapterSupervisor | null;
   languageFeatureService?: LanguageFeatureService | null;
   languageProjectContributionService?: LanguageProjectContributionService | null;
+  languageWorkspaceHostService?: LanguageWorkspaceHostService | null;
   pluginManager?: PluginManager | null;
   currentWorkspace: Workspace | null;
   getMainWindow?: () => BrowserWindow | null;

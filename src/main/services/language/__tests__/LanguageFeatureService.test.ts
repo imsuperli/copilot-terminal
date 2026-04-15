@@ -6,6 +6,7 @@ import type { ResolvedLanguagePlugin } from '../LanguagePluginResolver';
 import type { LanguagePluginResolver } from '../LanguagePluginResolver';
 import type { LanguageServerSupervisor } from '../LanguageServerSupervisor';
 import { LanguageFeatureService } from '../LanguageFeatureService';
+import type { LanguageWorkspaceService } from '../LanguageWorkspaceService';
 
 describe('LanguageFeatureService', () => {
   const resolution = {
@@ -351,6 +352,33 @@ describe('LanguageFeatureService', () => {
       'jdt://contents/java.base/java/lang/String.class?=mock',
     );
   });
+
+  it('returns cached workspace state when the language workspace has already started', async () => {
+    const { service, resolver, workspaceService } = createService();
+    resolver.resolve.mockResolvedValue(resolution);
+    workspaceService.getState.mockReturnValue({
+      pluginId: 'acme.java-language',
+      workspaceRoot: '/workspace',
+      projectRoot: '/workspace/project',
+      languageId: 'java',
+      runtimeState: 'running',
+      phase: 'ready',
+      readyFeatures: ['definition'],
+      timestamp: '2026-04-15T00:00:00.000Z',
+    });
+
+    const result = await service.getWorkspaceState({
+      rootPath: '/workspace',
+      filePath: '/workspace/project/src/Main.java',
+      language: 'java',
+    }, null);
+
+    expect(result).toMatchObject({
+      pluginId: 'acme.java-language',
+      phase: 'ready',
+    });
+    expect(workspaceService.getState).toHaveBeenCalledWith(resolution);
+  });
 });
 
 function createService() {
@@ -400,6 +428,11 @@ function createService() {
     lintDocument: ReturnType<typeof vi.fn>;
     resetSessions: ReturnType<typeof vi.fn>;
   };
+  const workspaceService = {
+    getState: vi.fn().mockReturnValue(null),
+  } as unknown as LanguageWorkspaceService & {
+    getState: ReturnType<typeof vi.fn>;
+  };
 
   return {
     service: new LanguageFeatureService({
@@ -407,10 +440,12 @@ function createService() {
       resolver,
       supervisor,
       pluginRuntimeService,
+      workspaceService,
     }),
     codeFileService,
     resolver,
     supervisor,
     pluginRuntimeService,
+    workspaceService,
   };
 }

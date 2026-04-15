@@ -31,6 +31,7 @@ import type {
   CodePaneHierarchyResult,
   CodePaneHoverResult,
   CodePaneLocation,
+  CodePaneLanguageWorkspaceState,
   CodePaneReadFileConfig,
   CodePaneReadFileResult,
   CodePaneReference,
@@ -50,6 +51,7 @@ import { CodeFileService } from '../code/CodeFileService';
 import { PluginCapabilityRuntimeService } from '../plugins/PluginCapabilityRuntimeService';
 import { LanguagePluginResolver, type ResolvedLanguagePlugin } from './LanguagePluginResolver';
 import { LanguageServerSupervisor } from './LanguageServerSupervisor';
+import { LanguageWorkspaceService } from './LanguageWorkspaceService';
 
 const TRANSIENT_DOCUMENT_OWNER_PREFIX = '__language-request__';
 
@@ -58,6 +60,7 @@ export interface LanguageFeatureServiceOptions {
   resolver: LanguagePluginResolver;
   supervisor: LanguageServerSupervisor;
   pluginRuntimeService?: PluginCapabilityRuntimeService;
+  workspaceService?: LanguageWorkspaceService;
 }
 
 export class LanguageFeatureService {
@@ -65,6 +68,7 @@ export class LanguageFeatureService {
   private readonly resolver: LanguagePluginResolver;
   private readonly supervisor: LanguageServerSupervisor;
   private readonly pluginRuntimeService?: PluginCapabilityRuntimeService;
+  private readonly workspaceService?: LanguageWorkspaceService;
   private nextTransientOwnerSequence = 1;
 
   constructor(options: LanguageFeatureServiceOptions) {
@@ -72,6 +76,7 @@ export class LanguageFeatureService {
     this.resolver = options.resolver;
     this.supervisor = options.supervisor;
     this.pluginRuntimeService = options.pluginRuntimeService;
+    this.workspaceService = options.workspaceService;
   }
 
   async openDocument(config: CodePaneDocumentSyncConfig, workspace: Workspace | null): Promise<void> {
@@ -139,6 +144,18 @@ export class LanguageFeatureService {
     }
 
     await this.supervisor.prewarmSession(resolution);
+  }
+
+  async getWorkspaceState(
+    config: CodePaneLanguagePrewarmConfig,
+    workspace: Workspace | null,
+  ): Promise<CodePaneLanguageWorkspaceState | null> {
+    const resolution = await this.resolve(config.rootPath, config.filePath, config.language, workspace);
+    if (!resolution || !this.workspaceService) {
+      return null;
+    }
+
+    return this.workspaceService.getState(resolution);
   }
 
   async getDefinition(config: CodePaneGetDefinitionConfig, workspace: Workspace | null): Promise<CodePaneLocation[]> {
