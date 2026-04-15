@@ -1948,6 +1948,25 @@ describe('CodePane', () => {
 
   it('runs file context menu actions', async () => {
     const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneGitHistory).mockResolvedValue({
+      success: true,
+      data: {
+        scope: 'file',
+        targetFilePath: '/workspace/project/src/index.ts',
+        entries: [
+          {
+            commitSha: 'abcdef1234567890',
+            shortSha: 'abcdef1',
+            subject: 'Refine index flow',
+            author: 'Test User',
+            timestamp: 1_710_000_000,
+            refs: ['HEAD -> main'],
+            scope: 'file',
+            filePath: '/workspace/project/src/index.ts',
+          },
+        ],
+      },
+    });
     renderCodePane(createPane());
 
     const treeButton = await screen.findByRole('button', { name: 'index.ts' });
@@ -1960,6 +1979,84 @@ describe('CodePane', () => {
     await user.pointer({ keys: '[MouseRight]', target: treeButton });
     await user.click(await screen.findByText('codePane.revealInFolder'));
     expect(window.electronAPI.openFolder).toHaveBeenCalledWith('/workspace/project/src');
+
+    await user.pointer({ keys: '[MouseRight]', target: treeButton });
+    await user.click(await screen.findByText('codePane.gitFileHistory'));
+    expect(window.electronAPI.codePaneGitHistory).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      lineNumber: undefined,
+      limit: 30,
+    });
+    expect((await screen.findAllByText('Refine index flow')).length).toBeGreaterThan(0);
+  });
+
+  it('opens git history from directory context menus', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (!targetPath || targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main',
+              name: 'main',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+    vi.mocked(window.electronAPI.codePaneGitHistory).mockResolvedValue({
+      success: true,
+      data: {
+        scope: 'file',
+        targetFilePath: '/workspace/project/src/main',
+        entries: [
+          {
+            commitSha: '1234567890abcdef',
+            shortSha: '1234567',
+            subject: 'Create main package',
+            author: 'Test User',
+            timestamp: 1_710_000_100,
+            refs: ['HEAD -> main'],
+            scope: 'file',
+            filePath: '/workspace/project/src/main',
+          },
+        ],
+      },
+    });
+
+    renderCodePane(createPane());
+
+    const directoryButton = await screen.findByRole('button', { name: 'src' });
+    await user.pointer({ keys: '[MouseRight]', target: directoryButton });
+    await user.click(await screen.findByText('codePane.gitFileHistory'));
+
+    expect(window.electronAPI.codePaneGitHistory).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src',
+      lineNumber: undefined,
+      limit: 30,
+    });
+    expect((await screen.findAllByText('Create main package')).length).toBeGreaterThan(0);
   });
 
   it('searches project contents and opens a selected match', async () => {

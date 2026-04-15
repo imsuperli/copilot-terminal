@@ -7532,6 +7532,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         >
           {t('codePane.copyPath')}
         </ContextMenu.Item>
+        <ContextMenu.Item
+          className={contextMenuItemClassName}
+          onSelect={() => {
+            void loadGitHistory({
+              filePath,
+            });
+          }}
+        >
+          {t('codePane.gitFileHistory')}
+        </ContextMenu.Item>
         {entryType === 'file' && (
           <ContextMenu.Item
             className={contextMenuItemClassName}
@@ -7600,6 +7610,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     contextMenuContentClassName,
     contextMenuItemClassName,
     copyPath,
+    loadGitHistory,
     movePathWithPreview,
     openFileInSplit,
     openDiffForFile,
