@@ -1282,6 +1282,139 @@ describe('CodePane', () => {
     ]);
   });
 
+  it('compacts single-directory package chains in Java source roots', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (!targetPath || targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main',
+              name: 'main',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java',
+              name: 'java',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main/java') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com',
+              name: 'com',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main/java/com') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com/iflytek',
+              name: 'iflytek',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main/java/com/iflytek') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com/iflytek/tjpt',
+              name: 'tjpt',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src/main/java/com/iflytek/tjpt') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/main/java/com/iflytek/tjpt/Application.java',
+              name: 'Application.java',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+
+    const view = renderCodePane(createPane());
+    const srcButton = await screen.findByRole('button', { name: 'src' }, { timeout: 3000 });
+
+    await act(async () => {
+      fireEvent.click(srcButton);
+    });
+    const mainButton = await screen.findByRole('button', { name: 'main' }, { timeout: 3000 });
+    await act(async () => {
+      fireEvent.click(mainButton);
+    });
+    const javaButton = await screen.findByRole('button', { name: 'java' }, { timeout: 3000 });
+    await act(async () => {
+      fireEvent.click(javaButton);
+    });
+
+    const compactedPackageButton = await screen.findByRole('button', { name: 'com.iflytek.tjpt/' });
+    expect(compactedPackageButton).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'com' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'iflytek' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'tjpt' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(compactedPackageButton);
+    });
+
+    expect(await screen.findByRole('button', { name: 'Application.java' })).toBeInTheDocument();
+    expect(view.getPane().code?.expandedPaths).toEqual([
+      '/workspace/project',
+      '/workspace/project/src',
+      '/workspace/project/src/main',
+      '/workspace/project/src/main/java',
+      '/workspace/project/src/main/java/com',
+      '/workspace/project/src/main/java/com/iflytek',
+      '/workspace/project/src/main/java/com/iflytek/tjpt',
+    ]);
+  });
+
   it('allows collapsing and expanding the root file tree entry', async () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
       success: true,

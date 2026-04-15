@@ -158,6 +158,13 @@ type BottomPanelMode =
   | 'hierarchy'
   | 'semantic';
 
+type CompactDirectoryPresentation = {
+  displayName: string;
+  entry: CodePaneTreeEntry;
+  isCompacted: boolean;
+  visibleDirectoryPaths: string[];
+};
+
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
 const CODE_PANE_SIDEBAR_MIN_WIDTH = 220;
 const CODE_PANE_SIDEBAR_MAX_WIDTH = 520;
@@ -178,6 +185,16 @@ const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
 const CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER = 'save-quality-linter';
+const CODE_PANE_COMPACT_PACKAGE_SOURCE_ROOTS = [
+  ['src', 'main', 'java'],
+  ['src', 'test', 'java'],
+  ['src', 'main', 'kotlin'],
+  ['src', 'test', 'kotlin'],
+  ['src', 'main', 'groovy'],
+  ['src', 'test', 'groovy'],
+  ['src', 'main', 'scala'],
+  ['src', 'test', 'scala'],
+] as const;
 const CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS: CodePaneExceptionBreakpoint[] = [{
   id: 'all',
   label: 'All Exceptions',
@@ -838,6 +855,77 @@ function createExpandedDirectorySet(rootPath: string, expandedPaths?: string[] |
     }
   }
   return nextExpandedDirectories;
+}
+
+function isCompactPackageCandidate(rootPath: string, directoryPath: string): boolean {
+  const relativePath = getRelativePath(rootPath, directoryPath);
+  if (!relativePath) {
+    return false;
+  }
+
+  const segments = relativePath.split('/').filter(Boolean);
+  if (segments.length <= 3) {
+    return false;
+  }
+
+  return CODE_PANE_COMPACT_PACKAGE_SOURCE_ROOTS.some((sourceRoot) => (
+    sourceRoot.every((segment, index) => segments[index] === segment)
+  ));
+}
+
+function buildCompactDirectoryPresentation(
+  rootPath: string,
+  startEntry: CodePaneTreeEntry,
+  getDirectoryEntries: (directoryPath: string) => CodePaneTreeEntry[],
+): CompactDirectoryPresentation {
+  if (startEntry.type !== 'directory' || !isCompactPackageCandidate(rootPath, startEntry.path)) {
+    return {
+      displayName: startEntry.name,
+      entry: startEntry,
+      isCompacted: false,
+      visibleDirectoryPaths: [startEntry.path],
+    };
+  }
+
+  const visibleDirectoryPaths = [startEntry.path];
+  const compactedNames = [startEntry.name];
+  let currentEntry = startEntry;
+
+  while (true) {
+    const childEntries = getDirectoryEntries(currentEntry.path);
+    if (childEntries.length !== 1) {
+      break;
+    }
+
+    const [singleChild] = childEntries;
+    if (singleChild.type !== 'directory' || !isCompactPackageCandidate(rootPath, singleChild.path)) {
+      break;
+    }
+
+    visibleDirectoryPaths.push(singleChild.path);
+    compactedNames.push(singleChild.name);
+    currentEntry = singleChild;
+  }
+
+  return {
+    displayName: compactedNames.length > 1 ? compactedNames.join('.') : startEntry.name,
+    entry: currentEntry,
+    isCompacted: compactedNames.length > 1,
+    visibleDirectoryPaths,
+  };
+}
+
+function shouldAutoLoadCompactDirectoryChildren(rootPath: string, directoryPath: string): boolean {
+  const relativePath = getRelativePath(rootPath, directoryPath);
+  if (!relativePath) {
+    return false;
+  }
+
+  const segments = relativePath.split('/').filter(Boolean);
+  return CODE_PANE_COMPACT_PACKAGE_SOURCE_ROOTS.some((sourceRoot) => (
+    sourceRoot.length === segments.length
+      && sourceRoot.every((segment, index) => segments[index] === segment)
+  ));
 }
 
 function sortOpenFilesByPinned<T extends { pinned?: boolean; preview?: boolean }>(openFiles: T[]): T[] {
@@ -2746,7 +2834,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const loadDirectory = useCallback(async (
     directoryPath: string,
     options?: { showLoadingIndicator?: boolean },
-  ) => {
+  ): Promise<CodePaneTreeEntry[]> => {
     const showLoadingIndicator = options?.showLoadingIndicator ?? true;
 
     if (showLoadingIndicator) {
@@ -2761,6 +2849,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       rootPath,
       targetPath: directoryPath,
     });
+    const nextEntries = response.success ? (response.data ?? []) : [];
 
     if (response.success) {
       if (directoryPath === rootPath) {
@@ -2794,6 +2883,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return nextLoadingDirectories;
       });
     }
+    return nextEntries;
   }, [rootPath, t]);
 
   const loadExternalLibrarySections = useCallback(async () => {
@@ -2847,7 +2937,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const loadExternalDirectory = useCallback(async (
     directoryPath: string,
     options?: { showLoadingIndicator?: boolean },
-  ) => {
+  ): Promise<CodePaneTreeEntry[]> => {
     const showLoadingIndicator = options?.showLoadingIndicator ?? true;
 
     if (showLoadingIndicator) {
@@ -2862,6 +2952,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       rootPath,
       targetPath: directoryPath,
     });
+    const nextEntries = response.success ? (response.data ?? []) : [];
 
     if (response.success) {
       setExternalLibrariesError(null);
@@ -2890,18 +2981,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return nextLoadingDirectories;
       });
     }
+    return nextEntries;
   }, [rootPath, t]);
 
   const loadExplorerDirectory = useCallback(async (
     directoryPath: string,
     options?: { showLoadingIndicator?: boolean },
-  ) => {
+  ): Promise<CodePaneTreeEntry[]> => {
     if (isPathInside(rootPath, directoryPath)) {
-      await loadDirectory(directoryPath, options);
-      return;
+      return await loadDirectory(directoryPath, options);
     }
 
-    await loadExternalDirectory(directoryPath, options);
+    return await loadExternalDirectory(directoryPath, options);
   }, [loadDirectory, loadExternalDirectory, rootPath]);
 
   const isDirectoryLoaded = useCallback((directoryPath: string) => (
@@ -2921,6 +3012,64 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ? (treeEntriesByDirectory[directoryPath] ?? [])
       : (externalEntriesByDirectory[directoryPath] ?? [])
   ), [externalEntriesByDirectory, rootPath, treeEntriesByDirectory]);
+
+  const ensureCompactDirectoryChainLoaded = useCallback(async (
+    directoryPath: string,
+    initialEntries?: CodePaneTreeEntry[],
+  ) => {
+    if (!isCompactPackageCandidate(rootPath, directoryPath)) {
+      return {
+        terminalPath: directoryPath,
+        visibleDirectoryPaths: [directoryPath],
+      };
+    }
+
+    const visibleDirectoryPaths = [directoryPath];
+    let currentPath = directoryPath;
+    let currentEntries = initialEntries;
+
+    while (true) {
+      const childEntries = currentEntries
+        ?? (isDirectoryLoaded(currentPath)
+          ? getDirectoryEntries(currentPath)
+          : await loadExplorerDirectory(currentPath));
+      if (childEntries.length !== 1) {
+        break;
+      }
+
+      const [singleChild] = childEntries;
+      if (singleChild.type !== 'directory' || !isCompactPackageCandidate(rootPath, singleChild.path)) {
+        break;
+      }
+
+      visibleDirectoryPaths.push(singleChild.path);
+      currentPath = singleChild.path;
+      currentEntries = undefined;
+    }
+
+    return {
+      terminalPath: currentPath,
+      visibleDirectoryPaths,
+    };
+  }, [getDirectoryEntries, isDirectoryLoaded, loadExplorerDirectory, rootPath]);
+
+  const preloadCompactDirectoryChildren = useCallback(async (
+    directoryPath: string,
+    directoryEntries?: CodePaneTreeEntry[],
+  ) => {
+    if (!shouldAutoLoadCompactDirectoryChildren(rootPath, directoryPath)) {
+      return;
+    }
+
+    const rootEntries = directoryEntries
+      ?? (isDirectoryLoaded(directoryPath)
+        ? getDirectoryEntries(directoryPath)
+        : await loadExplorerDirectory(directoryPath));
+    const childDirectoryEntries = rootEntries.filter((entry) => entry.type === 'directory');
+    await Promise.all(childDirectoryEntries.map(async (entry) => {
+      await ensureCompactDirectoryChainLoaded(entry.path);
+    }));
+  }, [ensureCompactDirectoryChainLoaded, getDirectoryEntries, isDirectoryLoaded, loadExplorerDirectory, rootPath]);
 
   const revealPathInExplorer = useCallback(async (targetPath: string) => {
     const directoryPathsToExpand: string[] = [];
@@ -4814,26 +4963,56 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [prepareRefactorPreview, rootPath, t]);
 
-  const toggleDirectory = useCallback((directoryPath: string) => {
-    setExpandedDirectories((currentExpandedDirectories) => {
-      const nextExpandedDirectories = new Set(currentExpandedDirectories);
-      if (nextExpandedDirectories.has(directoryPath)) {
-        nextExpandedDirectories.delete(directoryPath);
-      } else {
-        nextExpandedDirectories.add(directoryPath);
-        if (!isDirectoryLoaded(directoryPath)) {
-          void loadExplorerDirectory(directoryPath);
-        }
-      }
+  const toggleDirectory = useCallback(async (directoryPath: string) => {
+    const currentExpandedDirectories = expandedDirectoriesRef.current;
+    const isCurrentlyExpanded = currentExpandedDirectories.has(directoryPath);
 
+    if (isCurrentlyExpanded) {
+      const nextExpandedDirectories = new Set(currentExpandedDirectories);
+      nextExpandedDirectories.delete(directoryPath);
+      setExpandedDirectories(nextExpandedDirectories);
       persistCodeState({
         selectedPath: directoryPath,
         expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
       });
+      return;
+    }
 
-      return nextExpandedDirectories;
+    const loadedEntries = isDirectoryLoaded(directoryPath)
+      ? getDirectoryEntries(directoryPath)
+      : await loadExplorerDirectory(directoryPath);
+
+    await preloadCompactDirectoryChildren(directoryPath, loadedEntries);
+    const isCompactCandidate = isCompactPackageCandidate(rootPath, directoryPath);
+    const {
+      terminalPath,
+      visibleDirectoryPaths,
+    } = isCompactCandidate
+      ? await ensureCompactDirectoryChainLoaded(directoryPath, loadedEntries)
+      : {
+          terminalPath: directoryPath,
+          visibleDirectoryPaths: [directoryPath],
+        };
+    const nextExpandedDirectories = new Set(expandedDirectoriesRef.current);
+    for (const visiblePath of visibleDirectoryPaths) {
+      nextExpandedDirectories.add(visiblePath);
+    }
+    nextExpandedDirectories.add(terminalPath);
+    setExpandedDirectories(nextExpandedDirectories);
+    persistCodeState({
+      selectedPath: terminalPath,
+      expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
     });
-  }, [getPersistedExpandedPaths, isDirectoryLoaded, loadExplorerDirectory, persistCodeState]);
+  }, [
+    ensureCompactDirectoryChainLoaded,
+    getDirectoryEntries,
+    getPersistedExpandedPaths,
+    isDirectoryLoaded,
+    loadExplorerDirectory,
+    persistCodeState,
+    preloadCompactDirectoryChildren,
+    rootPath,
+  ]);
 
   const openDiffForActiveFile = useCallback(async () => {
     const filePath = activeFilePathRef.current;
@@ -6734,11 +6913,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const renderTree = useCallback((directoryPath: string, depth: number): React.ReactNode => {
     const entries = getDirectoryEntries(directoryPath);
     return entries.map((entry) => {
-      const isDirectory = entry.type === 'directory';
-      const isExpanded = expandedDirectories.has(entry.path);
-      const isSelected = selectedPath === entry.path;
-      const entryStatus = getEntryStatus(entry.path, entry.type);
+      const compactPresentation = buildCompactDirectoryPresentation(rootPath, entry, getDirectoryEntries);
+      const resolvedEntry = compactPresentation.entry;
+      const isDirectory = resolvedEntry.type === 'directory';
+      const isExpanded = expandedDirectories.has(resolvedEntry.path);
+      const isSelected = selectedPath === resolvedEntry.path;
+      const entryStatus = getEntryStatus(resolvedEntry.path, resolvedEntry.type);
       const badge = getStatusTone(entryStatus);
+      const isLoading = compactPresentation.visibleDirectoryPaths.some((visiblePath) => isDirectoryLoading(visiblePath));
 
       return (
         <React.Fragment key={entry.path}>
@@ -6748,18 +6930,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 type="button"
                 onClick={() => {
                   if (isDirectory) {
-                    toggleDirectory(entry.path);
+                    void toggleDirectory(entry.path);
                   } else {
-                    void activateFile(entry.path, { preview: true });
+                    void activateFile(resolvedEntry.path, { preview: true });
                   }
                 }}
                 onDoubleClick={() => {
                   if (!isDirectory) {
-                    void activateFile(entry.path, { promotePreview: true });
+                    void activateFile(resolvedEntry.path, { promotePreview: true });
                   }
                 }}
                 className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                 style={{ paddingLeft: `${10 + depth * 14}px` }}
+                title={compactPresentation.isCompacted ? compactPresentation.displayName : resolvedEntry.name}
               >
                 {isDirectory ? (
                   isExpanded ? <ChevronDown size={14} className="shrink-0 text-zinc-500" /> : <ChevronRight size={14} className="shrink-0 text-zinc-500" />
@@ -6771,8 +6954,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 ) : (
                   <FileIcon size={14} className="shrink-0 text-zinc-500" />
                 )}
-                <span className="min-w-0 flex-1 truncate">{entry.name}</span>
-                {isDirectoryLoading(entry.path) && (
+                <span className="min-w-0 flex-1 truncate">
+                  {compactPresentation.displayName}
+                  {compactPresentation.isCompacted ? '/' : ''}
+                </span>
+                {isLoading && (
                   <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
                 )}
                 {badge && (
@@ -6782,11 +6968,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 )}
               </button>
             </ContextMenu.Trigger>
-            {renderFileContextMenu(entry.path, entry.type, {
+            {renderFileContextMenu(resolvedEntry.path, resolvedEntry.type, {
               allowDiff: isPathInside(rootPath, entry.path),
             })}
           </ContextMenu.Root>
-          {isDirectory && isExpanded && renderTree(entry.path, depth + 1)}
+          {isDirectory && isExpanded && renderTree(resolvedEntry.path, depth + 1)}
         </React.Fragment>
       );
     });
