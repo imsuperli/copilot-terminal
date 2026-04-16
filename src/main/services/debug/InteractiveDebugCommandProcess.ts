@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
-import { prepareSpawnCommand } from '../code/CodeRunProfileService';
+import { prepareSpawnCommand } from '../../utils/spawnCommand';
 
 interface InteractiveDebugCommandProcessOptions {
   command: string;
@@ -35,14 +35,9 @@ export class InteractiveDebugCommandProcess {
     this.promptPattern = buildPromptPattern(options.promptPattern);
     this.onOutput = options.onOutput;
     this.onExit = options.onExit;
-    const command = normalizeSpawnCommand(options.command);
-    const args = normalizeSpawnArgs(options.args);
-    if (!command) {
-      throw new Error('Debugger command is empty');
-    }
     const preparedCommand = prepareSpawnCommand(
-      command,
-      args,
+      options.command,
+      options.args,
       options.cwd,
       options.env ?? process.env,
     );
@@ -204,17 +199,6 @@ export class InteractiveDebugCommandProcess {
       ?? `Debugger process exited with code ${result.exitCode ?? 'unknown'}`;
     pendingRequest.reject(new Error(message));
   }
-}
-
-function normalizeSpawnCommand(command: string): string {
-  return command.trim().replace(/^"(.*)"$/s, '$1');
-}
-
-function normalizeSpawnArgs(args: string[]): string[] {
-  return args
-    .filter((arg): arg is string => typeof arg === 'string')
-    .map((arg) => arg.trim())
-    .filter((arg) => arg.length > 0);
 }
 
 function buildPromptPattern(pattern: RegExp): RegExp {

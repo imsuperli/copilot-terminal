@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import type { PluginRuntime } from '../../../../shared/types/plugin';
 import { getLatestEnvironmentVariables } from '../../../utils/environment';
 import { resolveNodePath } from '../../../utils/node-path';
+import { prepareSpawnCommand } from '../../../utils/spawnCommand';
 
 export interface RuntimeSpawnContext {
   pluginId: string;
@@ -139,8 +140,9 @@ export function spawnRuntimeProcess(
   args: string[],
   options: SpawnOptionsWithoutStdio,
 ): SpawnedRuntimeProcess {
-  const child = spawn(command, args, {
-    ...options,
+  const prepared = prepareRuntimeSpawn(command, args, options);
+  const child = spawn(prepared.command, prepared.args, {
+    ...prepared.options,
     stdio: 'pipe',
   });
 
@@ -150,13 +152,40 @@ export function spawnRuntimeProcess(
 
   return {
     child: child as ChildProcessWithoutNullStreams,
-    command,
-    args,
-    cwd: typeof options.cwd === 'string'
-      ? options.cwd
-      : options.cwd
-        ? fileURLToPath(options.cwd)
-        : process.cwd(),
-    env: options.env ?? process.env,
+    command: prepared.command,
+    args: prepared.args,
+    cwd: prepared.cwd,
+    env: prepared.env,
+  };
+}
+
+export function prepareRuntimeSpawn(
+  command: string,
+  args: string[],
+  options: SpawnOptionsWithoutStdio,
+): {
+  command: string;
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  options: SpawnOptionsWithoutStdio;
+} {
+  const cwd = typeof options.cwd === 'string'
+    ? options.cwd
+    : options.cwd
+      ? fileURLToPath(options.cwd)
+      : process.cwd();
+  const env = options.env ?? process.env;
+  const preparedCommand = prepareSpawnCommand(command, args, cwd, env);
+
+  return {
+    command: preparedCommand.command,
+    args: preparedCommand.args,
+    cwd,
+    env,
+    options: {
+      ...options,
+      ...preparedCommand.options,
+    },
   };
 }

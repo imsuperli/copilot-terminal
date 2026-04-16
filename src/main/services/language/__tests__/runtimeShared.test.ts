@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRuntimeEnvironment } from '../runtime/shared';
+import { buildRuntimeEnvironment, prepareRuntimeSpawn } from '../runtime/shared';
 
 describe('language runtime shared helpers', () => {
   it('passes merged plugin settings to runtime processes as JSON', () => {
@@ -25,5 +25,30 @@ describe('language runtime shared helpers', () => {
       'python.command': 'pyright-langserver',
       'python.analysis.typeCheckingMode': 'basic',
     }));
+  });
+
+  it('normalizes runtime spawn commands before starting language servers', () => {
+    const prepared = prepareRuntimeSpawn('"python"', [' ', 'server.py', ''], {
+      cwd: '/workspace/project',
+      env: {
+        ...process.env,
+        PYTHONPATH: '/plugins/runtime',
+      },
+    });
+
+    expect(prepared).toEqual({
+      command: 'python',
+      args: ['server.py'],
+      cwd: '/workspace/project',
+      env: expect.objectContaining({
+        PYTHONPATH: '/plugins/runtime',
+      }),
+      options: expect.objectContaining({
+        cwd: '/workspace/project',
+        env: expect.objectContaining({
+          PYTHONPATH: '/plugins/runtime',
+        }),
+      }),
+    });
   });
 });

@@ -232,7 +232,7 @@ describe('CodeRunProfileService', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
 
     try {
-      expect(prepareSpawnCommand('mvn.cmd', ['spring-boot:run'], tempRootPath, process.env)).toEqual({
+      expect(prepareSpawnCommand('"mvn.cmd"', [' ', 'spring-boot:run', ''], tempRootPath, process.env)).toEqual({
         command: 'mvn.cmd',
         args: ['spring-boot:run'],
         options: expect.objectContaining({
