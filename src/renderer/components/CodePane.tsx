@@ -176,6 +176,7 @@ type BottomPanelMode =
   | 'workspace'
   | 'performance'
   | 'hierarchy'
+  | 'external-changes'
   | 'semantic';
 
 type CompactDirectoryPresentation = {
@@ -202,6 +203,7 @@ const CODE_PANE_MAX_NAVIGATION_HISTORY = 50;
 const CODE_PANE_MAX_LOCAL_HISTORY_PER_FILE = 12;
 const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
 const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
+const CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES = 60;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
 const CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER = 'save-quality-linter';
@@ -268,6 +270,24 @@ type SearchEverywhereItem = {
 
 type CodePaneFsChange = CodePaneFsChangedPayload['changes'][number];
 type CodePaneIndexStatus = CodePaneIndexProgressPayload;
+type ExternalChangeKind = 'added' | 'modified' | 'deleted';
+type ExternalChangeEntry = {
+  id: string;
+  filePath: string;
+  relativePath: string;
+  previousContent: string | null;
+  currentContent: string | null;
+  language: string;
+  changeType: ExternalChangeKind;
+  changedAt: number;
+  openedAtChange: boolean;
+  canDiff: boolean;
+};
+type ExternalChangeDiffRequest = {
+  filePath: string;
+  leftLabel: string;
+  rightLabel: string;
+};
 type DefinitionLookupResult = {
   location: CodePaneLocation | null;
   error?: string;
@@ -1109,6 +1129,39 @@ function getStatusTextClassName(status?: CodePaneGitStatusEntry['status']): stri
   }
 }
 
+function getExternalChangeTextClassName(changeType?: ExternalChangeKind): string {
+  switch (changeType) {
+    case 'added':
+      return 'text-emerald-300';
+    case 'deleted':
+      return 'text-red-300';
+    case 'modified':
+      return 'text-sky-300';
+    default:
+      return '';
+  }
+}
+
+function getExternalChangeDotClassName(changeType: ExternalChangeKind): string {
+  switch (changeType) {
+    case 'added':
+      return 'bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.12)]';
+    case 'deleted':
+      return 'bg-red-400 shadow-[0_0_0_3px_rgba(248,113,113,0.12)]';
+    case 'modified':
+    default:
+      return 'bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.12)]';
+  }
+}
+
+function formatExternalChangeTime(timestamp: number): string {
+  const date = new Date(timestamp);
+  const hours = `${date.getHours()}`.padStart(2, '0');
+  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+  const seconds = `${date.getSeconds()}`.padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
+}
+
 function getProblemTone(severity: number): {
   label: 'error' | 'warning' | 'info' | 'hint';
   className: string;
@@ -1376,6 +1429,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const revisionModifiedModelsRef = useRef(new Map<string, MonacoModel>());
   const revisionDiffFilePathRef = useRef<string | null>(null);
   const pendingGitRevisionDiffRef = useRef<GitRevisionDiffRequest | null>(null);
+  const pendingExternalChangeDiffRef = useRef<ExternalChangeDiffRequest | null>(null);
+  const externalChangeEntriesRef = useRef<ExternalChangeEntry[]>([]);
   const modelDisposersRef = useRef(new Map<string, MonacoDisposable>());
   const fileMetaRef = useRef(new Map<string, FileRuntimeMeta>());
   const modelFilePathRef = useRef(new Map<string, string>());
@@ -1546,6 +1601,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isGitHistoryLoading, setIsGitHistoryLoading] = useState(false);
   const [gitHistoryError, setGitHistoryError] = useState<string | null>(null);
   const [pendingGitRevisionDiff, setPendingGitRevisionDiff] = useState<GitRevisionDiffRequest | null>(null);
+  const [pendingExternalChangeDiff, setPendingExternalChangeDiff] = useState<ExternalChangeDiffRequest | null>(null);
+  const [externalChangeEntries, setExternalChangeEntries] = useState<ExternalChangeEntry[]>([]);
+  const [selectedExternalChangePath, setSelectedExternalChangePath] = useState<string | null>(null);
   const [todoItems, setTodoItems] = useState<CodePaneTodoItem[]>([]);
   const [isTodoLoading, setIsTodoLoading] = useState(false);
   const [todoError, setTodoError] = useState<string | null>(null);
@@ -1747,6 +1805,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     revisionDiffFilePathRef.current = pendingGitRevisionDiff?.filePath ?? null;
     pendingGitRevisionDiffRef.current = pendingGitRevisionDiff;
   }, [pendingGitRevisionDiff]);
+
+  useEffect(() => {
+    pendingExternalChangeDiffRef.current = pendingExternalChangeDiff;
+  }, [pendingExternalChangeDiff]);
+
+  useEffect(() => {
+    externalChangeEntriesRef.current = externalChangeEntries;
+  }, [externalChangeEntries]);
 
   useEffect(() => {
     bottomPanelHeightRef.current = bottomPanelHeight;
@@ -2874,6 +2940,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
     revisionModifiedModelsRef.current.clear();
     revisionDiffFilePathRef.current = null;
+    pendingExternalChangeDiffRef.current = null;
 
     fileMetaRef.current.clear();
     preloadedReadResultsRef.current.clear();
@@ -3900,8 +3967,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
       const revisionRequest = pendingGitRevisionDiffRef.current;
+      const externalChangeRequest = pendingExternalChangeDiffRef.current;
       const modifiedRevisionModel = revisionModifiedModelsRef.current.get(currentActiveFilePath);
-      const modifiedModel = revisionRequest?.filePath === currentActiveFilePath
+      const modifiedModel = revisionRequest?.filePath === currentActiveFilePath || externalChangeRequest?.filePath === currentActiveFilePath
         ? modifiedRevisionModel
         : model;
       if (!modifiedModel) {
@@ -3954,7 +4022,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         modified: modifiedModel,
       });
       diffEditorRef.current.getModifiedEditor().updateOptions?.({
-        readOnly: revisionRequest?.filePath === currentActiveFilePath ? true : isReadOnlyFile,
+        readOnly: revisionRequest?.filePath === currentActiveFilePath || externalChangeRequest?.filePath === currentActiveFilePath
+          ? true
+          : isReadOnlyFile,
         ...editorInlayHintOptions,
       });
       applyDebugDecorations(diffEditorRef.current.getModifiedEditor(), currentActiveFilePath);
@@ -5131,6 +5201,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
 
     setPendingGitRevisionDiff(null);
+    setPendingExternalChangeDiff(null);
     persistCodeState({
       openFiles: nextTabs,
       activeFilePath: filePath,
@@ -5407,6 +5478,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const didEnsureDiffModel = await ensureDiffModel(filePath);
     if (!didEnsureDiffModel) {
       setPendingGitRevisionDiff(null);
+      setPendingExternalChangeDiff(null);
       return;
     }
 
@@ -5416,6 +5488,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
 
     setBanner(null);
+    setPendingExternalChangeDiff(null);
     persistCodeState({
       openFiles: nextTabs,
       activeFilePath: filePath,
@@ -5428,6 +5501,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const openGitRevisionDiff = useCallback(async (request: GitRevisionDiffRequest) => {
     setPendingGitRevisionDiff(request);
+    setPendingExternalChangeDiff(null);
     const didEnsureRevisionDiffModel = await ensureRevisionDiffModel(request);
     if (!didEnsureRevisionDiffModel) {
       setPendingGitRevisionDiff(null);
@@ -5449,6 +5523,292 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setBanner(null);
     await refreshEditorSurface();
   }, [ensureRevisionDiffModel, openFiles, persistCodeState, refreshEditorSurface]);
+
+  const ensureExternalChangeDiffModel = useCallback(async (
+    entry: ExternalChangeEntry,
+    options?: {
+      showBanner?: boolean;
+    },
+  ) => {
+    if (!entry.canDiff || entry.previousContent === null || entry.currentContent === null) {
+      if (options?.showBanner !== false) {
+        setBanner({
+          tone: 'info',
+          message: t('codePane.externalChangeNoDiff'),
+          filePath: entry.filePath,
+        });
+      }
+      return false;
+    }
+
+    if (!monacoRef.current && supportsMonaco) {
+      const monaco = await ensureMonacoReady();
+      if (!monaco) {
+        if (options?.showBanner !== false) {
+          setBanner({
+            tone: 'info',
+            message: t('codePane.gitUnavailable'),
+            filePath: entry.filePath,
+          });
+        }
+        return false;
+      }
+    }
+
+    const monaco = monacoRef.current;
+    if (!monaco) {
+      if (options?.showBanner !== false) {
+        setBanner({
+          tone: 'info',
+          message: t('codePane.gitUnavailable'),
+          filePath: entry.filePath,
+        });
+      }
+      return false;
+    }
+
+    const modelKey = entry.filePath;
+    const leftLabel = t('codePane.externalChangeBefore');
+    const rightLabel = t('codePane.externalChangeAfter');
+    const originalUri = monaco.Uri.parse(
+      `code-pane-external-before://${encodeURIComponent(entry.filePath)}?changedAt=${entry.changedAt}`,
+    );
+    const modifiedUri = monaco.Uri.parse(
+      `code-pane-external-after://${encodeURIComponent(entry.filePath)}?changedAt=${entry.changedAt}`,
+    );
+
+    let diffModel = diffModelsRef.current.get(modelKey);
+    if (!diffModel) {
+      diffModel = monaco.editor.createModel(entry.previousContent, entry.language, originalUri);
+      diffModelsRef.current.set(modelKey, diffModel);
+    } else {
+      if (diffModel.getLanguageId() !== entry.language) {
+        monaco.editor.setModelLanguage(diffModel, entry.language);
+      }
+      if (diffModel.uri.toString() !== originalUri.toString()) {
+        diffModel.dispose();
+        diffModel = monaco.editor.createModel(entry.previousContent, entry.language, originalUri);
+        diffModelsRef.current.set(modelKey, diffModel);
+      } else if (diffModel.getValue() !== entry.previousContent) {
+        diffModel.setValue(entry.previousContent);
+      }
+    }
+
+    let modifiedModel = revisionModifiedModelsRef.current.get(modelKey);
+    if (!modifiedModel) {
+      modifiedModel = monaco.editor.createModel(entry.currentContent, entry.language, modifiedUri);
+      revisionModifiedModelsRef.current.set(modelKey, modifiedModel);
+    } else {
+      if (modifiedModel.getLanguageId() !== entry.language) {
+        monaco.editor.setModelLanguage(modifiedModel, entry.language);
+      }
+      if (modifiedModel.uri.toString() !== modifiedUri.toString()) {
+        modifiedModel.dispose();
+        modifiedModel = monaco.editor.createModel(entry.currentContent, entry.language, modifiedUri);
+        revisionModifiedModelsRef.current.set(modelKey, modifiedModel);
+      } else if (modifiedModel.getValue() !== entry.currentContent) {
+        modifiedModel.setValue(entry.currentContent);
+      }
+    }
+
+    setPendingExternalChangeDiff({
+      filePath: entry.filePath,
+      leftLabel,
+      rightLabel,
+    });
+    clearBannerForFile(entry.filePath);
+    return true;
+  }, [clearBannerForFile, ensureMonacoReady, supportsMonaco, t]);
+
+  const openExternalChangeDiff = useCallback(async (filePath: string) => {
+    const entry = externalChangeEntriesRef.current.find((candidate) => candidate.filePath === filePath);
+    if (!entry) {
+      return;
+    }
+
+    setPendingGitRevisionDiff(null);
+    const externalDiffRequest: ExternalChangeDiffRequest = {
+      filePath: entry.filePath,
+      leftLabel: t('codePane.externalChangeBefore'),
+      rightLabel: t('codePane.externalChangeAfter'),
+    };
+    setPendingExternalChangeDiff(externalDiffRequest);
+    pendingExternalChangeDiffRef.current = externalDiffRequest;
+    setSelectedExternalChangePath(filePath);
+    if (entry.changeType !== 'deleted') {
+      const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
+      if (!loadedModel) {
+        setPendingExternalChangeDiff(null);
+        pendingExternalChangeDiffRef.current = null;
+        return;
+      }
+    }
+
+    const didEnsureDiffModel = await ensureExternalChangeDiffModel(entry);
+    if (!didEnsureDiffModel) {
+      setPendingExternalChangeDiff(null);
+      pendingExternalChangeDiffRef.current = null;
+      return;
+    }
+
+    const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
+    const nextTabs = entry.changeType === 'deleted'
+      ? currentOpenFiles
+      : upsertOpenFileTab(currentOpenFiles, filePath, {
+        promote: true,
+      });
+
+    persistCodeState({
+      openFiles: nextTabs,
+      activeFilePath: filePath,
+      selectedPath: filePath,
+      viewMode: 'diff',
+      diffTargetPath: filePath,
+    });
+    setBanner(null);
+    await refreshEditorSurface();
+  }, [ensureExternalChangeDiffModel, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, t]);
+
+  const updateExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
+    setExternalChangeEntries((currentEntries) => {
+      const nextEntries = [
+        entry,
+        ...currentEntries.filter((candidate) => candidate.filePath !== entry.filePath),
+      ].slice(0, CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES);
+      externalChangeEntriesRef.current = nextEntries;
+      return nextEntries;
+    });
+    setSelectedExternalChangePath((currentPath) => currentPath ?? entry.filePath);
+  }, []);
+
+  const clearExternalChangeEntry = useCallback((filePath: string) => {
+    const nextEntries = externalChangeEntriesRef.current.filter((entry) => entry.filePath !== filePath);
+    externalChangeEntriesRef.current = nextEntries;
+    setExternalChangeEntries(nextEntries);
+    setSelectedExternalChangePath((currentPath) => (
+      currentPath === filePath
+        ? nextEntries[0]?.filePath ?? null
+        : currentPath
+    ));
+    if (pendingExternalChangeDiffRef.current?.filePath === filePath) {
+      setPendingExternalChangeDiff(null);
+      if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff') {
+        persistCodeState({
+          viewMode: 'editor',
+          diffTargetPath: null,
+        });
+      }
+    }
+  }, [persistCodeState, viewMode]);
+
+  const clearAllExternalChanges = useCallback(() => {
+    externalChangeEntriesRef.current = [];
+    setExternalChangeEntries([]);
+    setSelectedExternalChangePath(null);
+    if (pendingExternalChangeDiffRef.current) {
+      setPendingExternalChangeDiff(null);
+      if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff') {
+        persistCodeState({
+          viewMode: 'editor',
+          diffTargetPath: null,
+        });
+      }
+    }
+  }, [persistCodeState, viewMode]);
+
+  const recordExternalChange = useCallback(async (change: CodePaneFsChange) => {
+    if (change.type !== 'add' && change.type !== 'change' && change.type !== 'unlink') {
+      return;
+    }
+
+    const filePath = normalizePath(change.path);
+    if (!isPathInside(rootPath, filePath) || isVirtualDocumentPath(filePath)) {
+      return;
+    }
+
+    const lastSavedAt = fileMetaRef.current.get(filePath)?.lastSavedAt ?? 0;
+    if (Date.now() - lastSavedAt < 1200) {
+      return;
+    }
+
+    const existingModel = fileModelsRef.current.get(filePath);
+    const openedAtChange = Boolean(existingModel);
+    const localHistoryEntry = localHistoryEntriesRef.current.get(filePath)?.[0] ?? null;
+    const previousContent = existingModel?.getValue() ?? localHistoryEntry?.content ?? null;
+    const changedAt = Date.now();
+    const previousLanguage = fileMetaRef.current.get(filePath)?.language
+      ?? existingModel?.getLanguageId()
+      ?? 'plaintext';
+
+    if (change.type === 'unlink') {
+      updateExternalChangeEntry({
+        id: `${filePath}:${changedAt}`,
+        filePath,
+        relativePath: getRelativePath(rootPath, filePath),
+        previousContent,
+        currentContent: null,
+        language: previousLanguage,
+        changeType: 'deleted',
+        changedAt,
+        openedAtChange,
+        canDiff: false,
+      });
+      return;
+    }
+
+    const response = await window.electronAPI.codePaneReadFile({
+      rootPath,
+      filePath,
+    });
+    if (!response.success || !response.data) {
+      return;
+    }
+
+    const currentContent = response.data.content;
+    const changeType: ExternalChangeKind = change.type === 'add' ? 'added' : 'modified';
+    const canDiff = changeType === 'added' || previousContent !== null;
+    const nextEntry: ExternalChangeEntry = {
+      id: `${filePath}:${changedAt}`,
+      filePath,
+      relativePath: getRelativePath(rootPath, filePath),
+      previousContent: changeType === 'added' ? (previousContent ?? '') : previousContent,
+      currentContent,
+      language: response.data.language,
+      changeType,
+      changedAt,
+      openedAtChange,
+      canDiff,
+    };
+
+    const hasUnsavedEditorContent = existingModel && (
+      dirtyPathsRef.current.has(filePath)
+      || autoSaveTimersRef.current.has(filePath)
+      || documentSyncTimersRef.current.has(filePath)
+    );
+
+    if (hasUnsavedEditorContent) {
+      updateExternalChangeEntry({
+        ...nextEntry,
+        previousContent,
+        canDiff,
+      });
+      setBanner({
+        tone: 'warning',
+        message: t('codePane.externalChange'),
+        filePath,
+        showReload: true,
+        showOverwrite: true,
+      });
+      return;
+    }
+
+    updateExternalChangeEntry(nextEntry);
+
+    if (existingModel) {
+      createOrUpdateModel(filePath, response.data);
+      await refreshEditorSurface();
+    }
+  }, [createOrUpdateModel, refreshEditorSurface, rootPath, t, updateExternalChangeEntry]);
 
   const closeFileTab = useCallback(async (filePath: string) => {
     const didFlush = await flushDirtyFiles([filePath]);
@@ -5696,6 +6056,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
     setPendingGitRevisionDiff(null);
+    setPendingExternalChangeDiff(null);
     await openDiffForFile(filePath, { preserveTabs: true });
   }, [openDiffForFile]);
 
@@ -5719,7 +6080,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (options?.refreshGitStatus !== false) {
       await refreshGitSnapshot({ force: true });
     }
-  }, [loadExplorerDirectory, refreshGitSnapshot]);
+  }, [loadExplorerDirectory, refreshGitSnapshot, rootPath]);
 
   const refreshLoadedDirectories = useCallback(async () => {
     invalidateProjectCache(rootPath, 'external-libraries');
@@ -6310,7 +6671,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const closeAllLanguageDocumentsRef = useRef(closeAllLanguageDocuments);
   const refreshDirectoryPathsRef = useRef(refreshDirectoryPaths);
   const pruneRemovedDirectoriesRef = useRef(pruneRemovedDirectories);
-  const reloadFileFromDiskRef = useRef(reloadFileFromDisk);
+  const recordExternalChangeRef = useRef(recordExternalChange);
 
   useEffect(() => {
     ensureMarkerListenerRef.current = ensureMarkerListener;
@@ -6341,8 +6702,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [pruneRemovedDirectories]);
 
   useEffect(() => {
-    reloadFileFromDiskRef.current = reloadFileFromDisk;
-  }, [reloadFileFromDisk]);
+    recordExternalChangeRef.current = recordExternalChange;
+  }, [recordExternalChange]);
 
   const revealPath = useCallback(async (targetPath: string, entryType: CodePaneTreeEntry['type']) => {
     try {
@@ -6590,28 +6951,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
-      const openFilePathSet = new Set((paneRef.current.code?.openFiles ?? []).map((file) => file.path));
       for (const change of payload.changes) {
-        if (!openFilePathSet.has(change.path)) {
-          continue;
-        }
-
-        const lastSavedAt = fileMetaRef.current.get(change.path)?.lastSavedAt ?? 0;
-        if (Date.now() - lastSavedAt < 1200) {
-          continue;
-        }
-
-        if (dirtyPathsRef.current.has(change.path)) {
-          setBanner({
-            tone: 'warning',
-            message: t('codePane.externalChange'),
-            filePath: change.path,
-            showReload: true,
-            showOverwrite: true,
-          });
-        } else {
-          void reloadFileFromDiskRef.current(change.path);
-        }
+        void recordExternalChangeRef.current(change);
       }
 
       pruneRemovedDirectoriesRef.current(payload.changes);
@@ -6721,6 +7062,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setRunSessionOutputs({});
       setSelectedRunSessionId(null);
       setPendingGitRevisionDiff(null);
+      setPendingExternalChangeDiff(null);
+      setExternalChangeEntries([]);
+      setSelectedExternalChangePath(null);
+      externalChangeEntriesRef.current = [];
       recentFilesRef.current = [];
       recentLocationsRef.current = [];
       navigationBackStackRef.current = [];
@@ -6870,6 +7215,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     loadDirectory,
     attachLanguageWorkspace,
     pane.id,
+    recordExternalChange,
     refreshProjectBootstrapCaches,
     resetExternalLibrarySections,
     rootPath,
@@ -6944,14 +7290,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       if (currentViewMode === 'diff') {
         const pendingRevisionRequest = pendingGitRevisionDiff;
-        const didEnsureDiffModel = pendingRevisionRequest && pendingRevisionRequest.filePath === activeFilePath
-          ? await ensureRevisionDiffModel(pendingRevisionRequest, {
-            showBanner: false,
-          })
-          : await ensureDiffModel(activeFilePath, {
-            baseFilePath: currentDiffTargetPath,
-            showBanner: false,
-          });
+        const pendingExternalRequest = pendingExternalChangeDiffRef.current ?? pendingExternalChangeDiff;
+        const pendingExternalEntry = pendingExternalRequest?.filePath === activeFilePath
+          ? externalChangeEntriesRef.current.find((entry) => entry.filePath === activeFilePath) ?? null
+          : null;
+        const didEnsureDiffModel = pendingExternalEntry
+          ? await ensureExternalChangeDiffModel(pendingExternalEntry, {
+              showBanner: false,
+            })
+          : pendingRevisionRequest && pendingRevisionRequest.filePath === activeFilePath
+            ? await ensureRevisionDiffModel(pendingRevisionRequest, {
+                showBanner: false,
+              })
+            : await ensureDiffModel(activeFilePath, {
+                baseFilePath: currentDiffTargetPath,
+                showBanner: false,
+              });
         if (!didEnsureDiffModel) {
           persistCodeState({
             viewMode: 'editor',
@@ -6972,9 +7326,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
     activeFilePath,
     diffTargetPath,
     ensureDiffModel,
+    ensureExternalChangeDiffModel,
     ensureRevisionDiffModel,
     isEditorSplitVisible,
     loadFileIntoModel,
+    pendingExternalChangeDiff,
     pendingGitRevisionDiff,
     persistCodeState,
     refreshEditorSurface,
@@ -7413,7 +7769,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return progressText ? `${languageLabel}: ${progressText}` : `${languageLabel}: starting`;
     }
   }, [languageWorkspaceState]);
-  const languageStatusTone = useMemo(() => {
+    const languageStatusTone = useMemo(() => {
     if (!languageWorkspaceState) {
       return null;
     }
@@ -7437,6 +7793,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       showSpinner: true,
     };
   }, [languageWorkspaceState]);
+  const externalChangesByPath = useMemo(() => (
+    new Map(externalChangeEntries.map((entry) => [entry.filePath, entry]))
+  ), [externalChangeEntries]);
+  const selectedExternalChangeEntry = useMemo(() => (
+    selectedExternalChangePath
+      ? externalChangeEntries.find((entry) => entry.filePath === selectedExternalChangePath) ?? externalChangeEntries[0] ?? null
+      : externalChangeEntries[0] ?? null
+  ), [externalChangeEntries, selectedExternalChangePath]);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
   const hasExternalLibraries = externalLibrarySections.some((section) => section.roots.length > 0);
   const rootLabel = useMemo(() => getPathLeafLabel(rootPath) || rootPath, [rootPath]);
@@ -7893,6 +8257,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
               {t('codePane.openDiff')}
             </ContextMenu.Item>
           )}
+          {entryType === 'file' && externalChangesByPath.has(filePath) && (
+            <ContextMenu.Item
+              className={contextMenuItemClassName}
+              onSelect={() => {
+                void openExternalChangeDiff(filePath);
+              }}
+            >
+              {t('codePane.externalChangeViewDiff')}
+            </ContextMenu.Item>
+          )}
           {options?.allowMutations !== false && (
             <>
               <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
@@ -7960,6 +8334,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitStatusByPath,
     loadGitHistory,
     movePathWithPreview,
+    externalChangesByPath,
+    openExternalChangeDiff,
     openFileInSplit,
     openDiffForFile,
     removeGitPaths,
@@ -7981,7 +8357,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const isExpanded = expandedDirectories.has(resolvedEntry.path);
       const isSelected = selectedPath === resolvedEntry.path;
       const entryStatus = isDirectory ? undefined : getEntryStatus(resolvedEntry.path, resolvedEntry.type);
-      const entryTextClassName = getStatusTextClassName(entryStatus);
+      const externalChangeEntry = isDirectory ? undefined : externalChangesByPath.get(resolvedEntry.path);
+      const entryTextClassName = entryStatus
+        ? getStatusTextClassName(entryStatus)
+        : getExternalChangeTextClassName(externalChangeEntry?.changeType);
       const isLoading = compactPresentation.visibleDirectoryPaths.some((visiblePath) => isDirectoryLoading(visiblePath));
 
       return (
@@ -8024,6 +8403,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 {isLoading && (
                   <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
                 )}
+                {externalChangeEntry && (
+                  <span
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${getExternalChangeDotClassName(externalChangeEntry.changeType)}`}
+                    title={t('codePane.externalChangesTab')}
+                  />
+                )}
               </button>
             </ContextMenu.Trigger>
             {renderFileContextMenu(resolvedEntry.path, resolvedEntry.type, {
@@ -8037,7 +8422,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         </React.Fragment>
       );
     });
-  }, [activateFile, expandedDirectories, getDirectoryEntries, getEntryStatus, isDirectoryLoading, renderFileContextMenu, rootPath, selectExplorerPath, selectedPath, toggleDirectory]);
+  }, [activateFile, expandedDirectories, externalChangesByPath, getDirectoryEntries, getEntryStatus, isDirectoryLoading, renderFileContextMenu, rootPath, selectExplorerPath, selectedPath, t, toggleDirectory]);
 
   const renderedExternalLibrarySections = useMemo(() => {
     if (!hasExternalLibraries && !externalLibrariesError) {
@@ -10227,6 +10612,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     }
 
+    if (externalChangeEntries.length > 0 || bottomPanelMode === 'external-changes') {
+      items.splice(5, 0, {
+        id: 'external-changes',
+        label: t('codePane.externalChangesTab'),
+        icon: <GitCompareArrows size={15} />,
+        active: bottomPanelMode === 'external-changes',
+        onClick: () => {
+          toggleBottomPanelMode('external-changes');
+        },
+      });
+    }
+
     if (refactorPreview || bottomPanelMode === 'preview') {
       items.splice(items.length - 1, 0, {
         id: 'preview',
@@ -10243,6 +10640,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [
     activeFilePath,
     bottomPanelMode,
+    externalChangeEntries.length,
     gitHistory,
     openFileStructurePanel,
     refactorPreview,
@@ -10522,6 +10920,147 @@ export const CodePane: React.FC<CodePaneProps> = ({
               setBottomPanelMode(null);
             }}
           />
+        );
+      case 'external-changes':
+        return (
+          <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+                  {t('codePane.externalChangesTab')}
+                </div>
+                <div className="truncate text-xs text-zinc-500">
+                  {t('codePane.externalChangesSubtitle', { count: externalChangeEntries.length })}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={externalChangeEntries.length === 0}
+                  onClick={clearAllExternalChanges}
+                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {t('codePane.externalChangeClearAll')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBottomPanelMode(null);
+                  }}
+                  className="rounded bg-zinc-800 p-1 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+                  aria-label={t('codePane.bottomPanelClose')}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+            {externalChangeEntries.length > 0 ? (
+              <div className="grid min-h-0 flex-1 md:grid-cols-[360px_minmax(0,1fr)]">
+                <section className="min-h-0 overflow-auto border-r border-zinc-800 px-2 py-2">
+                  <div className="space-y-1">
+                    {externalChangeEntries.map((entry) => {
+                      const isSelected = selectedExternalChangeEntry?.filePath === entry.filePath;
+                      const changeLabel = entry.changeType === 'added'
+                        ? t('codePane.externalChangeAdded')
+                        : entry.changeType === 'deleted'
+                          ? t('codePane.externalChangeDeleted')
+                          : t('codePane.externalChangeModified');
+                      return (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedExternalChangePath(entry.filePath);
+                            if (entry.changeType !== 'deleted') {
+                              void activateFile(entry.filePath, { preview: true });
+                            }
+                          }}
+                          onDoubleClick={() => {
+                            void openExternalChangeDiff(entry.filePath);
+                          }}
+                          className={`flex w-full items-start gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'}`}
+                        >
+                          <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${getExternalChangeDotClassName(entry.changeType)}`} />
+                          <div className="min-w-0 flex-1">
+                            <div className={`truncate font-medium ${getExternalChangeTextClassName(entry.changeType)}`}>
+                              {getPathLeafLabel(entry.filePath) || entry.filePath}
+                            </div>
+                            <div className="mt-1 truncate text-[10px] text-zinc-500">{entry.relativePath}</div>
+                            <div className="mt-1 flex items-center gap-2 text-[10px] text-zinc-500">
+                              <span>{changeLabel}</span>
+                              <span>{formatExternalChangeTime(entry.changedAt)}</span>
+                              {entry.openedAtChange && <span>{t('codePane.externalChangeOpened')}</span>}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+                <section className="flex min-h-0 flex-col px-3 py-3">
+                  {selectedExternalChangeEntry ? (
+                    <>
+                      <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium text-zinc-100">
+                            {getPathLeafLabel(selectedExternalChangeEntry.filePath) || selectedExternalChangeEntry.filePath}
+                          </div>
+                          <div className="mt-1 truncate text-xs text-zinc-500">
+                            {selectedExternalChangeEntry.relativePath}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            disabled={!selectedExternalChangeEntry.canDiff}
+                            onClick={() => {
+                              void openExternalChangeDiff(selectedExternalChangeEntry.filePath);
+                            }}
+                            className="rounded bg-sky-500/15 px-2 py-1 text-[11px] text-sky-200 transition-colors hover:bg-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {t('codePane.externalChangeViewDiff')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              clearExternalChangeEntry(selectedExternalChangeEntry.filePath);
+                            }}
+                            className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+                          >
+                            {t('codePane.externalChangeClear')}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid min-h-0 flex-1 gap-3 overflow-auto py-3 md:grid-cols-2">
+                        <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
+                          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                            {t('codePane.externalChangeBefore')}
+                          </div>
+                          <pre className="max-h-full overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-zinc-400">
+                            {selectedExternalChangeEntry.previousContent ?? t('codePane.externalChangeNoContent')}
+                          </pre>
+                        </div>
+                        <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
+                          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                            {t('codePane.externalChangeAfter')}
+                          </div>
+                          <pre className="max-h-full overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-zinc-300">
+                            {selectedExternalChangeEntry.currentContent ?? t('codePane.externalChangeNoContent')}
+                          </pre>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-xs text-zinc-500">{t('codePane.externalChangesEmpty')}</div>
+                  )}
+                </section>
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs text-zinc-500">
+                {t('codePane.externalChangesEmpty')}
+              </div>
+            )}
+          </div>
         );
       case 'workspace':
         return (
@@ -11014,6 +11553,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               onClick={() => {
                 if (viewMode === 'diff') {
                   setPendingGitRevisionDiff(null);
+                  setPendingExternalChangeDiff(null);
                   persistCodeState({
                     viewMode: 'editor',
                     diffTargetPath: null,
@@ -11792,7 +12332,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
             {orderedOpenFiles.length > 0 ? orderedOpenFiles.map((tab) => {
               const isTabActive = tab.path === activeFilePath;
               const tabStatus = getEntryStatus(tab.path, 'file');
-              const entryTextClassName = getStatusTextClassName(tabStatus);
+              const externalChangeEntry = externalChangesByPath.get(tab.path);
+              const entryTextClassName = tabStatus
+                ? getStatusTextClassName(tabStatus)
+                : getExternalChangeTextClassName(externalChangeEntry?.changeType);
               const isTabPinned = Boolean(tab.pinned);
               const isTabPreview = Boolean(tab.preview);
 
@@ -11821,6 +12364,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
                           <span className="rounded bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-400">
                             {t('codePane.previewTabBadge')}
                           </span>
+                        )}
+                        {externalChangeEntry && (
+                          <span
+                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${getExternalChangeDotClassName(externalChangeEntry.changeType)}`}
+                            title={t('codePane.externalChangesTab')}
+                          />
                         )}
                       </button>
                       <button

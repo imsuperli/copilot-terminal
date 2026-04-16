@@ -5366,13 +5366,169 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
   });
 
+  it('tracks external file changes and opens an external diff', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 2;\n',
+        mtimeMs: 200,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'change',
+          path: '/workspace/project/src/index.ts',
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 2;\n');
+    });
+
+    const externalChangesButton = await screen.findByRole('button', { name: 'codePane.externalChangesTab' });
+    await act(async () => {
+      fireEvent.click(externalChangesButton);
+    });
+
+    await screen.findByText('codePane.externalChangesSubtitle');
+    const viewDiffButton = await screen.findByRole('button', { name: 'codePane.externalChangeViewDiff' });
+    await act(async () => {
+      fireEvent.click(viewDiffButton);
+    });
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastDiffModel?.original.getValue()).toBe('export const value = 0;\n');
+      expect(fakeMonacoState.lastDiffModel?.modified.getValue()).toBe('export const value = 2;\n');
+    });
+  });
+
+  it('records external changes without auto-writing the file when local edits were made in the editor model', async () => {
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    vi.useFakeTimers();
+    await act(async () => {
+      fakeMonacoState.lastEditorModel?.setValue('export const local = 3;\n');
+      await Promise.resolve();
+    });
+    vi.mocked(window.electronAPI.codePaneWriteFile).mockClear();
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const remote = 4;\n',
+        mtimeMs: 200,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'change',
+          path: '/workspace/project/src/index.ts',
+        },
+      ],
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole('button', { name: 'codePane.externalChangesTab' })).toBeInTheDocument();
+    expect(window.electronAPI.codePaneWriteFile).not.toHaveBeenCalled();
+  });
+
+  it('treats unopened file watcher changes as modified entries without fabricating a diff base', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          name: 'index.ts',
+          type: 'file',
+        },
+        {
+          path: '/workspace/project/src/other.ts',
+          name: 'other.ts',
+          type: 'file',
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await screen.findByRole('button', { name: 'other.ts' }, { timeout: 3000 });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const remote = 4;\n',
+        mtimeMs: 200,
+        size: 25,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'change',
+          path: '/workspace/project/src/other.ts',
+        },
+      ],
+    });
+
+    const externalChangesButton = await screen.findByRole('button', { name: 'codePane.externalChangesTab' });
+    await act(async () => {
+      fireEvent.click(externalChangesButton);
+    });
+
+    expect(await screen.findByText('codePane.externalChangeModified')).toBeInTheDocument();
+
+    const viewDiffButton = await screen.findByRole('button', { name: 'codePane.externalChangeViewDiff' });
+    expect(viewDiffButton).toBeDisabled();
+  });
+
   it('removes deleted files from the tree without reloading the whole directory', async () => {
     renderCodePane(createPane());
 
     await screen.findByRole('button', { name: 'index.ts' }, { timeout: 3000 });
 
     vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+    vi.mocked(window.electronAPI.codePaneReadFile).mockClear();
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockClear();
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: false,
+      error: 'not loaded yet',
+    });
 
     await emitFsChanged({
       rootPath: '/workspace/project',
