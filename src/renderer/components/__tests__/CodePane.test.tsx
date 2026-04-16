@@ -1968,6 +1968,37 @@ describe('CodePane', () => {
     expect(view.getPane().code?.expandedPaths).toEqual(['/workspace/project']);
   });
 
+  it('toggles the root file tree entry from the chevron button', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src',
+          name: 'src',
+          type: 'directory',
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByRole('button', { name: 'src' })).toBeInTheDocument();
+
+    const collapseButtons = screen.getAllByRole('button', { name: 'Collapse' });
+    await act(async () => {
+      fireEvent.click(collapseButtons[0]);
+    });
+
+    expect(screen.queryByRole('button', { name: 'src' })).not.toBeInTheDocument();
+
+    const expandButtons = screen.getAllByRole('button', { name: 'Expand' });
+    await act(async () => {
+      fireEvent.click(expandButtons[0]);
+    });
+
+    expect(await screen.findByRole('button', { name: 'src' })).toBeInTheDocument();
+  });
+
   it('runs file context menu actions', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.codePaneGitHistory).mockResolvedValue({

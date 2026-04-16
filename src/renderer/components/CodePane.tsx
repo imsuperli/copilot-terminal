@@ -8488,7 +8488,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 title={compactPresentation.isCompacted ? compactPresentation.displayName : resolvedEntry.name}
               >
                 {isDirectory ? (
-                  isExpanded ? <ChevronDown size={14} className="shrink-0 text-zinc-500" /> : <ChevronRight size={14} className="shrink-0 text-zinc-500" />
+                  <button
+                    type="button"
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
+                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void toggleDirectory(entry.path);
+                    }}
+                  >
+                    {isExpanded ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
+                  </button>
                 ) : (
                   <span className="w-[14px] shrink-0" />
                 )}
@@ -8559,11 +8569,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         }}
                         className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                       >
-                        {isExpanded ? (
-                          <ChevronDown size={14} className="shrink-0 text-zinc-500" />
-                        ) : (
-                          <ChevronRight size={14} className="shrink-0 text-zinc-500" />
-                        )}
+                        <button
+                          type="button"
+                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
+                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void toggleDirectory(root.path);
+                          }}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown size={14} className="shrink-0" />
+                          ) : (
+                            <ChevronRight size={14} className="shrink-0" />
+                          )}
+                        </button>
                         {isExpanded ? (
                           <FolderOpen size={14} className="shrink-0 text-amber-300" />
                         ) : (
@@ -11900,11 +11920,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
                               }}
                               className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                             >
-                              {isRootExpanded ? (
-                                <ChevronDown size={14} className="shrink-0 text-zinc-500" />
-                              ) : (
-                                <ChevronRight size={14} className="shrink-0 text-zinc-500" />
-                              )}
+                              <button
+                                type="button"
+                                className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
+                                aria-label={isRootExpanded ? 'Collapse' : 'Expand'}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void toggleDirectory(rootPath);
+                                }}
+                              >
+                                {isRootExpanded ? (
+                                  <ChevronDown size={14} className="shrink-0" />
+                                ) : (
+                                  <ChevronRight size={14} className="shrink-0" />
+                                )}
+                              </button>
                               {isRootExpanded ? (
                                 <FolderOpen size={14} className="shrink-0 text-amber-300" />
                               ) : (
