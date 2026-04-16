@@ -8876,9 +8876,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         <React.Fragment key={entry.path}>
           <ContextMenu.Root>
             <ContextMenu.Trigger asChild>
-              <div
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
                 onClick={() => {
                   if (isDirectory) {
                     selectExplorerPath(resolvedEntry.path);
@@ -8893,34 +8892,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     void activateFile(resolvedEntry.path, { promotePreview: true });
                   }
                 }}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') {
-                    return;
-                  }
-
-                  event.preventDefault();
-                  if (isDirectory) {
-                    selectExplorerPath(resolvedEntry.path);
-                  } else {
-                    void activateFile(resolvedEntry.path, { preview: true });
-                  }
+                onContextMenu={() => {
+                  selectExplorerPath(resolvedEntry.path);
                 }}
                 className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                 style={{ paddingLeft: `${10 + depth * 14}px` }}
                 title={compactPresentation.isCompacted ? compactPresentation.displayName : resolvedEntry.name}
               >
                 {isDirectory ? (
-                  <button
-                    type="button"
+                  <span
                     className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    role="button"
                     onClick={(event) => {
+                      event.preventDefault();
                       event.stopPropagation();
                       void toggleDirectory(entry.path);
                     }}
                   >
                     {isExpanded ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />}
-                  </button>
+                  </span>
                 ) : (
                   <span className="w-[14px] shrink-0" />
                 )}
@@ -8941,7 +8932,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     title={t('codePane.externalChangesTab')}
                   />
                 )}
-              </div>
+              </button>
             </ContextMenu.Trigger>
             {renderFileContextMenu(resolvedEntry.path, resolvedEntry.type, {
               allowDiff: isPathInside(rootPath, entry.path),
@@ -8980,9 +8971,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 <div key={root.id}>
                   <ContextMenu.Root>
                     <ContextMenu.Trigger asChild>
-                      <div
-                        role="button"
-                        tabIndex={0}
+                      <button
+                        type="button"
                         title={root.path}
                         onClick={() => {
                           selectExplorerPath(root.path);
@@ -8990,21 +8980,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         onDoubleClick={() => {
                           void toggleDirectory(root.path);
                         }}
-                        onKeyDown={(event) => {
-                          if (event.key !== 'Enter' && event.key !== ' ') {
-                            return;
-                          }
-
-                          event.preventDefault();
+                        onContextMenu={() => {
                           selectExplorerPath(root.path);
                         }}
                         className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                       >
-                        <button
-                          type="button"
+                        <span
                           className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
                           aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                          role="button"
                           onClick={(event) => {
+                            event.preventDefault();
                             event.stopPropagation();
                             void toggleDirectory(root.path);
                           }}
@@ -9014,7 +9000,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                           ) : (
                             <ChevronRight size={14} className="shrink-0" />
                           )}
-                        </button>
+                        </span>
                         {isExpanded ? (
                           <FolderOpen size={14} className="shrink-0 text-amber-300" />
                         ) : (
@@ -9024,7 +9010,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         {isDirectoryLoading(root.path) && (
                           <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
                         )}
-                      </div>
+                      </button>
                     </ContextMenu.Trigger>
                     {renderFileContextMenu(root.path, 'directory', {
                       allowDiff: false,
@@ -12715,9 +12701,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       <>
                         <ContextMenu.Root>
                           <ContextMenu.Trigger asChild>
-                            <div
-                              role="button"
-                              tabIndex={0}
+                            <button
+                              type="button"
                               title={rootPath}
                               onClick={() => {
                                 selectExplorerPath(rootPath);
@@ -12725,21 +12710,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
                               onDoubleClick={() => {
                                 void toggleDirectory(rootPath);
                               }}
-                              onKeyDown={(event) => {
-                                if (event.key !== 'Enter' && event.key !== ' ') {
-                                  return;
-                                }
-
-                                event.preventDefault();
+                              onContextMenu={() => {
                                 selectExplorerPath(rootPath);
                               }}
                               className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                             >
-                              <button
-                                type="button"
+                              <span
                                 className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
                                 aria-label={isRootExpanded ? 'Collapse' : 'Expand'}
+                                role="button"
                                 onClick={(event) => {
+                                  event.preventDefault();
                                   event.stopPropagation();
                                   void toggleDirectory(rootPath);
                                 }}
@@ -12749,7 +12730,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                                 ) : (
                                   <ChevronRight size={14} className="shrink-0" />
                                 )}
-                              </button>
+                              </span>
                               {isRootExpanded ? (
                                 <FolderOpen size={14} className="shrink-0 text-amber-300" />
                               ) : (
@@ -12759,7 +12740,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                               {isDirectoryLoading(rootPath) && (
                                 <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
                               )}
-                            </div>
+                            </button>
                           </ContextMenu.Trigger>
                           {renderFileContextMenu(rootPath, 'directory')}
                         </ContextMenu.Root>
