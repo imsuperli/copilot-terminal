@@ -49,7 +49,7 @@ interface GitToolWindowProps {
   onChangeRebaseBaseRef: (baseRef: string) => void;
   onRefresh: () => void | Promise<void>;
   onRefreshRebase: () => void | Promise<void>;
-  onCheckoutBranch: (config: { branchName: string; createBranch: boolean; startPoint?: string }) => void | Promise<void>;
+  onCheckoutBranch: (config: { branchName: string; createBranch: boolean; startPoint?: string; preferExisting?: boolean }) => void | Promise<void>;
   onRenameBranch: (branchName: string, nextBranchName: string) => void | Promise<void>;
   onDeleteBranch: (branchName: string, force?: boolean) => void | Promise<void>;
   onCherryPick: (commitSha: string) => void | Promise<void>;
@@ -708,7 +708,7 @@ function GitWorkbenchDetails({
   selectedCommitOrder: string[];
   isCommitDetailsLoading: boolean;
   commitDetailsError: string | null;
-  onCheckoutBranch: (config: { branchName: string; createBranch: boolean; startPoint?: string }) => void | Promise<void>;
+  onCheckoutBranch: (config: { branchName: string; createBranch: boolean; startPoint?: string; preferExisting?: boolean }) => void | Promise<void>;
   onRenameBranch: (branchName: string, nextBranchName: string) => void | Promise<void>;
   onDeleteBranch: (branchName: string, force?: boolean) => void | Promise<void>;
   onCherryPick: (commitSha: string) => void | Promise<void>;
@@ -773,6 +773,7 @@ function GitWorkbenchDetails({
                     branchName: suggestedBranchName,
                     createBranch: true,
                     startPoint: selectedBranch.name,
+                    preferExisting: true,
                   });
                 }}
                 className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"

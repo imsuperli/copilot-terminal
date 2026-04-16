@@ -6465,18 +6465,92 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ) => {
     const uniqueDirectoryPaths = Array.from(new Set(directoryPaths));
     if (uniqueDirectoryPaths.length > 0) {
-      for (const directoryPath of uniqueDirectoryPaths) {
+      const missingDirectoryPaths = new Set<string>();
+      await Promise.all(uniqueDirectoryPaths.map(async (directoryPath) => {
         invalidateDirectoryCache(rootPath, directoryPath);
+        try {
+          await loadExplorerDirectory(directoryPath, {
+            showLoadingIndicator: options?.showLoadingIndicator,
+          });
+        } catch (error) {
+          const isMissingDirectoryError = error instanceof Error
+            && /ENOENT|outside the code pane root|outside the allowed code pane roots|Target path is not a directory/i.test(error.message);
+          if (!isMissingDirectoryError) {
+            throw error;
+          }
+          missingDirectoryPaths.add(directoryPath);
+        }
+      }));
+
+      if (missingDirectoryPaths.size > 0) {
+        const nextMissingDirectoryPaths = missingDirectoryPaths;
+        startTransition(() => {
+          setLoadedDirectories((currentLoadedDirectories) => {
+            const nextLoadedDirectories = new Set(currentLoadedDirectories);
+            for (const directoryPath of nextMissingDirectoryPaths) {
+              nextLoadedDirectories.delete(directoryPath);
+            }
+            return nextLoadedDirectories;
+          });
+          setLoadedExternalDirectories((currentLoadedDirectories) => {
+            const nextLoadedDirectories = new Set(currentLoadedDirectories);
+            for (const directoryPath of nextMissingDirectoryPaths) {
+              nextLoadedDirectories.delete(directoryPath);
+            }
+            return nextLoadedDirectories;
+          });
+          setLoadingDirectories((currentLoadingDirectories) => {
+            const nextLoadingDirectories = new Set(currentLoadingDirectories);
+            for (const directoryPath of nextMissingDirectoryPaths) {
+              nextLoadingDirectories.delete(directoryPath);
+            }
+            return nextLoadingDirectories;
+          });
+          setLoadingExternalDirectories((currentLoadingDirectories) => {
+            const nextLoadingDirectories = new Set(currentLoadingDirectories);
+            for (const directoryPath of nextMissingDirectoryPaths) {
+              nextLoadingDirectories.delete(directoryPath);
+            }
+            return nextLoadingDirectories;
+          });
+          setExpandedDirectories((currentExpandedDirectories) => {
+            const nextExpandedDirectories = new Set(currentExpandedDirectories);
+            for (const directoryPath of nextMissingDirectoryPaths) {
+              nextExpandedDirectories.delete(directoryPath);
+            }
+            persistCodeState({
+              expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
+            });
+            return nextExpandedDirectories;
+          });
+          setTreeEntriesByDirectory((currentTreeEntries) => {
+            if (Object.keys(currentTreeEntries).length === 0) {
+              return currentTreeEntries;
+            }
+            const nextTreeEntries = { ...currentTreeEntries };
+            for (const directoryPath of nextMissingDirectoryPaths) {
+              delete nextTreeEntries[directoryPath];
+            }
+            return nextTreeEntries;
+          });
+          setExternalEntriesByDirectory((currentTreeEntries) => {
+            if (Object.keys(currentTreeEntries).length === 0) {
+              return currentTreeEntries;
+            }
+            const nextTreeEntries = { ...currentTreeEntries };
+            for (const directoryPath of nextMissingDirectoryPaths) {
+              delete nextTreeEntries[directoryPath];
+            }
+            return nextTreeEntries;
+          });
+        });
       }
-      await Promise.all(uniqueDirectoryPaths.map((directoryPath) => loadExplorerDirectory(directoryPath, {
-        showLoadingIndicator: options?.showLoadingIndicator,
-      })));
     }
 
     if (options?.refreshGitStatus !== false) {
       await refreshGitSnapshot({ force: true });
     }
-  }, [loadExplorerDirectory, refreshGitSnapshot, rootPath]);
+  }, [getPersistedExpandedPaths, loadExplorerDirectory, persistCodeState, refreshGitSnapshot, rootPath]);
 
   const refreshLoadedDirectories = useCallback(async () => {
     invalidateProjectCache(rootPath, 'external-libraries');
@@ -6798,6 +6872,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     createBranch: boolean;
     startPoint?: string;
     detached?: boolean;
+    preferExisting?: boolean;
   }) => {
     const didCheckout = await runGitOperation(
       async () => await window.electronAPI.codePaneGitCheckout({
@@ -6806,9 +6881,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         createBranch: config.createBranch,
         startPoint: config.startPoint,
         detached: config.detached,
+        preferExisting: config.preferExisting,
       }),
       {
-        successMessage: t('codePane.gitCheckoutSuccess'),
         refreshGraph: true,
       },
     );
@@ -8288,7 +8363,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const isRootExpanded = expandedDirectories.has(rootPath);
   const isRootSelected = selectedPath === rootPath;
   const orderedOpenFiles = useMemo(() => sortOpenFilesByPinned(openFiles), [openFiles]);
-  const contextMenuContentClassName = 'z-50 min-w-[180px] rounded border border-zinc-800 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur';
+  const contextMenuContentClassName = 'z-[140] min-w-[180px] rounded border border-zinc-800 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur';
   const contextMenuItemClassName = 'flex items-center gap-2 rounded px-3 py-2 text-xs text-zinc-200 outline-none transition-colors focus:bg-zinc-800 data-[highlighted]:bg-zinc-800';
   const sidebarTabs = useMemo(() => ([
     {
@@ -8892,9 +8967,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     void activateFile(resolvedEntry.path, { promotePreview: true });
                   }
                 }}
-                onContextMenu={() => {
-                  selectExplorerPath(resolvedEntry.path);
-                }}
                 className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                 style={{ paddingLeft: `${10 + depth * 14}px` }}
                 title={compactPresentation.isCompacted ? compactPresentation.displayName : resolvedEntry.name}
@@ -8979,9 +9051,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         }}
                         onDoubleClick={() => {
                           void toggleDirectory(root.path);
-                        }}
-                        onContextMenu={() => {
-                          selectExplorerPath(root.path);
                         }}
                         className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                       >
@@ -12008,6 +12077,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         branchName: getTrackingLocalBranchName(branch.name),
         createBranch: true,
         startPoint: branch.name,
+        preferExisting: true,
       });
       return;
     }
@@ -12709,9 +12779,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                               }}
                               onDoubleClick={() => {
                                 void toggleDirectory(rootPath);
-                              }}
-                              onContextMenu={() => {
-                                selectExplorerPath(rootPath);
                               }}
                               className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                             >

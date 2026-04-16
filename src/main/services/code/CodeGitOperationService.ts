@@ -228,11 +228,19 @@ export class CodeGitOperationService {
       throw new Error('Branch, tag, or revision is required');
     }
 
-    const args = config.detached
+    let args = config.detached
       ? ['-C', repoContext.repoRootPath, 'checkout', '--detach', branchName]
       : config.createBranch
-      ? ['-C', repoContext.repoRootPath, 'switch', '-c', config.branchName, ...(config.startPoint ? [config.startPoint] : [])]
-      : ['-C', repoContext.repoRootPath, 'switch', config.branchName];
+        ? ['-C', repoContext.repoRootPath, 'switch', '-c', branchName, ...(config.startPoint ? [config.startPoint] : [])]
+        : ['-C', repoContext.repoRootPath, 'switch', branchName];
+
+    if (!config.detached && config.createBranch && config.preferExisting) {
+      const localBranchExists = await this.checkLocalBranchExists(repoContext.repoRootPath, branchName);
+      if (localBranchExists) {
+        args = ['-C', repoContext.repoRootPath, 'switch', branchName];
+      }
+    }
+
     await execFileAsync('git', args, { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 });
   }
 
@@ -420,6 +428,19 @@ export class CodeGitOperationService {
       return (stdout as string).trim();
     } catch {
       return '';
+    }
+  }
+
+  private async checkLocalBranchExists(repoRootPath: string, branchName: string): Promise<boolean> {
+    try {
+      await execFileAsync(
+        'git',
+        ['-C', repoRootPath, 'show-ref', '--verify', '--quiet', `refs/heads/${branchName}`],
+        { encoding: 'utf-8' },
+      );
+      return true;
+    } catch {
+      return false;
     }
   }
 }

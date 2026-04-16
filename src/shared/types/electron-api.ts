@@ -488,6 +488,7 @@ export interface CodePaneGitCheckoutConfig {
   createBranch?: boolean;
   startPoint?: string;
   detached?: boolean;
+  preferExisting?: boolean;
 }
 
 export interface CodePaneGitUpdateProjectConfig {
