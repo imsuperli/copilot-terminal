@@ -4563,6 +4563,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       model,
       filePath,
       position,
+      selection: editorInstance.getSelection?.() ?? null,
       language: fileMetaRef.current.get(filePath)?.language ?? model.getLanguageId(),
       readOnly: Boolean(fileMetaRef.current.get(filePath)?.readOnly),
     };
@@ -5276,7 +5277,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const activeFile = request.filePath;
-    const workspaceModel = fileModelsRef.current.get(activeFile);
+    const workspaceModel = fileModelsRef.current.get(activeFile)
+      ?? (!rightCommitSha ? await loadFileIntoModel(activeFile) : null);
+    if (!rightCommitSha && !workspaceModel) {
+      if (options?.showBanner !== false) {
+        setBanner({
+          tone: 'info',
+          message: t('codePane.gitUnavailable'),
+          filePath: activeFile,
+        });
+      }
+      return false;
+    }
     const language = fileMetaRef.current.get(activeFile)?.language
       ?? workspaceModel?.getLanguageId()
       ?? 'plaintext';
@@ -5301,18 +5313,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
           filePath: activeFile,
           commitSha: rightCommitSha,
         })
-        : Promise.resolve({
-          success: true,
-          data: {
-            content: '',
-            exists: false,
-          },
-        }),
+        : Promise.resolve(null),
     ]);
 
-    if (!leftRevisionResponse.success || !rightRevisionResponse.success) {
+    if (!leftRevisionResponse.success || (rightRevisionResponse && !rightRevisionResponse.success)) {
       const leftError = 'error' in leftRevisionResponse ? leftRevisionResponse.error : undefined;
-      const rightError = 'error' in rightRevisionResponse ? rightRevisionResponse.error : undefined;
+      const rightError = rightRevisionResponse && 'error' in rightRevisionResponse ? rightRevisionResponse.error : undefined;
       if (options?.showBanner !== false) {
         setBanner({
           tone: 'info',
@@ -5324,7 +5330,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const leftContent = leftRevisionResponse.data?.content ?? '';
-    const rightContent = rightRevisionResponse.data?.content ?? '';
+    const rightContent = rightCommitSha
+      ? rightRevisionResponse?.data?.content ?? ''
+      : workspaceModel?.getValue() ?? '';
     const modelKey = activeFile;
     const monaco = monacoRef.current;
     if (!monaco) {
@@ -5376,7 +5384,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     clearBannerForFile(activeFile);
     return true;
-  }, [clearBannerForFile, ensureDiffModel, ensureMonacoReady, rootPath, supportsMonaco, t]);
+  }, [clearBannerForFile, ensureDiffModel, ensureMonacoReady, loadFileIntoModel, rootPath, supportsMonaco, t]);
 
   const openDiffForFile = useCallback(async (filePath: string, options?: { preserveTabs?: boolean }) => {
     if (!isPathInside(rootPath, filePath)) {
@@ -5936,11 +5944,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    const selectedLineNumber = context.selection && !context.selection.isEmpty()
+      ? context.selection.startLineNumber
+      : context.position.lineNumber;
+
     await loadGitHistory({
       filePath: context.filePath,
-      lineNumber: context.position.lineNumber,
+      lineNumber: selectedLineNumber,
     });
   }, [getActiveEditorContext, loadGitHistory]);
+
+  const comparePathWithReference = useCallback(async (filePath: string, revisionRef: string) => {
+    const trimmedRevisionRef = revisionRef.trim();
+    if (!trimmedRevisionRef) {
+      return;
+    }
+
+    await openGitRevisionDiff({
+      filePath,
+      leftCommitSha: trimmedRevisionRef,
+      leftLabel: trimmedRevisionRef,
+      rightLabel: t('codePane.modified'),
+    });
+  }, [openGitRevisionDiff, t]);
 
   const comparePathWithRevision = useCallback(async (filePath: string) => {
     const revisionRef = window.prompt(t('codePane.gitCompareWithRevisionPrompt'), '')?.trim();
@@ -5948,13 +5974,43 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    await openGitRevisionDiff({
-      filePath,
-      leftCommitSha: revisionRef,
-      leftLabel: revisionRef,
-      rightLabel: t('codePane.modified'),
+    await comparePathWithReference(filePath, revisionRef);
+  }, [comparePathWithReference, t]);
+
+  const getGitBranchesForAction = useCallback(async () => {
+    if (gitBranches.length > 0) {
+      return gitBranches;
+    }
+
+    const response = await window.electronAPI.codePaneGetGitBranches({ rootPath });
+    if (!response.success || !response.data) {
+      return gitBranches;
+    }
+
+    startTransition(() => {
+      setGitBranches(response.data ?? []);
     });
-  }, [openGitRevisionDiff, t]);
+    return response.data;
+  }, [gitBranches, rootPath]);
+
+  const comparePathWithBranch = useCallback(async (filePath: string) => {
+    const availableBranches = await getGitBranchesForAction();
+    const currentBranchName = gitRepositorySummary?.currentBranch ?? '';
+    const suggestedBranchName = availableBranches.find((branch) => branch.name === currentBranchName)?.upstream
+      ?? availableBranches.find((branch) => branch.kind === 'remote')?.name
+      ?? availableBranches.find((branch) => !branch.current)?.name
+      ?? '';
+    const branchName = window.prompt(t('codePane.gitCompareWithBranchPrompt'), suggestedBranchName)?.trim();
+    if (!branchName) {
+      return;
+    }
+
+    await comparePathWithReference(filePath, branchName);
+  }, [comparePathWithReference, getGitBranchesForAction, gitRepositorySummary?.currentBranch, t]);
+
+  const comparePathWithLatestRepositoryVersion = useCallback(async (filePath: string) => {
+    await comparePathWithReference(filePath, 'HEAD');
+  }, [comparePathWithReference]);
 
   const stashGitChanges = useCallback(async (config: { message: string; includeUntracked: boolean }) => {
     const response = await window.electronAPI.codePaneGitStash({
@@ -7778,11 +7834,31 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   {entryType === 'file' && (
                     <ContextMenu.Item
                       className={contextMenuItemClassName}
-                      onClick={() => {
+                      onSelect={() => {
                         void comparePathWithRevision(filePath);
                       }}
                     >
                       {t('codePane.gitCompareWithRevision')}
+                    </ContextMenu.Item>
+                  )}
+                  {entryType === 'file' && (
+                    <ContextMenu.Item
+                      className={contextMenuItemClassName}
+                      onSelect={() => {
+                        void comparePathWithBranch(filePath);
+                      }}
+                    >
+                      {t('codePane.gitCompareWithBranch')}
+                    </ContextMenu.Item>
+                  )}
+                  {entryType === 'file' && (
+                    <ContextMenu.Item
+                      className={contextMenuItemClassName}
+                      onSelect={() => {
+                        void comparePathWithLatestRepositoryVersion(filePath);
+                      }}
+                    >
+                      {t('codePane.gitCompareWithLatest')}
                     </ContextMenu.Item>
                   )}
                   <ContextMenu.Item
@@ -7876,6 +7952,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     contextMenuContentClassName,
     contextMenuItemClassName,
     commitPathChanges,
+    comparePathWithBranch,
+    comparePathWithLatestRepositoryVersion,
+    comparePathWithRevision,
     copyTextValue,
     copyPath,
     gitStatusByPath,

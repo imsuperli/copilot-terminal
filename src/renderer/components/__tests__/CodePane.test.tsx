@@ -50,7 +50,7 @@ class FakeModel {
   constructor(
     private value: string,
     private language: string,
-    readonly uri: { path: string },
+    readonly uri: { path: string; fsPath?: string; toString?: () => string },
   ) {}
 
   onDidChangeContent(listener: ChangeListener) {
@@ -118,6 +118,13 @@ class FakeModel {
 function createFakeEditor() {
   let model: FakeModel | null = null;
   let position = { lineNumber: 1, column: 1 };
+  let selection = {
+    startLineNumber: 1,
+    startColumn: 1,
+    endLineNumber: 1,
+    endColumn: 1,
+    isEmpty: () => true,
+  };
   const mouseDownListeners = new Set<(event: any) => void>();
   const mouseMoveListeners = new Set<(event: any) => void>();
   const mouseLeaveListeners = new Set<() => void>();
@@ -133,6 +140,7 @@ function createFakeEditor() {
     dispose: vi.fn(),
     focus: vi.fn(),
     getPosition: vi.fn(() => position),
+    getSelection: vi.fn(() => selection),
     onMouseDown: vi.fn((listener: (event: any) => void) => {
       mouseDownListeners.add(listener);
       return {
@@ -163,7 +171,9 @@ function createFakeEditor() {
     setPosition: vi.fn((nextPosition: { lineNumber: number; column: number }) => {
       position = nextPosition;
     }),
-    setSelection: vi.fn(),
+    setSelection: vi.fn((nextSelection: typeof selection) => {
+      selection = nextSelection;
+    }),
     updateOptions: vi.fn(),
     setModel: vi.fn((nextModel: FakeModel | null) => {
       model = nextModel;
@@ -336,15 +346,23 @@ const fakeMonaco = {
     Alt: 512,
   },
   Uri: {
-    file: (path: string) => ({ path }),
-    parse: (value: string) => ({
-      path: decodeURIComponent(value.split('://')[1] ?? value),
+    file: (path: string) => ({
+      path,
+      fsPath: path,
+      toString: () => `file://${path}`,
     }),
+    parse: (value: string) => {
+      const parsedPath = decodeURIComponent(value.split('://')[1] ?? value);
+      return {
+        path: parsedPath,
+        toString: () => value,
+      };
+    },
   },
   editor: {
     create: vi.fn(() => createFakeEditor()),
     createDiffEditor: vi.fn(() => createFakeDiffEditor()),
-    createModel: vi.fn((content: string, language: string, uri: { path: string }) => {
+    createModel: vi.fn((content: string, language: string, uri: { path: string; fsPath?: string; toString?: () => string }) => {
       const model = new FakeModel(content, language, uri);
       fakeMonacoState.models.set(uri.path, model);
       return model;
@@ -2005,6 +2023,8 @@ describe('CodePane', () => {
     await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
     expect(await screen.findByRole('menuitem', { name: 'codePane.gitRevert' })).toBeInTheDocument();
     expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithRevision' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithBranch' })).toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithLatest' })).toBeInTheDocument();
     expect(await screen.findByRole('menuitem', { name: 'codePane.gitCherryPick' })).toBeInTheDocument();
 
     fireEvent.contextMenu(treeButton);
@@ -2176,17 +2196,146 @@ describe('CodePane', () => {
     renderCodePane(createPane());
 
     const srcButton = await screen.findByRole('button', { name: 'src' });
-    fireEvent.doubleClick(srcButton);
+    await act(async () => {
+      fireEvent.doubleClick(srcButton);
+    });
     const mainButton = await screen.findByRole('button', { name: 'main' });
-    fireEvent.doubleClick(mainButton);
+    await act(async () => {
+      fireEvent.doubleClick(mainButton);
+    });
     const javaButton = await screen.findByRole('button', { name: 'java' });
-    fireEvent.doubleClick(javaButton);
+    await act(async () => {
+      fireEvent.doubleClick(javaButton);
+    });
     const packageButton = await screen.findByRole('button', { name: 'com.iflytek.tjpt' });
 
     await user.pointer({ keys: '[MouseRight]', target: packageButton });
     await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyQualifiedName' }));
 
     expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('com.iflytek.tjpt');
+  });
+
+  it('compares files with branches and the latest repository version from context menus', async () => {
+    const user = userEvent.setup();
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('origin/main');
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'main',
+          refName: 'refs/heads/main',
+          shortName: 'main',
+          kind: 'local',
+          current: true,
+          upstream: 'origin/main',
+          aheadCount: 0,
+          behindCount: 0,
+          commitSha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          subject: 'Current branch',
+          timestamp: 1_710_000_000,
+          mergedIntoCurrent: true,
+        },
+        {
+          name: 'origin/main',
+          refName: 'refs/remotes/origin/main',
+          shortName: 'origin/main',
+          kind: 'remote',
+          current: false,
+          aheadCount: 0,
+          behindCount: 0,
+          commitSha: '1234567890abcdef',
+          shortSha: '1234567',
+          subject: 'Remote branch',
+          timestamp: 1_710_000_100,
+          mergedIntoCurrent: true,
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 2;\n',
+        mtimeMs: 100,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneReadGitRevisionFile).mockImplementation(async ({ commitSha }) => ({
+      success: true,
+      data: {
+        content: `// ${commitSha}\nexport const value = 1;\n`,
+        exists: true,
+      },
+    }));
+
+    renderCodePane(createPane());
+
+    const treeButton = await screen.findByRole('button', { name: 'index.ts' });
+    fireEvent.contextMenu(treeButton);
+    await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
+    const compareWithBranchItem = await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithBranch' });
+    await act(async () => {
+      fireEvent.click(compareWithBranchItem);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadGitRevisionFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        commitSha: 'origin/main',
+      });
+    });
+    expect(fakeMonacoState.lastDiffModel?.original.getValue()).toContain('// origin/main');
+    expect(fakeMonacoState.lastDiffModel?.modified.getValue()).toBe('export const value = 2;\n');
+
+    fireEvent.contextMenu(treeButton);
+    await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
+    const compareWithLatestItem = await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithLatest' });
+    await act(async () => {
+      fireEvent.click(compareWithLatestItem);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadGitRevisionFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        commitSha: 'HEAD',
+      });
+    });
+    expect(promptSpy).toHaveBeenCalledWith('codePane.gitCompareWithBranchPrompt', 'origin/main');
+    promptSpy.mockRestore();
+  });
+
+  it('opens git history for the selected editor line when a selection exists', async () => {
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+
+    await act(async () => {
+      activeEditor.setPosition({ lineNumber: 1, column: 15 });
+      activeEditor.setSelection({
+        startLineNumber: 3,
+        startColumn: 1,
+        endLineNumber: 5,
+        endColumn: 1,
+        isEmpty: () => false,
+      });
+    });
+    await triggerEditorAction('codePane.gitShowHistoryForSelection');
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitHistory).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        lineNumber: 3,
+        limit: 30,
+      });
+    });
   });
 
   it('searches project contents and opens a selected match', async () => {
