@@ -986,6 +986,17 @@ function doesBranchMatchQuery(
   ].some((candidate) => candidate.toLowerCase().includes(normalizedQuery));
 }
 
+function isKnownMonacoCancellationError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const maybeError = error as { name?: string; message?: string };
+  return maybeError.name === 'Canceled'
+    || maybeError.message === 'Canceled'
+    || maybeError.message === 'Model not found';
+}
+
 function isPathInside(parentPath: string, candidatePath: string): boolean {
   const normalizedParentPath = normalizePath(parentPath);
   const normalizedCandidatePath = normalizePath(candidatePath);
@@ -3045,6 +3056,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [viewMode]);
 
+  const restoreEditorViewStateSafely = useCallback((
+    editorInstance: MonacoEditor | null | undefined,
+    nextModel: MonacoModel | null | undefined,
+    savedViewState: MonacoViewState | null | undefined,
+  ) => {
+    if (!editorInstance || !nextModel || !savedViewState) {
+      return;
+    }
+
+    if (editorInstance.getModel?.() !== nextModel) {
+      return;
+    }
+
+    try {
+      editorInstance.restoreViewState(savedViewState);
+    } catch (error) {
+      if (!isKnownMonacoCancellationError(error)) {
+        console.warn('[CodePane] restoreViewState failed', error);
+      }
+    }
+  }, []);
+
   const detachDiffEditorModel = useCallback(() => {
     try {
       diffEditorRef.current?.setModel(null);
@@ -3963,13 +3996,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    const { location: nextLocation } = await lookupDefinitionTarget(
-      model,
-      filePath,
-      lineNumber,
-      column,
-      { showErrors: true },
-    );
+    let nextLocation: CodePaneLocation | null = null;
+    try {
+      const result = await lookupDefinitionTarget(
+        model,
+        filePath,
+        lineNumber,
+        column,
+        { showErrors: true },
+      );
+      nextLocation = result.location;
+    } catch (error) {
+      if (!isKnownMonacoCancellationError(error)) {
+        setBanner({
+          tone: 'warning',
+          message: error instanceof Error ? error.message : t('common.retry'),
+          filePath,
+        });
+      }
+      return;
+    }
     if (!nextLocation) {
       return;
     }
@@ -3984,7 +4030,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       displayPath: nextLocation.displayPath,
       documentUri: nextLocation.uri,
     });
-  }, [getModelFilePath, lookupDefinitionTarget]);
+  }, [getModelFilePath, lookupDefinitionTarget, t]);
 
   const attachDefinitionClickNavigation = useCallback((
     editorInstance: MonacoEditor | null,
@@ -4205,7 +4251,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         diffEditorRef.current = monaco.editor.createDiffEditor(hostElement, {
           automaticLayout: true,
           minimap: { enabled: false },
-          links: true,
+          links: false,
           definitionLinkOpensInPeek: false,
           renderSideBySide: true,
           wordWrap: 'off',
@@ -4245,7 +4291,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
       if (savedViewState) {
-        diffEditorRef.current.getModifiedEditor().restoreViewState(savedViewState);
+        restoreEditorViewStateSafely(
+          diffEditorRef.current.getModifiedEditor(),
+          modifiedModel,
+          savedViewState,
+        );
       }
 
       applyPendingNavigation(diffEditorRef.current.getModifiedEditor(), currentActiveFilePath);
@@ -4273,7 +4323,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const nextEditor = monaco.editor.create(host, {
         automaticLayout: true,
         minimap: { enabled: false },
-        links: true,
+        links: false,
         definitionLinkOpensInPeek: false,
         wordWrap: 'off',
         fontSize: 13,
@@ -4355,7 +4405,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
     if (savedViewState) {
-      primaryEditor.restoreViewState(savedViewState);
+      restoreEditorViewStateSafely(primaryEditor, model, savedViewState);
     }
 
     applyPendingNavigation(primaryEditor, currentActiveFilePath);
@@ -4372,7 +4422,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         const savedSecondaryViewState = secondaryViewStatesRef.current.get(currentSecondaryFilePath);
         if (savedSecondaryViewState) {
-          secondaryEditor.restoreViewState(savedSecondaryViewState);
+          restoreEditorViewStateSafely(secondaryEditor, secondaryModel, savedSecondaryViewState);
         }
       }
     } else {
@@ -8843,6 +8893,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     void activateFile(resolvedEntry.path, { promotePreview: true });
                   }
                 }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  if (isDirectory) {
+                    selectExplorerPath(resolvedEntry.path);
+                  } else {
+                    void activateFile(resolvedEntry.path, { preview: true });
+                  }
+                }}
                 className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                 style={{ paddingLeft: `${10 + depth * 14}px` }}
                 title={compactPresentation.isCompacted ? compactPresentation.displayName : resolvedEntry.name}
@@ -8918,14 +8980,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 <div key={root.id}>
                   <ContextMenu.Root>
                     <ContextMenu.Trigger asChild>
-                      <button
-                        type="button"
+                      <div
+                        role="button"
+                        tabIndex={0}
                         title={root.path}
                         onClick={() => {
                           selectExplorerPath(root.path);
                         }}
                         onDoubleClick={() => {
                           void toggleDirectory(root.path);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          selectExplorerPath(root.path);
                         }}
                         className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                       >
@@ -8953,7 +9024,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         {isDirectoryLoading(root.path) && (
                           <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
                         )}
-                      </button>
+                      </div>
                     </ContextMenu.Trigger>
                     {renderFileContextMenu(root.path, 'directory', {
                       allowDiff: false,
@@ -12644,14 +12715,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       <>
                         <ContextMenu.Root>
                           <ContextMenu.Trigger asChild>
-                            <button
-                              type="button"
+                            <div
+                              role="button"
+                              tabIndex={0}
                               title={rootPath}
                               onClick={() => {
                                 selectExplorerPath(rootPath);
                               }}
                               onDoubleClick={() => {
                                 void toggleDirectory(rootPath);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key !== 'Enter' && event.key !== ' ') {
+                                  return;
+                                }
+
+                                event.preventDefault();
+                                selectExplorerPath(rootPath);
                               }}
                               className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isRootSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
                             >
@@ -12679,7 +12759,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                               {isDirectoryLoading(rootPath) && (
                                 <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
                               )}
-                            </button>
+                            </div>
                           </ContextMenu.Trigger>
                           {renderFileContextMenu(rootPath, 'directory')}
                         </ContextMenu.Root>
