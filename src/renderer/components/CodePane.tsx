@@ -8631,7 +8631,63 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     return (
       <ContextMenu.Portal>
-        <ContextMenu.Content className={contextMenuContentClassName}>
+        <ContextMenu.Content
+          className={contextMenuContentClassName}
+          ref={(node) => {
+            if (!node) {
+              return;
+            }
+
+            requestAnimationFrame(() => {
+              const rect = node.getBoundingClientRect();
+              const computedStyle = window.getComputedStyle(node);
+              logCodePaneDebug('context menu content mounted', {
+                path: filePath,
+                entryType,
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+                zIndex: computedStyle.zIndex,
+                display: computedStyle.display,
+                visibility: computedStyle.visibility,
+                opacity: computedStyle.opacity,
+                pointerEvents: computedStyle.pointerEvents,
+              });
+            });
+          }}
+          onPointerDownOutside={(event) => {
+            logCodePaneDebug('context menu pointer down outside', {
+              path: filePath,
+              entryType,
+              defaultPrevented: event.defaultPrevented,
+              targetTagName: event.target instanceof HTMLElement ? event.target.tagName : 'unknown',
+            });
+          }}
+          onFocusOutside={(event) => {
+            logCodePaneDebug('context menu focus outside', {
+              path: filePath,
+              entryType,
+              defaultPrevented: event.defaultPrevented,
+              targetTagName: event.target instanceof HTMLElement ? event.target.tagName : 'unknown',
+            });
+          }}
+          onInteractOutside={(event) => {
+            logCodePaneDebug('context menu interact outside', {
+              path: filePath,
+              entryType,
+              defaultPrevented: event.defaultPrevented,
+              targetTagName: event.target instanceof HTMLElement ? event.target.tagName : 'unknown',
+            });
+          }}
+          onCloseAutoFocus={(event) => {
+            logCodePaneDebug('context menu close auto focus', {
+              path: filePath,
+              entryType,
+              defaultPrevented: event.defaultPrevented,
+            });
+          }}
+        >
           <ContextMenu.Item
             className={contextMenuItemClassName}
             onSelect={() => {
