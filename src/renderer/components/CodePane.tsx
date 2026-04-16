@@ -29,6 +29,7 @@ import {
   GripVertical,
   History,
   Loader2,
+  Lock,
   MoreHorizontal,
   Pin,
   Play,
@@ -151,7 +152,7 @@ import {
   setGitStatusCache,
   setGitSummaryCache,
 } from '../stores/codePaneProjectCache';
-import { getPathLeafLabel } from '../utils/pathDisplay';
+import { getDecodedPathLeafLabel, getPathLeafLabel } from '../utils/pathDisplay';
 
 type MonacoModule = typeof import('monaco-editor');
 type MonacoEditor = import('monaco-editor').editor.IStandaloneCodeEditor;
@@ -7633,9 +7634,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     fileMetaRef.current.get(filePath)?.displayPath ?? filePath
   ), []);
 
-  const getFileLabel = useCallback((filePath: string) => (
-    getPathLeafLabel(getDisplayPath(filePath)) || getDisplayPath(filePath)
-  ), [getDisplayPath]);
+  const getFileLabel = useCallback((filePath: string) => {
+    const fileMeta = fileMetaRef.current.get(filePath);
+    return getDecodedPathLeafLabel(fileMeta?.displayPath ?? fileMeta?.documentUri ?? filePath);
+  }, []);
 
   const visibleLocalHistoryEntries = useMemo(() => {
     const sourceEntries = activeFilePath
@@ -12333,11 +12335,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
               const isTabActive = tab.path === activeFilePath;
               const tabStatus = getEntryStatus(tab.path, 'file');
               const externalChangeEntry = externalChangesByPath.get(tab.path);
+              const tabMeta = fileMetaRef.current.get(tab.path);
+              const isReadOnlyTab = tabMeta?.readOnly === true;
               const entryTextClassName = tabStatus
                 ? getStatusTextClassName(tabStatus)
                 : getExternalChangeTextClassName(externalChangeEntry?.changeType);
               const isTabPinned = Boolean(tab.pinned);
-              const isTabPreview = Boolean(tab.preview);
 
               return (
                 <ContextMenu.Root key={tab.path}>
@@ -12359,12 +12362,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       >
                         <FileIcon size={12} className="shrink-0" />
                         {isTabPinned && <Pin size={10} className="shrink-0 text-zinc-500" />}
-                        <span className={`truncate ${isTabPreview ? 'italic text-zinc-300' : ''} ${entryTextClassName}`}>{getFileLabel(tab.path)}</span>
-                        {isTabPreview && (
-                          <span className="rounded bg-zinc-800 px-1 py-0.5 text-[10px] text-zinc-400">
-                            {t('codePane.previewTabBadge')}
-                          </span>
-                        )}
+                        {isReadOnlyTab && <Lock size={10} className="shrink-0 text-zinc-500" aria-label="read-only" />}
+                        <span className={`truncate ${entryTextClassName}`}>{getFileLabel(tab.path)}</span>
                         {externalChangeEntry && (
                           <span
                             className={`h-1.5 w-1.5 shrink-0 rounded-full ${getExternalChangeDotClassName(externalChangeEntry.changeType)}`}

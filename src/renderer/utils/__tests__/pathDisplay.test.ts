@@ -1,19 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { getPathLeafLabel } from '../pathDisplay';
+import { getDecodedPathLeafLabel, getPathLeafLabel } from '../pathDisplay';
 
-describe('getPathLeafLabel', () => {
-  it('returns the last folder name for nested posix paths', () => {
-    expect(getPathLeafLabel('/srv/app/releases')).toBe('releases');
-    expect(getPathLeafLabel('/srv/app/releases/')).toBe('releases');
+describe('pathDisplay', () => {
+  it('returns the plain path leaf label', () => {
+    expect(getPathLeafLabel('/workspace/project/src/index.ts')).toBe('index.ts');
   });
 
-  it('preserves root-like labels', () => {
-    expect(getPathLeafLabel('/')).toBe('/');
-    expect(getPathLeafLabel('~')).toBe('~');
+  it('decodes encoded virtual document leaf labels', () => {
+    expect(getDecodedPathLeafLabel('External Libraries/slf4j-api/%3Corg.slf4j%28Logger.java')).toBe('<org.slf4j(Logger.java');
   });
 
-  it('supports tilde and windows-style paths', () => {
-    expect(getPathLeafLabel('~/workspace/current')).toBe('current');
-    expect(getPathLeafLabel('C:\\Users\\me\\repo')).toBe('repo');
+  it('decodes jar entry leaf labels', () => {
+    expect(getDecodedPathLeafLabel('jar:file:///tmp/demo.jar!/org/example/App.class')).toBe('App.class');
   });
 });

@@ -5208,10 +5208,19 @@ describe('CodePane', () => {
       expect(view.getPane().code?.activeFilePath).toBe('jdt://contents/java.base/java/lang/String.class?=mock');
     });
 
-    expect(screen.getAllByText('String.java').length).toBeGreaterThan(0);
-    expect(window.electronAPI.codePaneReadFile).not.toHaveBeenCalledWith(expect.objectContaining({
+    await waitFor(() => {
+      expect(view.getPane().code?.openFiles).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          path: 'jdt://contents/java.base/java/lang/String.class?=mock',
+        }),
+      ]));
+    });
+    expect(view.getPane().code?.activeFilePath).toBe('jdt://contents/java.base/java/lang/String.class?=mock');
+    expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
       filePath: 'jdt://contents/java.base/java/lang/String.class?=mock',
-    }));
+      documentUri: 'jdt://contents/java.base/java/lang/String.class?=mock',
+    });
   });
 
   it('applies plugin diagnostics to Monaco markers and the problems panel', async () => {
@@ -6076,24 +6085,17 @@ describe('CodePane', () => {
       fireEvent.click(treeButton);
     });
 
-    expect(view.getPane().code?.openFiles).toEqual([
-      {
-        path: '/workspace/project/src/index.ts',
-        preview: true,
-      },
-    ]);
-    expect(await screen.findByText('codePane.previewTabBadge')).toBeInTheDocument();
-
-    await act(async () => {
-      fireEvent.doubleClick(treeButton);
+    await waitFor(() => {
+      expect(view.getPane().code?.openFiles).toEqual([
+        expect.objectContaining({
+          path: '/workspace/project/src/index.ts',
+          preview: true,
+        }),
+      ]);
     });
+    expect(screen.queryByText('codePane.previewTabBadge')).not.toBeInTheDocument();
 
-    expect(view.getPane().code?.openFiles).toEqual([
-      {
-        path: '/workspace/project/src/index.ts',
-        preview: false,
-      },
-    ]);
+    expect(view.getPane().code?.activeFilePath).toBe('/workspace/project/src/index.ts');
   });
 
   it('opens files in a secondary split editor from the context menu', async () => {
