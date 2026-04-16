@@ -211,6 +211,7 @@ const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
 const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
 const CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES = 60;
 const CODE_PANE_EXTERNAL_CHANGE_PREVIEW_LINE_LIMIT = 80;
+const CODE_PANE_SUPPRESSED_EXTERNAL_CHANGE_TTL_MS = 5000;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
 const CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER = 'save-quality-linter';
@@ -1920,6 +1921,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const documentSyncTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const localHistoryTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const localHistoryEntriesRef = useRef(new Map<string, LocalHistoryEntry[]>());
+  const suppressedExternalChangePathsRef = useRef(new Map<string, number>());
   const suppressModelEventsRef = useRef(new Set<string>());
   const markerListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
@@ -4781,6 +4783,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return true;
   }, [createOrUpdateModel, refreshEditorSurface, rootPath, t]);
 
+  const suppressExternalChangesForPaths = useCallback((paths: string[]) => {
+    const normalizedPaths = paths.map((filePath) => normalizePath(filePath));
+    const suppressionExpiresAt = Date.now() + CODE_PANE_SUPPRESSED_EXTERNAL_CHANGE_TTL_MS;
+    for (const filePath of normalizedPaths) {
+      suppressedExternalChangePathsRef.current.set(filePath, suppressionExpiresAt);
+    }
+    return normalizedPaths;
+  }, []);
+
   const applySaveQualityDiagnostics = useCallback((filePath: string, diagnostics: CodePaneDiagnostic[]) => {
     const monaco = monacoRef.current;
     const model = fileModelsRef.current.get(filePath);
@@ -6475,6 +6486,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    const suppressedUntil = suppressedExternalChangePathsRef.current.get(filePath) ?? 0;
+    if (suppressedUntil > 0) {
+      if (Date.now() <= suppressedUntil) {
+        return;
+      }
+      suppressedExternalChangePathsRef.current.delete(filePath);
+    }
+
     const lastSavedAt = fileMetaRef.current.get(filePath)?.lastSavedAt ?? 0;
     if (Date.now() - lastSavedAt < 1200) {
       return;
@@ -6650,11 +6669,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setIsApplyingRefactorPreview(true);
     setRefactorPreviewError(null);
+    const suppressedPaths = suppressExternalChangesForPaths(refactorPreview.files.flatMap((change) => (
+      change.targetFilePath ? [change.filePath, change.targetFilePath] : [change.filePath]
+    )));
 
     const response = await window.electronAPI.codePaneApplyRefactor({
       previewId: refactorPreview.id,
     });
     if (!response.success || !response.data) {
+      for (const filePath of suppressedPaths) {
+        suppressedExternalChangePathsRef.current.delete(filePath);
+      }
       setRefactorPreviewError(response.error || t('common.retry'));
       setIsApplyingRefactorPreview(false);
       return;
@@ -6707,6 +6732,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     openFiles,
     refactorPreview,
     refreshGitSnapshot,
+    suppressExternalChangesForPaths,
     syncLanguageDocument,
     t,
   ]);
@@ -7038,18 +7064,40 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [rootPath, runGitOperation, t]);
 
   const removeGitPaths = useCallback(async (paths: string[], cached?: boolean) => {
-    await runGitOperation(
+    const normalizedPaths = cached ? [] : suppressExternalChangesForPaths(paths);
+    const didRemove = await runGitOperation(
       async () => await window.electronAPI.codePaneGitRemove({ rootPath, paths, cached }),
       { successMessage: t('codePane.gitRemoveSuccess') },
     );
-  }, [rootPath, runGitOperation, t]);
+    if (didRemove || normalizedPaths.length === 0) {
+      return;
+    }
+
+    for (const filePath of normalizedPaths) {
+      suppressedExternalChangePathsRef.current.delete(filePath);
+    }
+  }, [rootPath, runGitOperation, suppressExternalChangesForPaths, t]);
 
   const discardGitPaths = useCallback(async (paths: string[], restoreStaged?: boolean) => {
-    await runGitOperation(
+    const normalizedPaths = suppressExternalChangesForPaths(paths);
+
+    const didDiscard = await runGitOperation(
       async () => await window.electronAPI.codePaneGitDiscard({ rootPath, paths, restoreStaged }),
       { successMessage: t('codePane.gitDiscardSuccess') },
     );
-  }, [rootPath, runGitOperation, t]);
+    if (!didDiscard) {
+      for (const filePath of normalizedPaths) {
+        suppressedExternalChangePathsRef.current.delete(filePath);
+      }
+      return;
+    }
+
+    await Promise.all(normalizedPaths.map(async (filePath) => {
+      if (fileModelsRef.current.has(filePath)) {
+        await reloadFileFromDisk(filePath);
+      }
+    }));
+  }, [reloadFileFromDisk, rootPath, runGitOperation, suppressExternalChangesForPaths, t]);
 
   const stageGitHunk = useCallback(async (hunk: CodePaneGitDiffHunk) => {
     const didApply = await runGitOperation(
@@ -9085,7 +9133,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
                     disabled={!canGitStage}
-                    onClick={() => {
+                    onSelect={() => {
                       void stageGitPaths([filePath]);
                     }}
                   >
@@ -9094,7 +9142,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
                     disabled={!canGitUnstage}
-                    onClick={() => {
+                    onSelect={() => {
                       void unstageGitPaths([filePath]);
                     }}
                   >
@@ -9103,7 +9151,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
                     disabled={!canGitRevert}
-                    onClick={() => {
+                    onSelect={() => {
                       void discardGitPaths([filePath], Boolean(statusEntry?.staged));
                     }}
                   >
@@ -9112,7 +9160,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
                     disabled={!canGitRemove}
-                    onClick={() => {
+                    onSelect={() => {
                       void removeGitPaths([filePath], statusEntry?.status === 'untracked');
                     }}
                   >
@@ -9121,7 +9169,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
-                    onClick={() => {
+                    onSelect={() => {
                       void commitPathChanges(filePath);
                     }}
                   >
@@ -9129,7 +9177,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   </ContextMenu.Item>
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
-                    onClick={() => {
+                    onSelect={() => {
                       void loadGitHistory({
                         filePath,
                       });
@@ -9169,7 +9217,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   )}
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
-                    onClick={() => {
+                    onSelect={() => {
                       void cherryPickPathCommit();
                     }}
                   >
@@ -9265,6 +9313,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       </ContextMenu.Portal>
     );
   }, [
+    cherryPickPathCommit,
+    discardGitPaths,
     contextMenuContentClassName,
     contextMenuItemClassName,
     commitPathChanges,
@@ -9280,6 +9330,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     openExternalChangeDiff,
     openFileInSplit,
     openDiffForFile,
+    openInspectorHierarchyPanel,
+    openInspectorOutlinePanel,
     removeGitPaths,
     renamePathWithPreview,
     revealPath,

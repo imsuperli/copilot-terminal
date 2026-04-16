@@ -2080,6 +2080,75 @@ describe('CodePane', () => {
     promptSpy.mockRestore();
   });
 
+  it('discards a git change without opening the external changes panel', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitDiscard' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitDiscard).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        paths: ['/workspace/project/src/index.ts'],
+        restoreStaged: false,
+      });
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 0;\n',
+        mtimeMs: 300,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'change',
+          path: '/workspace/project/src/index.ts',
+        },
+        {
+          type: 'change',
+          path: '/workspace/project/src/index.ts',
+        },
+      ],
+    });
+
+    expect(screen.queryByText('codePane.externalChangesSubtitle')).not.toBeInTheDocument();
+  });
+
   it('opens git history from directory context menus', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
@@ -3583,6 +3652,33 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneApplyRefactor).toHaveBeenCalledWith({
       previewId: 'preview-rename-1',
     });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const nextValue = 1;\n',
+        mtimeMs: 300,
+        size: 28,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'change',
+          path: '/workspace/project/src/index.ts',
+        },
+        {
+          type: 'change',
+          path: '/workspace/project/src/index.ts',
+        },
+      ],
+    });
+
+    expect(screen.queryByText('codePane.externalChangesSubtitle')).not.toBeInTheDocument();
     promptSpy.mockRestore();
   });
 
