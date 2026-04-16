@@ -997,6 +997,10 @@ function isKnownMonacoCancellationError(error: unknown): boolean {
     || maybeError.message === 'Model not found';
 }
 
+function logCodePaneDebug(message: string, payload?: Record<string, unknown>): void {
+  console.log('[CodePane]', message, payload ?? {});
+}
+
 function isPathInside(parentPath: string, candidatePath: string): boolean {
   const normalizedParentPath = normalizePath(parentPath);
   const normalizedCandidatePath = normalizePath(candidatePath);
@@ -8949,10 +8953,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       return (
         <React.Fragment key={entry.path}>
-          <ContextMenu.Root>
+          <ContextMenu.Root
+            onOpenChange={(open) => {
+              logCodePaneDebug('tree context menu open change', {
+                open,
+                path: resolvedEntry.path,
+                entryType: resolvedEntry.type,
+              });
+            }}
+          >
             <ContextMenu.Trigger asChild>
               <button
                 type="button"
+                onContextMenu={(event) => {
+                  logCodePaneDebug('tree contextmenu trigger', {
+                    path: resolvedEntry.path,
+                    entryType: resolvedEntry.type,
+                    button: event.button,
+                    defaultPrevented: event.defaultPrevented,
+                  });
+                }}
                 onClick={() => {
                   if (isDirectory) {
                     selectExplorerPath(resolvedEntry.path);
@@ -9041,11 +9061,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
               return (
                 <div key={root.id}>
-                  <ContextMenu.Root>
+                  <ContextMenu.Root
+                    onOpenChange={(open) => {
+                      logCodePaneDebug('external root context menu open change', {
+                        open,
+                        path: root.path,
+                      });
+                    }}
+                  >
                     <ContextMenu.Trigger asChild>
                       <button
                         type="button"
                         title={root.path}
+                        onContextMenu={(event) => {
+                          logCodePaneDebug('external root contextmenu trigger', {
+                            path: root.path,
+                            button: event.button,
+                            defaultPrevented: event.defaultPrevented,
+                          });
+                        }}
                         onClick={() => {
                           selectExplorerPath(root.path);
                         }}
@@ -12315,7 +12349,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       <div
         ref={rootContainerRef}
         className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
-        onMouseDown={onActivate}
+        onMouseDown={(event) => {
+          logCodePaneDebug('root container mouse down', {
+            button: event.button,
+            buttons: event.buttons,
+            targetTagName: event.target instanceof HTMLElement ? event.target.tagName : 'unknown',
+          });
+          if (event.button !== 0) {
+            return;
+          }
+          onActivate();
+        }}
       >
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
         <div className="flex min-w-0 items-center gap-2">
@@ -12769,11 +12813,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <>
                     {sidebarEntries.length > 0 ? (
                       <>
-                        <ContextMenu.Root>
+                        <ContextMenu.Root
+                          onOpenChange={(open) => {
+                            logCodePaneDebug('project root context menu open change', {
+                              open,
+                              path: rootPath,
+                            });
+                          }}
+                        >
                           <ContextMenu.Trigger asChild>
                             <button
                               type="button"
                               title={rootPath}
+                              onContextMenu={(event) => {
+                                logCodePaneDebug('project root contextmenu trigger', {
+                                  path: rootPath,
+                                  button: event.button,
+                                  defaultPrevented: event.defaultPrevented,
+                                });
+                              }}
                               onClick={() => {
                                 selectExplorerPath(rootPath);
                               }}
