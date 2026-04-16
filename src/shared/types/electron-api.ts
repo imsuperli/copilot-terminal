@@ -311,6 +311,23 @@ export interface CodePaneWriteFileResult {
   mtimeMs: number;
 }
 
+export interface CodePaneCreateFileConfig {
+  rootPath: string;
+  filePath: string;
+  content?: string;
+}
+
+export interface CodePaneCreateDirectoryConfig {
+  rootPath: string;
+  directoryPath: string;
+}
+
+export interface CodePaneRenamePathConfig {
+  rootPath: string;
+  sourcePath: string;
+  targetPath: string;
+}
+
 export interface CodePaneGitStatusConfig {
   rootPath: string;
 }
@@ -1679,6 +1696,9 @@ export interface ElectronAPI {
   codePaneListDirectory: (config: CodePaneListDirectoryConfig) => Promise<IpcResponse<CodePaneTreeEntry[]>>;
   codePaneReadFile: (config: CodePaneReadFileConfig) => Promise<IpcResponse<CodePaneReadFileResult>>;
   codePaneWriteFile: (config: CodePaneWriteFileConfig) => Promise<IpcResponse<CodePaneWriteFileResult>>;
+  codePaneCreateFile: (config: CodePaneCreateFileConfig) => Promise<IpcResponse<CodePaneTreeEntry>>;
+  codePaneCreateDirectory: (config: CodePaneCreateDirectoryConfig) => Promise<IpcResponse<CodePaneTreeEntry>>;
+  codePaneRenamePath: (config: CodePaneRenamePathConfig) => Promise<IpcResponse<CodePaneTreeEntry>>;
   codePaneGetExternalLibrarySections: (config: CodePaneGetExternalLibrarySectionsConfig) => Promise<IpcResponse<CodePaneExternalLibrarySection[]>>;
   codePaneGetGitStatus: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitStatusEntry[]>>;
   codePaneGetGitRepositorySummary: (config: CodePaneGitStatusConfig) => Promise<IpcResponse<CodePaneGitRepositorySummary | null>>;

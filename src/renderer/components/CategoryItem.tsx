@@ -5,6 +5,13 @@ import { CustomCategory } from '../../shared/types/custom-category';
 import { CategoryDropZone } from './dnd';
 import { useWindowStore } from '../stores/windowStore';
 import { useI18n } from '../i18n';
+import {
+  ideMenuContentClassName,
+  ideMenuDangerItemClassName,
+  ideMenuItemClassName,
+  IdeMenuItemContent,
+  ideMenuSeparatorClassName,
+} from './ui/ide-menu';
 
 interface CategoryItemProps {
   category: CustomCategory;
@@ -114,38 +121,46 @@ export function CategoryItem({
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content
-                className="min-w-[180px] bg-bg-app border border-border-subtle rounded shadow-lg p-1 z-50"
+                className={ideMenuContentClassName}
                 sideOffset={5}
                 align="end"
               >
                 <DropdownMenu.Item
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary rounded cursor-pointer hover:bg-bg-hover focus:bg-bg-hover outline-none"
+                  className={ideMenuItemClassName}
                   onSelect={() => onEdit(category)}
                 >
-                  <Edit className="h-4 w-4" />
-                  <span>{t('category.rename')}</span>
+                  <IdeMenuItemContent
+                    icon={<Edit className="h-4 w-4" />}
+                    label={t('category.rename')}
+                  />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary rounded cursor-pointer hover:bg-bg-hover focus:bg-bg-hover outline-none"
+                  className={ideMenuItemClassName}
                   onSelect={() => onEdit(category)}
                 >
-                  <Palette className="h-4 w-4" />
-                  <span>{t('category.changeIcon')}</span>
+                  <IdeMenuItemContent
+                    icon={<Palette className="h-4 w-4" />}
+                    label={t('category.changeIcon')}
+                  />
                 </DropdownMenu.Item>
                 <DropdownMenu.Item
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-text-primary rounded cursor-pointer hover:bg-bg-hover focus:bg-bg-hover outline-none"
+                  className={ideMenuItemClassName}
                   onSelect={() => onCreateSubcategory(category.id)}
                 >
-                  <FolderPlus className="h-4 w-4" />
-                  <span>{t('category.createSubcategory')}</span>
+                  <IdeMenuItemContent
+                    icon={<FolderPlus className="h-4 w-4" />}
+                    label={t('category.createSubcategory')}
+                  />
                 </DropdownMenu.Item>
-                <DropdownMenu.Separator className="h-px bg-border-subtle my-1" />
+                <DropdownMenu.Separator className={ideMenuSeparatorClassName} />
                 <DropdownMenu.Item
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-status-error rounded cursor-pointer hover:bg-status-error/10 focus:bg-status-error/10 outline-none"
+                  className={ideMenuDangerItemClassName}
                   onSelect={() => onDelete(category)}
                 >
-                  <Trash2 className="h-4 w-4" />
-                  <span>{t('category.delete')}</span>
+                  <IdeMenuItemContent
+                    icon={<Trash2 className="h-4 w-4" />}
+                    label={t('category.delete')}
+                  />
                 </DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Portal>

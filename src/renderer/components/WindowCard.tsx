@@ -13,6 +13,11 @@ import { ProjectLinks } from './ProjectLinks';
 import { formatRelativeTime, useI18n } from '../i18n';
 import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
+import {
+  ideMenuContentClassName,
+  ideMenuItemClassName,
+  IdeMenuItemContent,
+} from './ui/ide-menu';
 
 interface WindowCardProps {
   window: Window;
@@ -565,7 +570,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content
-                      className="bg-[rgb(var(--card))] rounded-lg shadow-xl border border-[rgb(var(--border))] p-1 z-50 min-w-[120px]"
+                      className={ideMenuContentClassName}
                       side="top"
                       sideOffset={5}
                       onClick={(e) => e.stopPropagation()}
@@ -573,11 +578,13 @@ export const WindowCard = React.memo<WindowCardProps>(({
                       {enabledIDEs.slice(3).map((ide) => (
                         <DropdownMenu.Item
                           key={ide.id}
-                          className="flex items-center gap-2 px-3 py-2 text-sm text-[rgb(var(--foreground))] rounded hover:bg-[rgb(var(--accent))] cursor-pointer outline-none"
+                          className={ideMenuItemClassName}
                           onSelect={() => onOpenInIDE?.(ide.id, window)}
                         >
-                          <IDEIcon icon={ide.icon || ''} size={16} />
-                          <span>{ide.name}</span>
+                          <IdeMenuItemContent
+                            icon={<IDEIcon icon={ide.icon || ''} size={16} />}
+                            label={ide.name}
+                          />
                         </DropdownMenu.Item>
                       ))}
                     </DropdownMenu.Content>

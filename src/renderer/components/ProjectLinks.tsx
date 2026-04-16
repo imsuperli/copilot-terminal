@@ -4,6 +4,11 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ExternalLink, ChevronDown } from 'lucide-react';
 import { ProjectLink } from '../../shared/types/project-config';
 import { AppTooltip } from './ui/AppTooltip';
+import {
+  ideMenuContentClassName,
+  ideMenuItemClassName,
+  IdeMenuItemContent,
+} from './ui/ide-menu';
 
 interface ProjectLinksProps {
   links: ProjectLink[];
@@ -95,14 +100,14 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content
-                className="bg-[rgb(var(--card))] rounded-lg shadow-xl border border-[rgb(var(--border))] p-1 z-50 min-w-[150px]"
+                className={ideMenuContentClassName}
                 sideOffset={5}
                 onClick={(e) => e.stopPropagation()}
               >
                 {hiddenLinks.map((link) => (
                   <DropdownMenu.Item
                     key={link.name}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-[rgb(var(--foreground))] rounded hover:bg-[rgb(var(--accent))] cursor-pointer outline-none"
+                    className={ideMenuItemClassName}
                     onSelect={() => {
                       if (!globalThis.electronAPI?.openExternalUrl) {
                         console.error('openExternalUrl is not available');
@@ -114,8 +119,10 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
                         });
                     }}
                   >
-                    <ExternalLink size={14} />
-                    <span className="truncate">{link.name}</span>
+                    <IdeMenuItemContent
+                      icon={<ExternalLink size={14} />}
+                      label={link.name}
+                    />
                   </DropdownMenu.Item>
                 ))}
               </DropdownMenu.Content>

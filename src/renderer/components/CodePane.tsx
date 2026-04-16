@@ -22,6 +22,7 @@ import {
   FileCode2,
   FlaskConical,
   Folder,
+  FolderPlus,
   FolderOpen,
   FolderTree,
   GitBranch,
@@ -109,6 +110,15 @@ import {
   CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
 } from '../../shared/types/electron-api';
 import { AppTooltip } from './ui/AppTooltip';
+import {
+  ideMenuContentClassName,
+  ideMenuDangerItemClassName,
+  ideMenuItemClassName,
+  IdeMenuItemContent,
+  IdeMenuSubTriggerContent,
+  ideMenuSeparatorClassName,
+  ideMenuSubTriggerClassName,
+} from './ui/ide-menu';
 import { DebugToolWindow } from './code-pane/tool-windows/DebugToolWindow';
 import { ConflictResolutionToolWindow } from './code-pane/tool-windows/ConflictResolutionToolWindow';
 import { GitHistoryToolWindow } from './code-pane/tool-windows/GitHistoryToolWindow';
@@ -391,6 +401,7 @@ type LocalHistoryEntry = {
 type EditorActionMenuItem = {
   id: string;
   label: string;
+  icon?: React.ReactNode;
   disabled?: boolean;
   active?: boolean;
   onSelect: () => void;
@@ -864,6 +875,29 @@ function resolvePathFromRoot(rootPath: string, relativePath: string): string {
   }
 
   return `${normalizedRootPath}/${normalizedRelativePath}`.replace(/\/{2,}/g, '/');
+}
+
+function replacePathPrefix(targetPath: string, sourcePath: string, nextPath: string): string {
+  const normalizedTargetPath = normalizePath(targetPath);
+  const normalizedSourcePath = normalizePath(sourcePath);
+  const normalizedNextPath = normalizePath(nextPath);
+
+  if (normalizedTargetPath === normalizedSourcePath) {
+    return normalizedNextPath;
+  }
+
+  if (!normalizedTargetPath.startsWith(`${normalizedSourcePath}/`)) {
+    return normalizedTargetPath;
+  }
+
+  return `${normalizedNextPath}${normalizedTargetPath.slice(normalizedSourcePath.length)}`;
+}
+
+function isPathEqualOrDescendant(targetPath: string, basePath: string): boolean {
+  const normalizedTargetPath = normalizePath(targetPath);
+  const normalizedBasePath = normalizePath(basePath);
+  return normalizedTargetPath === normalizedBasePath
+    || normalizedTargetPath.startsWith(`${normalizedBasePath}/`);
 }
 
 function splitGitBranchPath(branchName: string): string[] {
@@ -6486,12 +6520,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    const suppressedUntil = suppressedExternalChangePathsRef.current.get(filePath) ?? 0;
+    let matchedSuppressedPath: string | null = null;
+    let suppressedUntil = 0;
+    for (const [suppressedPath, expiresAt] of suppressedExternalChangePathsRef.current.entries()) {
+      if (isPathEqualOrDescendant(filePath, suppressedPath)) {
+        matchedSuppressedPath = suppressedPath;
+        suppressedUntil = expiresAt;
+        break;
+      }
+    }
     if (suppressedUntil > 0) {
       if (Date.now() <= suppressedUntil) {
         return;
       }
-      suppressedExternalChangePathsRef.current.delete(filePath);
+      if (matchedSuppressedPath) {
+        suppressedExternalChangePathsRef.current.delete(matchedSuppressedPath);
+      }
     }
 
     const lastSavedAt = fileMetaRef.current.get(filePath)?.lastSavedAt ?? 0;
@@ -7737,6 +7781,481 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }));
   }, [updateOpenFileTabs]);
 
+  const getMutationParentDirectory = useCallback((
+    targetPath: string,
+    entryType: CodePaneTreeEntry['type'],
+  ) => (
+    entryType === 'directory' ? targetPath : getParentDirectory(targetPath)
+  ), []);
+
+  const buildChildPath = useCallback((
+    targetPath: string,
+    entryType: CodePaneTreeEntry['type'],
+    relativeOrLeafPath: string,
+  ) => {
+    const parentDirectory = getMutationParentDirectory(targetPath, entryType);
+    const normalizedRelativePath = normalizePath(relativeOrLeafPath).replace(/^\/+/, '');
+    if (!normalizedRelativePath) {
+      return parentDirectory;
+    }
+    return `${parentDirectory}/${normalizedRelativePath}`.replace(/\/{2,}/g, '/');
+  }, [getMutationParentDirectory]);
+
+  const updateReferencesForRenamedPath = useCallback((
+    sourcePath: string,
+    targetPath: string,
+  ) => {
+    const normalizeRenamedPath = (candidatePath: string | null | undefined) => {
+      if (!candidatePath || !isPathEqualOrDescendant(candidatePath, sourcePath)) {
+        return candidatePath ?? null;
+      }
+
+      return replacePathPrefix(candidatePath, sourcePath, targetPath);
+    };
+
+    const currentCodeState = paneRef.current.code;
+    const nextOpenFiles = (currentCodeState?.openFiles ?? []).map((tab) => (
+      isPathEqualOrDescendant(tab.path, sourcePath)
+        ? { ...tab, path: replacePathPrefix(tab.path, sourcePath, targetPath) }
+        : tab
+    ));
+
+    persistCodeState({
+      openFiles: nextOpenFiles,
+      activeFilePath: normalizeRenamedPath(currentCodeState?.activeFilePath),
+      selectedPath: normalizeRenamedPath(currentCodeState?.selectedPath),
+      bookmarks: (currentCodeState?.bookmarks ?? []).map((bookmark) => {
+        if (!isPathEqualOrDescendant(bookmark.filePath, sourcePath)) {
+          return bookmark;
+        }
+
+        const nextFilePath = replacePathPrefix(bookmark.filePath, sourcePath, targetPath);
+        return {
+          ...bookmark,
+          filePath: nextFilePath,
+          id: `${nextFilePath}:${bookmark.lineNumber}`,
+        };
+      }),
+      breakpoints: breakpointsRef.current.map((breakpoint) => (
+        isPathEqualOrDescendant(breakpoint.filePath, sourcePath)
+          ? {
+              filePath: replacePathPrefix(breakpoint.filePath, sourcePath, targetPath),
+              lineNumber: breakpoint.lineNumber,
+              ...(breakpoint.condition ? { condition: breakpoint.condition } : {}),
+              ...(breakpoint.logMessage ? { logMessage: breakpoint.logMessage } : {}),
+              ...(breakpoint.enabled === false ? { enabled: false } : {}),
+            }
+          : {
+              filePath: breakpoint.filePath,
+              lineNumber: breakpoint.lineNumber,
+              ...(breakpoint.condition ? { condition: breakpoint.condition } : {}),
+              ...(breakpoint.logMessage ? { logMessage: breakpoint.logMessage } : {}),
+              ...(breakpoint.enabled === false ? { enabled: false } : {}),
+            }
+      )),
+    });
+
+    setRecentFiles((currentRecentFiles) => {
+      const nextRecentFiles = currentRecentFiles.map((candidatePath) => (
+        isPathEqualOrDescendant(candidatePath, sourcePath)
+          ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+          : candidatePath
+      ));
+      recentFilesRef.current = nextRecentFiles;
+      return nextRecentFiles;
+    });
+
+    persistEditorSplitLayout({
+      secondaryFilePath: normalizeRenamedPath(secondaryFilePathRef.current),
+    });
+
+    const nextLocalHistoryEntries = new Map<string, LocalHistoryEntry[]>();
+    for (const [candidatePath, entries] of localHistoryEntriesRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextLocalHistoryEntries.set(nextPath, entries.map((entry) => ({
+        ...entry,
+        filePath: nextPath,
+        id: entry.id,
+      })));
+    }
+    localHistoryEntriesRef.current = nextLocalHistoryEntries;
+
+    const migrateTimerMap = (timerMap: Map<string, ReturnType<typeof setTimeout>>) => {
+      const nextTimerMap = new Map<string, ReturnType<typeof setTimeout>>();
+      for (const [candidatePath, timer] of timerMap.entries()) {
+        const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+          ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+          : candidatePath;
+        nextTimerMap.set(nextPath, timer);
+      }
+      timerMap.clear();
+      for (const [candidatePath, timer] of nextTimerMap.entries()) {
+        timerMap.set(candidatePath, timer);
+      }
+    };
+
+    migrateTimerMap(autoSaveTimersRef.current);
+    migrateTimerMap(documentSyncTimersRef.current);
+    migrateTimerMap(localHistoryTimersRef.current);
+
+    const nextDirtyPaths = new Set<string>();
+    for (const candidatePath of dirtyPathsRef.current) {
+      nextDirtyPaths.add(
+        isPathEqualOrDescendant(candidatePath, sourcePath)
+          ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+          : candidatePath,
+      );
+    }
+    dirtyPathsRef.current = nextDirtyPaths;
+    setDirtyPaths(new Set(nextDirtyPaths));
+
+    const nextSavingPaths = new Set<string>();
+    for (const candidatePath of savingPathsRef.current) {
+      nextSavingPaths.add(
+        isPathEqualOrDescendant(candidatePath, sourcePath)
+          ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+          : candidatePath,
+      );
+    }
+    savingPathsRef.current = nextSavingPaths;
+    setSavingPaths(new Set(nextSavingPaths));
+
+    const nextFileMeta = new Map<string, FileRuntimeMeta>();
+    for (const [candidatePath, meta] of fileMetaRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextFileMeta.set(nextPath, meta);
+    }
+    fileMetaRef.current = nextFileMeta;
+
+    const nextModels = new Map<string, MonacoModel>();
+    for (const [candidatePath, model] of fileModelsRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextModels.set(nextPath, model);
+    }
+    fileModelsRef.current = nextModels;
+
+    const nextModelFilePaths = new Map<string, string>();
+    for (const [modelPath, candidatePath] of modelFilePathRef.current.entries()) {
+      nextModelFilePaths.set(
+        modelPath,
+        isPathEqualOrDescendant(candidatePath, sourcePath)
+          ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+          : candidatePath,
+      );
+    }
+    modelFilePathRef.current = nextModelFilePaths;
+
+    const nextModelDisposers = new Map<string, MonacoDisposable>();
+    for (const [candidatePath, disposable] of modelDisposersRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextModelDisposers.set(nextPath, disposable);
+    }
+    modelDisposersRef.current = nextModelDisposers;
+
+    const nextPreloadedResults = new Map<string, CodePaneReadFileResult>();
+    for (const [candidatePath, result] of preloadedReadResultsRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextPreloadedResults.set(nextPath, result);
+    }
+    preloadedReadResultsRef.current = nextPreloadedResults;
+
+    const nextViewStates = new Map<string, MonacoViewState>();
+    for (const [candidatePath, viewState] of viewStatesRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextViewStates.set(nextPath, viewState);
+    }
+    viewStatesRef.current = nextViewStates;
+
+    const nextSecondaryViewStates = new Map<string, MonacoViewState>();
+    for (const [candidatePath, viewState] of secondaryViewStatesRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextSecondaryViewStates.set(nextPath, viewState);
+    }
+    secondaryViewStatesRef.current = nextSecondaryViewStates;
+
+    const nextSuppressedPaths = new Map<string, number>();
+    for (const [candidatePath, expiresAt] of suppressedExternalChangePathsRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextSuppressedPaths.set(nextPath, expiresAt);
+    }
+    suppressedExternalChangePathsRef.current = nextSuppressedPaths;
+
+    const nextSuppressModelEvents = new Set<string>();
+    for (const candidatePath of suppressModelEventsRef.current) {
+      nextSuppressModelEvents.add(
+        isPathEqualOrDescendant(candidatePath, sourcePath)
+          ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+          : candidatePath,
+      );
+    }
+    suppressModelEventsRef.current = nextSuppressModelEvents;
+
+    const nextExternalChangeEntries = externalChangeEntriesRef.current.map((entry) => (
+      isPathEqualOrDescendant(entry.filePath, sourcePath)
+        ? {
+            ...entry,
+            id: replacePathPrefix(entry.id, sourcePath, targetPath),
+            filePath: replacePathPrefix(entry.filePath, sourcePath, targetPath),
+            relativePath: getRelativePath(rootPath, replacePathPrefix(entry.filePath, sourcePath, targetPath)),
+          }
+        : entry
+    ));
+    externalChangeEntriesRef.current = nextExternalChangeEntries;
+    setExternalChangeEntries(nextExternalChangeEntries);
+
+    setSelectedExternalChangePath((currentPath) => (
+      currentPath && isPathEqualOrDescendant(currentPath, sourcePath)
+        ? replacePathPrefix(currentPath, sourcePath, targetPath)
+        : currentPath
+    ));
+    setPendingExternalChangeDiff((currentRequest) => (
+      currentRequest && isPathEqualOrDescendant(currentRequest.filePath, sourcePath)
+        ? {
+            ...currentRequest,
+            filePath: replacePathPrefix(currentRequest.filePath, sourcePath, targetPath),
+          }
+        : currentRequest
+    ));
+    pendingExternalChangeDiffRef.current = pendingExternalChangeDiffRef.current
+      && isPathEqualOrDescendant(pendingExternalChangeDiffRef.current.filePath, sourcePath)
+      ? {
+          ...pendingExternalChangeDiffRef.current,
+          filePath: replacePathPrefix(pendingExternalChangeDiffRef.current.filePath, sourcePath, targetPath),
+        }
+      : pendingExternalChangeDiffRef.current;
+
+    if (revisionDiffFilePathRef.current && isPathEqualOrDescendant(revisionDiffFilePathRef.current, sourcePath)) {
+      revisionDiffFilePathRef.current = replacePathPrefix(revisionDiffFilePathRef.current, sourcePath, targetPath);
+    }
+    setPendingGitRevisionDiff((currentRequest) => (
+      currentRequest && isPathEqualOrDescendant(currentRequest.filePath, sourcePath)
+        ? {
+            ...currentRequest,
+            filePath: replacePathPrefix(currentRequest.filePath, sourcePath, targetPath),
+          }
+        : currentRequest
+    ));
+    pendingGitRevisionDiffRef.current = pendingGitRevisionDiffRef.current
+      && isPathEqualOrDescendant(pendingGitRevisionDiffRef.current.filePath, sourcePath)
+      ? {
+          ...pendingGitRevisionDiffRef.current,
+          filePath: replacePathPrefix(pendingGitRevisionDiffRef.current.filePath, sourcePath, targetPath),
+        }
+      : pendingGitRevisionDiffRef.current;
+
+    clearDefinitionLookupCache();
+    refreshProblems();
+  }, [clearDefinitionLookupCache, persistCodeState, persistEditorSplitLayout, refreshProblems, rootPath]);
+
+  const createExplorerFile = useCallback(async (
+    targetPath: string,
+    entryType: CodePaneTreeEntry['type'],
+  ) => {
+    const nextInput = window.prompt(t('codePane.newFilePrompt'))?.trim();
+    if (!nextInput) {
+      return;
+    }
+
+    const nextFilePath = buildChildPath(targetPath, entryType, nextInput);
+    const parentDirectoryPath = getParentDirectory(nextFilePath);
+    const suppressedPaths = suppressExternalChangesForPaths([nextFilePath]);
+    const response = await window.electronAPI.codePaneCreateFile({
+      rootPath,
+      filePath: nextFilePath,
+    });
+
+    if (!response.success || !response.data) {
+      for (const filePath of suppressedPaths) {
+        suppressedExternalChangePathsRef.current.delete(filePath);
+      }
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    await revealPathInExplorer(response.data.path);
+    await refreshDirectoryPaths([parentDirectoryPath], {
+      showLoadingIndicator: false,
+    });
+    await activateFile(response.data.path, {
+      recordRecent: true,
+      promotePreview: true,
+    });
+    setBanner({
+      tone: 'info',
+      message: t('codePane.fileCreated', {
+        path: getRelativePath(rootPath, response.data.path) || getPathLeafLabel(response.data.path) || response.data.path,
+      }),
+      filePath: response.data.path,
+    });
+  }, [
+    activateFile,
+    buildChildPath,
+    refreshDirectoryPaths,
+    revealPathInExplorer,
+    rootPath,
+    suppressExternalChangesForPaths,
+    t,
+  ]);
+
+  const createExplorerDirectory = useCallback(async (
+    targetPath: string,
+    entryType: CodePaneTreeEntry['type'],
+  ) => {
+    const nextInput = window.prompt(t('codePane.newFolderPrompt'))?.trim();
+    if (!nextInput) {
+      return;
+    }
+
+    const nextDirectoryPath = buildChildPath(targetPath, entryType, nextInput);
+    const parentDirectoryPath = getParentDirectory(nextDirectoryPath);
+    const suppressedPaths = suppressExternalChangesForPaths([nextDirectoryPath]);
+    const response = await window.electronAPI.codePaneCreateDirectory({
+      rootPath,
+      directoryPath: nextDirectoryPath,
+    });
+
+    if (!response.success || !response.data) {
+      for (const filePath of suppressedPaths) {
+        suppressedExternalChangePathsRef.current.delete(filePath);
+      }
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+      });
+      return;
+    }
+
+    await revealPathInExplorer(response.data.path);
+    await refreshDirectoryPaths([parentDirectoryPath, response.data.path], {
+      showLoadingIndicator: false,
+    });
+    setBanner({
+      tone: 'info',
+      message: t('codePane.folderCreated', {
+        path: getRelativePath(rootPath, response.data.path) || getPathLeafLabel(response.data.path) || response.data.path,
+      }),
+      filePath: response.data.path,
+    });
+  }, [
+    buildChildPath,
+    refreshDirectoryPaths,
+    revealPathInExplorer,
+    rootPath,
+    suppressExternalChangesForPaths,
+    t,
+  ]);
+
+  const renameExplorerPath = useCallback(async (
+    targetPath: string,
+    entryType: CodePaneTreeEntry['type'],
+  ) => {
+    const currentName = getPathLeafLabel(targetPath);
+    const nextName = window.prompt(t('codePane.renamePathPrompt'), currentName)?.trim();
+    if (!nextName || nextName === currentName) {
+      return;
+    }
+
+    const nextPath = replacePathLeaf(targetPath, nextName);
+    const affectedOpenFilePaths = Array.from(fileModelsRef.current.keys()).filter((filePath) => (
+      isPathEqualOrDescendant(filePath, targetPath)
+    ));
+    const affectedDirtyFiles = Array.from(dirtyPathsRef.current).filter((filePath) => (
+      isPathEqualOrDescendant(filePath, targetPath)
+    ));
+    if (affectedDirtyFiles.length > 0) {
+      const didFlush = await flushDirtyFiles(affectedDirtyFiles);
+      if (!didFlush) {
+        setBanner({
+          tone: 'warning',
+          message: t('codePane.renamePathBlockedByUnsaved'),
+          filePath: targetPath,
+        });
+        return;
+      }
+    }
+
+    const directoriesToRefresh = new Set<string>([
+      getParentDirectory(targetPath),
+      getParentDirectory(nextPath),
+    ]);
+    if (entryType === 'directory') {
+      directoriesToRefresh.add(nextPath);
+    }
+    const suppressedPaths = suppressExternalChangesForPaths([targetPath, nextPath]);
+    const response = await window.electronAPI.codePaneRenamePath({
+      rootPath,
+      sourcePath: targetPath,
+      targetPath: nextPath,
+    });
+
+    if (!response.success || !response.data) {
+      for (const filePath of suppressedPaths) {
+        suppressedExternalChangePathsRef.current.delete(filePath);
+      }
+      setBanner({
+        tone: 'error',
+        message: response.error || t('common.retry'),
+        filePath: targetPath,
+      });
+      return;
+    }
+
+    for (const filePath of affectedOpenFilePaths) {
+      await closeLanguageDocument(filePath);
+    }
+    updateReferencesForRenamedPath(targetPath, response.data.path);
+    for (const filePath of affectedOpenFilePaths) {
+      await syncLanguageDocument(replacePathPrefix(filePath, targetPath, response.data.path), 'open');
+    }
+    await revealPathInExplorer(response.data.path);
+    await refreshDirectoryPaths(directoriesToRefresh, {
+      showLoadingIndicator: false,
+    });
+    if (response.data.type === 'file') {
+      await activateFile(response.data.path, {
+        recordRecent: true,
+        promotePreview: true,
+      });
+    }
+    setBanner({
+      tone: 'info',
+      message: t('codePane.pathRenamed', {
+        path: getRelativePath(rootPath, response.data.path) || getPathLeafLabel(response.data.path) || response.data.path,
+      }),
+      filePath: response.data.path,
+    });
+  }, [
+    activateFile,
+    closeLanguageDocument,
+    flushDirtyFiles,
+    refreshDirectoryPaths,
+    revealPathInExplorer,
+    rootPath,
+    suppressExternalChangesForPaths,
+    syncLanguageDocument,
+    t,
+    updateReferencesForRenamedPath,
+  ]);
+
   const openFileInSplit = useCallback(async (filePath: string) => {
     const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
     if (!loadedModel) {
@@ -8767,8 +9286,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const isRootExpanded = expandedDirectories.has(rootPath);
   const isRootSelected = selectedPath === rootPath;
   const orderedOpenFiles = useMemo(() => sortOpenFilesByPinned(openFiles), [openFiles]);
-  const contextMenuContentClassName = 'z-[140] min-w-[180px] rounded border border-zinc-800 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur';
-  const contextMenuItemClassName = 'flex cursor-pointer select-none items-center gap-2 rounded px-3 py-2 text-xs text-zinc-200 outline-none transition-colors focus:bg-zinc-800 data-[highlighted]:bg-zinc-800';
+  const contextMenuContentClassName = ideMenuContentClassName;
+  const contextMenuItemClassName = ideMenuItemClassName;
+  const contextMenuDangerItemClassName = ideMenuDangerItemClassName;
+  const contextMenuSubTriggerClassName = ideMenuSubTriggerClassName;
   const sidebarTabs = useMemo(() => ([
     {
       mode: 'files' as const,
@@ -9040,7 +9561,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
               void revealPath(filePath, entryType);
             }}
           >
-            {t('codePane.revealInFolder')}
+            <IdeMenuItemContent
+              icon={<FolderOpen size={14} />}
+              label={t('codePane.revealInFolder')}
+            />
           </ContextMenu.Item>
           <ContextMenu.Item
             className={contextMenuItemClassName}
@@ -9048,7 +9572,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
               void copyPath(filePath);
             }}
           >
-            {t('codePane.copyPath')}
+            <IdeMenuItemContent
+              icon={<FileIcon size={14} />}
+              label={t('codePane.copyPath')}
+            />
           </ContextMenu.Item>
           <ContextMenu.Item
             className={contextMenuItemClassName}
@@ -9056,7 +9583,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
               void copyRelativePath(filePath);
             }}
           >
-            {t('codePane.copyRelativePath')}
+            <IdeMenuItemContent
+              icon={<FileIcon size={14} />}
+              label={t('codePane.copyRelativePath')}
+            />
           </ContextMenu.Item>
           <ContextMenu.Item
             className={contextMenuItemClassName}
@@ -9064,7 +9594,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
               void copyTextValue(filePath, filePath);
             }}
           >
-            {t('codePane.copyAbsolutePath')}
+            <IdeMenuItemContent
+              icon={<FileIcon size={14} />}
+              label={t('codePane.copyAbsolutePath')}
+            />
           </ContextMenu.Item>
           <ContextMenu.Item
             className={contextMenuItemClassName}
@@ -9072,7 +9605,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
               void copyTextValue(getPathLeafLabel(filePath) || filePath, filePath);
             }}
           >
-            {t('codePane.copyFileName')}
+            <IdeMenuItemContent
+              icon={<FileIcon size={14} />}
+              label={t('codePane.copyFileName')}
+            />
           </ContextMenu.Item>
           {options?.qualifiedName ? (
             <ContextMenu.Item
@@ -9081,7 +9617,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 void copyTextValue(options.qualifiedName ?? '', filePath);
               }}
             >
-              {t('codePane.copyQualifiedName')}
+              <IdeMenuItemContent
+                icon={<Binary size={14} />}
+                label={t('codePane.copyQualifiedName')}
+              />
             </ContextMenu.Item>
           ) : null}
           <ContextMenu.Item
@@ -9092,7 +9631,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
               });
             }}
           >
-            {t('codePane.gitFileHistory')}
+            <IdeMenuItemContent
+              icon={<History size={14} />}
+              label={t('codePane.gitFileHistory')}
+            />
           </ContextMenu.Item>
           {entryType === 'file' && (
             <>
@@ -9102,7 +9644,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   void openInspectorOutlinePanel(filePath);
                 }}
               >
-                {t('codePane.fileStructureTab')}
+                <IdeMenuItemContent
+                  icon={<FileCode2 size={14} />}
+                  label={t('codePane.fileStructureTab')}
+                />
               </ContextMenu.Item>
               <ContextMenu.Item
                 className={contextMenuItemClassName}
@@ -9110,7 +9655,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   void openInspectorHierarchyPanel(filePath, 'type-parents');
                 }}
               >
-                {t('codePane.typeHierarchyAction')}
+                <IdeMenuItemContent
+                  icon={<Workflow size={14} />}
+                  label={t('codePane.typeHierarchyAction')}
+                />
               </ContextMenu.Item>
               <ContextMenu.Item
                 className={contextMenuItemClassName}
@@ -9118,15 +9666,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   void openInspectorHierarchyPanel(filePath, 'call-outgoing');
                 }}
               >
-                {t('codePane.callHierarchyAction')}
+                <IdeMenuItemContent
+                  icon={<Workflow size={14} />}
+                  label={t('codePane.callHierarchyAction')}
+                />
               </ContextMenu.Item>
             </>
           )}
           {options?.allowGitActions !== false && (
             <ContextMenu.Sub>
-              <ContextMenu.SubTrigger className={`${contextMenuItemClassName} justify-between`}>
-                {t('codePane.gitMenu')}
-                <ChevronRight size={13} className="text-zinc-500" />
+              <ContextMenu.SubTrigger className={contextMenuSubTriggerClassName}>
+                <IdeMenuSubTriggerContent
+                  icon={<GitBranch size={14} />}
+                  label={t('codePane.gitMenu')}
+                />
               </ContextMenu.SubTrigger>
               <ContextMenu.Portal>
                 <ContextMenu.SubContent className={contextMenuContentClassName}>
@@ -9137,7 +9690,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       void stageGitPaths([filePath]);
                     }}
                   >
-                    {statusEntry?.status === 'untracked' ? t('codePane.gitAdd') : t('codePane.gitStage')}
+                    <IdeMenuItemContent
+                      icon={<Plus size={14} />}
+                      label={statusEntry?.status === 'untracked' ? t('codePane.gitAdd') : t('codePane.gitStage')}
+                    />
                   </ContextMenu.Item>
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
@@ -9146,34 +9702,46 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       void unstageGitPaths([filePath]);
                     }}
                   >
-                    {t('codePane.gitUnstage')}
+                    <IdeMenuItemContent
+                      icon={<X size={14} />}
+                      label={t('codePane.gitUnstage')}
+                    />
                   </ContextMenu.Item>
                   <ContextMenu.Item
-                    className={contextMenuItemClassName}
+                    className={contextMenuDangerItemClassName}
                     disabled={!canGitRevert}
                     onSelect={() => {
                       void discardGitPaths([filePath], Boolean(statusEntry?.staged));
                     }}
                   >
-                    {t('codePane.gitRevert')}
+                    <IdeMenuItemContent
+                      icon={<RefreshCw size={14} />}
+                      label={t('codePane.gitRevert')}
+                    />
                   </ContextMenu.Item>
                   <ContextMenu.Item
-                    className={contextMenuItemClassName}
+                    className={contextMenuDangerItemClassName}
                     disabled={!canGitRemove}
                     onSelect={() => {
                       void removeGitPaths([filePath], statusEntry?.status === 'untracked');
                     }}
                   >
-                    {t('codePane.gitRemove')}
+                    <IdeMenuItemContent
+                      icon={<X size={14} />}
+                      label={t('codePane.gitRemove')}
+                    />
                   </ContextMenu.Item>
-                  <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+                  <ContextMenu.Separator className={ideMenuSeparatorClassName} />
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
                     onSelect={() => {
                       void commitPathChanges(filePath);
                     }}
                   >
-                    {t('codePane.gitCommit')}
+                    <IdeMenuItemContent
+                      icon={<GitCommitHorizontal size={14} />}
+                      label={t('codePane.gitCommit')}
+                    />
                   </ContextMenu.Item>
                   <ContextMenu.Item
                     className={contextMenuItemClassName}
@@ -9183,7 +9751,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       });
                     }}
                   >
-                    {t('codePane.gitFileHistory')}
+                    <IdeMenuItemContent
+                      icon={<History size={14} />}
+                      label={t('codePane.gitFileHistory')}
+                    />
                   </ContextMenu.Item>
                   {entryType === 'file' && (
                     <ContextMenu.Item
@@ -9192,7 +9763,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         void comparePathWithRevision(filePath);
                       }}
                     >
-                      {t('codePane.gitCompareWithRevision')}
+                      <IdeMenuItemContent
+                        icon={<GitCompareArrows size={14} />}
+                        label={t('codePane.gitCompareWithRevision')}
+                      />
                     </ContextMenu.Item>
                   )}
                   {entryType === 'file' && (
@@ -9202,7 +9776,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         void comparePathWithBranch(filePath);
                       }}
                     >
-                      {t('codePane.gitCompareWithBranch')}
+                      <IdeMenuItemContent
+                        icon={<GitCompareArrows size={14} />}
+                        label={t('codePane.gitCompareWithBranch')}
+                      />
                     </ContextMenu.Item>
                   )}
                   {entryType === 'file' && (
@@ -9212,7 +9789,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         void comparePathWithLatestRepositoryVersion(filePath);
                       }}
                     >
-                      {t('codePane.gitCompareWithLatest')}
+                      <IdeMenuItemContent
+                        icon={<GitCompareArrows size={14} />}
+                        label={t('codePane.gitCompareWithLatest')}
+                      />
                     </ContextMenu.Item>
                   )}
                   <ContextMenu.Item
@@ -9221,7 +9801,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       void cherryPickPathCommit();
                     }}
                   >
-                    {t('codePane.gitCherryPick')}
+                    <IdeMenuItemContent
+                      icon={<GitCommitHorizontal size={14} />}
+                      label={t('codePane.gitCherryPick')}
+                    />
                   </ContextMenu.Item>
                 </ContextMenu.SubContent>
               </ContextMenu.Portal>
@@ -9234,7 +9817,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 void openFileInSplit(filePath);
               }}
             >
-              {t('codePane.openInSplit')}
+              <IdeMenuItemContent
+                icon={<FolderTree size={14} />}
+                label={t('codePane.openInSplit')}
+              />
             </ContextMenu.Item>
           )}
           {entryType === 'file' && options?.allowDiff !== false && (
@@ -9244,7 +9830,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 void openDiffForFile(filePath);
               }}
             >
-              {t('codePane.openDiff')}
+              <IdeMenuItemContent
+                icon={<GitCompareArrows size={14} />}
+                label={t('codePane.openDiff')}
+              />
             </ContextMenu.Item>
           )}
           {entryType === 'file' && externalChangesByPath.has(filePath) && (
@@ -9254,42 +9843,78 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 void openExternalChangeDiff(filePath);
               }}
             >
-              {t('codePane.externalChangeViewDiff')}
+              <IdeMenuItemContent
+                icon={<GitCompareArrows size={14} />}
+                label={t('codePane.externalChangeViewDiff')}
+              />
             </ContextMenu.Item>
           )}
           {options?.allowMutations !== false && (
             <>
-              <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+              <ContextMenu.Separator className={ideMenuSeparatorClassName} />
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void createExplorerFile(filePath, entryType);
+                }}
+              >
+                <IdeMenuItemContent
+                  icon={<Plus size={14} />}
+                  label={t('codePane.newFile')}
+                />
+              </ContextMenu.Item>
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void createExplorerDirectory(filePath, entryType);
+                }}
+              >
+                <IdeMenuItemContent
+                  icon={<FolderPlus size={14} />}
+                  label={t('codePane.newFolder')}
+                />
+              </ContextMenu.Item>
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void renameExplorerPath(filePath, entryType);
+                }}
+              >
+                <IdeMenuItemContent
+                  icon={<FileIcon size={14} />}
+                  label={t('codePane.renamePath')}
+                />
+              </ContextMenu.Item>
               <ContextMenu.Sub>
-                <ContextMenu.SubTrigger className={`${contextMenuItemClassName} justify-between`}>
-                  {t('codePane.refactorMenu')}
-                  <ChevronRight size={13} className="text-zinc-500" />
+                <ContextMenu.SubTrigger className={contextMenuSubTriggerClassName}>
+                  <IdeMenuSubTriggerContent
+                    icon={<Workflow size={14} />}
+                    label={t('codePane.refactorMenu')}
+                  />
                 </ContextMenu.SubTrigger>
                 <ContextMenu.Portal>
                   <ContextMenu.SubContent className={contextMenuContentClassName}>
                     <ContextMenu.Item
                       className={contextMenuItemClassName}
                       onSelect={() => {
-                        void renamePathWithPreview(filePath);
-                      }}
-                    >
-                      {t('codePane.renamePath')}
-                    </ContextMenu.Item>
-                    <ContextMenu.Item
-                      className={contextMenuItemClassName}
-                      onSelect={() => {
                         void movePathWithPreview(filePath);
                       }}
                     >
-                      {t('codePane.movePath')}
+                      <IdeMenuItemContent
+                        icon={<FolderTree size={14} />}
+                        label={t('codePane.movePath')}
+                      />
                     </ContextMenu.Item>
                     <ContextMenu.Item
-                      className={contextMenuItemClassName}
+                      className={contextMenuDangerItemClassName}
                       onSelect={() => {
                         void safeDeletePathWithPreview(filePath);
                       }}
                     >
-                      {t('codePane.deletePath')}
+                      <IdeMenuItemContent
+                        icon={<X size={14} />}
+                        label={t('codePane.deletePath')}
+                      />
                     </ContextMenu.Item>
                   </ContextMenu.SubContent>
                 </ContextMenu.Portal>
@@ -9298,14 +9923,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
           )}
           {entryType === 'file' && options?.showPinToggle && (
             <>
-              <ContextMenu.Separator className="my-1 h-px bg-zinc-800" />
+              <ContextMenu.Separator className={ideMenuSeparatorClassName} />
               <ContextMenu.Item
                 className={contextMenuItemClassName}
                 onSelect={() => {
                   togglePinnedTab(filePath);
                 }}
               >
-                {options.pinned ? t('codePane.unpinTab') : t('codePane.pinTab')}
+                <IdeMenuItemContent
+                  icon={<Pin size={14} />}
+                  label={options.pinned ? t('codePane.unpinTab') : t('codePane.pinTab')}
+                />
               </ContextMenu.Item>
             </>
           )}
@@ -9323,6 +9951,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     comparePathWithRevision,
     copyTextValue,
     copyPath,
+    createExplorerDirectory,
+    createExplorerFile,
     gitStatusByPath,
     loadGitHistory,
     movePathWithPreview,
@@ -9333,7 +9963,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     openInspectorHierarchyPanel,
     openInspectorOutlinePanel,
     removeGitPaths,
-    renamePathWithPreview,
+    renameExplorerPath,
     revealPath,
     safeDeletePathWithPreview,
     stageGitPaths,
@@ -12193,6 +12823,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'find-usages',
         label: t('codePane.findUsages'),
+        icon: <Search size={14} />,
         disabled: !activeFilePath,
         onSelect: () => {
           void findUsagesAtCursor();
@@ -12201,6 +12832,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'rename-symbol',
         label: t('codePane.renameSymbol'),
+        icon: <FileIcon size={14} />,
         disabled: !activeFilePath || activeFileReadOnly,
         onSelect: () => {
           void renameSymbolAtCursor();
@@ -12209,6 +12841,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'go-to-implementation',
         label: t('codePane.goToImplementation'),
+        icon: <Binary size={14} />,
         disabled: !activeFilePath,
         onSelect: () => {
           void goToImplementationAtCursor();
@@ -12217,6 +12850,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'file-structure',
         label: t('codePane.fileStructureAction'),
+        icon: <FileCode2 size={14} />,
         disabled: !activeFilePath,
         onSelect: () => {
           openFileStructurePanel();
@@ -12225,6 +12859,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'type-hierarchy',
         label: t('codePane.typeHierarchyAction'),
+        icon: <Workflow size={14} />,
         disabled: !activeFilePath,
         onSelect: () => {
           openHierarchyPanel('type-parents');
@@ -12233,6 +12868,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'call-hierarchy',
         label: t('codePane.callHierarchyAction'),
+        icon: <Workflow size={14} />,
         disabled: !activeFilePath,
         onSelect: () => {
           openHierarchyPanel('call-outgoing');
@@ -12241,6 +12877,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'code-actions',
         label: t('codePane.codeActions'),
+        icon: <Settings size={14} />,
         disabled: !activeFilePath,
         onSelect: () => {
           void openCodeActionMenu();
@@ -12249,6 +12886,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'format-document',
         label: t('codePane.formatDocument'),
+        icon: <Check size={14} />,
         disabled: !activeFilePath || activeFileReadOnly,
         onSelect: () => {
           void formatActiveDocument();
@@ -12259,6 +12897,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'quick-documentation',
         label: t('codePane.quickDocumentation'),
+        icon: <History size={14} />,
         disabled: !activeFilePath,
         active: isQuickDocumentationOpen,
         onSelect: () => {
@@ -12268,6 +12907,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'toggle-inlay-hints',
         label: t('codePane.inlayHints'),
+        icon: <Binary size={14} />,
         disabled: !activeFilePath,
         active: areInlayHintsEnabled,
         onSelect: () => {
@@ -12277,6 +12917,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'toggle-split-editor',
         label: t('codePane.editorSplitToggle'),
+        icon: <FolderTree size={14} />,
         disabled: !activeFilePath,
         active: isEditorSplitVisible,
         onSelect: () => {
@@ -12288,6 +12929,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'toggle-bookmark',
         label: t('codePane.bookmarkToggle'),
+        icon: <Star size={14} />,
         disabled: !activeFilePath,
         active: isCurrentLineBookmarked,
         onSelect: () => {
@@ -12297,6 +12939,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'toggle-git-blame',
         label: t('codePane.gitBlame'),
+        icon: <GitBranch size={14} />,
         disabled: !activeFilePath,
         active: isBlameVisible,
         onSelect: () => {
@@ -12306,6 +12949,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       {
         id: 'git-history-selection',
         label: t('codePane.gitShowHistoryForSelection'),
+        icon: <History size={14} />,
         disabled: !activeFilePath,
         onSelect: () => {
           void showHistoryForCurrentSelection();
@@ -12629,7 +13273,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 disabled={branch.current}
                 className={`${contextMenuItemClassName} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
               >
-                {isRemote ? t('codePane.gitCreateTrackingBranch') : t('codePane.gitCheckout')}
+                <IdeMenuItemContent
+                  icon={<GitBranch size={14} />}
+                  label={isRemote ? t('codePane.gitCreateTrackingBranch') : t('codePane.gitCheckout')}
+                />
               </DropdownMenu.Item>
               {branch.kind === 'local' && (
                 <>
@@ -12639,27 +13286,36 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     }}
                     className={contextMenuItemClassName}
                   >
-                    {t('codePane.gitRenameBranch')}
+                    <IdeMenuItemContent
+                      icon={<FileIcon size={14} />}
+                      label={t('codePane.gitRenameBranch')}
+                    />
                   </DropdownMenu.Item>
                   <DropdownMenu.Item
                     onSelect={() => {
                       deleteBranchFromManager(branch);
                     }}
                     disabled={branch.current}
-                    className={`${contextMenuItemClassName} text-red-200 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
+                    className={`${contextMenuDangerItemClassName} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
                   >
-                    {t('codePane.gitDeleteBranch')}
+                    <IdeMenuItemContent
+                      icon={<X size={14} />}
+                      label={t('codePane.gitDeleteBranch')}
+                    />
                   </DropdownMenu.Item>
                 </>
               )}
-              <DropdownMenu.Separator className="my-1 h-px bg-zinc-800" />
+              <DropdownMenu.Separator className={ideMenuSeparatorClassName} />
               <DropdownMenu.Item
                 onSelect={() => {
                   void window.electronAPI.writeClipboardText(branch.name);
                 }}
                 className={contextMenuItemClassName}
               >
-                {t('codePane.gitCopyBranchName')}
+                <IdeMenuItemContent
+                  icon={<FileIcon size={14} />}
+                  label={t('codePane.gitCopyBranchName')}
+                />
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -13001,12 +13657,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
                         onSelect={item.onSelect}
                         className={`${contextMenuItemClassName} justify-between ${item.active ? 'bg-zinc-800/80 text-zinc-50' : ''} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
                       >
-                        <span>{item.label}</span>
-                        {item.active && <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />}
+                        <IdeMenuItemContent
+                          icon={item.icon}
+                          label={item.label}
+                          trailing={item.active ? <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> : null}
+                        />
                       </DropdownMenu.Item>
                     ))}
                     {sectionIndex < editorActionMenuSections.length - 1 && (
-                      <DropdownMenu.Separator className="my-1 h-px bg-zinc-800" />
+                      <DropdownMenu.Separator className={ideMenuSeparatorClassName} />
                     )}
                   </React.Fragment>
                 ))}
@@ -13832,7 +14491,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   />
                 )}
                 {inspectorPanelMode === 'outline' && inspectorPanelFilePath && (
-                    <div className="absolute right-3 top-3 z-20 w-[420px] max-w-[calc(100%-24px)] overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/95 shadow-2xl backdrop-blur">
+                    <div className="absolute right-3 top-3 z-20 w-[460px] max-w-[calc(100%-24px)]">
                       <OutlineToolWindow
                         fileLabel={getFileLabel(inspectorPanelFilePath)}
                         symbols={documentSymbolsFilePath === inspectorPanelFilePath ? documentSymbols : []}
@@ -13849,14 +14508,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
                             column: range.startColumn,
                           });
                         }}
-                        panelClassName="flex max-h-[70vh] min-h-0 flex-col bg-transparent"
-                        bodyClassName="min-h-0 flex-1 overflow-auto px-3 py-3"
+                        panelClassName="flex max-h-[72vh] min-h-0 flex-col"
                         closeOnDoubleClick
                       />
                     </div>
                 )}
                 {inspectorPanelMode === 'hierarchy' && inspectorPanelFilePath && (
-                    <div className="absolute right-3 top-3 z-20 w-[460px] max-w-[calc(100%-24px)] overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/95 shadow-2xl backdrop-blur">
+                    <div className="absolute right-3 top-3 z-20 w-[480px] max-w-[calc(100%-24px)]">
                       <HierarchyToolWindow
                         mode={selectedHierarchyMode}
                         root={hierarchyRootNode}
@@ -13880,8 +14538,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                             column: item.selectionRange.startColumn,
                           });
                         }}
-                        panelClassName="flex max-h-[70vh] min-h-0 flex-col bg-transparent"
-                        bodyClassName="min-h-0 flex-1 overflow-auto px-3 py-3"
+                        panelClassName="flex max-h-[72vh] min-h-0 flex-col"
                         closeOnDoubleClick
                       />
                     </div>

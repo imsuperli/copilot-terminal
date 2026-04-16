@@ -4,6 +4,8 @@ import { HandlerContext } from './HandlerContext';
 import { successResponse, errorResponse } from './HandlerResponse';
 import type {
   CodePaneApplyRefactorConfig,
+  CodePaneCreateDirectoryConfig,
+  CodePaneCreateFileConfig,
   CodePaneDebugControlConfig,
   CodePaneDebugEvaluateConfig,
   CodePaneDebugStartConfig,
@@ -45,6 +47,7 @@ import type {
   CodePaneReadFileConfig,
   CodePaneReadGitBaseFileConfig,
   CodePaneReadGitRevisionFileConfig,
+  CodePaneRenamePathConfig,
   CodePaneRerunFailedTestsConfig,
   CodePaneRunProjectCommandConfig,
   CodePaneRunTargetConfig,
@@ -155,6 +158,42 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await codeFileService.writeFile(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-create-file', async (_event, config: CodePaneCreateFileConfig) => {
+    try {
+      if (!codeFileService) {
+        throw new Error('CodeFileService not initialized');
+      }
+
+      return successResponse(await codeFileService.createFile(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-create-directory', async (_event, config: CodePaneCreateDirectoryConfig) => {
+    try {
+      if (!codeFileService) {
+        throw new Error('CodeFileService not initialized');
+      }
+
+      return successResponse(await codeFileService.createDirectory(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-rename-path', async (_event, config: CodePaneRenamePathConfig) => {
+    try {
+      if (!codeFileService) {
+        throw new Error('CodeFileService not initialized');
+      }
+
+      return successResponse(await codeFileService.renamePath(config));
     } catch (error) {
       return errorResponse(error);
     }

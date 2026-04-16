@@ -1,15 +1,22 @@
-import React from 'react'
-import * as ContextMenu from '@radix-ui/react-context-menu'
-import { useI18n } from '../i18n'
+import React from 'react';
+import * as ContextMenu from '@radix-ui/react-context-menu';
+import { Trash2, X } from 'lucide-react';
+import { useI18n } from '../i18n';
+import {
+  ideMenuContentClassName,
+  ideMenuDangerItemClassName,
+  ideMenuItemClassName,
+  IdeMenuItemContent,
+} from './ui/ide-menu';
 
 interface WindowContextMenuProps {
-  children: React.ReactNode
-  onClose: () => void
-  onDelete: () => void
+  children: React.ReactNode;
+  onClose: () => void;
+  onDelete: () => void;
 }
 
 export function WindowContextMenu({ children, onClose, onDelete }: WindowContextMenuProps) {
-  const { t } = useI18n()
+  const { t } = useI18n();
 
   return (
     <ContextMenu.Root>
@@ -18,22 +25,28 @@ export function WindowContextMenu({ children, onClose, onDelete }: WindowContext
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Content
-          className="min-w-[160px] bg-bg-card border border-border-subtle rounded-card p-1 shadow-lg z-50"
+          className={ideMenuContentClassName}
         >
           <ContextMenu.Item
-            className="flex items-center px-3 py-2 text-sm text-text-primary rounded cursor-pointer hover:bg-bg-card-hover focus:bg-bg-card-hover outline-none"
+            className={ideMenuItemClassName}
             onSelect={onClose}
           >
-            {t('common.closeWindow')}
+            <IdeMenuItemContent
+              icon={<X size={14} />}
+              label={t('common.closeWindow')}
+            />
           </ContextMenu.Item>
           <ContextMenu.Item
-            className="flex items-center px-3 py-2 text-sm text-status-error rounded cursor-pointer hover:bg-bg-card-hover focus:bg-bg-card-hover outline-none"
+            className={ideMenuDangerItemClassName}
             onSelect={onDelete}
           >
-            {t('common.deleteWindow')}
+            <IdeMenuItemContent
+              icon={<Trash2 size={14} />}
+              label={t('common.deleteWindow')}
+            />
           </ContextMenu.Item>
         </ContextMenu.Content>
       </ContextMenu.Portal>
     </ContextMenu.Root>
-  )
+  );
 }

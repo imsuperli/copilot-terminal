@@ -666,6 +666,9 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockReset();
     vi.mocked(window.electronAPI.codePaneReadFile).mockReset();
     vi.mocked(window.electronAPI.codePaneWriteFile).mockReset();
+    vi.mocked(window.electronAPI.codePaneCreateFile).mockReset();
+    vi.mocked(window.electronAPI.codePaneCreateDirectory).mockReset();
+    vi.mocked(window.electronAPI.codePaneRenamePath).mockReset();
     vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockReset();
@@ -799,6 +802,36 @@ describe('CodePane', () => {
       success: true,
       data: {
         mtimeMs: 200,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneCreateFile).mockResolvedValue({
+      success: true,
+      data: {
+        path: '/workspace/project/src/new-file.ts',
+        name: 'new-file.ts',
+        type: 'file',
+        size: 0,
+        mtimeMs: 300,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneCreateDirectory).mockResolvedValue({
+      success: true,
+      data: {
+        path: '/workspace/project/src/new-folder',
+        name: 'new-folder',
+        type: 'directory',
+        mtimeMs: 301,
+        hasChildren: true,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneRenamePath).mockResolvedValue({
+      success: true,
+      data: {
+        path: '/workspace/project/src/renamed-index.ts',
+        name: 'renamed-index.ts',
+        type: 'file',
+        size: 24,
+        mtimeMs: 302,
       },
     });
     vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockResolvedValue({
@@ -1021,6 +1054,7 @@ describe('CodePane', () => {
   afterEach(() => {
     updatePaneImpl = null;
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('opens a file from the tree and creates a tab', async () => {
@@ -2037,47 +2071,114 @@ describe('CodePane', () => {
         },
       ],
     });
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Commit index');
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('new-file.ts');
+    try {
+      renderCodePane(createPane());
+      const treeButton = await screen.findByRole('button', { name: 'index.ts' });
+
+      fireEvent.contextMenu(treeButton);
+      await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyAbsolutePath' }));
+      expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('/workspace/project/src/index.ts');
+
+      fireEvent.contextMenu(treeButton);
+      await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyFileName' }));
+      expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('index.ts');
+
+      fireEvent.contextMenu(treeButton);
+      await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyRelativePath' }));
+      expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('src/index.ts');
+
+      fireEvent.contextMenu(treeButton);
+      await user.click(await screen.findByText('codePane.revealInFolder'));
+      expect(window.electronAPI.openFolder).toHaveBeenCalledWith('/workspace/project/src');
+
+      fireEvent.contextMenu(treeButton);
+      await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
+      expect(await screen.findByRole('menuitem', { name: 'codePane.gitRevert' })).toBeInTheDocument();
+      expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithRevision' })).toBeInTheDocument();
+      expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithBranch' })).toBeInTheDocument();
+      expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithLatest' })).toBeInTheDocument();
+      expect(await screen.findByRole('menuitem', { name: 'codePane.gitCherryPick' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+
+      fireEvent.contextMenu(treeButton);
+      await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
+      expect(await screen.findByRole('menuitem', { name: 'codePane.gitCommit' })).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+
+      fireEvent.contextMenu(treeButton);
+      await user.click(await screen.findByRole('menuitem', { name: 'codePane.newFile' }));
+      expect(window.electronAPI.codePaneCreateFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/new-file.ts',
+      });
+
+    } finally {
+      promptSpy.mockRestore();
+    }
+  });
+
+  it('renames paths directly from file context menus', async () => {
+    const user = userEvent.setup();
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('renamed-index.ts');
+
+    try {
+      renderCodePane(createPane());
+
+      const treeButton = await screen.findByRole('button', { name: 'index.ts' });
+      fireEvent.contextMenu(treeButton);
+      await user.click(await screen.findByRole('menuitem', { name: 'codePane.renamePath' }));
+
+      expect(window.electronAPI.codePaneRenamePath).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        sourcePath: '/workspace/project/src/index.ts',
+        targetPath: '/workspace/project/src/renamed-index.ts',
+      });
+    } finally {
+      promptSpy.mockRestore();
+    }
+  });
+
+  it('shows refactor actions from file context menus', async () => {
+    const user = userEvent.setup();
+
     renderCodePane(createPane());
 
     const treeButton = await screen.findByRole('button', { name: 'index.ts' });
-
-    fireEvent.contextMenu(treeButton);
-    await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyAbsolutePath' }));
-    expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('/workspace/project/src/index.ts');
-    expect(screen.getByText('codePane.valueCopied')).toBeInTheDocument();
-
-    fireEvent.contextMenu(treeButton);
-    await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyFileName' }));
-    expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('index.ts');
-
-    fireEvent.contextMenu(treeButton);
-    await user.click(await screen.findByRole('menuitem', { name: 'codePane.copyRelativePath' }));
-    expect(window.electronAPI.writeClipboardText).toHaveBeenCalledWith('src/index.ts');
-
-    fireEvent.contextMenu(treeButton);
-    await user.click(await screen.findByText('codePane.revealInFolder'));
-    expect(window.electronAPI.openFolder).toHaveBeenCalledWith('/workspace/project/src');
-
-    fireEvent.contextMenu(treeButton);
-    await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
-    expect(await screen.findByRole('menuitem', { name: 'codePane.gitRevert' })).toBeInTheDocument();
-    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithRevision' })).toBeInTheDocument();
-    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithBranch' })).toBeInTheDocument();
-    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCompareWithLatest' })).toBeInTheDocument();
-    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCherryPick' })).toBeInTheDocument();
-
-    fireEvent.contextMenu(treeButton);
-    await user.hover(await screen.findByRole('menuitem', { name: 'codePane.gitMenu' }));
-    expect(await screen.findByRole('menuitem', { name: 'codePane.gitCommit' })).toBeInTheDocument();
-
     fireEvent.contextMenu(treeButton);
     await user.hover(await screen.findByRole('menuitem', { name: 'codePane.refactorMenu' }));
-    expect(await screen.findByRole('menuitem', { name: 'codePane.renamePath' })).toBeInTheDocument();
+
     expect(await screen.findByRole('menuitem', { name: 'codePane.movePath' })).toBeInTheDocument();
     expect(await screen.findByRole('menuitem', { name: 'codePane.deletePath' })).toBeInTheDocument();
+  });
 
-    promptSpy.mockRestore();
+  it('creates directories from directory context menus', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src',
+          name: 'src',
+          type: 'directory',
+        },
+      ],
+    });
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('new-folder');
+    try {
+      renderCodePane(createPane());
+
+      const directoryButton = await screen.findByRole('button', { name: 'src' });
+      fireEvent.contextMenu(directoryButton);
+      await user.click(await screen.findByRole('menuitem', { name: 'codePane.newFolder' }));
+
+      expect(window.electronAPI.codePaneCreateDirectory).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        directoryPath: '/workspace/project/src/new-folder',
+      });
+    } finally {
+      promptSpy.mockRestore();
+    }
   });
 
   it('discards a git change without opening the external changes panel', async () => {
@@ -6156,6 +6257,9 @@ describe('CodePane', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'codePane.fileStructureTab' }));
 
     expect(await screen.findByText('UserService')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.fileStructureFilterInherited' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.fileStructureFilterAnonymous' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'codePane.fileStructureFilterLambdas' })).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.doubleClick(screen.getByText('listUsers'));

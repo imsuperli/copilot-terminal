@@ -11,6 +11,15 @@ import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirector
 import { getPersistableWindows, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
 import { useI18n } from '../i18n';
 import type { SSHProfile } from '../../shared/types/ssh';
+import {
+  IdePopupShell,
+  idePopupHeaderMetaClassName,
+  idePopupOverlayClassName,
+  idePopupScrollAreaClassName,
+  idePopupSectionClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from './ui/ide-popup';
 
 interface QuickSwitcherProps {
   isOpen: boolean;
@@ -280,23 +289,35 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
 
   return (
     <>
-      {/* 背景遮罩 - 淡入淡出 */}
       <div
-        className={`fixed inset-0 bg-black z-[2000] backdrop-blur-sm transition-opacity duration-200 ${
+        className={`${idePopupOverlayClassName} z-[2000] transition-opacity duration-200 ${
           isAnimating ? 'opacity-60' : 'opacity-0'
         }`}
         onClick={onClose}
       />
 
-      {/* 面板 - 缩放+淡入 */}
       <div
         className={`fixed top-[15%] left-1/2 -translate-x-1/2 z-[2001] w-[800px] max-w-[90vw] transition-all duration-200 ${
           isAnimating ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
         }`}
       >
-        <div className="bg-zinc-900 rounded-xl shadow-2xl overflow-hidden border border-zinc-700">
-          {/* 搜索框区域 */}
-          <div className="px-6 py-4 border-b border-zinc-800 bg-zinc-900/95 backdrop-blur">
+        <IdePopupShell className="flex max-h-[72vh] flex-col">
+          <div className={`${idePopupSectionClassName} px-5 py-3`}>
+            <div className={idePopupHeaderMetaClassName}>Quick Switcher</div>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className={idePopupTitleClassName}>{t('quickSwitcher.title')}</div>
+                <div className={idePopupSubtitleClassName}>{t('quickSwitcher.shortcutHint')}</div>
+              </div>
+              {query ? (
+                <span className="rounded-md border border-zinc-700/80 bg-zinc-950/55 px-2 py-1 text-[11px] text-zinc-400">
+                  {t('quickSwitcher.resultsCount', { count: filteredItems.length })}
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="border-b border-zinc-800/90 px-5 py-3 bg-[rgba(28,30,35,0.94)]">
             <div className="flex items-center gap-3">
               <Search size={20} className="text-zinc-400 flex-shrink-0" />
               <input
@@ -308,23 +329,17 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
                   setSelectedIndex(0);
                 }}
                 placeholder={t('quickSwitcher.searchPlaceholder')}
-                className="flex-1 bg-transparent text-zinc-100 placeholder-zinc-500 outline-none text-base"
+                className="flex-1 bg-transparent text-zinc-100 placeholder:text-zinc-500 outline-none text-base"
               />
-              {query && (
-                <span className="text-xs text-zinc-500">
-                  {t('quickSwitcher.resultsCount', { count: filteredItems.length })}
-                </span>
-              )}
             </div>
           </div>
 
-          {/* 列表 */}
           <div
             ref={listRef}
-            className="max-h-[500px] overflow-y-auto py-2"
+            className={`max-h-[500px] overflow-y-auto py-2 ${idePopupScrollAreaClassName}`}
             style={{
               scrollbarWidth: 'thin',
-              scrollbarColor: '#52525b #27272a'
+              scrollbarColor: '#52525b transparent'
             }}
           >
             {filteredItems.length === 0 ? (
@@ -367,8 +382,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
             )}
           </div>
 
-          {/* 提示栏 */}
-          <div className="px-6 py-3 bg-zinc-900/95 border-t border-zinc-800 flex items-center justify-between text-xs text-zinc-500">
+          <div className="border-t border-zinc-800/90 bg-[rgba(35,37,42,0.94)] px-5 py-3 text-xs text-zinc-500">
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1">
                 <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">↑↓</kbd>
@@ -387,7 +401,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
               {t('quickSwitcher.shortcutHint')}
             </div>
           </div>
-        </div>
+        </IdePopupShell>
       </div>
     </>
   );

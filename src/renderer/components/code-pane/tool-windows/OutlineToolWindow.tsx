@@ -9,11 +9,31 @@ import {
 } from 'lucide-react';
 import type { CodePaneDocumentSymbol, CodePaneRange } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  IdePopupShell,
+  idePopupBodyClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupRowClassName,
+  idePopupScrollAreaClassName,
+  idePopupSectionClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+  idePopupToggleButtonClassName,
+  idePopupToggleIndicatorClassName,
+} from '../../ui/ide-popup';
 
 interface OutlineTreeNode {
   id: string;
   symbol: CodePaneDocumentSymbol;
   children: OutlineTreeNode[];
+}
+
+interface OutlineFilterState {
+  inherited: boolean;
+  anonymous: boolean;
+  lambdas: boolean;
 }
 
 interface OutlineToolWindowProps {
@@ -29,6 +49,12 @@ interface OutlineToolWindowProps {
   closeOnDoubleClick?: boolean;
 }
 
+const DEFAULT_FILTERS: OutlineFilterState = {
+  inherited: true,
+  anonymous: true,
+  lambdas: true,
+};
+
 export function OutlineToolWindow({
   fileLabel,
   symbols,
@@ -43,52 +69,107 @@ export function OutlineToolWindow({
 }: OutlineToolWindowProps) {
   const { t } = useI18n();
   const tree = React.useMemo(() => buildOutlineTree(symbols), [symbols]);
+  const [filters, setFilters] = React.useState(DEFAULT_FILTERS);
+  const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
+  const filteredTree = React.useMemo(() => filterOutlineTree(tree, filters), [filters, tree]);
+  const visibleNodeIds = React.useMemo(() => collectVisibleNodeIds(filteredTree), [filteredTree]);
+
+  React.useEffect(() => {
+    if (visibleNodeIds.length === 0) {
+      setSelectedNodeId(null);
+      return;
+    }
+
+    setSelectedNodeId((currentValue) => (
+      currentValue && visibleNodeIds.includes(currentValue) ? currentValue : visibleNodeIds[0]
+    ));
+  }, [visibleNodeIds]);
 
   return (
-    <div className={panelClassName ?? 'flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90'}>
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
-            <FileCode2 size={12} />
-            {t('codePane.fileStructureTab')}
+    <IdePopupShell className={panelClassName ?? 'flex h-full min-h-0 flex-col'}>
+      <div className={idePopupHeaderClassName}>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <FileCode2 size={12} className="shrink-0 text-sky-300" />
+            <div className={idePopupHeaderMetaClassName}>{t('codePane.fileStructureTab')}</div>
           </div>
-          <div className="truncate text-xs text-zinc-500">
-            {fileLabel ?? t('codePane.fileStructureEmpty')}
+          <div className="mt-1 min-w-0">
+            <div className={idePopupTitleClassName}>{fileLabel ?? t('codePane.fileStructureEmpty')}</div>
+            <div className={idePopupSubtitleClassName}>
+              {visibleNodeIds.length > 0
+                ? t('codePane.fileStructureCount', { count: visibleNodeIds.length })
+                : t('codePane.fileStructureHint')}
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => {
               void onRefresh();
             }}
-            className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={13} />
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-zinc-800 p-1 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
-            <X size={12} />
+            <X size={13} />
           </button>
         </div>
       </div>
 
-      <div className={bodyClassName ?? 'min-h-0 flex-1 overflow-auto px-3 py-3'}>
+      <div className={`${idePopupSectionClassName} px-3 py-2`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterToggle
+            active={filters.inherited}
+            label={t('codePane.fileStructureFilterInherited')}
+            onClick={() => {
+              setFilters((currentValue) => ({
+                ...currentValue,
+                inherited: !currentValue.inherited,
+              }));
+            }}
+          />
+          <FilterToggle
+            active={filters.anonymous}
+            label={t('codePane.fileStructureFilterAnonymous')}
+            onClick={() => {
+              setFilters((currentValue) => ({
+                ...currentValue,
+                anonymous: !currentValue.anonymous,
+              }));
+            }}
+          />
+          <FilterToggle
+            active={filters.lambdas}
+            label={t('codePane.fileStructureFilterLambdas')}
+            onClick={() => {
+              setFilters((currentValue) => ({
+                ...currentValue,
+                lambdas: !currentValue.lambdas,
+              }));
+            }}
+          />
+        </div>
+      </div>
+
+      <div className={bodyClassName ?? `${idePopupBodyClassName} ${idePopupScrollAreaClassName} px-2 py-2`}>
         {isLoading ? (
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <div className="flex items-center gap-2 px-2 py-4 text-xs text-zinc-400">
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.fileStructureLoading')}
           </div>
         ) : error ? (
-          <div className="text-xs text-red-300">{error}</div>
-        ) : tree.length > 0 ? (
-          <div className="space-y-1">
-            {tree.map((node) => (
+          <div className="px-2 py-4 text-xs text-red-300">{error}</div>
+        ) : filteredTree.length > 0 ? (
+          <div className="space-y-0.5">
+            {filteredTree.map((node) => (
               <OutlineNodeRow
                 key={node.id}
                 node={node}
@@ -96,16 +177,40 @@ export function OutlineToolWindow({
                 onOpenSymbol={onOpenSymbol}
                 onClose={onClose}
                 closeOnDoubleClick={closeOnDoubleClick}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={setSelectedNodeId}
               />
             ))}
           </div>
         ) : (
-          <div className="rounded border border-dashed border-zinc-800 bg-zinc-950/60 px-3 py-4 text-xs text-zinc-500">
+          <div className="mx-2 rounded-md border border-dashed border-zinc-700 bg-zinc-950/40 px-3 py-4 text-xs text-zinc-500">
             {t('codePane.fileStructureEmpty')}
           </div>
         )}
       </div>
-    </div>
+    </IdePopupShell>
+  );
+}
+
+function FilterToggle({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={idePopupToggleButtonClassName(active)}
+      aria-label={label}
+    >
+      <span className={idePopupToggleIndicatorClassName(active)}>{active ? '•' : ' '}</span>
+      <span>{label}</span>
+    </button>
   );
 }
 
@@ -115,22 +220,27 @@ function OutlineNodeRow({
   onOpenSymbol,
   onClose,
   closeOnDoubleClick,
+  selectedNodeId,
+  onSelectNode,
 }: {
   node: OutlineTreeNode;
   depth: number;
   onOpenSymbol: (range: CodePaneRange) => void | Promise<void>;
   onClose: () => void;
   closeOnDoubleClick: boolean;
+  selectedNodeId: string | null;
+  onSelectNode: (nodeId: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = React.useState(true);
   const hasChildren = node.children.length > 0;
-  const kindLabel = getSymbolKindLabel(node.symbol.kind);
+  const isSelected = selectedNodeId === node.id;
+  const kind = getSymbolKindPresentation(node.symbol.kind);
 
   return (
     <div>
       <div
-        className="flex items-center gap-2 rounded px-1.5 py-1 transition-colors hover:bg-zinc-900/70"
-        style={{ paddingLeft: `${depth * 16 + 4}px` }}
+        className="flex items-center gap-1"
+        style={{ paddingLeft: `${depth * 14}px` }}
       >
         {hasChildren ? (
           <button
@@ -138,41 +248,47 @@ function OutlineNodeRow({
             onClick={() => {
               setIsExpanded((currentValue) => !currentValue);
             }}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+            className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800/80 hover:text-zinc-200"
             aria-label={isExpanded ? 'Collapse' : 'Expand'}
           >
             {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
         ) : (
-          <div className="h-5 w-5 shrink-0" />
+          <div className="h-6 w-5 shrink-0" />
         )}
         <button
           type="button"
           onClick={() => {
+            onSelectNode(node.id);
             void onOpenSymbol(node.symbol.selectionRange);
           }}
           onDoubleClick={() => {
+            onSelectNode(node.id);
             if (!closeOnDoubleClick) {
               return;
             }
             void onOpenSymbol(node.symbol.selectionRange);
             onClose();
           }}
-          className="min-w-0 flex-1 text-left"
+          className={idePopupRowClassName(isSelected)}
         >
-          <div className="flex items-center gap-2">
-            <span className="truncate text-xs font-medium text-zinc-100">{node.symbol.name}</span>
-            <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-zinc-400">
-              {kindLabel}
-            </span>
+          <OutlineKindBadge kind={kind.shortLabel} tone={kind.tone} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-[12px] leading-5 text-inherit">{node.symbol.name}</span>
+              {node.symbol.detail ? (
+                <span className="truncate text-[11px] text-zinc-400/90">{node.symbol.detail}</span>
+              ) : (
+                <span className="rounded border border-zinc-700/80 bg-zinc-950/55 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                  {kind.label}
+                </span>
+              )}
+            </div>
           </div>
-          {node.symbol.detail && (
-            <div className="mt-0.5 truncate text-[10px] text-zinc-500">{node.symbol.detail}</div>
-          )}
         </button>
       </div>
       {hasChildren && isExpanded && (
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {node.children.map((child) => (
             <OutlineNodeRow
               key={child.id}
@@ -181,11 +297,39 @@ function OutlineNodeRow({
               onOpenSymbol={onOpenSymbol}
               onClose={onClose}
               closeOnDoubleClick={closeOnDoubleClick}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={onSelectNode}
             />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function OutlineKindBadge({
+  kind,
+  tone,
+}: {
+  kind: string;
+  tone: 'red' | 'amber' | 'sky' | 'emerald' | 'violet' | 'zinc';
+}) {
+  const toneClassName = {
+    red: 'border-red-400/60 bg-red-500/10 text-red-300',
+    amber: 'border-amber-400/60 bg-amber-500/10 text-amber-300',
+    sky: 'border-sky-400/60 bg-sky-500/10 text-sky-300',
+    emerald: 'border-emerald-400/60 bg-emerald-500/10 text-emerald-300',
+    violet: 'border-violet-400/60 bg-violet-500/10 text-violet-300',
+    zinc: 'border-zinc-500/70 bg-zinc-500/10 text-zinc-300',
+  }[tone];
+
+  return (
+    <span
+      className={`inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[9px] font-semibold uppercase leading-none ${toneClassName}`}
+      aria-hidden="true"
+    >
+      {kind}
+    </span>
   );
 }
 
@@ -201,31 +345,104 @@ function createOutlineNode(symbol: CodePaneDocumentSymbol, id: string): OutlineT
   };
 }
 
-function getSymbolKindLabel(kind: number): string {
+function filterOutlineTree(tree: OutlineTreeNode[], filters: OutlineFilterState): OutlineTreeNode[] {
+  const nextTree: OutlineTreeNode[] = [];
+
+  tree.forEach((node) => {
+    const filteredChildren = filterOutlineTree(node.children, filters);
+    const isVisible = matchesOutlineFilters(node.symbol, filters);
+
+    if (!isVisible && filteredChildren.length === 0) {
+      return;
+    }
+
+    nextTree.push({
+      ...node,
+      children: filteredChildren,
+    });
+  });
+
+  return nextTree;
+}
+
+function collectVisibleNodeIds(nodes: OutlineTreeNode[]): string[] {
+  const ids: string[] = [];
+
+  nodes.forEach((node) => {
+    ids.push(node.id);
+    ids.push(...collectVisibleNodeIds(node.children));
+  });
+
+  return ids;
+}
+
+function matchesOutlineFilters(symbol: CodePaneDocumentSymbol, filters: OutlineFilterState): boolean {
+  if (!filters.inherited && isInheritedSymbol(symbol)) {
+    return false;
+  }
+
+  if (!filters.anonymous && isAnonymousClassSymbol(symbol)) {
+    return false;
+  }
+
+  if (!filters.lambdas && isLambdaSymbol(symbol)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isInheritedSymbol(symbol: CodePaneDocumentSymbol): boolean {
+  const detail = (symbol.detail ?? '').toLowerCase();
+  return detail.includes('inherited') || detail.includes('override') || detail.includes('super.');
+}
+
+function isAnonymousClassSymbol(symbol: CodePaneDocumentSymbol): boolean {
+  const name = symbol.name.toLowerCase();
+  const detail = (symbol.detail ?? '').toLowerCase();
+  return name.includes('anonymous') || name.includes('<anonymous>') || detail.includes('anonymous');
+}
+
+function isLambdaSymbol(symbol: CodePaneDocumentSymbol): boolean {
+  const name = symbol.name.toLowerCase();
+  const detail = (symbol.detail ?? '').toLowerCase();
+
+  if (symbol.kind === 12) {
+    return name.includes('lambda') || name.includes('=>') || detail.includes('lambda');
+  }
+
+  return name.includes('<lambda>') || detail.includes('=>');
+}
+
+function getSymbolKindPresentation(kind: number): {
+  label: string;
+  shortLabel: string;
+  tone: 'red' | 'amber' | 'sky' | 'emerald' | 'violet' | 'zinc';
+} {
   switch (kind) {
     case 5:
-      return 'class';
+      return { label: 'class', shortLabel: 'c', tone: 'sky' };
     case 6:
-      return 'method';
+      return { label: 'method', shortLabel: 'm', tone: 'red' };
     case 7:
-      return 'property';
+      return { label: 'property', shortLabel: 'p', tone: 'emerald' };
     case 8:
-      return 'field';
+      return { label: 'field', shortLabel: 'f', tone: 'amber' };
     case 9:
-      return 'constructor';
+      return { label: 'constructor', shortLabel: 'c', tone: 'violet' };
     case 10:
-      return 'enum';
+      return { label: 'enum', shortLabel: 'e', tone: 'amber' };
     case 11:
-      return 'interface';
+      return { label: 'interface', shortLabel: 'i', tone: 'emerald' };
     case 12:
-      return 'function';
+      return { label: 'function', shortLabel: 'f', tone: 'red' };
     case 13:
-      return 'variable';
+      return { label: 'variable', shortLabel: 'v', tone: 'amber' };
     case 23:
-      return 'struct';
+      return { label: 'struct', shortLabel: 's', tone: 'violet' };
     case 24:
-      return 'event';
+      return { label: 'event', shortLabel: 'e', tone: 'sky' };
     default:
-      return 'symbol';
+      return { label: 'symbol', shortLabel: 's', tone: 'zinc' };
   }
 }

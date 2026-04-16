@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { X, ExternalLink, Folder, Globe } from 'lucide-react';
+import { Compass, ExternalLink, Folder, Globe, X } from 'lucide-react';
 import { QuickNavItem } from '../../shared/types/quick-nav';
 import { useI18n } from '../i18n';
+import {
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupOverlayClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+  IdePopupShell,
+} from './ui/ide-popup';
 
 interface QuickNavPanelProps {
   open: boolean;
@@ -54,69 +64,76 @@ export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) =
   return (
     <Dialog.Root open={open} onOpenChange={onClose}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[1100] animate-fade-in" />
+        <Dialog.Overlay className={`${idePopupOverlayClassName} z-[1100] animate-fade-in`} />
         <Dialog.Content
-          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] max-w-4xl max-h-[85vh] bg-zinc-900 rounded-xl shadow-2xl border border-zinc-800 z-[1100] overflow-hidden flex flex-col animate-scale-in"
+          className="fixed top-1/2 left-1/2 z-[1100] w-[90vw] max-w-4xl max-h-[85vh] -translate-x-1/2 -translate-y-1/2 animate-scale-in focus:outline-none"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          {/* 标题栏 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur">
-            <Dialog.Title className="text-xl font-semibold text-zinc-100">
-              {t('quickNav.title')}
-            </Dialog.Title>
-            <Dialog.Close asChild>
-              <button className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors">
-                <X size={18} />
-              </button>
-            </Dialog.Close>
-          </div>
-
-          {/* 内容区域 */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-zinc-500">{t('common.loading')}</div>
+          <IdePopupShell className="flex max-h-[85vh] flex-col">
+            <div className={idePopupHeaderClassName}>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <Compass size={12} className="shrink-0 text-sky-300" />
+                  <div className={idePopupHeaderMetaClassName}>Quick Nav</div>
+                </div>
+                <Dialog.Title className={`mt-1 ${idePopupTitleClassName}`}>
+                  {t('quickNav.title')}
+                </Dialog.Title>
+                <div className={idePopupSubtitleClassName}>{t('quickNav.subtitle')}</div>
               </div>
-            ) : items.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
-                <Globe size={48} className="mb-4 opacity-50" />
-                <p className="text-lg mb-2">{t('quickNav.emptyTitle')}</p>
-                <p className="text-sm">{t('quickNav.emptyDescription')}</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {items.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleItemClick(item)}
-                    className="group flex flex-col items-center gap-3 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700/50 hover:border-[rgb(var(--primary))]/50 hover:bg-zinc-800 transition-all duration-200 hover:scale-105"
-                    title={item.path}
-                  >
-                    {/* 图标 */}
-                    <div className="w-12 h-12 flex items-center justify-center rounded-lg bg-zinc-700/50 group-hover:bg-[rgb(var(--primary))]/20 transition-colors">
-                      {item.type === 'url' ? (
-                        <Globe size={24} className="text-[rgb(var(--primary))]" />
-                      ) : (
-                        <Folder size={24} className="text-yellow-400" />
-                      )}
-                    </div>
+              <Dialog.Close asChild>
+                <button className={idePopupIconButtonClassName} aria-label={t('common.close')}>
+                  <X size={14} />
+                </button>
+              </Dialog.Close>
+            </div>
 
-                    {/* 名称 */}
-                    <div className="w-full text-center">
-                      <p className="text-sm font-medium text-zinc-100 truncate">
-                        {item.name}
-                      </p>
-                    </div>
+            <div className={`flex-1 overflow-y-auto p-5 ${idePopupScrollAreaClassName}`}>
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-zinc-500">{t('common.loading')}</div>
+                </div>
+              ) : items.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
+                  <Globe size={48} className="mb-4 opacity-50" />
+                  <p className="text-lg mb-2">{t('quickNav.emptyTitle')}</p>
+                  <p className="text-sm">{t('quickNav.emptyDescription')}</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                  {items.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleItemClick(item)}
+                      className="group relative flex flex-col items-center gap-3 rounded-[12px] border border-zinc-700/80 bg-zinc-900/45 p-4 text-center transition-all duration-150 hover:border-sky-400/50 hover:bg-zinc-800/90"
+                      title={item.path}
+                    >
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-700/80 bg-zinc-950/55 transition-colors group-hover:border-sky-400/40 group-hover:bg-sky-500/10">
+                        {item.type === 'url' ? (
+                          <Globe size={22} className="text-sky-300" />
+                        ) : (
+                          <Folder size={22} className="text-amber-300" />
+                        )}
+                      </div>
 
-                    {/* 类型标识 */}
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <ExternalLink size={14} className="text-zinc-400" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+                      <div className="w-full">
+                        <p className="truncate text-sm font-medium text-zinc-100">
+                          {item.name}
+                        </p>
+                        <p className="mt-1 truncate text-[11px] text-zinc-500">
+                          {item.path}
+                        </p>
+                      </div>
+
+                      <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100">
+                        <ExternalLink size={14} className="text-zinc-500" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </IdePopupShell>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

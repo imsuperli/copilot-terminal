@@ -67,8 +67,8 @@ describe('WindowContextMenu', () => {
     )
     await user.pointer({ keys: '[MouseRight]', target: screen.getByText('窗口卡片') })
 
-    const closeItem = screen.getByText('关闭窗口')
-    const deleteItem = screen.getByText('删除窗口')
+    const closeItem = screen.getByRole('menuitem', { name: '关闭窗口' })
+    const deleteItem = screen.getByRole('menuitem', { name: '删除窗口' })
 
     // Radix UI focuses the menu container first; ArrowDown moves focus to first item
     await user.keyboard('{ArrowDown}')
@@ -106,7 +106,7 @@ describe('WindowContextMenu', () => {
     )
     await user.pointer({ keys: '[MouseRight]', target: screen.getByText('窗口卡片') })
 
-    const closeItem = screen.getByText('关闭窗口')
+    const closeItem = screen.getByRole('menuitem', { name: '关闭窗口' })
     closeItem.focus()
     await user.keyboard('{Enter}')
 

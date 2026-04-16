@@ -1,6 +1,16 @@
 import React from 'react';
 import { BookOpen, Loader2, RefreshCw, X } from 'lucide-react';
 import type { CodePaneHoverResult } from '../../../shared/types/electron-api';
+import {
+  IdePopupShell,
+  idePopupBodyClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../ui/ide-popup';
 
 interface QuickDocumentationPanelProps {
   title: string;
@@ -24,33 +34,39 @@ export function QuickDocumentationPanel({
   onClose,
 }: QuickDocumentationPanelProps) {
   return (
-    <div className="absolute right-3 top-3 z-20 flex w-[380px] max-w-[calc(100%-24px)] flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/95 shadow-2xl backdrop-blur">
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2 text-xs font-medium text-zinc-100">
-          <BookOpen size={13} className="shrink-0 text-sky-300" />
-          <span className="truncate">{title}</span>
+    <IdePopupShell className="absolute right-3 top-3 z-20 flex w-[400px] max-w-[calc(100%-24px)] flex-col">
+      <div className={idePopupHeaderClassName}>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <BookOpen size={12} className="shrink-0 text-sky-300" />
+            <div className={idePopupHeaderMetaClassName}>{title}</div>
+          </div>
+          <div className="mt-1">
+            <div className={idePopupTitleClassName}>{title}</div>
+            <div className={idePopupSubtitleClassName}>{result?.contents.length ? `${result.contents.length} item${result.contents.length > 1 ? 's' : ''}` : emptyLabel}</div>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onRefresh}
-            className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className={idePopupIconButtonClassName}
             aria-label={title}
           >
-            <RefreshCw size={11} />
+            <RefreshCw size={13} />
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className={idePopupIconButtonClassName}
             aria-label={title}
           >
-            <X size={11} />
+            <X size={13} />
           </button>
         </div>
       </div>
 
-      <div className="max-h-[50vh] overflow-auto px-3 py-3 text-xs text-zinc-300">
+      <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} max-h-[52vh] px-3 py-3 text-xs text-zinc-300`}>
         {loading ? (
           <div className="flex items-center gap-2 text-zinc-500">
             <Loader2 size={12} className="animate-spin" />
@@ -63,10 +79,10 @@ export function QuickDocumentationPanel({
             {result.contents.map((content, index) => (
               <div
                 key={`${content.kind}-${index}`}
-                className={`rounded border px-3 py-2 ${
+                className={`rounded-md border px-3 py-2 ${
                   content.kind === 'markdown'
-                    ? 'border-sky-500/10 bg-sky-500/5'
-                    : 'border-zinc-800 bg-zinc-900/70'
+                    ? 'border-sky-400/25 bg-sky-500/10'
+                    : 'border-zinc-700/80 bg-zinc-900/55'
                 }`}
               >
                 <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
@@ -82,6 +98,6 @@ export function QuickDocumentationPanel({
           <div className="text-zinc-500">{emptyLabel}</div>
         )}
       </div>
-    </div>
+    </IdePopupShell>
   );
 }

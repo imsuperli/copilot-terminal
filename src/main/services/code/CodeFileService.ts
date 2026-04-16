@@ -2,7 +2,10 @@ import path from 'path';
 import { promises as fsPromises } from 'fs';
 import type {
   CodePaneContentMatch,
+  CodePaneCreateDirectoryConfig,
+  CodePaneCreateFileConfig,
   CodePaneListDirectoryConfig,
+  CodePaneRenamePathConfig,
   CodePaneReadFileConfig,
   CodePaneReadFileResult,
   CodePaneSearchContentsConfig,
@@ -251,6 +254,38 @@ export class CodeFileService {
     return {
       mtimeMs: updatedStats.mtimeMs,
     };
+  }
+
+  async createFile(config: CodePaneCreateFileConfig): Promise<CodePaneTreeEntry> {
+    const rootInfo = await this.resolveRoot(config.rootPath);
+    const filePath = await this.resolveWritablePath(rootInfo, config.filePath);
+    await this.ensurePathDoesNotExist(filePath);
+    await fsPromises.writeFile(filePath, config.content ?? '', {
+      encoding: 'utf-8',
+      flag: 'wx',
+    });
+    return await this.readTreeEntry(filePath, 'file');
+  }
+
+  async createDirectory(config: CodePaneCreateDirectoryConfig): Promise<CodePaneTreeEntry> {
+    const rootInfo = await this.resolveRoot(config.rootPath);
+    const directoryPath = await this.resolveWritablePath(rootInfo, config.directoryPath);
+    await this.ensurePathDoesNotExist(directoryPath);
+    await fsPromises.mkdir(directoryPath);
+    return await this.readTreeEntry(directoryPath, 'directory');
+  }
+
+  async renamePath(config: CodePaneRenamePathConfig): Promise<CodePaneTreeEntry> {
+    const rootInfo = await this.resolveRoot(config.rootPath);
+    const sourcePath = await this.resolveExistingUnknownPath(rootInfo, config.sourcePath);
+    const targetPath = await this.resolveWritablePath(rootInfo, config.targetPath);
+    if (sourcePath === targetPath) {
+      return await this.readTreeEntry(sourcePath);
+    }
+
+    await this.ensurePathDoesNotExist(targetPath);
+    await fsPromises.rename(sourcePath, targetPath);
+    return await this.readTreeEntry(targetPath);
   }
 
   async searchFiles(config: CodePaneSearchFilesConfig): Promise<string[]> {
@@ -523,6 +558,41 @@ export class CodeFileService {
     return resolvedPath;
   }
 
+  private async resolveExistingUnknownPath(rootInfo: RootInfo, targetPath: string): Promise<string> {
+    const resolvedPath = path.resolve(targetPath);
+    if (!path.isAbsolute(targetPath) || !isPathWithin(rootInfo.rootPath, resolvedPath)) {
+      throw new Error('Target path is outside the code pane root');
+    }
+
+    const stats = await fsPromises.lstat(resolvedPath);
+    if (stats.isSymbolicLink()) {
+      throw new Error('Symbolic links are not supported in the code pane');
+    }
+
+    if (!stats.isDirectory() && !stats.isFile()) {
+      throw new Error('Target path is neither a file nor a directory');
+    }
+
+    const realPath = await fsPromises.realpath(resolvedPath);
+    if (!isPathWithin(rootInfo.rootRealPath, realPath)) {
+      throw new Error('Target path resolves outside the code pane root');
+    }
+
+    return resolvedPath;
+  }
+
+  private async ensurePathDoesNotExist(targetPath: string): Promise<void> {
+    try {
+      await fsPromises.lstat(targetPath);
+      throw new Error('Target path already exists');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return;
+      }
+      throw error;
+    }
+  }
+
   private async readValidatedFile(filePath: string): Promise<CodePaneReadFileResult> {
     const stats = await fsPromises.stat(filePath);
 
@@ -579,6 +649,30 @@ export class CodeFileService {
     }));
 
     return entryResults.filter((entry): entry is CodePaneTreeEntry => entry !== null);
+  }
+
+  private async readTreeEntry(
+    entryPath: string,
+    expectedType?: 'file' | 'directory',
+  ): Promise<CodePaneTreeEntry> {
+    const stats = await fsPromises.stat(entryPath);
+    const type = stats.isDirectory() ? 'directory' as const : 'file' as const;
+    if (expectedType && type !== expectedType) {
+      throw new Error(`Target path is not a ${expectedType}`);
+    }
+
+    if (type !== 'directory' && type !== 'file') {
+      throw new Error('Target path is neither a file nor a directory');
+    }
+
+    return {
+      path: entryPath,
+      name: path.basename(entryPath),
+      type,
+      size: type === 'file' ? stats.size : undefined,
+      mtimeMs: stats.mtimeMs,
+      hasChildren: type === 'directory' ? true : undefined,
+    };
   }
 }
 

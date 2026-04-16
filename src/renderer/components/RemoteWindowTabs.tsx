@@ -1,11 +1,18 @@
 import React, { useMemo } from 'react';
 import * as ContextMenu from '@radix-ui/react-context-menu';
+import { CopyPlus, X } from 'lucide-react';
 import { Window } from '../types/window';
 import { getAllPanes } from '../utils/layoutHelpers';
 import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
 import { isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { getPathLeafLabel } from '../utils/pathDisplay';
 import { AppTooltip } from './ui/AppTooltip';
+import {
+  ideMenuContentClassName,
+  ideMenuDangerItemClassName,
+  ideMenuItemClassName,
+  IdeMenuItemContent,
+} from './ui/ide-menu';
 
 interface RemoteWindowTabsProps {
   windows: Window[];
@@ -114,19 +121,25 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
               <ContextMenu.Content
-                className="z-[12040] min-w-[180px] rounded-lg border border-zinc-700 bg-zinc-900 p-1 shadow-lg"
+                className={ideMenuContentClassName}
               >
                 <ContextMenu.Item
-                  className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-zinc-100 outline-none transition-colors hover:bg-zinc-800 focus:bg-zinc-800"
+                  className={ideMenuItemClassName}
                   onSelect={() => onWindowClone(window.id)}
                 >
-                  {cloneLabel}
+                  <IdeMenuItemContent
+                    icon={<CopyPlus size={14} />}
+                    label={cloneLabel}
+                  />
                 </ContextMenu.Item>
                 <ContextMenu.Item
-                  className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-red-300 outline-none transition-colors hover:bg-red-500/10 focus:bg-red-500/10"
+                  className={ideMenuDangerItemClassName}
                   onSelect={() => onWindowClose(window.id)}
                 >
-                  {closeLabel}
+                  <IdeMenuItemContent
+                    icon={<X size={14} />}
+                    label={closeLabel}
+                  />
                 </ContextMenu.Item>
               </ContextMenu.Content>
             </ContextMenu.Portal>
