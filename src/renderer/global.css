@@ -24,8 +24,3 @@ body {
   height: 100%;
   width: 100%;
 }
-
-/* Radix Tooltip Portal 容器需要高于终端视图(z-1000)和组视图(z-1001) */
-[data-radix-popper-content-wrapper] {
-  z-index: 1100 !important;
-}

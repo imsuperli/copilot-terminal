@@ -113,3 +113,8 @@
   width: 0;
   height: 0;
 }
+
+/* Keep Radix popper portals above pane chrome and Monaco overlays. */
+[data-radix-popper-content-wrapper] {
+  z-index: 10000 !important;
+}
