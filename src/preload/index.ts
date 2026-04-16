@@ -177,6 +177,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('code-pane-git-stash', config),
   codePaneGitPush: (config) =>
     ipcRenderer.invoke('code-pane-git-push', config),
+  codePaneGitUpdateProject: (config) =>
+    ipcRenderer.invoke('code-pane-git-update-project', config),
   codePaneGitCheckout: (config) =>
     ipcRenderer.invoke('code-pane-git-checkout', config),
   codePaneGetGitBranches: (config) =>

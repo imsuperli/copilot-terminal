@@ -37,6 +37,7 @@ import type {
   CodePaneGitStageConfig,
   CodePaneGitStashConfig,
   CodePaneGitStatusConfig,
+  CodePaneGitUpdateProjectConfig,
   CodePaneListDirectoryConfig,
   CodePaneListRunTargetsConfig,
   CodePaneListTestsConfig,
@@ -353,6 +354,18 @@ export function registerCodePaneHandlers(ctx: HandlerContext) {
       }
 
       return successResponse(await codeGitOperationService.push(config));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('code-pane-git-update-project', async (_event, config: CodePaneGitUpdateProjectConfig) => {
+    try {
+      if (!codeGitOperationService) {
+        throw new Error('CodeGitOperationService not initialized');
+      }
+
+      return successResponse(await codeGitOperationService.updateProject(config));
     } catch (error) {
       return errorResponse(error);
     }

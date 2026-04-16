@@ -682,6 +682,7 @@ describe('CodePane', () => {
     vi.mocked(window.electronAPI.codePaneGitDiscardHunk).mockReset();
     vi.mocked(window.electronAPI.codePaneGitCommit).mockReset();
     vi.mocked(window.electronAPI.codePaneGitStash).mockReset();
+    vi.mocked(window.electronAPI.codePaneGitUpdateProject).mockReset();
     vi.mocked(window.electronAPI.codePaneGitCheckout).mockReset();
     vi.mocked(window.electronAPI.codePaneGetGitBranches).mockReset();
     vi.mocked(window.electronAPI.codePaneGitRenameBranch).mockReset();
@@ -875,6 +876,12 @@ describe('CodePane', () => {
       data: {
         reference: 'stash@{0}',
         message: 'WIP',
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGitUpdateProject).mockResolvedValue({
+      success: true,
+      data: {
+        mode: 'fetch',
       },
     });
     vi.mocked(window.electronAPI.codePaneGitCheckout).mockResolvedValue({ success: true });
@@ -3927,6 +3934,112 @@ describe('CodePane', () => {
     expect(branchButtons.length).toBeGreaterThan(0);
     expect(branchButtons[0]).toHaveTextContent('codePane.gitDetachedHead');
 
+  });
+
+  it('opens the IDEA-like branch manager from the editor header and runs branch actions', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/current',
+        upstreamBranch: 'origin/feature/current',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 1,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'feature/current',
+          refName: 'refs/heads/feature/current',
+          shortName: 'feature/current',
+          kind: 'local',
+          current: true,
+          upstream: 'origin/feature/current',
+          aheadCount: 1,
+          behindCount: 0,
+          commitSha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          subject: 'Current feature',
+          timestamp: 1_710_000_100,
+          mergedIntoCurrent: false,
+        },
+        {
+          name: 'main',
+          refName: 'refs/heads/main',
+          shortName: 'main',
+          kind: 'local',
+          current: false,
+          upstream: 'origin/main',
+          aheadCount: 0,
+          behindCount: 0,
+          commitSha: '1234567890abcdef',
+          shortSha: '1234567',
+          subject: 'Base commit',
+          timestamp: 1_710_000_000,
+          mergedIntoCurrent: true,
+        },
+        {
+          name: 'origin/release/2026.04',
+          refName: 'refs/remotes/origin/release/2026.04',
+          shortName: 'origin/release/2026.04',
+          kind: 'remote',
+          current: false,
+          upstream: undefined,
+          aheadCount: 0,
+          behindCount: 0,
+          commitSha: '3333333333333333',
+          shortSha: '3333333',
+          subject: 'Release branch',
+          timestamp: 1_710_000_050,
+          mergedIntoCurrent: false,
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    const branchButton = await screen.findByRole('button', { name: 'codePane.gitBranchManager' });
+    await user.click(branchButton);
+
+    expect(await screen.findByPlaceholderText('codePane.gitBranchSearchPlaceholder')).toBeInTheDocument();
+    expect(screen.getByText('codePane.gitUpdateProject')).toBeInTheDocument();
+    expect(await screen.findByText('codePane.gitRecentBranches')).toBeInTheDocument();
+    expect(screen.getByText('codePane.gitLocalBranches')).toBeInTheDocument();
+    expect(screen.getByText('codePane.gitRemoteBranches')).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText('codePane.gitBranchSearchPlaceholder'), 'release');
+    const releaseEntries = await screen.findAllByText('2026.04');
+    expect(releaseEntries.length).toBeGreaterThan(0);
+    expect(screen.queryByText('main')).not.toBeInTheDocument();
+
+    await user.click(releaseEntries[0]);
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitCheckout).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        branchName: 'release/2026.04',
+        createBranch: true,
+        startPoint: 'origin/release/2026.04',
+        detached: undefined,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText('codePane.gitBranchSearchPlaceholder')).not.toBeInTheDocument();
+    });
+    await user.click(branchButton);
+    await user.click(await screen.findByText('codePane.gitUpdateProject'));
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitUpdateProject).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+      });
+    });
   });
 
   it('compares selected commits in click order and opens revision diff from the git workbench', async () => {

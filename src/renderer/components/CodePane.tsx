@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Binary,
   Bug,
+  Check,
   ChevronLeft,
   ChevronDown,
   ChevronRight,
@@ -25,6 +26,7 @@ import {
   FolderTree,
   GitBranch,
   GitCompareArrows,
+  GitCommitHorizontal,
   GripHorizontal,
   GripVertical,
   History,
@@ -33,9 +35,12 @@ import {
   MoreHorizontal,
   Pin,
   Play,
+  Plus,
   RefreshCw,
   Save,
   Search,
+  Settings,
+  Star,
   Workflow,
   X,
 } from 'lucide-react';
@@ -318,6 +323,28 @@ type GitChangeSectionGroup = {
   roots: GitChangeTreeNode[];
 };
 
+type BranchManagerTreeNode =
+  | {
+    key: string;
+    kind: 'folder';
+    label: string;
+    children: BranchManagerTreeNode[];
+    branchCount: number;
+  }
+  | {
+    key: string;
+    kind: 'branch';
+    label: string;
+    branch: CodePaneGitBranchEntry;
+  };
+
+type BranchManagerSection = {
+  key: 'recent' | 'local' | 'remote';
+  label: string;
+  count: number;
+  nodes: BranchManagerTreeNode[];
+};
+
 type DebugEvaluationEntry = {
   id: string;
   expression: string;
@@ -373,14 +400,6 @@ type GitRevisionDiffRequest = {
   rightCommitSha?: string;
   leftLabel?: string;
   rightLabel?: string;
-};
-
-type GitBranchActionMenuItem = {
-  id: string;
-  label: string;
-  disabled?: boolean;
-  tone?: 'danger';
-  onSelect: () => void;
 };
 
 const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
@@ -829,6 +848,142 @@ function resolvePathFromRoot(rootPath: string, relativePath: string): string {
   }
 
   return `${normalizedRootPath}/${normalizedRelativePath}`.replace(/\/{2,}/g, '/');
+}
+
+function splitGitBranchPath(branchName: string): string[] {
+  return branchName.split('/').filter(Boolean);
+}
+
+function getTrackingLocalBranchName(remoteBranchName: string): string {
+  const [, ...branchSegments] = splitGitBranchPath(remoteBranchName);
+  return branchSegments.join('/') || remoteBranchName;
+}
+
+function buildBranchManagerTree(
+  branches: CodePaneGitBranchEntry[],
+  keyPrefix: string,
+  getSegments: (branch: CodePaneGitBranchEntry) => string[],
+): BranchManagerTreeNode[] {
+  const rootNodes: BranchManagerTreeNode[] = [];
+
+  for (const branch of branches) {
+    const segments = getSegments(branch).filter(Boolean);
+    insertBranchManagerTreeNode(rootNodes, segments.length > 0 ? segments : [branch.name], branch, keyPrefix, []);
+  }
+
+  return sortBranchManagerTreeNodes(rootNodes);
+}
+
+function insertBranchManagerTreeNode(
+  nodes: BranchManagerTreeNode[],
+  segments: string[],
+  branch: CodePaneGitBranchEntry,
+  keyPrefix: string,
+  parentSegments: string[],
+): void {
+  if (segments.length <= 1) {
+    nodes.push({
+      key: `${keyPrefix}:branch:${branch.name}`,
+      kind: 'branch',
+      label: segments[0] ?? branch.name,
+      branch,
+    });
+    return;
+  }
+
+  const [folderLabel, ...restSegments] = segments;
+  const folderPath = [...parentSegments, folderLabel];
+  let folderNode = nodes.find((node): node is Extract<BranchManagerTreeNode, { kind: 'folder' }> => (
+    node.kind === 'folder' && node.label === folderLabel
+  ));
+
+  if (!folderNode) {
+    folderNode = {
+      key: `${keyPrefix}:folder:${folderPath.join('/')}`,
+      kind: 'folder',
+      label: folderLabel,
+      children: [],
+      branchCount: 0,
+    };
+    nodes.push(folderNode);
+  }
+
+  insertBranchManagerTreeNode(folderNode.children, restSegments, branch, keyPrefix, folderPath);
+  folderNode.branchCount = countBranchManagerTreeNodes(folderNode.children);
+}
+
+function sortBranchManagerTreeNodes(nodes: BranchManagerTreeNode[]): BranchManagerTreeNode[] {
+  return [...nodes]
+    .map((node) => (
+      node.kind === 'folder'
+        ? {
+          ...node,
+          children: sortBranchManagerTreeNodes(node.children),
+          branchCount: countBranchManagerTreeNodes(node.children),
+        }
+        : node
+    ))
+    .sort((leftNode, rightNode) => {
+      if (leftNode.kind !== rightNode.kind) {
+        return leftNode.kind === 'folder' ? -1 : 1;
+      }
+
+      if (leftNode.kind === 'branch' && rightNode.kind === 'branch') {
+        if (leftNode.branch.current !== rightNode.branch.current) {
+          return leftNode.branch.current ? -1 : 1;
+        }
+      }
+
+      return leftNode.label.localeCompare(rightNode.label, undefined, { sensitivity: 'base' });
+    });
+}
+
+function countBranchManagerTreeNodes(nodes: BranchManagerTreeNode[]): number {
+  return nodes.reduce((count, node) => (
+    count + (node.kind === 'folder' ? countBranchManagerTreeNodes(node.children) : 1)
+  ), 0);
+}
+
+function filterBranchManagerTreeNodes(nodes: BranchManagerTreeNode[], query: string): BranchManagerTreeNode[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return nodes;
+  }
+
+  return nodes.flatMap<BranchManagerTreeNode>((node) => {
+    if (node.kind === 'branch') {
+      return doesBranchMatchQuery(node.branch, node.label, normalizedQuery) ? [node] : [];
+    }
+
+    const folderMatches = node.label.toLowerCase().includes(normalizedQuery);
+    const children = folderMatches
+      ? node.children
+      : filterBranchManagerTreeNodes(node.children, normalizedQuery);
+    if (children.length === 0) {
+      return [];
+    }
+
+    return [{
+      ...node,
+      children,
+      branchCount: countBranchManagerTreeNodes(children),
+    }];
+  });
+}
+
+function doesBranchMatchQuery(
+  branch: CodePaneGitBranchEntry,
+  label: string,
+  normalizedQuery: string,
+): boolean {
+  return [
+    label,
+    branch.name,
+    branch.shortName,
+    branch.upstream ?? '',
+    branch.subject,
+    branch.shortSha,
+  ].some((candidate) => candidate.toLowerCase().includes(normalizedQuery));
 }
 
 function isPathInside(parentPath: string, candidatePath: string): boolean {
@@ -1522,6 +1677,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [searchEverywhereMode, setSearchEverywhereMode] = useState<SearchEverywhereMode>('all');
   const [searchEverywhereQuery, setSearchEverywhereQuery] = useState('');
   const deferredSearchEverywhereQuery = useDeferredValue(searchEverywhereQuery);
+  const [isBranchManagerOpen, setIsBranchManagerOpen] = useState(false);
+  const [branchManagerQuery, setBranchManagerQuery] = useState('');
+  const deferredBranchManagerQuery = useDeferredValue(branchManagerQuery);
+  const [collapsedBranchManagerNodeKeys, setCollapsedBranchManagerNodeKeys] = useState<Set<string>>(() => new Set());
   const [searchEverywhereFileResults, setSearchEverywhereFileResults] = useState<string[]>([]);
   const [searchEverywhereSymbolResults, setSearchEverywhereSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
   const [isSearchEverywhereLoading, setIsSearchEverywhereLoading] = useState(false);
@@ -1691,6 +1850,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const navigationBackStackRef = useRef<NavigationHistoryEntry[]>([]);
   const navigationForwardStackRef = useRef<NavigationHistoryEntry[]>([]);
   const searchEverywhereInputRef = useRef<HTMLInputElement | null>(null);
+  const branchManagerRef = useRef<HTMLDivElement | null>(null);
+  const branchManagerSearchInputRef = useRef<HTMLInputElement | null>(null);
   const navigateBackRef = useRef<() => Promise<void>>(async () => {});
   const navigateForwardRef = useRef<() => Promise<void>>(async () => {});
   const goToImplementationAtCursorRef = useRef<() => Promise<void>>(async () => {});
@@ -6582,13 +6743,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [refreshGitSnapshot, refreshLoadedDirectories, rootPath, t]);
 
-  const checkoutGitBranch = useCallback(async (config: { branchName: string; createBranch: boolean; startPoint?: string }) => {
+  const checkoutGitBranch = useCallback(async (config: {
+    branchName: string;
+    createBranch: boolean;
+    startPoint?: string;
+    detached?: boolean;
+  }) => {
     const didCheckout = await runGitOperation(
       async () => await window.electronAPI.codePaneGitCheckout({
         rootPath,
         branchName: config.branchName,
         createBranch: config.createBranch,
         startPoint: config.startPoint,
+        detached: config.detached,
       }),
       {
         successMessage: t('codePane.gitCheckoutSuccess'),
@@ -6599,6 +6766,48 @@ export const CodePane: React.FC<CodePaneProps> = ({
       await loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
     }
   }, [gitRebaseBaseRef, loadGitBranches, rootPath, runGitOperation, t]);
+
+  const updateGitProject = useCallback(async () => {
+    const didUpdate = await runGitOperation(
+      async () => await window.electronAPI.codePaneGitUpdateProject({
+        rootPath,
+      }),
+      {
+        successMessage: t('codePane.gitUpdateProjectSuccess'),
+        refreshGraph: true,
+      },
+    );
+    if (didUpdate) {
+      await loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+    }
+  }, [gitRebaseBaseRef, loadGitBranches, rootPath, runGitOperation, t]);
+
+  const commitGitChangesFromPrompt = useCallback(async () => {
+    handleSidebarModeSelect('scm');
+    const nextMessage = window.prompt(t('codePane.gitCommitPrompt'), '')?.trim();
+    if (!nextMessage) {
+      return;
+    }
+
+    await commitGitChanges({
+      message: nextMessage,
+      amend: false,
+      includeAll: true,
+    });
+  }, [commitGitChanges, handleSidebarModeSelect, t]);
+
+  const checkoutGitRevisionFromPrompt = useCallback(async () => {
+    const revisionRef = window.prompt(t('codePane.gitCheckoutRevisionPrompt'), '')?.trim();
+    if (!revisionRef) {
+      return;
+    }
+
+    await checkoutGitBranch({
+      branchName: revisionRef,
+      createBranch: false,
+      detached: true,
+    });
+  }, [checkoutGitBranch, t]);
 
   const pushGitBranch = useCallback(async (config?: { remote?: string; branchName?: string; setUpstream?: boolean }) => {
     const response = await window.electronAPI.codePaneGitPush({
@@ -9154,6 +9363,51 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [isSearchEverywhereOpen]);
 
   useEffect(() => {
+    if (!isBranchManagerOpen) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      branchManagerSearchInputRef.current?.focus();
+      branchManagerSearchInputRef.current?.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isBranchManagerOpen]);
+
+  useEffect(() => {
+    if (!isBranchManagerOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!branchManagerRef.current?.contains(target)) {
+        setIsBranchManagerOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsBranchManagerOpen(false);
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isBranchManagerOpen]);
+
+  useEffect(() => {
     if (!isSearchEverywhereOpen) {
       return;
     }
@@ -11538,101 +11792,346 @@ export const CodePane: React.FC<CodePaneProps> = ({
     toggleBookmarkAtCursor,
   ]);
 
-  const branchActionMenuSections = useMemo<GitBranchActionMenuItem[][]>(() => {
+  const branchManagerSections = useMemo<BranchManagerSection[]>(() => {
     const localBranches = gitBranches.filter((branch) => branch.kind === 'local');
     const remoteBranches = gitBranches.filter((branch) => branch.kind === 'remote');
+    const recentBranches = [...gitBranches]
+      .sort((leftBranch, rightBranch) => {
+        if (leftBranch.current !== rightBranch.current) {
+          return leftBranch.current ? -1 : 1;
+        }
+        return rightBranch.timestamp - leftBranch.timestamp;
+      })
+      .slice(0, 8);
+
+    const sections: BranchManagerSection[] = [
+      {
+        key: 'recent',
+        label: t('codePane.gitRecentBranches'),
+        count: recentBranches.length,
+        nodes: buildBranchManagerTree(recentBranches, 'recent', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+      },
+      {
+        key: 'local',
+        label: t('codePane.gitLocalBranches'),
+        count: localBranches.length,
+        nodes: buildBranchManagerTree(localBranches, 'local', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+      },
+      {
+        key: 'remote',
+        label: t('codePane.gitRemoteBranches'),
+        count: remoteBranches.length,
+        nodes: buildBranchManagerTree(remoteBranches, 'remote', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+      },
+    ];
+
+    const query = deferredBranchManagerQuery.trim();
+    return sections
+      .map((section) => {
+        const nodes = filterBranchManagerTreeNodes(section.nodes, query);
+        return {
+          ...section,
+          count: query ? countBranchManagerTreeNodes(nodes) : section.count,
+          nodes,
+        };
+      })
+      .filter((section) => section.count > 0);
+  }, [deferredBranchManagerQuery, gitBranches, t]);
+
+  const filteredBranchManagerQuickActions = useMemo(() => {
     const currentBranchName = currentGitBranch?.name ?? gitRepositorySummary?.currentBranch ?? '';
+    const actions = [
+      {
+        id: 'update-project',
+        label: t('codePane.gitUpdateProject'),
+        shortcut: '',
+        icon: RefreshCw,
+        disabled: false,
+        onSelect: () => {
+          setIsBranchManagerOpen(false);
+          void updateGitProject();
+        },
+      },
+      {
+        id: 'commit',
+        label: t('codePane.gitCommitDots'),
+        shortcut: '',
+        icon: GitCommitHorizontal,
+        disabled: false,
+        onSelect: () => {
+          setIsBranchManagerOpen(false);
+          void commitGitChangesFromPrompt();
+        },
+      },
+      {
+        id: 'push',
+        label: t('codePane.gitPushDots'),
+        shortcut: isMac ? '⌘⇧K' : 'Ctrl+Shift+K',
+        icon: GitBranch,
+        disabled: !currentBranchName,
+        onSelect: () => {
+          setIsBranchManagerOpen(false);
+          void pushGitBranch({
+            branchName: currentBranchName || undefined,
+            setUpstream: !currentGitBranch?.upstream,
+          });
+        },
+      },
+      {
+        id: 'new-branch',
+        label: t('codePane.gitNewBranchDots'),
+        shortcut: isMac ? '⌘⌥N' : 'Ctrl+Alt+N',
+        icon: Plus,
+        disabled: false,
+        onSelect: () => {
+          const nextBranchName = window.prompt(t('codePane.gitCheckoutPlaceholder'), '');
+          if (!nextBranchName?.trim()) {
+            return;
+          }
 
-    return [
-      [
-        {
-          id: 'git-workbench',
-          label: t('codePane.gitOpenWorkbench'),
-          onSelect: () => {
-            setBottomPanelMode('git');
-          },
+          setIsBranchManagerOpen(false);
+          void checkoutGitBranch({
+            branchName: nextBranchName.trim(),
+            createBranch: true,
+            startPoint: currentBranchName || undefined,
+          });
         },
-        {
-          id: 'source-control',
-          label: t('codePane.sourceControl'),
-          onSelect: () => {
-            handleSidebarModeSelect('scm');
-          },
+      },
+      {
+        id: 'checkout-revision',
+        label: t('codePane.gitCheckoutTagOrRevision'),
+        shortcut: '',
+        icon: GitCompareArrows,
+        disabled: false,
+        onSelect: () => {
+          setIsBranchManagerOpen(false);
+          void checkoutGitRevisionFromPrompt();
         },
-      ],
-      [
-        {
-          id: 'create-branch',
-          label: t('codePane.gitCreateBranch'),
-          onSelect: () => {
-            const nextBranchName = window.prompt(t('codePane.gitCheckoutPlaceholder'), '');
-            if (!nextBranchName?.trim()) {
-              return;
-            }
+      },
+    ];
+    const query = deferredBranchManagerQuery.trim().toLowerCase();
+    if (!query) {
+      return actions;
+    }
 
-            void checkoutGitBranch({
-              branchName: nextBranchName.trim(),
-              createBranch: true,
-              startPoint: currentBranchName || undefined,
-            });
-          },
-        },
-        {
-          id: 'commit',
-          label: t('codePane.gitCommit'),
-          onSelect: () => {
-            handleSidebarModeSelect('scm');
-          },
-        },
-        {
-          id: 'push',
-          label: t('codePane.gitPush'),
-          disabled: !currentBranchName,
-          onSelect: () => {
-            void pushGitBranch({
-              branchName: currentBranchName || undefined,
-              setUpstream: !currentGitBranch?.upstream,
-            });
-          },
-        },
-      ],
-      [
-        ...localBranches
-          .filter((branch) => !branch.current)
-          .slice(0, 12)
-          .map((branch) => ({
-            id: `local-${branch.name}`,
-            label: `${t('codePane.gitCheckout')} ${branch.name}`,
-            onSelect: () => {
-              void checkoutGitBranch({
-                branchName: branch.name,
-                createBranch: false,
-              });
-            },
-          })),
-        ...remoteBranches.slice(0, 12).map((branch) => ({
-          id: `remote-${branch.name}`,
-          label: `${t('codePane.gitCreateTrackingBranch')} ${branch.name}`,
-          onSelect: () => {
-            const suggestedBranchName = branch.name.split('/').slice(1).join('/') || branch.name;
-            void checkoutGitBranch({
-              branchName: suggestedBranchName,
-              createBranch: true,
-              startPoint: branch.name,
-            });
-          },
-        })),
-      ],
-    ].filter((section) => section.length > 0);
+    return actions.filter((action) => (
+      action.label.toLowerCase().includes(query)
+      || action.id.toLowerCase().includes(query)
+    ));
   }, [
     checkoutGitBranch,
+    checkoutGitRevisionFromPrompt,
+    commitGitChangesFromPrompt,
     currentGitBranch?.name,
     currentGitBranch?.upstream,
-    gitBranches,
+    deferredBranchManagerQuery,
     gitRepositorySummary?.currentBranch,
-    handleSidebarModeSelect,
+    isMac,
     pushGitBranch,
     t,
+    updateGitProject,
+  ]);
+
+  const toggleBranchManagerNode = useCallback((nodeKey: string) => {
+    setCollapsedBranchManagerNodeKeys((currentKeys) => {
+      const nextKeys = new Set(currentKeys);
+      if (nextKeys.has(nodeKey)) {
+        nextKeys.delete(nodeKey);
+      } else {
+        nextKeys.add(nodeKey);
+      }
+      return nextKeys;
+    });
+  }, []);
+
+  const checkoutBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
+    setIsBranchManagerOpen(false);
+    if (branch.kind === 'remote') {
+      void checkoutGitBranch({
+        branchName: getTrackingLocalBranchName(branch.name),
+        createBranch: true,
+        startPoint: branch.name,
+      });
+      return;
+    }
+
+    if (!branch.current) {
+      void checkoutGitBranch({
+        branchName: branch.name,
+        createBranch: false,
+      });
+    }
+  }, [checkoutGitBranch]);
+
+  const renameBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
+    if (branch.kind !== 'local') {
+      return;
+    }
+
+    const nextBranchName = window.prompt(t('codePane.gitRenameBranchPrompt'), branch.name)?.trim();
+    if (!nextBranchName || nextBranchName === branch.name) {
+      return;
+    }
+
+    setIsBranchManagerOpen(false);
+    void renameGitBranch(branch.name, nextBranchName);
+  }, [renameGitBranch, t]);
+
+  const deleteBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
+    if (branch.kind !== 'local' || branch.current) {
+      return;
+    }
+
+    const promptKey = branch.mergedIntoCurrent
+      ? 'codePane.gitDeleteBranchPrompt'
+      : 'codePane.gitDeleteBranchForcePrompt';
+    if (!window.confirm(t(promptKey, { branch: branch.name }))) {
+      return;
+    }
+
+    setIsBranchManagerOpen(false);
+    void deleteGitBranch(branch.name, !branch.mergedIntoCurrent);
+  }, [deleteGitBranch, t]);
+
+  const renderBranchManagerTreeNode = useCallback((node: BranchManagerTreeNode, depth: number): React.ReactNode => {
+    if (node.kind === 'folder') {
+      const isCollapsed = collapsedBranchManagerNodeKeys.has(node.key);
+      return (
+        <div key={node.key}>
+          <button
+            type="button"
+            onClick={() => {
+              toggleBranchManagerNode(node.key);
+            }}
+            className="group flex h-6 w-full items-center gap-1.5 rounded px-1 text-left text-xs text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-zinc-100"
+            style={{ paddingLeft: `${10 + (depth * 16)}px` }}
+          >
+            {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+            <Folder size={12} className="text-zinc-500 group-hover:text-zinc-300" />
+            <span className="min-w-0 flex-1 truncate">{node.label}</span>
+          </button>
+          {!isCollapsed && (
+            <div>
+              {node.children.map((childNode) => renderBranchManagerTreeNode(childNode, depth + 1))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const branch = node.branch;
+    const isCurrent = branch.current;
+    const isRemote = branch.kind === 'remote';
+    const branchMeta = [
+      branch.upstream,
+      branch.aheadCount > 0 ? `↑ ${branch.aheadCount}` : '',
+      branch.behindCount > 0 ? `↓ ${branch.behindCount}` : '',
+    ].filter(Boolean).join('  ');
+
+    return (
+      <div
+        key={node.key}
+        className={`group flex h-7 items-center gap-1.5 rounded pr-1 text-xs transition-colors ${
+          isCurrent
+            ? 'bg-sky-500/15 text-sky-100'
+            : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-50'
+        }`}
+        style={{ paddingLeft: `${28 + (depth * 16)}px` }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            checkoutBranchFromManager(branch);
+          }}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+        >
+          {isCurrent ? (
+            <Star size={12} className="shrink-0 fill-amber-300 text-amber-300" />
+          ) : (
+            <GitBranch size={12} className={`shrink-0 ${isRemote ? 'text-zinc-500' : 'text-amber-300'}`} />
+          )}
+          <span className="min-w-0 flex-1 truncate">{node.label}</span>
+          {branchMeta && (
+            <span className="hidden max-w-[140px] truncate text-[10px] text-zinc-500 group-hover:block">
+              {branchMeta}
+            </span>
+          )}
+          {isCurrent && (
+            <Check size={12} className="shrink-0 text-emerald-300" />
+          )}
+        </button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              aria-label={t('codePane.gitBranchActions')}
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+              className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 opacity-0 transition-opacity hover:bg-zinc-700 hover:text-zinc-100 group-hover:opacity-100"
+            >
+              <MoreHorizontal size={12} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal container={branchManagerRef.current ?? undefined}>
+            <DropdownMenu.Content
+              className={contextMenuContentClassName}
+              sideOffset={4}
+              align="end"
+            >
+              <DropdownMenu.Item
+                onSelect={() => {
+                  checkoutBranchFromManager(branch);
+                }}
+                disabled={branch.current}
+                className={`${contextMenuItemClassName} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
+              >
+                {isRemote ? t('codePane.gitCreateTrackingBranch') : t('codePane.gitCheckout')}
+              </DropdownMenu.Item>
+              {branch.kind === 'local' && (
+                <>
+                  <DropdownMenu.Item
+                    onSelect={() => {
+                      renameBranchFromManager(branch);
+                    }}
+                    className={contextMenuItemClassName}
+                  >
+                    {t('codePane.gitRenameBranch')}
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={() => {
+                      deleteBranchFromManager(branch);
+                    }}
+                    disabled={branch.current}
+                    className={`${contextMenuItemClassName} text-red-200 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
+                  >
+                    {t('codePane.gitDeleteBranch')}
+                  </DropdownMenu.Item>
+                </>
+              )}
+              <DropdownMenu.Separator className="my-1 h-px bg-zinc-800" />
+              <DropdownMenu.Item
+                onSelect={() => {
+                  void window.electronAPI.writeClipboardText(branch.name);
+                }}
+                className={contextMenuItemClassName}
+              >
+                {t('codePane.gitCopyBranchName')}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+    );
+  }, [
+    checkoutBranchFromManager,
+    collapsedBranchManagerNodeKeys,
+    contextMenuContentClassName,
+    contextMenuItemClassName,
+    deleteBranchFromManager,
+    renameBranchFromManager,
+    t,
+    toggleBranchManagerNode,
   ]);
 
   return (
@@ -11693,52 +12192,137 @@ export const CodePane: React.FC<CodePaneProps> = ({
       >
       <div className="flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
         <div className="flex min-w-0 items-center gap-2">
-          <DropdownMenu.Root
-            onOpenChange={(open) => {
-              if (open && gitBranches.length === 0 && !isGitBranchesLoading) {
-                void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
-              }
-            }}
-          >
-            <DropdownMenu.Trigger asChild>
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-label={t('codePane.gitBranchManager')}
-                onMouseDown={preventMouseButtonFocus}
-                className="flex h-6 max-w-[280px] items-center gap-1 rounded bg-zinc-800/90 px-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
-              >
-                <GitBranch size={12} className="shrink-0 text-sky-300" />
-                <span className="truncate">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</span>
-                <ChevronDown size={12} className="shrink-0 text-zinc-500" />
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                className={`${contextMenuContentClassName} max-h-[420px] min-w-[280px] overflow-y-auto`}
-                sideOffset={6}
-                align="start"
-              >
-                {branchActionMenuSections.map((section, sectionIndex) => (
-                  <React.Fragment key={`branch-actions-${sectionIndex}`}>
-                    {section.map((item) => (
-                      <DropdownMenu.Item
-                        key={item.id}
-                        disabled={item.disabled}
-                        onSelect={item.onSelect}
-                        className={`${contextMenuItemClassName} ${item.tone === 'danger' ? 'text-red-200 focus:text-red-100 data-[highlighted]:text-red-100' : ''} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
-                      >
-                        {item.label}
-                      </DropdownMenu.Item>
-                    ))}
-                    {sectionIndex < branchActionMenuSections.length - 1 && (
-                      <DropdownMenu.Separator className="my-1 h-px bg-zinc-800" />
-                    )}
-                  </React.Fragment>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+          <div ref={branchManagerRef} className="relative">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('codePane.gitBranchManager')}
+              aria-expanded={isBranchManagerOpen}
+              onMouseDown={preventMouseButtonFocus}
+              onClick={() => {
+                const nextOpen = !isBranchManagerOpen;
+                setIsBranchManagerOpen(nextOpen);
+                if (nextOpen && !isGitBranchesLoading) {
+                  setBranchManagerQuery('');
+                  void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+                }
+              }}
+              className={`flex h-6 max-w-[280px] items-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
+                isBranchManagerOpen
+                  ? 'bg-sky-500/15 text-sky-100'
+                  : 'bg-zinc-800/90 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50'
+              }`}
+            >
+              <GitBranch size={12} className="shrink-0 text-sky-300" />
+              <span className="truncate">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</span>
+              <ChevronDown size={12} className="shrink-0 text-zinc-500" />
+            </button>
+            {isBranchManagerOpen && (
+              <div className="absolute left-0 top-full z-[80] mt-1 flex h-[min(72vh,680px)] w-[360px] flex-col overflow-hidden rounded border border-zinc-800 bg-zinc-950 shadow-2xl">
+                <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
+                  <GitBranch size={13} className="shrink-0 text-sky-300" />
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-100">
+                    {gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={t('codePane.refresh')}
+                    onClick={() => {
+                      void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+                    }}
+                    className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+                  >
+                    {isGitBranchesLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t('codePane.gitOpenWorkbench')}
+                    onClick={() => {
+                      setIsBranchManagerOpen(false);
+                      setBottomPanelMode('git');
+                    }}
+                    className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+                  >
+                    <Settings size={13} />
+                  </button>
+                </div>
+
+                <div className="border-b border-zinc-800 px-2 py-2">
+                  <div className="flex h-7 items-center gap-2 rounded border border-zinc-800 bg-zinc-900/70 px-2">
+                    <Search size={13} className="shrink-0 text-zinc-500" />
+                    <input
+                      ref={branchManagerSearchInputRef}
+                      value={branchManagerQuery}
+                      onChange={(event) => {
+                        setBranchManagerQuery(event.target.value);
+                      }}
+                      placeholder={t('codePane.gitBranchSearchPlaceholder')}
+                      className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+                  {filteredBranchManagerQuickActions.length > 0 && (
+                    <div className="mb-3 space-y-0.5 border-b border-zinc-800 pb-2">
+                      {filteredBranchManagerQuickActions.map((action) => {
+                        const ActionIcon = action.icon;
+                        return (
+                          <button
+                            key={action.id}
+                            type="button"
+                            disabled={action.disabled}
+                            onClick={action.onSelect}
+                            className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            <ActionIcon size={13} className="shrink-0 text-zinc-500" />
+                            <span className="min-w-0 flex-1 truncate">{action.label}</span>
+                            {action.shortcut && (
+                              <span className="text-[10px] text-zinc-500">{action.shortcut}</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {gitBranchesError && (
+                    <div className="mb-2 rounded border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-xs text-red-200">
+                      {gitBranchesError}
+                    </div>
+                  )}
+
+                  {isGitBranchesLoading && gitBranches.length === 0 ? (
+                    <div className="flex h-32 items-center justify-center gap-2 text-xs text-zinc-500">
+                      <Loader2 size={13} className="animate-spin" />
+                      {t('codePane.loading')}
+                    </div>
+                  ) : branchManagerSections.length > 0 ? (
+                    <div className="space-y-3">
+                      {branchManagerSections.map((section) => (
+                        <div key={section.key}>
+                          <div className="mb-1 flex h-6 items-center gap-1.5 px-1 text-xs font-medium text-zinc-400">
+                            <ChevronDown size={12} className="text-zinc-500" />
+                            <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                            <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                              {section.count}
+                            </span>
+                          </div>
+                          <div className="space-y-0.5">
+                            {section.nodes.map((node) => renderBranchManagerTreeNode(node, 0))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex h-32 items-center justify-center text-xs text-zinc-500">
+                      {t('codePane.gitBranchNoResults')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           {gitRepositorySummary && gitRepositorySummary.operation !== 'idle' && (
             <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
               {gitOperationLabel}

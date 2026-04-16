@@ -487,6 +487,15 @@ export interface CodePaneGitCheckoutConfig {
   branchName: string;
   createBranch?: boolean;
   startPoint?: string;
+  detached?: boolean;
+}
+
+export interface CodePaneGitUpdateProjectConfig {
+  rootPath: string;
+}
+
+export interface CodePaneGitUpdateProjectResult {
+  mode: 'pull' | 'fetch';
 }
 
 export interface CodePaneGitBranchListConfig {
@@ -1686,6 +1695,7 @@ export interface ElectronAPI {
   codePaneGitCommit: (config: CodePaneGitCommitConfig) => Promise<IpcResponse<CodePaneGitCommitResult>>;
   codePaneGitStash: (config: CodePaneGitStashConfig) => Promise<IpcResponse<CodePaneGitStashResult>>;
   codePaneGitPush: (config: CodePaneGitPushConfig) => Promise<IpcResponse<CodePaneGitPushResult>>;
+  codePaneGitUpdateProject: (config: CodePaneGitUpdateProjectConfig) => Promise<IpcResponse<CodePaneGitUpdateProjectResult>>;
   codePaneGitCheckout: (config: CodePaneGitCheckoutConfig) => Promise<IpcResponse<void>>;
   codePaneGetGitBranches: (config: CodePaneGitBranchListConfig) => Promise<IpcResponse<CodePaneGitBranchEntry[]>>;
   codePaneGitRenameBranch: (config: CodePaneGitRenameBranchConfig) => Promise<IpcResponse<void>>;

@@ -159,6 +159,7 @@ Object.defineProperty(window, 'electronAPI', {
     codePaneGitCommit: vi.fn().mockResolvedValue({ success: true, data: { commitSha: 'abcdef1234567890', shortSha: 'abcdef1', summary: 'Commit summary' } }),
     codePaneGitStash: vi.fn().mockResolvedValue({ success: true, data: { reference: 'stash@{0}', message: 'WIP' } }),
     codePaneGitPush: vi.fn().mockResolvedValue({ success: true, data: { remote: 'origin', branchName: 'main' } }),
+    codePaneGitUpdateProject: vi.fn().mockResolvedValue({ success: true, data: { mode: 'fetch' } }),
     codePaneGitCheckout: vi.fn().mockResolvedValue({ success: true }),
     codePaneGetGitBranches: vi.fn().mockResolvedValue({ success: true, data: [] }),
     codePaneGitRenameBranch: vi.fn().mockResolvedValue({ success: true }),

@@ -21,6 +21,8 @@ import type {
   CodePaneGitStageConfig,
   CodePaneGitStashConfig,
   CodePaneGitStashResult,
+  CodePaneGitUpdateProjectConfig,
+  CodePaneGitUpdateProjectResult,
 } from '../../../shared/types/electron-api';
 import {
   execFileAsync,
@@ -194,9 +196,41 @@ export class CodeGitOperationService {
     };
   }
 
+  async updateProject(config: CodePaneGitUpdateProjectConfig): Promise<CodePaneGitUpdateProjectResult> {
+    const repoContext = await requireRepoContext(config.rootPath);
+    const upstreamBranch = await this.resolveCurrentUpstreamBranchName(repoContext.repoRootPath);
+
+    if (upstreamBranch) {
+      await execFileAsync(
+        'git',
+        ['-C', repoContext.repoRootPath, 'pull', '--ff-only'],
+        { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+      );
+      return {
+        mode: 'pull',
+      };
+    }
+
+    await execFileAsync(
+      'git',
+      ['-C', repoContext.repoRootPath, 'fetch', '--all', '--prune'],
+      { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
+    );
+    return {
+      mode: 'fetch',
+    };
+  }
+
   async checkout(config: CodePaneGitCheckoutConfig): Promise<void> {
     const repoContext = await requireRepoContext(config.rootPath);
-    const args = config.createBranch
+    const branchName = config.branchName.trim();
+    if (!branchName) {
+      throw new Error('Branch, tag, or revision is required');
+    }
+
+    const args = config.detached
+      ? ['-C', repoContext.repoRootPath, 'checkout', '--detach', branchName]
+      : config.createBranch
       ? ['-C', repoContext.repoRootPath, 'switch', '-c', config.branchName, ...(config.startPoint ? [config.startPoint] : [])]
       : ['-C', repoContext.repoRootPath, 'switch', config.branchName];
     await execFileAsync('git', args, { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 });
@@ -368,6 +402,19 @@ export class CodeGitOperationService {
       const { stdout } = await execFileAsync(
         'git',
         ['-C', repoRootPath, 'branch', '--show-current'],
+        { encoding: 'utf-8' },
+      );
+      return (stdout as string).trim();
+    } catch {
+      return '';
+    }
+  }
+
+  private async resolveCurrentUpstreamBranchName(repoRootPath: string): Promise<string> {
+    try {
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', repoRootPath, 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
         { encoding: 'utf-8' },
       );
       return (stdout as string).trim();
