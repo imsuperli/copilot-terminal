@@ -997,10 +997,6 @@ function isKnownMonacoCancellationError(error: unknown): boolean {
     || maybeError.message === 'Model not found';
 }
 
-function logCodePaneDebug(message: string, payload?: Record<string, unknown>): void {
-  console.log('[CodePane]', message, payload ?? {});
-}
-
 function isPathInside(parentPath: string, candidatePath: string): boolean {
   const normalizedParentPath = normalizePath(parentPath);
   const normalizedCandidatePath = normalizePath(candidatePath);
@@ -7282,12 +7278,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
         return;
       }
-
-      setBanner({
-        tone: 'info',
-        message: t('codePane.pathCopied'),
-        filePath: targetPath,
-      });
     } catch (error) {
       setBanner({
         tone: 'error',
@@ -7306,12 +7296,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
         return;
       }
-
-      setBanner({
-        tone: 'info',
-        message: t('codePane.valueCopied'),
-        filePath,
-      });
     } catch (error) {
       setBanner({
         tone: 'error',
@@ -8368,7 +8352,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const isRootSelected = selectedPath === rootPath;
   const orderedOpenFiles = useMemo(() => sortOpenFilesByPinned(openFiles), [openFiles]);
   const contextMenuContentClassName = 'z-[140] min-w-[180px] rounded border border-zinc-800 bg-zinc-950/95 p-1 shadow-2xl backdrop-blur';
-  const contextMenuItemClassName = 'flex items-center gap-2 rounded px-3 py-2 text-xs text-zinc-200 outline-none transition-colors focus:bg-zinc-800 data-[highlighted]:bg-zinc-800';
+  const contextMenuItemClassName = 'flex cursor-pointer select-none items-center gap-2 rounded px-3 py-2 text-xs text-zinc-200 outline-none transition-colors focus:bg-zinc-800 data-[highlighted]:bg-zinc-800';
   const sidebarTabs = useMemo(() => ([
     {
       mode: 'files' as const,
@@ -8633,60 +8617,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       <ContextMenu.Portal>
         <ContextMenu.Content
           className={contextMenuContentClassName}
-          ref={(node) => {
-            if (!node) {
-              return;
-            }
-
-            requestAnimationFrame(() => {
-              const rect = node.getBoundingClientRect();
-              const computedStyle = window.getComputedStyle(node);
-              logCodePaneDebug('context menu content mounted', {
-                path: filePath,
-                entryType,
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-                zIndex: computedStyle.zIndex,
-                display: computedStyle.display,
-                visibility: computedStyle.visibility,
-                opacity: computedStyle.opacity,
-                pointerEvents: computedStyle.pointerEvents,
-              });
-            });
-          }}
-          onPointerDownOutside={(event) => {
-            logCodePaneDebug('context menu pointer down outside', {
-              path: filePath,
-              entryType,
-              defaultPrevented: event.defaultPrevented,
-              targetTagName: event.target instanceof HTMLElement ? event.target.tagName : 'unknown',
-            });
-          }}
-          onFocusOutside={(event) => {
-            logCodePaneDebug('context menu focus outside', {
-              path: filePath,
-              entryType,
-              defaultPrevented: event.defaultPrevented,
-              targetTagName: event.target instanceof HTMLElement ? event.target.tagName : 'unknown',
-            });
-          }}
-          onInteractOutside={(event) => {
-            logCodePaneDebug('context menu interact outside', {
-              path: filePath,
-              entryType,
-              defaultPrevented: event.defaultPrevented,
-              targetTagName: event.target instanceof HTMLElement ? event.target.tagName : 'unknown',
-            });
-          }}
-          onCloseAutoFocus={(event) => {
-            logCodePaneDebug('context menu close auto focus', {
-              path: filePath,
-              entryType,
-              defaultPrevented: event.defaultPrevented,
-            });
-          }}
         >
           <ContextMenu.Item
             className={contextMenuItemClassName}
@@ -9009,26 +8939,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       return (
         <React.Fragment key={entry.path}>
-          <ContextMenu.Root
-            onOpenChange={(open) => {
-              logCodePaneDebug('tree context menu open change', {
-                open,
-                path: resolvedEntry.path,
-                entryType: resolvedEntry.type,
-              });
-            }}
-          >
+          <ContextMenu.Root>
             <ContextMenu.Trigger asChild>
               <button
                 type="button"
-                onContextMenu={(event) => {
-                  logCodePaneDebug('tree contextmenu trigger', {
-                    path: resolvedEntry.path,
-                    entryType: resolvedEntry.type,
-                    button: event.button,
-                    defaultPrevented: event.defaultPrevented,
-                  });
-                }}
                 onClick={() => {
                   if (isDirectory) {
                     selectExplorerPath(resolvedEntry.path);
@@ -9117,25 +9031,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
               return (
                 <div key={root.id}>
-                  <ContextMenu.Root
-                    onOpenChange={(open) => {
-                      logCodePaneDebug('external root context menu open change', {
-                        open,
-                        path: root.path,
-                      });
-                    }}
-                  >
+                  <ContextMenu.Root>
                     <ContextMenu.Trigger asChild>
                       <button
                         type="button"
                         title={root.path}
-                        onContextMenu={(event) => {
-                          logCodePaneDebug('external root contextmenu trigger', {
-                            path: root.path,
-                            button: event.button,
-                            defaultPrevented: event.defaultPrevented,
-                          });
-                        }}
                         onClick={() => {
                           selectExplorerPath(root.path);
                         }}
@@ -12406,11 +12306,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ref={rootContainerRef}
         className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
         onMouseDown={(event) => {
-          logCodePaneDebug('root container mouse down', {
-            button: event.button,
-            buttons: event.buttons,
-            targetTagName: event.target instanceof HTMLElement ? event.target.tagName : 'unknown',
-          });
           if (event.button !== 0) {
             return;
           }
@@ -12729,44 +12624,50 @@ export const CodePane: React.FC<CodePaneProps> = ({
         </div>
       </div>
 
-      {banner && (
-        <div className={`flex items-center justify-between gap-3 border-b px-3 py-2 text-xs ${banner.tone === 'error' ? 'border-red-500/30 bg-red-500/10 text-red-200' : banner.tone === 'warning' ? 'border-amber-500/30 bg-amber-500/10 text-amber-100' : 'border-sky-500/30 bg-sky-500/10 text-sky-100'}`}>
-          <span className="min-w-0 flex-1 truncate">{banner.message}</span>
-          <div className="flex items-center gap-2">
-            {banner.showReload && banner.filePath && (
+      {banner && banner.tone !== 'info' && (
+        <div className="pointer-events-none absolute right-3 top-9 z-[120] max-w-[min(420px,calc(100%-24px))]">
+          <div className={`pointer-events-auto flex items-center justify-between gap-3 rounded border px-3 py-2 text-xs shadow-2xl ${
+            banner.tone === 'error'
+              ? 'border-red-500/30 bg-zinc-950/96 text-red-200'
+              : 'border-amber-500/30 bg-zinc-950/96 text-amber-100'
+          }`}>
+            <span className="min-w-0 flex-1 break-words">{banner.message}</span>
+            <div className="flex items-center gap-2">
+              {banner.showReload && banner.filePath && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void reloadFileFromDisk(banner.filePath!);
+                    setBanner(null);
+                  }}
+                  className="rounded bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-100 hover:bg-zinc-800"
+                >
+                  {t('codePane.reload')}
+                </button>
+              )}
+              {banner.showOverwrite && banner.filePath && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    void saveFile(banner.filePath!, { overwrite: true }).then((didSave) => {
+                      if (didSave) {
+                        setBanner(null);
+                      }
+                    });
+                  }}
+                  className="rounded bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-100 hover:bg-zinc-800"
+                >
+                  {t('codePane.overwrite')}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={() => {
-                  void reloadFileFromDisk(banner.filePath!);
-                  setBanner(null);
-                }}
-                className="rounded bg-zinc-950/50 px-2 py-1 text-[11px] font-medium text-zinc-100 hover:bg-zinc-950"
+                onClick={() => setBanner(null)}
+                className="rounded bg-zinc-900/80 p-1 text-zinc-100 hover:bg-zinc-800"
               >
-                {t('codePane.reload')}
+                <X size={12} />
               </button>
-            )}
-            {banner.showOverwrite && banner.filePath && (
-              <button
-                type="button"
-                onClick={() => {
-                  void saveFile(banner.filePath!, { overwrite: true }).then((didSave) => {
-                    if (didSave) {
-                      setBanner(null);
-                    }
-                  });
-                }}
-                className="rounded bg-zinc-950/50 px-2 py-1 text-[11px] font-medium text-zinc-100 hover:bg-zinc-950"
-              >
-                {t('codePane.overwrite')}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setBanner(null)}
-              className="rounded bg-zinc-950/30 p-1 text-zinc-100 hover:bg-zinc-950/60"
-            >
-              <X size={12} />
-            </button>
+            </div>
           </div>
         </div>
       )}
@@ -12869,25 +12770,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   <>
                     {sidebarEntries.length > 0 ? (
                       <>
-                        <ContextMenu.Root
-                          onOpenChange={(open) => {
-                            logCodePaneDebug('project root context menu open change', {
-                              open,
-                              path: rootPath,
-                            });
-                          }}
-                        >
+                        <ContextMenu.Root>
                           <ContextMenu.Trigger asChild>
                             <button
                               type="button"
                               title={rootPath}
-                              onContextMenu={(event) => {
-                                logCodePaneDebug('project root contextmenu trigger', {
-                                  path: rootPath,
-                                  button: event.button,
-                                  defaultPrevented: event.defaultPrevented,
-                                });
-                              }}
                               onClick={() => {
                                 selectExplorerPath(rootPath);
                               }}
