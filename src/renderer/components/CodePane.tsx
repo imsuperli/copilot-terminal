@@ -1694,6 +1694,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const hierarchyRequestIdRef = useRef(0);
   const documentSymbolsRequestIdRef = useRef(0);
   const semanticRequestIdRef = useRef(0);
+  const editorSurfaceRequestIdRef = useRef(0);
 
   useEffect(() => {
     paneRef.current = pane;
@@ -2870,6 +2871,33 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [viewMode]);
 
+  const detachDiffEditorModel = useCallback(() => {
+    try {
+      diffEditorRef.current?.setModel(null);
+    } catch {
+      // Monaco can throw during rapid teardown; the editor is being disposed immediately afterwards.
+    }
+  }, []);
+
+  const releaseDiffModelsForFile = useCallback((filePath: string) => {
+    const activeDiffTargetPath = activeFilePathRef.current;
+    const isVisibleInDiffEditor = activeDiffTargetPath === filePath
+      && (paneRef.current.code?.viewMode ?? viewMode) === 'diff';
+
+    if (isVisibleInDiffEditor) {
+      detachDiffEditorModel();
+    }
+
+    diffModelsRef.current.get(filePath)?.dispose();
+    diffModelsRef.current.delete(filePath);
+    revisionModifiedModelsRef.current.get(filePath)?.dispose();
+    revisionModifiedModelsRef.current.delete(filePath);
+
+    if (revisionDiffFilePathRef.current === filePath) {
+      revisionDiffFilePathRef.current = null;
+    }
+  }, [detachDiffEditorModel, viewMode]);
+
   const disposeEditors = useCallback(() => {
     saveCurrentViewState();
     editorMouseDownListenerRef.current?.dispose();
@@ -2896,6 +2924,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     diffEditorMouseLeaveListenerRef.current = null;
     diffEditorCursorPositionListenerRef.current?.dispose();
     diffEditorCursorPositionListenerRef.current = null;
+    detachDiffEditorModel();
     clearDefinitionLinkDecoration();
     clearDebugDecorations();
     editorRef.current?.dispose();
@@ -2904,9 +2933,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     editorRef.current = null;
     secondaryEditorRef.current = null;
     diffEditorRef.current = null;
-  }, [clearDebugDecorations, clearDefinitionLinkDecoration, saveCurrentViewState]);
+  }, [clearDebugDecorations, clearDefinitionLinkDecoration, detachDiffEditorModel, saveCurrentViewState]);
 
   const disposeAllModels = useCallback(() => {
+    editorSurfaceRequestIdRef.current += 1;
     for (const timer of autoSaveTimersRef.current.values()) {
       clearTimeout(timer);
     }
@@ -2932,6 +2962,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
     fileModelsRef.current.clear();
 
+    detachDiffEditorModel();
     for (const model of diffModelsRef.current.values()) {
       model.dispose();
     }
@@ -2948,7 +2979,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     clearDefinitionLookupCache();
     viewStatesRef.current.clear();
     setProblems([]);
-  }, [clearDefinitionLookupCache]);
+  }, [clearDefinitionLookupCache, detachDiffEditorModel]);
 
   const applyExternalLibrarySections = useCallback((nextSections: CodePaneExternalLibrarySection[]) => {
     const nextExternalRootPaths = collectExternalRootPaths(nextSections);
@@ -3929,12 +3960,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   const refreshEditorSurface = useCallback(async () => {
+    const requestId = ++editorSurfaceRequestIdRef.current;
+    const isCurrentRequest = () => requestId === editorSurfaceRequestIdRef.current;
     const hostElement = editorHostRef.current;
     if (!hostElement) {
       return;
     }
 
     const monaco = await ensureMonacoReady();
+    if (!isCurrentRequest()) {
+      return;
+    }
     if (!monaco) {
       disposeEditors();
       return;
@@ -3954,7 +3990,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const model = fileModelsRef.current.get(currentActiveFilePath);
-    if (!model) {
+    if (!model || !isCurrentRequest()) {
       return;
     }
     const isReadOnlyFile = fileMetaRef.current.get(currentActiveFilePath)?.readOnly === true;
@@ -4017,6 +4053,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         );
         attachDefinitionClickNavigation(diffEditorRef.current.getModifiedEditor(), 'diff');
       }
+      if (!isCurrentRequest()) {
+        return;
+      }
 
       diffEditorRef.current.setModel({
         original: diffModel,
@@ -4047,6 +4086,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     diffEditorMouseDownListenerRef.current?.dispose();
     diffEditorMouseDownListenerRef.current = null;
+    detachDiffEditorModel();
     diffEditorRef.current?.dispose();
     diffEditorRef.current = null;
 
@@ -4183,6 +4223,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     applyDebugDecorations,
     applyPendingNavigation,
     attachDefinitionClickNavigation,
+    detachDiffEditorModel,
     disposeEditors,
     editorInlayHintOptions,
     ensureMonacoReady,
@@ -5430,6 +5471,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         monaco.editor.setModelLanguage(diffModel, language);
       }
       if (diffModel.uri.toString() !== originalUri.toString()) {
+        if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff' && activeFilePathRef.current === modelKey) {
+          detachDiffEditorModel();
+        }
         diffModel.dispose();
         diffModel = monaco.editor.createModel(leftContent, language, originalUri);
         diffModelsRef.current.set(modelKey, diffModel);
@@ -5446,6 +5490,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         monaco.editor.setModelLanguage(modifiedRevisionModel, language);
       }
       if (modifiedRevisionModel.uri.toString() !== modifiedUri.toString()) {
+        if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff' && activeFilePathRef.current === modelKey) {
+          detachDiffEditorModel();
+        }
         modifiedRevisionModel.dispose();
         modifiedRevisionModel = monaco.editor.createModel(rightContent, language, modifiedUri);
         revisionModifiedModelsRef.current.set(modelKey, modifiedRevisionModel);
@@ -5456,7 +5503,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     clearBannerForFile(activeFile);
     return true;
-  }, [clearBannerForFile, ensureDiffModel, ensureMonacoReady, loadFileIntoModel, rootPath, supportsMonaco, t]);
+  }, [clearBannerForFile, detachDiffEditorModel, ensureDiffModel, ensureMonacoReady, loadFileIntoModel, rootPath, supportsMonaco, t, viewMode]);
 
   const openDiffForFile = useCallback(async (filePath: string, options?: { preserveTabs?: boolean }) => {
     if (!isPathInside(rootPath, filePath)) {
@@ -5501,10 +5548,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [ensureDiffModel, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, rootPath, t]);
 
   const openGitRevisionDiff = useCallback(async (request: GitRevisionDiffRequest) => {
+    pendingGitRevisionDiffRef.current = request;
     setPendingGitRevisionDiff(request);
     setPendingExternalChangeDiff(null);
+    pendingExternalChangeDiffRef.current = null;
     const didEnsureRevisionDiffModel = await ensureRevisionDiffModel(request);
     if (!didEnsureRevisionDiffModel) {
+      pendingGitRevisionDiffRef.current = null;
       setPendingGitRevisionDiff(null);
       return;
     }
@@ -5587,6 +5637,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         monaco.editor.setModelLanguage(diffModel, entry.language);
       }
       if (diffModel.uri.toString() !== originalUri.toString()) {
+        if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff' && activeFilePathRef.current === modelKey) {
+          detachDiffEditorModel();
+        }
         diffModel.dispose();
         diffModel = monaco.editor.createModel(entry.previousContent, entry.language, originalUri);
         diffModelsRef.current.set(modelKey, diffModel);
@@ -5604,6 +5657,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         monaco.editor.setModelLanguage(modifiedModel, entry.language);
       }
       if (modifiedModel.uri.toString() !== modifiedUri.toString()) {
+        if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff' && activeFilePathRef.current === modelKey) {
+          detachDiffEditorModel();
+        }
         modifiedModel.dispose();
         modifiedModel = monaco.editor.createModel(entry.currentContent, entry.language, modifiedUri);
         revisionModifiedModelsRef.current.set(modelKey, modifiedModel);
@@ -5619,7 +5675,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
     clearBannerForFile(entry.filePath);
     return true;
-  }, [clearBannerForFile, ensureMonacoReady, supportsMonaco, t]);
+  }, [activeFilePathRef, clearBannerForFile, detachDiffEditorModel, ensureMonacoReady, supportsMonaco, t, viewMode]);
 
   const openExternalChangeDiff = useCallback(async (filePath: string) => {
     const entry = externalChangeEntriesRef.current.find((candidate) => candidate.filePath === filePath);
@@ -5692,6 +5748,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         : currentPath
     ));
     if (pendingExternalChangeDiffRef.current?.filePath === filePath) {
+      pendingExternalChangeDiffRef.current = null;
       setPendingExternalChangeDiff(null);
       if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff') {
         persistCodeState({
@@ -5707,6 +5764,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setExternalChangeEntries([]);
     setSelectedExternalChangePath(null);
     if (pendingExternalChangeDiffRef.current) {
+      pendingExternalChangeDiffRef.current = null;
       setPendingExternalChangeDiff(null);
       if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff') {
         persistCodeState({
@@ -5833,12 +5891,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     modelDisposersRef.current.delete(filePath);
     const existingModel = fileModelsRef.current.get(filePath);
     if (existingModel) {
+      if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff' && activeFilePathRef.current === filePath) {
+        detachDiffEditorModel();
+      }
       modelFilePathRef.current.delete(existingModel.uri.path);
       existingModel.dispose();
     }
     fileModelsRef.current.delete(filePath);
-    diffModelsRef.current.get(filePath)?.dispose();
-    diffModelsRef.current.delete(filePath);
+    releaseDiffModelsForFile(filePath);
     fileMetaRef.current.delete(filePath);
     preloadedReadResultsRef.current.delete(filePath);
     clearDefinitionLookupCache();
@@ -5875,11 +5935,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     clearBannerForFile,
     clearDefinitionLookupCache,
     closeLanguageDocument,
+    detachDiffEditorModel,
     flushDirtyFiles,
     markDirty,
     openFiles,
     persistCodeState,
     persistEditorSplitLayout,
+    releaseDiffModelsForFile,
     selectedPath,
   ]);
 
@@ -6673,6 +6735,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const refreshDirectoryPathsRef = useRef(refreshDirectoryPaths);
   const pruneRemovedDirectoriesRef = useRef(pruneRemovedDirectories);
   const recordExternalChangeRef = useRef(recordExternalChange);
+  const attachLanguageWorkspaceRef = useRef(attachLanguageWorkspace);
+  const loadDirectoryRef = useRef(loadDirectory);
+  const refreshProjectBootstrapCachesRef = useRef(refreshProjectBootstrapCaches);
+  const resetExternalLibrarySectionsRef = useRef(resetExternalLibrarySections);
+  const applyGitSnapshotRef = useRef(applyGitSnapshot);
 
   useEffect(() => {
     ensureMarkerListenerRef.current = ensureMarkerListener;
@@ -6705,6 +6772,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     recordExternalChangeRef.current = recordExternalChange;
   }, [recordExternalChange]);
+
+  useEffect(() => {
+    attachLanguageWorkspaceRef.current = attachLanguageWorkspace;
+  }, [attachLanguageWorkspace]);
+
+  useEffect(() => {
+    loadDirectoryRef.current = loadDirectory;
+  }, [loadDirectory]);
+
+  useEffect(() => {
+    refreshProjectBootstrapCachesRef.current = refreshProjectBootstrapCaches;
+  }, [refreshProjectBootstrapCaches]);
+
+  useEffect(() => {
+    resetExternalLibrarySectionsRef.current = resetExternalLibrarySections;
+  }, [resetExternalLibrarySections]);
+
+  useEffect(() => {
+    applyGitSnapshotRef.current = applyGitSnapshot;
+  }, [applyGitSnapshot]);
 
   const revealPath = useCallback(async (targetPath: string, entryType: CodePaneTreeEntry['type']) => {
     try {
@@ -7015,7 +7102,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setTreeEntriesByDirectory({});
       setExternalEntriesByDirectory({});
       setExternalLibrariesError(null);
-      resetExternalLibrarySections(getExternalLibraryCache(rootPath) ?? []);
+      resetExternalLibrarySectionsRef.current(getExternalLibraryCache(rootPath) ?? []);
       setIndexStatus(null);
       setLanguageWorkspaceState(null);
       setExpandedDirectories(initialExpandedDirectories);
@@ -7088,7 +7175,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const cachedGitStatusEntries = getGitStatusCache(rootPath) ?? [];
       const cachedGitSummary = getGitSummaryCache(rootPath);
       const cachedGitGraph = getGitGraphCache(rootPath) ?? [];
-      applyGitSnapshot(cachedGitStatusEntries, cachedGitSummary, cachedGitGraph, {
+      applyGitSnapshotRef.current(cachedGitStatusEntries, cachedGitSummary, cachedGitGraph, {
         includeGraph: true,
       });
       disposeEditorsRef.current();
@@ -7159,13 +7246,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
         const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
           .filter((directoryPath) => directoryPath !== rootPath);
         if (nestedExpandedDirectories.length > 0) {
-          void Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectory(directoryPath, {
+          void Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectoryRef.current(directoryPath, {
             showLoadingIndicator: getDirectoryCache(rootPath, directoryPath) === null,
           })))
             .catch(() => {});
         }
 
-        const rootEntries = await loadDirectory(rootPath, {
+        const rootEntries = await loadDirectoryRef.current(rootPath, {
           showLoadingIndicator: cachedRootEntries === null,
         });
 
@@ -7173,12 +7260,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
           setIsBootstrapping(false);
         }
 
-        void refreshProjectBootstrapCaches().catch((error) => {
+        void refreshProjectBootstrapCachesRef.current().catch((error) => {
           if (mounted) {
             setExternalLibrariesError(error instanceof Error ? error.message : t('common.retry'));
           }
         });
-        void attachLanguageWorkspace(rootEntries).catch(() => {});
+        void attachLanguageWorkspaceRef.current(rootEntries).catch(() => {});
       } catch (error) {
         if (mounted) {
           setBanner({
@@ -7212,13 +7299,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     };
   }, [
-    applyGitSnapshot,
-    loadDirectory,
-    attachLanguageWorkspace,
     pane.id,
-    recordExternalChange,
-    refreshProjectBootstrapCaches,
-    resetExternalLibrarySections,
     rootPath,
     supportsMonaco,
     t,
@@ -7280,12 +7361,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    let cancelled = false;
+    const requestId = ++editorSurfaceRequestIdRef.current;
+    const isCurrentRequest = () => !cancelled && requestId === editorSurfaceRequestIdRef.current;
+
     const syncActiveSurface = async () => {
+      if (!isCurrentRequest()) {
+        return;
+      }
       const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
       const currentDiffTargetPath = paneRef.current.code?.diffTargetPath ?? diffTargetPath ?? activeFilePath;
       const currentSecondaryFilePath = secondaryFilePathRef.current;
       const loadedModel = fileModelsRef.current.get(activeFilePath) ?? await loadFileIntoModel(activeFilePath);
-      if (!loadedModel) {
+      if (!loadedModel || !isCurrentRequest()) {
         return;
       }
 
@@ -7307,6 +7395,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 baseFilePath: currentDiffTargetPath,
                 showBanner: false,
               });
+        if (!isCurrentRequest()) {
+          return;
+        }
         if (!didEnsureDiffModel) {
           persistCodeState({
             viewMode: 'editor',
@@ -7317,12 +7408,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       if (currentViewMode === 'editor' && isEditorSplitVisible && currentSecondaryFilePath && currentSecondaryFilePath !== activeFilePath) {
         await loadFileIntoModel(currentSecondaryFilePath);
+        if (!isCurrentRequest()) {
+          return;
+        }
       }
 
       await refreshEditorSurface();
     };
 
     void syncActiveSurface();
+
+    return () => {
+      cancelled = true;
+    };
   }, [
     activeFilePath,
     diffTargetPath,

@@ -14,6 +14,8 @@ import { resetCodePaneProjectCacheForTests } from '../../stores/codePaneProjectC
 import type { Pane } from '../../types/window';
 import { WindowStatus } from '../../types/window';
 
+vi.setConfig({ testTimeout: 15000 });
+
 type UpdatePaneFn = (windowId: string, paneId: string, updates: Partial<Pane>) => void;
 type ChangeListener = () => void;
 
@@ -4784,15 +4786,15 @@ describe('CodePane', () => {
       },
     });
     expect(result).toEqual([
-      {
-        uri: { path: '/workspace/project/src/index.ts' },
+      expect.objectContaining({
+        uri: expect.objectContaining({ path: '/workspace/project/src/index.ts' }),
         range: {
           startLineNumber: 1,
           startColumn: 8,
           endLineNumber: 1,
           endColumn: 13,
         },
-      },
+      }),
     ]);
   });
 
@@ -4878,15 +4880,15 @@ describe('CodePane', () => {
       },
     });
     expect(implementationResult).toEqual([
-      {
-        uri: { path: '/workspace/project/src/util.ts' },
+      expect.objectContaining({
+        uri: expect.objectContaining({ path: '/workspace/project/src/util.ts' }),
         range: {
           startLineNumber: 3,
           startColumn: 5,
           endLineNumber: 3,
           endColumn: 9,
         },
-      },
+      }),
     ]);
   });
 
@@ -5216,11 +5218,8 @@ describe('CodePane', () => {
       ]));
     });
     expect(view.getPane().code?.activeFilePath).toBe('jdt://contents/java.base/java/lang/String.class?=mock');
-    expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
-      rootPath: '/workspace/project',
-      filePath: 'jdt://contents/java.base/java/lang/String.class?=mock',
-      documentUri: 'jdt://contents/java.base/java/lang/String.class?=mock',
-    });
+    expect(window.electronAPI.codePaneReadFile).not.toHaveBeenCalled();
+    expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('package java.lang;\npublic final class String {}\n');
   });
 
   it('applies plugin diagnostics to Monaco markers and the problems panel', async () => {

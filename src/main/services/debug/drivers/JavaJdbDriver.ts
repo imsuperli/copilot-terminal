@@ -46,6 +46,9 @@ export class JavaJdbDriver implements DebugDriver {
     if (!launchConfig) {
       throw new Error('The selected Java target does not support the current debug launcher.');
     }
+    if (!launchConfig.command.trim()) {
+      throw new Error('The selected Java debug target resolved to an empty command.');
+    }
 
     this.launchProcess = new InteractiveDebugCommandProcess({
       command: launchConfig.command,
@@ -275,26 +278,31 @@ function buildJavaDebugLaunch(
   port: number,
 ): { command: string; args: string[] } | null {
   const debugAgent = `-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:${port}`;
-  const baseName = path.basename(target.command).toLowerCase();
+  const command = target.command.trim();
+  const args = target.args
+    .filter((arg): arg is string => typeof arg === 'string')
+    .map((arg) => arg.trim())
+    .filter((arg) => arg.length > 0);
+  const baseName = path.basename(command).toLowerCase();
 
   if (baseName === 'mvn' || baseName === 'mvn.cmd' || baseName === 'mvnw' || baseName === 'mvnw.cmd') {
-    const propertyName = target.args.some((arg) => arg.includes('spring-boot:run'))
+    const propertyName = args.some((arg) => arg.includes('spring-boot:run'))
       ? 'spring-boot.run.jvmArguments'
       : 'exec.jvmArgs';
-    const existingJvmArgsIndex = target.args.findIndex((arg) => arg.startsWith(`-D${propertyName}=`));
+    const existingJvmArgsIndex = args.findIndex((arg) => arg.startsWith(`-D${propertyName}=`));
     if (existingJvmArgsIndex >= 0) {
-      const existingValue = target.args[existingJvmArgsIndex].slice(`-D${propertyName}=`.length).trim();
-      const nextArgs = [...target.args];
+      const existingValue = args[existingJvmArgsIndex].slice(`-D${propertyName}=`.length).trim();
+      const nextArgs = [...args];
       nextArgs[existingJvmArgsIndex] = `-D${propertyName}=${[existingValue, debugAgent].filter(Boolean).join(' ')}`;
       return {
-        command: target.command,
+        command,
         args: nextArgs,
       };
     }
 
     return {
-      command: target.command,
-      args: [`-D${propertyName}=${debugAgent}`, ...target.args],
+      command,
+      args: [`-D${propertyName}=${debugAgent}`, ...args],
     };
   }
 

@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
+import { prepareSpawnCommand } from '../code/CodeRunProfileService';
 
 interface InteractiveDebugCommandProcessOptions {
   command: string;
@@ -34,10 +35,22 @@ export class InteractiveDebugCommandProcess {
     this.promptPattern = buildPromptPattern(options.promptPattern);
     this.onOutput = options.onOutput;
     this.onExit = options.onExit;
-    this.child = spawn(options.command, options.args, {
-      cwd: options.cwd,
-      env: options.env ?? process.env,
+    const command = normalizeSpawnCommand(options.command);
+    const args = normalizeSpawnArgs(options.args);
+    if (!command) {
+      throw new Error('Debugger command is empty');
+    }
+    const preparedCommand = prepareSpawnCommand(
+      command,
+      args,
+      options.cwd,
+      options.env ?? process.env,
+    );
+
+    this.child = spawn(preparedCommand.command, preparedCommand.args, {
+      ...preparedCommand.options,
       stdio: 'pipe',
+      windowsHide: true,
     });
 
     this.child.stdout.on('data', (chunk: Buffer) => {
@@ -191,6 +204,17 @@ export class InteractiveDebugCommandProcess {
       ?? `Debugger process exited with code ${result.exitCode ?? 'unknown'}`;
     pendingRequest.reject(new Error(message));
   }
+}
+
+function normalizeSpawnCommand(command: string): string {
+  return command.trim().replace(/^"(.*)"$/s, '$1');
+}
+
+function normalizeSpawnArgs(args: string[]): string[] {
+  return args
+    .filter((arg): arg is string => typeof arg === 'string')
+    .map((arg) => arg.trim())
+    .filter((arg) => arg.length > 0);
 }
 
 function buildPromptPattern(pattern: RegExp): RegExp {
