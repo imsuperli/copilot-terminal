@@ -24,6 +24,9 @@ interface OutlineToolWindowProps {
   onClose: () => void;
   onRefresh: () => void | Promise<void>;
   onOpenSymbol: (range: CodePaneRange) => void | Promise<void>;
+  panelClassName?: string;
+  bodyClassName?: string;
+  closeOnDoubleClick?: boolean;
 }
 
 export function OutlineToolWindow({
@@ -34,12 +37,15 @@ export function OutlineToolWindow({
   onClose,
   onRefresh,
   onOpenSymbol,
+  panelClassName,
+  bodyClassName,
+  closeOnDoubleClick = false,
 }: OutlineToolWindowProps) {
   const { t } = useI18n();
   const tree = React.useMemo(() => buildOutlineTree(symbols), [symbols]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
+    <div className={panelClassName ?? 'flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90'}>
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
@@ -72,7 +78,7 @@ export function OutlineToolWindow({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+      <div className={bodyClassName ?? 'min-h-0 flex-1 overflow-auto px-3 py-3'}>
         {isLoading ? (
           <div className="flex items-center gap-2 text-xs text-zinc-500">
             <Loader2 size={12} className="animate-spin" />
@@ -88,6 +94,8 @@ export function OutlineToolWindow({
                 node={node}
                 depth={0}
                 onOpenSymbol={onOpenSymbol}
+                onClose={onClose}
+                closeOnDoubleClick={closeOnDoubleClick}
               />
             ))}
           </div>
@@ -105,10 +113,14 @@ function OutlineNodeRow({
   node,
   depth,
   onOpenSymbol,
+  onClose,
+  closeOnDoubleClick,
 }: {
   node: OutlineTreeNode;
   depth: number;
   onOpenSymbol: (range: CodePaneRange) => void | Promise<void>;
+  onClose: () => void;
+  closeOnDoubleClick: boolean;
 }) {
   const [isExpanded, setIsExpanded] = React.useState(true);
   const hasChildren = node.children.length > 0;
@@ -139,6 +151,13 @@ function OutlineNodeRow({
           onClick={() => {
             void onOpenSymbol(node.symbol.selectionRange);
           }}
+          onDoubleClick={() => {
+            if (!closeOnDoubleClick) {
+              return;
+            }
+            void onOpenSymbol(node.symbol.selectionRange);
+            onClose();
+          }}
           className="min-w-0 flex-1 text-left"
         >
           <div className="flex items-center gap-2">
@@ -160,6 +179,8 @@ function OutlineNodeRow({
               node={child}
               depth={depth + 1}
               onOpenSymbol={onOpenSymbol}
+              onClose={onClose}
+              closeOnDoubleClick={closeOnDoubleClick}
             />
           ))}
         </div>

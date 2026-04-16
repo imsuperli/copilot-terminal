@@ -269,6 +269,17 @@ type SearchEverywhereItem = {
   execute: () => void | Promise<void>;
 };
 
+type InspectorPanelMode = 'outline' | 'hierarchy';
+
+type InspectorTargetContext = {
+  filePath: string;
+  language: string;
+  position: {
+    lineNumber: number;
+    column: number;
+  };
+};
+
 type CodePaneFsChange = CodePaneFsChangedPayload['changes'][number];
 type CodePaneIndexStatus = CodePaneIndexProgressPayload;
 type ExternalChangeKind = 'added' | 'modified' | 'deleted';
@@ -1559,6 +1570,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [documentSymbolsFilePath, setDocumentSymbolsFilePath] = useState<string | null>(null);
   const [isDocumentSymbolsLoading, setIsDocumentSymbolsLoading] = useState(false);
   const [documentSymbolsError, setDocumentSymbolsError] = useState<string | null>(null);
+  const [inspectorPanelMode, setInspectorPanelMode] = useState<InspectorPanelMode | null>(null);
+  const [inspectorPanelFilePath, setInspectorPanelFilePath] = useState<string | null>(null);
   const [problems, setProblems] = useState<Array<MonacoMarker & { filePath: string }>>([]);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -4742,8 +4755,44 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void loadQuickDocumentation();
   }, [isQuickDocumentationOpen, loadQuickDocumentation]);
 
-  const loadDocumentSymbols = useCallback(async () => {
-    const context = getActiveEditorContext();
+  const resolveInspectorTargetContext = useCallback(async (
+    filePath: string,
+    options?: {
+      preferredRange?: CodePaneDocumentSymbol['selectionRange'] | null;
+    },
+  ): Promise<InspectorTargetContext | null> => {
+    const activeContext = getActiveEditorContext();
+    if (activeContext && activeContext.filePath === filePath) {
+      return {
+        filePath,
+        language: activeContext.language,
+        position: {
+          lineNumber: activeContext.position.lineNumber,
+          column: activeContext.position.column,
+        },
+      };
+    }
+
+    const model = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
+    if (!model) {
+      return null;
+    }
+
+    const preferredRange = options?.preferredRange;
+    return {
+      filePath,
+      language: fileMetaRef.current.get(filePath)?.language ?? model.getLanguageId(),
+      position: {
+        lineNumber: preferredRange?.startLineNumber ?? 1,
+        column: preferredRange?.startColumn ?? 1,
+      },
+    };
+  }, [getActiveEditorContext, loadFileIntoModel]);
+
+  const loadDocumentSymbols = useCallback(async (targetFilePath?: string) => {
+    const context = targetFilePath
+      ? await resolveInspectorTargetContext(targetFilePath)
+      : getActiveEditorContext();
     if (!context) {
       documentSymbolsRequestIdRef.current += 1;
       setDocumentSymbols([]);
@@ -4791,19 +4840,52 @@ export const CodePane: React.FC<CodePaneProps> = ({
         setIsDocumentSymbolsLoading(false);
       }
     }
-  }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
+  }, [getActiveEditorContext, getModelRequestPath, resolveInspectorTargetContext, rootPath, t, trackRequest]);
 
-  const openFileStructurePanel = useCallback(() => {
-    if (!activeFilePath) {
-      return;
+  const closeInspectorPanel = useCallback(() => {
+    setInspectorPanelMode(null);
+    setInspectorPanelFilePath(null);
+  }, []);
+
+  const openInspectorOutlinePanel = useCallback(async (filePath: string) => {
+    setInspectorPanelMode('outline');
+    setInspectorPanelFilePath(filePath);
+    await loadDocumentSymbols(filePath);
+  }, [loadDocumentSymbols]);
+
+  const loadDocumentSymbolsForFile = useCallback(async (filePath: string) => {
+    const context = await resolveInspectorTargetContext(filePath);
+    if (!context) {
+      return null;
     }
 
-    setBottomPanelMode('outline');
-    void loadDocumentSymbols();
-  }, [activeFilePath, loadDocumentSymbols]);
+    const response = await trackRequest(
+      `document-symbols:${getModelRequestPath(filePath)}`,
+      'Document symbols',
+      getRelativePath(rootPath, filePath),
+      async () => await window.electronAPI.codePaneGetDocumentSymbols({
+        rootPath,
+        filePath: getModelRequestPath(filePath),
+        language: context.language,
+      }),
+    );
 
-  const loadHierarchyRoot = useCallback(async (mode: HierarchyMode) => {
-    const context = getActiveEditorContext();
+    return response.success ? (response.data ?? []) : null;
+  }, [getModelRequestPath, getRelativePath, resolveInspectorTargetContext, rootPath, trackRequest]);
+
+  const loadHierarchyRoot = useCallback(async (
+    mode: HierarchyMode,
+    targetFilePath?: string,
+    preferredRange?: CodePaneDocumentSymbol['selectionRange'] | null,
+  ) => {
+    const resolvedPreferredRange = preferredRange ?? (
+      targetFilePath && documentSymbolsFilePath === targetFilePath
+        ? documentSymbols[0]?.selectionRange ?? null
+        : null
+    );
+    const context = targetFilePath
+      ? await resolveInspectorTargetContext(targetFilePath, { preferredRange: resolvedPreferredRange })
+      : getActiveEditorContext();
     if (!context) {
       setHierarchyRootNode(null);
       setHierarchyError(null);
@@ -4883,12 +4965,52 @@ export const CodePane: React.FC<CodePaneProps> = ({
         setIsHierarchyLoading(false);
       }
     }
-  }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
+  }, [
+    documentSymbols,
+    documentSymbolsFilePath,
+    getActiveEditorContext,
+    getModelRequestPath,
+    resolveInspectorTargetContext,
+    rootPath,
+    t,
+    trackRequest,
+  ]);
+
+  const openInspectorHierarchyPanel = useCallback(async (filePath: string, mode: HierarchyMode) => {
+    setSelectedHierarchyMode(mode);
+    setInspectorPanelMode('hierarchy');
+    setInspectorPanelFilePath(filePath);
+    const symbols = await loadDocumentSymbolsForFile(filePath).catch(() => null);
+    const preferredRange = symbols?.[0]?.selectionRange ?? null;
+    const context = await resolveInspectorTargetContext(filePath, { preferredRange });
+    if (!context) {
+      setHierarchyRootNode(null);
+      setHierarchyError(t('common.retry'));
+      setIsHierarchyLoading(false);
+      return;
+    }
+
+    setDocumentSymbols(symbols ?? []);
+    setDocumentSymbolsFilePath(filePath);
+    setDocumentSymbolsError(null);
+    await loadHierarchyRoot(mode, context.filePath, preferredRange);
+  }, [loadDocumentSymbolsForFile, loadHierarchyRoot, resolveInspectorTargetContext, t]);
+
+  const openFileStructurePanel = useCallback(() => {
+    if (!activeFilePath) {
+      return;
+    }
+
+    void openInspectorOutlinePanel(activeFilePath);
+  }, [activeFilePath, openInspectorOutlinePanel]);
 
   const openHierarchyPanel = useCallback((mode: HierarchyMode) => {
-    setSelectedHierarchyMode(mode);
-    setBottomPanelMode('hierarchy');
-  }, []);
+    if (!activeFilePath) {
+      return;
+    }
+
+    void openInspectorHierarchyPanel(activeFilePath, mode);
+  }, [activeFilePath, openInspectorHierarchyPanel]);
 
   useEffect(() => {
     openFileStructurePanelRef.current = openFileStructurePanel;
@@ -8232,6 +8354,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
           >
             {t('codePane.gitFileHistory')}
           </ContextMenu.Item>
+          {entryType === 'file' && (
+            <>
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void openInspectorOutlinePanel(filePath);
+                }}
+              >
+                {t('codePane.fileStructureTab')}
+              </ContextMenu.Item>
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void openInspectorHierarchyPanel(filePath, 'type-parents');
+                }}
+              >
+                {t('codePane.typeHierarchyAction')}
+              </ContextMenu.Item>
+              <ContextMenu.Item
+                className={contextMenuItemClassName}
+                onSelect={() => {
+                  void openInspectorHierarchyPanel(filePath, 'call-outgoing');
+                }}
+              >
+                {t('codePane.callHierarchyAction')}
+              </ContextMenu.Item>
+            </>
+          )}
           {options?.allowGitActions !== false && (
             <ContextMenu.Sub>
               <ContextMenu.SubTrigger className={`${contextMenuItemClassName} justify-between`}>
@@ -8467,8 +8617,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         <React.Fragment key={entry.path}>
           <ContextMenu.Root>
             <ContextMenu.Trigger asChild>
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   if (isDirectory) {
                     selectExplorerPath(resolvedEntry.path);
@@ -8519,7 +8670,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     title={t('codePane.externalChangesTab')}
                   />
                 )}
-              </button>
+              </div>
             </ContextMenu.Trigger>
             {renderFileContextMenu(resolvedEntry.path, resolvedEntry.type, {
               allowDiff: isPathInside(rootPath, entry.path),
@@ -12525,24 +12676,79 @@ export const CodePane: React.FC<CodePaneProps> = ({
 	          </div>
 
 	          <div className="relative min-h-0 flex-1 overflow-hidden bg-zinc-950">
+                {isQuickDocumentationOpen && (
+                  <QuickDocumentationPanel
+                    title={t('codePane.quickDocumentation')}
+                    loadingLabel={t('codePane.quickDocumentationLoading')}
+                    emptyLabel={t('codePane.quickDocumentationEmpty')}
+                    error={quickDocumentationError}
+                    loading={isQuickDocumentationLoading}
+                    result={quickDocumentation}
+                    onRefresh={() => {
+                      void loadQuickDocumentation();
+                    }}
+                    onClose={() => {
+                      setIsQuickDocumentationOpen(false);
+                    }}
+                  />
+                )}
+                {inspectorPanelMode === 'outline' && inspectorPanelFilePath && (
+                    <div className="absolute right-3 top-3 z-20 w-[420px] max-w-[calc(100%-24px)] overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/95 shadow-2xl backdrop-blur">
+                      <OutlineToolWindow
+                        fileLabel={getFileLabel(inspectorPanelFilePath)}
+                        symbols={documentSymbolsFilePath === inspectorPanelFilePath ? documentSymbols : []}
+                        isLoading={isDocumentSymbolsLoading && documentSymbolsFilePath === inspectorPanelFilePath}
+                        error={documentSymbolsFilePath === inspectorPanelFilePath ? documentSymbolsError : null}
+                        onClose={closeInspectorPanel}
+                        onRefresh={() => {
+                          void loadDocumentSymbols(inspectorPanelFilePath);
+                        }}
+                        onOpenSymbol={(range) => {
+                          void openFileLocation({
+                            filePath: inspectorPanelFilePath,
+                            lineNumber: range.startLineNumber,
+                            column: range.startColumn,
+                          });
+                        }}
+                        panelClassName="flex max-h-[70vh] min-h-0 flex-col bg-transparent"
+                        bodyClassName="min-h-0 flex-1 overflow-auto px-3 py-3"
+                        closeOnDoubleClick
+                      />
+                    </div>
+                )}
+                {inspectorPanelMode === 'hierarchy' && inspectorPanelFilePath && (
+                    <div className="absolute right-3 top-3 z-20 w-[460px] max-w-[calc(100%-24px)] overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950/95 shadow-2xl backdrop-blur">
+                      <HierarchyToolWindow
+                        mode={selectedHierarchyMode}
+                        root={hierarchyRootNode}
+                        isLoading={isHierarchyLoading}
+                        error={hierarchyError}
+                        onClose={closeInspectorPanel}
+                        onRefresh={() => {
+                          void loadHierarchyRoot(selectedHierarchyMode, inspectorPanelFilePath);
+                        }}
+                        onSelectMode={(mode) => {
+                          setSelectedHierarchyMode(mode);
+                          void loadHierarchyRoot(mode, inspectorPanelFilePath);
+                        }}
+                        onToggleNode={(nodeKey) => {
+                          void toggleHierarchyNode(nodeKey);
+                        }}
+                        onOpenItem={(item) => {
+                          void openFileLocation({
+                            filePath: item.filePath,
+                            lineNumber: item.selectionRange.startLineNumber,
+                            column: item.selectionRange.startColumn,
+                          });
+                        }}
+                        panelClassName="flex max-h-[70vh] min-h-0 flex-col bg-transparent"
+                        bodyClassName="min-h-0 flex-1 overflow-auto px-3 py-3"
+                        closeOnDoubleClick
+                      />
+                    </div>
+                )}
 	            {activeFilePath ? (
 	              <div className="flex h-full min-h-0 flex-col">
-	                {isQuickDocumentationOpen && (
-	                  <QuickDocumentationPanel
-	                    title={t('codePane.quickDocumentation')}
-	                    loadingLabel={t('codePane.quickDocumentationLoading')}
-	                    emptyLabel={t('codePane.quickDocumentationEmpty')}
-	                    error={quickDocumentationError}
-	                    loading={isQuickDocumentationLoading}
-	                    result={quickDocumentation}
-	                    onRefresh={() => {
-	                      void loadQuickDocumentation();
-	                    }}
-	                    onClose={() => {
-	                      setIsQuickDocumentationOpen(false);
-	                    }}
-	                  />
-	                )}
 	                {isBlameVisible && (
 	                  <BlameGutter
                     enabled={isBlameVisible}

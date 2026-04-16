@@ -31,6 +31,9 @@ interface HierarchyToolWindowProps {
   onSelectMode: (mode: HierarchyMode) => void;
   onToggleNode: (nodeKey: string) => void;
   onOpenItem: (item: CodePaneHierarchyItem) => void;
+  panelClassName?: string;
+  bodyClassName?: string;
+  closeOnDoubleClick?: boolean;
 }
 
 export function HierarchyToolWindow({
@@ -43,11 +46,14 @@ export function HierarchyToolWindow({
   onSelectMode,
   onToggleNode,
   onOpenItem,
+  panelClassName,
+  bodyClassName,
+  closeOnDoubleClick = false,
 }: HierarchyToolWindowProps) {
   const { t } = useI18n();
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
+    <div className={panelClassName ?? 'flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90'}>
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
@@ -99,7 +105,7 @@ export function HierarchyToolWindow({
         })}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+      <div className={bodyClassName ?? 'min-h-0 flex-1 overflow-auto px-3 py-3'}>
         {isLoading ? (
           <div className="flex items-center gap-2 text-xs text-zinc-500">
             <Loader2 size={12} className="animate-spin" />
@@ -131,6 +137,8 @@ export function HierarchyToolWindow({
                     depth={0}
                     onToggleNode={onToggleNode}
                     onOpenItem={onOpenItem}
+                    onClose={onClose}
+                    closeOnDoubleClick={closeOnDoubleClick}
                   />
                 ))
               ) : (
@@ -155,9 +163,11 @@ interface HierarchyNodeRowProps {
   depth: number;
   onToggleNode: (nodeKey: string) => void;
   onOpenItem: (item: CodePaneHierarchyItem) => void;
+  onClose: () => void;
+  closeOnDoubleClick: boolean;
 }
 
-function HierarchyNodeRow({ node, depth, onToggleNode, onOpenItem }: HierarchyNodeRowProps) {
+function HierarchyNodeRow({ node, depth, onToggleNode, onOpenItem, onClose, closeOnDoubleClick }: HierarchyNodeRowProps) {
   return (
     <div>
       <div
@@ -189,6 +199,13 @@ function HierarchyNodeRow({ node, depth, onToggleNode, onOpenItem }: HierarchyNo
           type="button"
           onClick={() => {
             onOpenItem(node.item);
+          }}
+          onDoubleClick={() => {
+            if (!closeOnDoubleClick) {
+              return;
+            }
+            onOpenItem(node.item);
+            onClose();
           }}
           className="min-w-0 flex-1 text-left"
         >
@@ -224,6 +241,8 @@ function HierarchyNodeRow({ node, depth, onToggleNode, onOpenItem }: HierarchyNo
               depth={depth + 1}
               onToggleNode={onToggleNode}
               onOpenItem={onOpenItem}
+              onClose={onClose}
+              closeOnDoubleClick={closeOnDoubleClick}
             />
           ))}
         </div>
