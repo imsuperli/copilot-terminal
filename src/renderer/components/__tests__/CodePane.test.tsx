@@ -5554,21 +5554,17 @@ describe('CodePane', () => {
       expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 2;\n');
     });
 
-    const externalChangesButton = await screen.findByRole('button', { name: 'codePane.externalChangesTab' });
-    await act(async () => {
-      fireEvent.click(externalChangesButton);
-    });
-
     await screen.findByText('codePane.externalChangesSubtitle');
     const viewDiffButton = await screen.findByRole('button', { name: 'codePane.externalChangeViewDiff' });
-    await act(async () => {
-      fireEvent.click(viewDiffButton);
-    });
+    expect(viewDiffButton).toBeEnabled();
 
     await waitFor(() => {
-      expect(fakeMonacoState.lastDiffModel?.original.getValue()).toBe('export const value = 0;\n');
+      expect(fakeMonacoState.lastDiffModel?.original.getValue()).toBe('export const value = 1;\n');
       expect(fakeMonacoState.lastDiffModel?.modified.getValue()).toBe('export const value = 2;\n');
     });
+    expect(screen.getByText('codePane.externalChangeLineSummary')).toBeInTheDocument();
+    expect(screen.getAllByText('codePane.externalChangeDeletedLines').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('codePane.externalChangeAddedLines').length).toBeGreaterThan(0);
   });
 
   it('records external changes without auto-writing the file when local edits were made in the editor model', async () => {
@@ -5615,7 +5611,7 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneWriteFile).not.toHaveBeenCalled();
   });
 
-  it('treats unopened file watcher changes as modified entries without fabricating a diff base', async () => {
+  it('opens a git-based external diff for unopened file watcher changes', async () => {
     vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
       success: true,
       data: [
@@ -5636,6 +5632,13 @@ describe('CodePane', () => {
 
     await screen.findByRole('button', { name: 'other.ts' }, { timeout: 3000 });
 
+    vi.mocked(window.electronAPI.codePaneReadGitBaseFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const remote = 1;\n',
+        existsInHead: true,
+      },
+    });
     vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
       success: true,
       data: {
@@ -5657,15 +5660,18 @@ describe('CodePane', () => {
       ],
     });
 
-    const externalChangesButton = await screen.findByRole('button', { name: 'codePane.externalChangesTab' });
-    await act(async () => {
-      fireEvent.click(externalChangesButton);
-    });
-
     expect(await screen.findByText('codePane.externalChangeModified')).toBeInTheDocument();
 
     const viewDiffButton = await screen.findByRole('button', { name: 'codePane.externalChangeViewDiff' });
-    expect(viewDiffButton).toBeDisabled();
+    expect(viewDiffButton).toBeEnabled();
+    await waitFor(() => {
+      expect(fakeMonacoState.lastDiffModel?.original.getValue()).toBe('export const remote = 1;\n');
+      expect(fakeMonacoState.lastDiffModel?.modified.getValue()).toBe('export const remote = 4;\n');
+    });
+    expect(window.electronAPI.codePaneReadGitBaseFile).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/other.ts',
+    });
   });
 
   it('removes deleted files from the tree without reloading the whole directory', async () => {

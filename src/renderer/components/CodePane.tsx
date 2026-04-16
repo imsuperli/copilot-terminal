@@ -210,6 +210,7 @@ const CODE_PANE_MAX_LOCAL_HISTORY_PER_FILE = 12;
 const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
 const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
 const CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES = 60;
+const CODE_PANE_EXTERNAL_CHANGE_PREVIEW_LINE_LIMIT = 80;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
 const CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER = 'save-quality-linter';
@@ -288,6 +289,19 @@ type InspectorTargetContext = {
 type CodePaneFsChange = CodePaneFsChangedPayload['changes'][number];
 type CodePaneIndexStatus = CodePaneIndexProgressPayload;
 type ExternalChangeKind = 'added' | 'modified' | 'deleted';
+type ExternalChangeLineEntry = {
+  lineNumber: number;
+  text: string;
+};
+type ExternalChangeLineSummary = {
+  addedCount: number;
+  deletedCount: number;
+  addedLines: ExternalChangeLineEntry[];
+  deletedLines: ExternalChangeLineEntry[];
+  hiddenAddedCount: number;
+  hiddenDeletedCount: number;
+  isApproximate: boolean;
+};
 type ExternalChangeEntry = {
   id: string;
   filePath: string;
@@ -299,6 +313,7 @@ type ExternalChangeEntry = {
   changedAt: number;
   openedAtChange: boolean;
   canDiff: boolean;
+  lineSummary: ExternalChangeLineSummary;
 };
 type ExternalChangeDiffRequest = {
   filePath: string;
@@ -1040,6 +1055,67 @@ function formatLanguageLabel(languageId: string): string {
   }
 }
 
+function detectLanguageFromPath(filePath: string): string {
+  const baseName = getPathLeafLabel(filePath).toLowerCase();
+  const extensionMatch = baseName.match(/\.([^.]+)$/);
+  const extension = extensionMatch?.[1] ?? '';
+
+  if (baseName === 'dockerfile') return 'dockerfile';
+  if (baseName === '.gitignore') return 'plaintext';
+  if (baseName === '.env' || baseName.startsWith('.env.')) return 'shell';
+
+  switch (extension) {
+    case 'ts':
+    case 'tsx':
+      return 'typescript';
+    case 'js':
+    case 'jsx':
+      return 'javascript';
+    case 'json':
+      return 'json';
+    case 'css':
+    case 'scss':
+    case 'less':
+      return 'css';
+    case 'html':
+    case 'htm':
+      return 'html';
+    case 'md':
+      return 'markdown';
+    case 'py':
+      return 'python';
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+      return 'shell';
+    case 'yml':
+    case 'yaml':
+      return 'yaml';
+    case 'xml':
+      return 'xml';
+    case 'java':
+      return 'java';
+    case 'go':
+      return 'go';
+    case 'rs':
+      return 'rust';
+    case 'c':
+      return 'c';
+    case 'cc':
+    case 'cpp':
+    case 'cxx':
+    case 'h':
+    case 'hpp':
+      return 'cpp';
+    case 'php':
+      return 'php';
+    case 'sql':
+      return 'sql';
+    default:
+      return 'plaintext';
+  }
+}
+
 function isPathAffectedByRemovedDirectory(removedDirectoryPaths: string[], candidatePath: string): boolean {
   return removedDirectoryPaths.some((removedDirectoryPath) => isPathInside(removedDirectoryPath, candidatePath));
 }
@@ -1338,6 +1414,231 @@ function formatExternalChangeTime(timestamp: number): string {
   const minutes = `${date.getMinutes()}`.padStart(2, '0');
   const seconds = `${date.getSeconds()}`.padStart(2, '0');
   return `${hours}:${minutes}:${seconds}`;
+}
+
+function createEmptyExternalChangeLineSummary(): ExternalChangeLineSummary {
+  return {
+    addedCount: 0,
+    deletedCount: 0,
+    addedLines: [],
+    deletedLines: [],
+    hiddenAddedCount: 0,
+    hiddenDeletedCount: 0,
+    isApproximate: false,
+  };
+}
+
+function splitContentLines(content: string | null): string[] {
+  if (content === null) {
+    return [];
+  }
+
+  const normalizedContent = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (!normalizedContent) {
+    return [];
+  }
+
+  const lines = normalizedContent.split('\n');
+  if (normalizedContent.endsWith('\n')) {
+    lines.pop();
+  }
+  return lines;
+}
+
+function createLinePreview(lines: string[]): ExternalChangeLineEntry[] {
+  return lines.slice(0, CODE_PANE_EXTERNAL_CHANGE_PREVIEW_LINE_LIMIT).map((text, index) => ({
+    lineNumber: index + 1,
+    text,
+  }));
+}
+
+function createExternalChangeLineSummary(
+  previousContent: string | null,
+  currentContent: string | null,
+): ExternalChangeLineSummary {
+  if (previousContent === null && currentContent === null) {
+    return createEmptyExternalChangeLineSummary();
+  }
+
+  if (previousContent === null) {
+    const addedLines = splitContentLines(currentContent);
+    const previewLines = createLinePreview(addedLines);
+    return {
+      addedCount: addedLines.length,
+      deletedCount: 0,
+      addedLines: previewLines,
+      deletedLines: [],
+      hiddenAddedCount: Math.max(0, addedLines.length - previewLines.length),
+      hiddenDeletedCount: 0,
+      isApproximate: false,
+    };
+  }
+
+  if (currentContent === null) {
+    const deletedLines = splitContentLines(previousContent);
+    const previewLines = createLinePreview(deletedLines);
+    return {
+      addedCount: 0,
+      deletedCount: deletedLines.length,
+      addedLines: [],
+      deletedLines: previewLines,
+      hiddenAddedCount: 0,
+      hiddenDeletedCount: Math.max(0, deletedLines.length - previewLines.length),
+      isApproximate: false,
+    };
+  }
+
+  const previousLines = splitContentLines(previousContent);
+  const currentLines = splitContentLines(currentContent);
+  let prefixLength = 0;
+  while (
+    prefixLength < previousLines.length
+    && prefixLength < currentLines.length
+    && previousLines[prefixLength] === currentLines[prefixLength]
+  ) {
+    prefixLength += 1;
+  }
+
+  let previousSuffixIndex = previousLines.length - 1;
+  let currentSuffixIndex = currentLines.length - 1;
+  while (
+    previousSuffixIndex >= prefixLength
+    && currentSuffixIndex >= prefixLength
+    && previousLines[previousSuffixIndex] === currentLines[currentSuffixIndex]
+  ) {
+    previousSuffixIndex -= 1;
+    currentSuffixIndex -= 1;
+  }
+
+  const deletedChangedLines = previousLines.slice(prefixLength, previousSuffixIndex + 1);
+  const addedChangedLines = currentLines.slice(prefixLength, currentSuffixIndex + 1);
+  const deletedPreview = deletedChangedLines
+    .slice(0, CODE_PANE_EXTERNAL_CHANGE_PREVIEW_LINE_LIMIT)
+    .map((text, index) => ({
+      lineNumber: prefixLength + index + 1,
+      text,
+    }));
+  const addedPreview = addedChangedLines
+    .slice(0, CODE_PANE_EXTERNAL_CHANGE_PREVIEW_LINE_LIMIT)
+    .map((text, index) => ({
+      lineNumber: prefixLength + index + 1,
+      text,
+    }));
+
+  return {
+    addedCount: addedChangedLines.length,
+    deletedCount: deletedChangedLines.length,
+    addedLines: addedPreview,
+    deletedLines: deletedPreview,
+    hiddenAddedCount: Math.max(0, addedChangedLines.length - addedPreview.length),
+    hiddenDeletedCount: Math.max(0, deletedChangedLines.length - deletedPreview.length),
+    isApproximate: true,
+  };
+}
+
+function ExternalChangeLinePreview({
+  line,
+  tone,
+}: {
+  line: ExternalChangeLineEntry;
+  tone: 'added' | 'deleted';
+}) {
+  const toneClassName = tone === 'added'
+    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
+    : 'border-red-500/25 bg-red-500/10 text-red-100';
+  const prefix = tone === 'added' ? '+' : '-';
+
+  return (
+    <div className={`grid grid-cols-[52px_minmax(0,1fr)] gap-2 border-b border-zinc-900/80 px-2 py-1 last:border-b-0 ${toneClassName}`}>
+      <span className="select-none text-right font-mono text-[10px] text-zinc-500">
+        {line.lineNumber}
+      </span>
+      <code className="min-w-0 whitespace-pre-wrap break-words font-mono text-[11px] leading-5">
+        {prefix} {line.text || ' '}
+      </code>
+    </div>
+  );
+}
+
+function ExternalChangeLineSummaryPanel({
+  summary,
+  t,
+}: {
+  summary: ExternalChangeLineSummary;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  if (summary.addedCount === 0 && summary.deletedCount === 0) {
+    return (
+      <div className="rounded border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-500">
+        {t('codePane.externalChangeNoLineChanges')}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
+        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          {t('codePane.externalChangeLineSummary')}
+        </div>
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-200">
+            {t('codePane.externalChangeAddedLines', { count: summary.addedCount })}
+          </span>
+          <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-red-200">
+            {t('codePane.externalChangeDeletedLines', { count: summary.deletedCount })}
+          </span>
+          {summary.isApproximate && (
+            <span className="text-zinc-500">{t('codePane.externalChangeLineSummaryApproximate')}</span>
+          )}
+        </div>
+      </div>
+      <div className="grid min-h-0 md:grid-cols-2">
+        <div className="min-h-0 border-b border-zinc-800 md:border-b-0 md:border-r">
+          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-red-300">
+            {t('codePane.externalChangeDeletedLines', { count: summary.deletedCount })}
+          </div>
+          <div className="max-h-52 overflow-auto">
+            {summary.deletedLines.length > 0 ? (
+              <>
+                {summary.deletedLines.map((line) => (
+                  <ExternalChangeLinePreview key={`deleted:${line.lineNumber}:${line.text}`} line={line} tone="deleted" />
+                ))}
+                {summary.hiddenDeletedCount > 0 && (
+                  <div className="px-3 py-2 text-[11px] text-zinc-500">
+                    {t('codePane.externalChangeHiddenLines', { count: summary.hiddenDeletedCount })}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="px-3 py-3 text-xs text-zinc-500">{t('codePane.externalChangeNoDeletedLines')}</div>
+            )}
+          </div>
+        </div>
+        <div className="min-h-0">
+          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-300">
+            {t('codePane.externalChangeAddedLines', { count: summary.addedCount })}
+          </div>
+          <div className="max-h-52 overflow-auto">
+            {summary.addedLines.length > 0 ? (
+              <>
+                {summary.addedLines.map((line) => (
+                  <ExternalChangeLinePreview key={`added:${line.lineNumber}:${line.text}`} line={line} tone="added" />
+                ))}
+                {summary.hiddenAddedCount > 0 && (
+                  <div className="px-3 py-2 text-[11px] text-zinc-500">
+                    {t('codePane.externalChangeHiddenLines', { count: summary.hiddenAddedCount })}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="px-3 py-3 text-xs text-zinc-500">{t('codePane.externalChangeNoAddedLines')}</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function getProblemTone(severity: number): {
@@ -4209,8 +4510,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    const model = fileModelsRef.current.get(currentActiveFilePath);
-    if (!model || !isCurrentRequest()) {
+    const revisionRequest = pendingGitRevisionDiffRef.current;
+    const externalChangeRequest = pendingExternalChangeDiffRef.current;
+    const usesReadonlyDiffModel = currentViewMode === 'diff' && (
+      revisionRequest?.filePath === currentActiveFilePath
+      || externalChangeRequest?.filePath === currentActiveFilePath
+    );
+    const readonlyDiffModifiedModel = usesReadonlyDiffModel
+      ? revisionModifiedModelsRef.current.get(currentActiveFilePath) ?? null
+      : null;
+    const model = fileModelsRef.current.get(currentActiveFilePath) ?? null;
+    if ((!model && !readonlyDiffModifiedModel) || !isCurrentRequest()) {
       return;
     }
     const isReadOnlyFile = fileMetaRef.current.get(currentActiveFilePath)?.readOnly === true;
@@ -4223,12 +4533,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         disposeEditors();
         return;
       }
-      const revisionRequest = pendingGitRevisionDiffRef.current;
-      const externalChangeRequest = pendingExternalChangeDiffRef.current;
-      const modifiedRevisionModel = revisionModifiedModelsRef.current.get(currentActiveFilePath);
-      const modifiedModel = revisionRequest?.filePath === currentActiveFilePath || externalChangeRequest?.filePath === currentActiveFilePath
-        ? modifiedRevisionModel
-        : model;
+      const modifiedModel = usesReadonlyDiffModel ? readonlyDiffModifiedModel : model;
       if (!modifiedModel) {
         disposeEditors();
         return;
@@ -4282,7 +4587,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         modified: modifiedModel,
       });
       diffEditorRef.current.getModifiedEditor().updateOptions?.({
-        readOnly: revisionRequest?.filePath === currentActiveFilePath || externalChangeRequest?.filePath === currentActiveFilePath
+        readOnly: usesReadonlyDiffModel
           ? true
           : isReadOnlyFile,
         ...editorInlayHintOptions,
@@ -6001,22 +6306,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    setPendingExternalChangeDiff({
+    const nextExternalDiffRequest = {
       filePath: entry.filePath,
       leftLabel,
       rightLabel,
-    });
+    };
+    const currentExternalDiffRequest = pendingExternalChangeDiffRef.current;
+    if (
+      currentExternalDiffRequest?.filePath !== nextExternalDiffRequest.filePath
+      || currentExternalDiffRequest.leftLabel !== nextExternalDiffRequest.leftLabel
+      || currentExternalDiffRequest.rightLabel !== nextExternalDiffRequest.rightLabel
+    ) {
+      pendingExternalChangeDiffRef.current = nextExternalDiffRequest;
+      setPendingExternalChangeDiff(nextExternalDiffRequest);
+    }
     clearBannerForFile(entry.filePath);
     return true;
   }, [activeFilePathRef, clearBannerForFile, detachDiffEditorModel, ensureMonacoReady, supportsMonaco, t, viewMode]);
 
   const openExternalChangeDiff = useCallback(async (filePath: string) => {
     const entry = externalChangeEntriesRef.current.find((candidate) => candidate.filePath === filePath);
-    if (!entry) {
+    if (!entry || !entry.canDiff) {
       return;
     }
 
     setPendingGitRevisionDiff(null);
+    pendingGitRevisionDiffRef.current = null;
     const externalDiffRequest: ExternalChangeDiffRequest = {
       filePath: entry.filePath,
       leftLabel: t('codePane.externalChangeBefore'),
@@ -6025,14 +6340,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setPendingExternalChangeDiff(externalDiffRequest);
     pendingExternalChangeDiffRef.current = externalDiffRequest;
     setSelectedExternalChangePath(filePath);
-    if (entry.changeType !== 'deleted') {
-      const loadedModel = fileModelsRef.current.get(filePath) ?? await loadFileIntoModel(filePath);
-      if (!loadedModel) {
-        setPendingExternalChangeDiff(null);
-        pendingExternalChangeDiffRef.current = null;
-        return;
-      }
-    }
 
     const didEnsureDiffModel = await ensureExternalChangeDiffModel(entry);
     if (!didEnsureDiffModel) {
@@ -6057,19 +6364,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
     setBanner(null);
     await refreshEditorSurface();
-  }, [ensureExternalChangeDiffModel, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, t]);
+  }, [ensureExternalChangeDiffModel, openFiles, persistCodeState, refreshEditorSurface, t]);
 
   const updateExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
-    setExternalChangeEntries((currentEntries) => {
-      const nextEntries = [
-        entry,
-        ...currentEntries.filter((candidate) => candidate.filePath !== entry.filePath),
-      ].slice(0, CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES);
-      externalChangeEntriesRef.current = nextEntries;
-      return nextEntries;
-    });
-    setSelectedExternalChangePath((currentPath) => currentPath ?? entry.filePath);
+    const nextEntries = [
+      entry,
+      ...externalChangeEntriesRef.current.filter((candidate) => candidate.filePath !== entry.filePath),
+    ].slice(0, CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES);
+    externalChangeEntriesRef.current = nextEntries;
+    setExternalChangeEntries(nextEntries);
+    setSelectedExternalChangePath(entry.filePath);
   }, []);
+
+  const revealExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
+    updateExternalChangeEntry(entry);
+    setBottomPanelMode('external-changes');
+    if (entry.changeType !== 'deleted' && (paneRef.current.code?.selectedPath ?? null) !== entry.filePath) {
+      void revealPathInExplorer(entry.filePath);
+    }
+    if (entry.canDiff) {
+      void openExternalChangeDiff(entry.filePath);
+    }
+  }, [openExternalChangeDiff, revealPathInExplorer, updateExternalChangeEntry]);
 
   const clearExternalChangeEntry = useCallback((filePath: string) => {
     const nextEntries = externalChangeEntriesRef.current.filter((entry) => entry.filePath !== filePath);
@@ -6108,6 +6424,47 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [persistCodeState, viewMode]);
 
+  const readExternalChangeBaseContent = useCallback(async (
+    filePath: string,
+    fallbackLanguage: string,
+  ): Promise<{ content: string | null; language: string }> => {
+    const existingModel = fileModelsRef.current.get(filePath);
+    if (existingModel) {
+      return {
+        content: existingModel.getValue(),
+        language: existingModel.getLanguageId(),
+      };
+    }
+
+    const localHistoryEntry = localHistoryEntriesRef.current.get(filePath)?.[0] ?? null;
+    if (localHistoryEntry) {
+      return {
+        content: localHistoryEntry.content,
+        language: fallbackLanguage,
+      };
+    }
+
+    try {
+      const gitBaseResponse = await window.electronAPI.codePaneReadGitBaseFile({
+        rootPath,
+        filePath,
+      });
+      if (gitBaseResponse.success && gitBaseResponse.data?.existsInHead) {
+        return {
+          content: gitBaseResponse.data.content,
+          language: fallbackLanguage,
+        };
+      }
+    } catch {
+      // Best-effort fallback: external change tracking should still record the file.
+    }
+
+    return {
+      content: null,
+      language: fallbackLanguage,
+    };
+  }, [rootPath]);
+
   const recordExternalChange = useCallback(async (change: CodePaneFsChange) => {
     if (change.type !== 'add' && change.type !== 'change' && change.type !== 'unlink') {
       return;
@@ -6125,25 +6482,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const existingModel = fileModelsRef.current.get(filePath);
     const openedAtChange = Boolean(existingModel);
-    const localHistoryEntry = localHistoryEntriesRef.current.get(filePath)?.[0] ?? null;
-    const previousContent = existingModel?.getValue() ?? localHistoryEntry?.content ?? null;
     const changedAt = Date.now();
-    const previousLanguage = fileMetaRef.current.get(filePath)?.language
+    const fallbackLanguage = fileMetaRef.current.get(filePath)?.language
       ?? existingModel?.getLanguageId()
-      ?? 'plaintext';
+      ?? detectLanguageFromPath(filePath);
+    const previousSnapshot = await readExternalChangeBaseContent(filePath, fallbackLanguage);
+    const previousContent = previousSnapshot.content;
+    const previousLanguage = previousSnapshot.language;
 
     if (change.type === 'unlink') {
-      updateExternalChangeEntry({
+      const currentContent = previousContent === null ? null : '';
+      revealExternalChangeEntry({
         id: `${filePath}:${changedAt}`,
         filePath,
         relativePath: getRelativePath(rootPath, filePath),
         previousContent,
-        currentContent: null,
+        currentContent,
         language: previousLanguage,
         changeType: 'deleted',
         changedAt,
         openedAtChange,
-        canDiff: false,
+        canDiff: previousContent !== null,
+        lineSummary: createExternalChangeLineSummary(previousContent, currentContent),
       });
       return;
     }
@@ -6170,6 +6530,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       changedAt,
       openedAtChange,
       canDiff,
+      lineSummary: createExternalChangeLineSummary(
+        changeType === 'added' ? (previousContent ?? '') : previousContent,
+        currentContent,
+      ),
     };
 
     const hasUnsavedEditorContent = existingModel && (
@@ -6179,10 +6543,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
 
     if (hasUnsavedEditorContent) {
-      updateExternalChangeEntry({
+      revealExternalChangeEntry({
         ...nextEntry,
         previousContent,
         canDiff,
+        lineSummary: createExternalChangeLineSummary(previousContent, currentContent),
       });
       setBanner({
         tone: 'warning',
@@ -6194,13 +6559,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    updateExternalChangeEntry(nextEntry);
+    revealExternalChangeEntry(nextEntry);
 
     if (existingModel) {
       createOrUpdateModel(filePath, response.data);
       await refreshEditorSurface();
     }
-  }, [createOrUpdateModel, refreshEditorSurface, rootPath, t, updateExternalChangeEntry]);
+  }, [createOrUpdateModel, readExternalChangeBaseContent, refreshEditorSurface, revealExternalChangeEntry, rootPath, t]);
 
   const closeFileTab = useCallback(async (filePath: string) => {
     const didFlush = await flushDirtyFiles([filePath]);
@@ -7816,17 +8181,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
       const currentDiffTargetPath = paneRef.current.code?.diffTargetPath ?? diffTargetPath ?? activeFilePath;
       const currentSecondaryFilePath = secondaryFilePathRef.current;
-      const loadedModel = fileModelsRef.current.get(activeFilePath) ?? await loadFileIntoModel(activeFilePath);
-      if (!loadedModel || !isCurrentRequest()) {
+      const pendingExternalRequest = pendingExternalChangeDiffRef.current ?? pendingExternalChangeDiff;
+      const pendingExternalEntry = pendingExternalRequest?.filePath === activeFilePath
+        ? externalChangeEntriesRef.current.find((entry) => entry.filePath === activeFilePath) ?? null
+        : null;
+      const shouldUseExternalDiffOnly = currentViewMode === 'diff' && Boolean(pendingExternalEntry);
+      const loadedModel = shouldUseExternalDiffOnly
+        ? fileModelsRef.current.get(activeFilePath) ?? null
+        : fileModelsRef.current.get(activeFilePath) ?? await loadFileIntoModel(activeFilePath);
+      if ((!loadedModel && !shouldUseExternalDiffOnly) || !isCurrentRequest()) {
         return;
       }
 
       if (currentViewMode === 'diff') {
         const pendingRevisionRequest = pendingGitRevisionDiff;
-        const pendingExternalRequest = pendingExternalChangeDiffRef.current ?? pendingExternalChangeDiff;
-        const pendingExternalEntry = pendingExternalRequest?.filePath === activeFilePath
-          ? externalChangeEntriesRef.current.find((entry) => entry.filePath === activeFilePath) ?? null
-          : null;
         const didEnsureDiffModel = pendingExternalEntry
           ? await ensureExternalChangeDiffModel(pendingExternalEntry, {
               showBanner: false,
@@ -11672,22 +12040,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
                           </button>
                         </div>
                       </div>
-                      <div className="grid min-h-0 flex-1 gap-3 overflow-auto py-3 md:grid-cols-2">
-                        <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
-                          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                            {t('codePane.externalChangeBefore')}
+                      <div className="min-h-0 flex-1 space-y-3 overflow-auto py-3">
+                        <ExternalChangeLineSummaryPanel
+                          summary={selectedExternalChangeEntry.lineSummary}
+                          t={t}
+                        />
+                        <div className="grid min-h-0 gap-3 md:grid-cols-2">
+                          <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
+                            <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                              {t('codePane.externalChangeBefore')}
+                            </div>
+                            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-zinc-400">
+                              {selectedExternalChangeEntry.previousContent ?? t('codePane.externalChangeNoContent')}
+                            </pre>
                           </div>
-                          <pre className="max-h-full overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-zinc-400">
-                            {selectedExternalChangeEntry.previousContent ?? t('codePane.externalChangeNoContent')}
-                          </pre>
-                        </div>
-                        <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
-                          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                            {t('codePane.externalChangeAfter')}
+                          <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
+                            <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                              {t('codePane.externalChangeAfter')}
+                            </div>
+                            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-zinc-300">
+                              {selectedExternalChangeEntry.currentContent ?? t('codePane.externalChangeNoContent')}
+                            </pre>
                           </div>
-                          <pre className="max-h-full overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-zinc-300">
-                            {selectedExternalChangeEntry.currentContent ?? t('codePane.externalChangeNoContent')}
-                          </pre>
                         </div>
                       </div>
                     </>
