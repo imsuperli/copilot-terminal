@@ -3,10 +3,12 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import {
+  idePopupActionButtonClassName,
   idePopupHeaderClassName,
   idePopupHeaderMetaClassName,
   idePopupIconButtonClassName,
   idePopupOverlayClassName,
+  idePopupSecondaryButtonClassName,
   idePopupSubtitleClassName,
   idePopupTitleClassName,
   IdePopupShell,
@@ -25,9 +27,9 @@ interface ActionConfirmDialogProps {
 }
 
 const confirmToneClassName = {
-  danger: 'bg-red-600 hover:bg-red-500 text-white disabled:bg-zinc-700 disabled:text-zinc-400',
-  warning: 'bg-amber-600 hover:bg-amber-500 text-white disabled:bg-zinc-700 disabled:text-zinc-400',
-  primary: 'bg-sky-600 hover:bg-sky-500 text-white disabled:bg-zinc-700 disabled:text-zinc-400',
+  danger: idePopupActionButtonClassName('danger'),
+  warning: idePopupActionButtonClassName('warning'),
+  primary: idePopupActionButtonClassName('primary'),
 } as const;
 
 export function ActionConfirmDialog({
@@ -101,7 +103,7 @@ export function ActionConfirmDialog({
                 type="button"
                 onClick={() => onOpenChange(false)}
                 disabled={isSubmitting}
-                className="rounded-md bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className={idePopupSecondaryButtonClassName}
               >
                 {t('common.cancel')}
               </button>

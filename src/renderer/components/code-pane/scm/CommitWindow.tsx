@@ -6,9 +6,13 @@ import { useI18n } from '../../../i18n';
 import { getPathLeafLabel } from '../../../utils/pathDisplay';
 import { GitHunkList } from './GitHunkList';
 import {
+  idePopupActionButtonClassName,
+  idePopupCardClassName,
+  idePopupFieldShellClassName,
   idePopupHeaderClassName,
   idePopupHeaderMetaClassName,
   idePopupIconButtonClassName,
+  idePopupMicroButtonClassName,
   idePopupOverlayClassName,
   idePopupSubtitleClassName,
   idePopupTitleClassName,
@@ -193,21 +197,23 @@ export function CommitWindow({
             </div>
 
             <div className="grid min-h-0 flex-1 grid-cols-[340px_minmax(0,1fr)] overflow-hidden">
-              <div className="flex min-h-0 flex-col border-r border-zinc-800 bg-zinc-950/70">
+              <div className="flex min-h-0 flex-col border-r border-zinc-800/90 bg-[linear-gradient(180deg,rgba(21,23,28,0.92)_0%,rgba(18,20,24,0.98)_100%)]">
                 <div className="border-b border-zinc-800 px-4 py-3">
                   <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
                     {t('codePane.gitCommitPlaceholder')}
                   </div>
-                  <textarea
-                    value={message}
-                    onChange={(event) => {
-                      setMessage(event.target.value);
-                    }}
-                    placeholder={t('codePane.gitCommitPlaceholder')}
-                    className="mt-2 h-24 w-full resize-none rounded-[10px] border border-zinc-700/80 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-100 outline-none transition-colors placeholder:text-zinc-500 focus:border-sky-400/60"
-                  />
+                  <div className={`${idePopupFieldShellClassName} mt-2 items-start gap-0 px-0 py-0`}>
+                    <textarea
+                      value={message}
+                      onChange={(event) => {
+                        setMessage(event.target.value);
+                      }}
+                      placeholder={t('codePane.gitCommitPlaceholder')}
+                      className="h-24 w-full resize-none bg-transparent px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                    />
+                  </div>
                   <div className="mt-3 flex items-center justify-between gap-3">
-                    <div className="text-[11px] text-zinc-500">
+                    <div className="rounded-md border border-zinc-700/70 bg-zinc-950/35 px-2 py-1 text-[11px] text-zinc-400">
                       {t('codePane.gitChanges')} · {selectedCount}/{entries.length}
                     </div>
                     <button
@@ -216,7 +222,7 @@ export function CommitWindow({
                         void handleCommit();
                       }}
                       disabled={!canCommit}
-                      className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                      className={idePopupActionButtonClassName('success')}
                     >
                       {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <GitCommitHorizontal size={14} />}
                       <span>{t('codePane.gitCommit')}</span>
@@ -233,13 +239,13 @@ export function CommitWindow({
                         return (
                           <div
                             key={entry.path}
-                            className={`rounded-[10px] border transition-colors ${
+                            className={`rounded-[12px] border transition-colors ${
                               isActive
-                                ? 'border-sky-500/40 bg-sky-500/10'
-                                : 'border-transparent bg-transparent hover:bg-zinc-900/80'
+                                ? 'border-sky-500/35 bg-sky-500/[0.08] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.12)]'
+                                : 'border-transparent bg-transparent hover:border-zinc-700/60 hover:bg-zinc-900/55'
                             }`}
                           >
-                            <div className="flex items-start gap-2 px-2 py-2">
+                            <div className="flex items-start gap-2 px-2.5 py-2.5">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -247,7 +253,7 @@ export function CommitWindow({
                                 }}
                                 className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                                   isChecked
-                                    ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-200'
+                                    ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
                                     : 'border-zinc-600 bg-zinc-950/80 text-transparent'
                                 }`}
                                 aria-label={`${isChecked ? 'unselect' : 'select'} ${entry.path}`}
@@ -263,7 +269,7 @@ export function CommitWindow({
                               >
                                 <div className="flex items-center gap-2">
                                   <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                                  <span className={`truncate text-sm ${getStatusTone(entry)}`}>
+                                  <span className={`truncate text-sm ${isActive ? 'text-zinc-50' : getStatusTone(entry)}`}>
                                     {getPathLeafLabel(entry.path)}
                                   </span>
                                 </div>
@@ -272,14 +278,14 @@ export function CommitWindow({
                                 </div>
                               </button>
                             </div>
-                            <div className="flex flex-wrap gap-1 px-2 pb-2 pl-8">
+                            <div className="flex flex-wrap gap-1 px-2.5 pb-2.5 pl-8">
                               {entry.staged ? (
                                 <button
                                   type="button"
                                   onClick={() => {
                                     void onUnstagePath(entry.path);
                                   }}
-                                  className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                                  className={idePopupMicroButtonClassName('neutral')}
                                 >
                                   {t('codePane.gitUnstage')}
                                 </button>
@@ -289,7 +295,7 @@ export function CommitWindow({
                                   onClick={() => {
                                     void onStagePath(entry.path);
                                   }}
-                                  className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                                  className={idePopupMicroButtonClassName('success')}
                                 >
                                   {t('codePane.gitStage')}
                                 </button>
@@ -301,7 +307,7 @@ export function CommitWindow({
                                     onClick={() => {
                                       void onOpenConflictResolver(entry.path);
                                     }}
-                                    className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-500/25"
+                                    className={idePopupMicroButtonClassName('success')}
                                   >
                                     {t('codePane.gitResolveConflict')}
                                   </button>
@@ -310,7 +316,7 @@ export function CommitWindow({
                                     onClick={() => {
                                       void onResolveConflict(entry.path, 'ours');
                                     }}
-                                    className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200 hover:bg-amber-500/25"
+                                    className={idePopupMicroButtonClassName('warning')}
                                   >
                                     {t('codePane.gitUseOurs')}
                                   </button>
@@ -319,7 +325,7 @@ export function CommitWindow({
                                     onClick={() => {
                                       void onResolveConflict(entry.path, 'theirs');
                                     }}
-                                    className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-200 hover:bg-sky-500/25"
+                                    className={idePopupMicroButtonClassName('primary')}
                                   >
                                     {t('codePane.gitUseTheirs')}
                                   </button>
@@ -331,7 +337,7 @@ export function CommitWindow({
                                   onClick={() => {
                                     void onDiscardPath(entry.path);
                                   }}
-                                  className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-red-500/25"
+                                  className={idePopupMicroButtonClassName('danger')}
                                 >
                                   {t('codePane.gitDiscard')}
                                 </button>
@@ -342,7 +348,7 @@ export function CommitWindow({
                                   onClick={() => {
                                     void onOpenFileDiff(entry.path);
                                   }}
-                                  className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                                  className={idePopupMicroButtonClassName('neutral')}
                                 >
                                   {t('codePane.openDiff')}
                                 </button>
@@ -358,10 +364,12 @@ export function CommitWindow({
                 </div>
               </div>
 
-              <div className="min-h-0 overflow-auto bg-zinc-950/40 px-4 py-4">
-                <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                  <FolderTree size={12} />
-                  {t('codePane.gitSelectedFileHunks')}
+              <div className="min-h-0 overflow-auto bg-[linear-gradient(180deg,rgba(24,26,31,0.94)_0%,rgba(19,21,26,0.98)_100%)] px-4 py-4">
+                <div className={`${idePopupCardClassName} mb-3 flex items-center gap-2 px-3 py-2`}>
+                  <FolderTree size={12} className="text-zinc-500" />
+                  <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                    {t('codePane.gitSelectedFileHunks')}
+                  </span>
                 </div>
                 <GitHunkList
                   selectedPath={selectedPath}

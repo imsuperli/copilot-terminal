@@ -6332,6 +6332,143 @@ describe('CodePane', () => {
     });
   });
 
+  it('shows the outline header as a centered file name and treats filters as opt-in', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'class RouteParam {\n  id = 1\n  anonymousValue = new Runnable() {}\n  lambdaHandler = () => {}\n  override toString() {}\n}\n',
+        mtimeMs: 100,
+        size: 120,
+        language: 'java',
+        isBinary: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetDocumentSymbols).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'RouteParam',
+          kind: 5,
+          range: {
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: 6,
+            endColumn: 2,
+          },
+          selectionRange: {
+            startLineNumber: 1,
+            startColumn: 7,
+            endLineNumber: 1,
+            endColumn: 17,
+          },
+          children: [
+            {
+              name: 'id',
+              kind: 8,
+              range: {
+                startLineNumber: 2,
+                startColumn: 3,
+                endLineNumber: 2,
+                endColumn: 9,
+              },
+              selectionRange: {
+                startLineNumber: 2,
+                startColumn: 3,
+                endLineNumber: 2,
+                endColumn: 5,
+              },
+            },
+            {
+              name: 'AnonymousRunnable',
+              kind: 5,
+              detail: 'anonymous',
+              range: {
+                startLineNumber: 3,
+                startColumn: 3,
+                endLineNumber: 3,
+                endColumn: 28,
+              },
+              selectionRange: {
+                startLineNumber: 3,
+                startColumn: 3,
+                endLineNumber: 3,
+                endColumn: 20,
+              },
+            },
+            {
+              name: 'lambdaHandler',
+              kind: 12,
+              detail: 'lambda',
+              range: {
+                startLineNumber: 4,
+                startColumn: 3,
+                endLineNumber: 4,
+                endColumn: 25,
+              },
+              selectionRange: {
+                startLineNumber: 4,
+                startColumn: 3,
+                endLineNumber: 4,
+                endColumn: 16,
+              },
+            },
+            {
+              name: 'toString',
+              kind: 6,
+              detail: 'override',
+              range: {
+                startLineNumber: 5,
+                startColumn: 3,
+                endLineNumber: 5,
+                endColumn: 25,
+              },
+              selectionRange: {
+                startLineNumber: 5,
+                startColumn: 3,
+                endLineNumber: 5,
+                endColumn: 11,
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts', { doubleClick: true });
+    await triggerEditorAction('codePane.fileStructureAction');
+
+    await waitFor(() => {
+      expect(screen.getAllByText('index.ts').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText('index.ts', {
+      selector: 'div.min-w-0.truncate.text-center.text-sm.font-semibold.leading-5.text-zinc-100',
+    })).toBeInTheDocument();
+    expect(screen.queryByText('codePane.fileStructureTab')).not.toBeInTheDocument();
+    expect(screen.queryByText('codePane.fileStructureCount')).not.toBeInTheDocument();
+    expect(screen.getByText('id')).toBeInTheDocument();
+    expect(screen.getByText('AnonymousRunnable')).toBeInTheDocument();
+    expect(screen.getByText('lambdaHandler')).toBeInTheDocument();
+    expect(screen.getByText('toString')).toBeInTheDocument();
+
+    const inheritedToggle = screen.getByRole('button', { name: 'codePane.fileStructureFilterInherited' });
+    const anonymousToggle = screen.getByRole('button', { name: 'codePane.fileStructureFilterAnonymous' });
+    const lambdasToggle = screen.getByRole('button', { name: 'codePane.fileStructureFilterLambdas' });
+
+    expect(inheritedToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(anonymousToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(lambdasToggle).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(anonymousToggle);
+    expect(anonymousToggle).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('id')).not.toBeInTheDocument();
+    expect(screen.getByText('AnonymousRunnable')).toBeInTheDocument();
+    expect(screen.queryByText('lambdaHandler')).not.toBeInTheDocument();
+    expect(screen.queryByText('toString')).not.toBeInTheDocument();
+  });
+
   it('registers IDEA-style Monaco navigation actions for file structure and hierarchy', async () => {
     renderCodePane(createPane());
 

@@ -1,8 +1,8 @@
 import React from 'react';
 import {
+  Check,
   ChevronDown,
   ChevronRight,
-  FileCode2,
   Loader2,
   RefreshCw,
   X,
@@ -11,17 +11,11 @@ import type { CodePaneDocumentSymbol, CodePaneRange } from '../../../../shared/t
 import { useI18n } from '../../../i18n';
 import {
   IdePopupShell,
+  idePopupBadgeClassName,
   idePopupBodyClassName,
-  idePopupHeaderClassName,
-  idePopupHeaderMetaClassName,
   idePopupIconButtonClassName,
   idePopupRowClassName,
   idePopupScrollAreaClassName,
-  idePopupSectionClassName,
-  idePopupSubtitleClassName,
-  idePopupTitleClassName,
-  idePopupToggleButtonClassName,
-  idePopupToggleIndicatorClassName,
 } from '../../ui/ide-popup';
 
 interface OutlineTreeNode {
@@ -50,9 +44,9 @@ interface OutlineToolWindowProps {
 }
 
 const DEFAULT_FILTERS: OutlineFilterState = {
-  inherited: true,
-  anonymous: true,
-  lambdas: true,
+  inherited: false,
+  anonymous: false,
+  lambdas: false,
 };
 
 export function OutlineToolWindow({
@@ -87,20 +81,10 @@ export function OutlineToolWindow({
 
   return (
     <IdePopupShell className={panelClassName ?? 'flex h-full min-h-0 flex-col'}>
-      <div className={idePopupHeaderClassName}>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <FileCode2 size={12} className="shrink-0 text-sky-300" />
-            <div className={idePopupHeaderMetaClassName}>{t('codePane.fileStructureTab')}</div>
-          </div>
-          <div className="mt-1 min-w-0">
-            <div className={idePopupTitleClassName}>{fileLabel ?? t('codePane.fileStructureEmpty')}</div>
-            <div className={idePopupSubtitleClassName}>
-              {visibleNodeIds.length > 0
-                ? t('codePane.fileStructureCount', { count: visibleNodeIds.length })
-                : t('codePane.fileStructureHint')}
-            </div>
-          </div>
+      <div className="grid grid-cols-[60px_minmax(0,1fr)_60px] items-center border-b border-zinc-800/90 bg-[linear-gradient(180deg,rgba(46,49,56,0.96)_0%,rgba(35,38,44,0.92)_100%)] px-3 py-2.5">
+        <div aria-hidden="true" />
+        <div className="min-w-0 truncate text-center text-sm font-semibold leading-5 text-zinc-100">
+          {fileLabel ?? t('codePane.fileStructureEmpty')}
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -124,7 +108,7 @@ export function OutlineToolWindow({
         </div>
       </div>
 
-      <div className={`${idePopupSectionClassName} px-3 py-2`}>
+      <div className="border-b border-zinc-800/80 bg-zinc-950/30 px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           <FilterToggle
             active={filters.inherited}
@@ -183,7 +167,7 @@ export function OutlineToolWindow({
             ))}
           </div>
         ) : (
-          <div className="mx-2 rounded-md border border-dashed border-zinc-700 bg-zinc-950/40 px-3 py-4 text-xs text-zinc-500">
+          <div className="mx-2 rounded-lg border border-dashed border-zinc-700/80 bg-zinc-950/35 px-3 py-4 text-xs text-zinc-500">
             {t('codePane.fileStructureEmpty')}
           </div>
         )}
@@ -205,10 +189,24 @@ function FilterToggle({
     <button
       type="button"
       onClick={onClick}
-      className={idePopupToggleButtonClassName(active)}
+      aria-pressed={active}
       aria-label={label}
+      className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px] transition-colors ${
+        active
+          ? 'border-sky-500/70 bg-transparent text-sky-200'
+          : 'border-zinc-700/80 bg-transparent text-zinc-300 hover:border-zinc-500 hover:text-zinc-100'
+      }`}
     >
-      <span className={idePopupToggleIndicatorClassName(active)}>{active ? '•' : ' '}</span>
+      <span
+        className={`flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border ${
+          active
+            ? 'border-sky-500/80 text-sky-300'
+            : 'border-zinc-600 text-transparent'
+        }`}
+        aria-hidden="true"
+      >
+        <Check size={9} strokeWidth={2.6} />
+      </span>
       <span>{label}</span>
     </button>
   );
@@ -240,7 +238,7 @@ function OutlineNodeRow({
     <div>
       <div
         className="flex items-center gap-1"
-        style={{ paddingLeft: `${depth * 14}px` }}
+        style={{ paddingLeft: `${depth * 12}px` }}
       >
         {hasChildren ? (
           <button
@@ -248,7 +246,7 @@ function OutlineNodeRow({
             onClick={() => {
               setIsExpanded((currentValue) => !currentValue);
             }}
-            className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800/80 hover:text-zinc-200"
+            className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-200"
             aria-label={isExpanded ? 'Collapse' : 'Expand'}
           >
             {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -273,17 +271,16 @@ function OutlineNodeRow({
           className={idePopupRowClassName(isSelected)}
         >
           <OutlineKindBadge kind={kind.shortLabel} tone={kind.tone} />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-[12px] leading-5 text-inherit">{node.symbol.name}</span>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12px] leading-5 text-inherit">{node.symbol.name}</div>
               {node.symbol.detail ? (
-                <span className="truncate text-[11px] text-zinc-400/90">{node.symbol.detail}</span>
-              ) : (
-                <span className="rounded border border-zinc-700/80 bg-zinc-950/55 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
-                  {kind.label}
-                </span>
-              )}
+                <div className="truncate text-[10px] leading-4 text-zinc-500">{node.symbol.detail}</div>
+              ) : null}
             </div>
+            <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/45 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+              {kind.label}
+            </span>
           </div>
         </button>
       </div>
@@ -315,17 +312,17 @@ function OutlineKindBadge({
   tone: 'red' | 'amber' | 'sky' | 'emerald' | 'violet' | 'zinc';
 }) {
   const toneClassName = {
-    red: 'border-red-400/60 bg-red-500/10 text-red-300',
-    amber: 'border-amber-400/60 bg-amber-500/10 text-amber-300',
-    sky: 'border-sky-400/60 bg-sky-500/10 text-sky-300',
-    emerald: 'border-emerald-400/60 bg-emerald-500/10 text-emerald-300',
-    violet: 'border-violet-400/60 bg-violet-500/10 text-violet-300',
-    zinc: 'border-zinc-500/70 bg-zinc-500/10 text-zinc-300',
+    red: idePopupBadgeClassName('red'),
+    amber: idePopupBadgeClassName('amber'),
+    sky: idePopupBadgeClassName('sky'),
+    emerald: idePopupBadgeClassName('emerald'),
+    violet: idePopupBadgeClassName('violet'),
+    zinc: idePopupBadgeClassName('zinc'),
   }[tone];
 
   return (
     <span
-      className={`inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border text-[9px] font-semibold uppercase leading-none ${toneClassName}`}
+      className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full border px-1 text-[9px] font-semibold uppercase leading-none ${toneClassName}`}
       aria-hidden="true"
     >
       {kind}
@@ -377,19 +374,15 @@ function collectVisibleNodeIds(nodes: OutlineTreeNode[]): string[] {
 }
 
 function matchesOutlineFilters(symbol: CodePaneDocumentSymbol, filters: OutlineFilterState): boolean {
-  if (!filters.inherited && isInheritedSymbol(symbol)) {
-    return false;
+  if (!filters.inherited && !filters.anonymous && !filters.lambdas) {
+    return true;
   }
 
-  if (!filters.anonymous && isAnonymousClassSymbol(symbol)) {
-    return false;
-  }
-
-  if (!filters.lambdas && isLambdaSymbol(symbol)) {
-    return false;
-  }
-
-  return true;
+  return (
+    (filters.inherited && isInheritedSymbol(symbol))
+    || (filters.anonymous && isAnonymousClassSymbol(symbol))
+    || (filters.lambdas && isLambdaSymbol(symbol))
+  );
 }
 
 function isInheritedSymbol(symbol: CodePaneDocumentSymbol): boolean {

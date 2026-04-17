@@ -3,10 +3,15 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { CheckSquare, Loader2, X } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import {
+  idePopupAccentCardClassName,
+  idePopupActionButtonClassName,
+  idePopupCardClassName,
+  idePopupFieldShellClassName,
   idePopupHeaderClassName,
   idePopupHeaderMetaClassName,
   idePopupIconButtonClassName,
   idePopupOverlayClassName,
+  idePopupSecondaryButtonClassName,
   idePopupSubtitleClassName,
   idePopupTitleClassName,
   IdePopupShell,
@@ -144,7 +149,7 @@ export function ActionInputDialog({
                 >
                   {inputLabel}
                 </label>
-                <div className="flex items-center gap-2 rounded-[10px] border border-zinc-700/80 bg-zinc-950/70 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] focus-within:border-sky-400/60 focus-within:ring-1 focus-within:ring-sky-500/40">
+                <div className={idePopupFieldShellClassName}>
                   <input
                     id="code-pane-action-input"
                     ref={inputRef}
@@ -163,7 +168,7 @@ export function ActionInputDialog({
               </div>
 
               {previewLabel ? (
-                <div className="rounded-[12px] border border-sky-500/30 bg-sky-500/[0.08] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                <div className={idePopupAccentCardClassName}>
                   <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-300/80">
                     {previewLabel}
                   </div>
@@ -178,7 +183,7 @@ export function ActionInputDialog({
               ) : null}
 
               {auxiliaryContent ? (
-                <div className="space-y-3 rounded-[12px] border border-zinc-700/70 bg-zinc-950/35 px-3 py-3">
+                <div className={`${idePopupCardClassName} space-y-3`}>
                   {auxiliaryContent}
                 </div>
               ) : null}
@@ -188,14 +193,14 @@ export function ActionInputDialog({
                   type="button"
                   onClick={() => onOpenChange(false)}
                   disabled={isSubmitting}
-                  className="rounded-md bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={idePopupSecondaryButtonClassName}
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   disabled={!isConfirmEnabled || isSubmitting}
-                  className="inline-flex min-w-[112px] items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-500 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
+                  className={idePopupActionButtonClassName('primary')}
                 >
                   {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
                   <span>{confirmLabel}</span>
