@@ -115,17 +115,29 @@ export class CodeGitOperationService {
 
   async commit(config: CodePaneGitCommitConfig): Promise<CodePaneGitCommitResult> {
     const repoContext = await requireRepoContext(config.rootPath);
+    const hasExplicitPaths = Array.isArray(config.paths) && config.paths.length > 0;
+    const pathspecArgs = hasExplicitPaths
+      ? this.getRepoPathspecArgs(repoContext, config.paths ?? [])
+      : [];
     if (config.includeAll) {
       await execFileAsync(
         'git',
-        ['-C', repoContext.repoRootPath, 'add', '-A'],
+        ['-C', repoContext.repoRootPath, 'add', '-A', ...(hasExplicitPaths ? pathspecArgs : [])],
         { encoding: 'utf-8' },
       );
     }
 
     await execFileAsync(
       'git',
-      ['-C', repoContext.repoRootPath, 'commit', ...(config.amend ? ['--amend'] : []), '-m', config.message],
+      [
+        '-C',
+        repoContext.repoRootPath,
+        'commit',
+        ...(config.amend ? ['--amend'] : []),
+        '-m',
+        config.message,
+        ...pathspecArgs,
+      ],
       { encoding: 'utf-8', maxBuffer: 8 * 1024 * 1024 },
     );
 

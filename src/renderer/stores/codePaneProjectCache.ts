@@ -126,7 +126,7 @@ export async function dedupeProjectRequest<T>(
 
 export function invalidateProjectCache(
   rootPath: string,
-  scope: 'all' | 'git' | 'external-libraries' | 'directories' = 'all',
+  scope: 'all' | 'git' | 'git-status' | 'git-graph' | 'external-libraries' | 'directories' = 'all',
 ): void {
   const normalizedRootPath = normalizePath(rootPath);
   const projectPrefix = `code-pane:${normalizedRootPath}:`;
@@ -142,6 +142,16 @@ export function invalidateProjectCache(
     }
 
     if (scope === 'git' && key.includes(':git-')) {
+      cache.delete(key);
+      continue;
+    }
+
+    if (scope === 'git-status' && (key.endsWith(':git-status') || key.endsWith(':git-summary'))) {
+      cache.delete(key);
+      continue;
+    }
+
+    if (scope === 'git-graph' && key.endsWith(':git-graph')) {
       cache.delete(key);
       continue;
     }

@@ -1,11 +1,14 @@
-import React from 'react';
+import React, {
+  useMemo,
+  useSyncExternalStore,
+} from 'react';
 import {
   AlertTriangle,
   Loader2,
   RefreshCw,
   X,
 } from 'lucide-react';
-import type { CodePaneTrackedRequest } from '../../../stores/codePaneRuntimeStore';
+import type { CodePaneRuntimeStore } from '../../../stores/codePaneRuntimeStore';
 import type {
   CodePaneIndexProgressPayload,
   CodePaneLanguageWorkspaceState,
@@ -20,7 +23,7 @@ interface PerformanceTask {
 }
 
 interface PerformanceToolWindowProps {
-  requests: CodePaneTrackedRequest[];
+  runtimeStore: CodePaneRuntimeStore;
   activeTasks: PerformanceTask[];
   indexStatus: CodePaneIndexProgressPayload | null;
   languageWorkspaceState: CodePaneLanguageWorkspaceState | null;
@@ -29,7 +32,7 @@ interface PerformanceToolWindowProps {
 }
 
 export function PerformanceToolWindow({
-  requests,
+  runtimeStore,
   activeTasks,
   indexStatus,
   languageWorkspaceState,
@@ -37,6 +40,14 @@ export function PerformanceToolWindow({
   onRefresh,
 }: PerformanceToolWindowProps) {
   const { t } = useI18n();
+  const runtimeStoreVersion = useSyncExternalStore(
+    runtimeStore.subscribe.bind(runtimeStore),
+    runtimeStore.getVersion.bind(runtimeStore),
+    runtimeStore.getVersion.bind(runtimeStore),
+  );
+  const requests = useMemo(() => (
+    runtimeStore.getRecentRequests()
+  ), [runtimeStore, runtimeStoreVersion]);
   const runningRequests = requests.filter((request) => request.status === 'running');
   const recentRequests = requests.slice(0, 20);
 

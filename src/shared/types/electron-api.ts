@@ -468,6 +468,7 @@ export interface CodePaneGitCommitConfig {
   message: string;
   amend?: boolean;
   includeAll?: boolean;
+  paths?: string[];
 }
 
 export interface CodePaneGitCommitResult {

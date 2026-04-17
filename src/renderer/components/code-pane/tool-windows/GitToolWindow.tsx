@@ -50,7 +50,7 @@ interface GitToolWindowProps {
   onRefresh: () => void | Promise<void>;
   onRefreshRebase: () => void | Promise<void>;
   onCheckoutBranch: (config: { branchName: string; createBranch: boolean; startPoint?: string; preferExisting?: boolean }) => void | Promise<void>;
-  onRenameBranch: (branchName: string, nextBranchName: string) => void | Promise<void>;
+  onRequestRenameBranch: (branchName: string) => void | Promise<void>;
   onDeleteBranch: (branchName: string, force?: boolean) => void | Promise<void>;
   onCherryPick: (commitSha: string) => void | Promise<void>;
   onCompareSelectedCommits: () => void | Promise<void>;
@@ -124,7 +124,7 @@ export function GitToolWindow({
   onRefresh,
   onRefreshRebase,
   onCheckoutBranch,
-  onRenameBranch,
+  onRequestRenameBranch,
   onDeleteBranch,
   onCherryPick,
   onCompareSelectedCommits,
@@ -300,7 +300,7 @@ export function GitToolWindow({
               isCommitDetailsLoading={isCommitDetailsLoading}
               commitDetailsError={commitDetailsError}
               onCheckoutBranch={onCheckoutBranch}
-              onRenameBranch={onRenameBranch}
+              onRequestRenameBranch={onRequestRenameBranch}
               onDeleteBranch={onDeleteBranch}
               onCherryPick={onCherryPick}
               onOpenCommitFileDiff={onOpenCommitFileDiff}
@@ -695,7 +695,7 @@ function GitWorkbenchDetails({
   isCommitDetailsLoading,
   commitDetailsError,
   onCheckoutBranch,
-  onRenameBranch,
+  onRequestRenameBranch,
   onDeleteBranch,
   onCherryPick,
   onOpenCommitFileDiff,
@@ -709,7 +709,7 @@ function GitWorkbenchDetails({
   isCommitDetailsLoading: boolean;
   commitDetailsError: string | null;
   onCheckoutBranch: (config: { branchName: string; createBranch: boolean; startPoint?: string; preferExisting?: boolean }) => void | Promise<void>;
-  onRenameBranch: (branchName: string, nextBranchName: string) => void | Promise<void>;
+  onRequestRenameBranch: (branchName: string) => void | Promise<void>;
   onDeleteBranch: (branchName: string, force?: boolean) => void | Promise<void>;
   onCherryPick: (commitSha: string) => void | Promise<void>;
   onOpenCommitFileDiff: (config: {
@@ -785,10 +785,7 @@ function GitWorkbenchDetails({
               <button
                 type="button"
                 onClick={() => {
-                  const nextBranchName = window.prompt(t('codePane.gitRenameBranchPrompt'), selectedBranch.name)?.trim();
-                  if (nextBranchName && nextBranchName !== selectedBranch.name) {
-                    void onRenameBranch(selectedBranch.name, nextBranchName);
-                  }
+                  void onRequestRenameBranch(selectedBranch.name);
                 }}
                 className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
               >
@@ -801,14 +798,7 @@ function GitWorkbenchDetails({
                 type="button"
                 onClick={() => {
                   const forceDelete = !selectedBranch.mergedIntoCurrent;
-                  const confirmed = window.confirm(
-                    forceDelete
-                      ? t('codePane.gitDeleteBranchForcePrompt', { branch: selectedBranch.name })
-                      : t('codePane.gitDeleteBranchPrompt', { branch: selectedBranch.name }),
-                  );
-                  if (confirmed) {
-                    void onDeleteBranch(selectedBranch.name, forceDelete);
-                  }
+                  void onDeleteBranch(selectedBranch.name, forceDelete);
                 }}
                 className="flex items-center gap-1 rounded bg-red-500/15 px-2 py-1 text-[11px] text-red-200 transition-colors hover:bg-red-500/25"
               >

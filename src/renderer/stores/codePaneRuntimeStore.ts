@@ -29,6 +29,7 @@ export class CodePaneRuntimeStore {
   private readonly requestOrder: string[] = [];
   private readonly cache = new Map<string, CacheEntry<unknown>>();
   private readonly listeners = new Set<() => void>();
+  private version = 0;
 
   constructor(
     private readonly options: {
@@ -41,6 +42,10 @@ export class CodePaneRuntimeStore {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  getVersion(): number {
+    return this.version;
   }
 
   markLatest(key: string): number {
@@ -94,6 +99,38 @@ export class CodePaneRuntimeStore {
     this.emit();
   }
 
+  recordRequest(
+    key: string,
+    label: string,
+    options?: {
+      meta?: string;
+      status?: Exclude<CodePaneTrackedRequestStatus, 'running'>;
+      error?: string;
+      fromCache?: boolean;
+      durationMs?: number;
+    },
+  ): void {
+    const id = `${key}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const endedAt = Date.now();
+    const durationMs = Math.max(0, options?.durationMs ?? 0);
+    const startedAt = endedAt - durationMs;
+    this.requestMap.set(id, {
+      id,
+      key,
+      label,
+      meta: options?.meta,
+      status: options?.status ?? 'completed',
+      startedAt,
+      endedAt,
+      durationMs,
+      fromCache: options?.fromCache,
+      error: options?.error,
+    });
+    this.requestOrder.unshift(id);
+    this.trimRequests();
+    this.emit();
+  }
+
   getRunningRequests(): CodePaneTrackedRequest[] {
     return this.requestOrder
       .map((id) => this.requestMap.get(id))
@@ -141,6 +178,7 @@ export class CodePaneRuntimeStore {
   }
 
   private emit(): void {
+    this.version += 1;
     for (const listener of Array.from(this.listeners)) {
       listener();
     }

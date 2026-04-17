@@ -28,6 +28,18 @@ describe('CodePaneRuntimeStore', () => {
     expect(store.getRecentRequests()[0]?.durationMs).toBeTypeOf('number');
   });
 
+  it('increments its public version when request state changes', () => {
+    const store = new CodePaneRuntimeStore();
+    const initialVersion = store.getVersion();
+    const handle = store.beginRequest('search:files', 'File search');
+
+    expect(store.getVersion()).toBe(initialVersion + 1);
+
+    store.finishRequest(handle, 'completed');
+
+    expect(store.getVersion()).toBe(initialVersion + 2);
+  });
+
   it('expires cached values after the configured TTL', () => {
     vi.useFakeTimers();
     const store = new CodePaneRuntimeStore();

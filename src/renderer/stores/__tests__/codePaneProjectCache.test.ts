@@ -155,6 +155,66 @@ describe('codePaneProjectCache', () => {
     expect(getGitSummaryCache('/workspace/project')).toBeNull();
   });
 
+  it('invalidates only lightweight git status caches', () => {
+    setGitStatusCache('/workspace/project', []);
+    setGitSummaryCache('/workspace/project', {
+      repoRootPath: '/workspace/project',
+      currentBranch: 'main',
+      upstreamBranch: 'origin/main',
+      detachedHead: false,
+      headSha: 'abcdef1234567890',
+      aheadCount: 0,
+      behindCount: 0,
+      operation: 'idle',
+      hasConflicts: false,
+    });
+    setGitGraphCache('/workspace/project', [
+      {
+        sha: 'abcdef1234567890',
+        parents: [],
+        refs: ['HEAD -> main'],
+        subject: 'Initial commit',
+        author: 'Test User',
+        timestamp: 1_710_000_000,
+        lane: 0,
+        laneCount: 1,
+        isHead: true,
+        isMergeCommit: false,
+        shortSha: 'abcdef1',
+      },
+    ]);
+
+    invalidateProjectCache('/workspace/project', 'git-status');
+
+    expect(getGitStatusCache('/workspace/project')).toBeNull();
+    expect(getGitSummaryCache('/workspace/project')).toBeNull();
+    expect(getGitGraphCache('/workspace/project')).toHaveLength(1);
+  });
+
+  it('invalidates only git graph caches', () => {
+    setGitStatusCache('/workspace/project', []);
+    setGitGraphCache('/workspace/project', [
+      {
+        sha: 'abcdef1234567890',
+        parents: [],
+        refs: ['HEAD -> main'],
+        subject: 'Initial commit',
+        author: 'Test User',
+        timestamp: 1_710_000_000,
+        lane: 0,
+        laneCount: 1,
+        isHead: true,
+        isMergeCommit: false,
+        shortSha: 'abcdef1',
+      },
+    ]);
+
+    invalidateProjectCache('/workspace/project', 'git-graph');
+
+    expect(getGitStatusCache('/workspace/project')).toEqual([]);
+    expect(getGitGraphCache('/workspace/project')).toBeNull();
+  });
+
   it('invalidates directory cache entries without touching git snapshots', () => {
     setDirectoryCache('/workspace/project', '/workspace/project/src', []);
     setGitStatusCache('/workspace/project', []);
