@@ -14793,10 +14793,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
           {isBranchManagerOpen && (
             <div className="absolute left-0 top-full z-[80] mt-1 flex h-[min(72vh,680px)] w-[360px] flex-col overflow-hidden rounded border border-zinc-800 bg-zinc-950 shadow-2xl">
               <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
-                <GitBranch size={13} className="shrink-0 text-sky-300" />
-                <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-100">
-                  {gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}
-                </span>
+                <div className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded border border-zinc-800 bg-zinc-900/70 px-2">
+                  <Search size={13} className="shrink-0 text-zinc-500" />
+                  <input
+                    ref={branchManagerSearchInputRef}
+                    value={branchManagerQuery}
+                    onChange={(event) => {
+                      setBranchManagerQuery(event.target.value);
+                    }}
+                    placeholder={t('codePane.gitBranchSearchPlaceholder')}
+                    className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
+                  />
+                </div>
                 <button
                   type="button"
                   aria-label={t('codePane.refresh')}
@@ -14818,21 +14826,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 >
                   <Settings size={13} />
                 </button>
-              </div>
-
-              <div className="border-b border-zinc-800 px-2 py-2">
-                <div className="flex h-7 items-center gap-2 rounded border border-zinc-800 bg-zinc-900/70 px-2">
-                  <Search size={13} className="shrink-0 text-zinc-500" />
-                  <input
-                    ref={branchManagerSearchInputRef}
-                    value={branchManagerQuery}
-                    onChange={(event) => {
-                      setBranchManagerQuery(event.target.value);
-                    }}
-                    placeholder={t('codePane.gitBranchSearchPlaceholder')}
-                    className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
-                  />
-                </div>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">

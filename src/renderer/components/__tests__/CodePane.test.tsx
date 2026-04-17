@@ -4206,6 +4206,7 @@ describe('CodePane', () => {
     await user.click(branchButton);
 
     expect(await screen.findByPlaceholderText('codePane.gitBranchSearchPlaceholder')).toBeInTheDocument();
+    expect(screen.queryAllByText('feature/current')).toHaveLength(1);
     expect(screen.getByText('codePane.gitUpdateProject')).toBeInTheDocument();
     expect(await screen.findByText('codePane.gitRecentBranches')).toBeInTheDocument();
     expect(screen.getByText('codePane.gitLocalBranches')).toBeInTheDocument();
@@ -4223,6 +4224,7 @@ describe('CodePane', () => {
         branchName: 'release/2026.04',
         createBranch: true,
         startPoint: 'origin/release/2026.04',
+        preferExisting: true,
         detached: undefined,
       });
     });
