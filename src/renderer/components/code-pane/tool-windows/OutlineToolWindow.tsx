@@ -24,6 +24,11 @@ interface OutlineTreeNode {
   children: OutlineTreeNode[];
 }
 
+interface OutlineVisibleRow {
+  node: OutlineTreeNode;
+  depth: number;
+}
+
 interface OutlineFilterState {
   inherited: boolean;
   anonymous: boolean;
@@ -49,7 +54,7 @@ const DEFAULT_FILTERS: OutlineFilterState = {
   lambdas: false,
 };
 
-export function OutlineToolWindow({
+export const OutlineToolWindow = React.memo(function OutlineToolWindow({
   fileLabel,
   symbols,
   isLoading,
@@ -64,9 +69,21 @@ export function OutlineToolWindow({
   const { t } = useI18n();
   const tree = React.useMemo(() => buildOutlineTree(symbols), [symbols]);
   const [filters, setFilters] = React.useState(DEFAULT_FILTERS);
+  const [collapsedNodeIds, setCollapsedNodeIds] = React.useState<Set<string>>(() => new Set());
   const [selectedNodeId, setSelectedNodeId] = React.useState<string | null>(null);
   const filteredTree = React.useMemo(() => filterOutlineTree(tree, filters), [filters, tree]);
-  const visibleNodeIds = React.useMemo(() => collectVisibleNodeIds(filteredTree), [filteredTree]);
+  const visibleRows = React.useMemo(
+    () => flattenOutlineTree(filteredTree, collapsedNodeIds),
+    [collapsedNodeIds, filteredTree],
+  );
+  const visibleNodeIds = React.useMemo(
+    () => visibleRows.map((row) => row.node.id),
+    [visibleRows],
+  );
+
+  React.useEffect(() => {
+    setCollapsedNodeIds(new Set());
+  }, [symbols]);
 
   React.useEffect(() => {
     if (visibleNodeIds.length === 0) {
@@ -79,6 +96,43 @@ export function OutlineToolWindow({
     ));
   }, [visibleNodeIds]);
 
+  const handleRefresh = React.useCallback(() => {
+    void onRefresh();
+  }, [onRefresh]);
+
+  const handleToggleInherited = React.useCallback(() => {
+    setFilters((currentValue) => ({
+      ...currentValue,
+      inherited: !currentValue.inherited,
+    }));
+  }, []);
+
+  const handleToggleAnonymous = React.useCallback(() => {
+    setFilters((currentValue) => ({
+      ...currentValue,
+      anonymous: !currentValue.anonymous,
+    }));
+  }, []);
+
+  const handleToggleLambdas = React.useCallback(() => {
+    setFilters((currentValue) => ({
+      ...currentValue,
+      lambdas: !currentValue.lambdas,
+    }));
+  }, []);
+
+  const handleToggleNodeExpanded = React.useCallback((nodeId: string) => {
+    setCollapsedNodeIds((currentValue) => {
+      const nextValue = new Set(currentValue);
+      if (nextValue.has(nodeId)) {
+        nextValue.delete(nodeId);
+      } else {
+        nextValue.add(nodeId);
+      }
+      return nextValue;
+    });
+  }, []);
+
   return (
     <IdePopupShell className={panelClassName ?? 'flex h-full min-h-0 flex-col'}>
       <div className="grid grid-cols-[60px_minmax(0,1fr)_60px] items-center border-b border-zinc-800/90 bg-[linear-gradient(180deg,rgba(46,49,56,0.96)_0%,rgba(35,38,44,0.92)_100%)] px-3 py-2.5">
@@ -89,9 +143,7 @@ export function OutlineToolWindow({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => {
-              void onRefresh();
-            }}
+            onClick={handleRefresh}
             className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
@@ -113,32 +165,17 @@ export function OutlineToolWindow({
           <FilterToggle
             active={filters.inherited}
             label={t('codePane.fileStructureFilterInherited')}
-            onClick={() => {
-              setFilters((currentValue) => ({
-                ...currentValue,
-                inherited: !currentValue.inherited,
-              }));
-            }}
+            onClick={handleToggleInherited}
           />
           <FilterToggle
             active={filters.anonymous}
             label={t('codePane.fileStructureFilterAnonymous')}
-            onClick={() => {
-              setFilters((currentValue) => ({
-                ...currentValue,
-                anonymous: !currentValue.anonymous,
-              }));
-            }}
+            onClick={handleToggleAnonymous}
           />
           <FilterToggle
             active={filters.lambdas}
             label={t('codePane.fileStructureFilterLambdas')}
-            onClick={() => {
-              setFilters((currentValue) => ({
-                ...currentValue,
-                lambdas: !currentValue.lambdas,
-              }));
-            }}
+            onClick={handleToggleLambdas}
           />
         </div>
       </div>
@@ -151,17 +188,19 @@ export function OutlineToolWindow({
           </div>
         ) : error ? (
           <div className="px-2 py-4 text-xs text-red-300">{error}</div>
-        ) : filteredTree.length > 0 ? (
+        ) : visibleRows.length > 0 ? (
           <div className="space-y-0.5">
-            {filteredTree.map((node) => (
+            {visibleRows.map((row) => (
               <OutlineNodeRow
-                key={node.id}
-                node={node}
-                depth={0}
+                key={row.node.id}
+                node={row.node}
+                depth={row.depth}
+                isExpanded={!collapsedNodeIds.has(row.node.id)}
+                isSelected={selectedNodeId === row.node.id}
+                onToggleExpanded={handleToggleNodeExpanded}
                 onOpenSymbol={onOpenSymbol}
                 onClose={onClose}
                 closeOnDoubleClick={closeOnDoubleClick}
-                selectedNodeId={selectedNodeId}
                 onSelectNode={setSelectedNodeId}
               />
             ))}
@@ -174,9 +213,9 @@ export function OutlineToolWindow({
       </div>
     </IdePopupShell>
   );
-}
+});
 
-function FilterToggle({
+const FilterToggle = React.memo(function FilterToggle({
   active,
   label,
   onClick,
@@ -210,98 +249,104 @@ function FilterToggle({
       <span>{label}</span>
     </button>
   );
-}
+});
 
-function OutlineNodeRow({
-  node,
-  depth,
-  onOpenSymbol,
-  onClose,
-  closeOnDoubleClick,
-  selectedNodeId,
-  onSelectNode,
-}: {
+interface OutlineNodeRowProps {
   node: OutlineTreeNode;
   depth: number;
+  isExpanded: boolean;
+  isSelected: boolean;
+  onToggleExpanded: (nodeId: string) => void;
   onOpenSymbol: (range: CodePaneRange) => void | Promise<void>;
   onClose: () => void;
   closeOnDoubleClick: boolean;
-  selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
-}) {
-  const [isExpanded, setIsExpanded] = React.useState(true);
+}
+
+const OutlineNodeRow = React.memo(function OutlineNodeRow({
+  node,
+  depth,
+  isExpanded,
+  isSelected,
+  onToggleExpanded,
+  onOpenSymbol,
+  onClose,
+  closeOnDoubleClick,
+  onSelectNode,
+}: OutlineNodeRowProps) {
   const hasChildren = node.children.length > 0;
-  const isSelected = selectedNodeId === node.id;
   const kind = getSymbolKindPresentation(node.symbol.kind);
 
   return (
-    <div>
-      <div
-        className="flex items-center gap-1"
-        style={{ paddingLeft: `${depth * 12}px` }}
-      >
-        {hasChildren ? (
-          <button
-            type="button"
-            onClick={() => {
-              setIsExpanded((currentValue) => !currentValue);
-            }}
-            className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-200"
-            aria-label={isExpanded ? 'Collapse' : 'Expand'}
-          >
-            {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </button>
-        ) : (
-          <div className="h-6 w-5 shrink-0" />
-        )}
+    <div
+      className="flex items-center gap-1"
+      style={{ paddingLeft: `${depth * 12}px` }}
+    >
+      {hasChildren ? (
         <button
           type="button"
           onClick={() => {
-            onSelectNode(node.id);
-            void onOpenSymbol(node.symbol.selectionRange);
+            onToggleExpanded(node.id);
           }}
-          onDoubleClick={() => {
-            onSelectNode(node.id);
-            if (!closeOnDoubleClick) {
-              return;
-            }
-            void onOpenSymbol(node.symbol.selectionRange);
-            onClose();
-          }}
-          className={idePopupRowClassName(isSelected)}
+          className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-200"
+          aria-label={isExpanded ? 'Collapse' : 'Expand'}
         >
-          <OutlineKindBadge kind={kind.shortLabel} tone={kind.tone} />
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] leading-5 text-inherit">{node.symbol.name}</div>
-              {node.symbol.detail ? (
-                <div className="truncate text-[10px] leading-4 text-zinc-500">{node.symbol.detail}</div>
-              ) : null}
-            </div>
-            <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/45 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
-              {kind.label}
-            </span>
-          </div>
+          {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
-      </div>
-      {hasChildren && isExpanded && (
-        <div className="space-y-0.5">
-          {node.children.map((child) => (
-            <OutlineNodeRow
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              onOpenSymbol={onOpenSymbol}
-              onClose={onClose}
-              closeOnDoubleClick={closeOnDoubleClick}
-              selectedNodeId={selectedNodeId}
-              onSelectNode={onSelectNode}
-            />
-          ))}
-        </div>
+      ) : (
+        <div className="h-6 w-5 shrink-0" />
       )}
+      <button
+        type="button"
+        onClick={() => {
+          onSelectNode(node.id);
+          void onOpenSymbol(node.symbol.selectionRange);
+        }}
+        onDoubleClick={() => {
+          onSelectNode(node.id);
+          if (!closeOnDoubleClick) {
+            return;
+          }
+          void onOpenSymbol(node.symbol.selectionRange);
+          onClose();
+        }}
+        className={idePopupRowClassName(isSelected)}
+      >
+        <OutlineKindBadge kind={kind.shortLabel} tone={kind.tone} />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[12px] leading-5 text-inherit">{node.symbol.name}</div>
+            {node.symbol.detail ? (
+              <div className="truncate text-[10px] leading-4 text-zinc-500">{node.symbol.detail}</div>
+            ) : null}
+          </div>
+          <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/45 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+            {kind.label}
+          </span>
+        </div>
+      </button>
     </div>
   );
+});
+
+function flattenOutlineTree(nodes: OutlineTreeNode[], collapsedNodeIds: Set<string>): OutlineVisibleRow[] {
+  const rows: OutlineVisibleRow[] = [];
+
+  const walk = (currentNodes: OutlineTreeNode[], depth: number) => {
+    currentNodes.forEach((node) => {
+      rows.push({
+        node,
+        depth,
+      });
+
+      if (node.children.length > 0 && !collapsedNodeIds.has(node.id)) {
+        walk(node.children, depth + 1);
+      }
+    });
+  };
+
+  walk(nodes, 0);
+  return rows;
 }
 
 function OutlineKindBadge({
@@ -360,17 +405,6 @@ function filterOutlineTree(tree: OutlineTreeNode[], filters: OutlineFilterState)
   });
 
   return nextTree;
-}
-
-function collectVisibleNodeIds(nodes: OutlineTreeNode[]): string[] {
-  const ids: string[] = [];
-
-  nodes.forEach((node) => {
-    ids.push(node.id);
-    ids.push(...collectVisibleNodeIds(node.children));
-  });
-
-  return ids;
 }
 
 function matchesOutlineFilters(symbol: CodePaneDocumentSymbol, filters: OutlineFilterState): boolean {

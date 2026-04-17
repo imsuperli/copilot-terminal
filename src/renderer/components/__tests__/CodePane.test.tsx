@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CodePane } from '../CodePane';
@@ -3657,9 +3657,16 @@ describe('CodePane', () => {
 
     expect((await screen.findAllByText('feature/scm')).length).toBeGreaterThan(0);
     expect(screen.getByText('codePane.gitOpenWorkbench')).toBeInTheDocument();
+    expect(screen.getByText('codePane.gitOpenChangesWorkbench')).toBeInTheDocument();
+    expect(window.electronAPI.codePaneGetGitGraph).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
+    });
+
+    expect(await screen.findByText('codePane.gitChangesWorkbenchTab')).toBeInTheDocument();
     expect(screen.getByText('codePane.gitSectionUnstaged')).toBeInTheDocument();
     expect(await screen.findByText('index.ts')).toBeInTheDocument();
-    expect(window.electronAPI.codePaneGetGitGraph).not.toHaveBeenCalled();
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.openDiff' }));
@@ -3669,6 +3676,68 @@ describe('CodePane', () => {
       expect(window.electronAPI.codePaneReadGitBaseFile).toHaveBeenCalledWith({
         rootPath: '/workspace/project',
         filePath: '/workspace/project/src/index.ts',
+      });
+    });
+  });
+
+  it('opens the git changes workbench from the SCM sidebar', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/scm',
+        upstreamBranch: 'origin/feature/scm',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 1,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'codePane.gitCommitDots' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
+    });
+
+    expect(await screen.findByText('codePane.gitChangesWorkbenchTab')).toBeInTheDocument();
+    expect(screen.getByText('codePane.gitSectionUnstaged')).toBeInTheDocument();
+    expect(screen.getByText('index.ts')).toBeInTheDocument();
+    expect(screen.queryByText('codePane.gitLogTab')).toBeInTheDocument();
+    expect(window.electronAPI.codePaneGetGitGraph).not.toHaveBeenCalled();
+    expect(window.electronAPI.codePaneGetGitBranches).not.toHaveBeenCalled();
+    expect(window.electronAPI.codePaneGetGitRebasePlan).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitLogTab' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitGraph).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        limit: 60,
+      });
+      expect(window.electronAPI.codePaneGetGitBranches).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
       });
     });
   });
@@ -3870,7 +3939,11 @@ describe('CodePane', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitFileHistory' }));
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitFileHistory' }));
     });
 
     expect(window.electronAPI.codePaneGitHistory).toHaveBeenCalledWith({
@@ -3895,6 +3968,210 @@ describe('CodePane', () => {
     });
     expect(await screen.findByText(/Test User · Refine index flow/)).toBeInTheDocument();
   }, 10_000);
+
+  it('filters the commit window to included files without changing the selected commit paths', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+        {
+          path: '/workspace/project/src/other.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'codePane.gitCommitDots' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitCommitDots' }));
+    });
+
+    expect(await screen.findByPlaceholderText('codePane.gitCommitPlaceholder')).toBeInTheDocument();
+    const commitMessageField = screen.getByPlaceholderText('codePane.gitCommitPlaceholder');
+    const commitWindow = commitMessageField.closest('[role="dialog"]') ?? commitMessageField.parentElement?.parentElement?.parentElement?.parentElement;
+    expect(commitWindow).not.toBeNull();
+    const commitWindowQueries = within(commitWindow as HTMLElement);
+    expect((await commitWindowQueries.findAllByText('other.ts')).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'unselect /workspace/project/src/other.ts' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitShowIncludedOnly' }));
+    });
+
+    expect(commitWindowQueries.getAllByText('index.ts').length).toBeGreaterThan(0);
+    expect(commitWindowQueries.queryAllByText('other.ts')).toHaveLength(0);
+
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText('codePane.gitCommitPlaceholder'), {
+        target: { value: 'Commit selected file only' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitCommit' }));
+    });
+
+    expect(window.electronAPI.codePaneGitCommit).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      message: 'Commit selected file only',
+      amend: false,
+      includeAll: true,
+      paths: ['/workspace/project/src/index.ts'],
+    });
+  });
+
+  it('groups commit window entries by directory and lets groups collapse', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+        {
+          path: '/workspace/project/src/components/button.tsx',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+        {
+          path: '/workspace/project/tests/button.test.tsx',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'codePane.gitCommitDots' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitCommitDots' }));
+    });
+
+    const commitMessageField = await screen.findByPlaceholderText('codePane.gitCommitPlaceholder');
+    const commitWindow = commitMessageField.closest('[role="dialog"]') ?? commitMessageField.parentElement?.parentElement?.parentElement?.parentElement;
+    expect(commitWindow).not.toBeNull();
+    const commitWindowQueries = within(commitWindow as HTMLElement);
+
+    expect(commitWindowQueries.getByText('src')).toBeInTheDocument();
+    expect(commitWindowQueries.getByText('src/components')).toBeInTheDocument();
+    expect(commitWindowQueries.getByText('tests')).toBeInTheDocument();
+    expect(commitWindowQueries.getByText('button.tsx')).toBeInTheDocument();
+
+    const componentsGroupToggle = commitWindowQueries.getByText('src/components').closest('button');
+    expect(componentsGroupToggle).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.click(componentsGroupToggle as HTMLButtonElement);
+    });
+
+    expect(commitWindowQueries.queryByText('button.tsx')).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(componentsGroupToggle as HTMLButtonElement);
+    });
+
+    expect(commitWindowQueries.getByText('button.tsx')).toBeInTheDocument();
+  });
+
+  it('toggles commit window selection for an entire directory group', async () => {
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+        {
+          path: '/workspace/project/src/components/button.tsx',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+        {
+          path: '/workspace/project/src/components/input.tsx',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'codePane.gitCommitDots' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitCommitDots' }));
+    });
+
+    const commitMessageField = await screen.findByPlaceholderText('codePane.gitCommitPlaceholder');
+    const commitWindow = commitMessageField.closest('[role="dialog"]') ?? commitMessageField.parentElement?.parentElement?.parentElement?.parentElement;
+    expect(commitWindow).not.toBeNull();
+    const commitWindowQueries = within(commitWindow as HTMLElement);
+
+    const groupSelectionToggle = commitWindowQueries.getByRole('button', { name: 'unselect group src/components' });
+
+    await act(async () => {
+      fireEvent.click(groupSelectionToggle);
+    });
+
+    await act(async () => {
+      fireEvent.change(commitMessageField, {
+        target: { value: 'Commit without component directory' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitCommit' }));
+    });
+
+    expect(window.electronAPI.codePaneGitCommit).toHaveBeenCalledWith({
+      rootPath: '/workspace/project',
+      message: 'Commit without component directory',
+      amend: false,
+      includeAll: true,
+      paths: ['/workspace/project/src/index.ts'],
+    });
+  });
 
   it('opens the conflict resolver below the editor and applies merged content', async () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
@@ -3939,7 +4216,11 @@ describe('CodePane', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitResolveConflict' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitResolveConflict' }));
     });
 
     expect(window.electronAPI.codePaneGetGitConflictDetails).toHaveBeenCalledWith({
@@ -4078,15 +4359,21 @@ describe('CodePane', () => {
         rootPath: '/workspace/project',
       });
     });
+    expect(window.electronAPI.codePaneGetGitRebasePlan).not.toHaveBeenCalled();
+    expect((await screen.findAllByText('codePane.gitBranchManager')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Feature commit 2').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('feature/workbench').length).toBeGreaterThan(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitRebasePlanner' }));
+    });
+
     await waitFor(() => {
       expect(window.electronAPI.codePaneGetGitRebasePlan).toHaveBeenCalledWith({
         rootPath: '/workspace/project',
         baseRef: 'origin/main',
       });
     });
-    expect((await screen.findAllByText('codePane.gitBranchManager')).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Feature commit 2').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('feature/workbench').length).toBeGreaterThan(0);
   });
 
   it('renders the current branch in the editor header', async () => {
@@ -4298,6 +4585,63 @@ describe('CodePane', () => {
         preferExisting: undefined,
       });
     });
+  });
+
+  it('reuses cached branch manager data when reopening the header popup', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/current',
+        upstreamBranch: 'origin/feature/current',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 1,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitBranches).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          name: 'feature/current',
+          refName: 'refs/heads/feature/current',
+          shortName: 'feature/current',
+          kind: 'local',
+          current: true,
+          upstream: 'origin/feature/current',
+          aheadCount: 1,
+          behindCount: 0,
+          commitSha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          subject: 'Current feature',
+          timestamp: 1_710_000_100,
+          mergedIntoCurrent: false,
+        },
+      ],
+    });
+
+    renderCodePane(createPane());
+
+    const branchButton = await screen.findByRole('button', { name: 'codePane.gitBranchManager' });
+    await user.click(branchButton);
+    expect(await screen.findByPlaceholderText('codePane.gitBranchSearchPlaceholder')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitBranches).toHaveBeenCalledTimes(1);
+    });
+
+    await user.click(branchButton);
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText('codePane.gitBranchSearchPlaceholder')).not.toBeInTheDocument();
+    });
+
+    await user.click(branchButton);
+    expect(await screen.findByPlaceholderText('codePane.gitBranchSearchPlaceholder')).toBeInTheDocument();
+    expect(window.electronAPI.codePaneGetGitBranches).toHaveBeenCalledTimes(1);
   });
 
   it('compares selected commits in click order and opens revision diff from the git workbench', async () => {
@@ -4606,11 +4950,31 @@ describe('CodePane', () => {
         unstagedHunks: [unstagedHunk],
       },
     });
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/scm',
+        upstreamBranch: 'origin/feature/scm',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 1,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
 
     renderCodePane(createPane());
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'codePane.gitCommitDots' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
     });
 
     const scmFileButton = await screen.findByRole('button', { name: /index\.ts/ });

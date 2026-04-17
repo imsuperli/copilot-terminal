@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
   ChevronRight,
+  File as FileIcon,
+  Folder,
   FolderTree,
   GitBranch,
   GitCommitHorizontal,
@@ -19,20 +21,378 @@ import type {
   CodePaneGitCommitDetails,
   CodePaneGitCommitFileChange,
   CodePaneGitCompareCommitsResult,
+  CodePaneGitDiffHunk,
   CodePaneGitGraphCommit,
   CodePaneGitRebasePlanEntry,
   CodePaneGitRebasePlanResult,
+  CodePaneGitStatusEntry,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import { getPathLeafLabel } from '../../../utils/pathDisplay';
 import { buildGitGraphLayout, type GitGraphLineSegment, type GitGraphRowLayout } from '../../../utils/gitGraphLayout';
+import { GitHunkList } from '../scm/GitHunkList';
 
-type GitToolWindowTab = 'log' | 'rebase';
+export type GitToolWindowTab = 'changes' | 'log' | 'rebase';
+type GitChangeSection = 'conflicted' | 'staged' | 'unstaged' | 'untracked';
+
+type GitChangeWorkbenchRow = {
+  key: string;
+  section: GitChangeSection;
+  entry: CodePaneGitStatusEntry;
+  relativePath: string;
+  directoryLabel: string;
+};
+
+type GitChangeWorkbenchDirectoryGroup = {
+  key: string;
+  label: string;
+  rows: GitChangeWorkbenchRow[];
+};
+
+type GitChangeWorkbenchSectionGroup = {
+  section: GitChangeSection;
+  count: number;
+  directoryGroups: GitChangeWorkbenchDirectoryGroup[];
+};
+
+const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
+  row,
+  isSelected,
+  getRelativePath,
+  onSelectChange,
+  onStagePath,
+  onUnstagePath,
+  onDiscardPath,
+  onOpenFileDiff,
+  onOpenConflictResolver,
+  onResolveConflict,
+  onShowFileHistory,
+  onRevealInExplorer,
+  t,
+}: {
+  row: GitChangeWorkbenchRow;
+  isSelected: boolean;
+  getRelativePath: (filePath: string) => string;
+  onSelectChange: (entry: CodePaneGitStatusEntry) => void | Promise<void>;
+  onStagePath: (filePath: string) => void | Promise<void>;
+  onUnstagePath: (filePath: string) => void | Promise<void>;
+  onDiscardPath: (filePath: string, restoreStaged: boolean) => void | Promise<void>;
+  onOpenFileDiff: (filePath: string) => void | Promise<void>;
+  onOpenConflictResolver: (filePath: string) => void | Promise<void>;
+  onResolveConflict: (filePath: string, resolution: 'ours' | 'theirs') => void | Promise<void>;
+  onShowFileHistory: (filePath: string) => void | Promise<void>;
+  onRevealInExplorer: (filePath: string) => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const entry = row.entry;
+  const entryTextClassName = getGitStatusTextClassName(entry.status);
+  const canStage = row.section !== 'staged';
+  const canUnstage = row.section === 'staged' || Boolean(entry.staged);
+
+  return (
+    <div
+      className={`group rounded border px-2 py-2 transition-colors ${
+        isSelected
+          ? 'border-sky-500/35 bg-sky-500/[0.08] text-zinc-100'
+          : 'border-transparent text-zinc-300 hover:border-zinc-700/70 hover:bg-zinc-900/80'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          void onSelectChange(entry);
+        }}
+        className="flex w-full min-w-0 items-center gap-2 text-left"
+      >
+        <FileIcon size={13} className="shrink-0 text-zinc-500" />
+        <span className={`min-w-0 flex-1 truncate text-xs ${entryTextClassName}`}>
+          {getPathLeafLabel(entry.path)}
+        </span>
+        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] ${getGitStatusBadgeClassName(entry.status)}`}>
+          {getGitStatusBadgeLabel(entry.status)}
+        </span>
+      </button>
+      <div className="mt-1 truncate pl-5 text-[10px] text-zinc-500">
+        {row.relativePath}
+      </div>
+      {entry.originalPath && (
+        <div className="mt-0.5 truncate pl-5 text-[10px] text-zinc-600">
+          {getRelativePath(entry.originalPath)} -&gt; {row.relativePath}
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap gap-1 pl-5">
+        {entry.conflicted ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                void onOpenConflictResolver(entry.path);
+              }}
+              className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-500/25"
+            >
+              {t('codePane.gitResolveConflict')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void onResolveConflict(entry.path, 'ours');
+              }}
+              className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200 hover:bg-amber-500/25"
+            >
+              {t('codePane.gitUseOurs')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void onResolveConflict(entry.path, 'theirs');
+              }}
+              className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-200 hover:bg-sky-500/25"
+            >
+              {t('codePane.gitUseTheirs')}
+            </button>
+          </>
+        ) : (
+          <>
+            {canStage && (
+              <button
+                type="button"
+                onClick={() => {
+                  void onStagePath(entry.path);
+                }}
+                className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+              >
+                {t('codePane.gitStage')}
+              </button>
+            )}
+            {canUnstage && (
+              <button
+                type="button"
+                onClick={() => {
+                  void onUnstagePath(entry.path);
+                }}
+                className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+              >
+                {t('codePane.gitUnstage')}
+              </button>
+            )}
+            {(row.section === 'unstaged' || row.section === 'untracked' || entry.status === 'deleted') && (
+              <button
+                type="button"
+                onClick={() => {
+                  void onDiscardPath(entry.path, row.section === 'staged');
+                }}
+                className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-red-500/25"
+              >
+                {t('codePane.gitDiscard')}
+              </button>
+            )}
+          </>
+        )}
+        {entry.status !== 'deleted' && (
+          <button
+            type="button"
+            onClick={() => {
+              void onOpenFileDiff(entry.path);
+            }}
+            className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+          >
+            {t('codePane.openDiff')}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            void onShowFileHistory(entry.path);
+          }}
+          className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+        >
+          {t('codePane.gitFileHistory')}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void onRevealInExplorer(entry.path);
+          }}
+          className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+        >
+          {t('codePane.gitRevealInExplorer')}
+        </button>
+      </div>
+    </div>
+  );
+});
+
+const GitChangeDirectoryGroup = React.memo(function GitChangeDirectoryGroup({
+  directoryGroup,
+  selectedChangePath,
+  getRelativePath,
+  onSelectChange,
+  onStagePath,
+  onUnstagePath,
+  onDiscardPath,
+  onOpenFileDiff,
+  onOpenConflictResolver,
+  onResolveConflict,
+  onShowFileHistory,
+  onRevealInExplorer,
+  t,
+}: {
+  directoryGroup: GitChangeWorkbenchDirectoryGroup;
+  selectedChangePath: string | null;
+  getRelativePath: (filePath: string) => string;
+  onSelectChange: (entry: CodePaneGitStatusEntry) => void | Promise<void>;
+  onStagePath: (filePath: string) => void | Promise<void>;
+  onUnstagePath: (filePath: string) => void | Promise<void>;
+  onDiscardPath: (filePath: string, restoreStaged: boolean) => void | Promise<void>;
+  onOpenFileDiff: (filePath: string) => void | Promise<void>;
+  onOpenConflictResolver: (filePath: string) => void | Promise<void>;
+  onResolveConflict: (filePath: string, resolution: 'ours' | 'theirs') => void | Promise<void>;
+  onShowFileHistory: (filePath: string) => void | Promise<void>;
+  onRevealInExplorer: (filePath: string) => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <div className="rounded border border-zinc-800/80 bg-zinc-900/35 p-1.5">
+      <div className="mb-1 flex items-center gap-2 px-1.5 py-1 text-[11px] text-zinc-500">
+        <Folder size={12} className="shrink-0 text-zinc-500" />
+        <span className="min-w-0 flex-1 truncate">{directoryGroup.label}</span>
+        <span className="rounded bg-zinc-950/80 px-1 py-0.5 text-[10px]">{directoryGroup.rows.length}</span>
+      </div>
+      <div className="space-y-1">
+        {directoryGroup.rows.map((row) => (
+          <GitChangeEntryCard
+            key={row.key}
+            row={row}
+            isSelected={selectedChangePath === row.entry.path}
+            getRelativePath={getRelativePath}
+            onSelectChange={onSelectChange}
+            onStagePath={onStagePath}
+            onUnstagePath={onUnstagePath}
+            onDiscardPath={onDiscardPath}
+            onOpenFileDiff={onOpenFileDiff}
+            onOpenConflictResolver={onOpenConflictResolver}
+            onResolveConflict={onResolveConflict}
+            onShowFileHistory={onShowFileHistory}
+            onRevealInExplorer={onRevealInExplorer}
+            t={t}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}, (previousProps, nextProps) => {
+  if (previousProps.directoryGroup !== nextProps.directoryGroup) {
+    return false;
+  }
+  if (previousProps.getRelativePath !== nextProps.getRelativePath
+    || previousProps.onSelectChange !== nextProps.onSelectChange
+    || previousProps.onStagePath !== nextProps.onStagePath
+    || previousProps.onUnstagePath !== nextProps.onUnstagePath
+    || previousProps.onDiscardPath !== nextProps.onDiscardPath
+    || previousProps.onOpenFileDiff !== nextProps.onOpenFileDiff
+    || previousProps.onOpenConflictResolver !== nextProps.onOpenConflictResolver
+    || previousProps.onResolveConflict !== nextProps.onResolveConflict
+    || previousProps.onShowFileHistory !== nextProps.onShowFileHistory
+    || previousProps.onRevealInExplorer !== nextProps.onRevealInExplorer
+    || previousProps.t !== nextProps.t) {
+    return false;
+  }
+
+  const previousSelectedPath = previousProps.selectedChangePath;
+  const nextSelectedPath = nextProps.selectedChangePath;
+  if (previousSelectedPath === nextSelectedPath) {
+    return true;
+  }
+
+  const previousHasSelected = directoryGroupContainsPath(previousProps.directoryGroup, previousSelectedPath);
+  const nextHasSelected = directoryGroupContainsPath(nextProps.directoryGroup, nextSelectedPath);
+  return !previousHasSelected && !nextHasSelected;
+});
+
+const BranchTreeRow = React.memo(function BranchTreeRow({
+  node,
+  depth,
+  isSelected = false,
+  isCollapsed = false,
+  onToggleNode,
+  onSelectBranch,
+}: {
+  node: BranchTreeNode;
+  depth: number;
+  isSelected?: boolean;
+  isCollapsed?: boolean;
+  onToggleNode: (nodeKey: string) => void;
+  onSelectBranch: (branchName: string) => void;
+}) {
+  if (node.kind === 'folder') {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          onToggleNode(node.key);
+        }}
+        className="flex h-7 w-full items-center gap-2 rounded text-left text-xs text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+        style={{ paddingLeft: `${10 + (depth * 14)}px`, paddingRight: '8px' }}
+      >
+        {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+        <FolderTree size={12} className="shrink-0 text-zinc-500" />
+        <span className="min-w-0 flex-1 truncate">{node.label}</span>
+        <span className="rounded bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-500">
+          {node.branchCount}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onSelectBranch(node.branch.name);
+      }}
+      className={`flex h-7 w-full items-center gap-2 rounded text-left text-xs transition-colors ${
+        isSelected
+          ? 'bg-sky-500/15 text-sky-100'
+          : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+      }`}
+      style={{ paddingLeft: `${28 + (depth * 14)}px`, paddingRight: '8px' }}
+    >
+      <GitBranch size={12} className={`shrink-0 ${node.branch.current ? 'text-emerald-300' : 'text-zinc-500'}`} />
+      <span className="min-w-0 flex-1 truncate">{node.label}</span>
+      <span className="truncate text-[10px] text-zinc-500">{node.branch.shortSha}</span>
+      {node.branch.current && (
+        <span className="rounded bg-emerald-500/15 px-1 py-0.5 text-[10px] text-emerald-200">
+          HEAD
+        </span>
+      )}
+    </button>
+  );
+});
+
+function directoryGroupContainsPath(directoryGroup: GitChangeWorkbenchDirectoryGroup, filePath: string | null): boolean {
+  if (!filePath) {
+    return false;
+  }
+
+  return directoryGroup.rows.some((row) => row.entry.path === filePath);
+}
 
 interface GitToolWindowProps {
+  initialTab?: GitToolWindowTab;
+  activeTab?: GitToolWindowTab;
+  onTabChange?: (tab: GitToolWindowTab) => void;
   branches: CodePaneGitBranchEntry[];
   selectedBranchName: string | null;
   commits: CodePaneGitGraphCommit[];
   selectedCommitSha: string | null;
+  changes: CodePaneGitStatusEntry[];
+  selectedChangePath: string | null;
+  selectedHunkPath: string | null;
+  selectedHunkRelativePath: string | null;
+  stagedHunks: CodePaneGitDiffHunk[];
+  unstagedHunks: CodePaneGitDiffHunk[];
+  hunksLoading: boolean;
+  hunksError: string | null;
   rebasePlan: CodePaneGitRebasePlanResult | null;
   rebaseBaseRef: string;
   isBranchesLoading: boolean;
@@ -46,9 +406,21 @@ interface GitToolWindowProps {
   commitDetailsError: string | null;
   onSelectBranch: (branchName: string) => void;
   onSelectCommit: (commitSha: string, event?: { metaKey?: boolean; ctrlKey?: boolean }) => void;
+  onSelectChange: (entry: CodePaneGitStatusEntry) => void | Promise<void>;
   onChangeRebaseBaseRef: (baseRef: string) => void;
   onRefresh: () => void | Promise<void>;
   onRefreshRebase: () => void | Promise<void>;
+  onStagePath: (filePath: string) => void | Promise<void>;
+  onUnstagePath: (filePath: string) => void | Promise<void>;
+  onDiscardPath: (filePath: string, restoreStaged: boolean) => void | Promise<void>;
+  onOpenFileDiff: (filePath: string) => void | Promise<void>;
+  onOpenConflictResolver: (filePath: string) => void | Promise<void>;
+  onResolveConflict: (filePath: string, resolution: 'ours' | 'theirs') => void | Promise<void>;
+  onStageHunk: (hunk: CodePaneGitDiffHunk) => void | Promise<void>;
+  onUnstageHunk: (hunk: CodePaneGitDiffHunk) => void | Promise<void>;
+  onDiscardHunk: (hunk: CodePaneGitDiffHunk) => void | Promise<void>;
+  onShowFileHistory: (filePath: string) => void | Promise<void>;
+  onRevealInExplorer: (filePath: string) => void | Promise<void>;
   onCheckoutBranch: (config: { branchName: string; createBranch: boolean; startPoint?: string; preferExisting?: boolean }) => void | Promise<void>;
   onRequestRenameBranch: (branchName: string) => void | Promise<void>;
   onDeleteBranch: (branchName: string, force?: boolean) => void | Promise<void>;
@@ -62,6 +434,7 @@ interface GitToolWindowProps {
     leftLabel?: string;
   }) => void | Promise<void>;
   onApplyRebasePlan: (baseRef: string, entries: CodePaneGitRebasePlanEntry[]) => void | Promise<void>;
+  getRelativePath: (filePath: string) => string;
   onClose: () => void;
 }
 
@@ -87,6 +460,33 @@ interface BranchTreeSection {
   nodes: BranchTreeNode[];
 }
 
+type BranchTreeVisibleRow = {
+  key: string;
+  depth: number;
+  node: BranchTreeNode;
+};
+
+type BranchListVisibleItem =
+  | {
+    key: string;
+    kind: 'section';
+    label: string;
+    count: number;
+  }
+  | {
+    key: string;
+    kind: 'row';
+    depth: number;
+    node: BranchTreeNode;
+  };
+
+type WindowedListSlice<T> = {
+  items: T[];
+  offsetTop: number;
+  totalHeight: number;
+  isWindowed: boolean;
+};
+
 const GIT_GRAPH_COLORS = [
   '#60a5fa',
   '#34d399',
@@ -101,12 +501,121 @@ const GIT_GRAPH_COLORS = [
 const GRAPH_LANE_WIDTH = 14;
 const GRAPH_ROW_HEIGHT = 28;
 const GRAPH_NODE_RADIUS = 4;
+const GIT_FIXED_LIST_OVERSCAN = 10;
+const GIT_FIXED_LIST_WINDOWING_THRESHOLD = 120;
+const GIT_BRANCH_LIST_ROW_HEIGHT = 28;
+const GIT_COMMIT_LOG_ROW_HEIGHT = 32;
+const GIT_REBASE_ROW_HEIGHT = 32;
+const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
 
-export function GitToolWindow({
+function getWindowedListSlice<T>({
+  items,
+  scrollTop,
+  viewportHeight,
+  rowHeight,
+  overscan,
+  threshold,
+}: {
+  items: T[];
+  scrollTop: number;
+  viewportHeight: number;
+  rowHeight: number;
+  overscan: number;
+  threshold: number;
+}): WindowedListSlice<T> {
+  const totalHeight = items.length * rowHeight;
+
+  if (items.length <= threshold || viewportHeight <= 0) {
+    return {
+      items,
+      offsetTop: 0,
+      totalHeight,
+      isWindowed: false,
+    };
+  }
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const endIndex = Math.min(
+    items.length,
+    Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan,
+  );
+
+  return {
+    items: items.slice(startIndex, endIndex),
+    offsetTop: startIndex * rowHeight,
+    totalHeight,
+    isWindowed: true,
+  };
+}
+
+function useFixedWindowedList<T>(
+  items: T[],
+  rowHeight: number,
+  threshold = GIT_FIXED_LIST_WINDOWING_THRESHOLD,
+) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+
+  useEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) {
+      return;
+    }
+
+    const syncViewportHeight = () => {
+      const nextHeight = scrollElement.clientHeight;
+      setViewportHeight((currentHeight) => (
+        currentHeight === nextHeight ? currentHeight : nextHeight
+      ));
+    };
+
+    syncViewportHeight();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewportHeight();
+    });
+    resizeObserver.observe(scrollElement);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  const slice = useMemo(() => getWindowedListSlice({
+    items,
+    scrollTop,
+    viewportHeight,
+    rowHeight,
+    overscan: GIT_FIXED_LIST_OVERSCAN,
+    threshold,
+  }), [items, rowHeight, scrollTop, threshold, viewportHeight]);
+
+  return {
+    scrollRef,
+    slice,
+    handleScroll: (event: React.UIEvent<HTMLDivElement>) => {
+      setScrollTop(event.currentTarget.scrollTop);
+    },
+  };
+}
+
+export const GitToolWindow = React.memo(function GitToolWindow({
+  initialTab = 'log',
+  activeTab: controlledActiveTab,
+  onTabChange,
   branches,
   selectedBranchName,
   commits,
   selectedCommitSha,
+  changes,
+  selectedChangePath,
+  selectedHunkPath,
+  selectedHunkRelativePath,
+  stagedHunks,
+  unstagedHunks,
+  hunksLoading,
+  hunksError,
   rebasePlan,
   rebaseBaseRef,
   isBranchesLoading,
@@ -120,9 +629,21 @@ export function GitToolWindow({
   commitDetailsError,
   onSelectBranch,
   onSelectCommit,
+  onSelectChange,
   onChangeRebaseBaseRef,
   onRefresh,
   onRefreshRebase,
+  onStagePath,
+  onUnstagePath,
+  onDiscardPath,
+  onOpenFileDiff,
+  onOpenConflictResolver,
+  onResolveConflict,
+  onStageHunk,
+  onUnstageHunk,
+  onDiscardHunk,
+  onShowFileHistory,
+  onRevealInExplorer,
   onCheckoutBranch,
   onRequestRenameBranch,
   onDeleteBranch,
@@ -130,11 +651,20 @@ export function GitToolWindow({
   onCompareSelectedCommits,
   onOpenCommitFileDiff,
   onApplyRebasePlan,
+  getRelativePath,
   onClose,
 }: GitToolWindowProps) {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<GitToolWindowTab>('log');
+  const [uncontrolledActiveTab, setUncontrolledActiveTab] = useState<GitToolWindowTab>(initialTab);
   const [draftEntries, setDraftEntries] = useState<CodePaneGitRebasePlanEntry[]>([]);
+
+  const activeTab = controlledActiveTab ?? uncontrolledActiveTab;
+
+  useEffect(() => {
+    if (controlledActiveTab === undefined) {
+      setUncontrolledActiveTab(initialTab);
+    }
+  }, [controlledActiveTab, initialTab]);
 
   useEffect(() => {
     setDraftEntries(rebasePlan?.commits ?? []);
@@ -169,7 +699,7 @@ export function GitToolWindow({
     [branches],
   );
 
-  const moveDraftEntry = (entryIndex: number, direction: -1 | 1) => {
+  const moveDraftEntry = useCallback((entryIndex: number, direction: -1 | 1) => {
     setDraftEntries((currentEntries) => {
       const nextIndex = entryIndex + direction;
       if (nextIndex < 0 || nextIndex >= currentEntries.length) {
@@ -181,9 +711,9 @@ export function GitToolWindow({
       nextEntries.splice(nextIndex, 0, entry);
       return nextEntries;
     });
-  };
+  }, []);
 
-  const updateDraftAction = (
+  const updateDraftAction = useCallback((
     entryIndex: number,
     action: CodePaneGitRebasePlanEntry['action'],
   ) => {
@@ -195,7 +725,14 @@ export function GitToolWindow({
         }
         : entry
     )));
-  };
+  }, []);
+
+  const handleTabChange = useCallback((tab: GitToolWindowTab) => {
+    if (controlledActiveTab === undefined) {
+      setUncontrolledActiveTab(tab);
+    }
+    onTabChange?.(tab);
+  }, [controlledActiveTab, onTabChange]);
 
   return (
     <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/95">
@@ -207,6 +744,7 @@ export function GitToolWindow({
           </div>
           <div className="flex rounded bg-zinc-900/80 p-0.5">
             {([
+              ['changes', t('codePane.gitChangesWorkbenchTab')],
               ['log', t('codePane.gitLogTab')],
               ['rebase', t('codePane.gitRebasePlanner')],
             ] as const).map(([tabId, label]) => (
@@ -214,7 +752,7 @@ export function GitToolWindow({
                 key={tabId}
                 type="button"
                 onClick={() => {
-                  setActiveTab(tabId);
+                  handleTabChange(tabId);
                 }}
                 className={`rounded px-2 py-1 text-[11px] transition-colors ${
                   activeTab === tabId
@@ -249,84 +787,206 @@ export function GitToolWindow({
         </div>
       </div>
 
-      {(branchesError || (activeTab === 'rebase' ? rebaseError : null)) && (
+      {((activeTab !== 'changes' ? branchesError : null) || (activeTab === 'rebase' ? rebaseError : null)) && (
         <div className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-          {branchesError || rebaseError}
+          {(activeTab !== 'changes' ? branchesError : null) || rebaseError}
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)_340px] overflow-hidden">
-        <div className="min-h-0 border-r border-zinc-800 bg-zinc-950/70">
-          <BranchListSection
-            currentBranches={currentBranches}
-            localBranches={localBranches}
-            remoteBranches={remoteBranches}
-            selectedBranchName={selectedBranch?.name ?? null}
-            isLoading={isBranchesLoading}
-            onSelectBranch={onSelectBranch}
+      {activeTab === 'changes' ? (
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(320px,420px)_minmax(0,1fr)] overflow-hidden">
+          <GitChangesSection
+            changes={changes}
+            selectedChangePath={selectedChangePath}
+            getRelativePath={getRelativePath}
+            onSelectChange={onSelectChange}
+            onStagePath={onStagePath}
+            onUnstagePath={onUnstagePath}
+            onDiscardPath={onDiscardPath}
+            onOpenFileDiff={onOpenFileDiff}
+            onOpenConflictResolver={onOpenConflictResolver}
+            onResolveConflict={onResolveConflict}
+            onShowFileHistory={onShowFileHistory}
+            onRevealInExplorer={onRevealInExplorer}
             t={t}
           />
+          <div className="min-h-0 overflow-auto bg-zinc-950/40 px-3 py-3">
+            <GitHunkList
+              selectedPath={selectedHunkPath}
+              relativePath={selectedHunkRelativePath}
+              stagedHunks={stagedHunks}
+              unstagedHunks={unstagedHunks}
+              loading={hunksLoading}
+              error={hunksError}
+              onStageHunk={onStageHunk}
+              onUnstageHunk={onUnstageHunk}
+              onDiscardHunk={onDiscardHunk}
+              t={t}
+            />
+          </div>
         </div>
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)_340px] overflow-hidden">
+          <div className="min-h-0 border-r border-zinc-800 bg-zinc-950/70">
+            <BranchListSection
+              currentBranches={currentBranches}
+              localBranches={localBranches}
+              remoteBranches={remoteBranches}
+              selectedBranchName={selectedBranch?.name ?? null}
+              isLoading={isBranchesLoading}
+              onSelectBranch={onSelectBranch}
+              t={t}
+            />
+          </div>
 
-        <div className="min-h-0 border-r border-zinc-800 bg-zinc-950/40">
-          {activeTab === 'log' ? (
-            <CommitLogSection
-              commits={commits}
-              selectedCommitSha={selectedCommit?.sha ?? null}
-              selectedCommitOrder={selectedCommitOrder}
-              onSelectCommit={onSelectCommit}
-              onCompareSelectedCommits={onCompareSelectedCommits}
-              t={t}
-            />
-          ) : (
-            <RebasePlanSection
-              entries={draftEntries}
-              isLoading={isRebaseLoading}
-              onMoveEntry={moveDraftEntry}
-              onChangeAction={updateDraftAction}
-              t={t}
-            />
-          )}
-        </div>
+          <div className="min-h-0 border-r border-zinc-800 bg-zinc-950/40">
+            {activeTab === 'log' ? (
+              <CommitLogSection
+                commits={commits}
+                selectedCommitSha={selectedCommit?.sha ?? null}
+                selectedCommitOrder={selectedCommitOrder}
+                onSelectCommit={onSelectCommit}
+                onCompareSelectedCommits={onCompareSelectedCommits}
+                t={t}
+              />
+            ) : (
+              <RebasePlanSection
+                entries={draftEntries}
+                isLoading={isRebaseLoading}
+                onMoveEntry={moveDraftEntry}
+                onChangeAction={updateDraftAction}
+                t={t}
+              />
+            )}
+          </div>
 
-        <div className="min-h-0 overflow-auto px-3 py-3">
-          {activeTab === 'log' ? (
-            <GitWorkbenchDetails
-              selectedBranch={selectedBranch}
-              selectedCommit={selectedCommit}
-              selectedCommitDetails={selectedCommitDetails}
-              comparedCommits={comparedCommits}
-              selectedCommitOrder={selectedCommitOrder}
-              isCommitDetailsLoading={isCommitDetailsLoading}
-              commitDetailsError={commitDetailsError}
-              onCheckoutBranch={onCheckoutBranch}
-              onRequestRenameBranch={onRequestRenameBranch}
-              onDeleteBranch={onDeleteBranch}
-              onCherryPick={onCherryPick}
-              onOpenCommitFileDiff={onOpenCommitFileDiff}
-              t={t}
-            />
-          ) : (
-            <GitRebaseDetails
-              branches={baseRefOptions}
-              baseRef={rebaseBaseRef}
-              hasMergeCommits={Boolean(rebasePlan?.hasMergeCommits)}
-              entryCount={draftEntries.length}
-              isLoading={isRebaseLoading}
-              onChangeBaseRef={onChangeRebaseBaseRef}
-              onRefreshRebase={onRefreshRebase}
-              onApplyRebasePlan={onApplyRebasePlan}
-              draftEntries={draftEntries}
-              t={t}
-            />
-          )}
+          <div className="min-h-0 overflow-auto px-3 py-3">
+            {activeTab === 'log' ? (
+              <GitWorkbenchDetails
+                selectedBranch={selectedBranch}
+                selectedCommit={selectedCommit}
+                selectedCommitDetails={selectedCommitDetails}
+                comparedCommits={comparedCommits}
+                selectedCommitOrder={selectedCommitOrder}
+                isCommitDetailsLoading={isCommitDetailsLoading}
+                commitDetailsError={commitDetailsError}
+                onCheckoutBranch={onCheckoutBranch}
+                onRequestRenameBranch={onRequestRenameBranch}
+                onDeleteBranch={onDeleteBranch}
+                onCherryPick={onCherryPick}
+                onOpenCommitFileDiff={onOpenCommitFileDiff}
+                t={t}
+              />
+            ) : (
+              <GitRebaseDetails
+                branches={baseRefOptions}
+                baseRef={rebaseBaseRef}
+                hasMergeCommits={Boolean(rebasePlan?.hasMergeCommits)}
+                entryCount={draftEntries.length}
+                isLoading={isRebaseLoading}
+                onChangeBaseRef={onChangeRebaseBaseRef}
+                onRefreshRebase={onRefreshRebase}
+                onApplyRebasePlan={onApplyRebasePlan}
+                draftEntries={draftEntries}
+                t={t}
+              />
+            )}
+          </div>
         </div>
+      )}
+    </div>
+  );
+});
+
+const GitChangesSection = React.memo(function GitChangesSection({
+  changes,
+  selectedChangePath,
+  getRelativePath,
+  onSelectChange,
+  onStagePath,
+  onUnstagePath,
+  onDiscardPath,
+  onOpenFileDiff,
+  onOpenConflictResolver,
+  onResolveConflict,
+  onShowFileHistory,
+  onRevealInExplorer,
+  t,
+}: {
+  changes: CodePaneGitStatusEntry[];
+  selectedChangePath: string | null;
+  getRelativePath: (filePath: string) => string;
+  onSelectChange: (entry: CodePaneGitStatusEntry) => void | Promise<void>;
+  onStagePath: (filePath: string) => void | Promise<void>;
+  onUnstagePath: (filePath: string) => void | Promise<void>;
+  onDiscardPath: (filePath: string, restoreStaged: boolean) => void | Promise<void>;
+  onOpenFileDiff: (filePath: string) => void | Promise<void>;
+  onOpenConflictResolver: (filePath: string) => void | Promise<void>;
+  onResolveConflict: (filePath: string, resolution: 'ours' | 'theirs') => void | Promise<void>;
+  onShowFileHistory: (filePath: string) => void | Promise<void>;
+  onRevealInExplorer: (filePath: string) => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const sectionGroups = useMemo(
+    () => buildGitChangeWorkbenchGroups(changes, getRelativePath),
+    [changes, getRelativePath],
+  );
+
+  return (
+    <div className="flex min-h-0 flex-col border-r border-zinc-800 bg-zinc-950/70">
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          <FolderTree size={12} />
+          {t('codePane.gitChanges')}
+        </div>
+        <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400">
+          {changes.length}
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+        {sectionGroups.length > 0 ? (
+          <div className="space-y-3">
+            {sectionGroups.map((sectionGroup) => (
+              <div key={sectionGroup.section} className="space-y-1">
+                <div className="flex items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500">
+                  <span>{getGitSectionLabel(t, sectionGroup.section)}</span>
+                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{sectionGroup.count}</span>
+                </div>
+                <div className="space-y-2">
+                  {sectionGroup.directoryGroups.map((directoryGroup) => (
+                    <GitChangeDirectoryGroup
+                      key={`${sectionGroup.section}:${directoryGroup.key}`}
+                      directoryGroup={directoryGroup}
+                      selectedChangePath={selectedChangePath}
+                      getRelativePath={getRelativePath}
+                      onSelectChange={onSelectChange}
+                      onStagePath={onStagePath}
+                      onUnstagePath={onUnstagePath}
+                      onDiscardPath={onDiscardPath}
+                      onOpenFileDiff={onOpenFileDiff}
+                      onOpenConflictResolver={onOpenConflictResolver}
+                      onResolveConflict={onResolveConflict}
+                      onShowFileHistory={onShowFileHistory}
+                      onRevealInExplorer={onRevealInExplorer}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+            {t('codePane.noChanges')}
+          </div>
+        )}
       </div>
     </div>
   );
-}
+});
 
-function BranchListSection({
+const BranchListSection = React.memo(function BranchListSection({
   currentBranches,
   localBranches,
   remoteBranches,
@@ -344,6 +1004,7 @@ function BranchListSection({
   t: ReturnType<typeof useI18n>['t'];
 }) {
   const [collapsedNodeKeys, setCollapsedNodeKeys] = useState<string[]>([]);
+  const collapsedNodeKeySet = useMemo(() => new Set(collapsedNodeKeys), [collapsedNodeKeys]);
   const sections = useMemo<BranchTreeSection[]>(() => {
     const headNodes = currentBranches.map((branch) => ({
       key: `head:branch:${branch.name}`,
@@ -378,14 +1039,36 @@ function BranchListSection({
       },
     ].filter((section) => section.count > 0);
   }, [currentBranches, localBranches, remoteBranches, t]);
+  const visibleSections = useMemo(() => sections.map((section) => ({
+    ...section,
+    rows: flattenBranchTreeRows(section.nodes, collapsedNodeKeySet),
+  })), [collapsedNodeKeySet, sections]);
+  const visibleItems = useMemo<BranchListVisibleItem[]>(() => visibleSections.flatMap((section) => ([
+    {
+      key: `section:${section.key}`,
+      kind: 'section',
+      label: section.label,
+      count: section.count,
+    },
+    ...section.rows.map((row) => ({
+      key: row.key,
+      kind: 'row' as const,
+      depth: row.depth,
+      node: row.node,
+    })),
+  ])), [visibleSections]);
+  const { scrollRef, slice: visibleItemSlice, handleScroll } = useFixedWindowedList(
+    visibleItems,
+    GIT_BRANCH_LIST_ROW_HEIGHT,
+  );
 
-  const toggleNode = (nodeKey: string) => {
+  const toggleNode = useCallback((nodeKey: string) => {
     setCollapsedNodeKeys((currentKeys) => (
       currentKeys.includes(nodeKey)
         ? currentKeys.filter((key) => key !== nodeKey)
         : [...currentKeys, nodeKey]
     ));
-  };
+  }, []);
 
   const totalBranches = localBranches.length + remoteBranches.length;
 
@@ -400,228 +1083,68 @@ function BranchListSection({
           {totalBranches}
         </span>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto px-2 py-2"
+        onScroll={handleScroll}
+      >
         {isLoading ? (
           <div className="flex h-full items-center justify-center gap-2 text-xs text-zinc-500">
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.loading')}
           </div>
-        ) : sections.length > 0 ? (
-          <div className="space-y-3">
-            {sections.map((section) => (
-              <div key={section.key}>
-                <div className="mb-1 flex items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500">
-                  <span>{section.label}</span>
-                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{section.count}</span>
-                </div>
-                <div className="space-y-0.5">
-                  {section.nodes.map((node) => (
+        ) : visibleItems.length > 0 ? (
+          visibleItemSlice.isWindowed ? (
+            <div style={{ height: `${visibleItemSlice.totalHeight}px`, position: 'relative' }}>
+              <div style={{ transform: `translateY(${visibleItemSlice.offsetTop}px)` }}>
+                {visibleItemSlice.items.map((item) => (
+                  item.kind === 'section' ? (
+                    <div
+                      key={item.key}
+                      className="flex h-7 items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500"
+                    >
+                      <span>{item.label}</span>
+                      <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{item.count}</span>
+                    </div>
+                  ) : (
                     <BranchTreeRow
-                      key={node.key}
-                      node={node}
-                      depth={0}
-                      selectedBranchName={selectedBranchName}
-                      collapsedNodeKeys={collapsedNodeKeys}
+                      key={item.key}
+                      node={item.node}
+                      depth={item.depth}
+                      isSelected={item.node.kind === 'branch' && item.node.branch.name === selectedBranchName}
+                      isCollapsed={item.node.kind === 'folder' ? collapsedNodeKeySet.has(item.node.key) : false}
                       onToggleNode={toggleNode}
                       onSelectBranch={onSelectBranch}
                     />
-                  ))}
-                </div>
+                  )
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
-            {t('codePane.gitCommitGraphEmpty')}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BranchTreeRow({
-  node,
-  depth,
-  selectedBranchName,
-  collapsedNodeKeys,
-  onToggleNode,
-  onSelectBranch,
-}: {
-  node: BranchTreeNode;
-  depth: number;
-  selectedBranchName: string | null;
-  collapsedNodeKeys: string[];
-  onToggleNode: (nodeKey: string) => void;
-  onSelectBranch: (branchName: string) => void;
-}) {
-  if (node.kind === 'folder') {
-    const isCollapsed = collapsedNodeKeys.includes(node.key);
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => {
-            onToggleNode(node.key);
-          }}
-          className="flex w-full items-center gap-2 rounded py-1 text-left text-xs text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
-          style={{ paddingLeft: `${10 + (depth * 14)}px`, paddingRight: '8px' }}
-        >
-          {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-          <FolderTree size={12} className="shrink-0 text-zinc-500" />
-          <span className="min-w-0 flex-1 truncate">{node.label}</span>
-          <span className="rounded bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-500">
-            {node.branchCount}
-          </span>
-        </button>
-        {!isCollapsed && (
-          <div className="space-y-0.5">
-            {node.children.map((childNode) => (
-              <BranchTreeRow
-                key={childNode.key}
-                node={childNode}
-                depth={depth + 1}
-                selectedBranchName={selectedBranchName}
-                collapsedNodeKeys={collapsedNodeKeys}
-                onToggleNode={onToggleNode}
-                onSelectBranch={onSelectBranch}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  const isSelected = node.branch.name === selectedBranchName;
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onSelectBranch(node.branch.name);
-      }}
-      className={`flex w-full items-center gap-2 rounded py-1 text-left text-xs transition-colors ${
-        isSelected
-          ? 'bg-sky-500/15 text-sky-100'
-          : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
-      }`}
-      style={{ paddingLeft: `${28 + (depth * 14)}px`, paddingRight: '8px' }}
-    >
-      <GitBranch size={12} className={`shrink-0 ${node.branch.current ? 'text-emerald-300' : 'text-zinc-500'}`} />
-      <span className="min-w-0 flex-1 truncate">{node.label}</span>
-      <span className="truncate text-[10px] text-zinc-500">{node.branch.shortSha}</span>
-      {node.branch.current && (
-        <span className="rounded bg-emerald-500/15 px-1 py-0.5 text-[10px] text-emerald-200">
-          HEAD
-        </span>
-      )}
-    </button>
-  );
-}
-
-function CommitLogSection({
-  commits,
-  selectedCommitSha,
-  selectedCommitOrder,
-  onSelectCommit,
-  onCompareSelectedCommits,
-  t,
-}: {
-  commits: CodePaneGitGraphCommit[];
-  selectedCommitSha: string | null;
-  selectedCommitOrder: string[];
-  onSelectCommit: (commitSha: string, event?: { metaKey?: boolean; ctrlKey?: boolean }) => void;
-  onCompareSelectedCommits: () => void | Promise<void>;
-  t: ReturnType<typeof useI18n>['t'];
-}) {
-  const layout = useMemo(() => buildGitGraphLayout(commits), [commits]);
-  const graphWidth = Math.max(layout.maxColumns, 1) * GRAPH_LANE_WIDTH;
-  const gridTemplateColumns = `${graphWidth + 24}px minmax(0,1fr) 110px 138px`;
-  const selectedCommitSet = useMemo(() => new Set(selectedCommitOrder), [selectedCommitOrder]);
-
-  return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-zinc-800 px-3 py-2">
-        <div
-          className="grid gap-2 text-[11px] font-medium text-zinc-500"
-          style={{ gridTemplateColumns }}
-        >
-          <span>{t('codePane.gitGraph')}</span>
-          <span>{t('codePane.gitCommit')}</span>
-          <span>{t('codePane.gitAuthor')}</span>
-          <span>{t('codePane.gitDate')}</span>
-        </div>
-        {selectedCommitOrder.length > 1 && (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded bg-zinc-900/70 px-2 py-1.5 text-[11px] text-zinc-400">
-            <span>{t('codePane.gitCompareSelectionCount', { count: selectedCommitOrder.length })}</span>
-            <button
-              type="button"
-              onClick={() => {
-                void onCompareSelectedCommits();
-              }}
-              className="rounded bg-zinc-800 px-2 py-1 text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
-            >
-              {t('codePane.gitCompareSelectedCommits')}
-            </button>
-          </div>
-        )}
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-        {layout.rows.length > 0 ? (
-          <div className="space-y-0.5">
-            {layout.rows.map((row) => {
-              const isSelected = row.commit.sha === selectedCommitSha;
-              const isCompared = selectedCommitSet.has(row.commit.sha);
-              const visibleRefs = row.commit.refs.slice(0, 3);
-              return (
-                <button
-                  key={row.commit.sha}
-                  type="button"
-                  onClick={(event) => {
-                    onSelectCommit(row.commit.sha, {
-                      metaKey: event.metaKey,
-                      ctrlKey: event.ctrlKey,
-                    });
-                  }}
-                  className={`grid w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${
-                    isSelected
-                      ? 'bg-sky-500/15 text-sky-100'
-                      : isCompared
-                        ? 'bg-amber-500/10 text-amber-100'
-                      : 'text-zinc-300 hover:bg-zinc-900/80 hover:text-zinc-100'
-                  }`}
-                  style={{ gridTemplateColumns }}
-                >
-                  <GitCommitGraphCell row={row} graphWidth={graphWidth} />
-                  <div className="flex min-w-0 items-center gap-1 overflow-hidden">
-                    <span className="min-w-0 flex-1 truncate text-zinc-100">
-                      {row.commit.subject || row.commit.shortSha}
-                    </span>
-                    {isCompared && (
-                      <span className="shrink-0 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] text-amber-200">
-                        {selectedCommitOrder.indexOf(row.commit.sha) + 1}
-                      </span>
-                    )}
-                    {visibleRefs.map((ref) => (
-                      <span
-                        key={`${row.commit.sha}-${ref}`}
-                        className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${getRefClassName(ref)}`}
-                      >
-                        {ref}
-                      </span>
-                    ))}
-                    {row.commit.refs.length > visibleRefs.length && (
-                      <span className="shrink-0 text-[10px] text-zinc-500">
-                        +{row.commit.refs.length - visibleRefs.length}
-                      </span>
-                    )}
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {visibleItems.map((item) => (
+                item.kind === 'section' ? (
+                  <div
+                    key={item.key}
+                    className="flex h-7 items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500"
+                  >
+                    <span>{item.label}</span>
+                    <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{item.count}</span>
                   </div>
-                  <span className="truncate text-zinc-400">{row.commit.author}</span>
-                  <span className="truncate text-zinc-500">{formatTimestamp(row.commit.timestamp)}</span>
-                </button>
-              );
-            })}
-          </div>
+                ) : (
+                  <BranchTreeRow
+                    key={item.key}
+                    node={item.node}
+                    depth={item.depth}
+                    isSelected={item.node.kind === 'branch' && item.node.branch.name === selectedBranchName}
+                    isCollapsed={item.node.kind === 'folder' ? collapsedNodeKeySet.has(item.node.key) : false}
+                    onToggleNode={toggleNode}
+                    onSelectBranch={onSelectBranch}
+                  />
+                )
+              ))}
+            </div>
+          )
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-zinc-500">
             {t('codePane.gitCommitGraphEmpty')}
@@ -630,9 +1153,9 @@ function CommitLogSection({
       </div>
     </div>
   );
-}
+});
 
-function GitCommitGraphCell({
+const GitCommitGraphCell = React.memo(function GitCommitGraphCell({
   row,
   graphWidth,
 }: {
@@ -684,9 +1207,175 @@ function GitCommitGraphCell({
       </svg>
     </div>
   );
-}
+});
 
-function GitWorkbenchDetails({
+const CommitLogRow = React.memo(function CommitLogRow({
+  row,
+  graphWidth,
+  gridTemplateColumns,
+  isSelected,
+  compareIndex,
+  onSelectCommit,
+}: {
+  row: GitGraphRowLayout;
+  graphWidth: number;
+  gridTemplateColumns: string;
+  isSelected: boolean;
+  compareIndex?: number;
+  onSelectCommit: (commitSha: string, event?: { metaKey?: boolean; ctrlKey?: boolean }) => void;
+}) {
+  const isCompared = compareIndex !== undefined;
+  const visibleRefs = row.commit.refs.slice(0, 3);
+
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        onSelectCommit(row.commit.sha, {
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+        });
+      }}
+      className={`grid h-8 w-full items-center gap-2 rounded px-2 text-left text-xs transition-colors ${
+        isSelected
+          ? 'bg-sky-500/15 text-sky-100'
+          : isCompared
+            ? 'bg-amber-500/10 text-amber-100'
+            : 'text-zinc-300 hover:bg-zinc-900/80 hover:text-zinc-100'
+      }`}
+      style={{ gridTemplateColumns }}
+    >
+      <GitCommitGraphCell row={row} graphWidth={graphWidth} />
+      <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+        <span className="min-w-0 flex-1 truncate text-zinc-100">
+          {row.commit.subject || row.commit.shortSha}
+        </span>
+        {isCompared && (
+          <span className="shrink-0 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] text-amber-200">
+            {compareIndex}
+          </span>
+        )}
+        {visibleRefs.map((ref) => (
+          <span
+            key={`${row.commit.sha}-${ref}`}
+            className={`shrink-0 rounded px-1 py-0.5 text-[10px] ${getRefClassName(ref)}`}
+          >
+            {ref}
+          </span>
+        ))}
+        {row.commit.refs.length > visibleRefs.length && (
+          <span className="shrink-0 text-[10px] text-zinc-500">
+            +{row.commit.refs.length - visibleRefs.length}
+          </span>
+        )}
+      </div>
+      <span className="truncate text-zinc-400">{row.commit.author}</span>
+      <span className="truncate text-zinc-500">{formatTimestamp(row.commit.timestamp)}</span>
+    </button>
+  );
+});
+
+const CommitLogSection = React.memo(function CommitLogSection({
+  commits,
+  selectedCommitSha,
+  selectedCommitOrder,
+  onSelectCommit,
+  onCompareSelectedCommits,
+  t,
+}: {
+  commits: CodePaneGitGraphCommit[];
+  selectedCommitSha: string | null;
+  selectedCommitOrder: string[];
+  onSelectCommit: (commitSha: string, event?: { metaKey?: boolean; ctrlKey?: boolean }) => void;
+  onCompareSelectedCommits: () => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const layout = useMemo(() => buildGitGraphLayout(commits), [commits]);
+  const graphWidth = Math.max(layout.maxColumns, 1) * GRAPH_LANE_WIDTH;
+  const gridTemplateColumns = `${graphWidth + 24}px minmax(0,1fr) 110px 138px`;
+  const selectedCommitIndexBySha = useMemo(() => new Map(
+    selectedCommitOrder.map((commitSha, index) => [commitSha, index + 1]),
+  ), [selectedCommitOrder]);
+  const { scrollRef, slice: visibleCommitRows, handleScroll } = useFixedWindowedList(
+    layout.rows,
+    GIT_COMMIT_LOG_ROW_HEIGHT,
+  );
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-zinc-800 px-3 py-2">
+        <div
+          className="grid gap-2 text-[11px] font-medium text-zinc-500"
+          style={{ gridTemplateColumns }}
+        >
+          <span>{t('codePane.gitGraph')}</span>
+          <span>{t('codePane.gitCommit')}</span>
+          <span>{t('codePane.gitAuthor')}</span>
+          <span>{t('codePane.gitDate')}</span>
+        </div>
+        {selectedCommitOrder.length > 1 && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded bg-zinc-900/70 px-2 py-1.5 text-[11px] text-zinc-400">
+            <span>{t('codePane.gitCompareSelectionCount', { count: selectedCommitOrder.length })}</span>
+            <button
+              type="button"
+              onClick={() => {
+                void onCompareSelectedCommits();
+              }}
+              className="rounded bg-zinc-800 px-2 py-1 text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            >
+              {t('codePane.gitCompareSelectedCommits')}
+            </button>
+          </div>
+        )}
+      </div>
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto px-2 py-2"
+        onScroll={handleScroll}
+      >
+        {layout.rows.length > 0 ? (
+          visibleCommitRows.isWindowed ? (
+            <div style={{ height: `${visibleCommitRows.totalHeight}px`, position: 'relative' }}>
+              <div style={{ transform: `translateY(${visibleCommitRows.offsetTop}px)` }}>
+                {visibleCommitRows.items.map((row) => (
+                  <CommitLogRow
+                    key={row.commit.sha}
+                    row={row}
+                    graphWidth={graphWidth}
+                    gridTemplateColumns={gridTemplateColumns}
+                    isSelected={row.commit.sha === selectedCommitSha}
+                    compareIndex={selectedCommitIndexBySha.get(row.commit.sha)}
+                    onSelectCommit={onSelectCommit}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {layout.rows.map((row) => (
+                <CommitLogRow
+                  key={row.commit.sha}
+                  row={row}
+                  graphWidth={graphWidth}
+                  gridTemplateColumns={gridTemplateColumns}
+                  isSelected={row.commit.sha === selectedCommitSha}
+                  compareIndex={selectedCommitIndexBySha.get(row.commit.sha)}
+                  onSelectCommit={onSelectCommit}
+                />
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+            {t('codePane.gitCommitGraphEmpty')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
   selectedBranch,
   selectedCommit,
   selectedCommitDetails,
@@ -884,9 +1573,9 @@ function GitWorkbenchDetails({
       </div>
     </div>
   );
-}
+});
 
-function CommitFileList({
+const CommitFileList = React.memo(function CommitFileList({
   files,
   comparedCommits,
   selectedCommitDetails,
@@ -948,9 +1637,70 @@ function CommitFileList({
       ))}
     </div>
   );
-}
+});
 
-function RebasePlanSection({
+const RebasePlanRow = React.memo(function RebasePlanRow({
+  entry,
+  entryIndex,
+  onMoveEntry,
+  onChangeAction,
+  t,
+}: {
+  entry: CodePaneGitRebasePlanEntry;
+  entryIndex: number;
+  onMoveEntry: (entryIndex: number, direction: -1 | 1) => void;
+  onChangeAction: (entryIndex: number, action: CodePaneGitRebasePlanEntry['action']) => void;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <div
+      className="grid h-8 grid-cols-[92px_minmax(0,1fr)_72px_72px] items-center gap-2 rounded px-2 text-xs text-zinc-300 hover:bg-zinc-900/70"
+    >
+      <select
+        value={entry.action}
+        onChange={(event) => {
+          onChangeAction(entryIndex, event.target.value as CodePaneGitRebasePlanEntry['action']);
+        }}
+        className="rounded border border-zinc-800 bg-zinc-950 px-1.5 py-1 text-[11px] text-zinc-200 outline-none"
+      >
+        {(['pick', 'squash', 'fixup', 'drop'] as const).map((action) => (
+          <option key={action} value={action}>
+            {action}
+          </option>
+        ))}
+      </select>
+      <div className="min-w-0 truncate">
+        <span className="mr-2 text-zinc-500">{entry.shortSha}</span>
+        <span className="truncate">{entry.subject}</span>
+      </div>
+      <span className="truncate text-zinc-500">{entry.author}</span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            onMoveEntry(entryIndex, -1);
+          }}
+          className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+          aria-label={t('codePane.moveUp')}
+        >
+          <ArrowUp size={11} />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            onMoveEntry(entryIndex, 1);
+          }}
+          className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+          aria-label={t('codePane.moveDown')}
+        >
+          <ArrowDown size={11} />
+        </button>
+      </div>
+    </div>
+  );
+});
+
+const RebasePlanSection = React.memo(function RebasePlanSection({
   entries,
   isLoading,
   onMoveEntry,
@@ -963,6 +1713,14 @@ function RebasePlanSection({
   onChangeAction: (entryIndex: number, action: CodePaneGitRebasePlanEntry['action']) => void;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  const { scrollRef, slice: visibleEntries, handleScroll } = useFixedWindowedList(
+    entries,
+    GIT_REBASE_ROW_HEIGHT,
+  );
+  const entryIndexByCommitSha = useMemo(() => new Map(
+    entries.map((entry, index) => [entry.commitSha, index]),
+  ), [entries]);
+
   return (
     <div className="flex h-full flex-col">
       <div className="grid grid-cols-[92px_minmax(0,1fr)_72px_72px] gap-2 border-b border-zinc-800 px-3 py-2 text-[11px] font-medium text-zinc-500">
@@ -971,62 +1729,49 @@ function RebasePlanSection({
         <span>{t('codePane.gitAuthor')}</span>
         <span>{t('codePane.gitMove')}</span>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto px-2 py-2"
+        onScroll={handleScroll}
+      >
         {isLoading ? (
           <div className="flex h-full items-center justify-center gap-2 text-xs text-zinc-500">
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.loading')}
           </div>
         ) : entries.length > 0 ? (
-          <div className="space-y-0.5">
-            {entries.map((entry, index) => (
-              <div
-                key={entry.commitSha}
-                className="grid grid-cols-[92px_minmax(0,1fr)_72px_72px] items-center gap-2 rounded px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-900/70"
-              >
-                <select
-                  value={entry.action}
-                  onChange={(event) => {
-                    onChangeAction(index, event.target.value as CodePaneGitRebasePlanEntry['action']);
-                  }}
-                  className="rounded border border-zinc-800 bg-zinc-950 px-1.5 py-1 text-[11px] text-zinc-200 outline-none"
-                >
-                  {(['pick', 'squash', 'fixup', 'drop'] as const).map((action) => (
-                    <option key={action} value={action}>
-                      {action}
-                    </option>
-                  ))}
-                </select>
-                <div className="min-w-0 truncate">
-                  <span className="mr-2 text-zinc-500">{entry.shortSha}</span>
-                  <span className="truncate">{entry.subject}</span>
-                </div>
-                <span className="truncate text-zinc-500">{entry.author}</span>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onMoveEntry(index, -1);
-                    }}
-                    className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
-                    aria-label={t('codePane.moveUp')}
-                  >
-                    <ArrowUp size={11} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onMoveEntry(index, 1);
-                    }}
-                    className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
-                    aria-label={t('codePane.moveDown')}
-                  >
-                    <ArrowDown size={11} />
-                  </button>
-                </div>
+          visibleEntries.isWindowed ? (
+            <div style={{ height: `${visibleEntries.totalHeight}px`, position: 'relative' }}>
+              <div style={{ transform: `translateY(${visibleEntries.offsetTop}px)` }}>
+                {visibleEntries.items.map((entry) => {
+                  const index = entryIndexByCommitSha.get(entry.commitSha) ?? -1;
+                  return (
+                    <RebasePlanRow
+                      key={entry.commitSha}
+                      entry={entry}
+                      entryIndex={index}
+                      onMoveEntry={onMoveEntry}
+                      onChangeAction={onChangeAction}
+                      t={t}
+                    />
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {entries.map((entry, index) => (
+                <RebasePlanRow
+                  key={entry.commitSha}
+                  entry={entry}
+                  entryIndex={index}
+                  onMoveEntry={onMoveEntry}
+                  onChangeAction={onChangeAction}
+                  t={t}
+                />
+              ))}
+            </div>
+          )
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-zinc-500">
             {t('codePane.gitRebasePlanEmpty')}
@@ -1035,9 +1780,9 @@ function RebasePlanSection({
       </div>
     </div>
   );
-}
+});
 
-function GitRebaseDetails({
+const GitRebaseDetails = React.memo(function GitRebaseDetails({
   branches,
   baseRef,
   hasMergeCommits,
@@ -1117,7 +1862,7 @@ function GitRebaseDetails({
       </div>
     </div>
   );
-}
+});
 
 function buildBranchTree(
   branches: CodePaneGitBranchEntry[],
@@ -1202,6 +1947,183 @@ function countBranchNodes(nodes: BranchTreeNode[]): number {
   return nodes.reduce((count, node) => (
     count + (node.kind === 'folder' ? countBranchNodes(node.children) : 1)
   ), 0);
+}
+
+function flattenBranchTreeRows(
+  nodes: BranchTreeNode[],
+  collapsedNodeKeys: Set<string>,
+  depth = 0,
+): BranchTreeVisibleRow[] {
+  const rows: BranchTreeVisibleRow[] = [];
+
+  for (const node of nodes) {
+    rows.push({
+      key: node.key,
+      depth,
+      node,
+    });
+
+    if (node.kind === 'folder' && !collapsedNodeKeys.has(node.key)) {
+      rows.push(...flattenBranchTreeRows(node.children, collapsedNodeKeys, depth + 1));
+    }
+  }
+
+  return rows;
+}
+
+function buildGitChangeWorkbenchGroups(
+  changes: CodePaneGitStatusEntry[],
+  getRelativePath: (filePath: string) => string,
+): GitChangeWorkbenchSectionGroup[] {
+  const rowsBySection = new Map<GitChangeSection, GitChangeWorkbenchRow[]>();
+
+  for (const entry of changes) {
+    const relativePath = getRelativePath(entry.path) || getPathLeafLabel(entry.path) || entry.path;
+    const directoryLabel = getDirectoryLabel(relativePath);
+
+    for (const section of getGitEntrySections(entry)) {
+      const rows = rowsBySection.get(section) ?? [];
+      rows.push({
+        key: `${section}:${entry.path}`,
+        section,
+        entry,
+        relativePath,
+        directoryLabel,
+      });
+      rowsBySection.set(section, rows);
+    }
+  }
+
+  return GIT_CHANGE_SECTION_ORDER
+    .map((section) => {
+      const rows = rowsBySection.get(section) ?? [];
+      const directoryGroupsByLabel = new Map<string, GitChangeWorkbenchRow[]>();
+
+      for (const row of rows) {
+        const groupRows = directoryGroupsByLabel.get(row.directoryLabel) ?? [];
+        groupRows.push(row);
+        directoryGroupsByLabel.set(row.directoryLabel, groupRows);
+      }
+
+      return {
+        section,
+        count: rows.length,
+        directoryGroups: Array.from(directoryGroupsByLabel.entries())
+          .map(([label, groupRows]) => ({
+            key: label,
+            label,
+            rows: [...groupRows].sort((left, right) => (
+              left.relativePath.localeCompare(right.relativePath, undefined, { sensitivity: 'base' })
+            )),
+          }))
+          .sort((left, right) => {
+            if (left.label === getRepositoryRootLabel() && right.label !== getRepositoryRootLabel()) {
+              return -1;
+            }
+
+            if (right.label === getRepositoryRootLabel() && left.label !== getRepositoryRootLabel()) {
+              return 1;
+            }
+
+            return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' });
+          }),
+      };
+    })
+    .filter((sectionGroup) => sectionGroup.count > 0);
+}
+
+function getGitEntrySections(entry: CodePaneGitStatusEntry): GitChangeSection[] {
+  if (entry.conflicted || entry.section === 'conflicted') {
+    return ['conflicted'];
+  }
+
+  const sections: GitChangeSection[] = [];
+  if (entry.staged || entry.section === 'staged') {
+    sections.push('staged');
+  }
+  if (entry.unstaged || entry.section === 'unstaged') {
+    sections.push('unstaged');
+  }
+  if (entry.status === 'untracked' || entry.section === 'untracked') {
+    sections.push('untracked');
+  }
+
+  if (sections.length === 0) {
+    sections.push(entry.status === 'untracked' ? 'untracked' : 'unstaged');
+  }
+
+  return Array.from(new Set(sections));
+}
+
+function getDirectoryLabel(relativePath: string): string {
+  const normalizedPath = relativePath.replace(/\\/g, '/');
+  const separatorIndex = normalizedPath.lastIndexOf('/');
+  return separatorIndex >= 0 ? normalizedPath.slice(0, separatorIndex) : getRepositoryRootLabel();
+}
+
+function getRepositoryRootLabel(): string {
+  return '.';
+}
+
+function getGitSectionLabel(t: ReturnType<typeof useI18n>['t'], section: GitChangeSection): string {
+  switch (section) {
+    case 'conflicted':
+      return t('codePane.gitSectionConflicted');
+    case 'staged':
+      return t('codePane.gitSectionStaged');
+    case 'unstaged':
+      return t('codePane.gitSectionUnstaged');
+    case 'untracked':
+      return t('codePane.gitSectionUntracked');
+    default:
+      return section;
+  }
+}
+
+function getGitStatusTextClassName(status?: CodePaneGitStatusEntry['status']): string {
+  switch (status) {
+    case 'modified':
+      return 'text-amber-300';
+    case 'untracked':
+    case 'added':
+      return 'text-emerald-300';
+    case 'deleted':
+      return 'text-red-300';
+    case 'renamed':
+      return 'text-sky-300';
+    default:
+      return '';
+  }
+}
+
+function getGitStatusBadgeLabel(status?: CodePaneGitStatusEntry['status']): string {
+  switch (status) {
+    case 'added':
+    case 'untracked':
+      return 'A';
+    case 'deleted':
+      return 'D';
+    case 'renamed':
+      return 'R';
+    case 'modified':
+    default:
+      return 'M';
+  }
+}
+
+function getGitStatusBadgeClassName(status?: CodePaneGitStatusEntry['status']): string {
+  switch (status) {
+    case 'added':
+    case 'untracked':
+      return 'bg-emerald-500/15 text-emerald-200';
+    case 'deleted':
+      return 'bg-red-500/15 text-red-200';
+    case 'renamed':
+      return 'bg-sky-500/15 text-sky-200';
+    case 'modified':
+    default:
+      return 'bg-amber-500/15 text-amber-200';
+  }
 }
 
 function splitBranchPath(branchName: string): string[] {

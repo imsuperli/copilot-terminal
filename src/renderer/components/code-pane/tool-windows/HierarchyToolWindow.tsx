@@ -13,6 +13,7 @@ import {
   IdePopupShell,
   idePopupBadgeClassName,
   idePopupBodyClassName,
+  idePopupCardClassName,
   idePopupHeaderClassName,
   idePopupHeaderMetaClassName,
   idePopupIconButtonClassName,
@@ -51,7 +52,7 @@ interface HierarchyToolWindowProps {
   closeOnDoubleClick?: boolean;
 }
 
-export function HierarchyToolWindow({
+export const HierarchyToolWindow = React.memo(function HierarchyToolWindow({
   mode,
   root,
   isLoading,
@@ -132,7 +133,7 @@ export function HierarchyToolWindow({
               onClick={() => {
                 onOpenItem(root.item);
               }}
-              className="w-full rounded-lg border border-zinc-700/80 bg-zinc-900/35 px-3 py-2.5 text-left transition-colors hover:border-zinc-500 hover:bg-zinc-800/65"
+              className={`w-full text-left transition-colors hover:border-zinc-500 hover:bg-zinc-800/65 ${idePopupCardClassName}`}
             >
               <div className="text-sm font-semibold text-zinc-100">{root.item.name}</div>
               {root.item.detail ? (
@@ -168,7 +169,7 @@ export function HierarchyToolWindow({
       </div>
     </IdePopupShell>
   );
-}
+});
 
 interface HierarchyNodeRowProps {
   node: HierarchyTreeNode;
@@ -179,7 +180,14 @@ interface HierarchyNodeRowProps {
   closeOnDoubleClick: boolean;
 }
 
-function HierarchyNodeRow({ node, depth, onToggleNode, onOpenItem, onClose, closeOnDoubleClick }: HierarchyNodeRowProps) {
+const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
+  node,
+  depth,
+  onToggleNode,
+  onOpenItem,
+  onClose,
+  closeOnDoubleClick,
+}: HierarchyNodeRowProps) {
   return (
     <div>
       <div
@@ -224,18 +232,22 @@ function HierarchyNodeRow({ node, depth, onToggleNode, onOpenItem, onClose, clos
           <span className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full border px-1 text-[9px] font-semibold uppercase leading-none ${idePopupBadgeClassName('sky')}`}>
             h
           </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[12px] leading-5 text-zinc-100">{node.item.name}</div>
-            <div className="mt-0.5 flex items-center gap-2 text-[10px] text-zinc-500">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[12px] leading-5 text-zinc-100">{node.item.name}</div>
               {node.item.detail ? (
-                <span className="truncate">{node.item.detail}</span>
-              ) : null}
-              {node.item.relationRanges?.length ? (
-                <span className={`rounded border px-1.5 py-0.5 text-[9px] ${idePopupBadgeClassName('sky')}`}>
-                  {node.item.relationRanges.length}
-                </span>
+                <div className="truncate text-[10px] leading-4 text-zinc-500">{node.item.detail}</div>
               ) : null}
             </div>
+            {node.item.relationRanges?.length ? (
+              <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[9px] ${idePopupBadgeClassName('sky')}`}>
+                {node.item.relationRanges.length}
+              </span>
+            ) : (
+              <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/45 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                hierarchy
+              </span>
+            )}
           </div>
         </button>
       </div>
@@ -266,7 +278,7 @@ function HierarchyNodeRow({ node, depth, onToggleNode, onOpenItem, onClose, clos
       ) : null}
     </div>
   );
-}
+});
 
 const HIERARCHY_MODE_ORDER: HierarchyMode[] = [
   'call-incoming',

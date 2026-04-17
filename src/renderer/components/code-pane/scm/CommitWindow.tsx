@@ -1,6 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Check, File as FileIcon, FolderTree, GitCommitHorizontal, Loader2, RefreshCw, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  File as FileIcon,
+  Folder,
+  FolderTree,
+  GitCommitHorizontal,
+  Loader2,
+  Minus,
+  RefreshCw,
+  X,
+} from 'lucide-react';
 import type { CodePaneGitDiffHunk, CodePaneGitRepositorySummary, CodePaneGitStatusEntry } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
 import { getPathLeafLabel } from '../../../utils/pathDisplay';
@@ -19,10 +31,25 @@ import {
   IdePopupShell,
 } from '../../ui/ide-popup';
 
+type CommitWindowEntry = CodePaneGitStatusEntry & {
+  relativePath: string;
+};
+
+type CommitWindowEntryGroup = {
+  key: string;
+  label: string;
+  entries: CommitWindowEntry[];
+  isRoot: boolean;
+};
+
+type CommitWindowVisibleEntryGroup = CommitWindowEntryGroup & {
+  includedCount: number;
+};
+
 interface CommitWindowProps {
   open: boolean;
   summary: CodePaneGitRepositorySummary | null;
-  entries: CodePaneGitStatusEntry[];
+  entries: CommitWindowEntry[];
   initialSelectedPaths?: string[];
   selectedPath: string | null;
   selectedRelativePath: string | null;
@@ -61,7 +88,199 @@ function getStatusTone(entry: CodePaneGitStatusEntry) {
   }
 }
 
-export function CommitWindow({
+function getCommitWindowGroupKey(relativePath: string): string {
+  const normalizedPath = relativePath.replace(/\\/g, '/');
+  const separatorIndex = normalizedPath.lastIndexOf('/');
+  return separatorIndex >= 0 ? normalizedPath.slice(0, separatorIndex) : '.';
+}
+
+function buildCommitWindowEntryGroups(
+  entries: CommitWindowEntry[],
+  rootLabel: string,
+): CommitWindowEntryGroup[] {
+  const groups = new Map<string, CommitWindowEntry[]>();
+
+  for (const entry of entries) {
+    const groupKey = getCommitWindowGroupKey(entry.relativePath);
+    const groupEntries = groups.get(groupKey) ?? [];
+    groupEntries.push(entry);
+    groups.set(groupKey, groupEntries);
+  }
+
+  return Array.from(groups.entries())
+    .map(([groupKey, groupEntries]) => ({
+      key: groupKey,
+      label: groupKey === '.' ? rootLabel : groupKey,
+      entries: [...groupEntries].sort((left, right) => (
+        left.relativePath.localeCompare(right.relativePath, undefined, { sensitivity: 'base' })
+      )),
+      isRoot: groupKey === '.',
+    }))
+    .sort((left, right) => {
+      if (left.isRoot !== right.isRoot) {
+        return left.isRoot ? -1 : 1;
+      }
+
+      return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' });
+    });
+}
+
+const CommitWindowEntryCard = React.memo(function CommitWindowEntryCard({
+  entry,
+  isChecked,
+  isActive,
+  onToggleSelectedPath,
+  onSelectPath,
+  onStagePath,
+  onUnstagePath,
+  onDiscardPath,
+  onOpenFileDiff,
+  onOpenConflictResolver,
+  onResolveConflict,
+  t,
+}: {
+  entry: CommitWindowEntry;
+  isChecked: boolean;
+  isActive: boolean;
+  onToggleSelectedPath: (filePath: string) => void;
+  onSelectPath: (filePath: string) => void | Promise<void>;
+  onStagePath: (filePath: string) => void | Promise<void>;
+  onUnstagePath: (filePath: string) => void | Promise<void>;
+  onDiscardPath: (filePath: string) => void | Promise<void>;
+  onOpenFileDiff: (filePath: string) => void | Promise<void>;
+  onOpenConflictResolver: (filePath: string) => void | Promise<void>;
+  onResolveConflict: (filePath: string, resolution: 'ours' | 'theirs') => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <div
+      className={`rounded-[12px] border transition-colors ${
+        isActive
+          ? 'border-sky-500/35 bg-sky-500/[0.08] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.12)]'
+          : isChecked
+            ? 'border-emerald-500/25 bg-emerald-500/[0.05] hover:border-emerald-400/35 hover:bg-emerald-500/[0.08]'
+            : 'border-transparent bg-transparent hover:border-zinc-700/60 hover:bg-zinc-900/55'
+      }`}
+    >
+      <div className="flex items-start gap-2 px-2.5 py-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            onToggleSelectedPath(entry.path);
+          }}
+          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+            isChecked
+              ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
+              : 'border-zinc-600 bg-zinc-950/80 text-transparent'
+          }`}
+          aria-label={`${isChecked ? 'unselect' : 'select'} ${entry.path}`}
+        >
+          <Check size={11} />
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void onSelectPath(entry.path);
+          }}
+          className="min-w-0 flex-1 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <FileIcon size={13} className="shrink-0 text-zinc-500" />
+            <span className={`truncate text-sm ${isActive ? 'text-zinc-50' : getStatusTone(entry)}`}>
+              {getPathLeafLabel(entry.path)}
+            </span>
+            {isChecked && (
+              <span className="shrink-0 rounded-md border border-emerald-500/30 bg-emerald-500/[0.08] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-emerald-200">
+                {t('codePane.gitIncludedInCommit')}
+              </span>
+            )}
+          </div>
+          <div className="mt-1 truncate pl-5 text-[11px] text-zinc-500">
+            {entry.relativePath}
+          </div>
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-1 px-2.5 pb-2.5 pl-8">
+        {entry.staged ? (
+          <button
+            type="button"
+            onClick={() => {
+              void onUnstagePath(entry.path);
+            }}
+            className={idePopupMicroButtonClassName('neutral')}
+          >
+            {t('codePane.gitUnstage')}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              void onStagePath(entry.path);
+            }}
+            className={idePopupMicroButtonClassName('success')}
+          >
+            {t('codePane.gitStage')}
+          </button>
+        )}
+        {entry.conflicted ? (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                void onOpenConflictResolver(entry.path);
+              }}
+              className={idePopupMicroButtonClassName('success')}
+            >
+              {t('codePane.gitResolveConflict')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void onResolveConflict(entry.path, 'ours');
+              }}
+              className={idePopupMicroButtonClassName('warning')}
+            >
+              {t('codePane.gitUseOurs')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void onResolveConflict(entry.path, 'theirs');
+              }}
+              className={idePopupMicroButtonClassName('primary')}
+            >
+              {t('codePane.gitUseTheirs')}
+            </button>
+          </>
+        ) : null}
+        {(entry.unstaged || entry.status === 'untracked' || entry.status === 'deleted') && (
+          <button
+            type="button"
+            onClick={() => {
+              void onDiscardPath(entry.path);
+            }}
+            className={idePopupMicroButtonClassName('danger')}
+          >
+            {t('codePane.gitDiscard')}
+          </button>
+        )}
+        {entry.status !== 'deleted' && (
+          <button
+            type="button"
+            onClick={() => {
+              void onOpenFileDiff(entry.path);
+            }}
+            className={idePopupMicroButtonClassName('neutral')}
+          >
+            {t('codePane.openDiff')}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+export const CommitWindow = React.memo(function CommitWindow({
   open,
   summary,
   entries,
@@ -91,6 +310,8 @@ export function CommitWindow({
   const { t } = useI18n();
   const [message, setMessage] = useState(initialMessage);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [showIncludedOnly, setShowIncludedOnly] = useState(false);
+  const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) {
@@ -99,6 +320,15 @@ export function CommitWindow({
 
     setMessage(initialMessage);
   }, [initialMessage, open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setShowIncludedOnly(false);
+    setCollapsedGroupKeys([]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -129,14 +359,80 @@ export function CommitWindow({
   const selectedPathSet = useMemo(() => new Set(selectedPaths), [selectedPaths]);
   const canCommit = message.trim().length > 0 && selectedCount > 0 && !isSubmitting;
   const currentBranchLabel = summary?.currentBranch ?? summary?.headSha ?? '';
+  const rootDirectoryLabel = t('codePane.gitRepositoryRoot');
+  const groupedEntries = useMemo(
+    () => buildCommitWindowEntryGroups(entries, rootDirectoryLabel),
+    [entries, rootDirectoryLabel],
+  );
+  const visibleEntries = useMemo(() => {
+    if (!showIncludedOnly) {
+      return entries;
+    }
 
-  const toggleSelectedPath = (filePath: string) => {
+    return entries.filter((entry) => selectedPathSet.has(entry.path));
+  }, [entries, selectedPathSet, showIncludedOnly]);
+  const visibleEntryGroupsBase = useMemo(
+    () => (
+      showIncludedOnly
+        ? buildCommitWindowEntryGroups(visibleEntries, rootDirectoryLabel)
+        : groupedEntries
+    ),
+    [groupedEntries, rootDirectoryLabel, showIncludedOnly, visibleEntries],
+  );
+  const visibleEntryGroups = useMemo<CommitWindowVisibleEntryGroup[]>(
+    () => visibleEntryGroupsBase.map((group) => ({
+      ...group,
+      includedCount: group.entries.reduce((count, entry) => (
+        count + (selectedPathSet.has(entry.path) ? 1 : 0)
+      ), 0),
+    })),
+    [selectedPathSet, visibleEntryGroupsBase],
+  );
+  const shouldRenderGroups = visibleEntryGroups.length > 1 || visibleEntryGroups.some((group) => !group.isRoot);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const visibleGroupKeys = new Set(visibleEntryGroups.map((group) => group.key));
+    setCollapsedGroupKeys((currentKeys) => currentKeys.filter((groupKey) => visibleGroupKeys.has(groupKey)));
+  }, [open, visibleEntryGroups]);
+
+  const toggleSelectedPath = useCallback((filePath: string) => {
     setSelectedPaths((currentSelectedPaths) => (
       currentSelectedPaths.includes(filePath)
         ? currentSelectedPaths.filter((path) => path !== filePath)
         : [...currentSelectedPaths, filePath]
     ));
-  };
+  }, []);
+
+  const toggleCollapsedGroup = useCallback((groupKey: string) => {
+    setCollapsedGroupKeys((currentKeys) => (
+      currentKeys.includes(groupKey)
+        ? currentKeys.filter((candidateKey) => candidateKey !== groupKey)
+        : [...currentKeys, groupKey]
+    ));
+  }, []);
+
+  const toggleSelectedGroup = useCallback((groupEntries: CommitWindowEntry[]) => {
+    setSelectedPaths((currentSelectedPaths) => {
+      const currentSelectedPathSet = new Set(currentSelectedPaths);
+      const shouldSelectGroup = groupEntries.some((entry) => !currentSelectedPathSet.has(entry.path));
+
+      if (shouldSelectGroup) {
+        const nextSelectedPathSet = new Set(currentSelectedPaths);
+        for (const entry of groupEntries) {
+          nextSelectedPathSet.add(entry.path);
+        }
+
+        return Array.from(nextSelectedPathSet);
+      }
+
+      const groupPathSet = new Set(groupEntries.map((entry) => entry.path));
+      return currentSelectedPaths.filter((path) => !groupPathSet.has(path));
+    });
+  }, []);
 
   const handleCommit = async () => {
     if (!canCommit) {
@@ -228,136 +524,124 @@ export function CommitWindow({
                       <span>{t('codePane.gitCommit')}</span>
                     </button>
                   </div>
+                  <div className="mt-3">
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] text-zinc-400">
+                      <button
+                        type="button"
+                        aria-pressed={showIncludedOnly}
+                        onClick={() => {
+                          setShowIncludedOnly((currentValue) => !currentValue);
+                        }}
+                        className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
+                          showIncludedOnly
+                            ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
+                            : 'border-zinc-600 bg-zinc-950/80 text-transparent'
+                        }`}
+                      >
+                        <Check size={11} />
+                      </button>
+                      <span>{t('codePane.gitShowIncludedOnly')}</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-                  {entries.length > 0 ? (
-                    <div className="space-y-1">
-                      {entries.map((entry) => {
-                        const isChecked = selectedPathSet.has(entry.path);
-                        const isActive = selectedPath === entry.path;
-                        return (
-                          <div
-                            key={entry.path}
-                            className={`rounded-[12px] border transition-colors ${
-                              isActive
-                                ? 'border-sky-500/35 bg-sky-500/[0.08] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.12)]'
-                                : 'border-transparent bg-transparent hover:border-zinc-700/60 hover:bg-zinc-900/55'
-                            }`}
-                          >
-                            <div className="flex items-start gap-2 px-2.5 py-2.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  toggleSelectedPath(entry.path);
-                                }}
-                                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                                  isChecked
-                                    ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
-                                    : 'border-zinc-600 bg-zinc-950/80 text-transparent'
-                                }`}
-                                aria-label={`${isChecked ? 'unselect' : 'select'} ${entry.path}`}
-                              >
-                                <Check size={11} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void onSelectPath(entry.path);
-                                }}
-                                className="min-w-0 flex-1 text-left"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                                  <span className={`truncate text-sm ${isActive ? 'text-zinc-50' : getStatusTone(entry)}`}>
-                                    {getPathLeafLabel(entry.path)}
+                  {visibleEntries.length > 0 ? (
+                    shouldRenderGroups ? (
+                      <div className="space-y-2">
+                        {visibleEntryGroups.map((group) => {
+                          const isCollapsed = collapsedGroupKeys.includes(group.key);
+                          const allGroupEntriesSelected = group.includedCount === group.entries.length;
+                          const someGroupEntriesSelected = group.includedCount > 0 && !allGroupEntriesSelected;
+
+                          return (
+                            <section
+                              key={group.key}
+                              className={`${idePopupCardClassName} overflow-hidden px-0 py-0`}
+                            >
+                              <div className="flex items-center gap-2 border-b border-zinc-800/70 px-3 py-2.5">
+                                <button
+                                  type="button"
+                                  aria-pressed={allGroupEntriesSelected}
+                                  aria-label={`${allGroupEntriesSelected ? 'unselect' : 'select'} group ${group.label}`}
+                                  onClick={() => {
+                                    toggleSelectedGroup(group.entries);
+                                  }}
+                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                                    allGroupEntriesSelected || someGroupEntriesSelected
+                                      ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
+                                      : 'border-zinc-600 bg-zinc-950/80 text-transparent'
+                                  }`}
+                                >
+                                  {allGroupEntriesSelected ? <Check size={11} /> : <Minus size={11} />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    toggleCollapsedGroup(group.key);
+                                  }}
+                                  className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-zinc-50"
+                                >
+                                  {isCollapsed ? (
+                                    <ChevronRight size={13} className="shrink-0 text-zinc-500" />
+                                  ) : (
+                                    <ChevronDown size={13} className="shrink-0 text-zinc-500" />
+                                  )}
+                                  <Folder size={13} className="shrink-0 text-amber-300/85" />
+                                  <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-zinc-100">
+                                    {group.label}
                                   </span>
+                                  <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/55 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                                    {group.includedCount}/{group.entries.length}
+                                  </span>
+                                </button>
+                              </div>
+                              {!isCollapsed && (
+                                <div className="space-y-1 px-2 py-2">
+                                  {group.entries.map((entry) => (
+                                    <CommitWindowEntryCard
+                                      key={entry.path}
+                                      entry={entry}
+                                      isChecked={selectedPathSet.has(entry.path)}
+                                      isActive={selectedPath === entry.path}
+                                      onToggleSelectedPath={toggleSelectedPath}
+                                      onSelectPath={onSelectPath}
+                                      onStagePath={onStagePath}
+                                      onUnstagePath={onUnstagePath}
+                                      onDiscardPath={onDiscardPath}
+                                      onOpenFileDiff={onOpenFileDiff}
+                                      onOpenConflictResolver={onOpenConflictResolver}
+                                      onResolveConflict={onResolveConflict}
+                                      t={t}
+                                    />
+                                  ))}
                                 </div>
-                                <div className="mt-1 truncate pl-5 text-[11px] text-zinc-500">
-                                  {entry.path}
-                                </div>
-                              </button>
-                            </div>
-                            <div className="flex flex-wrap gap-1 px-2.5 pb-2.5 pl-8">
-                              {entry.staged ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void onUnstagePath(entry.path);
-                                  }}
-                                  className={idePopupMicroButtonClassName('neutral')}
-                                >
-                                  {t('codePane.gitUnstage')}
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void onStagePath(entry.path);
-                                  }}
-                                  className={idePopupMicroButtonClassName('success')}
-                                >
-                                  {t('codePane.gitStage')}
-                                </button>
                               )}
-                              {entry.conflicted ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void onOpenConflictResolver(entry.path);
-                                    }}
-                                    className={idePopupMicroButtonClassName('success')}
-                                  >
-                                    {t('codePane.gitResolveConflict')}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void onResolveConflict(entry.path, 'ours');
-                                    }}
-                                    className={idePopupMicroButtonClassName('warning')}
-                                  >
-                                    {t('codePane.gitUseOurs')}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void onResolveConflict(entry.path, 'theirs');
-                                    }}
-                                    className={idePopupMicroButtonClassName('primary')}
-                                  >
-                                    {t('codePane.gitUseTheirs')}
-                                  </button>
-                                </>
-                              ) : null}
-                              {(entry.unstaged || entry.status === 'untracked' || entry.status === 'deleted') && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void onDiscardPath(entry.path);
-                                  }}
-                                  className={idePopupMicroButtonClassName('danger')}
-                                >
-                                  {t('codePane.gitDiscard')}
-                                </button>
-                              )}
-                              {entry.status !== 'deleted' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void onOpenFileDiff(entry.path);
-                                  }}
-                                  className={idePopupMicroButtonClassName('neutral')}
-                                >
-                                  {t('codePane.openDiff')}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                            </section>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {visibleEntries.map((entry) => (
+                          <CommitWindowEntryCard
+                            key={entry.path}
+                            entry={entry}
+                            isChecked={selectedPathSet.has(entry.path)}
+                            isActive={selectedPath === entry.path}
+                            onToggleSelectedPath={toggleSelectedPath}
+                            onSelectPath={onSelectPath}
+                            onStagePath={onStagePath}
+                            onUnstagePath={onUnstagePath}
+                            onDiscardPath={onDiscardPath}
+                            onOpenFileDiff={onOpenFileDiff}
+                            onOpenConflictResolver={onOpenConflictResolver}
+                            onResolveConflict={onResolveConflict}
+                            t={t}
+                          />
+                        ))}
+                      </div>
+                    )
                   ) : (
                     <div className="px-2 py-3 text-xs text-zinc-500">{t('codePane.noChanges')}</div>
                   )}
@@ -390,4 +674,4 @@ export function CommitWindow({
       </Dialog.Portal>
     </Dialog.Root>
   );
-}
+});

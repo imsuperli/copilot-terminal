@@ -2,12 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CODE_PANE_DIRECTORY_CACHE_TTL_MS,
   CODE_PANE_EXTERNAL_LIBRARY_CACHE_TTL_MS,
+  CODE_PANE_GIT_BRANCHES_CACHE_TTL_MS,
   CODE_PANE_GIT_GRAPH_CACHE_TTL_MS,
+  CODE_PANE_GIT_REBASE_PLAN_CACHE_TTL_MS,
   CODE_PANE_GIT_STATUS_CACHE_TTL_MS,
   dedupeProjectRequest,
   getDirectoryCache,
   getExternalLibraryCache,
+  getGitBranchesCache,
   getGitGraphCache,
+  getGitRebasePlanCache,
   getGitStatusCache,
   getGitSummaryCache,
   invalidateDirectoryCache,
@@ -15,7 +19,9 @@ import {
   resetCodePaneProjectCacheForTests,
   setDirectoryCache,
   setExternalLibraryCache,
+  setGitBranchesCache,
   setGitGraphCache,
+  setGitRebasePlanCache,
   setGitStatusCache,
   setGitSummaryCache,
 } from '../codePaneProjectCache';
@@ -83,6 +89,48 @@ describe('codePaneProjectCache', () => {
 
     vi.advanceTimersByTime(CODE_PANE_GIT_GRAPH_CACHE_TTL_MS - CODE_PANE_GIT_STATUS_CACHE_TTL_MS);
     expect(getGitGraphCache('/workspace/project')).toBeNull();
+  });
+
+  it('returns cached git branches and rebase plan before their TTLs expire', () => {
+    vi.useFakeTimers();
+
+    setGitBranchesCache('/workspace/project', [
+      {
+        name: 'main',
+        refName: 'refs/heads/main',
+        shortName: 'main',
+        kind: 'local',
+        current: true,
+        upstream: 'origin/main',
+        aheadCount: 0,
+        behindCount: 0,
+        commitSha: 'abcdef1234567890',
+        shortSha: 'abcdef1',
+        subject: 'Initial commit',
+        timestamp: 1_710_000_000,
+        mergedIntoCurrent: false,
+      },
+    ]);
+    setGitRebasePlanCache('/workspace/project', 'origin/main', {
+      baseRef: 'origin/main',
+      currentBranch: 'main',
+      hasMergeCommits: false,
+      commits: [],
+    });
+
+    expect(getGitBranchesCache('/workspace/project')).toHaveLength(1);
+    expect(getGitRebasePlanCache('/workspace/project', 'origin/main')).not.toBeNull();
+
+    vi.advanceTimersByTime(CODE_PANE_GIT_BRANCHES_CACHE_TTL_MS - 1);
+    expect(getGitBranchesCache('/workspace/project')).toHaveLength(1);
+    expect(getGitRebasePlanCache('/workspace/project', 'origin/main')).not.toBeNull();
+
+    vi.advanceTimersByTime(2);
+    expect(getGitBranchesCache('/workspace/project')).toBeNull();
+    expect(getGitRebasePlanCache('/workspace/project', 'origin/main')).not.toBeNull();
+
+    vi.advanceTimersByTime(CODE_PANE_GIT_REBASE_PLAN_CACHE_TTL_MS - CODE_PANE_GIT_BRANCHES_CACHE_TTL_MS);
+    expect(getGitRebasePlanCache('/workspace/project', 'origin/main')).toBeNull();
   });
 
   it('deduplicates concurrent project requests with the same key', async () => {
@@ -213,6 +261,23 @@ describe('codePaneProjectCache', () => {
 
     expect(getGitStatusCache('/workspace/project')).toEqual([]);
     expect(getGitGraphCache('/workspace/project')).toBeNull();
+  });
+
+  it('invalidates git branches and rebase caches independently', () => {
+    setGitBranchesCache('/workspace/project', []);
+    setGitRebasePlanCache('/workspace/project', 'origin/main', {
+      baseRef: 'origin/main',
+      currentBranch: 'main',
+      hasMergeCommits: false,
+      commits: [],
+    });
+
+    invalidateProjectCache('/workspace/project', 'git-branches');
+    expect(getGitBranchesCache('/workspace/project')).toBeNull();
+    expect(getGitRebasePlanCache('/workspace/project', 'origin/main')).not.toBeNull();
+
+    invalidateProjectCache('/workspace/project', 'git-rebase');
+    expect(getGitRebasePlanCache('/workspace/project', 'origin/main')).toBeNull();
   });
 
   it('invalidates directory cache entries without touching git snapshots', () => {

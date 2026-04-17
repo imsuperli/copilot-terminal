@@ -1,11 +1,13 @@
 import React from 'react';
 import { BookOpen, Loader2, RefreshCw, X } from 'lucide-react';
 import type { CodePaneHoverResult } from '../../../shared/types/electron-api';
+import { useI18n } from '../../i18n';
 import {
+  idePopupAccentCardClassName,
   IdePopupShell,
   idePopupBodyClassName,
+  idePopupCardClassName,
   idePopupHeaderClassName,
-  idePopupHeaderMetaClassName,
   idePopupIconButtonClassName,
   idePopupScrollAreaClassName,
   idePopupSubtitleClassName,
@@ -33,17 +35,27 @@ export function QuickDocumentationPanel({
   onRefresh,
   onClose,
 }: QuickDocumentationPanelProps) {
+  const { t } = useI18n();
+  const contentCount = result?.contents.length ?? 0;
+  const subtitle = React.useMemo(() => (
+    contentCount > 0
+      ? contentCount === 1
+        ? t('codePane.quickDocumentationCountOne')
+        : t('codePane.quickDocumentationCountMany', { count: contentCount })
+      : emptyLabel
+  ), [contentCount, emptyLabel, t]);
+  const contents = result?.contents ?? [];
+
   return (
     <IdePopupShell className="absolute right-3 top-3 z-20 flex w-[400px] max-w-[calc(100%-24px)] flex-col">
       <div className={idePopupHeaderClassName}>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <BookOpen size={12} className="shrink-0 text-sky-300" />
-            <div className={idePopupHeaderMetaClassName}>{title}</div>
-          </div>
-          <div className="mt-1">
-            <div className={idePopupTitleClassName}>{title}</div>
-            <div className={idePopupSubtitleClassName}>{result?.contents.length ? `${result.contents.length} item${result.contents.length > 1 ? 's' : ''}` : emptyLabel}</div>
+            <div className="min-w-0">
+              <div className={idePopupTitleClassName}>{title}</div>
+              <div className={idePopupSubtitleClassName}>{subtitle}</div>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -68,36 +80,51 @@ export function QuickDocumentationPanel({
 
       <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} max-h-[52vh] px-3 py-3 text-xs text-zinc-300`}>
         {loading ? (
-          <div className="flex items-center gap-2 text-zinc-500">
+          <div className="flex items-center gap-2 px-1 text-zinc-500">
             <Loader2 size={12} className="animate-spin" />
             {loadingLabel}
           </div>
         ) : error ? (
-          <div className="text-red-300">{error}</div>
-        ) : result?.contents.length ? (
+          <div className={`${idePopupCardClassName} border-red-500/30 text-red-300`}>{error}</div>
+        ) : contents.length ? (
           <div className="space-y-3">
-            {result.contents.map((content, index) => (
-              <div
+            {contents.map((content, index) => (
+              <QuickDocumentationContentCard
                 key={`${content.kind}-${index}`}
-                className={`rounded-md border px-3 py-2 ${
-                  content.kind === 'markdown'
-                    ? 'border-sky-400/25 bg-sky-500/10'
-                    : 'border-zinc-700/80 bg-zinc-900/55'
-                }`}
-              >
-                <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                  {content.kind}
-                </div>
-                <div className="whitespace-pre-wrap break-words leading-5 text-zinc-200">
-                  {content.value}
-                </div>
-              </div>
+                kind={content.kind}
+                value={content.value}
+              />
             ))}
           </div>
         ) : (
-          <div className="text-zinc-500">{emptyLabel}</div>
+          <div className={`${idePopupCardClassName} text-zinc-500`}>{emptyLabel}</div>
         )}
       </div>
     </IdePopupShell>
   );
 }
+
+const QuickDocumentationContentCard = React.memo(function QuickDocumentationContentCard({
+  kind,
+  value,
+}: {
+  kind: CodePaneHoverResult['contents'][number]['kind'];
+  value: string;
+}) {
+  return (
+    <div
+      className={`${
+        kind === 'markdown'
+          ? idePopupAccentCardClassName
+          : idePopupCardClassName
+      }`}
+    >
+      <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+        {kind}
+      </div>
+      <div className="whitespace-pre-wrap break-words leading-5 text-zinc-200">
+        {value}
+      </div>
+    </div>
+  );
+});

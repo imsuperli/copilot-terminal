@@ -1,7 +1,9 @@
 import type {
+  CodePaneGitBranchEntry,
   CodePaneTreeEntry,
   CodePaneExternalLibrarySection,
   CodePaneGitGraphCommit,
+  CodePaneGitRebasePlanResult,
   CodePaneGitRepositorySummary,
   CodePaneGitStatusEntry,
 } from '../../shared/types/electron-api';
@@ -26,6 +28,8 @@ export const CODE_PANE_EXTERNAL_LIBRARY_CACHE_TTL_MS = 5 * 60_000;
 export const CODE_PANE_GIT_STATUS_CACHE_TTL_MS = 5_000;
 export const CODE_PANE_GIT_SUMMARY_CACHE_TTL_MS = 5_000;
 export const CODE_PANE_GIT_GRAPH_CACHE_TTL_MS = 15_000;
+export const CODE_PANE_GIT_BRANCHES_CACHE_TTL_MS = 15_000;
+export const CODE_PANE_GIT_REBASE_PLAN_CACHE_TTL_MS = 30_000;
 export const CODE_PANE_DIRECTORY_CACHE_TTL_MS = 60_000;
 
 export function getExternalLibraryCache(rootPath: string): CodePaneExternalLibrarySection[] | null {
@@ -70,6 +74,32 @@ export function getGitGraphCache(rootPath: string): CodePaneGitGraphCommit[] | n
 
 export function setGitGraphCache(rootPath: string, value: CodePaneGitGraphCommit[]): void {
   setCacheValue(createScopedKey(rootPath, 'git-graph'), value);
+}
+
+export function getGitBranchesCache(rootPath: string): CodePaneGitBranchEntry[] | null {
+  return getCacheValue<CodePaneGitBranchEntry[]>(
+    createScopedKey(rootPath, 'git-branches'),
+    CODE_PANE_GIT_BRANCHES_CACHE_TTL_MS,
+  );
+}
+
+export function setGitBranchesCache(rootPath: string, value: CodePaneGitBranchEntry[]): void {
+  setCacheValue(createScopedKey(rootPath, 'git-branches'), value);
+}
+
+export function getGitRebasePlanCache(rootPath: string, baseRef: string): CodePaneGitRebasePlanResult | null {
+  return getCacheValue<CodePaneGitRebasePlanResult>(
+    createScopedKey(rootPath, `git-rebase-plan:${normalizePath(baseRef)}`),
+    CODE_PANE_GIT_REBASE_PLAN_CACHE_TTL_MS,
+  );
+}
+
+export function setGitRebasePlanCache(
+  rootPath: string,
+  baseRef: string,
+  value: CodePaneGitRebasePlanResult,
+): void {
+  setCacheValue(createScopedKey(rootPath, `git-rebase-plan:${normalizePath(baseRef)}`), value);
 }
 
 export function getDirectoryCache(rootPath: string, directoryPath: string): CodePaneTreeEntry[] | null {
@@ -126,7 +156,7 @@ export async function dedupeProjectRequest<T>(
 
 export function invalidateProjectCache(
   rootPath: string,
-  scope: 'all' | 'git' | 'git-status' | 'git-graph' | 'external-libraries' | 'directories' = 'all',
+  scope: 'all' | 'git' | 'git-status' | 'git-graph' | 'git-branches' | 'git-rebase' | 'external-libraries' | 'directories' = 'all',
 ): void {
   const normalizedRootPath = normalizePath(rootPath);
   const projectPrefix = `code-pane:${normalizedRootPath}:`;
@@ -152,6 +182,16 @@ export function invalidateProjectCache(
     }
 
     if (scope === 'git-graph' && key.endsWith(':git-graph')) {
+      cache.delete(key);
+      continue;
+    }
+
+    if (scope === 'git-branches' && key.endsWith(':git-branches')) {
+      cache.delete(key);
+      continue;
+    }
+
+    if (scope === 'git-rebase' && key.includes(':git-rebase-plan:')) {
       cache.delete(key);
       continue;
     }

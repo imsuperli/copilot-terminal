@@ -31,7 +31,7 @@ interface ProjectToolWindowProps {
   onOpenTreeItem?: (item: CodePaneProjectTreeItem) => void;
 }
 
-export function ProjectToolWindow({
+export const ProjectToolWindow = React.memo(function ProjectToolWindow({
   contributions,
   sessions,
   selectedSession,
@@ -47,6 +47,13 @@ export function ProjectToolWindow({
   onOpenTreeItem,
 }: ProjectToolWindowProps) {
   const { t } = useI18n();
+  const handleStopSelectedSession = React.useCallback(() => {
+    if (!selectedSession || !isSessionActive(selectedSession)) {
+      return;
+    }
+
+    void onStopSession(selectedSession.id);
+  }, [onStopSession, selectedSession]);
 
   return (
     <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
@@ -78,226 +85,14 @@ export function ProjectToolWindow({
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="flex w-[380px] shrink-0 flex-col border-r border-zinc-800">
-          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-            {t('codePane.projectSummary')}
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
-            {isLoading ? (
-              <div className="flex items-center gap-2 text-xs text-zinc-500">
-                <Loader2 size={12} className="animate-spin" />
-                {t('codePane.projectLoading')}
-              </div>
-            ) : error ? (
-              <div className="text-xs text-red-300">{error}</div>
-            ) : contributions.length > 0 ? (
-              <div className="space-y-4">
-                {contributions.map((contribution) => (
-                  <div key={contribution.id} className="rounded border border-zinc-800 bg-zinc-900/50 p-3">
-                    <div className="mb-3 flex items-center justify-between gap-2">
-                      <div className="text-sm font-medium text-zinc-100">{contribution.title}</div>
-                      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
-                        {formatLanguageLabel(contribution.languageId)}
-                      </span>
-                    </div>
-
-                    {languageWorkspaceState?.languageId === contribution.languageId && (
-                      <div className="mb-3">
-                        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-                          Workspace State
-                        </div>
-                        <div className="rounded border border-zinc-800 bg-zinc-950/60 px-2 py-2">
-                          <div className="flex items-center gap-2">
-                            {getWorkspaceStateTone(languageWorkspaceState).showSpinner ? (
-                              <Loader2 size={12} className="animate-spin text-amber-300" />
-                            ) : (
-                              <div className={`h-2 w-2 rounded-full ${getWorkspaceStateTone(languageWorkspaceState).dotClassName}`} />
-                            )}
-                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${getWorkspaceStateTone(languageWorkspaceState).badgeClassName}`}>
-                              {formatWorkspacePhaseLabel(languageWorkspaceState.phase)}
-                            </span>
-                            <span className="truncate text-[11px] text-zinc-300">
-                              {languageWorkspaceState.progressText ?? languageWorkspaceState.message ?? formatWorkspacePhaseLabel(languageWorkspaceState.phase)}
-                            </span>
-                          </div>
-                          {languageWorkspaceState.readyFeatures.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1.5">
-                              {languageWorkspaceState.readyFeatures.map((feature) => (
-                                <span
-                                  key={`${contribution.id}-${feature}`}
-                                  className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400"
-                                >
-                                  {feature}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {contribution.statusItems && contribution.statusItems.length > 0 && (
-                      <div className="mb-3 flex flex-wrap gap-2">
-                        {contribution.statusItems.map((item) => (
-                          <span
-                            key={item.id}
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusTone(item.tone)}`}
-                          >
-                            {item.label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {contribution.diagnostics && contribution.diagnostics.length > 0 && (
-                      <div className="mb-3">
-                        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-                          Diagnostics
-                        </div>
-                        <div className="space-y-2">
-                          {contribution.diagnostics.map((diagnostic) => (
-                            <div
-                              key={diagnostic.id}
-                              className={`rounded border px-2 py-2 text-xs ${getDiagnosticTone(diagnostic.severity).containerClassName}`}
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${getDiagnosticTone(diagnostic.severity).badgeClassName}`}>
-                                      {diagnostic.severity}
-                                    </span>
-                                    <div className="break-words font-medium text-zinc-100">{diagnostic.message}</div>
-                                  </div>
-                                  {diagnostic.detail && (
-                                    <div className="mt-1 break-words text-[10px] text-zinc-400">{diagnostic.detail}</div>
-                                  )}
-                                  {diagnostic.filePath && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        onOpenTreeItem?.({
-                                          id: diagnostic.id,
-                                          label: diagnostic.message,
-                                          kind: 'entry',
-                                          filePath: diagnostic.filePath,
-                                          lineNumber: diagnostic.lineNumber,
-                                        });
-                                      }}
-                                      className="mt-2 text-[10px] text-sky-300 transition-colors hover:text-sky-200"
-                                    >
-                                      {diagnostic.filePath}
-                                      {diagnostic.lineNumber ? `:${diagnostic.lineNumber}` : ''}
-                                    </button>
-                                  )}
-                                </div>
-                                {diagnostic.commandId && diagnostic.commandLabel && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      void onRunCommand(diagnostic.commandId!);
-                                    }}
-                                    className="shrink-0 rounded border border-zinc-700 bg-zinc-900/80 px-2 py-1 text-[10px] font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
-                                  >
-                                    {diagnostic.commandLabel}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {contribution.commandGroups?.map((group) => (
-                      <div key={group.id} className="mb-3">
-                        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-                          {group.title}
-                        </div>
-                        <div className="space-y-1">
-                          {group.commands.map((command) => {
-                            const commandTone = getProjectCommandTone(command.kind);
-                            return (
-                              <button
-                                key={command.id}
-                                type="button"
-                                onClick={() => {
-                                  void onRunCommand(command.id);
-                                }}
-                                className={`flex w-full items-center justify-between gap-3 rounded border px-2 py-2 text-left text-xs transition-colors ${commandTone.buttonClassName}`}
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className="truncate font-medium text-zinc-100">{command.title}</div>
-                                    <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${commandTone.badgeClassName}`}>
-                                      {commandTone.badgeLabel}
-                                    </span>
-                                  </div>
-                                  {command.detail && (
-                                    <div className="mt-1 truncate text-[10px] text-zinc-500">{command.detail}</div>
-                                  )}
-                                </div>
-                                {commandTone.icon === 'refresh' ? (
-                                  <RefreshCw size={12} className="shrink-0 text-sky-300" />
-                                ) : commandTone.icon === 'configure' ? (
-                                  <ChevronRight size={12} className="shrink-0 text-amber-300" />
-                                ) : commandTone.icon === 'repair' ? (
-                                  <Square size={11} className="shrink-0 text-red-300" />
-                                ) : (
-                                  <Play size={12} className="shrink-0 text-emerald-300" />
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-
-                    {contribution.treeSections?.map((section) => (
-                      <div key={section.id} className="mb-3">
-                        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-                          {section.title}
-                        </div>
-                        <div className="rounded bg-zinc-950/60 px-2 py-2">
-                          {section.items.length > 0 ? (
-                            <div className="space-y-1">
-                              {section.items.map((item) => (
-                                <ProjectTreeItemRow
-                                  key={item.id}
-                                  item={item}
-                                  depth={0}
-                                  onOpenTreeItem={onOpenTreeItem}
-                                />
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-[11px] text-zinc-500">No items</div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-
-                    {contribution.detailCards?.map((card) => (
-                      <div key={card.id} className="mb-3 last:mb-0">
-                        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
-                          {card.title}
-                        </div>
-                        <div className="space-y-1 rounded bg-zinc-950/60 px-2 py-2 text-[11px] text-zinc-400">
-                          {card.lines.map((line, index) => (
-                            <div key={`${card.id}-${index}`} className="break-words">
-                              {line}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-xs text-zinc-500">{t('codePane.projectEmpty')}</div>
-            )}
-          </div>
-        </div>
+        <ProjectSummaryPane
+          contributions={contributions}
+          languageWorkspaceState={languageWorkspaceState}
+          isLoading={isLoading}
+          error={error}
+          onRunCommand={onRunCommand}
+          onOpenTreeItem={onOpenTreeItem}
+        />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -308,34 +103,14 @@ export function ProjectToolWindow({
               <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
                 {sessions.length > 0 ? (
                   <div className="space-y-1">
-                    {sessions.map((session) => {
-                      const tone = getSessionTone(session.state);
-                      const isSelected = selectedSession?.id === session.id;
-                      return (
-                        <button
-                          key={session.id}
-                          type="button"
-                          onClick={() => {
-                            onSelectSession(session.id);
-                          }}
-                          className={`w-full rounded border px-2 py-2 text-left transition-colors ${
-                            isSelected
-                              ? 'border-zinc-700 bg-zinc-800 text-zinc-100'
-                              : 'border-transparent bg-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900/70'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-xs font-medium">{session.label}</div>
-                              <div className="mt-1 truncate text-[10px] text-zinc-500">{session.detail}</div>
-                            </div>
-                            <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${tone.className}`}>
-                              {tone.label}
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {sessions.map((session) => (
+                      <ProjectSessionRow
+                        key={session.id}
+                        session={session}
+                        isSelected={selectedSession?.id === session.id}
+                        onSelectSession={onSelectSession}
+                      />
+                    ))}
                   </div>
                 ) : (
                   <div className="text-xs text-zinc-500">{t('codePane.runConsoleEmpty')}</div>
@@ -356,9 +131,7 @@ export function ProjectToolWindow({
                 {selectedSession && isSessionActive(selectedSession) && (
                   <button
                     type="button"
-                    onClick={() => {
-                      void onStopSession(selectedSession.id);
-                    }}
+                    onClick={handleStopSelectedSession}
                     className="rounded bg-red-500/15 p-1 text-red-300 transition-colors hover:bg-red-500/25 hover:text-red-200"
                     aria-label={t('codePane.stopRun')}
                   >
@@ -381,7 +154,342 @@ export function ProjectToolWindow({
       </div>
     </div>
   );
-}
+});
+
+const ProjectSummaryPane = React.memo(function ProjectSummaryPane({
+  contributions,
+  languageWorkspaceState,
+  isLoading,
+  error,
+  onRunCommand,
+  onOpenTreeItem,
+}: {
+  contributions: CodePaneProjectContribution[];
+  languageWorkspaceState: CodePaneLanguageWorkspaceState | null;
+  isLoading: boolean;
+  error: string | null;
+  onRunCommand: (commandId: string) => void | Promise<void>;
+  onOpenTreeItem?: (item: CodePaneProjectTreeItem) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex w-[380px] shrink-0 flex-col border-r border-zinc-800">
+      <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+        {t('codePane.projectSummary')}
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <Loader2 size={12} className="animate-spin" />
+            {t('codePane.projectLoading')}
+          </div>
+        ) : error ? (
+          <div className="text-xs text-red-300">{error}</div>
+        ) : contributions.length > 0 ? (
+          <div className="space-y-4">
+            {contributions.map((contribution) => (
+              <ProjectContributionCard
+                key={contribution.id}
+                contribution={contribution}
+                languageWorkspaceState={languageWorkspaceState}
+                onRunCommand={onRunCommand}
+                onOpenTreeItem={onOpenTreeItem}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-zinc-500">{t('codePane.projectEmpty')}</div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+const ProjectContributionCard = React.memo(function ProjectContributionCard({
+  contribution,
+  languageWorkspaceState,
+  onRunCommand,
+  onOpenTreeItem,
+}: {
+  contribution: CodePaneProjectContribution;
+  languageWorkspaceState: CodePaneLanguageWorkspaceState | null;
+  onRunCommand: (commandId: string) => void | Promise<void>;
+  onOpenTreeItem?: (item: CodePaneProjectTreeItem) => void;
+}) {
+  const workspaceStateTone = languageWorkspaceState && languageWorkspaceState.languageId === contribution.languageId
+    ? getWorkspaceStateTone(languageWorkspaceState)
+    : null;
+
+  return (
+    <div className="rounded border border-zinc-800 bg-zinc-900/50 p-3">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="text-sm font-medium text-zinc-100">{contribution.title}</div>
+        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+          {formatLanguageLabel(contribution.languageId)}
+        </span>
+      </div>
+
+      {workspaceStateTone && languageWorkspaceState && (
+        <div className="mb-3">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+            Workspace State
+          </div>
+          <div className="rounded border border-zinc-800 bg-zinc-950/60 px-2 py-2">
+            <div className="flex items-center gap-2">
+              {workspaceStateTone.showSpinner ? (
+                <Loader2 size={12} className="animate-spin text-amber-300" />
+              ) : (
+                <div className={`h-2 w-2 rounded-full ${workspaceStateTone.dotClassName}`} />
+              )}
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${workspaceStateTone.badgeClassName}`}>
+                {formatWorkspacePhaseLabel(languageWorkspaceState.phase)}
+              </span>
+              <span className="truncate text-[11px] text-zinc-300">
+                {languageWorkspaceState.progressText ?? languageWorkspaceState.message ?? formatWorkspacePhaseLabel(languageWorkspaceState.phase)}
+              </span>
+            </div>
+            {languageWorkspaceState.readyFeatures.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {languageWorkspaceState.readyFeatures.map((feature) => (
+                  <span
+                    key={`${contribution.id}-${feature}`}
+                    className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400"
+                  >
+                    {feature}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {contribution.statusItems && contribution.statusItems.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {contribution.statusItems.map((item) => (
+            <span
+              key={item.id}
+              className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${getStatusTone(item.tone)}`}
+            >
+              {item.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {contribution.diagnostics && contribution.diagnostics.length > 0 && (
+        <div className="mb-3">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+            Diagnostics
+          </div>
+          <div className="space-y-2">
+            {contribution.diagnostics.map((diagnostic) => (
+              <ProjectDiagnosticRow
+                key={diagnostic.id}
+                diagnostic={diagnostic}
+                onRunCommand={onRunCommand}
+                onOpenTreeItem={onOpenTreeItem}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {contribution.commandGroups?.map((group) => (
+        <div key={group.id} className="mb-3">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+            {group.title}
+          </div>
+          <div className="space-y-1">
+            {group.commands.map((command) => (
+              <ProjectCommandRow
+                key={command.id}
+                command={command}
+                onRunCommand={onRunCommand}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {contribution.treeSections?.map((section) => (
+        <div key={section.id} className="mb-3">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+            {section.title}
+          </div>
+          <div className="rounded bg-zinc-950/60 px-2 py-2">
+            {section.items.length > 0 ? (
+              <div className="space-y-1">
+                {section.items.map((item) => (
+                  <ProjectTreeItemRow
+                    key={item.id}
+                    item={item}
+                    depth={0}
+                    onOpenTreeItem={onOpenTreeItem}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-[11px] text-zinc-500">No items</div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {contribution.detailCards?.map((card) => (
+        <div key={card.id} className="mb-3 last:mb-0">
+          <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">
+            {card.title}
+          </div>
+          <div className="space-y-1 rounded bg-zinc-950/60 px-2 py-2 text-[11px] text-zinc-400">
+            {card.lines.map((line, index) => (
+              <div key={`${card.id}-${index}`} className="break-words">
+                {line}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+});
+
+const ProjectDiagnosticRow = React.memo(function ProjectDiagnosticRow({
+  diagnostic,
+  onRunCommand,
+  onOpenTreeItem,
+}: {
+  diagnostic: NonNullable<CodePaneProjectContribution['diagnostics']>[number];
+  onRunCommand: (commandId: string) => void | Promise<void>;
+  onOpenTreeItem?: (item: CodePaneProjectTreeItem) => void;
+}) {
+  const diagnosticTone = getDiagnosticTone(diagnostic.severity);
+
+  return (
+    <div className={`rounded border px-2 py-2 text-xs ${diagnosticTone.containerClassName}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${diagnosticTone.badgeClassName}`}>
+              {diagnostic.severity}
+            </span>
+            <div className="break-words font-medium text-zinc-100">{diagnostic.message}</div>
+          </div>
+          {diagnostic.detail && (
+            <div className="mt-1 break-words text-[10px] text-zinc-400">{diagnostic.detail}</div>
+          )}
+          {diagnostic.filePath && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenTreeItem?.({
+                  id: diagnostic.id,
+                  label: diagnostic.message,
+                  kind: 'entry',
+                  filePath: diagnostic.filePath,
+                  lineNumber: diagnostic.lineNumber,
+                });
+              }}
+              className="mt-2 text-[10px] text-sky-300 transition-colors hover:text-sky-200"
+            >
+              {diagnostic.filePath}
+              {diagnostic.lineNumber ? `:${diagnostic.lineNumber}` : ''}
+            </button>
+          )}
+        </div>
+        {diagnostic.commandId && diagnostic.commandLabel && (
+          <button
+            type="button"
+            onClick={() => {
+              void onRunCommand(diagnostic.commandId!);
+            }}
+            className="shrink-0 rounded border border-zinc-700 bg-zinc-900/80 px-2 py-1 text-[10px] font-medium text-zinc-200 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+          >
+            {diagnostic.commandLabel}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
+const ProjectCommandRow = React.memo(function ProjectCommandRow({
+  command,
+  onRunCommand,
+}: {
+  command: NonNullable<NonNullable<CodePaneProjectContribution['commandGroups']>[number]['commands']>[number];
+  onRunCommand: (commandId: string) => void | Promise<void>;
+}) {
+  const commandTone = getProjectCommandTone(command.kind);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void onRunCommand(command.id);
+      }}
+      className={`flex w-full items-center justify-between gap-3 rounded border px-2 py-2 text-left text-xs transition-colors ${commandTone.buttonClassName}`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <div className="truncate font-medium text-zinc-100">{command.title}</div>
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${commandTone.badgeClassName}`}>
+            {commandTone.badgeLabel}
+          </span>
+        </div>
+        {command.detail && (
+          <div className="mt-1 truncate text-[10px] text-zinc-500">{command.detail}</div>
+        )}
+      </div>
+      {commandTone.icon === 'refresh' ? (
+        <RefreshCw size={12} className="shrink-0 text-sky-300" />
+      ) : commandTone.icon === 'configure' ? (
+        <ChevronRight size={12} className="shrink-0 text-amber-300" />
+      ) : commandTone.icon === 'repair' ? (
+        <Square size={11} className="shrink-0 text-red-300" />
+      ) : (
+        <Play size={12} className="shrink-0 text-emerald-300" />
+      )}
+    </button>
+  );
+});
+
+const ProjectSessionRow = React.memo(function ProjectSessionRow({
+  session,
+  isSelected,
+  onSelectSession,
+}: {
+  session: CodePaneRunSession;
+  isSelected: boolean;
+  onSelectSession: (sessionId: string) => void;
+}) {
+  const tone = getSessionTone(session.state);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onSelectSession(session.id);
+      }}
+      className={`w-full rounded border px-2 py-2 text-left transition-colors ${
+        isSelected
+          ? 'border-zinc-700 bg-zinc-800 text-zinc-100'
+          : 'border-transparent bg-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900/70'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-medium">{session.label}</div>
+          <div className="mt-1 truncate text-[10px] text-zinc-500">{session.detail}</div>
+        </div>
+        <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${tone.className}`}>
+          {tone.label}
+        </span>
+      </div>
+    </button>
+  );
+});
 
 interface ProjectTreeItemRowProps {
   item: CodePaneProjectTreeItem;
@@ -389,7 +497,7 @@ interface ProjectTreeItemRowProps {
   onOpenTreeItem?: (item: CodePaneProjectTreeItem) => void;
 }
 
-function ProjectTreeItemRow({ item, depth, onOpenTreeItem }: ProjectTreeItemRowProps) {
+const ProjectTreeItemRow = React.memo(function ProjectTreeItemRow({ item, depth, onOpenTreeItem }: ProjectTreeItemRowProps) {
   const content = (
     <div className="min-w-0 flex-1">
       <div className="truncate text-xs font-medium text-zinc-200">{item.label}</div>
@@ -439,7 +547,7 @@ function ProjectTreeItemRow({ item, depth, onOpenTreeItem }: ProjectTreeItemRowP
       )}
     </div>
   );
-}
+});
 
 function formatLanguageLabel(languageId: string): string {
   if (!languageId) {
