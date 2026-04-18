@@ -12345,18 +12345,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [copyTextValue, rootPath]);
 
   const togglePinnedTab = useCallback((filePath: string) => {
-    updateOpenFileTabs((currentOpenFiles) => currentOpenFiles.map((tab) => {
-      if (tab.path !== filePath) {
-        return tab;
-      }
+    updateOpenFileTabs((currentOpenFiles) => {
+      const nextOpenFiles: typeof currentOpenFiles = [];
+      for (const tab of currentOpenFiles) {
+        if (tab.path !== filePath) {
+          nextOpenFiles.push(tab);
+          continue;
+        }
 
-      const nextPinned = !tab.pinned;
-      return {
-        ...tab,
-        pinned: nextPinned || undefined,
-        preview: nextPinned ? false : tab.preview,
-      };
-    }));
+        const nextPinned = !tab.pinned;
+        nextOpenFiles.push({
+          ...tab,
+          pinned: nextPinned || undefined,
+          preview: nextPinned ? false : tab.preview,
+        });
+      }
+      return nextOpenFiles;
+    });
   }, [updateOpenFileTabs]);
 
   const getMutationParentDirectory = useCallback((
@@ -12601,16 +12606,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
     suppressModelEventsRef.current = nextSuppressModelEvents;
 
-    const nextExternalChangeEntries = externalChangeEntriesRef.current.map((entry) => (
-      isPathEqualOrDescendant(entry.filePath, sourcePath)
-        ? {
-            ...entry,
-            id: replacePathPrefix(entry.id, sourcePath, targetPath),
-            filePath: replacePathPrefix(entry.filePath, sourcePath, targetPath),
-            relativePath: getRelativePath(rootPath, replacePathPrefix(entry.filePath, sourcePath, targetPath)),
-          }
-        : entry
-    ));
+    const nextExternalChangeEntries: ExternalChangeEntry[] = [];
+    for (const entry of externalChangeEntriesRef.current) {
+      if (!isPathEqualOrDescendant(entry.filePath, sourcePath)) {
+        nextExternalChangeEntries.push(entry);
+        continue;
+      }
+
+      const nextFilePath = replacePathPrefix(entry.filePath, sourcePath, targetPath);
+      nextExternalChangeEntries.push({
+        ...entry,
+        id: replacePathPrefix(entry.id, sourcePath, targetPath),
+        filePath: nextFilePath,
+        relativePath: getRelativePath(rootPath, nextFilePath),
+      });
+    }
     externalChangeEntriesRef.current = nextExternalChangeEntries;
     setExternalChangeEntries(nextExternalChangeEntries);
 
@@ -13427,9 +13437,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
           }
         }
         if (nestedExpandedDirectories.length > 0) {
-          void Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectoryRef.current(directoryPath, {
-            showLoadingIndicator: getDirectoryCache(rootPath, directoryPath) === null,
-          })))
+          const loadRequests: Array<Promise<CodePaneTreeEntry[]>> = [];
+          for (const directoryPath of nestedExpandedDirectories) {
+            loadRequests.push(loadDirectoryRef.current(directoryPath, {
+              showLoadingIndicator: getDirectoryCache(rootPath, directoryPath) === null,
+            }));
+          }
+          void Promise.all(loadRequests)
             .catch(() => {});
         }
 
