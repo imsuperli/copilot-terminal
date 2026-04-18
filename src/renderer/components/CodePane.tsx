@@ -6250,6 +6250,44 @@ function areGitBlameLinesEqual(previousLines: CodePaneGitBlameLine[], nextLines:
   return true;
 }
 
+function areSemanticLegendsEqual(
+  previousLegend: CodePaneSemanticTokensLegend | null,
+  nextLegend: CodePaneSemanticTokensLegend | null,
+): boolean {
+  if (previousLegend === nextLegend) {
+    return true;
+  }
+
+  if (!previousLegend || !nextLegend) {
+    return false;
+  }
+
+  return areStringListsEqual(previousLegend.tokenTypes, nextLegend.tokenTypes)
+    && areStringListsEqual(previousLegend.tokenModifiers, nextLegend.tokenModifiers);
+}
+
+function areSemanticSummaryEntriesEqual(
+  previousEntries: SemanticTokenSummaryEntry[],
+  nextEntries: SemanticTokenSummaryEntry[],
+): boolean {
+  if (previousEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousEntries.length; index += 1) {
+    const previousEntry = previousEntries[index];
+    const nextEntry = nextEntries[index];
+    if (
+      previousEntry?.tokenType !== nextEntry?.tokenType
+      || previousEntry?.count !== nextEntry?.count
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function areRunSessionsEqual(previousSessions: CodePaneRunSession[], nextSessions: CodePaneRunSession[]): boolean {
   if (previousSessions.length !== nextSessions.length) {
     return false;
@@ -10997,21 +11035,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const loadSemanticSummary = useCallback(async () => {
     const context = getActiveEditorContext();
     if (!context) {
-      setSemanticLegend(null);
-      setSemanticSummary([]);
-      setSemanticTokenCount(0);
-      setSemanticSummaryFileLabel(null);
-      setSemanticSummaryError(null);
-      setIsSemanticSummaryLoading(false);
+      setSemanticLegend((currentLegend) => (currentLegend === null ? currentLegend : null));
+      setSemanticSummary((currentSummary) => (currentSummary.length === 0 ? currentSummary : []));
+      setSemanticTokenCount((currentCount) => (currentCount === 0 ? currentCount : 0));
+      setSemanticSummaryFileLabel((currentLabel) => (currentLabel === null ? currentLabel : null));
+      setSemanticSummaryError((currentError) => (currentError === null ? currentError : null));
+      setIsSemanticSummaryLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
     const requestPath = getModelRequestPath(context.filePath);
     const requestKey = `semantic:${requestPath}`;
     const requestVersion = ++semanticRequestIdRef.current;
-    setIsSemanticSummaryLoading(true);
-    setSemanticSummaryError(null);
-    setSemanticSummaryFileLabel(getRelativePath(rootPath, context.filePath));
+    const nextFileLabel = getRelativePath(rootPath, context.filePath);
+    setIsSemanticSummaryLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setSemanticSummaryError((currentError) => (currentError === null ? currentError : null));
+    setSemanticSummaryFileLabel((currentLabel) => (
+      currentLabel === nextFileLabel ? currentLabel : nextFileLabel
+    ));
 
     try {
       const response = await trackRequest(
@@ -11033,30 +11074,42 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ? (response.data ?? null)
         : null;
       if (!semanticResult) {
-        setSemanticLegend(null);
-        setSemanticSummary([]);
-        setSemanticTokenCount(0);
-        setSemanticSummaryError(response.success ? null : (response.error || t('common.retry')));
+        const nextError = response.success ? null : (response.error || t('common.retry'));
+        setSemanticLegend((currentLegend) => (currentLegend === null ? currentLegend : null));
+        setSemanticSummary((currentSummary) => (currentSummary.length === 0 ? currentSummary : []));
+        setSemanticTokenCount((currentCount) => (currentCount === 0 ? currentCount : 0));
+        setSemanticSummaryError((currentError) => (
+          currentError === nextError ? currentError : nextError
+        ));
         return;
       }
 
       const nextSummary = summarizeSemanticTokens(semanticResult);
-      setSemanticLegend(semanticResult.legend);
-      setSemanticSummary(nextSummary.summary);
-      setSemanticTokenCount(nextSummary.totalTokens);
-      setSemanticSummaryError(response.success ? null : (response.error || t('common.retry')));
+      setSemanticLegend((currentLegend) => (
+        areSemanticLegendsEqual(currentLegend, semanticResult.legend) ? currentLegend : semanticResult.legend
+      ));
+      setSemanticSummary((currentSummary) => (
+        areSemanticSummaryEntriesEqual(currentSummary, nextSummary.summary) ? currentSummary : nextSummary.summary
+      ));
+      setSemanticTokenCount((currentCount) => (
+        currentCount === nextSummary.totalTokens ? currentCount : nextSummary.totalTokens
+      ));
+      setSemanticSummaryError((currentError) => (currentError === null ? currentError : null));
     } catch (error) {
       if (semanticRequestIdRef.current !== requestVersion) {
         return;
       }
 
-      setSemanticLegend(null);
-      setSemanticSummary([]);
-      setSemanticTokenCount(0);
-      setSemanticSummaryError(error instanceof Error ? error.message : t('common.retry'));
+      const nextError = error instanceof Error ? error.message : t('common.retry');
+      setSemanticLegend((currentLegend) => (currentLegend === null ? currentLegend : null));
+      setSemanticSummary((currentSummary) => (currentSummary.length === 0 ? currentSummary : []));
+      setSemanticTokenCount((currentCount) => (currentCount === 0 ? currentCount : 0));
+      setSemanticSummaryError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
     } finally {
       if (semanticRequestIdRef.current === requestVersion) {
-        setIsSemanticSummaryLoading(false);
+        setIsSemanticSummaryLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       }
     }
   }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
