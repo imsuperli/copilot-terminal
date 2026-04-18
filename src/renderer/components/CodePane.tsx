@@ -488,7 +488,7 @@ type EditorActionMenuItem = {
 type ToolWindowLauncher = {
   id: string;
   label: string;
-  icon: React.ReactNode;
+  icon: LucideIcon;
   disabled?: boolean;
   active?: boolean;
   onClick: () => void;
@@ -870,6 +870,8 @@ const ToolWindowRailButton = React.memo(function ToolWindowRailButton({
 }: {
   item: ToolWindowLauncher;
 }) {
+  const Icon = item.icon;
+
   return (
     <AppTooltip content={item.label} placement="pane-corner">
       <button
@@ -884,7 +886,7 @@ const ToolWindowRailButton = React.memo(function ToolWindowRailButton({
             : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
         } disabled:cursor-not-allowed disabled:opacity-40`}
       >
-        {item.icon}
+        <Icon size={15} />
       </button>
     </AppTooltip>
   );
@@ -1011,6 +1013,313 @@ const OpenFileTab = React.memo(function OpenFileTab({
         </div>
       )}
     />
+  );
+});
+
+const SavePipelineToggles = React.memo(function SavePipelineToggles({
+  state,
+  onToggleFormat,
+  onToggleImports,
+  onToggleLint,
+  t,
+}: {
+  state: CodePaneSavePipelineState;
+  onToggleFormat: () => void;
+  onToggleImports: () => void;
+  onToggleLint: () => void;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={onToggleFormat}
+        className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+          state.formatOnSave
+            ? 'bg-emerald-500/15 text-emerald-300'
+            : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+        }`}
+      >
+        {t('codePane.saveQualityFormatToggle')}
+      </button>
+      <button
+        type="button"
+        onClick={onToggleImports}
+        className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+          state.organizeImportsOnSave
+            ? 'bg-sky-500/15 text-sky-300'
+            : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+        }`}
+      >
+        {t('codePane.saveQualityImportsToggle')}
+      </button>
+      <button
+        type="button"
+        onClick={onToggleLint}
+        className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+          state.lintOnSave
+            ? 'bg-amber-500/15 text-amber-300'
+            : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+        }`}
+      >
+        {t('codePane.saveQualityLintToggle')}
+      </button>
+    </div>
+  );
+});
+
+const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
+  inputRef,
+  mode,
+  query,
+  items,
+  selectedIndex,
+  selectedItem,
+  error,
+  isLoading,
+  onClose,
+  onModeChange,
+  onQueryChange,
+  onMoveSelection,
+  onExecuteSelected,
+  onHoverIndex,
+  onExecuteItem,
+  t,
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  mode: SearchEverywhereMode;
+  query: string;
+  items: SearchEverywhereItem[];
+  selectedIndex: number;
+  selectedItem: SearchEverywhereItem | null;
+  error: string | null;
+  isLoading: boolean;
+  onClose: () => void;
+  onModeChange: (mode: SearchEverywhereMode) => void;
+  onQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onMoveSelection: (direction: 1 | -1) => void;
+  onExecuteSelected: () => void;
+  onHoverIndex: (index: number) => void;
+  onExecuteItem: (item: SearchEverywhereItem) => void;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/70 p-4">
+      <div className="mt-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
+        <div className="border-b border-zinc-800 p-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-sm font-medium text-zinc-100">{t('codePane.searchEverywhereTitle')}</div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="mb-3 flex gap-1 rounded bg-zinc-900/60 p-1">
+            {([
+              ['all', t('codePane.searchEverywhereAll')],
+              ['recent', t('codePane.searchEverywhereRecent')],
+              ['commands', t('codePane.searchEverywhereCommands')],
+            ] as const).map(([nextMode, label]) => (
+              <button
+                key={nextMode}
+                type="button"
+                onClick={() => {
+                  onModeChange(nextMode);
+                }}
+                className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                  mode === nextMode
+                    ? 'bg-zinc-800 text-zinc-100'
+                    : 'text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-3 py-2">
+            <Search size={13} className="shrink-0 text-zinc-500" />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={onQueryChange}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  onMoveSelection(1);
+                  return;
+                }
+
+                if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  onMoveSelection(-1);
+                  return;
+                }
+
+                if (event.key === 'Enter' && selectedItem) {
+                  event.preventDefault();
+                  onExecuteSelected();
+                  return;
+                }
+
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  onClose();
+                }
+              }}
+              placeholder={t('codePane.searchEverywherePlaceholder')}
+              className="w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+            />
+            {isLoading && <Loader2 size={13} className="shrink-0 animate-spin text-zinc-500" />}
+          </div>
+        </div>
+        <div className="max-h-[60vh] overflow-auto p-2">
+          {error ? (
+            <div className="px-2 py-3 text-sm text-red-300">{error}</div>
+          ) : items.length > 0 ? (
+            <div className="space-y-1">
+              {items.map((item, index) => {
+                const previousItem = index > 0 ? items[index - 1] : null;
+                const showSectionLabel = !previousItem || previousItem.section !== item.section;
+                const isSelected = index === selectedIndex;
+
+                return (
+                  <React.Fragment key={item.id}>
+                    {showSectionLabel && (
+                      <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                        {item.section}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onMouseEnter={() => {
+                        onHoverIndex(index);
+                      }}
+                      onClick={() => {
+                        onExecuteItem(item);
+                      }}
+                      className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
+                        isSelected
+                          ? 'bg-zinc-800 text-zinc-100'
+                          : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm">{item.title}</div>
+                        {item.subtitle && (
+                          <div className="mt-1 truncate text-xs text-zinc-500">{item.subtitle}</div>
+                        )}
+                      </div>
+                      {item.meta && (
+                        <div className="shrink-0 text-[11px] text-zinc-500">{item.meta}</div>
+                      )}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.searchEverywhereEmpty')}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
+  items,
+  selectedIndex,
+  error,
+  isLoading,
+  onClose,
+  onHoverIndex,
+  onExecuteAction,
+  t,
+}: {
+  items: CodePaneCodeAction[];
+  selectedIndex: number;
+  error: string | null;
+  isLoading: boolean;
+  onClose: () => void;
+  onHoverIndex: (index: number) => void;
+  onExecuteAction: (action: CodePaneCodeAction) => void;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/60 p-4">
+      <div className="mt-16 flex w-full max-w-xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+          <div className="text-sm font-medium text-zinc-100">{t('codePane.codeActions')}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100"
+          >
+            <X size={14} />
+          </button>
+        </div>
+        <div className="max-h-[50vh] overflow-auto p-2">
+          {isLoading ? (
+            <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500">
+              <Loader2 size={13} className="animate-spin" />
+              {t('codePane.codeActionsLoading')}
+            </div>
+          ) : error ? (
+            <div className="px-2 py-3 text-sm text-red-300">{error}</div>
+          ) : items.length > 0 ? (
+            <div className="space-y-1">
+              {items.map((action, index) => {
+                const isSelected = index === selectedIndex;
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    disabled={Boolean(action.disabledReason)}
+                    onMouseEnter={() => {
+                      onHoverIndex(index);
+                    }}
+                    onClick={() => {
+                      onExecuteAction(action);
+                    }}
+                    className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
+                      action.disabledReason
+                        ? 'cursor-not-allowed text-zinc-600'
+                        : isSelected
+                          ? 'bg-zinc-800 text-zinc-100'
+                          : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{action.title}</div>
+                      {(action.kind || action.disabledReason) && (
+                        <div className="mt-1 truncate text-xs text-zinc-500">
+                          {action.disabledReason ?? action.kind}
+                        </div>
+                      )}
+                    </div>
+                    {action.isPreferred && (
+                      <div className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                        {t('codePane.codeActionsPreferred')}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.codeActionsEmpty')}</div>
+          )}
+        </div>
+        {items.length > 0 && !isLoading && (
+          <div className="border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
+            <span>{t('codePane.codeActionsHint')}</span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 });
 
@@ -4718,6 +5027,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const navigationBackStackRef = useRef<NavigationHistoryEntry[]>([]);
   const navigationForwardStackRef = useRef<NavigationHistoryEntry[]>([]);
   const searchEverywhereInputRef = useRef<HTMLInputElement | null>(null);
+  const searchEverywhereItemsRef = useRef<SearchEverywhereItem[]>([]);
+  const searchEverywhereSelectedIndexRef = useRef(0);
   const branchManagerRef = useRef<HTMLDivElement | null>(null);
   const branchManagerSearchInputRef = useRef<HTMLInputElement | null>(null);
   const navigateBackRef = useRef<() => Promise<void>>(async () => {});
@@ -14425,6 +14736,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     ));
   }, [isSearchEverywhereOpen, searchEverywhereItems]);
 
+  useEffect(() => {
+    searchEverywhereItemsRef.current = searchEverywhereItems;
+  }, [searchEverywhereItems]);
+
+  useEffect(() => {
+    searchEverywhereSelectedIndexRef.current = searchEverywhereSelectedIndex;
+  }, [searchEverywhereSelectedIndex]);
+
   const { canNavigateBack, canNavigateForward } = navigationAvailability;
   const selectedSearchEverywhereItem = searchEverywhereItems[searchEverywhereSelectedIndex] ?? null;
   const selectedCodeAction = codeActionItems[selectedCodeActionIndex] ?? null;
@@ -15995,6 +16314,76 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setWorkspaceSymbolQuery(event.target.value);
   }, []);
 
+  const handleSearchEverywhereModeChange = useCallback((mode: SearchEverywhereMode) => {
+    setSearchEverywhereMode(mode);
+    setSearchEverywhereSelectedIndex(0);
+  }, []);
+
+  const handleSearchEverywhereQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchEverywhereQuery(event.target.value);
+  }, []);
+
+  const handleSearchEverywhereMoveSelection = useCallback((direction: 1 | -1) => {
+    setSearchEverywhereSelectedIndex((currentIndex) => (
+      searchEverywhereItemsRef.current.length === 0
+        ? 0
+        : direction > 0
+          ? Math.min(currentIndex + 1, searchEverywhereItemsRef.current.length - 1)
+          : Math.max(currentIndex - 1, 0)
+    ));
+  }, []);
+
+  const handleSearchEverywhereHoverIndex = useCallback((index: number) => {
+    setSearchEverywhereSelectedIndex(index);
+  }, []);
+
+  const handleSearchEverywhereExecuteItem = useCallback((item: SearchEverywhereItem) => {
+    closeSearchEverywhere();
+    void item.execute();
+  }, [closeSearchEverywhere]);
+
+  const handleSearchEverywhereExecuteSelected = useCallback(() => {
+    const item = searchEverywhereItemsRef.current[searchEverywhereSelectedIndexRef.current];
+    if (!item) {
+      return;
+    }
+
+    closeSearchEverywhere();
+    void item.execute();
+  }, [closeSearchEverywhere]);
+
+  const handleCloseCodeActionMenu = useCallback(() => {
+    setIsCodeActionMenuOpen(false);
+    setCodeActionItems([]);
+    setCodeActionMenuError(null);
+  }, []);
+
+  const handleCodeActionHoverIndex = useCallback((index: number) => {
+    setSelectedCodeActionIndex(index);
+  }, []);
+
+  const handleExecuteCodeAction = useCallback((action: CodePaneCodeAction) => {
+    void runSelectedCodeAction(action);
+  }, [runSelectedCodeAction]);
+
+  const handleToggleFormatOnSave = useCallback(() => {
+    persistSavePipelineState({
+      formatOnSave: !savePipelineState.formatOnSave,
+    });
+  }, [persistSavePipelineState, savePipelineState.formatOnSave]);
+
+  const handleToggleImportsOnSave = useCallback(() => {
+    persistSavePipelineState({
+      organizeImportsOnSave: !savePipelineState.organizeImportsOnSave,
+    });
+  }, [persistSavePipelineState, savePipelineState.organizeImportsOnSave]);
+
+  const handleToggleLintOnSave = useCallback(() => {
+    persistSavePipelineState({
+      lintOnSave: !savePipelineState.lintOnSave,
+    });
+  }, [persistSavePipelineState, savePipelineState.lintOnSave]);
+
   const handleToggleActiveDiffView = useCallback(() => {
     if (viewMode === 'diff') {
       setPendingGitRevisionDiff(null);
@@ -16059,108 +16448,136 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void showHistoryForCurrentSelection();
   }, [showHistoryForCurrentSelection]);
 
+  const handleToggleRunToolWindow = useCallback(() => {
+    toggleBottomPanelMode('run');
+  }, [toggleBottomPanelMode]);
+
+  const handleToggleDebugToolWindow = useCallback(() => {
+    toggleBottomPanelMode('debug');
+  }, [toggleBottomPanelMode]);
+
+  const handleToggleTestsToolWindow = useCallback(() => {
+    toggleBottomPanelMode('tests');
+  }, [toggleBottomPanelMode]);
+
+  const handleToggleProjectToolWindow = useCallback(() => {
+    toggleBottomPanelMode('project');
+  }, [toggleBottomPanelMode]);
+
+  const handleToggleOutlineToolWindow = useCallback(() => {
+    if (bottomPanelMode === 'outline') {
+      setBottomPanelMode(null);
+    } else {
+      openFileStructurePanel();
+    }
+  }, [bottomPanelMode, openFileStructurePanel]);
+
+  const handleToggleGitToolWindow = useCallback(() => {
+    if (bottomPanelMode === 'git') {
+      setBottomPanelMode(null);
+    } else {
+      openGitWorkbench('log');
+    }
+  }, [bottomPanelMode, openGitWorkbench]);
+
+  const handleToggleWorkspaceToolWindow = useCallback(() => {
+    toggleBottomPanelMode('workspace');
+  }, [toggleBottomPanelMode]);
+
+  const handleToggleSemanticToolWindow = useCallback(() => {
+    toggleBottomPanelMode('semantic');
+  }, [toggleBottomPanelMode]);
+
+  const handleTogglePerformanceToolWindow = useCallback(() => {
+    toggleBottomPanelMode('performance');
+  }, [toggleBottomPanelMode]);
+
+  const handleToggleHistoryToolWindow = useCallback(() => {
+    toggleBottomPanelMode('history');
+  }, [toggleBottomPanelMode]);
+
+  const handleToggleExternalChangesToolWindow = useCallback(() => {
+    toggleBottomPanelMode('external-changes');
+  }, [toggleBottomPanelMode]);
+
+  const handleTogglePreviewToolWindow = useCallback(() => {
+    toggleBottomPanelMode('preview');
+  }, [toggleBottomPanelMode]);
+
   const toolWindowLaunchers = useMemo<ToolWindowLauncher[]>(() => {
     const items: ToolWindowLauncher[] = [
       {
         id: 'run',
         label: t('codePane.runTab'),
-        icon: <Play size={15} />,
+        icon: Play,
         active: bottomPanelMode === 'run',
-        onClick: () => {
-          toggleBottomPanelMode('run');
-        },
+        onClick: handleToggleRunToolWindow,
       },
       {
         id: 'debug',
         label: t('codePane.debugTab'),
-        icon: <Bug size={15} />,
+        icon: Bug,
         active: bottomPanelMode === 'debug',
-        onClick: () => {
-          toggleBottomPanelMode('debug');
-        },
+        onClick: handleToggleDebugToolWindow,
       },
       {
         id: 'tests',
         label: t('codePane.testsTab'),
-        icon: <FlaskConical size={15} />,
+        icon: FlaskConical,
         active: bottomPanelMode === 'tests',
-        onClick: () => {
-          toggleBottomPanelMode('tests');
-        },
+        onClick: handleToggleTestsToolWindow,
       },
       {
         id: 'project',
         label: t('codePane.projectTab'),
-        icon: <FolderTree size={15} />,
+        icon: FolderTree,
         active: bottomPanelMode === 'project',
-        onClick: () => {
-          toggleBottomPanelMode('project');
-        },
+        onClick: handleToggleProjectToolWindow,
       },
       {
         id: 'outline',
         label: t('codePane.fileStructureTab'),
-        icon: <FileCode2 size={15} />,
+        icon: FileCode2,
         active: bottomPanelMode === 'outline',
         disabled: !activeFilePath,
-        onClick: () => {
-          if (bottomPanelMode === 'outline') {
-            setBottomPanelMode(null);
-          } else {
-            openFileStructurePanel();
-          }
-        },
+        onClick: handleToggleOutlineToolWindow,
       },
       {
         id: 'git',
         label: t('codePane.gitWorkbenchTab'),
-        icon: <GitBranch size={15} />,
+        icon: GitBranch,
         active: bottomPanelMode === 'git',
-        onClick: () => {
-          if (bottomPanelMode === 'git') {
-            setBottomPanelMode(null);
-          } else {
-            openGitWorkbench('log');
-          }
-        },
+        onClick: handleToggleGitToolWindow,
       },
       {
         id: 'workspace',
         label: t('codePane.workspaceTab'),
-        icon: <FileCode2 size={15} />,
+        icon: FileCode2,
         active: bottomPanelMode === 'workspace',
-        onClick: () => {
-          toggleBottomPanelMode('workspace');
-        },
+        onClick: handleToggleWorkspaceToolWindow,
       },
       {
         id: 'hierarchy',
         label: t('codePane.hierarchyTab'),
-        icon: <Workflow size={15} />,
+        icon: Workflow,
         active: bottomPanelMode === 'hierarchy',
         disabled: !activeFilePath,
-        onClick: () => {
-          toggleHierarchyToolWindow();
-        },
+        onClick: toggleHierarchyToolWindow,
       },
       {
         id: 'semantic',
         label: t('codePane.semanticTab'),
-        icon: <Binary size={15} />,
+        icon: Binary,
         active: bottomPanelMode === 'semantic',
         disabled: !activeFilePath,
-        onClick: () => {
-          toggleBottomPanelMode('semantic');
-        },
+        onClick: handleToggleSemanticToolWindow,
       },
       {
         id: 'performance',
         label: t('codePane.performanceTab'),
-        icon: <Activity size={15} />,
+        icon: Activity,
         active: bottomPanelMode === 'performance',
-        onClick: () => {
-          toggleBottomPanelMode('performance');
-        },
+        onClick: handleTogglePerformanceToolWindow,
       },
     ];
 
@@ -16168,11 +16585,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       items.splice(5, 0, {
         id: 'history',
         label: t('codePane.gitHistoryTab'),
-        icon: <History size={15} />,
+        icon: History,
         active: bottomPanelMode === 'history',
-        onClick: () => {
-          toggleBottomPanelMode('history');
-        },
+        onClick: handleToggleHistoryToolWindow,
       });
     }
 
@@ -16180,11 +16595,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       items.splice(5, 0, {
         id: 'external-changes',
         label: t('codePane.externalChangesTab'),
-        icon: <GitCompareArrows size={15} />,
+        icon: GitCompareArrows,
         active: bottomPanelMode === 'external-changes',
-        onClick: () => {
-          toggleBottomPanelMode('external-changes');
-        },
+        onClick: handleToggleExternalChangesToolWindow,
       });
     }
 
@@ -16192,11 +16605,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       items.splice(items.length - 1, 0, {
         id: 'preview',
         label: t('codePane.refactorPreviewTab'),
-        icon: <GitCompareArrows size={15} />,
+        icon: GitCompareArrows,
         active: bottomPanelMode === 'preview',
-        onClick: () => {
-          toggleBottomPanelMode('preview');
-        },
+        onClick: handleTogglePreviewToolWindow,
       });
     }
 
@@ -16206,10 +16617,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
     bottomPanelMode,
     externalChangeEntries.length,
     gitHistory,
-    openFileStructurePanel,
+    handleToggleDebugToolWindow,
+    handleToggleExternalChangesToolWindow,
+    handleToggleGitToolWindow,
+    handleToggleHistoryToolWindow,
+    handleToggleOutlineToolWindow,
+    handleTogglePerformanceToolWindow,
+    handleTogglePreviewToolWindow,
+    handleToggleProjectToolWindow,
+    handleToggleRunToolWindow,
+    handleToggleSemanticToolWindow,
+    handleToggleTestsToolWindow,
+    handleToggleWorkspaceToolWindow,
     refactorPreview,
     t,
-    toggleBottomPanelMode,
     toggleHierarchyToolWindow,
   ]);
 
@@ -17112,66 +17533,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
           label={t('codePane.performanceBusy')}
         />
         <span>{viewMode === 'diff' ? t('codePane.diffView') : t('codePane.editorView')}</span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              persistSavePipelineState({
-                formatOnSave: !savePipelineState.formatOnSave,
-              });
-            }}
-            className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
-              savePipelineState.formatOnSave
-                ? 'bg-emerald-500/15 text-emerald-300'
-                : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {t('codePane.saveQualityFormatToggle')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              persistSavePipelineState({
-                organizeImportsOnSave: !savePipelineState.organizeImportsOnSave,
-              });
-            }}
-            className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
-              savePipelineState.organizeImportsOnSave
-                ? 'bg-sky-500/15 text-sky-300'
-                : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {t('codePane.saveQualityImportsToggle')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              persistSavePipelineState({
-                lintOnSave: !savePipelineState.lintOnSave,
-              });
-            }}
-            className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
-              savePipelineState.lintOnSave
-                ? 'bg-amber-500/15 text-amber-300'
-                : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {t('codePane.saveQualityLintToggle')}
-          </button>
-        </div>
+        <SavePipelineToggles
+          state={savePipelineState}
+          onToggleFormat={handleToggleFormatOnSave}
+          onToggleImports={handleToggleImportsOnSave}
+          onToggleLint={handleToggleLintOnSave}
+          t={t}
+        />
       </div>
     </div>
   ), [
     activeFileStatusLabel,
     activePerformanceTasks.length,
+    handleToggleFormatOnSave,
+    handleToggleImportsOnSave,
+    handleToggleLintOnSave,
     indexStatus,
     indexStatusText,
     languageStatusText,
     languageStatusTone,
-    persistSavePipelineState,
-    savePipelineState.formatOnSave,
-    savePipelineState.lintOnSave,
-    savePipelineState.organizeImportsOnSave,
+    savePipelineState,
     t,
     viewMode,
   ]);
@@ -17879,217 +18260,37 @@ export const CodePane: React.FC<CodePaneProps> = ({
       </div>
 
       {isSearchEverywhereOpen && (
-        <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/70 p-4">
-          <div className="mt-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
-            <div className="border-b border-zinc-800 p-3">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div className="text-sm font-medium text-zinc-100">{t('codePane.searchEverywhereTitle')}</div>
-                <button
-                  type="button"
-                  onClick={closeSearchEverywhere}
-                  className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="mb-3 flex gap-1 rounded bg-zinc-900/60 p-1">
-                {([
-                  ['all', t('codePane.searchEverywhereAll')],
-                  ['recent', t('codePane.searchEverywhereRecent')],
-                  ['commands', t('codePane.searchEverywhereCommands')],
-                ] as const).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => {
-                      setSearchEverywhereMode(mode);
-                      setSearchEverywhereSelectedIndex(0);
-                    }}
-                    className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-                      searchEverywhereMode === mode
-                        ? 'bg-zinc-800 text-zinc-100'
-                        : 'text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-3 py-2">
-                <Search size={13} className="shrink-0 text-zinc-500" />
-                <input
-                  ref={searchEverywhereInputRef}
-                  value={searchEverywhereQuery}
-                  onChange={(event) => setSearchEverywhereQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'ArrowDown') {
-                      event.preventDefault();
-                      setSearchEverywhereSelectedIndex((currentIndex) => (
-                        searchEverywhereItems.length === 0
-                          ? 0
-                          : Math.min(currentIndex + 1, searchEverywhereItems.length - 1)
-                      ));
-                      return;
-                    }
-
-                    if (event.key === 'ArrowUp') {
-                      event.preventDefault();
-                      setSearchEverywhereSelectedIndex((currentIndex) => (
-                        searchEverywhereItems.length === 0
-                          ? 0
-                          : Math.max(currentIndex - 1, 0)
-                      ));
-                      return;
-                    }
-
-                    if (event.key === 'Enter' && selectedSearchEverywhereItem) {
-                      event.preventDefault();
-                      closeSearchEverywhere();
-                      void selectedSearchEverywhereItem.execute();
-                      return;
-                    }
-
-                    if (event.key === 'Escape') {
-                      event.preventDefault();
-                      closeSearchEverywhere();
-                    }
-                  }}
-                  placeholder={t('codePane.searchEverywherePlaceholder')}
-                  className="w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
-                />
-                {isSearchEverywhereLoading && <Loader2 size={13} className="shrink-0 animate-spin text-zinc-500" />}
-              </div>
-            </div>
-            <div className="max-h-[60vh] overflow-auto p-2">
-              {searchEverywhereError ? (
-                <div className="px-2 py-3 text-sm text-red-300">{searchEverywhereError}</div>
-              ) : searchEverywhereItems.length > 0 ? (
-                <div className="space-y-1">
-                  {searchEverywhereItems.map((item, index) => {
-                    const previousItem = index > 0 ? searchEverywhereItems[index - 1] : null;
-                    const showSectionLabel = !previousItem || previousItem.section !== item.section;
-                    const isSelected = index === searchEverywhereSelectedIndex;
-
-                    return (
-                      <React.Fragment key={item.id}>
-                        {showSectionLabel && (
-                          <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                            {item.section}
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onMouseEnter={() => {
-                            setSearchEverywhereSelectedIndex(index);
-                          }}
-                          onClick={() => {
-                            closeSearchEverywhere();
-                            void item.execute();
-                          }}
-                          className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
-                            isSelected
-                              ? 'bg-zinc-800 text-zinc-100'
-                              : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm">{item.title}</div>
-                            {item.subtitle && (
-                              <div className="mt-1 truncate text-xs text-zinc-500">{item.subtitle}</div>
-                            )}
-                          </div>
-                          {item.meta && (
-                            <div className="shrink-0 text-[11px] text-zinc-500">{item.meta}</div>
-                          )}
-                        </button>
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.searchEverywhereEmpty')}</div>
-              )}
-            </div>
-          </div>
-        </div>
+        <SearchEverywhereDialog
+          inputRef={searchEverywhereInputRef}
+          mode={searchEverywhereMode}
+          query={searchEverywhereQuery}
+          items={searchEverywhereItems}
+          selectedIndex={searchEverywhereSelectedIndex}
+          selectedItem={selectedSearchEverywhereItem}
+          error={searchEverywhereError}
+          isLoading={isSearchEverywhereLoading}
+          onClose={closeSearchEverywhere}
+          onModeChange={handleSearchEverywhereModeChange}
+          onQueryChange={handleSearchEverywhereQueryChange}
+          onMoveSelection={handleSearchEverywhereMoveSelection}
+          onExecuteSelected={handleSearchEverywhereExecuteSelected}
+          onHoverIndex={handleSearchEverywhereHoverIndex}
+          onExecuteItem={handleSearchEverywhereExecuteItem}
+          t={t}
+        />
       )}
 
       {isCodeActionMenuOpen && (
-        <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/60 p-4">
-          <div className="mt-16 flex w-full max-w-xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
-              <div className="text-sm font-medium text-zinc-100">{t('codePane.codeActions')}</div>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCodeActionMenuOpen(false);
-                  setCodeActionItems([]);
-                  setCodeActionMenuError(null);
-                }}
-                className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100"
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="max-h-[50vh] overflow-auto p-2">
-              {isCodeActionMenuLoading ? (
-                <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500">
-                  <Loader2 size={13} className="animate-spin" />
-                  {t('codePane.codeActionsLoading')}
-                </div>
-              ) : codeActionMenuError ? (
-                <div className="px-2 py-3 text-sm text-red-300">{codeActionMenuError}</div>
-              ) : codeActionItems.length > 0 ? (
-                <div className="space-y-1">
-                  {codeActionItems.map((action, index) => {
-                    const isSelected = index === selectedCodeActionIndex;
-                    return (
-                      <button
-                        key={action.id}
-                        type="button"
-                        disabled={Boolean(action.disabledReason)}
-                        onMouseEnter={() => {
-                          setSelectedCodeActionIndex(index);
-                        }}
-                        onClick={() => {
-                          void runSelectedCodeAction(action);
-                        }}
-                        className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
-                          action.disabledReason
-                            ? 'cursor-not-allowed text-zinc-600'
-                            : isSelected
-                              ? 'bg-zinc-800 text-zinc-100'
-                              : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
-                        }`}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm">{action.title}</div>
-                          {(action.kind || action.disabledReason) && (
-                            <div className="mt-1 truncate text-xs text-zinc-500">
-                              {action.disabledReason ?? action.kind}
-                            </div>
-                          )}
-                        </div>
-                        {action.isPreferred && (
-                          <div className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                            {t('codePane.codeActionsPreferred')}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.codeActionsEmpty')}</div>
-              )}
-            </div>
-            {codeActionItems.length > 0 && !isCodeActionMenuLoading && (
-              <div className="border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
-                <span>{t('codePane.codeActionsHint')}</span>
-              </div>
-            )}
-          </div>
-        </div>
+        <CodeActionMenuDialog
+          items={codeActionItems}
+          selectedIndex={selectedCodeActionIndex}
+          error={codeActionMenuError}
+          isLoading={isCodeActionMenuLoading}
+          onClose={handleCloseCodeActionMenu}
+          onHoverIndex={handleCodeActionHoverIndex}
+          onExecuteAction={handleExecuteCodeAction}
+          t={t}
+        />
       )}
       </div>
     </>
