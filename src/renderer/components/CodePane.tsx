@@ -90,6 +90,7 @@ import type {
   CodePaneLanguageWorkspaceChangedPayload,
   CodePaneLanguageWorkspaceState,
   CodePaneLocation,
+  IpcResponse,
   CodePaneProjectContribution,
   CodePaneProjectTreeItem,
   CodePaneRange,
@@ -12937,8 +12938,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsTodoLoading(true);
     setTodoError(null);
 
-    const responses = await Promise.all(
-      CODE_PANE_TODO_TOKENS.map(async (token) => ({
+    const scanRequests: Array<Promise<{
+      token: typeof CODE_PANE_TODO_TOKENS[number];
+      response: IpcResponse<CodePaneContentMatch[]>;
+    }>> = [];
+    for (const token of CODE_PANE_TODO_TOKENS) {
+      scanRequests.push((async () => ({
         token,
         response: await trackRequest(
           `todo-scan:${rootPath}:${token}`,
@@ -12951,8 +12956,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
             maxMatchesPerFile: 20,
           }),
         ),
-      })),
-    );
+      }))());
+    }
+    const responses = await Promise.all(scanRequests);
 
     const todoItemsByKey = new Map<string, CodePaneTodoItem>();
     for (const { token, response } of responses) {
@@ -15057,18 +15063,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
     })
   ), [renderFileContextMenu, rootPath]);
 
-  const renderExplorerTreeRows = useCallback((rows: ExplorerTreeRow[]): React.ReactNode => rows.map((row) => (
-    <ExplorerTreeRowButton
-      key={row.key}
-      row={row}
-      isSelected={selectedPath === row.resolvedPath}
-      onActivate={handleExplorerRowActivate}
-      onPromote={handleExplorerRowPromote}
-      onToggleDirectory={handleExplorerRowToggle}
-      renderContextMenu={renderExplorerRowContextMenu}
-      t={t}
-    />
-  )), [
+  const renderExplorerTreeRows = useCallback((rows: ExplorerTreeRow[]): React.ReactNode => {
+    const renderedRows: React.ReactNode[] = [];
+    for (const row of rows) {
+      renderedRows.push(
+        <ExplorerTreeRowButton
+          key={row.key}
+          row={row}
+          isSelected={selectedPath === row.resolvedPath}
+          onActivate={handleExplorerRowActivate}
+          onPromote={handleExplorerRowPromote}
+          onToggleDirectory={handleExplorerRowToggle}
+          renderContextMenu={renderExplorerRowContextMenu}
+          t={t}
+        />,
+      );
+    }
+    return renderedRows;
+  }, [
     handleExplorerRowActivate,
     handleExplorerRowPromote,
     handleExplorerRowToggle,
@@ -15384,7 +15396,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return nextGroups;
   }, [isSidebarVisible, searchPanelMode, sidebarMode, usageResults]);
 
-  const scmEntryValues = useMemo(() => Object.values(gitStatusByPath), [gitStatusByPath]);
+  const scmEntryValues = useMemo(() => {
+    const nextEntries: CodePaneGitStatusEntry[] = [];
+    for (const entry of Object.values(gitStatusByPath)) {
+      nextEntries.push(entry);
+    }
+    return nextEntries;
+  }, [gitStatusByPath]);
   const shouldSortScmEntries = bottomPanelMode === 'git' || Boolean(commitWindowState) || (
     isSidebarVisible && sidebarMode === 'scm'
   );
