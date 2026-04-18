@@ -495,6 +495,12 @@ type BranchManagerSection = {
   nodes: BranchManagerTreeNode[];
 };
 
+type BranchManagerBranchBuckets = {
+  local: CodePaneGitBranchEntry[];
+  remote: CodePaneGitBranchEntry[];
+  recent: CodePaneGitBranchEntry[];
+};
+
 type BranchManagerTreeFilterResult = {
   count: number;
   nodes: BranchManagerTreeNode[];
@@ -21626,52 +21632,63 @@ export const CodePane: React.FC<CodePaneProps> = ({
     toggleBookmarkAtCursor,
   ]);
 
-  const branchManagerBaseSections = useMemo<BranchManagerSection[]>(() => {
-    if (!isBranchManagerOpen) {
-      return [];
-    }
+  const branchManagerBranchBuckets = useMemo<BranchManagerBranchBuckets>(() => {
+    const local: CodePaneGitBranchEntry[] = [];
+    const remote: CodePaneGitBranchEntry[] = [];
+    const recent = [...gitBranches];
 
-    const localBranches: CodePaneGitBranchEntry[] = [];
-    const remoteBranches: CodePaneGitBranchEntry[] = [];
     for (const branch of gitBranches) {
       if (branch.kind === 'local') {
-        localBranches.push(branch);
+        local.push(branch);
       } else if (branch.kind === 'remote') {
-        remoteBranches.push(branch);
+        remote.push(branch);
       }
     }
-    const recentBranches = [...gitBranches];
-    recentBranches.sort((leftBranch, rightBranch) => {
+
+    recent.sort((leftBranch, rightBranch) => {
       if (leftBranch.current !== rightBranch.current) {
         return leftBranch.current ? -1 : 1;
       }
       return rightBranch.timestamp - leftBranch.timestamp;
     });
-    if (recentBranches.length > 8) {
-      recentBranches.length = 8;
+    if (recent.length > 8) {
+      recent.length = 8;
     }
+
+    return {
+      local,
+      remote,
+      recent,
+    };
+  }, [gitBranches]);
+
+  const branchManagerBaseSections = useMemo<BranchManagerSection[]>(() => {
+    if (!isBranchManagerOpen) {
+      return [];
+    }
+    const { local, remote, recent } = branchManagerBranchBuckets;
 
     return [
       {
         key: 'recent',
         label: t('codePane.gitRecentBranches'),
-        count: recentBranches.length,
-        nodes: buildBranchManagerTree(recentBranches, 'recent', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+        count: recent.length,
+        nodes: buildBranchManagerTree(recent, 'recent', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
       },
       {
         key: 'local',
         label: t('codePane.gitLocalBranches'),
-        count: localBranches.length,
-        nodes: buildBranchManagerTree(localBranches, 'local', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+        count: local.length,
+        nodes: buildBranchManagerTree(local, 'local', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
       },
       {
         key: 'remote',
         label: t('codePane.gitRemoteBranches'),
-        count: remoteBranches.length,
-        nodes: buildBranchManagerTree(remoteBranches, 'remote', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+        count: remote.length,
+        nodes: buildBranchManagerTree(remote, 'remote', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
       },
     ];
-  }, [gitBranches, isBranchManagerOpen, t]);
+  }, [branchManagerBranchBuckets, isBranchManagerOpen, t]);
 
   const branchManagerVisibleSections = useMemo<BranchManagerVisibleSection[]>(() => {
     if (!isBranchManagerOpen) {
