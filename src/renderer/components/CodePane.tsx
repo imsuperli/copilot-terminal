@@ -3885,6 +3885,144 @@ function areOpenFilesEqual(previousOpenFiles: CodePaneOpenFile[], nextOpenFiles:
   return true;
 }
 
+function areStringArraysEqual(previousValues?: string[] | null, nextValues?: string[] | null): boolean {
+  const previousArray = previousValues ?? [];
+  const nextArray = nextValues ?? [];
+  if (previousArray.length !== nextArray.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousArray.length; index += 1) {
+    if (previousArray[index] !== nextArray[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areCodePaneBookmarksEqual(
+  previousBookmarks?: CodePaneState['bookmarks'],
+  nextBookmarks?: CodePaneState['bookmarks'],
+): boolean {
+  const previousArray = previousBookmarks ?? [];
+  const nextArray = nextBookmarks ?? [];
+  if (previousArray.length !== nextArray.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousArray.length; index += 1) {
+    const previousBookmark = previousArray[index];
+    const nextBookmark = nextArray[index];
+    if (
+      previousBookmark?.id !== nextBookmark?.id
+      || previousBookmark?.filePath !== nextBookmark?.filePath
+      || previousBookmark?.lineNumber !== nextBookmark?.lineNumber
+      || previousBookmark?.column !== nextBookmark?.column
+      || previousBookmark?.label !== nextBookmark?.label
+      || previousBookmark?.createdAt !== nextBookmark?.createdAt
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function arePersistedBreakpointsEqual(
+  previousBreakpoints?: CodePaneState['breakpoints'],
+  nextBreakpoints?: CodePaneState['breakpoints'],
+): boolean {
+  const previousArray = previousBreakpoints ?? [];
+  const nextArray = nextBreakpoints ?? [];
+  if (previousArray.length !== nextArray.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousArray.length; index += 1) {
+    const previousBreakpoint = previousArray[index];
+    const nextBreakpoint = nextArray[index];
+    if (
+      previousBreakpoint?.filePath !== nextBreakpoint?.filePath
+      || previousBreakpoint?.lineNumber !== nextBreakpoint?.lineNumber
+      || previousBreakpoint?.condition !== nextBreakpoint?.condition
+      || previousBreakpoint?.logMessage !== nextBreakpoint?.logMessage
+      || previousBreakpoint?.enabled !== nextBreakpoint?.enabled
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areRunTargetConfigurationsEqual(
+  previousConfigurations?: CodePaneState['runConfigurations'],
+  nextConfigurations?: CodePaneState['runConfigurations'],
+): boolean {
+  const previousEntries = Object.entries(previousConfigurations ?? {});
+  const nextEntries = Object.entries(nextConfigurations ?? {});
+  if (previousEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  for (const [targetId, previousCustomization] of previousEntries) {
+    const nextCustomization = nextConfigurations?.[targetId];
+    if (!nextCustomization || !areRunTargetCustomizationsEqual(previousCustomization, nextCustomization)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areCodePaneStatesEqual(previousState: CodePaneState, nextState: CodePaneState): boolean {
+  return previousState.rootPath === nextState.rootPath
+    && areOpenFilesEqual(previousState.openFiles, nextState.openFiles)
+    && (previousState.activeFilePath ?? null) === (nextState.activeFilePath ?? null)
+    && (previousState.selectedPath ?? null) === (nextState.selectedPath ?? null)
+    && areStringArraysEqual(previousState.expandedPaths, nextState.expandedPaths)
+    && (previousState.viewMode ?? 'editor') === (nextState.viewMode ?? 'editor')
+    && (previousState.diffTargetPath ?? null) === (nextState.diffTargetPath ?? null)
+    && areRunTargetConfigurationsEqual(previousState.runConfigurations, nextState.runConfigurations)
+    && areCodePaneBookmarksEqual(previousState.bookmarks, nextState.bookmarks)
+    && arePersistedBreakpointsEqual(previousState.breakpoints, nextState.breakpoints)
+    && areCodePaneDebugStatesEqual(previousState.debug ?? {}, nextState.debug ?? {})
+    && areCodePaneLayoutSidebarsEqual(
+      previousState.layout?.sidebar ?? {
+        visible: true,
+        activeView: 'files',
+        width: CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+        lastExpandedWidth: CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+      },
+      nextState.layout?.sidebar ?? {
+        visible: true,
+        activeView: 'files',
+        width: CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+        lastExpandedWidth: CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+      },
+    )
+    && areCodePaneBottomPanelLayoutsEqual(
+      previousState.layout?.bottomPanel ?? { height: CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT },
+      nextState.layout?.bottomPanel ?? { height: CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT },
+    )
+    && areCodePaneEditorSplitLayoutsEqual(
+      previousState.layout?.editorSplit ?? {
+        visible: false,
+        size: CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE,
+        secondaryFilePath: null,
+      },
+      nextState.layout?.editorSplit ?? {
+        visible: false,
+        size: CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE,
+        secondaryFilePath: null,
+      },
+    )
+    && (previousState.savePipeline?.formatOnSave ?? false) === (nextState.savePipeline?.formatOnSave ?? false)
+    && (previousState.savePipeline?.organizeImportsOnSave ?? false) === (nextState.savePipeline?.organizeImportsOnSave ?? false)
+    && (previousState.savePipeline?.lintOnSave ?? false) === (nextState.savePipeline?.lintOnSave ?? false);
+}
+
 function upsertOpenFileTab(
   existingTabs: CodePaneOpenFile[],
   filePath: string,
@@ -5423,6 +5561,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ...currentCodeState,
       ...updates,
     };
+
+    if (areCodePaneStatesEqual(currentCodeState, nextCodeState)) {
+      return;
+    }
 
     paneRef.current = {
       ...paneRef.current,
@@ -10105,7 +10247,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    await refreshGitSnapshot({ force: true });
+    await refreshGitSnapshot({ force: true, includeGraph: false });
     setRefactorPreview(null);
     setSelectedPreviewChangeId(null);
     setRefactorPreviewError(null);
@@ -10316,7 +10458,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (options?.refreshGitStatus !== false) {
-      await refreshGitSnapshot({ force: true });
+      await refreshGitSnapshot({ force: true, includeGraph: false });
     }
   }, [getPersistedExpandedPaths, loadExplorerDirectory, persistCodeState, refreshGitSnapshot, rootPath]);
 
@@ -15568,7 +15710,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (refresh && response.success) {
       void loadExternalLibrarySections({ force: true });
-      void refreshGitSnapshot({ force: true });
+      void refreshGitSnapshot({ force: true, includeGraph: false });
     }
   }, [loadExternalLibrarySections, refreshGitSnapshot, rootPath, t, trackRequest]);
 
@@ -16278,11 +16420,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const handleCommitWindowRefresh = useCallback(() => {
-    void refreshGitSnapshot({ force: true });
+    void refreshGitSnapshot({ force: true, includeGraph: false });
   }, [refreshGitSnapshot]);
 
   const handleScmRefreshStatus = useCallback(() => {
-    void refreshGitSnapshot({ force: true });
+    void refreshGitSnapshot({ force: true, includeGraph: false });
   }, [refreshGitSnapshot]);
 
   const handleScmOpenRepository = useCallback(() => {
