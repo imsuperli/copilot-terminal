@@ -12655,8 +12655,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setIsApplyingRefactorPreview(true);
-    setRefactorPreviewError(null);
+    setIsApplyingRefactorPreview((currentApplying) => (currentApplying ? currentApplying : true));
+    setRefactorPreviewError((currentError) => (currentError === null ? currentError : null));
     const pathsToSuppress: string[] = [];
     for (const change of refactorPreview.files) {
       pathsToSuppress.push(change.filePath);
@@ -12673,8 +12673,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       for (const filePath of suppressedPaths) {
         suppressedExternalChangePathsRef.current.delete(filePath);
       }
-      setRefactorPreviewError(response.error || t('common.retry'));
-      setIsApplyingRefactorPreview(false);
+      setRefactorPreviewError((currentError) => {
+        const nextError = response.error || t('common.retry');
+        return currentError === nextError ? currentError : nextError;
+      });
+      setIsApplyingRefactorPreview((currentApplying) => (currentApplying ? false : currentApplying));
       return;
     }
 
@@ -12718,15 +12721,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     invalidateProjectCache(rootPath, 'git-status');
     await refreshGitSnapshot({ includeGraph: false });
-    setRefactorPreview(null);
-    setSelectedPreviewChangeId(null);
-    setRefactorPreviewError(null);
+    setRefactorPreview((currentPreview) => (currentPreview === null ? currentPreview : null));
+    setSelectedPreviewChangeId((currentChangeId) => (currentChangeId === null ? currentChangeId : null));
+    setRefactorPreviewError((currentError) => (currentError === null ? currentError : null));
     setBottomPanelMode((currentMode) => (currentMode === 'preview' ? null : currentMode));
     setBanner({
       tone: 'info',
       message: t('codePane.refactorApplied'),
     });
-    setIsApplyingRefactorPreview(false);
+    setIsApplyingRefactorPreview((currentApplying) => (currentApplying ? false : currentApplying));
   }, [
     activateFile,
     clearDefinitionLookupCache,
@@ -14577,15 +14580,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   const handlePathMutationConfirm = useCallback(async (nextInput: string) => {
-    setIsSubmittingPathMutation(true);
+    setIsSubmittingPathMutation((currentSubmitting) => (currentSubmitting ? currentSubmitting : true));
     try {
       const didSucceed = await submitPathMutation(nextInput);
       if (didSucceed) {
-        setPathMutationDialog(null);
+        setPathMutationDialog((currentDialog) => (currentDialog === null ? currentDialog : null));
       }
       return didSucceed;
     } finally {
-      setIsSubmittingPathMutation(false);
+      setIsSubmittingPathMutation((currentSubmitting) => (currentSubmitting ? false : currentSubmitting));
     }
   }, [submitPathMutation]);
 
@@ -14642,8 +14645,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [isEditorSplitVisible, openFileInSplit, persistEditorSplitLayout]);
 
   const loadTodoEntries = useCallback(async () => {
-    setIsTodoLoading(true);
-    setTodoError(null);
+    setIsTodoLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setTodoError((currentError) => (currentError === null ? currentError : null));
 
     const scanRequests: Array<Promise<{
       token: typeof CODE_PANE_TODO_TOKENS[number];
@@ -14713,8 +14716,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setTodoItems((currentItems) => (
       areTodoItemListsEqual(currentItems, nextTodoItems) ? currentItems : nextTodoItems
     ));
-    setTodoError(firstError);
-    setIsTodoLoading(false);
+    setTodoError((currentError) => (currentError === firstError ? currentError : firstError));
+    setIsTodoLoading((currentLoading) => (currentLoading ? false : currentLoading));
   }, [rootPath, trackRequest]);
 
   const toggleBookmarkAtCursor = useCallback(() => {
