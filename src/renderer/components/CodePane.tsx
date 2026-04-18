@@ -10568,9 +10568,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    const nextEntries = Array.from(nextEntriesByPath.values())
-      .sort((leftEntry, rightEntry) => rightEntry.changedAt - leftEntry.changedAt)
-      .slice(0, CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES);
+    const nextEntries = [...nextEntriesByPath.values()];
+    nextEntries.sort((leftEntry, rightEntry) => rightEntry.changedAt - leftEntry.changedAt);
+    if (nextEntries.length > CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES) {
+      nextEntries.length = CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES;
+    }
     const preferredSelectedPath = entries[entries.length - 1]?.filePath ?? nextEntries[0]?.filePath ?? null;
 
     const currentEntries = externalChangeEntriesRef.current;
@@ -10893,9 +10895,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setIsApplyingRefactorPreview(true);
     setRefactorPreviewError(null);
-    const suppressedPaths = suppressExternalChangesForPaths(refactorPreview.files.flatMap((change) => (
-      change.targetFilePath ? [change.filePath, change.targetFilePath] : [change.filePath]
-    )));
+    const pathsToSuppress: string[] = [];
+    for (const change of refactorPreview.files) {
+      pathsToSuppress.push(change.filePath);
+      if (change.targetFilePath) {
+        pathsToSuppress.push(change.targetFilePath);
+      }
+    }
+    const suppressedPaths = suppressExternalChangesForPaths(pathsToSuppress);
 
     const response = await window.electronAPI.codePaneApplyRefactor({
       previewId: refactorPreview.id,
@@ -13219,8 +13226,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
           });
         });
 
-        const nestedExpandedDirectories = Array.from(initialExpandedDirectories)
-          .filter((directoryPath) => directoryPath !== rootPath);
+        const nestedExpandedDirectories: string[] = [];
+        for (const directoryPath of initialExpandedDirectories) {
+          if (directoryPath !== rootPath) {
+            nestedExpandedDirectories.push(directoryPath);
+          }
+        }
         if (nestedExpandedDirectories.length > 0) {
           void Promise.all(nestedExpandedDirectories.map((directoryPath) => loadDirectoryRef.current(directoryPath, {
             showLoadingIndicator: getDirectoryCache(rootPath, directoryPath) === null,
@@ -15255,7 +15266,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return [];
     }
 
-    const availablePaths = new Set(commitWindowEntries.map((entry) => entry.path));
+    const availablePaths = new Set<string>();
+    for (const entry of commitWindowEntries) {
+      availablePaths.add(entry.path);
+    }
     return commitWindowState.preselectedPaths?.filter((candidatePath) => availablePaths.has(candidatePath)) ?? [];
   }, [commitWindowEntries, commitWindowState]);
 
