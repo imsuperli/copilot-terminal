@@ -12454,7 +12454,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const revealExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
     updateExternalChangeEntries([entry]);
-    setBottomPanelMode('external-changes');
+    setBottomPanelMode((currentMode) => (currentMode === 'external-changes' ? currentMode : 'external-changes'));
     if (entry.changeType !== 'deleted' && (paneRef.current.code?.selectedPath ?? null) !== entry.filePath) {
       void revealPathInExplorer(entry.filePath);
     }
@@ -15049,7 +15049,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             filePath: latestEntry.filePath,
             changedAt: latestEntry.changedAt,
           };
-          setBottomPanelMode('external-changes');
+          setBottomPanelMode((currentMode) => (currentMode === 'external-changes' ? currentMode : 'external-changes'));
 
           if (latestEntry.changeType !== 'deleted' && (paneRef.current.code?.selectedPath ?? null) !== latestEntry.filePath) {
             void revealPathInExplorer(latestEntry.filePath);
@@ -18995,7 +18995,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           endColumn: context.position.column + 1,
         };
 
-    setIsCodeActionMenuOpen(true);
+    setIsCodeActionMenuOpen((currentOpen) => (currentOpen ? currentOpen : true));
     setCodeActionItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
     setCodeActionMenuError((currentError) => (currentError === null ? currentError : null));
     setIsCodeActionMenuLoading((currentLoading) => (currentLoading ? currentLoading : true));
@@ -19190,7 +19190,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setBottomPanelMode('run');
+    setBottomPanelMode((currentMode) => (currentMode === 'run' ? currentMode : 'run'));
     setSelectedRunSessionId((currentSessionId) => (
       currentSessionId === response.data!.id ? currentSessionId : response.data!.id
     ));
@@ -19212,7 +19212,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setBottomPanelMode('debug');
+    setBottomPanelMode((currentMode) => (currentMode === 'debug' ? currentMode : 'debug'));
     setSelectedDebugSessionId((currentSessionId) => (
       currentSessionId === response.data!.id ? currentSessionId : response.data!.id
     ));
@@ -19233,7 +19233,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setBottomPanelMode('tests');
+    setBottomPanelMode((currentMode) => (currentMode === 'tests' ? currentMode : 'tests'));
     setSelectedRunSessionId((currentSessionId) => (
       currentSessionId === response.data!.id ? currentSessionId : response.data!.id
     ));
@@ -19254,7 +19254,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const latestSession = response.data?.at(-1) ?? null;
     if (latestSession) {
-      setBottomPanelMode('tests');
+      setBottomPanelMode((currentMode) => (currentMode === 'tests' ? currentMode : 'tests'));
       setSelectedRunSessionId((currentSessionId) => (
         currentSessionId === latestSession.id ? currentSessionId : latestSession.id
       ));
@@ -19288,7 +19288,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setBottomPanelMode('project');
+    setBottomPanelMode((currentMode) => (currentMode === 'project' ? currentMode : 'project'));
     if (response.data) {
       setSelectedRunSessionId((currentSessionId) => (
         currentSessionId === response.data!.id ? currentSessionId : response.data!.id
