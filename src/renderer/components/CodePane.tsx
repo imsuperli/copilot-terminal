@@ -5216,6 +5216,35 @@ function areContentMatchListsEqual(
   return true;
 }
 
+function areProblemListsEqual(
+  previousList: Array<MonacoMarker & { filePath: string }>,
+  nextList: Array<MonacoMarker & { filePath: string }>,
+): boolean {
+  if (previousList.length !== nextList.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousList.length; index += 1) {
+    const previousProblem = previousList[index];
+    const nextProblem = nextList[index];
+    if (
+      previousProblem?.filePath !== nextProblem?.filePath
+      || previousProblem?.severity !== nextProblem?.severity
+      || previousProblem?.message !== nextProblem?.message
+      || previousProblem?.startLineNumber !== nextProblem?.startLineNumber
+      || previousProblem?.startColumn !== nextProblem?.startColumn
+      || previousProblem?.endLineNumber !== nextProblem?.endLineNumber
+      || previousProblem?.endColumn !== nextProblem?.endColumn
+      || previousProblem?.source !== nextProblem?.source
+      || previousProblem?.code !== nextProblem?.code
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function getLocalHistoryPreview(content: string): string {
   let lineStartIndex = 0;
   while (lineStartIndex < content.length) {
@@ -6436,7 +6465,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const refreshProblems = useCallback(() => {
     const monaco = monacoRef.current;
     if (!monaco) {
-      setProblems([]);
+      setProblems((currentProblems) => (
+        currentProblems.length === 0 ? currentProblems : []
+      ));
       return;
     }
 
@@ -6462,7 +6493,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
 
     startTransition(() => {
-      setProblems(nextProblems);
+      setProblems((currentProblems) => (
+        areProblemListsEqual(currentProblems, nextProblems) ? currentProblems : nextProblems
+      ));
     });
   }, []);
 
