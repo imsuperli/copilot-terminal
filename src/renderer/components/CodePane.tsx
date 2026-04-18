@@ -11405,18 +11405,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
 
+    const requestPath = getModelRequestPath(filePath);
+    const requestKey = `document-symbols:${requestPath}`;
+    const cachedSymbols = runtimeStoreRef.current.getCache<CodePaneDocumentSymbol[]>(
+      requestKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedSymbols) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Document symbols', {
+        meta: getRelativePath(rootPath, filePath),
+        fromCache: true,
+      });
+      return cachedSymbols;
+    }
+
     const response = await trackRequest(
-      `document-symbols:${getModelRequestPath(filePath)}`,
+      requestKey,
       'Document symbols',
       getRelativePath(rootPath, filePath),
       async () => await window.electronAPI.codePaneGetDocumentSymbols({
         rootPath,
-        filePath: getModelRequestPath(filePath),
+        filePath: requestPath,
         language: context.language,
       }),
     );
 
-    return response.success ? (response.data ?? []) : null;
+    if (response.success) {
+      const nextSymbols = response.data ?? [];
+      runtimeStoreRef.current.setCache(requestKey, nextSymbols);
+      return nextSymbols;
+    }
+
+    return null;
   }, [getModelRequestPath, getRelativePath, resolveInspectorTargetContext, rootPath, trackRequest]);
 
   const loadHierarchyRoot = useCallback(async (
