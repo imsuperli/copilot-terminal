@@ -43,6 +43,7 @@ import {
   Search,
   Settings,
   Star,
+  type LucideIcon,
   Workflow,
   X,
 } from 'lucide-react';
@@ -187,6 +188,7 @@ type MonacoViewState = import('monaco-editor').editor.ICodeEditorViewState | nul
 type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
 type SidebarMode = 'files' | 'search' | 'scm' | 'problems';
+type SearchPanelMode = 'contents' | 'symbols' | 'usages';
 type SearchEverywhereMode = 'all' | 'commands' | 'recent';
 type BottomPanelMode =
   | 'run'
@@ -231,6 +233,27 @@ type WindowedListSlice<T> = {
   offsetTop: number;
   totalHeight: number;
   isWindowed: boolean;
+};
+
+type ContentSearchGroup = {
+  filePath: string;
+  matches: CodePaneContentMatch[];
+};
+
+type UsageSearchGroup = {
+  filePath: string;
+  references: CodePaneReference[];
+};
+
+type ProblemGroup = {
+  filePath: string;
+  entries: Array<MonacoMarker & { filePath: string }>;
+};
+
+type ProblemSummary = {
+  errorCount: number;
+  warningCount: number;
+  infoCount: number;
 };
 
 const CODE_PANE_SIDEBAR_DEFAULT_WIDTH = 300;
@@ -415,6 +438,15 @@ type BranchManagerVisibleTreeRow = {
 
 type BranchManagerVisibleSection = BranchManagerSection & {
   rows: BranchManagerVisibleTreeRow[];
+};
+
+type BranchManagerQuickAction = {
+  id: string;
+  label: string;
+  shortcut: string;
+  icon: LucideIcon;
+  disabled: boolean;
+  onSelect: () => void;
 };
 
 type DebugEvaluationEntry = {
@@ -957,6 +989,1215 @@ const BranchManagerTreeRow = React.memo(function BranchManagerTreeRow({
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
     </div>
+  );
+});
+
+const BranchManagerPopup = React.memo(function BranchManagerPopup({
+  searchInputRef,
+  query,
+  quickActions,
+  sections,
+  collapsedNodeKeys,
+  gitBranchesCount,
+  error,
+  isLoading,
+  menuContainer,
+  contextMenuContentClassName,
+  contextMenuItemClassName,
+  contextMenuDangerItemClassName,
+  onQueryChange,
+  onRefresh,
+  onOpenWorkbench,
+  onToggleNode,
+  onCheckoutBranch,
+  onRenameBranch,
+  onDeleteBranch,
+  t,
+}: {
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+  query: string;
+  quickActions: BranchManagerQuickAction[];
+  sections: BranchManagerVisibleSection[];
+  collapsedNodeKeys: Set<string>;
+  gitBranchesCount: number;
+  error: string | null;
+  isLoading: boolean;
+  menuContainer: HTMLElement | null;
+  contextMenuContentClassName: string;
+  contextMenuItemClassName: string;
+  contextMenuDangerItemClassName: string;
+  onQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onRefresh: () => void;
+  onOpenWorkbench: () => void;
+  onToggleNode: (nodeKey: string) => void;
+  onCheckoutBranch: (branch: CodePaneGitBranchEntry) => void;
+  onRenameBranch: (branch: CodePaneGitBranchEntry) => void;
+  onDeleteBranch: (branch: CodePaneGitBranchEntry) => void;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <div className="absolute left-0 top-full z-[80] mt-1 flex h-[min(72vh,680px)] w-[360px] flex-col overflow-hidden rounded border border-zinc-800 bg-zinc-950 shadow-2xl">
+      <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
+        <div className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded border border-zinc-800 bg-zinc-900/70 px-2">
+          <Search size={13} className="shrink-0 text-zinc-500" />
+          <input
+            ref={searchInputRef}
+            value={query}
+            onChange={onQueryChange}
+            placeholder={t('codePane.gitBranchSearchPlaceholder')}
+            className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
+          />
+        </div>
+        <button
+          type="button"
+          aria-label={t('codePane.refresh')}
+          onClick={onRefresh}
+          className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          {isLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+        </button>
+        <button
+          type="button"
+          aria-label={t('codePane.gitOpenWorkbench')}
+          onClick={onOpenWorkbench}
+          className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+        >
+          <Settings size={13} />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {quickActions.length > 0 && (
+          <div className="mb-3 space-y-0.5 border-b border-zinc-800 pb-2">
+            {quickActions.map((action) => {
+              const ActionIcon = action.icon;
+              return (
+                <button
+                  key={action.id}
+                  type="button"
+                  disabled={action.disabled}
+                  onClick={action.onSelect}
+                  className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ActionIcon size={13} className="shrink-0 text-zinc-500" />
+                  <span className="min-w-0 flex-1 truncate">{action.label}</span>
+                  {action.shortcut && (
+                    <span className="text-[10px] text-zinc-500">{action.shortcut}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-2 rounded border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-xs text-red-200">
+            {error}
+          </div>
+        )}
+
+        {isLoading && gitBranchesCount === 0 ? (
+          <div className="flex h-32 items-center justify-center gap-2 text-xs text-zinc-500">
+            <Loader2 size={13} className="animate-spin" />
+            {t('codePane.loading')}
+          </div>
+        ) : sections.length > 0 ? (
+          <div className="space-y-3">
+            {sections.map((section) => (
+              <div key={section.key}>
+                <div className="mb-1 flex h-6 items-center gap-1.5 px-1 text-xs font-medium text-zinc-400">
+                  <ChevronDown size={12} className="text-zinc-500" />
+                  <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                    {section.count}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  {section.rows.map((row) => (
+                    <BranchManagerTreeRow
+                      key={row.key}
+                      node={row.node}
+                      depth={row.depth}
+                      isCollapsed={collapsedNodeKeys.has(row.node.key)}
+                      menuContainer={menuContainer}
+                      contextMenuContentClassName={contextMenuContentClassName}
+                      contextMenuItemClassName={contextMenuItemClassName}
+                      contextMenuDangerItemClassName={contextMenuDangerItemClassName}
+                      onToggleNode={onToggleNode}
+                      onCheckoutBranch={onCheckoutBranch}
+                      onRenameBranch={onRenameBranch}
+                      onDeleteBranch={onDeleteBranch}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex h-32 items-center justify-center text-xs text-zinc-500">
+            {t('codePane.gitBranchNoResults')}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
+  branchManagerRef,
+  branchManagerSearchInputRef,
+  branchManagerQuery,
+  branchManagerQuickActions,
+  branchManagerVisibleSections,
+  canNavigateBack,
+  canNavigateForward,
+  collapsedBranchManagerNodeKeys,
+  contextMenuContentClassName,
+  contextMenuDangerItemClassName,
+  contextMenuItemClassName,
+  editorActionMenuSections,
+  gitBranchesCount,
+  gitBranchesError,
+  gitOperationLabel,
+  gitRepositorySummary,
+  gitSummaryBranchLabel,
+  isBranchManagerOpen,
+  isGitBranchesLoading,
+  isRefreshing,
+  activeFilePath,
+  onClose,
+  onBranchManagerToggle,
+  onBranchManagerQueryChange,
+  onBranchManagerRefresh,
+  onBranchManagerOpenWorkbench,
+  onBranchManagerToggleNode,
+  onBranchManagerCheckoutBranch,
+  onBranchManagerRenameBranch,
+  onBranchManagerDeleteBranch,
+  onNavigateBack,
+  onNavigateForward,
+  onOpenSearchEverywhere,
+  onWorkspaceRefresh,
+  onToggleActiveDiffView,
+  onSaveActiveFile,
+  onPaneClose,
+  preventFocus,
+  t,
+  viewMode,
+}: {
+  branchManagerRef: React.RefObject<HTMLDivElement | null>;
+  branchManagerSearchInputRef: React.RefObject<HTMLInputElement | null>;
+  branchManagerQuery: string;
+  branchManagerQuickActions: BranchManagerQuickAction[];
+  branchManagerVisibleSections: BranchManagerVisibleSection[];
+  canNavigateBack: boolean;
+  canNavigateForward: boolean;
+  collapsedBranchManagerNodeKeys: Set<string>;
+  contextMenuContentClassName: string;
+  contextMenuDangerItemClassName: string;
+  contextMenuItemClassName: string;
+  editorActionMenuSections: EditorActionMenuItem[][];
+  gitBranchesCount: number;
+  gitBranchesError: string | null;
+  gitOperationLabel: string;
+  gitRepositorySummary: CodePaneGitRepositorySummary | null;
+  gitSummaryBranchLabel: string | null;
+  isBranchManagerOpen: boolean;
+  isGitBranchesLoading: boolean;
+  isRefreshing: boolean;
+  activeFilePath: string | null;
+  onClose?: () => void;
+  onBranchManagerToggle: () => void;
+  onBranchManagerQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onBranchManagerRefresh: () => void;
+  onBranchManagerOpenWorkbench: () => void;
+  onBranchManagerToggleNode: (nodeKey: string) => void;
+  onBranchManagerCheckoutBranch: (branch: CodePaneGitBranchEntry) => void;
+  onBranchManagerRenameBranch: (branch: CodePaneGitBranchEntry) => void;
+  onBranchManagerDeleteBranch: (branch: CodePaneGitBranchEntry) => void;
+  onNavigateBack: () => void;
+  onNavigateForward: () => void;
+  onOpenSearchEverywhere: () => void;
+  onWorkspaceRefresh: () => void;
+  onToggleActiveDiffView: () => void;
+  onSaveActiveFile: () => void;
+  onPaneClose: () => void | Promise<void>;
+  preventFocus: (event: React.MouseEvent<HTMLElement>) => void;
+  t: ReturnType<typeof useI18n>['t'];
+  viewMode: string;
+}) {
+  const branchMenuContainer = branchManagerRef.current;
+  const diffButtonLabel = viewMode === 'diff' ? t('codePane.showEditor') : t('codePane.showDiff');
+
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
+      <div className="flex min-w-0 items-center gap-2">
+        <div ref={branchManagerRef} className="relative">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('codePane.gitBranchManager')}
+            aria-expanded={isBranchManagerOpen}
+            onMouseDown={preventFocus}
+            onClick={onBranchManagerToggle}
+            className={`flex h-6 max-w-[280px] items-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
+              isBranchManagerOpen
+                ? 'bg-sky-500/15 text-sky-100'
+                : 'bg-zinc-800/90 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50'
+            }`}
+          >
+            <GitBranch size={12} className="shrink-0 text-sky-300" />
+            <span className="truncate">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</span>
+            <ChevronDown size={12} className="shrink-0 text-zinc-500" />
+          </button>
+          {isBranchManagerOpen && (
+            <BranchManagerPopup
+              searchInputRef={branchManagerSearchInputRef}
+              query={branchManagerQuery}
+              quickActions={branchManagerQuickActions}
+              sections={branchManagerVisibleSections}
+              collapsedNodeKeys={collapsedBranchManagerNodeKeys}
+              gitBranchesCount={gitBranchesCount}
+              error={gitBranchesError}
+              isLoading={isGitBranchesLoading}
+              menuContainer={branchMenuContainer}
+              contextMenuContentClassName={contextMenuContentClassName}
+              contextMenuItemClassName={contextMenuItemClassName}
+              contextMenuDangerItemClassName={contextMenuDangerItemClassName}
+              onQueryChange={onBranchManagerQueryChange}
+              onRefresh={onBranchManagerRefresh}
+              onOpenWorkbench={onBranchManagerOpenWorkbench}
+              onToggleNode={onBranchManagerToggleNode}
+              onCheckoutBranch={onBranchManagerCheckoutBranch}
+              onRenameBranch={onBranchManagerRenameBranch}
+              onDeleteBranch={onBranchManagerDeleteBranch}
+              t={t}
+            />
+          )}
+        </div>
+        {gitRepositorySummary && gitRepositorySummary.operation !== 'idle' && (
+          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
+            {gitOperationLabel}
+          </span>
+        )}
+        {gitRepositorySummary?.hasConflicts && (
+          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200">
+            {t('codePane.gitConflictsActive')}
+          </span>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        <AppTooltip content={t('codePane.navigateBack')} placement="pane-corner">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('codePane.navigateBack')}
+            onMouseDown={preventFocus}
+            onClick={onNavigateBack}
+            disabled={!canNavigateBack}
+            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft size={13} />
+          </button>
+        </AppTooltip>
+        <AppTooltip content={t('codePane.navigateForward')} placement="pane-corner">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('codePane.navigateForward')}
+            onMouseDown={preventFocus}
+            onClick={onNavigateForward}
+            disabled={!canNavigateForward}
+            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronRight size={13} />
+          </button>
+        </AppTooltip>
+        <AppTooltip content={t('codePane.searchEverywhereOpen')} placement="pane-corner">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('codePane.searchEverywhereOpen')}
+            onMouseDown={preventFocus}
+            onClick={onOpenSearchEverywhere}
+            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
+          >
+            <Search size={13} />
+          </button>
+        </AppTooltip>
+        <AppTooltip content={t('codePane.refresh')} placement="pane-corner">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('codePane.refresh')}
+            onMouseDown={preventFocus}
+            onClick={onWorkspaceRefresh}
+            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
+          >
+            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
+          </button>
+        </AppTooltip>
+        <AppTooltip content={diffButtonLabel} placement="pane-corner">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={diffButtonLabel}
+            onMouseDown={preventFocus}
+            onClick={onToggleActiveDiffView}
+            disabled={!activeFilePath}
+            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <GitCompareArrows size={13} />
+          </button>
+        </AppTooltip>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              tabIndex={-1}
+              title={t('codePane.editorActionsMenu')}
+              aria-label={t('codePane.editorActionsMenu')}
+              onMouseDown={preventFocus}
+              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            >
+              <MoreHorizontal size={13} className="mr-1" />
+              {t('common.more')}
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className={contextMenuContentClassName}
+              sideOffset={6}
+              align="end"
+            >
+              {editorActionMenuSections.map((section, sectionIndex) => (
+                <React.Fragment key={`editor-actions-${sectionIndex}`}>
+                  {section.map((item) => (
+                    <EditorActionMenuItemRow
+                      key={item.id}
+                      item={item}
+                      className={contextMenuItemClassName}
+                    />
+                  ))}
+                  {sectionIndex < editorActionMenuSections.length - 1 && (
+                    <DropdownMenu.Separator className={ideMenuSeparatorClassName} />
+                  )}
+                </React.Fragment>
+              ))}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+        <AppTooltip content={t('common.save')} placement="pane-corner">
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={t('common.save')}
+            onMouseDown={preventFocus}
+            onClick={onSaveActiveFile}
+            disabled={!activeFilePath}
+            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Save size={13} />
+          </button>
+        </AppTooltip>
+        {onClose && (
+          <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t('terminalPane.close')}
+              onMouseDown={preventFocus}
+              onClick={(event) => {
+                event.stopPropagation();
+                void onPaneClose();
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:bg-red-600 hover:text-zinc-50"
+            >
+              <X size={13} />
+            </button>
+          </AppTooltip>
+        )}
+      </div>
+    </div>
+  );
+});
+
+const FilesSidebarContent = React.memo(function FilesSidebarContent({
+  scrollRef,
+  searchQuery,
+  isSearching,
+  body,
+  onSearchQueryChange,
+  onScroll,
+  t,
+}: {
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  searchQuery: string;
+  isSearching: boolean;
+  body: React.ReactNode;
+  onSearchQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onScroll: (event: React.UIEvent<HTMLDivElement>) => void;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <>
+      <div className="border-b border-zinc-800 px-2 py-2">
+        <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
+          <Search size={12} className="shrink-0 text-zinc-500" />
+          <input
+            value={searchQuery}
+            onChange={onSearchQueryChange}
+            placeholder={t('codePane.searchFilesPlaceholder')}
+            className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+          />
+          {isSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+        </div>
+      </div>
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto px-1 py-2"
+        onScroll={onScroll}
+      >
+        {body}
+      </div>
+    </>
+  );
+});
+
+const SearchSidebarContent = React.memo(function SearchSidebarContent({
+  mode,
+  contentQuery,
+  contentGroups,
+  deferredContentQuery,
+  contentError,
+  isContentSearching,
+  workspaceSymbolQuery,
+  deferredWorkspaceSymbolQuery,
+  workspaceSymbolResults,
+  workspaceSymbolError,
+  isWorkspaceSymbolSearching,
+  usageGroups,
+  usageError,
+  usagesTargetLabel,
+  isFindingUsages,
+  rootPath,
+  onModeChange,
+  onContentQueryChange,
+  onWorkspaceSymbolQueryChange,
+  onFindUsages,
+  onActivateFile,
+  onOpenContentMatch,
+  onOpenFileLocation,
+  t,
+}: {
+  mode: SearchPanelMode;
+  contentQuery: string;
+  contentGroups: ContentSearchGroup[];
+  deferredContentQuery: string;
+  contentError: string | null;
+  isContentSearching: boolean;
+  workspaceSymbolQuery: string;
+  deferredWorkspaceSymbolQuery: string;
+  workspaceSymbolResults: CodePaneWorkspaceSymbol[];
+  workspaceSymbolError: string | null;
+  isWorkspaceSymbolSearching: boolean;
+  usageGroups: UsageSearchGroup[];
+  usageError: string | null;
+  usagesTargetLabel: string | null;
+  isFindingUsages: boolean;
+  rootPath: string;
+  onModeChange: (mode: SearchPanelMode) => void;
+  onContentQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onWorkspaceSymbolQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onFindUsages: () => void;
+  onActivateFile: (filePath: string, options?: { preview?: boolean; promotePreview?: boolean }) => void | Promise<void>;
+  onOpenContentMatch: (match: CodePaneContentMatch) => void | Promise<void>;
+  onOpenFileLocation: (location: FileNavigationLocation) => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const headingLabel = mode === 'contents'
+    ? t('codePane.searchContents')
+    : mode === 'symbols'
+      ? t('codePane.workspaceSymbols')
+      : t('codePane.findUsages');
+  const resultsLabel = mode === 'contents'
+    ? t('codePane.searchTab')
+    : mode === 'symbols'
+      ? t('codePane.workspaceSymbols')
+      : t('codePane.findUsages');
+  const hasDeferredContentQuery = Boolean(deferredContentQuery.trim());
+  const hasDeferredWorkspaceSymbolQuery = Boolean(deferredWorkspaceSymbolQuery.trim());
+
+  return (
+    <>
+      <div className="border-b border-zinc-800 px-2 py-2">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          <Search size={12} />
+          {headingLabel}
+        </div>
+        <div className="mb-2 flex gap-1 rounded bg-zinc-900/60 p-1">
+          {([
+            ['contents', t('codePane.searchModeContents')],
+            ['symbols', t('codePane.searchModeSymbols')],
+            ['usages', t('codePane.searchModeUsages')],
+          ] as const).map(([nextMode, label]) => (
+            <button
+              key={nextMode}
+              type="button"
+              onClick={() => {
+                onModeChange(nextMode);
+              }}
+              className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                mode === nextMode
+                  ? 'bg-zinc-800 text-zinc-100'
+                  : 'text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {mode === 'contents' ? (
+          <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
+            <Search size={12} className="shrink-0 text-zinc-500" />
+            <input
+              value={contentQuery}
+              onChange={onContentQueryChange}
+              placeholder={t('codePane.searchContentsPlaceholder')}
+              className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+            />
+            {isContentSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+          </div>
+        ) : mode === 'symbols' ? (
+          <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
+            <Search size={12} className="shrink-0 text-zinc-500" />
+            <input
+              value={workspaceSymbolQuery}
+              onChange={onWorkspaceSymbolQueryChange}
+              placeholder={t('codePane.workspaceSymbolsPlaceholder')}
+              className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+            />
+            {isWorkspaceSymbolSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-400">
+            <span className="truncate">
+              {usagesTargetLabel
+                ? t('codePane.findUsagesFor', { symbol: usagesTargetLabel })
+                : t('codePane.findUsagesHint')}
+            </span>
+            <button
+              type="button"
+              onClick={onFindUsages}
+              className="shrink-0 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+            >
+              {t('codePane.findUsages')}
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          {resultsLabel}
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+          {mode === 'contents' ? (
+            hasDeferredContentQuery && contentError ? (
+              <div className="text-xs text-red-300">{contentError}</div>
+            ) : hasDeferredContentQuery ? (
+              contentGroups.length > 0 ? (
+                <div className="space-y-3">
+                  {contentGroups.map((group) => (
+                    <div key={group.filePath} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void onActivateFile(group.filePath, { preview: true });
+                        }}
+                        className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                      >
+                        <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                        <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
+                        <span className="truncate text-[10px] text-zinc-500">
+                          {getRelativePath(rootPath, group.filePath)}
+                        </span>
+                      </button>
+                      {group.matches.map((match) => (
+                        <button
+                          key={`${group.filePath}:${match.lineNumber}:${match.column}`}
+                          type="button"
+                          onClick={() => {
+                            void onOpenContentMatch(match);
+                          }}
+                          className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
+                        >
+                          <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
+                            {match.lineNumber}:{match.column}
+                          </span>
+                          <span className="min-w-0 flex-1 break-words">{match.lineText}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-zinc-500">{t('codePane.searchContentsEmpty')}</div>
+              )
+            ) : (
+              <div className="text-xs text-zinc-500">{t('codePane.searchContentsHint')}</div>
+            )
+          ) : mode === 'symbols' ? (
+            hasDeferredWorkspaceSymbolQuery && workspaceSymbolError ? (
+              <div className="text-xs text-red-300">{workspaceSymbolError}</div>
+            ) : hasDeferredWorkspaceSymbolQuery ? (
+              workspaceSymbolResults.length > 0 ? (
+                <div className="space-y-1">
+                  {workspaceSymbolResults.map((symbol) => (
+                    <button
+                      key={`${symbol.filePath}:${symbol.name}:${symbol.range.startLineNumber}:${symbol.range.startColumn}`}
+                      type="button"
+                      onClick={() => {
+                        void onOpenFileLocation({
+                          filePath: symbol.filePath,
+                          lineNumber: symbol.range.startLineNumber,
+                          column: symbol.range.startColumn,
+                        });
+                      }}
+                      className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                    >
+                      <FileCode2 size={13} className="mt-0.5 shrink-0 text-zinc-500" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-zinc-100">{symbol.name}</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                          {symbol.containerName && <span>{symbol.containerName}</span>}
+                          <span>{getRelativePath(rootPath, symbol.filePath)}</span>
+                          <span>{symbol.range.startLineNumber}:{symbol.range.startColumn}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsEmpty')}</div>
+              )
+            ) : (
+              <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsHint')}</div>
+            )
+          ) : usageError ? (
+            <div className="text-xs text-red-300">{usageError}</div>
+          ) : isFindingUsages ? (
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <Loader2 size={12} className="animate-spin" />
+              {t('codePane.findUsages')}
+            </div>
+          ) : usagesTargetLabel ? (
+            usageGroups.length > 0 ? (
+              <div className="space-y-3">
+                {usageGroups.map((group) => (
+                  <div key={group.filePath} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onActivateFile(group.filePath, { preview: true });
+                      }}
+                      className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                    >
+                      <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                      <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
+                      <span className="truncate text-[10px] text-zinc-500">
+                        {getRelativePath(rootPath, group.filePath)}
+                      </span>
+                    </button>
+                    {group.references.map((reference) => (
+                      <button
+                        key={`${group.filePath}:${reference.range.startLineNumber}:${reference.range.startColumn}`}
+                        type="button"
+                        onClick={() => {
+                          void onOpenFileLocation({
+                            filePath: group.filePath,
+                            lineNumber: reference.range.startLineNumber,
+                            column: reference.range.startColumn,
+                          });
+                        }}
+                        className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
+                      >
+                        <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
+                          {reference.range.startLineNumber}:{reference.range.startColumn}
+                        </span>
+                        <span className="min-w-0 flex-1 break-words">
+                          {reference.previewText ?? getRelativePath(rootPath, group.filePath)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-zinc-500">{t('codePane.findUsagesEmpty')}</div>
+            )
+          ) : (
+            <div className="text-xs text-zinc-500">{t('codePane.findUsagesHint')}</div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+});
+
+const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
+  groups,
+  summary,
+  rootPath,
+  onOpenFileLocation,
+  t,
+}: {
+  groups: ProblemGroup[];
+  summary: ProblemSummary;
+  rootPath: string;
+  onOpenFileLocation: (location: FileNavigationLocation) => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  return (
+    <>
+      <div className="border-b border-zinc-800 px-2 py-2">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          <AlertTriangle size={12} />
+          {t('codePane.problemsTab')}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <span>{t('codePane.problemErrors', { count: summary.errorCount })}</span>
+          <span>{t('codePane.problemWarnings', { count: summary.warningCount })}</span>
+          <span>{t('codePane.problemInfos', { count: summary.infoCount })}</span>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+        {groups.length > 0 ? (
+          <div className="space-y-3">
+            {groups.map((group) => (
+              <div key={group.filePath} className="space-y-1">
+                <div className="flex items-center gap-2 px-1 py-1 text-xs text-zinc-300">
+                  <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                  <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
+                  <span className="truncate text-[10px] text-zinc-500">
+                    {getRelativePath(rootPath, group.filePath)}
+                  </span>
+                </div>
+                {group.entries.map((problem) => {
+                  const tone = getProblemTone(problem.severity);
+                  return (
+                    <button
+                      key={`${group.filePath}:${problem.startLineNumber}:${problem.startColumn}:${problem.message}`}
+                      type="button"
+                      onClick={() => {
+                        void onOpenFileLocation({
+                          filePath: group.filePath,
+                          lineNumber: problem.startLineNumber,
+                          column: problem.startColumn,
+                        });
+                      }}
+                      className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                    >
+                      <span className={`mt-0.5 rounded px-1 py-0.5 text-[10px] font-medium uppercase ${tone.className}`}>
+                        {tone.label}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="break-words">{problem.message}</div>
+                        <div className="mt-1 text-[10px] text-zinc-500">
+                          {problem.startLineNumber}:{problem.startColumn}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-zinc-500">{t('codePane.noProblems')}</div>
+        )}
+      </div>
+    </>
+  );
+});
+
+const ScmSidebarContent = React.memo(function ScmSidebarContent({
+  repositorySummary,
+  branchLabel,
+  operationLabel,
+  entries,
+  selectedPath,
+  selectedEntry,
+  selectedRelativePath,
+  rootPath,
+  gitGraphCount,
+  showInlineChanges,
+  canCopyBranchName,
+  onRefreshStatus,
+  onOpenRepository,
+  onCopyBranchName,
+  onStageAll,
+  onStash,
+  onNewBranch,
+  onCheckoutRevision,
+  onRebaseContinue,
+  onRebaseAbort,
+  onOpenCommit,
+  onOpenChangesWorkbench,
+  onOpenGitLog,
+  onSelectEntry,
+  onOpenDiff,
+  onStagePath,
+  onUnstagePath,
+  onDiscardPath,
+  t,
+}: {
+  repositorySummary: CodePaneGitRepositorySummary | null;
+  branchLabel: string | null;
+  operationLabel: string;
+  entries: CodePaneGitStatusEntry[];
+  selectedPath: string | null;
+  selectedEntry: CodePaneGitStatusEntry | null;
+  selectedRelativePath: string | null;
+  rootPath: string;
+  gitGraphCount: number;
+  showInlineChanges: boolean;
+  canCopyBranchName: boolean;
+  onRefreshStatus: () => void;
+  onOpenRepository: () => void;
+  onCopyBranchName: () => void;
+  onStageAll: () => void;
+  onStash: () => void;
+  onNewBranch: () => void;
+  onCheckoutRevision: () => void;
+  onRebaseContinue: () => void;
+  onRebaseAbort: () => void;
+  onOpenCommit: () => void;
+  onOpenChangesWorkbench: () => void;
+  onOpenGitLog: () => void;
+  onSelectEntry: (entry: CodePaneGitStatusEntry) => void;
+  onOpenDiff: (filePath: string) => void;
+  onStagePath: (filePath: string) => void;
+  onUnstagePath: (filePath: string) => void;
+  onDiscardPath: (filePath: string, restoreStaged: boolean) => void;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const hasRepositoryContent = Boolean(repositorySummary) || entries.length > 0;
+
+  return (
+    <>
+      <div className="border-b border-zinc-800 px-2 py-2">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          <GitBranch size={12} />
+          {t('codePane.sourceControl')}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+          {branchLabel ? (
+            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-200">
+              {branchLabel}
+            </span>
+          ) : null}
+          <span>
+            {hasRepositoryContent
+              ? t('codePane.sourceControlHint')
+              : t('codePane.gitRepositoryUnavailable')}
+          </span>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+        {hasRepositoryContent ? (
+          <div className="space-y-3">
+            {repositorySummary && (
+              <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                    {t('codePane.gitRepositorySummary')}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onRefreshStatus}
+                    className="rounded bg-zinc-800 p-1 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
+                    aria-label={t('codePane.gitRefreshStatus')}
+                  >
+                    <RefreshCw size={12} />
+                  </button>
+                </div>
+                {(repositorySummary.operation !== 'idle' || repositorySummary.hasConflicts) && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {repositorySummary.operation !== 'idle' && (
+                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                        {operationLabel}
+                      </span>
+                    )}
+                    {repositorySummary.hasConflicts && (
+                      <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
+                        {t('codePane.gitConflictsActive')}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2 text-xs text-zinc-300">
+                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitBranch')}</div>
+                    <div className="mt-1 truncate text-zinc-100">{branchLabel ?? t('codePane.gitDetachedHead')}</div>
+                  </div>
+                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitUpstream')}</div>
+                    <div className="mt-1 truncate text-zinc-100">{repositorySummary.upstreamBranch ?? t('codePane.gitNoUpstream')}</div>
+                  </div>
+                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitAheadBehind')}</div>
+                    <div className="mt-1 text-zinc-100">
+                      ↑{repositorySummary.aheadCount} ↓{repositorySummary.behindCount}
+                    </div>
+                  </div>
+                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitOperation')}</div>
+                    <div className="mt-1 truncate text-zinc-100">{operationLabel}</div>
+                  </div>
+                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitConflicts')}</div>
+                    <div className="mt-1 truncate text-zinc-100">
+                      {repositorySummary.hasConflicts
+                        ? t('codePane.gitConflictsActive')
+                        : t('codePane.gitConflictsNone')}
+                    </div>
+                  </div>
+                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitRepoRoot')}</div>
+                    <div className="mt-1 truncate text-zinc-100">{repositorySummary.repoRootPath}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                {t('codePane.gitQuickActions')}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={onRefreshStatus}
+                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                >
+                  {t('codePane.gitRefreshStatus')}
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenRepository}
+                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                >
+                  {t('codePane.gitOpenRepository')}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canCopyBranchName}
+                  onClick={onCopyBranchName}
+                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {t('codePane.gitCopyBranchName')}
+                </button>
+                <button
+                  type="button"
+                  disabled={entries.length === 0}
+                  onClick={onStageAll}
+                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {t('codePane.gitStageAll')}
+                </button>
+                <button
+                  type="button"
+                  onClick={onStash}
+                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                >
+                  {t('codePane.gitStash')}
+                </button>
+                <button
+                  type="button"
+                  onClick={onNewBranch}
+                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                >
+                  {t('codePane.gitNewBranchDots')}
+                </button>
+                <button
+                  type="button"
+                  onClick={onCheckoutRevision}
+                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                >
+                  {t('codePane.gitCheckoutTagOrRevision')}
+                </button>
+                {repositorySummary?.operation === 'rebase' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={onRebaseContinue}
+                      className="rounded bg-amber-500/15 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-500/25"
+                    >
+                      {t('codePane.gitRebaseContinue')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onRebaseAbort}
+                      className="rounded bg-red-500/15 px-2 py-1 text-[11px] text-red-200 hover:bg-red-500/25"
+                    >
+                      {t('codePane.gitRebaseAbort')}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                {t('codePane.gitComposer')}
+              </div>
+              <button
+                type="button"
+                aria-label={t('codePane.gitCommitDots')}
+                onClick={onOpenCommit}
+                className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
+              >
+                <span>{t('codePane.gitCommitDots')}</span>
+                <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{entries.length}</span>
+              </button>
+              <div className="mt-2 text-[11px] leading-5 text-zinc-500">
+                {t('codePane.sourceControlHint')}
+              </div>
+            </div>
+
+            <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                {t('codePane.gitWorkbenchTab')}
+              </div>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  aria-label={t('codePane.gitOpenChangesWorkbench')}
+                  onClick={onOpenChangesWorkbench}
+                  className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
+                >
+                  <span>{t('codePane.gitOpenChangesWorkbench')}</span>
+                  <span aria-hidden="true" className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{entries.length}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={t('codePane.gitOpenWorkbench')}
+                  onClick={onOpenGitLog}
+                  className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
+                >
+                  <span>{t('codePane.gitOpenWorkbench')}</span>
+                  <span aria-hidden="true" className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{gitGraphCount}</span>
+                </button>
+              </div>
+            </div>
+
+            {entries.length > 0 && showInlineChanges && (
+              <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                    {t('codePane.sourceControl')}
+                  </div>
+                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                    {entries.length}
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  {entries.slice(0, 8).map((entry) => {
+                    const isSelected = selectedPath === entry.path;
+                    const statusTone = getStatusTone(entry.status);
+                    return (
+                      <div
+                        key={entry.path}
+                        onClick={() => {
+                          onSelectEntry(entry);
+                        }}
+                        role="listitem"
+                        className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors ${
+                          isSelected
+                            ? 'bg-zinc-800/80 text-zinc-50'
+                            : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-50'
+                        }`}
+                      >
+                        {statusTone ? (
+                          <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-medium ${statusTone.className}`}>
+                            {statusTone.badge}
+                          </span>
+                        ) : (
+                          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-zinc-800 text-[10px] text-zinc-500">
+                            <FileIcon size={10} />
+                          </span>
+                        )}
+                        <span className={`min-w-0 flex-1 truncate ${getStatusTextClassName(entry.status)}`}>
+                          {getPathLeafLabel(entry.path)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {selectedEntry && (
+                  <div className="mt-3 border-t border-zinc-800 pt-2">
+                    <div className="mb-2 truncate text-[11px] text-zinc-500">
+                      {selectedRelativePath ?? getRelativePath(rootPath, selectedEntry.path)}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        aria-label={t('codePane.openDiff')}
+                        onClick={() => {
+                          onOpenDiff(selectedEntry.path);
+                        }}
+                        className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                      >
+                        {t('codePane.openDiff')}
+                      </button>
+                      {(selectedEntry.unstaged || !selectedEntry.staged) && (
+                        <button
+                          type="button"
+                          aria-label={t('codePane.gitStage')}
+                          onClick={() => {
+                            onStagePath(selectedEntry.path);
+                          }}
+                          className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                        >
+                          {t('codePane.gitStage')}
+                        </button>
+                      )}
+                      {selectedEntry.staged && (
+                        <button
+                          type="button"
+                          aria-label={t('codePane.gitUnstage')}
+                          onClick={() => {
+                            onUnstagePath(selectedEntry.path);
+                          }}
+                          className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                        >
+                          {t('codePane.gitUnstage')}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={t('codePane.gitDiscard')}
+                        onClick={() => {
+                          onDiscardPath(selectedEntry.path, Boolean(selectedEntry.staged));
+                        }}
+                        className="rounded bg-red-500/15 px-2 py-1 text-[11px] text-red-200 hover:bg-red-500/25"
+                      >
+                        {t('codePane.gitDiscard')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-xs text-zinc-500">{t('codePane.gitRepositoryUnavailable')}</div>
+        )}
+      </div>
+    </>
   );
 });
 
@@ -3098,7 +4339,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [bottomPanelHeight, setBottomPanelHeight] = useState(initialBottomPanelLayout.height);
   const [bottomPanelAvailableHeight, setBottomPanelAvailableHeight] = useState(CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT);
   const [isBottomPanelResizing, setIsBottomPanelResizing] = useState(false);
-  const [searchPanelMode, setSearchPanelMode] = useState<'contents' | 'symbols' | 'usages'>('contents');
+  const [searchPanelMode, setSearchPanelMode] = useState<SearchPanelMode>('contents');
   const [contentSearchQuery, setContentSearchQuery] = useState('');
   const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
   const [contentSearchResults, setContentSearchResults] = useState<CodePaneContentMatch[]>([]);
@@ -3319,6 +4560,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const isFsChangeFlushQueuedRef = useRef(false);
   const gitStatusByPathRef = useRef(gitStatusByPath);
   const gitStatusEntriesRef = useRef<CodePaneGitStatusEntry[]>(cachedGitStatusEntries);
+  const gitRepositorySummaryRef = useRef<CodePaneGitRepositorySummary | null>(cachedGitSummary);
   const externalLibrarySectionsRef = useRef<CodePaneExternalLibrarySection[]>(cachedExternalLibrarySections);
   const gitBranchesRef = useRef<CodePaneGitBranchEntry[]>([]);
   const selectedGitCommitOrderRef = useRef<string[]>(selectedGitCommitOrder);
@@ -3403,6 +4645,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     gitBranchesRef.current = gitBranches;
   }, [gitBranches]);
+
+  useEffect(() => {
+    gitRepositorySummaryRef.current = gitRepositorySummary;
+  }, [gitRepositorySummary]);
 
   useEffect(() => {
     selectedGitCommitOrderRef.current = selectedGitCommitOrder;
@@ -14302,6 +15548,84 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void refreshGitSnapshot({ force: true });
   }, [refreshGitSnapshot]);
 
+  const handleScmRefreshStatus = useCallback(() => {
+    void refreshGitSnapshot({ force: true });
+  }, [refreshGitSnapshot]);
+
+  const handleScmOpenRepository = useCallback(() => {
+    void window.electronAPI.openFolder(gitRepositorySummaryRef.current?.repoRootPath ?? rootPath);
+  }, [rootPath]);
+
+  const handleScmCopyBranchName = useCallback(() => {
+    const currentBranch = gitBranchesRef.current.find((branch) => branch.current)
+      ?? gitBranchesRef.current.find((branch) => branch.name === gitRepositorySummaryRef.current?.currentBranch)
+      ?? null;
+    const copyValue = currentBranch?.name ?? gitRepositorySummaryRef.current?.headSha ?? '';
+    if (copyValue) {
+      void window.electronAPI.writeClipboardText(copyValue);
+    }
+  }, []);
+
+  const handleScmStageAll = useCallback(() => {
+    const paths = Object.values(gitStatusByPathRef.current).map((entry) => entry.path);
+    if (paths.length > 0) {
+      void stageGitPaths(paths);
+    }
+  }, [stageGitPaths]);
+
+  const handleScmStash = useCallback(() => {
+    openActionInputDialog({
+      kind: 'stash',
+      initialValue: '',
+      includeUntracked: true,
+    }, { deferred: true });
+  }, [openActionInputDialog]);
+
+  const handleScmNewBranch = useCallback(() => {
+    const currentBranch = gitBranchesRef.current.find((branch) => branch.current)
+      ?? gitBranchesRef.current.find((branch) => branch.name === gitRepositorySummaryRef.current?.currentBranch)
+      ?? null;
+    openActionInputDialog({
+      kind: 'checkout-branch',
+      initialValue: '',
+      createBranch: true,
+      startPoint: currentBranch?.name ?? gitRepositorySummaryRef.current?.currentBranch ?? undefined,
+    }, { deferred: true });
+  }, [openActionInputDialog]);
+
+  const handleScmCheckoutRevision = useCallback(() => {
+    openActionInputDialog({
+      kind: 'checkout-revision',
+      initialValue: '',
+    }, { deferred: true });
+  }, [openActionInputDialog]);
+
+  const handleScmRebaseContinue = useCallback(() => {
+    void controlGitRebase('continue');
+  }, [controlGitRebase]);
+
+  const handleScmRebaseAbort = useCallback(() => {
+    void controlGitRebase('abort');
+  }, [controlGitRebase]);
+
+  const handleScmOpenCommit = useCallback(() => {
+    window.setTimeout(() => {
+      openCommitWindow();
+    }, 0);
+  }, [openCommitWindow]);
+
+  const handleScmOpenChangesWorkbench = useCallback(() => {
+    openGitWorkbench('changes');
+  }, [openGitWorkbench]);
+
+  const handleScmOpenGitLog = useCallback(() => {
+    openGitWorkbench('log');
+  }, [openGitWorkbench]);
+
+  const handleScmSelectEntry = useCallback((entry: CodePaneGitStatusEntry) => {
+    selectGitChangeEntry(entry);
+  }, [selectGitChangeEntry]);
+
   const handleDebugStepOver = useCallback((sessionId: string) => (
     stepDebugSession(sessionId, 'over')
   ), [stepDebugSession]);
@@ -14467,6 +15791,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setIsRefreshing(false);
     });
   }, [refreshLoadedDirectories]);
+
+  const handleFilesSearchQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(event.target.value);
+  }, []);
+
+  const handleFilesSidebarScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    setFilesSidebarScrollTop(event.currentTarget.scrollTop);
+  }, []);
+
+  const handleSearchPanelModeChange = useCallback((nextMode: SearchPanelMode) => {
+    setSearchPanelMode(nextMode);
+  }, []);
+
+  const handleContentSearchQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setContentSearchQuery(event.target.value);
+  }, []);
+
+  const handleWorkspaceSymbolQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setWorkspaceSymbolQuery(event.target.value);
+  }, []);
 
   const handleToggleActiveDiffView = useCallback(() => {
     if (viewMode === 'diff') {
@@ -15348,7 +16692,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }));
   }, [branchManagerSections, collapsedBranchManagerNodeKeys, isBranchManagerOpen]);
 
-  const filteredBranchManagerQuickActions = useMemo(() => {
+  const filteredBranchManagerQuickActions = useMemo<BranchManagerQuickAction[]>(() => {
     if (!isBranchManagerOpen) {
       return [];
     }
@@ -15503,34 +16847,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }, { deferred: true });
   }, [openActionConfirmDialog]);
 
-  const renderBranchManagerTreeRow = useCallback((row: BranchManagerVisibleTreeRow): React.ReactNode => (
-    <BranchManagerTreeRow
-      key={row.key}
-      node={row.node}
-      depth={row.depth}
-      isCollapsed={collapsedBranchManagerNodeKeys.has(row.node.key)}
-      menuContainer={branchManagerRef.current}
-      contextMenuContentClassName={contextMenuContentClassName}
-      contextMenuItemClassName={contextMenuItemClassName}
-      contextMenuDangerItemClassName={contextMenuDangerItemClassName}
-      onToggleNode={toggleBranchManagerNode}
-      onCheckoutBranch={checkoutBranchFromManager}
-      onRenameBranch={renameBranchFromManager}
-      onDeleteBranch={deleteBranchFromManager}
-      t={t}
-    />
-  ), [
-    checkoutBranchFromManager,
-    collapsedBranchManagerNodeKeys,
-    contextMenuContentClassName,
-    contextMenuDangerItemClassName,
-    contextMenuItemClassName,
-    deleteBranchFromManager,
-    renameBranchFromManager,
-    t,
-    toggleBranchManagerNode,
-  ]);
-
   const activeFileStatusLabel = useMemo(() => {
     if (!activeFilePath) {
       return t('codePane.autoSave');
@@ -15544,273 +16860,60 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [activeFileDisplayPath, activeFilePath, rootPath, t]);
 
   const renderedWorkspaceHeader = useMemo(() => (
-    <div className="flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
-      <div className="flex min-w-0 items-center gap-2">
-        <div ref={branchManagerRef} className="relative">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={t('codePane.gitBranchManager')}
-            aria-expanded={isBranchManagerOpen}
-            onMouseDown={preventMouseButtonFocus}
-            onClick={handleBranchManagerToggle}
-            className={`flex h-6 max-w-[280px] items-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
-              isBranchManagerOpen
-                ? 'bg-sky-500/15 text-sky-100'
-                : 'bg-zinc-800/90 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50'
-            }`}
-          >
-            <GitBranch size={12} className="shrink-0 text-sky-300" />
-            <span className="truncate">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</span>
-            <ChevronDown size={12} className="shrink-0 text-zinc-500" />
-          </button>
-          {isBranchManagerOpen && (
-            <div className="absolute left-0 top-full z-[80] mt-1 flex h-[min(72vh,680px)] w-[360px] flex-col overflow-hidden rounded border border-zinc-800 bg-zinc-950 shadow-2xl">
-              <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
-                <div className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded border border-zinc-800 bg-zinc-900/70 px-2">
-                  <Search size={13} className="shrink-0 text-zinc-500" />
-                  <input
-                    ref={branchManagerSearchInputRef}
-                    value={branchManagerQuery}
-                    onChange={handleBranchManagerQueryChange}
-                    placeholder={t('codePane.gitBranchSearchPlaceholder')}
-                    className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
-                  />
-                </div>
-                <button
-                  type="button"
-                  aria-label={t('codePane.refresh')}
-                  onClick={handleBranchManagerRefresh}
-                  className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-                >
-                  {isGitBranchesLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                </button>
-                <button
-                  type="button"
-                  aria-label={t('codePane.gitOpenWorkbench')}
-                  onClick={handleBranchManagerOpenWorkbench}
-                  className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
-                >
-                  <Settings size={13} />
-                </button>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-                {filteredBranchManagerQuickActions.length > 0 && (
-                  <div className="mb-3 space-y-0.5 border-b border-zinc-800 pb-2">
-                    {filteredBranchManagerQuickActions.map((action) => {
-                      const ActionIcon = action.icon;
-                      return (
-                        <button
-                          key={action.id}
-                          type="button"
-                          disabled={action.disabled}
-                          onClick={action.onSelect}
-                          className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <ActionIcon size={13} className="shrink-0 text-zinc-500" />
-                          <span className="min-w-0 flex-1 truncate">{action.label}</span>
-                          {action.shortcut && (
-                            <span className="text-[10px] text-zinc-500">{action.shortcut}</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {gitBranchesError && (
-                  <div className="mb-2 rounded border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-xs text-red-200">
-                    {gitBranchesError}
-                  </div>
-                )}
-
-                {isGitBranchesLoading && gitBranches.length === 0 ? (
-                  <div className="flex h-32 items-center justify-center gap-2 text-xs text-zinc-500">
-                    <Loader2 size={13} className="animate-spin" />
-                    {t('codePane.loading')}
-                  </div>
-                ) : branchManagerVisibleSections.length > 0 ? (
-                  <div className="space-y-3">
-                    {branchManagerVisibleSections.map((section) => (
-                      <div key={section.key}>
-                        <div className="mb-1 flex h-6 items-center gap-1.5 px-1 text-xs font-medium text-zinc-400">
-                          <ChevronDown size={12} className="text-zinc-500" />
-                          <span className="min-w-0 flex-1 truncate">{section.label}</span>
-                          <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                            {section.count}
-                          </span>
-                        </div>
-                        <div className="space-y-0.5">
-                          {section.rows.map((row) => renderBranchManagerTreeRow(row))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex h-32 items-center justify-center text-xs text-zinc-500">
-                    {t('codePane.gitBranchNoResults')}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-        {gitRepositorySummary && gitRepositorySummary.operation !== 'idle' && (
-          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
-            {gitOperationLabel}
-          </span>
-        )}
-        {gitRepositorySummary?.hasConflicts && (
-          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200">
-            {t('codePane.gitConflictsActive')}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-1">
-        <AppTooltip content={t('codePane.navigateBack')} placement="pane-corner">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={t('codePane.navigateBack')}
-            onMouseDown={preventMouseButtonFocus}
-            onClick={handleNavigateBackClick}
-            disabled={!canNavigateBack}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <ChevronLeft size={13} />
-          </button>
-        </AppTooltip>
-        <AppTooltip content={t('codePane.navigateForward')} placement="pane-corner">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={t('codePane.navigateForward')}
-            onMouseDown={preventMouseButtonFocus}
-            onClick={handleNavigateForwardClick}
-            disabled={!canNavigateForward}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <ChevronRight size={13} />
-          </button>
-        </AppTooltip>
-        <AppTooltip content={t('codePane.searchEverywhereOpen')} placement="pane-corner">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={t('codePane.searchEverywhereOpen')}
-            onMouseDown={preventMouseButtonFocus}
-            onClick={handleOpenSearchEverywhereAll}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
-          >
-            <Search size={13} />
-          </button>
-        </AppTooltip>
-        <AppTooltip content={t('codePane.refresh')} placement="pane-corner">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={t('codePane.refresh')}
-            onMouseDown={preventMouseButtonFocus}
-            onClick={handleWorkspaceRefreshClick}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
-          >
-            <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
-          </button>
-        </AppTooltip>
-        <AppTooltip
-          content={viewMode === 'diff' ? t('codePane.showEditor') : t('codePane.showDiff')}
-          placement="pane-corner"
-        >
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={viewMode === 'diff' ? t('codePane.showEditor') : t('codePane.showDiff')}
-            onMouseDown={preventMouseButtonFocus}
-            onClick={handleToggleActiveDiffView}
-            disabled={!activeFilePath}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <GitCompareArrows size={13} />
-          </button>
-        </AppTooltip>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button
-              type="button"
-              tabIndex={-1}
-              title={t('codePane.editorActionsMenu')}
-              aria-label={t('codePane.editorActionsMenu')}
-              onMouseDown={preventMouseButtonFocus}
-              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
-            >
-              <MoreHorizontal size={13} className="mr-1" />
-              {t('common.more')}
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              className={contextMenuContentClassName}
-              sideOffset={6}
-              align="end"
-            >
-              {editorActionMenuSections.map((section, sectionIndex) => (
-                <React.Fragment key={`editor-actions-${sectionIndex}`}>
-                  {section.map((item) => (
-                    <EditorActionMenuItemRow
-                      key={item.id}
-                      item={item}
-                      className={contextMenuItemClassName}
-                    />
-                  ))}
-                  {sectionIndex < editorActionMenuSections.length - 1 && (
-                    <DropdownMenu.Separator className={ideMenuSeparatorClassName} />
-                  )}
-                </React.Fragment>
-              ))}
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-        <AppTooltip content={t('common.save')} placement="pane-corner">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={t('common.save')}
-            onMouseDown={preventMouseButtonFocus}
-            onClick={handleSaveActiveFile}
-            disabled={!activeFilePath}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Save size={13} />
-          </button>
-        </AppTooltip>
-        {onClose && (
-          <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
-            <button
-              type="button"
-              tabIndex={-1}
-              aria-label={t('terminalPane.close')}
-              onMouseDown={preventMouseButtonFocus}
-              onClick={(event) => {
-                event.stopPropagation();
-                void handlePaneClose();
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:bg-red-600 hover:text-zinc-50"
-            >
-              <X size={13} />
-            </button>
-          </AppTooltip>
-        )}
-      </div>
-    </div>
+    <CodePaneWorkspaceHeader
+      branchManagerRef={branchManagerRef}
+      branchManagerSearchInputRef={branchManagerSearchInputRef}
+      branchManagerQuery={branchManagerQuery}
+      branchManagerQuickActions={filteredBranchManagerQuickActions}
+      branchManagerVisibleSections={branchManagerVisibleSections}
+      canNavigateBack={canNavigateBack}
+      canNavigateForward={canNavigateForward}
+      collapsedBranchManagerNodeKeys={collapsedBranchManagerNodeKeys}
+      contextMenuContentClassName={contextMenuContentClassName}
+      contextMenuDangerItemClassName={contextMenuDangerItemClassName}
+      contextMenuItemClassName={contextMenuItemClassName}
+      editorActionMenuSections={editorActionMenuSections}
+      gitBranchesCount={gitBranches.length}
+      gitBranchesError={gitBranchesError}
+      gitOperationLabel={gitOperationLabel}
+      gitRepositorySummary={gitRepositorySummary}
+      gitSummaryBranchLabel={gitSummaryBranchLabel}
+      isBranchManagerOpen={isBranchManagerOpen}
+      isGitBranchesLoading={isGitBranchesLoading}
+      isRefreshing={isRefreshing}
+      activeFilePath={activeFilePath}
+      onClose={onClose}
+      onBranchManagerToggle={handleBranchManagerToggle}
+      onBranchManagerQueryChange={handleBranchManagerQueryChange}
+      onBranchManagerRefresh={handleBranchManagerRefresh}
+      onBranchManagerOpenWorkbench={handleBranchManagerOpenWorkbench}
+      onBranchManagerToggleNode={toggleBranchManagerNode}
+      onBranchManagerCheckoutBranch={checkoutBranchFromManager}
+      onBranchManagerRenameBranch={renameBranchFromManager}
+      onBranchManagerDeleteBranch={deleteBranchFromManager}
+      onNavigateBack={handleNavigateBackClick}
+      onNavigateForward={handleNavigateForwardClick}
+      onOpenSearchEverywhere={handleOpenSearchEverywhereAll}
+      onWorkspaceRefresh={handleWorkspaceRefreshClick}
+      onToggleActiveDiffView={handleToggleActiveDiffView}
+      onSaveActiveFile={handleSaveActiveFile}
+      onPaneClose={handlePaneClose}
+      preventFocus={preventMouseButtonFocus}
+      t={t}
+      viewMode={viewMode}
+    />
   ), [
     activeFilePath,
     branchManagerQuery,
     branchManagerVisibleSections,
     canNavigateBack,
     canNavigateForward,
+    checkoutBranchFromManager,
+    collapsedBranchManagerNodeKeys,
     contextMenuContentClassName,
+    contextMenuDangerItemClassName,
     contextMenuItemClassName,
+    deleteBranchFromManager,
     editorActionMenuSections,
     filteredBranchManagerQuickActions,
     handleBranchManagerOpenWorkbench,
@@ -15834,8 +16937,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     isRefreshing,
     onClose,
     preventMouseButtonFocus,
-    renderBranchManagerTreeRow,
+    renameBranchFromManager,
     t,
+    toggleBranchManagerNode,
     viewMode,
   ]);
 
@@ -16016,678 +17120,94 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (sidebarMode === 'files') {
       return (
-        <>
-          <div className="border-b border-zinc-800 px-2 py-2">
-            <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
-              <Search size={12} className="shrink-0 text-zinc-500" />
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={t('codePane.searchFilesPlaceholder')}
-                className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
-              />
-              {isSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
-            </div>
-          </div>
-          <div
-            ref={filesSidebarScrollRef}
-            className="min-h-0 flex-1 overflow-auto px-1 py-2"
-            onScroll={(event) => {
-              setFilesSidebarScrollTop(event.currentTarget.scrollTop);
-            }}
-          >
-            {renderedFilesSidebarBody}
-          </div>
-        </>
+        <FilesSidebarContent
+          scrollRef={filesSidebarScrollRef}
+          searchQuery={searchQuery}
+          isSearching={isSearching}
+          body={renderedFilesSidebarBody}
+          onSearchQueryChange={handleFilesSearchQueryChange}
+          onScroll={handleFilesSidebarScroll}
+          t={t}
+        />
       );
     }
 
     if (sidebarMode === 'search') {
       return (
-        <>
-          <div className="border-b border-zinc-800 px-2 py-2">
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-              <Search size={12} />
-              {searchPanelMode === 'contents'
-                ? t('codePane.searchContents')
-                : searchPanelMode === 'symbols'
-                  ? t('codePane.workspaceSymbols')
-                  : t('codePane.findUsages')}
-            </div>
-            <div className="mb-2 flex gap-1 rounded bg-zinc-900/60 p-1">
-              {([
-                ['contents', t('codePane.searchModeContents')],
-                ['symbols', t('codePane.searchModeSymbols')],
-                ['usages', t('codePane.searchModeUsages')],
-              ] as const).map(([mode, label]) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setSearchPanelMode(mode)}
-                  className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-                    searchPanelMode === mode
-                      ? 'bg-zinc-800 text-zinc-100'
-                      : 'text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {searchPanelMode === 'contents' ? (
-              <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
-                <Search size={12} className="shrink-0 text-zinc-500" />
-                <input
-                  value={contentSearchQuery}
-                  onChange={(event) => setContentSearchQuery(event.target.value)}
-                  placeholder={t('codePane.searchContentsPlaceholder')}
-                  className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
-                />
-                {isContentSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
-              </div>
-            ) : searchPanelMode === 'symbols' ? (
-              <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
-                <Search size={12} className="shrink-0 text-zinc-500" />
-                <input
-                  value={workspaceSymbolQuery}
-                  onChange={(event) => setWorkspaceSymbolQuery(event.target.value)}
-                  placeholder={t('codePane.workspaceSymbolsPlaceholder')}
-                  className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
-                />
-                {isWorkspaceSymbolSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
-              </div>
-            ) : (
-              <div className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-400">
-                <span className="truncate">
-                  {usagesTargetLabel
-                    ? t('codePane.findUsagesFor', { symbol: usagesTargetLabel })
-                    : t('codePane.findUsagesHint')}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void findUsagesAtCursor();
-                  }}
-                  className="shrink-0 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                >
-                  {t('codePane.findUsages')}
-                </button>
-              </div>
-            )}
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-              {searchPanelMode === 'contents'
-                ? t('codePane.searchTab')
-                : searchPanelMode === 'symbols'
-                  ? t('codePane.workspaceSymbols')
-                  : t('codePane.findUsages')}
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-              {searchPanelMode === 'contents' ? (
-                deferredContentSearchQuery.trim() && contentSearchError ? (
-                  <div className="text-xs text-red-300">{contentSearchError}</div>
-                ) : deferredContentSearchQuery.trim() ? (
-                  contentSearchGroups.length > 0 ? (
-                    <div className="space-y-3">
-                      {contentSearchGroups.map((group) => (
-                        <div key={group.filePath} className="space-y-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void activateFile(group.filePath, { preview: true });
-                            }}
-                            className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
-                          >
-                            <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                            <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
-                            <span className="truncate text-[10px] text-zinc-500">
-                              {getRelativePath(rootPath, group.filePath)}
-                            </span>
-                          </button>
-                          {group.matches.map((match) => (
-                            <button
-                              key={`${group.filePath}:${match.lineNumber}:${match.column}`}
-                              type="button"
-                              onClick={() => {
-                                void openContentSearchMatch(match);
-                              }}
-                              className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
-                            >
-                              <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
-                                {match.lineNumber}:{match.column}
-                              </span>
-                              <span className="min-w-0 flex-1 break-words">{match.lineText}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-zinc-500">{t('codePane.searchContentsEmpty')}</div>
-                  )
-                ) : (
-                  <div className="text-xs text-zinc-500">{t('codePane.searchContentsHint')}</div>
-                )
-              ) : searchPanelMode === 'symbols' ? (
-                deferredWorkspaceSymbolQuery.trim() && workspaceSymbolError ? (
-                  <div className="text-xs text-red-300">{workspaceSymbolError}</div>
-                ) : deferredWorkspaceSymbolQuery.trim() ? (
-                  workspaceSymbolResults.length > 0 ? (
-                    <div className="space-y-1">
-                      {workspaceSymbolResults.map((symbol) => (
-                        <button
-                          key={`${symbol.filePath}:${symbol.name}:${symbol.range.startLineNumber}:${symbol.range.startColumn}`}
-                          type="button"
-                          onClick={() => {
-                            void openFileLocation({
-                              filePath: symbol.filePath,
-                              lineNumber: symbol.range.startLineNumber,
-                              column: symbol.range.startColumn,
-                            });
-                          }}
-                          className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
-                        >
-                          <FileCode2 size={13} className="mt-0.5 shrink-0 text-zinc-500" />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-zinc-100">{symbol.name}</div>
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
-                              {symbol.containerName && <span>{symbol.containerName}</span>}
-                              <span>{getRelativePath(rootPath, symbol.filePath)}</span>
-                              <span>{symbol.range.startLineNumber}:{symbol.range.startColumn}</span>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsEmpty')}</div>
-                  )
-                ) : (
-                  <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsHint')}</div>
-                )
-              ) : usageError ? (
-                <div className="text-xs text-red-300">{usageError}</div>
-              ) : isFindingUsages ? (
-                <div className="flex items-center gap-2 text-xs text-zinc-500">
-                  <Loader2 size={12} className="animate-spin" />
-                  {t('codePane.findUsages')}
-                </div>
-              ) : usagesTargetLabel ? (
-                usageGroups.length > 0 ? (
-                  <div className="space-y-3">
-                    {usageGroups.map((group) => (
-                      <div key={group.filePath} className="space-y-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void activateFile(group.filePath, { preview: true });
-                          }}
-                          className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
-                        >
-                          <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                          <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
-                          <span className="truncate text-[10px] text-zinc-500">
-                            {getRelativePath(rootPath, group.filePath)}
-                          </span>
-                        </button>
-                        {group.references.map((reference) => (
-                          <button
-                            key={`${group.filePath}:${reference.range.startLineNumber}:${reference.range.startColumn}`}
-                            type="button"
-                            onClick={() => {
-                              void openFileLocation({
-                                filePath: group.filePath,
-                                lineNumber: reference.range.startLineNumber,
-                                column: reference.range.startColumn,
-                              });
-                            }}
-                            className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
-                          >
-                            <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
-                              {reference.range.startLineNumber}:{reference.range.startColumn}
-                            </span>
-                            <span className="min-w-0 flex-1 break-words">
-                              {reference.previewText ?? getRelativePath(rootPath, group.filePath)}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-xs text-zinc-500">{t('codePane.findUsagesEmpty')}</div>
-                )
-              ) : (
-                <div className="text-xs text-zinc-500">{t('codePane.findUsagesHint')}</div>
-              )}
-            </div>
-          </div>
-        </>
+        <SearchSidebarContent
+          mode={searchPanelMode}
+          contentQuery={contentSearchQuery}
+          contentGroups={contentSearchGroups}
+          deferredContentQuery={deferredContentSearchQuery}
+          contentError={contentSearchError}
+          isContentSearching={isContentSearching}
+          workspaceSymbolQuery={workspaceSymbolQuery}
+          deferredWorkspaceSymbolQuery={deferredWorkspaceSymbolQuery}
+          workspaceSymbolResults={workspaceSymbolResults}
+          workspaceSymbolError={workspaceSymbolError}
+          isWorkspaceSymbolSearching={isWorkspaceSymbolSearching}
+          usageGroups={usageGroups}
+          usageError={usageError}
+          usagesTargetLabel={usagesTargetLabel}
+          isFindingUsages={isFindingUsages}
+          rootPath={rootPath}
+          onModeChange={handleSearchPanelModeChange}
+          onContentQueryChange={handleContentSearchQueryChange}
+          onWorkspaceSymbolQueryChange={handleWorkspaceSymbolQueryChange}
+          onFindUsages={handleEditorActionFindUsages}
+          onActivateFile={activateFile}
+          onOpenContentMatch={openContentSearchMatch}
+          onOpenFileLocation={openFileLocation}
+          t={t}
+        />
       );
     }
 
     if (sidebarMode === 'scm') {
       return (
-        <>
-          <div className="border-b border-zinc-800 px-2 py-2">
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-              <GitBranch size={12} />
-              {t('codePane.sourceControl')}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-              {gitSummaryBranchLabel ? (
-                <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-200">
-                  {gitSummaryBranchLabel}
-                </span>
-              ) : null}
-              <span>
-                {gitRepositorySummary || scmEntries.length > 0
-                  ? t('codePane.sourceControlHint')
-                  : t('codePane.gitRepositoryUnavailable')}
-              </span>
-            </div>
-          </div>
-          <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-            {gitRepositorySummary || scmEntries.length > 0 ? (
-              <div className="space-y-3">
-                {gitRepositorySummary && (
-                  <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                        {t('codePane.gitRepositorySummary')}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void refreshGitSnapshot({ force: true });
-                        }}
-                        className="rounded bg-zinc-800 p-1 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
-                        aria-label={t('codePane.gitRefreshStatus')}
-                      >
-                        <RefreshCw size={12} />
-                      </button>
-                    </div>
-                    {(gitRepositorySummary.operation !== 'idle' || gitRepositorySummary.hasConflicts) && (
-                      <div className="mb-2 flex flex-wrap gap-2">
-                        {gitRepositorySummary.operation !== 'idle' && (
-                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                            {gitOperationLabel}
-                          </span>
-                        )}
-                        {gitRepositorySummary.hasConflicts && (
-                          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
-                            {t('codePane.gitConflictsActive')}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    <div className="grid grid-cols-2 gap-2 text-xs text-zinc-300">
-                      <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                        <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitBranch')}</div>
-                        <div className="mt-1 truncate text-zinc-100">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</div>
-                      </div>
-                      <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                        <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitUpstream')}</div>
-                        <div className="mt-1 truncate text-zinc-100">{gitRepositorySummary.upstreamBranch ?? t('codePane.gitNoUpstream')}</div>
-                      </div>
-                      <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                        <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitAheadBehind')}</div>
-                        <div className="mt-1 text-zinc-100">
-                          ↑{gitRepositorySummary.aheadCount} ↓{gitRepositorySummary.behindCount}
-                        </div>
-                      </div>
-                      <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                        <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitOperation')}</div>
-                        <div className="mt-1 truncate text-zinc-100">{gitOperationLabel}</div>
-                      </div>
-                      <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                        <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitConflicts')}</div>
-                        <div className="mt-1 truncate text-zinc-100">
-                          {gitRepositorySummary.hasConflicts
-                            ? t('codePane.gitConflictsActive')
-                            : t('codePane.gitConflictsNone')}
-                        </div>
-                      </div>
-                      <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                        <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitRepoRoot')}</div>
-                        <div className="mt-1 truncate text-zinc-100">{gitRepositorySummary.repoRootPath}</div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-                  <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                    {t('codePane.gitQuickActions')}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void refreshGitSnapshot({ force: true });
-                      }}
-                      className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                    >
-                      {t('codePane.gitRefreshStatus')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void window.electronAPI.openFolder(gitRepositorySummary?.repoRootPath ?? rootPath);
-                      }}
-                      className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                    >
-                      {t('codePane.gitOpenRepository')}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!currentGitBranch?.name && !gitRepositorySummary?.headSha}
-                      onClick={() => {
-                        const copyValue = currentGitBranch?.name ?? gitRepositorySummary?.headSha ?? '';
-                        if (copyValue) {
-                          void window.electronAPI.writeClipboardText(copyValue);
-                        }
-                      }}
-                      className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {t('codePane.gitCopyBranchName')}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={scmEntries.length === 0}
-                      onClick={() => {
-                        void stageGitPaths(scmEntries.map((entry) => entry.path));
-                      }}
-                      className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {t('codePane.gitStageAll')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openActionInputDialog({
-                          kind: 'stash',
-                          initialValue: '',
-                          includeUntracked: true,
-                        }, { deferred: true });
-                      }}
-                      className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                    >
-                      {t('codePane.gitStash')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openActionInputDialog({
-                          kind: 'checkout-branch',
-                          initialValue: '',
-                          createBranch: true,
-                          startPoint: currentGitBranch?.name ?? gitRepositorySummary?.currentBranch ?? undefined,
-                        }, { deferred: true });
-                      }}
-                      className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                    >
-                      {t('codePane.gitNewBranchDots')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openActionInputDialog({
-                          kind: 'checkout-revision',
-                          initialValue: '',
-                        }, { deferred: true });
-                      }}
-                      className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                    >
-                      {t('codePane.gitCheckoutTagOrRevision')}
-                    </button>
-                    {gitRepositorySummary?.operation === 'rebase' && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void controlGitRebase('continue');
-                          }}
-                          className="rounded bg-amber-500/15 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-500/25"
-                        >
-                          {t('codePane.gitRebaseContinue')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void controlGitRebase('abort');
-                          }}
-                          className="rounded bg-red-500/15 px-2 py-1 text-[11px] text-red-200 hover:bg-red-500/25"
-                        >
-                          {t('codePane.gitRebaseAbort')}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-                  <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                    {t('codePane.gitComposer')}
-                  </div>
-                  <button
-                    type="button"
-                    aria-label={t('codePane.gitCommitDots')}
-                    onClick={() => {
-                      window.setTimeout(() => {
-                        openCommitWindow();
-                      }, 0);
-                    }}
-                    className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
-                  >
-                    <span>{t('codePane.gitCommitDots')}</span>
-                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{scmEntries.length}</span>
-                  </button>
-                  <div className="mt-2 text-[11px] leading-5 text-zinc-500">
-                    {t('codePane.sourceControlHint')}
-                  </div>
-                </div>
-
-                <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-                  <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                    {t('codePane.gitWorkbenchTab')}
-                  </div>
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      aria-label={t('codePane.gitOpenChangesWorkbench')}
-                      onClick={() => {
-                        openGitWorkbench('changes');
-                      }}
-                      className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
-                    >
-                      <span>{t('codePane.gitOpenChangesWorkbench')}</span>
-                      <span aria-hidden="true" className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{scmEntries.length}</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={t('codePane.gitOpenWorkbench')}
-                      onClick={() => {
-                        openGitWorkbench('log');
-                      }}
-                      className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
-                    >
-                      <span>{t('codePane.gitOpenWorkbench')}</span>
-                      <span aria-hidden="true" className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{gitGraph.length}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {scmEntries.length > 0 && !(bottomPanelMode === 'git' && activeGitWorkbenchTab === 'changes') && (
-                  <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                        {t('codePane.sourceControl')}
-                      </div>
-                      <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                        {scmEntries.length}
-                      </span>
-                    </div>
-
-                    <div className="space-y-1">
-                      {scmEntries.slice(0, 8).map((entry) => {
-                        const isSelected = selectedGitChangePath === entry.path;
-                        const statusTone = getStatusTone(entry.status);
-                        return (
-                          <div
-                            key={entry.path}
-                            onClick={() => {
-                              selectGitChangeEntry(entry);
-                            }}
-                            role="listitem"
-                            className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors ${
-                              isSelected
-                                ? 'bg-zinc-800/80 text-zinc-50'
-                                : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-50'
-                            }`}
-                          >
-                            {statusTone ? (
-                              <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] font-medium ${statusTone.className}`}>
-                                {statusTone.badge}
-                              </span>
-                            ) : (
-                              <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-zinc-800 text-[10px] text-zinc-500">
-                                <FileIcon size={10} />
-                              </span>
-                            )}
-                            <span className={`min-w-0 flex-1 truncate ${getStatusTextClassName(entry.status)}`}>
-                              {getPathLeafLabel(entry.path)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {selectedScmEntry && (
-                      <div className="mt-3 border-t border-zinc-800 pt-2">
-                        <div className="mb-2 truncate text-[11px] text-zinc-500">
-                          {selectedGitChangeRelativePath ?? getRelativePath(rootPath, selectedScmEntry.path)}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            aria-label={t('codePane.openDiff')}
-                            onClick={() => {
-                              void openDiffForFile(selectedScmEntry.path);
-                            }}
-                            className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                          >
-                            {t('codePane.openDiff')}
-                          </button>
-                          {(selectedScmEntry.unstaged || !selectedScmEntry.staged) && (
-                            <button
-                              type="button"
-                              aria-label={t('codePane.gitStage')}
-                              onClick={() => {
-                                void stageGitPaths([selectedScmEntry.path]);
-                              }}
-                              className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                            >
-                              {t('codePane.gitStage')}
-                            </button>
-                          )}
-                          {selectedScmEntry.staged && (
-                            <button
-                              type="button"
-                              aria-label={t('codePane.gitUnstage')}
-                              onClick={() => {
-                                void unstageGitPaths([selectedScmEntry.path]);
-                              }}
-                              className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
-                            >
-                              {t('codePane.gitUnstage')}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            aria-label={t('codePane.gitDiscard')}
-                            onClick={() => {
-                              void discardGitPaths([selectedScmEntry.path], Boolean(selectedScmEntry.staged));
-                            }}
-                            className="rounded bg-red-500/15 px-2 py-1 text-[11px] text-red-200 hover:bg-red-500/25"
-                          >
-                            {t('codePane.gitDiscard')}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-xs text-zinc-500">{t('codePane.gitRepositoryUnavailable')}</div>
-            )}
-          </div>
-        </>
+        <ScmSidebarContent
+          repositorySummary={gitRepositorySummary}
+          branchLabel={gitSummaryBranchLabel}
+          operationLabel={gitOperationLabel}
+          entries={scmEntries}
+          selectedPath={selectedGitChangePath}
+          selectedEntry={selectedScmEntry}
+          selectedRelativePath={selectedGitChangeRelativePath}
+          rootPath={rootPath}
+          gitGraphCount={gitGraph.length}
+          showInlineChanges={!(bottomPanelMode === 'git' && activeGitWorkbenchTab === 'changes')}
+          canCopyBranchName={Boolean(currentGitBranch?.name || gitRepositorySummary?.headSha)}
+          onRefreshStatus={handleScmRefreshStatus}
+          onOpenRepository={handleScmOpenRepository}
+          onCopyBranchName={handleScmCopyBranchName}
+          onStageAll={handleScmStageAll}
+          onStash={handleScmStash}
+          onNewBranch={handleScmNewBranch}
+          onCheckoutRevision={handleScmCheckoutRevision}
+          onRebaseContinue={handleScmRebaseContinue}
+          onRebaseAbort={handleScmRebaseAbort}
+          onOpenCommit={handleScmOpenCommit}
+          onOpenChangesWorkbench={handleScmOpenChangesWorkbench}
+          onOpenGitLog={handleScmOpenGitLog}
+          onSelectEntry={handleScmSelectEntry}
+          onOpenDiff={handleGitOpenFileDiff}
+          onStagePath={handleGitStagePath}
+          onUnstagePath={handleGitUnstagePath}
+          onDiscardPath={handleGitWorkbenchDiscardPath}
+          t={t}
+        />
       );
     }
 
+
     return (
-      <>
-        <div className="border-b border-zinc-800 px-2 py-2">
-          <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-            <AlertTriangle size={12} />
-            {t('codePane.problemsTab')}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
-            <span>{t('codePane.problemErrors', { count: problemSummary.errorCount })}</span>
-            <span>{t('codePane.problemWarnings', { count: problemSummary.warningCount })}</span>
-            <span>{t('codePane.problemInfos', { count: problemSummary.infoCount })}</span>
-          </div>
-        </div>
-        <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
-          {problemGroups.length > 0 ? (
-            <div className="space-y-3">
-              {problemGroups.map((group) => (
-                <div key={group.filePath} className="space-y-1">
-                  <div className="flex items-center gap-2 px-1 py-1 text-xs text-zinc-300">
-                    <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                    <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
-                    <span className="truncate text-[10px] text-zinc-500">
-                      {getRelativePath(rootPath, group.filePath)}
-                    </span>
-                  </div>
-                  {group.entries.map((problem) => {
-                    const tone = getProblemTone(problem.severity);
-                    return (
-                      <button
-                        key={`${group.filePath}:${problem.startLineNumber}:${problem.startColumn}:${problem.message}`}
-                        type="button"
-                        onClick={() => {
-                          void openFileLocation({
-                            filePath: group.filePath,
-                            lineNumber: problem.startLineNumber,
-                            column: problem.startColumn,
-                          });
-                        }}
-                        className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
-                      >
-                        <span className={`mt-0.5 rounded px-1 py-0.5 text-[10px] font-medium uppercase ${tone.className}`}>
-                          {tone.label}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="break-words">{problem.message}</div>
-                          <div className="mt-1 text-[10px] text-zinc-500">
-                            {problem.startLineNumber}:{problem.startColumn}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-xs text-zinc-500">{t('codePane.noProblems')}</div>
-          )}
-        </div>
-      </>
+      <ProblemsSidebarContent
+        groups={problemGroups}
+        summary={problemSummary}
+        rootPath={rootPath}
+        onOpenFileLocation={openFileLocation}
+        t={t}
+      />
     );
   }, [
     activateFile,
@@ -16696,32 +17216,47 @@ export const CodePane: React.FC<CodePaneProps> = ({
     contentSearchError,
     contentSearchGroups,
     contentSearchQuery,
-    controlGitRebase,
     currentGitBranch,
     deferredContentSearchQuery,
     deferredWorkspaceSymbolQuery,
-    discardGitPaths,
-    findUsagesAtCursor,
     gitGraph.length,
     gitOperationLabel,
     gitRepositorySummary,
     gitSummaryBranchLabel,
+    handleContentSearchQueryChange,
+    handleEditorActionFindUsages,
+    handleFilesSearchQueryChange,
+    handleFilesSidebarScroll,
+    handleGitOpenFileDiff,
+    handleGitStagePath,
+    handleGitUnstagePath,
+    handleGitWorkbenchDiscardPath,
+    handleScmCheckoutRevision,
+    handleScmCopyBranchName,
+    handleScmNewBranch,
+    handleScmOpenChangesWorkbench,
+    handleScmOpenCommit,
+    handleScmOpenGitLog,
+    handleScmOpenRepository,
+    handleScmRebaseAbort,
+    handleScmRebaseContinue,
+    handleScmRefreshStatus,
+    handleScmSelectEntry,
+    handleScmStageAll,
+    handleScmStash,
+    handleSearchPanelModeChange,
+    handleWorkspaceSymbolQueryChange,
     isContentSearching,
     isFindingUsages,
     isSearching,
     isSidebarVisible,
     isWorkspaceSymbolSearching,
-    openActionInputDialog,
-    openGitWorkbench,
-    openCommitWindow,
     openContentSearchMatch,
-    openDiffForFile,
     openFileLocation,
     problemGroups,
     problemSummary.errorCount,
     problemSummary.infoCount,
     problemSummary.warningCount,
-    refreshGitSnapshot,
     renderedFilesSidebarBody,
     rootPath,
     scmEntries,
@@ -16730,11 +17265,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     selectedGitChangePath,
     selectedGitChangeRelativePath,
     selectedScmEntry,
-    selectGitChangeEntry,
     sidebarMode,
-    stageGitPaths,
     t,
-    unstageGitPaths,
     usageError,
     usageGroups,
     usagesTargetLabel,
