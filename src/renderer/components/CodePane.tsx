@@ -494,6 +494,12 @@ type ToolWindowLauncher = {
   onClick: () => void;
 };
 
+type SidebarTabItem = {
+  mode: SidebarMode;
+  icon: LucideIcon;
+  label: string;
+};
+
 type CodePaneCursorSnapshot = {
   lineNumber: number;
   column: number;
@@ -826,6 +832,183 @@ const SearchResultRowButton = React.memo(function SearchResultRowButton({
             {relativePath}
           </span>
         </button>
+      )}
+    />
+  );
+});
+
+const SidebarRailButton = React.memo(function SidebarRailButton({
+  tab,
+  isSelected,
+  onSelect,
+}: {
+  tab: SidebarTabItem;
+  isSelected: boolean;
+  onSelect: (mode: SidebarMode) => void;
+}) {
+  const Icon = tab.icon;
+
+  return (
+    <AppTooltip content={tab.label} placement="pane-corner">
+      <button
+        type="button"
+        aria-label={tab.label}
+        aria-pressed={isSelected}
+        onClick={() => {
+          onSelect(tab.mode);
+        }}
+        className={`flex h-9 w-9 items-center justify-center rounded text-zinc-400 transition-colors ${isSelected ? 'bg-zinc-800 text-zinc-100' : 'hover:bg-zinc-900 hover:text-zinc-100'}`}
+      >
+        <Icon size={15} />
+      </button>
+    </AppTooltip>
+  );
+});
+
+const ToolWindowRailButton = React.memo(function ToolWindowRailButton({
+  item,
+}: {
+  item: ToolWindowLauncher;
+}) {
+  return (
+    <AppTooltip content={item.label} placement="pane-corner">
+      <button
+        type="button"
+        aria-label={item.label}
+        aria-pressed={item.active}
+        onClick={item.onClick}
+        disabled={item.disabled}
+        className={`flex h-9 w-9 items-center justify-center rounded transition-colors ${
+          item.active
+            ? 'bg-zinc-800 text-zinc-100'
+            : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
+        } disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        {item.icon}
+      </button>
+    </AppTooltip>
+  );
+});
+
+const ActivityRail = React.memo(function ActivityRail({
+  sidebarTabs,
+  toolWindowLaunchers,
+  sidebarMode,
+  isSidebarVisible,
+  onSidebarModeSelect,
+}: {
+  sidebarTabs: SidebarTabItem[];
+  toolWindowLaunchers: ToolWindowLauncher[];
+  sidebarMode: SidebarMode;
+  isSidebarVisible: boolean;
+  onSidebarModeSelect: (mode: SidebarMode) => void;
+}) {
+  return (
+    <div
+      data-testid="code-pane-activity-rail"
+      className="flex h-full w-12 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/85"
+    >
+      <div className="flex flex-col items-center gap-1 px-1 py-2">
+        {sidebarTabs.map((tab) => (
+          <SidebarRailButton
+            key={tab.mode}
+            tab={tab}
+            isSelected={sidebarMode === tab.mode && isSidebarVisible}
+            onSelect={onSidebarModeSelect}
+          />
+        ))}
+      </div>
+
+      <div className="mt-auto border-t border-zinc-800">
+        <div className="flex max-h-full flex-col items-center gap-1 overflow-y-auto px-1 py-2">
+          {toolWindowLaunchers.map((item) => (
+            <ToolWindowRailButton key={item.id} item={item} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const OpenFileTab = React.memo(function OpenFileTab({
+  tab,
+  isActive,
+  isReadOnly,
+  entryTextClassName,
+  externalChangeType,
+  label,
+  rootPath,
+  renderContextMenu,
+  onActivate,
+  onClose,
+  t,
+}: {
+  tab: CodePaneOpenFile;
+  isActive: boolean;
+  isReadOnly: boolean;
+  entryTextClassName: string;
+  externalChangeType?: ExternalChangeKind;
+  label: string;
+  rootPath: string;
+  renderContextMenu: (
+    filePath: string,
+    entryType: CodePaneTreeEntry['type'],
+    options?: {
+      allowDiff?: boolean;
+      pinned?: boolean;
+      showPinToggle?: boolean;
+    },
+  ) => React.ReactNode;
+  onActivate: (filePath: string, options?: { preview?: boolean; promotePreview?: boolean }) => void | Promise<void>;
+  onClose: (filePath: string) => void | Promise<void>;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const isPinned = Boolean(tab.pinned);
+
+  return (
+    <LazyContextMenu
+      children={() => renderContextMenu(tab.path, 'file', {
+        allowDiff: isPathInside(rootPath, tab.path),
+        pinned: isPinned,
+        showPinToggle: true,
+      })}
+      trigger={(
+        <div
+          className={`group relative flex min-w-0 max-w-[220px] items-center gap-2 border-r border-zinc-800 px-3 py-2 text-xs ${isActive ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-100'}`}
+        >
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            onClick={() => {
+              void onActivate(tab.path);
+            }}
+            onDoubleClick={() => {
+              if (tab.preview) {
+                void onActivate(tab.path, { promotePreview: true });
+              }
+            }}
+          >
+            <FileIcon size={12} className="shrink-0" />
+            {isPinned && <Pin size={10} className="shrink-0 text-zinc-500" />}
+            {isReadOnly && <Lock size={10} className="shrink-0 text-zinc-500" aria-label="read-only" />}
+            <span className={`truncate ${entryTextClassName}`}>{label}</span>
+            {externalChangeType && (
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${getExternalChangeDotClassName(externalChangeType)}`}
+                title={t('codePane.externalChangesTab')}
+              />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void onClose(tab.path);
+            }}
+            className="rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+          >
+            <X size={11} />
+          </button>
+        </div>
       )}
     />
   );
@@ -12202,7 +12385,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const contextMenuItemClassName = ideMenuItemClassName;
   const contextMenuDangerItemClassName = ideMenuDangerItemClassName;
   const contextMenuSubTriggerClassName = ideMenuSubTriggerClassName;
-  const sidebarTabs = useMemo(() => ([
+  const sidebarTabs = useMemo<SidebarTabItem[]>(() => ([
     {
       mode: 'files' as const,
       icon: FileCode2,
@@ -16031,55 +16214,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   const renderedActivityRail = useMemo(() => (
-    <div
-      data-testid="code-pane-activity-rail"
-      className="flex h-full w-12 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/85"
-    >
-      <div className="flex flex-col items-center gap-1 px-1 py-2">
-        {sidebarTabs.map((tab) => {
-          const Icon = tab.icon;
-          const isSelected = sidebarMode === tab.mode && isSidebarVisible;
-          return (
-            <AppTooltip key={tab.mode} content={tab.label} placement="pane-corner">
-              <button
-                type="button"
-                aria-label={tab.label}
-                aria-pressed={isSelected}
-                onClick={() => {
-                  handleSidebarModeSelect(tab.mode);
-                }}
-                className={`flex h-9 w-9 items-center justify-center rounded text-zinc-400 transition-colors ${isSelected ? 'bg-zinc-800 text-zinc-100' : 'hover:bg-zinc-900 hover:text-zinc-100'}`}
-              >
-                <Icon size={15} />
-              </button>
-            </AppTooltip>
-          );
-        })}
-      </div>
-
-      <div className="mt-auto border-t border-zinc-800">
-        <div className="flex max-h-full flex-col items-center gap-1 overflow-y-auto px-1 py-2">
-          {toolWindowLaunchers.map((item) => (
-            <AppTooltip key={item.id} content={item.label} placement="pane-corner">
-              <button
-                type="button"
-                aria-label={item.label}
-                aria-pressed={item.active}
-                onClick={item.onClick}
-                disabled={item.disabled}
-                className={`flex h-9 w-9 items-center justify-center rounded transition-colors ${
-                  item.active
-                    ? 'bg-zinc-800 text-zinc-100'
-                    : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
-                } disabled:cursor-not-allowed disabled:opacity-40`}
-              >
-                {item.icon}
-              </button>
-            </AppTooltip>
-          ))}
-        </div>
-      </div>
-    </div>
+    <ActivityRail
+      sidebarTabs={sidebarTabs}
+      toolWindowLaunchers={toolWindowLaunchers}
+      sidebarMode={sidebarMode}
+      isSidebarVisible={isSidebarVisible}
+      onSidebarModeSelect={handleSidebarModeSelect}
+    />
   ), [handleSidebarModeSelect, isSidebarVisible, sidebarMode, sidebarTabs, toolWindowLaunchers]);
 
   const renderedPerformancePanel = useMemo(() => (
@@ -17048,51 +17189,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const isTabPinned = Boolean(tab.pinned);
 
       return (
-        <LazyContextMenu
+        <OpenFileTab
           key={tab.path}
-          children={() => renderFileContextMenu(tab.path, 'file', {
-            allowDiff: isPathInside(rootPath, tab.path),
-            pinned: isTabPinned,
-            showPinToggle: true,
-          })}
-          trigger={(
-            <div
-              className={`group relative flex min-w-0 max-w-[220px] items-center gap-2 border-r border-zinc-800 px-3 py-2 text-xs ${isTabActive ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-100'}`}
-            >
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                onClick={() => {
-                  void activateFile(tab.path);
-                }}
-                onDoubleClick={() => {
-                  if (tab.preview) {
-                    void activateFile(tab.path, { promotePreview: true });
-                  }
-                }}
-              >
-                <FileIcon size={12} className="shrink-0" />
-                {isTabPinned && <Pin size={10} className="shrink-0 text-zinc-500" />}
-                {isReadOnlyTab && <Lock size={10} className="shrink-0 text-zinc-500" aria-label="read-only" />}
-                <span className={`truncate ${entryTextClassName}`}>{getFileLabel(tab.path)}</span>
-                {externalChangeEntry && (
-                  <span
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${getExternalChangeDotClassName(externalChangeEntry.changeType)}`}
-                    title={t('codePane.externalChangesTab')}
-                  />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void closeFileTab(tab.path);
-                }}
-                className="rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-              >
-                <X size={11} />
-              </button>
-            </div>
-          )}
+          tab={tab}
+          isActive={isTabActive}
+          isReadOnly={isReadOnlyTab}
+          entryTextClassName={entryTextClassName}
+          externalChangeType={externalChangeEntry?.changeType}
+          label={getFileLabel(tab.path)}
+          rootPath={rootPath}
+          renderContextMenu={renderFileContextMenu}
+          onActivate={activateFile}
+          onClose={closeFileTab}
+          t={t}
         />
       );
     }) : (
