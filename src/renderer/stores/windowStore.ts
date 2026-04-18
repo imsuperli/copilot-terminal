@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { Window, WindowStatus, Pane, LayoutNode } from '../types/window';
+import { Window, WindowStatus, Pane, LayoutNode, CodePaneState } from '../types/window';
 import { WindowGroup, GroupLayoutNode } from '../../shared/types/window-group';
 import { CustomCategory } from '../../shared/types/custom-category';
 import {
@@ -190,6 +190,35 @@ export function __resetWindowStoreAutoSaveStateForTests(): void {
 
 function isRuntimeOnlyPaneUpdate(updateKeys: string[]): boolean {
   return updateKeys.length > 0 && updateKeys.every((key) => runtimeOnlyPaneFields.has(key as keyof Pane));
+}
+
+function isRuntimeOnlyCodePaneUpdate(previousCode: CodePaneState | undefined, nextCode: CodePaneState | undefined): boolean {
+  if (!previousCode || !nextCode) {
+    return false;
+  }
+
+  const previousKeys = Object.keys(previousCode);
+  const nextKeys = Object.keys(nextCode);
+  if (previousKeys.length !== nextKeys.length) {
+    return false;
+  }
+
+  for (const key of nextKeys) {
+    if (!(key in previousCode)) {
+      return false;
+    }
+
+    const paneKey = key as keyof CodePaneState;
+    if (paneKey === 'selectedPath') {
+      continue;
+    }
+
+    if (previousCode[paneKey] !== nextCode[paneKey]) {
+      return false;
+    }
+  }
+
+  return previousCode.selectedPath !== nextCode.selectedPath;
 }
 
 export type TerminalSidebarSection = 'archived' | 'local' | 'ssh';
@@ -630,6 +659,7 @@ export const useWindowStore = create<WindowStore>()(
       const updateKeys = Object.keys(updates);
       const isRuntimeOnlyUpdate = isRuntimeOnlyPaneUpdate(updateKeys);
       let didChange = false;
+      let shouldSkipPersistence = false;
 
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
@@ -648,15 +678,20 @@ export const useWindowStore = create<WindowStore>()(
             return;
           }
 
+          shouldSkipPersistence = isRuntimeOnlyUpdate || (
+            updateKeys.length === 1
+            && updateKeys[0] === 'code'
+            && isRuntimeOnlyCodePaneUpdate(paneNode.pane.code, updates.code as CodePaneState | undefined)
+          );
           didChange = true;
           window.layout = updatePaneInLayout(window.layout, paneId, updates);
-          if (!isRuntimeOnlyUpdate) {
+          if (!shouldSkipPersistence) {
             window.lastActiveAt = new Date().toISOString();
           }
         }
       });
 
-      if (didChange && !isRuntimeOnlyUpdate) {
+      if (didChange && !shouldSkipPersistence) {
         const { windows, groups } = get();
         triggerAutoSave(windows, groups);
       }
