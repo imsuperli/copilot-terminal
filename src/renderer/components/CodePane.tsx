@@ -13510,9 +13510,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const currentDiffTargetPath = paneRef.current.code?.diffTargetPath ?? diffTargetPath ?? activeFilePath;
       const currentSecondaryFilePath = secondaryFilePathRef.current;
       const pendingExternalRequest = pendingExternalChangeDiffRef.current ?? pendingExternalChangeDiff;
-      const pendingExternalEntry = pendingExternalRequest?.filePath === activeFilePath
-        ? externalChangeEntriesRef.current.find((entry) => entry.filePath === activeFilePath) ?? null
-        : null;
+      let pendingExternalEntry: ExternalChangeEntry | null = null;
+      if (pendingExternalRequest?.filePath === activeFilePath) {
+        for (const entry of externalChangeEntriesRef.current) {
+          if (entry.filePath === activeFilePath) {
+            pendingExternalEntry = entry;
+            break;
+          }
+        }
+      }
       const shouldUseExternalDiffOnly = currentViewMode === 'diff' && Boolean(pendingExternalEntry);
       const loadedModel = shouldUseExternalDiffOnly
         ? fileModelsRef.current.get(activeFilePath) ?? null
@@ -15770,33 +15776,45 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (currentLocation) {
       if (direction > 0) {
-        nextProblem = sortedProblemLocations.find((problem) => (
-          problem.filePath > currentLocation.filePath
-          || (
-            problem.filePath === currentLocation.filePath
-            && (
-              problem.startLineNumber > currentLocation.lineNumber
-              || (
-                problem.startLineNumber === currentLocation.lineNumber
-                && problem.startColumn > currentLocation.column
+        for (const problem of sortedProblemLocations) {
+          if (
+            problem.filePath > currentLocation.filePath
+            || (
+              problem.filePath === currentLocation.filePath
+              && (
+                problem.startLineNumber > currentLocation.lineNumber
+                || (
+                  problem.startLineNumber === currentLocation.lineNumber
+                  && problem.startColumn > currentLocation.column
+                )
               )
             )
-          )
-        )) ?? sortedProblemLocations[0];
+          ) {
+            nextProblem = problem;
+            break;
+          }
+        }
       } else {
-        nextProblem = [...sortedProblemLocations].reverse().find((problem) => (
-          problem.filePath < currentLocation.filePath
-          || (
-            problem.filePath === currentLocation.filePath
-            && (
-              problem.startLineNumber < currentLocation.lineNumber
-              || (
-                problem.startLineNumber === currentLocation.lineNumber
-                && problem.startColumn < currentLocation.column
+        nextProblem = sortedProblemLocations[sortedProblemLocations.length - 1]!;
+        for (let index = sortedProblemLocations.length - 1; index >= 0; index -= 1) {
+          const problem = sortedProblemLocations[index]!;
+          if (
+            problem.filePath < currentLocation.filePath
+            || (
+              problem.filePath === currentLocation.filePath
+              && (
+                problem.startLineNumber < currentLocation.lineNumber
+                || (
+                  problem.startLineNumber === currentLocation.lineNumber
+                  && problem.startColumn < currentLocation.column
+                )
               )
             )
-          )
-        )) ?? sortedProblemLocations[sortedProblemLocations.length - 1];
+          ) {
+            nextProblem = problem;
+            break;
+          }
+        }
       }
     }
 
@@ -16614,10 +16632,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       setRunSessions((currentSessions) => {
-        const nextSessions = [
-          payload.session,
-          ...currentSessions.filter((session) => session.id !== payload.session.id),
-        ];
+        const nextSessions = [payload.session];
+        for (const session of currentSessions) {
+          if (session.id !== payload.session.id) {
+            nextSessions.push(session);
+          }
+        }
         return nextSessions.slice(0, 20);
       });
       setSelectedRunSessionId((currentSelectedSessionId) => currentSelectedSessionId ?? payload.session.id);
@@ -16650,10 +16670,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       setDebugSessions((currentSessions) => {
-        const nextSessions = [
-          payload.session,
-          ...currentSessions.filter((session) => session.id !== payload.session.id),
-        ];
+        const nextSessions = [payload.session];
+        for (const session of currentSessions) {
+          if (session.id !== payload.session.id) {
+            nextSessions.push(session);
+          }
+        }
         return nextSessions.slice(0, 20);
       });
       setSelectedDebugSessionId((currentSelectedSessionId) => currentSelectedSessionId ?? payload.session.id);
@@ -18855,7 +18877,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
           }
 
           const lineNumber = cursorStoreRef.current.getSnapshot().lineNumber;
-          return bookmarks.some((bookmark) => bookmark.id === `${activePath}:${lineNumber}`);
+          const bookmarkId = `${activePath}:${lineNumber}`;
+          for (const bookmark of bookmarks) {
+            if (bookmark.id === bookmarkId) {
+              return true;
+            }
+          }
+          return false;
         },
         onSelect: () => {
           toggleBookmarkAtCursor();
