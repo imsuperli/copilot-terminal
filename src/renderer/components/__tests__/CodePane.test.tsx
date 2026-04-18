@@ -7422,6 +7422,11 @@ describe('CodePane', () => {
     const view = renderCodePane(createPane());
 
     await openFileFromTree('index.ts', { doubleClick: true });
+    const primaryEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    if (!primaryEditor) {
+      throw new Error('expected primary editor instance');
+    }
+    vi.mocked(primaryEditor.setModel).mockClear();
 
     const tabLabel = (await screen.findAllByText('index.ts')).at(-1);
     if (!tabLabel) {
@@ -7439,6 +7444,7 @@ describe('CodePane', () => {
       size: 0.5,
       secondaryFilePath: '/workspace/project/src/index.ts',
     });
+    expect(primaryEditor.setModel).toHaveBeenCalledTimes(1);
   });
 
   it('shows bookmarks, todo items, and local history in the workspace tool window', async () => {

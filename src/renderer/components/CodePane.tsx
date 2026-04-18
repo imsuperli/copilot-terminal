@@ -5049,6 +5049,135 @@ function areEditorSurfaceBindingStatesEqual(
     && previousState.readonlySecondary === nextState.readonlySecondary;
 }
 
+function hasCodePaneStateUpdates(
+  currentState: CodePaneState,
+  updates: Partial<CodePaneState>,
+): boolean {
+  const updateKeys = Object.keys(updates) as Array<keyof CodePaneState>;
+  for (const key of updateKeys) {
+    switch (key) {
+      case 'rootPath':
+        if (currentState.rootPath !== updates.rootPath) {
+          return true;
+        }
+        break;
+      case 'openFiles':
+        if (!areOpenFilesEqual(currentState.openFiles, updates.openFiles ?? [])) {
+          return true;
+        }
+        break;
+      case 'activeFilePath':
+        if ((currentState.activeFilePath ?? null) !== (updates.activeFilePath ?? null)) {
+          return true;
+        }
+        break;
+      case 'selectedPath':
+        if ((currentState.selectedPath ?? null) !== (updates.selectedPath ?? null)) {
+          return true;
+        }
+        break;
+      case 'expandedPaths':
+        if (!areStringArraysEqual(currentState.expandedPaths ?? [currentState.rootPath], updates.expandedPaths ?? [currentState.rootPath])) {
+          return true;
+        }
+        break;
+      case 'viewMode':
+        if ((currentState.viewMode ?? 'editor') !== (updates.viewMode ?? 'editor')) {
+          return true;
+        }
+        break;
+      case 'diffTargetPath':
+        if ((currentState.diffTargetPath ?? null) !== (updates.diffTargetPath ?? null)) {
+          return true;
+        }
+        break;
+      case 'runConfigurations':
+        if (!areRunTargetConfigurationsEqual(currentState.runConfigurations, updates.runConfigurations)) {
+          return true;
+        }
+        break;
+      case 'bookmarks':
+        if (!areCodePaneBookmarksEqual(currentState.bookmarks, updates.bookmarks)) {
+          return true;
+        }
+        break;
+      case 'breakpoints':
+        if (!arePersistedBreakpointsEqual(currentState.breakpoints, updates.breakpoints)) {
+          return true;
+        }
+        break;
+      case 'debug':
+        if (!areCodePaneDebugStatesEqual(currentState.debug ?? {}, updates.debug ?? {})) {
+          return true;
+        }
+        break;
+      case 'layout':
+        if (!updates.layout) {
+          if (currentState.layout) {
+            return true;
+          }
+          break;
+        }
+        if (
+          !areCodePaneLayoutSidebarsEqual(
+            currentState.layout?.sidebar ?? {
+              visible: true,
+              activeView: 'files',
+              width: CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+              lastExpandedWidth: CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+            },
+            updates.layout.sidebar ?? {
+              visible: true,
+              activeView: 'files',
+              width: CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+              lastExpandedWidth: CODE_PANE_SIDEBAR_DEFAULT_WIDTH,
+            },
+          )
+          || !areCodePaneBottomPanelLayoutsEqual(
+            currentState.layout?.bottomPanel ?? { height: CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT },
+            updates.layout.bottomPanel ?? { height: CODE_PANE_BOTTOM_PANEL_DEFAULT_HEIGHT },
+          )
+          || !areCodePaneEditorSplitLayoutsEqual(
+            currentState.layout?.editorSplit ?? {
+              visible: false,
+              size: CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE,
+              secondaryFilePath: null,
+            },
+            updates.layout.editorSplit ?? {
+              visible: false,
+              size: CODE_PANE_EDITOR_SPLIT_DEFAULT_SIZE,
+              secondaryFilePath: null,
+            },
+          )
+        ) {
+          return true;
+        }
+        break;
+      case 'savePipeline':
+        if (
+          (currentState.savePipeline?.formatOnSave ?? false) !== (updates.savePipeline?.formatOnSave ?? false)
+          || (currentState.savePipeline?.organizeImportsOnSave ?? false) !== (updates.savePipeline?.organizeImportsOnSave ?? false)
+          || (currentState.savePipeline?.lintOnSave ?? false) !== (updates.savePipeline?.lintOnSave ?? false)
+        ) {
+          return true;
+        }
+        break;
+      case 'qualityGate':
+        if (currentState.qualityGate !== updates.qualityGate) {
+          return true;
+        }
+        break;
+      default:
+        if (currentState[key] !== updates[key]) {
+          return true;
+        }
+        break;
+    }
+  }
+
+  return false;
+}
+
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -5595,14 +5724,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       },
       ...(paneRef.current.code ?? {}),
     };
+
+    if (!hasCodePaneStateUpdates(currentCodeState, updates)) {
+      return;
+    }
+
     const nextCodeState = {
       ...currentCodeState,
       ...updates,
     };
-
-    if (areCodePaneStatesEqual(currentCodeState, nextCodeState)) {
-      return;
-    }
 
     paneRef.current = {
       ...paneRef.current,
@@ -12136,8 +12266,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       visible: true,
       secondaryFilePath: filePath,
     });
-    await refreshEditorSurface();
-  }, [loadFileIntoModel, persistEditorSplitLayout, refreshEditorSurface, updateOpenFileTabs]);
+  }, [loadFileIntoModel, persistEditorSplitLayout, updateOpenFileTabs]);
 
   const toggleEditorSplit = useCallback(async () => {
     if (isEditorSplitVisible) {
