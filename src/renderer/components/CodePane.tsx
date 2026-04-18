@@ -11251,13 +11251,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [getActiveEditorContext, getModelRequestPath, resolveInspectorTargetContext, rootPath, t, trackRequest]);
 
   const closeInspectorPanel = useCallback(() => {
-    setInspectorPanelMode(null);
-    setInspectorPanelFilePath(null);
+    setInspectorPanelMode((currentMode) => (currentMode === null ? currentMode : null));
+    setInspectorPanelFilePath((currentFilePath) => (currentFilePath === null ? currentFilePath : null));
   }, []);
 
   const openInspectorOutlinePanel = useCallback(async (filePath: string) => {
-    setInspectorPanelMode('outline');
-    setInspectorPanelFilePath(filePath);
+    setInspectorPanelMode((currentMode) => (currentMode === 'outline' ? currentMode : 'outline'));
+    setInspectorPanelFilePath((currentFilePath) => (currentFilePath === filePath ? currentFilePath : filePath));
     await loadDocumentSymbols(filePath);
   }, [loadDocumentSymbols]);
 
@@ -11394,8 +11394,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const openInspectorHierarchyPanel = useCallback(async (filePath: string, mode: HierarchyMode) => {
     setSelectedHierarchyMode(mode);
-    setInspectorPanelMode('hierarchy');
-    setInspectorPanelFilePath(filePath);
+    setInspectorPanelMode((currentMode) => (currentMode === 'hierarchy' ? currentMode : 'hierarchy'));
+    setInspectorPanelFilePath((currentFilePath) => (currentFilePath === filePath ? currentFilePath : filePath));
     const symbols = await loadDocumentSymbolsForFile(filePath).catch(() => null);
     const preferredRange = symbols?.[0]?.selectionRange ?? null;
     const context = await resolveInspectorTargetContext(filePath, { preferredRange });
@@ -19644,7 +19644,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (bottomPanelMode === 'hierarchy') {
-      setBottomPanelMode(null);
+      setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
       return;
     }
 
@@ -19897,8 +19897,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const handleGitWorkbenchTabChange = useCallback((tab: GitToolWindowTab) => {
-    setGitWorkbenchInitialTab(tab);
-    setActiveGitWorkbenchTab(tab);
+    setGitWorkbenchInitialTab((currentTab) => (currentTab === tab ? currentTab : tab));
+    setActiveGitWorkbenchTab((currentTab) => (currentTab === tab ? currentTab : tab));
   }, []);
 
   const handleGitWorkbenchRefreshRebase = useCallback(() => {
@@ -20273,8 +20273,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const handleSearchEverywhereModeChange = useCallback((mode: SearchEverywhereMode) => {
-    setSearchEverywhereMode(mode);
-    setSearchEverywhereSelectedIndex(0);
+    setSearchEverywhereMode((currentMode) => (currentMode === mode ? currentMode : mode));
+    setSearchEverywhereSelectedIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
   }, []);
 
   const handleSearchEverywhereQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
