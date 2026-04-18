@@ -1941,19 +1941,45 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
   scrollRef,
   searchQuery,
   isSearching,
+  viewport,
+  onViewportChange,
   body,
   onSearchQueryChange,
-  onScroll,
   t,
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>;
   searchQuery: string;
   isSearching: boolean;
+  viewport: FileTreeViewport;
+  onViewportChange: (viewport: FileTreeViewport) => void;
   body: React.ReactNode;
   onSearchQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onScroll: (event: React.UIEvent<HTMLDivElement>) => void;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  React.useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncViewport = () => {
+      onViewportChange({
+        scrollTop: container.scrollTop,
+        viewportHeight: container.clientHeight,
+      });
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [onViewportChange, scrollRef]);
+
   return (
     <>
       <div className="border-b border-zinc-800 px-2 py-2">
@@ -1971,7 +1997,12 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
       <div
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-auto px-1 py-2"
-        onScroll={onScroll}
+        onScroll={(event) => {
+          onViewportChange({
+            scrollTop: event.currentTarget.scrollTop,
+            viewportHeight: viewport.viewportHeight || event.currentTarget.clientHeight,
+          });
+        }}
       >
         {body}
       </div>
@@ -2718,6 +2749,11 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
 type SaveFileOptions = {
   overwrite?: boolean;
   skipQualityPipeline?: boolean;
+};
+
+type FileTreeViewport = {
+  scrollTop: number;
+  viewportHeight: number;
 };
 
 type GitRevisionDiffRequest = {
@@ -4740,6 +4776,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const rootContainerRef = useRef<HTMLDivElement | null>(null);
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const filesSidebarScrollRef = useRef<HTMLDivElement | null>(null);
+  const filesSidebarViewportRef = useRef<FileTreeViewport>({
+    scrollTop: 0,
+    viewportHeight: 0,
+  });
   const rootPath = pane.code?.rootPath ?? pane.cwd;
   const cachedExternalLibrarySections = useMemo(
     () => getExternalLibraryCache(rootPath) ?? [],
@@ -4764,7 +4804,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const viewMode = pane.code?.viewMode ?? 'editor';
   const diffTargetPath = pane.code?.diffTargetPath ?? null;
   const savePipelineState = getInitialSavePipelineState(pane);
-  const qualityGateState = pane.code?.qualityGate ?? null;
+  const [qualityGateState, setQualityGateState] = useState<CodePaneSaveQualityState | null>(
+    () => pane.code?.qualityGate ?? null,
+  );
   const initialSidebarLayout = useMemo(() => getInitialSidebarLayout(pane), [pane]);
   const initialEditorSplitLayout = useMemo(() => getInitialEditorSplitLayout(pane), [pane]);
   const initialBottomPanelLayout = useMemo(() => getInitialBottomPanelLayout(pane), [pane]);
@@ -4792,6 +4834,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const secondaryViewStatesRef = useRef(new Map<string, MonacoViewState>());
   const autoSaveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const documentSyncTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const documentSyncQueueRef = useRef(new Map<string, Promise<void>>());
   const localHistoryTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const localHistoryEntriesRef = useRef(new Map<string, LocalHistoryEntry[]>());
   const suppressedExternalChangePathsRef = useRef(new Map<string, number>());
@@ -4844,8 +4887,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [sidebarWidth, setSidebarWidth] = useState(initialSidebarLayout.width);
   const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(initialSidebarLayout.lastExpandedWidth);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
-  const [filesSidebarScrollTop, setFilesSidebarScrollTop] = useState(0);
-  const [filesSidebarViewportHeight, setFilesSidebarViewportHeight] = useState(0);
   const [isEditorSplitVisible, setIsEditorSplitVisible] = useState(initialEditorSplitLayout.visible);
   const [editorSplitSize, setEditorSplitSize] = useState(initialEditorSplitLayout.size);
   const [secondaryFilePath, setSecondaryFilePath] = useState<string | null>(initialEditorSplitLayout.secondaryFilePath);
@@ -5086,6 +5127,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     paneRef.current = pane;
   }, [pane]);
+
+  useEffect(() => {
+    setQualityGateState(pane.code?.qualityGate ?? null);
+  }, [pane.id, pane.code?.qualityGate]);
 
   useEffect(() => {
     localHistoryEntriesRef.current.clear();
@@ -5431,31 +5476,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
   }, [bottomPanelMode, persistBottomPanelLayout]);
 
-  useEffect(() => {
-    const scrollElement = filesSidebarScrollRef.current;
-    if (!scrollElement) {
-      return;
-    }
-
-    const syncViewportHeight = () => {
-      const nextHeight = scrollElement.clientHeight;
-      setFilesSidebarViewportHeight((currentHeight) => (
-        currentHeight === nextHeight ? currentHeight : nextHeight
-      ));
-    };
-
-    syncViewportHeight();
-
-    const resizeObserver = new ResizeObserver(() => {
-      syncViewportHeight();
-    });
-    resizeObserver.observe(scrollElement);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [isSidebarVisible, sidebarMode]);
-
   const persistDebugState = useCallback((updates: Partial<NonNullable<NonNullable<Pane['code']>['debug']>>) => {
     const currentDebugState = paneRef.current.code?.debug ?? {};
     persistCodeState({
@@ -5477,10 +5497,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [persistCodeState]);
 
   const persistQualityGateState = useCallback((qualityGate: CodePaneSaveQualityState) => {
-    persistCodeState({
-      qualityGate,
-    });
-  }, [persistCodeState]);
+    setQualityGateState((currentQualityGate) => (
+      currentQualityGate === qualityGate ? currentQualityGate : qualityGate
+    ));
+  }, []);
 
   const getPersistedExpandedPaths = useCallback((paths: Set<string>) => (
     Array.from(paths).filter((directoryPath) => isPathInside(rootPath, directoryPath))
@@ -5997,6 +6017,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
     await bridge.saveDocument(context);
   }, [buildLanguageDocumentContext]);
 
+  const queueLanguageDocumentSync = useCallback((
+    filePath: string,
+    reason: 'open' | 'change' | 'save' | 'close',
+    task: () => Promise<void>,
+  ) => {
+    const currentQueue = documentSyncQueueRef.current.get(filePath) ?? Promise.resolve();
+    const nextQueue = currentQueue
+      .catch(() => {})
+      .then(async () => {
+        await task();
+      })
+      .catch((error) => {
+        console.warn(`[CodePane] Failed to ${reason} language document for ${filePath}`, error);
+      });
+
+    documentSyncQueueRef.current.set(filePath, nextQueue);
+    return nextQueue.finally(() => {
+      if (documentSyncQueueRef.current.get(filePath) === nextQueue) {
+        documentSyncQueueRef.current.delete(filePath);
+      }
+    });
+  }, []);
+
   const flushPendingLanguageSync = useCallback(async (filePath: string) => {
     const timer = documentSyncTimersRef.current.get(filePath);
     if (!timer) {
@@ -6005,8 +6048,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     clearTimeout(timer);
     documentSyncTimersRef.current.delete(filePath);
-    await syncLanguageDocument(filePath, 'change');
-  }, [syncLanguageDocument]);
+    await queueLanguageDocumentSync(filePath, 'change', async () => {
+      await syncLanguageDocument(filePath, 'change');
+    });
+  }, [queueLanguageDocumentSync, syncLanguageDocument]);
 
   const closeLanguageDocument = useCallback(async (filePath: string) => {
     const bridge = languageBridgeRef.current ?? (
@@ -6024,8 +6069,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    await bridge.closeDocument(context);
-  }, [buildLanguageDocumentContext]);
+    await queueLanguageDocumentSync(filePath, 'close', async () => {
+      await bridge.closeDocument(context);
+    });
+  }, [buildLanguageDocumentContext, queueLanguageDocumentSync]);
 
   const closeAllLanguageDocuments = useCallback(async () => {
     const filePaths = Array.from(fileModelsRef.current.keys());
@@ -7286,7 +7333,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         documentSyncTimersRef.current.set(filePath, setTimeout(() => {
           documentSyncTimersRef.current.delete(filePath);
-          void syncLanguageDocument(filePath, 'change');
+          void queueLanguageDocumentSync(filePath, 'change', async () => {
+            await syncLanguageDocument(filePath, 'change');
+          });
         }, 150));
 
         autoSaveTimersRef.current.set(filePath, setTimeout(() => {
@@ -7326,7 +7375,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     refreshProblems();
     addLocalHistoryEntry(filePath, 'open', readResult.content);
     if (!readResult.readOnly) {
-      void syncLanguageDocument(filePath, 'open');
+      void queueLanguageDocumentSync(filePath, 'open', async () => {
+        await syncLanguageDocument(filePath, 'open');
+      });
     }
     return model;
   }, [
@@ -7335,6 +7386,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     clearDefinitionLookupCache,
     markDirty,
     promotePreviewTab,
+    queueLanguageDocumentSync,
     refreshProblems,
     scheduleLocalHistorySnapshot,
     syncLanguageDocument,
@@ -7995,7 +8047,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    void refreshGitSnapshot({ force: true });
+    void refreshGitSnapshot({ force: true, includeGraph: false });
     return true;
   }, [clearDefinitionLookupCache, markDirty, refreshGitSnapshot, rootPath, syncLanguageDocument, t]);
 
@@ -8260,8 +8312,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
         steps: nextSteps,
       }));
     }
-    await syncLanguageDocument(filePath, 'save');
-    void refreshGitSnapshot({ force: true });
+    void queueLanguageDocumentSync(filePath, 'save', async () => {
+      await syncLanguageDocument(filePath, 'save');
+    });
+    void refreshGitSnapshot({ force: true, includeGraph: false });
     return true;
   }, [
     addLocalHistoryEntry,
@@ -8269,6 +8323,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     flushPendingLanguageSync,
     markDirty,
     markSaving,
+    queueLanguageDocumentSync,
     refreshGitSnapshot,
     rootPath,
     runSaveQualityPipeline,
@@ -9870,8 +9925,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
           suppressModelEventsRef.current.delete(change.filePath);
           clearDefinitionLookupCache();
           markDirty(change.filePath, false);
-          await syncLanguageDocument(change.filePath, 'change');
-          await syncLanguageDocument(change.filePath, 'save');
+          await queueLanguageDocumentSync(change.filePath, 'change', async () => {
+            await syncLanguageDocument(change.filePath, 'change');
+          });
+          void queueLanguageDocumentSync(change.filePath, 'save', async () => {
+            await syncLanguageDocument(change.filePath, 'save');
+          });
         }
         continue;
       }
@@ -9905,6 +9964,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     flushPendingLanguageSync,
     markDirty,
     openFiles,
+    queueLanguageDocumentSync,
     refactorPreview,
     refreshGitSnapshot,
     suppressExternalChangesForPaths,
@@ -11552,7 +11612,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
     updateReferencesForRenamedPath(targetPath, response.data.path);
     for (const filePath of affectedOpenFilePaths) {
-      await syncLanguageDocument(replacePathPrefix(filePath, targetPath, response.data.path), 'open');
+      const renamedFilePath = replacePathPrefix(filePath, targetPath, response.data.path);
+      await queueLanguageDocumentSync(renamedFilePath, 'open', async () => {
+        await syncLanguageDocument(renamedFilePath, 'open');
+      });
     }
     await revealPathInExplorer(response.data.path);
     await refreshDirectoryPaths(directoriesToRefresh, {
@@ -11758,7 +11821,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     suppressModelEventsRef.current.delete(entry.filePath);
     clearDefinitionLookupCache();
     markDirty(entry.filePath, true);
-    await syncLanguageDocument(entry.filePath, 'change');
+    await queueLanguageDocumentSync(entry.filePath, 'change', async () => {
+      await syncLanguageDocument(entry.filePath, 'change');
+    });
     await activateFile(entry.filePath, {
       recordRecent: true,
       promotePreview: true,
@@ -11769,6 +11834,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     clearDefinitionLookupCache,
     loadFileIntoModel,
     markDirty,
+    queueLanguageDocumentSync,
     syncLanguageDocument,
   ]);
 
@@ -13453,15 +13519,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     return buildExplorerTreeRows(rootPath, 1);
   }, [buildExplorerTreeRows, isRootExpanded, isSidebarVisible, rootPath, sidebarMode, trimmedDeferredSearchQuery]);
-  const visibleRootExplorerRows = useMemo(() => getWindowedListSlice({
-    items: rootExplorerRows,
-    scrollTop: Math.max(0, filesSidebarScrollTop - CODE_PANE_EXPLORER_ROW_HEIGHT),
-    viewportHeight: filesSidebarViewportHeight,
-    rowHeight: CODE_PANE_EXPLORER_ROW_HEIGHT,
-    overscan: CODE_PANE_EXPLORER_ROW_OVERSCAN,
-    threshold: CODE_PANE_EXPLORER_WINDOWING_THRESHOLD,
-  }), [filesSidebarScrollTop, filesSidebarViewportHeight, rootExplorerRows]);
-
   const externalLibraryExplorerRowsByRoot = useMemo(() => {
     const rowsByRoot = new Map<string, ExplorerTreeRow[]>();
     if (!isSidebarVisible || sidebarMode !== 'files' || !hasExternalLibraries) {
@@ -13615,20 +13672,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }, [expandedDirectories, externalLibrariesError, externalLibraryExplorerRowsByRoot, externalLibrarySections, hasExternalLibraries, isDirectoryLoading, isSidebarVisible, renderExplorerTreeRows, renderFileContextMenu, selectExplorerPath, selectedPath, sidebarMode, t, toggleDirectory]);
 
-  const visibleSearchResults = useMemo(() => getWindowedListSlice({
-    items: searchResults,
-    scrollTop: filesSidebarScrollTop,
-    viewportHeight: filesSidebarViewportHeight,
-    rowHeight: CODE_PANE_EXPLORER_ROW_HEIGHT,
-    overscan: CODE_PANE_EXPLORER_ROW_OVERSCAN,
-    threshold: CODE_PANE_EXPLORER_WINDOWING_THRESHOLD,
-  }), [filesSidebarScrollTop, filesSidebarViewportHeight, searchResults]);
-  const renderedSearchResults = useMemo(() => {
+  const renderedFilesSidebarBody = useMemo(() => {
     if (!isSidebarVisible || sidebarMode !== 'files') {
       return null;
     }
 
-    const renderedRows = visibleSearchResults.items.map((filePath) => {
+    const { scrollTop: filesSidebarScrollTop, viewportHeight: filesSidebarViewportHeight } = filesSidebarViewportRef.current;
+    const visibleRootExplorerRows = getWindowedListSlice({
+      items: rootExplorerRows,
+      scrollTop: Math.max(0, filesSidebarScrollTop - CODE_PANE_EXPLORER_ROW_HEIGHT),
+      viewportHeight: filesSidebarViewportHeight,
+      rowHeight: CODE_PANE_EXPLORER_ROW_HEIGHT,
+      overscan: CODE_PANE_EXPLORER_ROW_OVERSCAN,
+      threshold: CODE_PANE_EXPLORER_WINDOWING_THRESHOLD,
+    });
+    const visibleSearchResults = getWindowedListSlice({
+      items: searchResults,
+      scrollTop: filesSidebarScrollTop,
+      viewportHeight: filesSidebarViewportHeight,
+      rowHeight: CODE_PANE_EXPLORER_ROW_HEIGHT,
+      overscan: CODE_PANE_EXPLORER_ROW_OVERSCAN,
+      threshold: CODE_PANE_EXPLORER_WINDOWING_THRESHOLD,
+    });
+
+    const renderedSearchResults = visibleSearchResults.items.map((filePath) => {
       const entryStatus = getEntryStatus(filePath, 'file');
       return (
         <SearchResultRowButton
@@ -13650,37 +13717,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       );
     });
 
-    if (!visibleSearchResults.isWindowed) {
-      return renderedRows;
-    }
-
-    return (
-      <div style={{ height: `${visibleSearchResults.totalHeight}px`, position: 'relative' }}>
-        <div
-          style={{
-            transform: `translateY(${visibleSearchResults.offsetTop}px)`,
-          }}
-        >
-          {renderedRows}
+    const renderedWindowedSearchResults = !visibleSearchResults.isWindowed
+      ? renderedSearchResults
+      : (
+        <div style={{ height: `${visibleSearchResults.totalHeight}px`, position: 'relative' }}>
+          <div
+            style={{
+              transform: `translateY(${visibleSearchResults.offsetTop}px)`,
+            }}
+          >
+            {renderedSearchResults}
+          </div>
         </div>
-      </div>
-    );
-  }, [
-    activateFile,
-    getEntryStatus,
-    isSidebarVisible,
-    renderFileContextMenu,
-    rootPath,
-    searchResults,
-    selectedPath,
-    sidebarMode,
-    visibleSearchResults,
-  ]);
-
-  const renderedFilesSidebarBody = useMemo(() => {
-    if (!isSidebarVisible || sidebarMode !== 'files') {
-      return null;
-    }
+      );
 
     if (isBootstrapping) {
       return (
@@ -13696,7 +13745,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (trimmedDeferredSearchQuery) {
-      return searchResults.length > 0 ? renderedSearchResults : (
+      return searchResults.length > 0 ? renderedWindowedSearchResults : (
         <div className="px-2 text-xs text-zinc-500">{t('common.noMatchingWindows')}</div>
       );
     }
@@ -13783,13 +13832,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     isSidebarVisible,
     renderFileContextMenu,
     renderedExternalLibrarySections,
-    renderedSearchResults,
     searchResults.length,
     renderExplorerTreeRows,
-    visibleRootExplorerRows,
     rootExplorerRows,
     rootLabel,
     rootPath,
+    getEntryStatus,
+    selectedPath,
     searchError,
     selectExplorerPath,
     sidebarEntries,
@@ -16320,8 +16369,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setSearchQuery(event.target.value);
   }, []);
 
-  const handleFilesSidebarScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
-    setFilesSidebarScrollTop(event.currentTarget.scrollTop);
+  const handleFilesSidebarViewportChange = useCallback((viewport: FileTreeViewport) => {
+    filesSidebarViewportRef.current = viewport;
   }, []);
 
   const handleSearchPanelModeChange = useCallback((nextMode: SearchPanelMode) => {
@@ -17638,9 +17687,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
           scrollRef={filesSidebarScrollRef}
           searchQuery={searchQuery}
           isSearching={isSearching}
+          viewport={filesSidebarViewportRef.current}
+          onViewportChange={handleFilesSidebarViewportChange}
           body={renderedFilesSidebarBody}
           onSearchQueryChange={handleFilesSearchQueryChange}
-          onScroll={handleFilesSidebarScroll}
           t={t}
         />
       );
@@ -17740,7 +17790,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     handleContentSearchQueryChange,
     handleEditorActionFindUsages,
     handleFilesSearchQueryChange,
-    handleFilesSidebarScroll,
+    handleFilesSidebarViewportChange,
     handleGitOpenFileDiff,
     handleGitStagePath,
     handleGitUnstagePath,
