@@ -5126,6 +5126,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const focusedEditorTargetRef = useRef<EditorTarget>('editor');
   const runtimeStoreRef = useRef(new CodePaneRuntimeStore());
   const cursorStoreRef = useRef(new CodePaneCursorStore());
+  const refreshEditorSurfaceCoreRef = useRef<(() => Promise<void>) | null>(null);
+  const pendingEditorSurfaceRefreshRef = useRef<Promise<void> | null>(null);
+  const queuedEditorSurfaceRefreshRef = useRef(false);
+  const editorSurfaceRefreshSequenceRef = useRef(0);
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
@@ -6724,6 +6728,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const disposeAllModels = useCallback(() => {
     editorSurfaceRequestIdRef.current += 1;
+    queuedEditorSurfaceRefreshRef.current = false;
+    pendingEditorSurfaceRefreshRef.current = null;
     for (const timer of autoSaveTimersRef.current.values()) {
       clearTimeout(timer);
     }
@@ -7961,7 +7967,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     updateDefinitionLinkHover,
   ]);
 
-  const refreshEditorSurface = useCallback(async () => {
+  const refreshEditorSurfaceCore = useCallback(async () => {
     const requestId = ++editorSurfaceRequestIdRef.current;
     const isCurrentRequest = () => requestId === editorSurfaceRequestIdRef.current;
     const hostElement = editorHostRef.current;
@@ -8241,6 +8247,35 @@ export const CodePane: React.FC<CodePaneProps> = ({
     saveCurrentViewState,
     viewMode,
   ]);
+
+  useEffect(() => {
+    refreshEditorSurfaceCoreRef.current = refreshEditorSurfaceCore;
+  }, [refreshEditorSurfaceCore]);
+
+  const refreshEditorSurface = useCallback(() => {
+    const sequence = ++editorSurfaceRefreshSequenceRef.current;
+    if (pendingEditorSurfaceRefreshRef.current) {
+      queuedEditorSurfaceRefreshRef.current = true;
+      return pendingEditorSurfaceRefreshRef.current;
+    }
+
+    const runRefresh = async (): Promise<void> => {
+      try {
+        await refreshEditorSurfaceCoreRef.current?.();
+      } finally {
+        pendingEditorSurfaceRefreshRef.current = null;
+        if (queuedEditorSurfaceRefreshRef.current && sequence !== editorSurfaceRefreshSequenceRef.current) {
+          queuedEditorSurfaceRefreshRef.current = false;
+          pendingEditorSurfaceRefreshRef.current = runRefresh();
+          return await pendingEditorSurfaceRefreshRef.current;
+        }
+        queuedEditorSurfaceRefreshRef.current = false;
+      }
+    };
+
+    pendingEditorSurfaceRefreshRef.current = runRefresh();
+    return pendingEditorSurfaceRefreshRef.current;
+  }, []);
 
   const reloadFileFromDisk = useCallback(async (filePath: string) => {
     const response = await window.electronAPI.codePaneReadFile({
@@ -12688,6 +12723,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     return () => {
       cancelled = true;
+      if (editorSurfaceRequestIdRef.current === requestId) {
+        editorSurfaceRequestIdRef.current += 1;
+      }
     };
   }, [
     activeFilePath,

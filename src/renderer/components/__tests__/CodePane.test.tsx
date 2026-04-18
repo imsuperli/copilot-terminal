@@ -6332,6 +6332,55 @@ describe('CodePane', () => {
     });
   });
 
+  it('does not rebind the editor model for watcher updates on opened files', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    const activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    if (!activeEditor) {
+      throw new Error('expected active editor instance');
+    }
+
+    vi.mocked(activeEditor.setModel).mockClear();
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 4;\n',
+        mtimeMs: 220,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 4;\n');
+    });
+    expect(activeEditor.setModel).not.toHaveBeenCalled();
+  });
+
   it('records external changes without auto-writing the file when local edits were made in the editor model', async () => {
     renderCodePane(createPane());
 
