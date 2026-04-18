@@ -12814,8 +12814,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    invalidateProjectCache(rootPath, 'git-status');
-    await refreshGitSnapshot({ includeGraph: false });
+    scheduleGitStatusRefresh();
     setRefactorPreview((currentPreview) => (currentPreview === null ? currentPreview : null));
     setSelectedPreviewChangeId((currentChangeId) => (currentChangeId === null ? currentChangeId : null));
     setRefactorPreviewError((currentError) => (currentError === null ? currentError : null));
@@ -12834,7 +12833,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     openFiles,
     queueLanguageDocumentSync,
     refactorPreview,
-    refreshGitSnapshot,
+    scheduleGitStatusRefresh,
     suppressExternalChangesForPaths,
     syncLanguageDocument,
     t,
@@ -12870,7 +12869,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isCurrentlyExpanded) {
       const nextExpandedDirectories = new Set(currentExpandedDirectories);
       nextExpandedDirectories.delete(directoryPath);
-      setExpandedDirectories(nextExpandedDirectories);
+      setExpandedDirectories((currentDirectories) => (
+        currentDirectories.size === nextExpandedDirectories.size
+        && [...nextExpandedDirectories].every((candidatePath) => currentDirectories.has(candidatePath))
+          ? currentDirectories
+          : nextExpandedDirectories
+      ));
       persistCodeState({
         selectedPath: directoryPath,
         expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
@@ -12898,7 +12902,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       nextExpandedDirectories.add(visiblePath);
     }
     nextExpandedDirectories.add(terminalPath);
-    setExpandedDirectories(nextExpandedDirectories);
+    setExpandedDirectories((currentDirectories) => (
+      currentDirectories.size === nextExpandedDirectories.size
+      && [...nextExpandedDirectories].every((candidatePath) => currentDirectories.has(candidatePath))
+        ? currentDirectories
+        : nextExpandedDirectories
+    ));
     persistCodeState({
       selectedPath: terminalPath,
       expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
@@ -13960,7 +13969,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
     loadedDirectoriesRef.current = nextLoadedDirectories;
 
-    setLoadedDirectories(nextLoadedDirectories);
+    setLoadedDirectories((currentLoadedDirectories) => (
+      currentLoadedDirectories.size === nextLoadedDirectories.size
+      && [...nextLoadedDirectories].every((directoryPath) => currentLoadedDirectories.has(directoryPath))
+        ? currentLoadedDirectories
+        : nextLoadedDirectories
+    ));
     setExpandedDirectories((currentExpandedDirectories) => {
       if (removedDirectoryPaths.length === 0) {
         return currentExpandedDirectories;
@@ -15395,18 +15409,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return undefined;
     }
 
-    void refreshGitSnapshot({ includeGraph: false });
+    scheduleGitStatusRefresh();
 
     const refreshInterval = window.setInterval(() => {
       if (!document.hidden) {
-        void refreshGitSnapshot({ includeGraph: false });
+        scheduleGitStatusRefresh();
       }
     }, 5000);
 
     return () => {
       window.clearInterval(refreshInterval);
     };
-  }, [isSidebarVisible, refreshGitSnapshot, sidebarMode]);
+  }, [isSidebarVisible, scheduleGitStatusRefresh, sidebarMode]);
 
   useEffect(() => {
     const availableCommitShas = new Set<string>();
