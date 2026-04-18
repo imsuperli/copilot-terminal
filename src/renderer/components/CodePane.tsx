@@ -15165,7 +15165,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             return;
           }
 
-          const nextIndexStatus = {
+          const nextIndexStatus: CodePaneIndexStatus = {
             paneId: pane.id,
             rootPath,
             state: 'error',
@@ -15183,7 +15183,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             return;
           }
 
-          const nextIndexStatus = {
+          const nextIndexStatus: CodePaneIndexStatus = {
             paneId: pane.id,
             rootPath,
             state: 'error',
