@@ -48,6 +48,7 @@ vi.mock('../ui/AppTooltip', () => ({
 
 class FakeModel {
   private listeners = new Set<ChangeListener>();
+  private versionId = 1;
 
   constructor(
     private value: string,
@@ -107,9 +108,18 @@ class FakeModel {
 
   setValue(value: string) {
     this.value = value;
+    this.versionId += 1;
     for (const listener of Array.from(this.listeners)) {
       listener();
     }
+  }
+
+  getAlternativeVersionId() {
+    return this.versionId;
+  }
+
+  getVersionId() {
+    return this.versionId;
   }
 
   dispose() {
@@ -6056,6 +6066,70 @@ describe('CodePane', () => {
     });
 
     vi.useRealTimers();
+  });
+
+  it('keeps the file dirty when content changes while a save is in flight', async () => {
+    let resolveWrite: ((value: { success: true; data: { mtimeMs: number } }) => void) | null = null;
+    vi.mocked(window.electronAPI.codePaneWriteFile).mockImplementationOnce(async () => (
+      await new Promise((resolve) => {
+        resolveWrite = resolve;
+      })
+    ));
+
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    vi.useFakeTimers();
+
+    try {
+      await act(async () => {
+        fakeMonacoState.models.get('/workspace/project/src/index.ts')?.setValue('export const value = 2;\n');
+        vi.advanceTimersByTime(800);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        content: 'export const value = 2;\n',
+        expectedMtimeMs: 100,
+      });
+
+      await act(async () => {
+        fakeMonacoState.models.get('/workspace/project/src/index.ts')?.setValue('export const value = 3;\n');
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        resolveWrite?.({
+          success: true,
+          data: {
+            mtimeMs: 200,
+          },
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      vi.mocked(window.electronAPI.codePaneWriteFile).mockClear();
+
+      await act(async () => {
+        vi.advanceTimersByTime(800);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        content: 'export const value = 3;\n',
+        expectedMtimeMs: 200,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('restores diff mode from persisted pane state', async () => {
