@@ -11789,8 +11789,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       && currentViewMode === 'editor'
       && (currentDiffTargetPath ?? null) === null;
 
-    setPendingGitRevisionDiff(null);
-    setPendingExternalChangeDiff(null);
+    setPendingGitRevisionDiff((currentRequest) => (
+      currentRequest === null ? currentRequest : null
+    ));
+    setPendingExternalChangeDiff((currentRequest) => (
+      currentRequest === null ? currentRequest : null
+    ));
     persistCodeState({
       openFiles: nextTabs,
       activeFilePath: filePath,
@@ -12830,8 +12834,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (!filePath) {
       return;
     }
-    setPendingGitRevisionDiff(null);
-    setPendingExternalChangeDiff(null);
+    setPendingGitRevisionDiff((currentRequest) => (
+      currentRequest === null ? currentRequest : null
+    ));
+    setPendingExternalChangeDiff((currentRequest) => (
+      currentRequest === null ? currentRequest : null
+    ));
     await openDiffForFile(filePath, { preserveTabs: true });
   }, [openDiffForFile]);
 
@@ -17308,7 +17316,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const previousCommitWindowState = commitWindowStateRef.current;
-    setCommitWindowState(null);
+    setCommitWindowState((currentState) => (currentState === null ? currentState : null));
     commitWindowStateRef.current = null;
     const didCommit = await commitGitChanges({
       message: config.message,
@@ -19755,7 +19763,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [flushDirtyFiles, onClose]);
 
   const closeBottomPanel = useCallback(() => {
-    setBottomPanelMode(null);
+    setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
   }, []);
 
   const handleGitWorkbenchTabChange = useCallback((tab: GitToolWindowTab) => {
@@ -19852,7 +19860,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const handleCommitWindowOpenChange = useCallback((nextOpen: boolean) => {
     if (!nextOpen) {
       commitWindowStateRef.current = null;
-      setCommitWindowState(null);
+      setCommitWindowState((currentState) => (currentState === null ? currentState : null));
     }
   }, []);
 
@@ -20207,8 +20215,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const handleToggleActiveDiffView = useCallback(() => {
     if (viewMode === 'diff') {
-      setPendingGitRevisionDiff(null);
-      setPendingExternalChangeDiff(null);
+      setPendingGitRevisionDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
+      setPendingExternalChangeDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
       persistCodeState({
         viewMode: 'editor',
         diffTargetPath: null,
@@ -20287,7 +20299,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const handleToggleOutlineToolWindow = useCallback(() => {
     if (bottomPanelMode === 'outline') {
-      setBottomPanelMode(null);
+      setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
     } else {
       openFileStructurePanel();
     }
@@ -20295,7 +20307,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const handleToggleGitToolWindow = useCallback(() => {
     if (bottomPanelMode === 'git') {
-      setBottomPanelMode(null);
+      setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
     } else {
       openGitWorkbench('log');
     }
@@ -21754,7 +21766,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   type="button"
                   onClick={() => {
                     void reloadFileFromDisk(banner.filePath!);
-                    setBanner(null);
+                    setBanner((currentBanner) => (currentBanner === null ? currentBanner : null));
                   }}
                   className="rounded bg-zinc-900 px-2 py-1 text-[11px] font-medium text-zinc-100 hover:bg-zinc-800"
                 >
@@ -21767,7 +21779,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                   onClick={() => {
                     void saveFile(banner.filePath!, { overwrite: true }).then((didSave) => {
                       if (didSave) {
-                        setBanner(null);
+                        setBanner((currentBanner) => (currentBanner === null ? currentBanner : null));
                       }
                     });
                   }}
@@ -21778,7 +21790,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               )}
               <button
                 type="button"
-                onClick={() => setBanner(null)}
+                onClick={() => setBanner((currentBanner) => (currentBanner === null ? currentBanner : null))}
                 className="rounded bg-zinc-900/80 p-1 text-zinc-100 hover:bg-zinc-800"
               >
                 <X size={12} />
@@ -21851,7 +21863,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           )}
           onOpenChange={(nextOpen) => {
             if (!nextOpen) {
-              setPathMutationDialog(null);
+              setPathMutationDialog((currentDialog) => (currentDialog === null ? currentDialog : null));
             }
           }}
           onConfirm={handlePathMutationConfirm}
@@ -21878,7 +21890,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           canConfirm={actionInputDialogConfig.canConfirm}
           onOpenChange={(nextOpen) => {
             if (!nextOpen) {
-              setActionInputDialog(null);
+              setActionInputDialog((currentDialog) => (currentDialog === null ? currentDialog : null));
             }
           }}
           onConfirm={submitActionInput}
@@ -21896,7 +21908,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           isSubmitting={isSubmittingActionConfirm}
           onOpenChange={(nextOpen) => {
             if (!nextOpen) {
-              setActionConfirmDialog(null);
+              setActionConfirmDialog((currentDialog) => (currentDialog === null ? currentDialog : null));
             }
           }}
           onConfirm={submitActionConfirm}
