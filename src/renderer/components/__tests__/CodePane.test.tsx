@@ -6280,6 +6280,58 @@ describe('CodePane', () => {
     expect(screen.getAllByText('codePane.externalChangeAddedLines').length).toBeGreaterThan(0);
   });
 
+  it('does not re-open language documents for watcher refreshes on already opened files', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneDidOpenDocument).toHaveBeenCalledTimes(1);
+    });
+
+    vi.mocked(window.electronAPI.codePaneDidOpenDocument).mockClear();
+    vi.mocked(window.electronAPI.codePaneDidChangeDocument).mockClear();
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 3;\n',
+        mtimeMs: 210,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 3;\n');
+    });
+    expect(window.electronAPI.codePaneDidOpenDocument).not.toHaveBeenCalled();
+    expect(window.electronAPI.codePaneDidChangeDocument).toHaveBeenCalledWith({
+      paneId: 'pane-code-1',
+      rootPath: '/workspace/project',
+      filePath: '/workspace/project/src/index.ts',
+      language: 'typescript',
+      content: 'export const value = 3;\n',
+    });
+  });
+
   it('records external changes without auto-writing the file when local edits were made in the editor model', async () => {
     renderCodePane(createPane());
 
@@ -7373,6 +7425,46 @@ describe('CodePane', () => {
         filePath: '/workspace/project/src/index.ts',
       }),
     ]);
+  });
+
+  it('does not duplicate local history opened entries after external file refreshes', async () => {
+    const user = userEvent.setup();
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 9;\n',
+        mtimeMs: 250,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await user.click(await screen.findByRole('button', { name: 'codePane.workspaceTab' }));
+    expect(await screen.findByText('codePane.localHistoryTitle')).toBeInTheDocument();
+    expect(screen.getAllByText('codePane.localHistoryOpened')).toHaveLength(1);
   });
 
   it('tracks search requests in the performance tool window', async () => {

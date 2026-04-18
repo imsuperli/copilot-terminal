@@ -7608,6 +7608,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ? monaco.Uri.parse(readResult.documentUri)
       : monaco.Uri.file(filePath);
     let model = fileModelsRef.current.get(filePath);
+    const previousMeta = fileMetaRef.current.get(filePath);
+    const wasExistingModel = Boolean(model);
+    let didChangeContent = false;
+    let didChangeLanguage = false;
     if (!model) {
       model = monaco.editor.createModel(readResult.content, readResult.language, modelUri);
       const disposable = model.onDidChangeContent(() => {
@@ -7652,6 +7656,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     } else {
       if (model.getLanguageId() !== readResult.language) {
         monaco.editor.setModelLanguage(model, readResult.language);
+        didChangeLanguage = true;
       }
 
       if (model.getValue() !== readResult.content) {
@@ -7659,6 +7664,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         model.setValue(readResult.content);
         suppressModelEventsRef.current.delete(filePath);
         clearDefinitionLookupCache();
+        didChangeContent = true;
       }
     }
 
@@ -7676,11 +7682,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     markDirty(filePath, false);
     clearBannerForFile(filePath);
-    refreshProblems();
-    addLocalHistoryEntry(filePath, 'open', readResult.content);
-    if (!readResult.readOnly) {
-      void queueLanguageDocumentSync(filePath, 'open', async () => {
-        await syncLanguageDocument(filePath, 'open');
+    if (!wasExistingModel) {
+      refreshProblems();
+      addLocalHistoryEntry(filePath, 'open', readResult.content);
+      if (!readResult.readOnly) {
+        void queueLanguageDocumentSync(filePath, 'open', async () => {
+          await syncLanguageDocument(filePath, 'open');
+        });
+      }
+      return model;
+    }
+
+    if (didChangeContent || didChangeLanguage || previousMeta?.readOnly !== readResult.readOnly) {
+      refreshProblems();
+    }
+    if (!readResult.readOnly && (didChangeContent || didChangeLanguage || previousMeta?.readOnly !== readResult.readOnly)) {
+      void queueLanguageDocumentSync(filePath, 'change', async () => {
+        await syncLanguageDocument(filePath, 'change');
       });
     }
     return model;
@@ -8355,7 +8373,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (wroteToDisk) {
-      void refreshGitSnapshot({ force: true, includeGraph: false });
+      invalidateProjectCache(rootPath, 'git-status');
+      void refreshGitSnapshot({ includeGraph: false });
     }
     return true;
   }, [clearDefinitionLookupCache, markDirty, refreshGitSnapshot, rootPath, syncLanguageDocument, t]);
@@ -8633,7 +8652,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void queueLanguageDocumentSync(filePath, 'save', async () => {
       await syncLanguageDocument(filePath, 'save');
     });
-    void refreshGitSnapshot({ force: true, includeGraph: false });
+    invalidateProjectCache(rootPath, 'git-status');
+    void refreshGitSnapshot({ includeGraph: false });
     return true;
   }, [
     addLocalHistoryEntry,
@@ -10265,7 +10285,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    await refreshGitSnapshot({ force: true, includeGraph: false });
+    invalidateProjectCache(rootPath, 'git-status');
+    await refreshGitSnapshot({ includeGraph: false });
     setRefactorPreview(null);
     setSelectedPreviewChangeId(null);
     setRefactorPreviewError(null);
