@@ -8031,8 +8031,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (currentSelectedSessionId && snapshots.some((snapshot) => snapshot.session.id === currentSelectedSessionId)) {
         return currentSelectedSessionId;
       }
-
-      return snapshots[0]?.session.id ?? null;
+      const nextSelectedSessionId = snapshots[0]?.session.id ?? null;
+      return currentSelectedSessionId === nextSelectedSessionId ? currentSelectedSessionId : nextSelectedSessionId;
     });
   }, [rootPath, t]);
 
@@ -18773,7 +18773,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return prependRecentSession(currentSessions, payload.session, areRunSessionsEqual);
       });
       setSelectedRunSessionId((currentSelectedSessionId) => (
-        currentSelectedSessionId ?? payload.session.id
+        currentSelectedSessionId ?? (
+          currentSelectedSessionId === payload.session.id ? currentSelectedSessionId : payload.session.id
+        )
       ));
     };
 
@@ -18810,7 +18812,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return prependRecentSession(currentSessions, payload.session, areDebugSessionsEqual);
       });
       setSelectedDebugSessionId((currentSelectedSessionId) => (
-        currentSelectedSessionId ?? payload.session.id
+        currentSelectedSessionId ?? (
+          currentSelectedSessionId === payload.session.id ? currentSelectedSessionId : payload.session.id
+        )
       ));
       const shouldLoadSelectedSessionDetails = selectedDebugSessionIdRef.current === null
         || selectedDebugSessionIdRef.current === payload.session.id;
