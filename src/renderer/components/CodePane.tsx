@@ -8227,6 +8227,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ), [externalEntriesByDirectory, rootPath, treeEntriesByDirectory]);
 
   const compactDirectoryPresentationsByDirectory = useMemo(() => {
+    if (!isSidebarVisible || sidebarMode !== 'files') {
+      return new Map<string, CompactDirectoryPresentation[]>();
+    }
+
     const presentationsByDirectory = new Map<string, CompactDirectoryPresentation[]>();
     const directoryPaths = new Set<string>([
       ...Object.keys(treeEntriesByDirectory),
@@ -8248,7 +8252,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     return presentationsByDirectory;
-  }, [externalEntriesByDirectory, rootPath, treeEntriesByDirectory]);
+  }, [externalEntriesByDirectory, isSidebarVisible, rootPath, sidebarMode, treeEntriesByDirectory]);
 
   const getCompactDirectoryPresentations = useCallback((directoryPath: string) => (
     compactDirectoryPresentationsByDirectory.get(directoryPath)
