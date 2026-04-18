@@ -5670,6 +5670,69 @@ function areWorkspaceSymbolListsEqual(
   return true;
 }
 
+function areRunSessionsEqual(previousSessions: CodePaneRunSession[], nextSessions: CodePaneRunSession[]): boolean {
+  if (previousSessions.length !== nextSessions.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousSessions.length; index += 1) {
+    const previousSession = previousSessions[index];
+    const nextSession = nextSessions[index];
+    if (
+      previousSession?.id !== nextSession?.id
+      || previousSession?.targetId !== nextSession?.targetId
+      || previousSession?.label !== nextSession?.label
+      || previousSession?.detail !== nextSession?.detail
+      || previousSession?.kind !== nextSession?.kind
+      || previousSession?.languageId !== nextSession?.languageId
+      || previousSession?.state !== nextSession?.state
+      || previousSession?.workingDirectory !== nextSession?.workingDirectory
+      || previousSession?.startedAt !== nextSession?.startedAt
+      || previousSession?.endedAt !== nextSession?.endedAt
+      || previousSession?.exitCode !== nextSession?.exitCode
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areDebugSessionsEqual(previousSessions: CodePaneDebugSession[], nextSessions: CodePaneDebugSession[]): boolean {
+  if (previousSessions.length !== nextSessions.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousSessions.length; index += 1) {
+    const previousSession = previousSessions[index];
+    const nextSession = nextSessions[index];
+    if (
+      previousSession?.id !== nextSession?.id
+      || previousSession?.targetId !== nextSession?.targetId
+      || previousSession?.label !== nextSession?.label
+      || previousSession?.detail !== nextSession?.detail
+      || previousSession?.languageId !== nextSession?.languageId
+      || previousSession?.adapterType !== nextSession?.adapterType
+      || previousSession?.request !== nextSession?.request
+      || previousSession?.state !== nextSession?.state
+      || previousSession?.workingDirectory !== nextSession?.workingDirectory
+      || previousSession?.startedAt !== nextSession?.startedAt
+      || previousSession?.endedAt !== nextSession?.endedAt
+      || previousSession?.stopReason !== nextSession?.stopReason
+      || previousSession?.error !== nextSession?.error
+      || previousSession?.currentFrame?.id !== nextSession?.currentFrame?.id
+      || previousSession?.currentFrame?.name !== nextSession?.currentFrame?.name
+      || previousSession?.currentFrame?.filePath !== nextSession?.currentFrame?.filePath
+      || previousSession?.currentFrame?.lineNumber !== nextSession?.currentFrame?.lineNumber
+      || previousSession?.currentFrame?.column !== nextSession?.currentFrame?.column
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function getLocalHistoryPreview(content: string): string {
   let lineStartIndex = 0;
   while (lineStartIndex < content.length) {
@@ -6774,7 +6837,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const snapshots = response.data ?? [];
-    setDebugSessions(snapshots.map((snapshot) => snapshot.session));
+    const nextSessions = snapshots.map((snapshot) => snapshot.session);
+    setDebugSessions((currentSessions) => (
+      areDebugSessionsEqual(currentSessions, nextSessions) ? currentSessions : nextSessions
+    ));
     debugSessionOutputsRef.current = snapshots.reduce<Record<string, string>>((accumulator, snapshot) => {
       accumulator[snapshot.session.id] = snapshot.output;
       return accumulator;
