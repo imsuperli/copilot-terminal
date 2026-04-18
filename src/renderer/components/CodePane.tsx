@@ -2885,6 +2885,31 @@ type CommitWindowState = {
   entriesSnapshot: CodePaneGitStatusEntry[];
 };
 
+function areCommitWindowStatesEqual(
+  previousState: CommitWindowState | null,
+  nextState: CommitWindowState | null,
+): boolean {
+  if (previousState === nextState) {
+    return true;
+  }
+
+  if (!previousState || !nextState) {
+    return false;
+  }
+
+  return previousState.initialMessage === nextState.initialMessage
+    && areStringArraysEqual(previousState.preselectedPaths, nextState.preselectedPaths)
+    && areGitStatusEntriesEqual(previousState.entriesSnapshot, nextState.entriesSnapshot);
+}
+
+function areNavigationAvailabilitiesEqual(
+  previousAvailability: { canNavigateBack: boolean; canNavigateForward: boolean },
+  nextAvailability: { canNavigateBack: boolean; canNavigateForward: boolean },
+): boolean {
+  return previousAvailability.canNavigateBack === nextAvailability.canNavigateBack
+    && previousAvailability.canNavigateForward === nextAvailability.canNavigateForward;
+}
+
 type ActionInputDialogState =
   | {
     kind: 'rename-symbol';
@@ -3081,6 +3106,56 @@ function normalizeWatchExpressions(watchExpressions: string[] | undefined | null
   }
 
   return normalizedExpressions;
+}
+
+function areBreakpointsEqual(
+  previousBreakpoints: CodePaneBreakpoint[],
+  nextBreakpoints: CodePaneBreakpoint[],
+): boolean {
+  if (previousBreakpoints.length !== nextBreakpoints.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousBreakpoints.length; index += 1) {
+    const previousBreakpoint = previousBreakpoints[index];
+    const nextBreakpoint = nextBreakpoints[index];
+    if (
+      previousBreakpoint?.id !== nextBreakpoint?.id
+      || previousBreakpoint?.filePath !== nextBreakpoint?.filePath
+      || previousBreakpoint?.lineNumber !== nextBreakpoint?.lineNumber
+      || previousBreakpoint?.condition !== nextBreakpoint?.condition
+      || previousBreakpoint?.logMessage !== nextBreakpoint?.logMessage
+      || previousBreakpoint?.enabled !== nextBreakpoint?.enabled
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areExceptionBreakpointsEqual(
+  previousBreakpoints: Array<Pick<CodePaneExceptionBreakpoint, 'id' | 'enabled'> & Partial<Pick<CodePaneExceptionBreakpoint, 'label'>>>,
+  nextBreakpoints: Array<Pick<CodePaneExceptionBreakpoint, 'id' | 'enabled'> & Partial<Pick<CodePaneExceptionBreakpoint, 'label'>>>,
+): boolean {
+  if (previousBreakpoints.length !== nextBreakpoints.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousBreakpoints.length; index += 1) {
+    const previousBreakpoint = previousBreakpoints[index];
+    const nextBreakpoint = nextBreakpoints[index];
+    if (
+      previousBreakpoint?.id !== nextBreakpoint?.id
+      || previousBreakpoint?.enabled !== nextBreakpoint?.enabled
+      || (previousBreakpoint?.label ?? CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS[0]?.label ?? '')
+        !== (nextBreakpoint?.label ?? CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS[0]?.label ?? '')
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function getBreakpointGlyphClassName(breakpoint: CodePaneBreakpoint): string {
@@ -5441,36 +5516,11 @@ function areCodePaneDebugStatesEqual(
   previousState: NonNullable<CodePaneState['debug']>,
   nextState: NonNullable<CodePaneState['debug']>,
 ): boolean {
-  const previousWatchExpressions = previousState.watchExpressions ?? [];
-  const nextWatchExpressions = nextState.watchExpressions ?? [];
-  if (previousWatchExpressions.length !== nextWatchExpressions.length) {
-    return false;
-  }
-
-  for (let index = 0; index < previousWatchExpressions.length; index += 1) {
-    if (previousWatchExpressions[index] !== nextWatchExpressions[index]) {
-      return false;
-    }
-  }
-
-  const previousExceptionBreakpoints = previousState.exceptionBreakpoints ?? [];
-  const nextExceptionBreakpoints = nextState.exceptionBreakpoints ?? [];
-  if (previousExceptionBreakpoints.length !== nextExceptionBreakpoints.length) {
-    return false;
-  }
-
-  for (let index = 0; index < previousExceptionBreakpoints.length; index += 1) {
-    const previousBreakpoint = previousExceptionBreakpoints[index];
-    const nextBreakpoint = nextExceptionBreakpoints[index];
-    if (
-      previousBreakpoint?.id !== nextBreakpoint?.id
-      || previousBreakpoint?.enabled !== nextBreakpoint?.enabled
-    ) {
-      return false;
-    }
-  }
-
-  return true;
+  return areStringListsEqual(previousState.watchExpressions ?? [], nextState.watchExpressions ?? [])
+    && areExceptionBreakpointsEqual(
+      previousState.exceptionBreakpoints ?? [],
+      nextState.exceptionBreakpoints ?? [],
+    );
 }
 
 function getModelVersionId(model: MonacoModel): number {
@@ -7182,16 +7232,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     const nextSidebarLayout = getInitialSidebarLayout(pane);
-    setSidebarMode(nextSidebarLayout.activeView);
-    setIsSidebarVisible(nextSidebarLayout.visible);
-    setSidebarWidth(nextSidebarLayout.width);
-    setLastExpandedSidebarWidth(nextSidebarLayout.lastExpandedWidth);
+    setSidebarMode((currentMode) => (
+      currentMode === nextSidebarLayout.activeView ? currentMode : nextSidebarLayout.activeView
+    ));
+    setIsSidebarVisible((currentVisible) => (
+      currentVisible === nextSidebarLayout.visible ? currentVisible : nextSidebarLayout.visible
+    ));
+    setSidebarWidth((currentWidth) => (
+      currentWidth === nextSidebarLayout.width ? currentWidth : nextSidebarLayout.width
+    ));
+    setLastExpandedSidebarWidth((currentWidth) => (
+      currentWidth === nextSidebarLayout.lastExpandedWidth ? currentWidth : nextSidebarLayout.lastExpandedWidth
+    ));
     const nextEditorSplitLayout = getInitialEditorSplitLayout(pane);
-    setIsEditorSplitVisible(nextEditorSplitLayout.visible);
-    setEditorSplitSize(nextEditorSplitLayout.size);
-    setSecondaryFilePath(nextEditorSplitLayout.secondaryFilePath);
+    setIsEditorSplitVisible((currentVisible) => (
+      currentVisible === nextEditorSplitLayout.visible ? currentVisible : nextEditorSplitLayout.visible
+    ));
+    setEditorSplitSize((currentSize) => (
+      currentSize === nextEditorSplitLayout.size ? currentSize : nextEditorSplitLayout.size
+    ));
+    setSecondaryFilePath((currentPath) => (
+      currentPath === nextEditorSplitLayout.secondaryFilePath ? currentPath : nextEditorSplitLayout.secondaryFilePath
+    ));
     const nextBottomPanelLayout = getInitialBottomPanelLayout(pane);
-    setBottomPanelHeight(nextBottomPanelLayout.height);
+    setBottomPanelHeight((currentHeight) => (
+      currentHeight === nextBottomPanelLayout.height ? currentHeight : nextBottomPanelLayout.height
+    ));
   }, [pane.id, pane.code?.layout, pane]);
 
   useEffect(() => {
@@ -7207,7 +7273,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [loadedExternalDirectories]);
 
   useEffect(() => {
-    setBreakpoints(normalizeBreakpoints(pane.code?.breakpoints));
+    const normalizedBreakpoints = normalizeBreakpoints(pane.code?.breakpoints);
+    setBreakpoints((currentBreakpoints) => (
+      areBreakpointsEqual(currentBreakpoints, normalizedBreakpoints)
+        ? currentBreakpoints
+        : normalizedBreakpoints
+    ));
   }, [pane.id, pane.code?.breakpoints]);
 
   useEffect(() => {
@@ -7215,7 +7286,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [breakpoints]);
 
   useEffect(() => {
-    setExceptionBreakpoints(normalizeExceptionBreakpoints(pane.code?.debug?.exceptionBreakpoints));
+    const normalizedExceptionBreakpoints = normalizeExceptionBreakpoints(pane.code?.debug?.exceptionBreakpoints);
+    setExceptionBreakpoints((currentBreakpoints) => (
+      areExceptionBreakpointsEqual(currentBreakpoints, normalizedExceptionBreakpoints)
+        ? currentBreakpoints
+        : normalizedExceptionBreakpoints
+    ));
   }, [pane.id, pane.code?.debug?.exceptionBreakpoints]);
 
   useEffect(() => {
@@ -7223,7 +7299,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [exceptionBreakpoints]);
 
   useEffect(() => {
-    setWatchExpressions(normalizeWatchExpressions(pane.code?.debug?.watchExpressions));
+    const normalizedWatchExpressions = normalizeWatchExpressions(pane.code?.debug?.watchExpressions);
+    setWatchExpressions((currentWatchExpressions) => (
+      areStringListsEqual(currentWatchExpressions, normalizedWatchExpressions)
+        ? currentWatchExpressions
+        : normalizedWatchExpressions
+    ));
   }, [pane.id, pane.code?.debug?.watchExpressions]);
 
   useEffect(() => {
@@ -7615,7 +7696,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const persistDebugBreakpoints = useCallback((nextBreakpoints: CodePaneBreakpoint[]) => {
     const normalizedBreakpoints = normalizeBreakpoints(nextBreakpoints);
-    setBreakpoints(normalizedBreakpoints);
+    setBreakpoints((currentBreakpoints) => (
+      areBreakpointsEqual(currentBreakpoints, normalizedBreakpoints)
+        ? currentBreakpoints
+        : normalizedBreakpoints
+    ));
     persistCodeState({
       breakpoints: normalizedBreakpoints.map((breakpoint) => ({
         filePath: breakpoint.filePath,
@@ -7629,7 +7714,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const persistExceptionBreakpoints = useCallback((nextBreakpoints: CodePaneExceptionBreakpoint[]) => {
     const normalizedExceptionBreakpoints = normalizeExceptionBreakpoints(nextBreakpoints);
-    setExceptionBreakpoints(normalizedExceptionBreakpoints);
+    setExceptionBreakpoints((currentBreakpoints) => (
+      areExceptionBreakpointsEqual(currentBreakpoints, normalizedExceptionBreakpoints)
+        ? currentBreakpoints
+        : normalizedExceptionBreakpoints
+    ));
     persistDebugState({
       exceptionBreakpoints: normalizedExceptionBreakpoints.map((breakpoint) => ({
         id: breakpoint.id,
@@ -7640,7 +7729,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const persistWatchExpressions = useCallback((nextWatchExpressions: string[]) => {
     const normalizedWatchExpressions = normalizeWatchExpressions(nextWatchExpressions);
-    setWatchExpressions(normalizedWatchExpressions);
+    setWatchExpressions((currentWatchExpressions) => (
+      areStringListsEqual(currentWatchExpressions, normalizedWatchExpressions)
+        ? currentWatchExpressions
+        : normalizedWatchExpressions
+    ));
     persistDebugState({
       watchExpressions: normalizedWatchExpressions,
     });
@@ -7829,7 +7922,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
         breakpoints: normalizedPersistedBreakpoints,
       });
       if (syncResponse.success) {
-        setExceptionBreakpoints(normalizedPersistedBreakpoints);
+        setExceptionBreakpoints((currentBreakpoints) => (
+          areExceptionBreakpointsEqual(currentBreakpoints, normalizedPersistedBreakpoints)
+            ? currentBreakpoints
+            : normalizedPersistedBreakpoints
+        ));
       }
       return;
     }
@@ -13098,8 +13195,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       preselectedPaths,
       entriesSnapshot: entrySnapshot,
     };
-    commitWindowStateRef.current = nextCommitWindowState;
-    setCommitWindowState(nextCommitWindowState);
+    const resolvedCommitWindowState = areCommitWindowStatesEqual(
+      commitWindowStateRef.current,
+      nextCommitWindowState,
+    )
+      ? commitWindowStateRef.current
+      : nextCommitWindowState;
+    commitWindowStateRef.current = resolvedCommitWindowState;
+    setCommitWindowState((currentState) => (
+      areCommitWindowStatesEqual(currentState, resolvedCommitWindowState)
+        ? currentState
+        : resolvedCommitWindowState
+    ));
   }, [loadGitDiffHunks]);
 
   const showHistoryForCurrentSelection = useCallback(async () => {
@@ -13151,10 +13258,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return gitBranches;
     }
 
+    const nextBranches = response.data ?? [];
+    const resolvedBranches = areGitBranchesEqual(gitBranchesRef.current, nextBranches)
+      ? gitBranchesRef.current
+      : nextBranches;
+
     startTransition(() => {
-      setGitBranches(response.data ?? []);
+      setGitBranches((currentBranches) => (
+        areGitBranchesEqual(currentBranches, resolvedBranches) ? currentBranches : resolvedBranches
+      ));
     });
-    return response.data;
+    return resolvedBranches;
   }, [gitBranches, rootPath]);
 
   const comparePathWithBranch = useCallback(async (filePath: string) => {
@@ -14805,79 +14919,109 @@ export const CodePane: React.FC<CodePaneProps> = ({
       );
 
       setIsBootstrapping(true);
-      setBanner(null);
-      setTreeLoadError(null);
-      setSearchError(null);
-      setContentSearchError(null);
+      setBanner((currentBanner) => (currentBanner === null ? currentBanner : null));
+      setTreeLoadError((currentError) => (currentError === null ? currentError : null));
+      setSearchError((currentError) => (currentError === null ? currentError : null));
+      setContentSearchError((currentError) => (currentError === null ? currentError : null));
       compactDirectoryPresentationsCacheRef.current.clear();
-      setTreeEntriesByDirectory({});
-      setExternalEntriesByDirectory({});
-      setExternalLibrariesError(null);
+      setTreeEntriesByDirectory((currentEntries) => (
+        Object.keys(currentEntries).length === 0 ? currentEntries : {}
+      ));
+      setExternalEntriesByDirectory((currentEntries) => (
+        Object.keys(currentEntries).length === 0 ? currentEntries : {}
+      ));
+      setExternalLibrariesError((currentError) => (currentError === null ? currentError : null));
       resetExternalLibrarySectionsRef.current(getExternalLibraryCache(rootPath) ?? []);
-      setIndexStatus(null);
-      setLanguageWorkspaceState(null);
-      setExpandedDirectories(initialExpandedDirectories);
-      setLoadedDirectories(new Set());
-      setLoadedExternalDirectories(new Set());
-      setLoadingDirectories(new Set([rootPath]));
-      setLoadingExternalDirectories(new Set());
-      setSearchResults([]);
-      setContentSearchResults([]);
-      setIsSearchEverywhereOpen(false);
-      setSearchEverywhereQuery('');
-      setCodeActionItems([]);
-      setIsCodeActionMenuOpen(false);
-      setCodeActionMenuError(null);
-      setBottomPanelMode(null);
-      setRunTargets([]);
-      setIsRunTargetsLoading(false);
-      setRunTargetsError(null);
-      setTestItems([]);
-      setIsTestsLoading(false);
-      setTestsError(null);
-      setProjectContributions([]);
-      setIsProjectLoading(false);
-      setProjectError(null);
-      setGitBranches([]);
-      setSelectedGitBranchName(null);
-      setSelectedGitLogCommitSha(null);
-      setSelectedGitCommitOrder([]);
-      setSelectedGitCommitDetails(null);
-      setComparedGitCommits(null);
-      setIsGitCommitDetailsLoading(false);
-      setGitCommitDetailsError(null);
-      setIsGitBranchesLoading(false);
-      setGitBranchesError(null);
-      setGitRebasePlan(null);
-      setGitRebaseBaseRef('');
-      setIsGitRebaseLoading(false);
-      setGitRebaseError(null);
-      setSelectedGitChangePath(null);
-      setGitStagedHunks([]);
-      setGitUnstagedHunks([]);
-      setIsGitHunksLoading(false);
-      setGitHunksError(null);
-      setRunSessions([]);
+      setIndexStatus((currentStatus) => (currentStatus === null ? currentStatus : null));
+      setLanguageWorkspaceState((currentState) => (currentState === null ? currentState : null));
+      setExpandedDirectories((currentDirectories) => (
+        areStringArraysEqual(
+          Array.from(currentDirectories).sort(),
+          Array.from(initialExpandedDirectories).sort(),
+        )
+          ? currentDirectories
+          : initialExpandedDirectories
+      ));
+      setLoadedDirectories((currentDirectories) => (
+        currentDirectories.size === 0 ? currentDirectories : new Set()
+      ));
+      setLoadedExternalDirectories((currentDirectories) => (
+        currentDirectories.size === 0 ? currentDirectories : new Set()
+      ));
+      setLoadingDirectories((currentDirectories) => (
+        currentDirectories.size === 1 && currentDirectories.has(rootPath)
+          ? currentDirectories
+          : new Set([rootPath])
+      ));
+      setLoadingExternalDirectories((currentDirectories) => (
+        currentDirectories.size === 0 ? currentDirectories : new Set()
+      ));
+      setSearchResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+      setContentSearchResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+      setIsSearchEverywhereOpen((currentOpen) => (currentOpen ? false : currentOpen));
+      setSearchEverywhereQuery((currentQuery) => (currentQuery === '' ? currentQuery : ''));
+      setCodeActionItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
+      setIsCodeActionMenuOpen((currentOpen) => (currentOpen ? false : currentOpen));
+      setCodeActionMenuError((currentError) => (currentError === null ? currentError : null));
+      setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
+      setRunTargets((currentTargets) => (currentTargets.length === 0 ? currentTargets : []));
+      setIsRunTargetsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      setRunTargetsError((currentError) => (currentError === null ? currentError : null));
+      setTestItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
+      setIsTestsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      setTestsError((currentError) => (currentError === null ? currentError : null));
+      setProjectContributions((currentContributions) => (
+        currentContributions.length === 0 ? currentContributions : []
+      ));
+      setIsProjectLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      setProjectError((currentError) => (currentError === null ? currentError : null));
+      setGitBranches((currentBranches) => (currentBranches.length === 0 ? currentBranches : []));
+      setSelectedGitBranchName((currentBranchName) => (currentBranchName === null ? currentBranchName : null));
+      setSelectedGitLogCommitSha((currentCommitSha) => (currentCommitSha === null ? currentCommitSha : null));
+      setSelectedGitCommitOrder((currentOrder) => (currentOrder.length === 0 ? currentOrder : []));
+      setSelectedGitCommitDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
+      setComparedGitCommits((currentComparison) => (currentComparison === null ? currentComparison : null));
+      setIsGitCommitDetailsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      setGitCommitDetailsError((currentError) => (currentError === null ? currentError : null));
+      setIsGitBranchesLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      setGitBranchesError((currentError) => (currentError === null ? currentError : null));
+      setGitRebasePlan((currentPlan) => (currentPlan === null ? currentPlan : null));
+      setGitRebaseBaseRef((currentBaseRef) => (currentBaseRef === '' ? currentBaseRef : ''));
+      setIsGitRebaseLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      setGitRebaseError((currentError) => (currentError === null ? currentError : null));
+      setSelectedGitChangePath((currentPath) => (currentPath === null ? currentPath : null));
+      setGitStagedHunks((currentHunks) => (currentHunks.length === 0 ? currentHunks : []));
+      setGitUnstagedHunks((currentHunks) => (currentHunks.length === 0 ? currentHunks : []));
+      setIsGitHunksLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      setGitHunksError((currentError) => (currentError === null ? currentError : null));
+      setRunSessions((currentSessions) => (currentSessions.length === 0 ? currentSessions : []));
       runSessionOutputsRef.current = {};
       debugSessionOutputsRef.current = {};
-      setSelectedRunSessionOutput('');
-      setSelectedDebugSessionOutput('');
+      setSelectedRunSessionOutput((currentOutput) => (currentOutput === '' ? currentOutput : ''));
+      setSelectedDebugSessionOutput((currentOutput) => (currentOutput === '' ? currentOutput : ''));
       setSelectedRunSessionId((currentSessionId) => (
         currentSessionId === null ? currentSessionId : null
       ));
-      setPendingGitRevisionDiff(null);
-      setPendingExternalChangeDiff(null);
+      setPendingGitRevisionDiff((currentDiff) => (currentDiff === null ? currentDiff : null));
+      setPendingExternalChangeDiff((currentDiff) => (currentDiff === null ? currentDiff : null));
       applyExternalChangeState([], null);
       recentFilesRef.current = [];
       recentLocationsRef.current = [];
       navigationBackStackRef.current = [];
       navigationForwardStackRef.current = [];
-      setRecentFiles([]);
-      setRecentLocations([]);
-      setNavigationAvailability({
-        canNavigateBack: false,
-        canNavigateForward: false,
-      });
+      setRecentFiles((currentFiles) => (currentFiles.length === 0 ? currentFiles : []));
+      setRecentLocations((currentLocations) => (currentLocations.length === 0 ? currentLocations : []));
+      setNavigationAvailability((currentAvailability) => (
+        areNavigationAvailabilitiesEqual(currentAvailability, {
+          canNavigateBack: false,
+          canNavigateForward: false,
+        })
+          ? currentAvailability
+          : {
+            canNavigateBack: false,
+            canNavigateForward: false,
+          }
+      ));
       const cachedRootEntries = getDirectoryCache(rootPath, rootPath);
       const cachedExpandedDirectoryEntries: Record<string, CodePaneTreeEntry[]> = {};
       const cachedDirectoryPaths = new Set<string>();
