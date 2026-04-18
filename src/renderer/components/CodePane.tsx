@@ -443,6 +443,9 @@ type PendingGitSnapshotRefresh = {
   resolvers: Array<() => void>;
   rejecters: Array<(error: unknown) => void>;
 };
+type InFlightGitSnapshotRefresh = PendingGitSnapshotRefresh & {
+  promise: Promise<void>;
+};
 
 type PendingFsChangeDisplayState = {
   filePath: string;
@@ -7251,6 +7254,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const editorSurfaceRequestIdRef = useRef(0);
   const pendingGitSnapshotRefreshRef = useRef<PendingGitSnapshotRefresh | null>(null);
   const gitSnapshotRefreshTimerRef = useRef<number | null>(null);
+  const inFlightGitSnapshotRefreshRef = useRef<InFlightGitSnapshotRefresh | null>(null);
   const pendingFsChangesRef = useRef<CodePaneFsChange[]>([]);
   const isFsChangeFlushQueuedRef = useRef(false);
   const fsChangeFlushTimerRef = useRef<number | null>(null);
@@ -7282,8 +7286,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     localHistoryTimersRef.current.forEach((timer) => clearTimeout(timer));
     localHistoryTimersRef.current.clear();
     compactDirectoryPresentationsCacheRef.current.clear();
-    setTodoItems([]);
-    setTodoError(null);
+    setTodoItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
+    setTodoError((currentError) => (currentError === null ? currentError : null));
     setLocalHistoryVersion((currentVersion) => currentVersion + 1);
   }, [pane.id, rootPath]);
 
@@ -8797,6 +8801,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const pendingGitSnapshotRefresh = pendingGitSnapshotRefreshRef.current;
     pendingGitSnapshotRefreshRef.current = null;
     pendingGitSnapshotRefresh?.resolvers.forEach((resolve) => resolve());
+    const inFlightGitSnapshotRefresh = inFlightGitSnapshotRefreshRef.current;
+    inFlightGitSnapshotRefreshRef.current = null;
+    inFlightGitSnapshotRefresh?.resolvers.forEach((resolve) => resolve());
 
     pendingFsChangesRef.current = [];
     isFsChangeFlushQueuedRef.current = false;
@@ -8833,7 +8840,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     problemsByFileRef.current.clear();
     clearDefinitionLookupCache();
     viewStatesRef.current.clear();
-    setProblems([]);
+    setProblems((currentProblems) => (currentProblems.length === 0 ? currentProblems : []));
   }, [clearDefinitionLookupCache, detachDiffEditorModel]);
 
   const applyExternalLibrarySections = useCallback((nextSections: CodePaneExternalLibrarySection[]) => {
@@ -9071,6 +9078,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const force = options?.force === true;
 
     return new Promise<void>((resolve, reject) => {
+      const inFlightRefresh = inFlightGitSnapshotRefreshRef.current;
+      if (inFlightRefresh) {
+        inFlightRefresh.includeGraph = inFlightRefresh.includeGraph || includeGraph;
+        inFlightRefresh.force = inFlightRefresh.force || force;
+        inFlightRefresh.resolvers.push(resolve);
+        inFlightRefresh.rejecters.push(reject);
+        return;
+      }
+
       const pendingRefresh = pendingGitSnapshotRefreshRef.current;
       const hadPendingRefresh = Boolean(pendingRefresh);
       if (pendingRefresh) {
@@ -9100,17 +9116,50 @@ export const CodePane: React.FC<CodePaneProps> = ({
           return;
         }
 
-        void refreshGitSnapshotNow({
+        const refreshPromise = refreshGitSnapshotNow({
           includeGraph: refresh.includeGraph,
           force: refresh.force,
-        }).then(() => {
-          refresh.resolvers.forEach((currentResolve) => currentResolve());
+        });
+        inFlightGitSnapshotRefreshRef.current = {
+          ...refresh,
+          promise: refreshPromise,
+        };
+        void refreshPromise.then(() => {
+          const completedRefresh = inFlightGitSnapshotRefreshRef.current ?? refresh;
+          inFlightGitSnapshotRefreshRef.current = null;
+          completedRefresh.resolvers.forEach((currentResolve) => currentResolve());
+          const trailingRefresh = pendingGitSnapshotRefreshRef.current;
+          pendingGitSnapshotRefreshRef.current = null;
+          if (!trailingRefresh) {
+            return;
+          }
+          void refreshGitSnapshot({
+            includeGraph: trailingRefresh.includeGraph,
+            force: trailingRefresh.force,
+          }).then(() => {
+            trailingRefresh.resolvers.forEach((currentResolve) => currentResolve());
+          }).catch((error) => {
+            trailingRefresh.rejecters.forEach((currentReject) => currentReject(error));
+          });
         }).catch((error) => {
-          refresh.rejecters.forEach((currentReject) => currentReject(error));
+          const completedRefresh = inFlightGitSnapshotRefreshRef.current ?? refresh;
+          inFlightGitSnapshotRefreshRef.current = null;
+          completedRefresh.rejecters.forEach((currentReject) => currentReject(error));
+          const trailingRefresh = pendingGitSnapshotRefreshRef.current;
+          pendingGitSnapshotRefreshRef.current = null;
+          trailingRefresh?.rejecters.forEach((currentReject) => currentReject(error));
         });
       }, queuedRefresh?.force || !hadPendingRefresh ? 0 : 150);
     });
   }, [refreshGitSnapshotNow, shouldLoadGitGraph]);
+
+  const scheduleGitStatusRefresh = useCallback((options?: { force?: boolean }) => {
+    invalidateProjectCache(rootPath, 'git-status');
+    void refreshGitSnapshot({
+      includeGraph: false,
+      ...(options?.force ? { force: true } : {}),
+    });
+  }, [refreshGitSnapshot, rootPath]);
 
   const loadGitBranches = useCallback(async (options?: { preferredBaseRef?: string }) => {
     const commitBranches = (branches: CodePaneGitBranchEntry[]) => {
@@ -9567,6 +9616,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (showLoadingIndicator) {
       setLoadingExternalDirectories((currentLoadingDirectories) => {
+        if (currentLoadingDirectories.has(directoryPath)) {
+          return currentLoadingDirectories;
+        }
         const nextLoadingDirectories = new Set(currentLoadingDirectories);
         nextLoadingDirectories.add(directoryPath);
         return nextLoadingDirectories;
@@ -9613,6 +9665,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (showLoadingIndicator) {
       setLoadingExternalDirectories((currentLoadingDirectories) => {
+        if (!currentLoadingDirectories.has(directoryPath)) {
+          return currentLoadingDirectories;
+        }
         const nextLoadingDirectories = new Set(currentLoadingDirectories);
         nextLoadingDirectories.delete(directoryPath);
         return nextLoadingDirectories;
@@ -9748,7 +9803,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       nextExpandedDirectories.add(directoryPath);
     }
 
-    setExpandedDirectories(nextExpandedDirectories);
+    setExpandedDirectories((currentExpandedDirectories) => (
+      currentExpandedDirectories.size === nextExpandedDirectories.size
+      && [...nextExpandedDirectories].every((directoryPath) => currentExpandedDirectories.has(directoryPath))
+        ? currentExpandedDirectories
+        : nextExpandedDirectories
+    ));
     persistCodeState({
       selectedPath: targetPath,
       expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
@@ -10568,10 +10628,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
     monaco.editor.setModelMarkers(model, CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER, []);
   }, []);
 
-  const applyLanguageTextEditsWithoutSaving = useCallback(async (edits: CodePaneTextEdit[]) => {
+  const applyLanguageTextEditsWithoutSaving = useCallback(async (
+    edits: CodePaneTextEdit[],
+    options?: {
+      skipGitRefresh?: boolean;
+    },
+  ) => {
     let wroteToDisk = false;
     if (edits.length === 0) {
-      return true;
+      return {
+        didApply: true,
+        wroteToDisk: false,
+      };
     }
 
     const editsByFilePath = new Map<string, CodePaneTextEdit[]>();
@@ -10606,7 +10674,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
           message: readResponse.error || t('common.retry'),
           filePath,
         });
-        return false;
+        return {
+          didApply: false,
+          wroteToDisk,
+        };
       }
 
       const nextContent = applyTextEditsToContent(readResponse.data.content, fileEdits);
@@ -10626,29 +10697,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
           showReload: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
           showOverwrite: writeResponse.errorCode === CODE_PANE_SAVE_CONFLICT_ERROR_CODE,
         });
-        return false;
+        return {
+          didApply: false,
+          wroteToDisk,
+        };
       }
 
       wroteToDisk = true;
     }
 
-    if (wroteToDisk) {
-      invalidateProjectCache(rootPath, 'git-status');
-      void refreshGitSnapshot({ includeGraph: false });
+    if (wroteToDisk && !options?.skipGitRefresh) {
+      scheduleGitStatusRefresh();
     }
-    return true;
-  }, [clearDefinitionLookupCache, markDirty, refreshGitSnapshot, rootPath, syncLanguageDocument, t]);
+    return {
+      didApply: true,
+      wroteToDisk,
+    };
+  }, [clearDefinitionLookupCache, markDirty, rootPath, scheduleGitStatusRefresh, syncLanguageDocument, t]);
 
   const runSaveQualityPipeline = useCallback(async (filePath: string) => {
     const model = fileModelsRef.current.get(filePath);
     const fileMeta = fileMetaRef.current.get(filePath);
     if (!model || !fileMeta) {
-      return createSaveQualityState({
-        status: 'idle',
-      });
+      return {
+        qualityState: createSaveQualityState({
+          status: 'idle',
+        }),
+        wroteToDisk: false,
+      };
     }
 
     const steps: CodePaneSaveQualityStep[] = [];
+    let wroteToDisk = false;
     const language = fileMeta.language ?? model.getLanguageId();
 
     if (savePipelineState.formatOnSave) {
@@ -10667,10 +10747,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         const edits = response.data ?? [];
         if (edits.length > 0) {
-          const didApply = await applyLanguageTextEditsWithoutSaving(edits);
-          if (!didApply) {
+          const applyResult = await applyLanguageTextEditsWithoutSaving(edits, { skipGitRefresh: true });
+          if (!applyResult.didApply) {
             throw new Error(t('common.retry'));
           }
+          wroteToDisk = wroteToDisk || applyResult.wroteToDisk;
         }
         steps.push({
           id: 'format',
@@ -10725,10 +10806,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
             throw new Error(runResponse.error || t('common.retry'));
           }
 
-          const didApply = await applyLanguageTextEditsWithoutSaving(runResponse.data ?? []);
-          if (!didApply) {
+          const applyResult = await applyLanguageTextEditsWithoutSaving(runResponse.data ?? [], { skipGitRefresh: true });
+          if (!applyResult.didApply) {
             throw new Error(t('common.retry'));
           }
+          wroteToDisk = wroteToDisk || applyResult.wroteToDisk;
           steps.push({
             id: 'organize-imports',
             status: 'passed',
@@ -10792,10 +10874,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     }
 
-    return createSaveQualityState({
-      status: resolveSaveQualityStatus(steps),
-      steps,
-    });
+    return {
+      qualityState: createSaveQualityState({
+        status: resolveSaveQualityStatus(steps),
+        steps,
+      }),
+      wroteToDisk,
+    };
   }, [
     applyLanguageTextEditsWithoutSaving,
     applySaveQualityDiagnostics,
@@ -10828,12 +10913,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     await flushPendingLanguageSync(filePath);
     let qualityGateStateBeforeWrite: CodePaneSaveQualityState | null = null;
+    let didWriteIntermediateFiles = false;
     if (!options?.skipQualityPipeline) {
       persistQualityGateState(createSaveQualityState({
         status: 'running',
         message: t('codePane.saveQualityRunning'),
       }));
-      qualityGateStateBeforeWrite = await runSaveQualityPipeline(filePath);
+      const qualityPipelineResult = await runSaveQualityPipeline(filePath);
+      qualityGateStateBeforeWrite = qualityPipelineResult.qualityState;
+      didWriteIntermediateFiles = qualityPipelineResult.wroteToDisk;
       await flushPendingLanguageSync(filePath);
     }
 
@@ -10913,8 +11001,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       await syncLanguageDocument(filePath, 'save');
     });
     if (!options?.skipGitRefresh) {
-      invalidateProjectCache(rootPath, 'git-status');
-      void refreshGitSnapshot({ includeGraph: false });
+      scheduleGitStatusRefresh({
+        force: didWriteIntermediateFiles,
+      });
     }
     return true;
   }, [
@@ -10924,9 +11013,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     markDirty,
     markSaving,
     queueLanguageDocumentSync,
-    refreshGitSnapshot,
     rootPath,
     runSaveQualityPipeline,
+    scheduleGitStatusRefresh,
     syncLanguageDocument,
     t,
     persistQualityGateState,
@@ -10951,12 +11040,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (didSaveAnyFile) {
-      invalidateProjectCache(rootPath, 'git-status');
-      void refreshGitSnapshot({ includeGraph: false });
+      scheduleGitStatusRefresh();
     }
 
     return true;
-  }, [refreshGitSnapshot, rootPath, saveFile]);
+  }, [saveFile, scheduleGitStatusRefresh]);
 
   const getActiveEditorContext = useCallback(() => {
     const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
@@ -11576,8 +11664,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       saveAfterApply?: boolean;
     },
   ) => {
-    const didApply = await applyLanguageTextEditsWithoutSaving(edits);
-    if (!didApply) {
+    const applyResult = await applyLanguageTextEditsWithoutSaving(edits, {
+      skipGitRefresh: options?.saveAfterApply !== false,
+    });
+    if (!applyResult.didApply) {
       return false;
     }
 
@@ -11608,12 +11698,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (didSaveAnyFile) {
-      invalidateProjectCache(rootPath, 'git-status');
-      void refreshGitSnapshot({ includeGraph: false });
+      scheduleGitStatusRefresh({
+        force: applyResult.wroteToDisk,
+      });
     }
 
     return true;
-  }, [applyLanguageTextEditsWithoutSaving, refreshGitSnapshot, rootPath, saveFile]);
+  }, [applyLanguageTextEditsWithoutSaving, saveFile, scheduleGitStatusRefresh]);
 
   const prepareRefactorPreview = useCallback(async (config: Parameters<typeof window.electronAPI.codePanePrepareRefactor>[0]) => {
     setRefactorPreviewError((currentError) => (currentError === null ? currentError : null));
@@ -18469,7 +18560,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     if (!isBlameVisible) {
-      setBlameLines([]);
+      setBlameLines((currentLines) => (currentLines.length === 0 ? currentLines : []));
       return;
     }
 
