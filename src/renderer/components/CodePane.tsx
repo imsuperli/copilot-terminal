@@ -5664,10 +5664,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const definitionLookupCacheRef = useRef(new Map<string, Promise<DefinitionLookupResult>>());
   const sidebarResizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const sidebarResizeCleanupRef = useRef<(() => void) | null>(null);
+  const pendingSidebarWidthRef = useRef<number | null>(null);
+  const sidebarResizeAnimationFrameRef = useRef<number | null>(null);
   const editorSplitResizeStartRef = useRef<{ startX: number; startSize: number } | null>(null);
   const editorSplitResizeCleanupRef = useRef<(() => void) | null>(null);
+  const pendingEditorSplitSizeRef = useRef<number | null>(null);
+  const editorSplitResizeAnimationFrameRef = useRef<number | null>(null);
   const bottomPanelResizeStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const bottomPanelResizeCleanupRef = useRef<(() => void) | null>(null);
+  const pendingBottomPanelResizeRef = useRef<{ height: number; availableHeight: number } | null>(null);
+  const bottomPanelResizeAnimationFrameRef = useRef<number | null>(null);
   const focusedEditorTargetRef = useRef<EditorTarget>('editor');
   const runtimeStoreRef = useRef(new CodePaneRuntimeStore());
   const cursorStoreRef = useRef(new CodePaneCursorStore());
@@ -14422,6 +14428,70 @@ export const CodePane: React.FC<CodePaneProps> = ({
       label: t('codePane.problemsTab'),
     },
   ]), [t]);
+  const scheduleSidebarWidthUpdate = useCallback((nextWidth: number) => {
+    pendingSidebarWidthRef.current = nextWidth;
+    if (sidebarResizeAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    sidebarResizeAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      sidebarResizeAnimationFrameRef.current = null;
+      const pendingWidth = pendingSidebarWidthRef.current;
+      pendingSidebarWidthRef.current = null;
+      if (pendingWidth !== null) {
+        setSidebarWidth((currentWidth) => (
+          currentWidth === pendingWidth ? currentWidth : pendingWidth
+        ));
+      }
+    });
+  }, []);
+
+  const scheduleEditorSplitSizeUpdate = useCallback((nextSize: number) => {
+    pendingEditorSplitSizeRef.current = nextSize;
+    if (editorSplitResizeAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    editorSplitResizeAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      editorSplitResizeAnimationFrameRef.current = null;
+      const pendingSize = pendingEditorSplitSizeRef.current;
+      pendingEditorSplitSizeRef.current = null;
+      if (pendingSize !== null) {
+        setEditorSplitSize((currentSize) => (
+          currentSize === pendingSize ? currentSize : pendingSize
+        ));
+      }
+    });
+  }, []);
+
+  const scheduleBottomPanelResizeUpdate = useCallback((nextHeight: number, availableHeight: number) => {
+    pendingBottomPanelResizeRef.current = {
+      height: nextHeight,
+      availableHeight,
+    };
+    if (bottomPanelResizeAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    bottomPanelResizeAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      bottomPanelResizeAnimationFrameRef.current = null;
+      const pendingResize = pendingBottomPanelResizeRef.current;
+      pendingBottomPanelResizeRef.current = null;
+      if (!pendingResize) {
+        return;
+      }
+
+      setBottomPanelAvailableHeight((currentAvailableHeight) => (
+        currentAvailableHeight === pendingResize.availableHeight
+          ? currentAvailableHeight
+          : pendingResize.availableHeight
+      ));
+      setBottomPanelHeight((currentHeight) => (
+        currentHeight === pendingResize.height ? currentHeight : pendingResize.height
+      ));
+    });
+  }, []);
+
   const startSidebarResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     sidebarResizeCleanupRef.current?.();
@@ -14441,10 +14511,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       const nextWidth = clampSidebarWidth(resizeStart.startWidth + (nextEvent.clientX - resizeStart.startX));
       sidebarWidthRef.current = nextWidth;
-      setSidebarWidth(nextWidth);
+      scheduleSidebarWidthUpdate(nextWidth);
     };
 
     const cleanup = () => {
+      if (sidebarResizeAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(sidebarResizeAnimationFrameRef.current);
+        sidebarResizeAnimationFrameRef.current = null;
+      }
+      pendingSidebarWidthRef.current = null;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       window.removeEventListener('mousemove', handleMouseMove);
@@ -14461,6 +14536,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         const nextWidth = clampSidebarWidth(sidebarWidthRef.current);
         sidebarWidthRef.current = nextWidth;
         lastExpandedSidebarWidthRef.current = nextWidth;
+        pendingSidebarWidthRef.current = null;
         setSidebarWidth(nextWidth);
         setLastExpandedSidebarWidth(nextWidth);
         persistSidebarLayout({
@@ -14477,7 +14553,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     sidebarResizeCleanupRef.current = cleanup;
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [persistSidebarLayout]);
+  }, [persistSidebarLayout, scheduleSidebarWidthUpdate]);
 
   const resetSidebarWidth = useCallback(() => {
     const nextWidth = CODE_PANE_SIDEBAR_DEFAULT_WIDTH;
@@ -14515,10 +14591,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
         resizeStart.startSize + ((nextEvent.clientX - resizeStart.startX) / containerWidth),
       );
       editorSplitSizeRef.current = nextSize;
-      setEditorSplitSize(nextSize);
+      scheduleEditorSplitSizeUpdate(nextSize);
     };
 
     const cleanup = () => {
+      if (editorSplitResizeAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(editorSplitResizeAnimationFrameRef.current);
+        editorSplitResizeAnimationFrameRef.current = null;
+      }
+      pendingEditorSplitSizeRef.current = null;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       window.removeEventListener('mousemove', handleMouseMove);
@@ -14534,6 +14615,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (resizeStart) {
         const nextSize = clampEditorSplitSize(editorSplitSizeRef.current);
         editorSplitSizeRef.current = nextSize;
+        pendingEditorSplitSizeRef.current = null;
         setEditorSplitSize(nextSize);
         persistEditorSplitLayout({
           visible: true,
@@ -14548,7 +14630,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     editorSplitResizeCleanupRef.current = cleanup;
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [persistEditorSplitLayout]);
+  }, [persistEditorSplitLayout, scheduleEditorSplitSizeUpdate]);
 
   const getBottomPanelAvailableHeightForLayout = useCallback(() => {
     return getBottomPanelAvailableHeight(
@@ -14598,14 +14680,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         resizeStart.startHeight - (nextEvent.clientY - resizeStart.startY),
         currentAvailableHeight,
       );
-      setBottomPanelAvailableHeight((availableHeightValue) => (
-        availableHeightValue === currentAvailableHeight ? availableHeightValue : currentAvailableHeight
-      ));
       bottomPanelHeightRef.current = nextHeight;
-      setBottomPanelHeight(nextHeight);
+      scheduleBottomPanelResizeUpdate(nextHeight, currentAvailableHeight);
     };
 
     const cleanup = () => {
+      if (bottomPanelResizeAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(bottomPanelResizeAnimationFrameRef.current);
+        bottomPanelResizeAnimationFrameRef.current = null;
+      }
+      pendingBottomPanelResizeRef.current = null;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       window.removeEventListener('mousemove', handleMouseMove);
@@ -14624,6 +14708,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           getBottomPanelAvailableHeightForLayout(),
         );
         bottomPanelHeightRef.current = nextHeight;
+        pendingBottomPanelResizeRef.current = null;
         setBottomPanelHeight(nextHeight);
         persistBottomPanelLayout({
           height: nextHeight,
@@ -14636,7 +14721,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     bottomPanelResizeCleanupRef.current = cleanup;
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, [getBottomPanelAvailableHeightForLayout, persistBottomPanelLayout]);
+  }, [getBottomPanelAvailableHeightForLayout, persistBottomPanelLayout, scheduleBottomPanelResizeUpdate]);
 
   const renderFileContextMenu = useCallback((
     filePath: string,
