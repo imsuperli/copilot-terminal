@@ -16018,23 +16018,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const trimmedQuery = searchEverywhereQuery.trim().toLowerCase();
+    const nextItems: SearchEverywhereItem[] = [];
+    const matchesQuery = (title: string, meta?: string) => (
+      trimmedQuery.length === 0
+      || title.toLowerCase().includes(trimmedQuery)
+      || meta?.toLowerCase().includes(trimmedQuery)
+    );
 
     if (searchEverywhereMode === 'commands') {
-      return searchEverywhereCommandItems.filter((item) => (
-        trimmedQuery.length === 0
-        || item.title.toLowerCase().includes(trimmedQuery)
-        || item.meta?.toLowerCase().includes(trimmedQuery)
-      ));
+      for (const item of searchEverywhereCommandItems) {
+        if (matchesQuery(item.title, item.meta)) {
+          nextItems.push(item);
+        }
+      }
+      return nextItems;
     }
 
     if (searchEverywhereMode === 'recent') {
-      const recentLocationItems = recentLocations
-        .filter((location) => (
-          trimmedQuery.length === 0
-          || getPathLeafLabel(location.displayPath ?? location.filePath).toLowerCase().includes(trimmedQuery)
-          || location.filePath.toLowerCase().includes(trimmedQuery)
-        ))
-        .map((location, index) => ({
+      for (let index = 0; index < recentLocations.length; index += 1) {
+        const location = recentLocations[index]!;
+        if (
+          trimmedQuery.length > 0
+          && !getPathLeafLabel(location.displayPath ?? location.filePath).toLowerCase().includes(trimmedQuery)
+          && !location.filePath.toLowerCase().includes(trimmedQuery)
+        ) {
+          continue;
+        }
+
+        nextItems.push({
           id: `recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
           section: t('codePane.recentLocations'),
           title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
@@ -16048,18 +16059,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
               clearForward: true,
             });
           },
-        }));
-      const recentFileItems = recentFiles
-        .filter((filePath) => (
-          trimmedQuery.length === 0
-          || getPathLeafLabel(getDisplayPath(filePath)).toLowerCase().includes(trimmedQuery)
-          || getDisplayPath(filePath).toLowerCase().includes(trimmedQuery)
-        ))
-        .map((filePath) => ({
+        });
+      }
+      for (const filePath of recentFiles) {
+        const displayPath = getDisplayPath(filePath);
+        if (
+          trimmedQuery.length > 0
+          && !getPathLeafLabel(displayPath).toLowerCase().includes(trimmedQuery)
+          && !displayPath.toLowerCase().includes(trimmedQuery)
+        ) {
+          continue;
+        }
+
+        nextItems.push({
           id: `recent-file-${filePath}`,
           section: t('codePane.recentFiles'),
           title: getFileLabel(filePath),
-          subtitle: getRelativePath(rootPath, getDisplayPath(filePath)),
+          subtitle: getRelativePath(rootPath, displayPath),
           execute: async () => {
             await openEditorLocation({
               filePath,
@@ -16072,98 +16088,102 @@ export const CodePane: React.FC<CodePaneProps> = ({
               clearForward: true,
             });
           },
-        }));
-      return [...recentLocationItems, ...recentFileItems];
+        });
+      }
+      return nextItems;
     }
 
-    const commandItems = searchEverywhereCommandItems.filter((item) => (
-      trimmedQuery.length === 0
-      || item.title.toLowerCase().includes(trimmedQuery)
-      || item.meta?.toLowerCase().includes(trimmedQuery)
-    ));
+    for (const item of searchEverywhereCommandItems) {
+      if (matchesQuery(item.title, item.meta)) {
+        nextItems.push(item);
+      }
+    }
 
-    const recentItems = trimmedQuery.length === 0
-      ? [
-          ...recentLocations.map((location, index) => ({
-            id: `search-recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
-            section: t('codePane.recentLocations'),
-            title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
-            subtitle: location.displayPath ?? getRelativePath(rootPath, location.filePath),
-            meta: `${location.lineNumber}:${location.column}`,
-            execute: async () => {
-              await openEditorLocation(location, {
-                preserveTabs: true,
-                recordHistory: true,
-                recordRecent: true,
-                clearForward: true,
-              });
-            },
-          })),
-          ...recentFiles.map((filePath) => ({
-            id: `search-recent-file-${filePath}`,
-            section: t('codePane.recentFiles'),
-            title: getFileLabel(filePath),
-            subtitle: getRelativePath(rootPath, getDisplayPath(filePath)),
-            execute: async () => {
-              await openEditorLocation({
-                filePath,
-                lineNumber: 1,
-                column: 1,
-              }, {
-                preserveTabs: true,
-                recordHistory: true,
-                recordRecent: true,
-                clearForward: true,
-              });
-            },
-          })),
-        ]
-      : [];
-
-    const fileItems = searchEverywhereFileResults.map((filePath) => ({
-      id: `search-file-${filePath}`,
-      section: t('codePane.searchEverywhereFilesSection'),
-      title: getPathLeafLabel(filePath) || filePath,
-      subtitle: getRelativePath(rootPath, filePath),
-      execute: async () => {
-        await openEditorLocation({
-          filePath,
-          lineNumber: 1,
-          column: 1,
-        }, {
-          recordHistory: true,
-          recordRecent: true,
-          clearForward: true,
+    if (trimmedQuery.length === 0) {
+      for (let index = 0; index < recentLocations.length; index += 1) {
+        const location = recentLocations[index]!;
+        nextItems.push({
+          id: `search-recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
+          section: t('codePane.recentLocations'),
+          title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
+          subtitle: location.displayPath ?? getRelativePath(rootPath, location.filePath),
+          meta: `${location.lineNumber}:${location.column}`,
+          execute: async () => {
+            await openEditorLocation(location, {
+              preserveTabs: true,
+              recordHistory: true,
+              recordRecent: true,
+              clearForward: true,
+            });
+          },
         });
-      },
-    }));
-
-    const symbolItems = searchEverywhereSymbolResults.map((symbol) => ({
-      id: `search-symbol-${symbol.filePath}-${symbol.name}-${symbol.range.startLineNumber}-${symbol.range.startColumn}`,
-      section: t('codePane.searchEverywhereSymbolsSection'),
-      title: symbol.name,
-      subtitle: getRelativePath(rootPath, symbol.filePath),
-      meta: `${symbol.range.startLineNumber}:${symbol.range.startColumn}`,
-      execute: async () => {
-        await openEditorLocation({
-          filePath: symbol.filePath,
-          lineNumber: symbol.range.startLineNumber,
-          column: symbol.range.startColumn,
-        }, {
-          preserveTabs: true,
-          recordHistory: true,
-          recordRecent: true,
-          clearForward: true,
+      }
+      for (const filePath of recentFiles) {
+        const displayPath = getDisplayPath(filePath);
+        nextItems.push({
+          id: `search-recent-file-${filePath}`,
+          section: t('codePane.recentFiles'),
+          title: getFileLabel(filePath),
+          subtitle: getRelativePath(rootPath, displayPath),
+          execute: async () => {
+            await openEditorLocation({
+              filePath,
+              lineNumber: 1,
+              column: 1,
+            }, {
+              preserveTabs: true,
+              recordHistory: true,
+              recordRecent: true,
+              clearForward: true,
+            });
+          },
         });
-      },
-    }));
+      }
+    }
 
-    return [
-      ...recentItems,
-      ...commandItems,
-      ...fileItems,
-      ...symbolItems,
-    ];
+    for (const filePath of searchEverywhereFileResults) {
+      nextItems.push({
+        id: `search-file-${filePath}`,
+        section: t('codePane.searchEverywhereFilesSection'),
+        title: getPathLeafLabel(filePath) || filePath,
+        subtitle: getRelativePath(rootPath, filePath),
+        execute: async () => {
+          await openEditorLocation({
+            filePath,
+            lineNumber: 1,
+            column: 1,
+          }, {
+            recordHistory: true,
+            recordRecent: true,
+            clearForward: true,
+          });
+        },
+      });
+    }
+
+    for (const symbol of searchEverywhereSymbolResults) {
+      nextItems.push({
+        id: `search-symbol-${symbol.filePath}-${symbol.name}-${symbol.range.startLineNumber}-${symbol.range.startColumn}`,
+        section: t('codePane.searchEverywhereSymbolsSection'),
+        title: symbol.name,
+        subtitle: getRelativePath(rootPath, symbol.filePath),
+        meta: `${symbol.range.startLineNumber}:${symbol.range.startColumn}`,
+        execute: async () => {
+          await openEditorLocation({
+            filePath: symbol.filePath,
+            lineNumber: symbol.range.startLineNumber,
+            column: symbol.range.startColumn,
+          }, {
+            preserveTabs: true,
+            recordHistory: true,
+            recordRecent: true,
+            clearForward: true,
+          });
+        },
+      });
+    }
+
+    return nextItems;
   }, [
     activateFile,
     getDisplayPath,
@@ -18686,16 +18706,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return [];
     }
 
-    const localBranches = gitBranches.filter((branch) => branch.kind === 'local');
-    const remoteBranches = gitBranches.filter((branch) => branch.kind === 'remote');
-    const recentBranches = [...gitBranches]
-      .sort((leftBranch, rightBranch) => {
-        if (leftBranch.current !== rightBranch.current) {
-          return leftBranch.current ? -1 : 1;
-        }
-        return rightBranch.timestamp - leftBranch.timestamp;
-      })
-      .slice(0, 8);
+    const localBranches: CodePaneGitBranchEntry[] = [];
+    const remoteBranches: CodePaneGitBranchEntry[] = [];
+    for (const branch of gitBranches) {
+      if (branch.kind === 'local') {
+        localBranches.push(branch);
+      } else if (branch.kind === 'remote') {
+        remoteBranches.push(branch);
+      }
+    }
+    const recentBranches = [...gitBranches];
+    recentBranches.sort((leftBranch, rightBranch) => {
+      if (leftBranch.current !== rightBranch.current) {
+        return leftBranch.current ? -1 : 1;
+      }
+      return rightBranch.timestamp - leftBranch.timestamp;
+    });
+    if (recentBranches.length > 8) {
+      recentBranches.length = 8;
+    }
 
     return [
       {
