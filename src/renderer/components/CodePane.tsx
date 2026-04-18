@@ -14186,6 +14186,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const visibleLocalHistoryEntries = useMemo(() => {
+    if (bottomPanelMode !== 'workspace') {
+      return [];
+    }
+
     const sourceEntries: LocalHistoryEntry[] = [];
     if (activeFilePath) {
       sourceEntries.push(...(localHistoryEntriesRef.current.get(activeFilePath) ?? []));
@@ -14200,9 +14204,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
       sourceEntries.length = 24;
     }
     return sourceEntries;
-  }, [activeFilePath, localHistoryVersion]);
+  }, [activeFilePath, bottomPanelMode, localHistoryVersion]);
+
+  const hasActivePerformanceTasks = isRunTargetsLoading
+    || isTestsLoading
+    || isProjectLoading
+    || isDebugDetailsLoading
+    || isTodoLoading
+    || isGitHistoryLoading;
 
   const activePerformanceTasks = useMemo(() => {
+    if (bottomPanelMode !== 'performance') {
+      return [];
+    }
+
     const nextTasks = [];
 
     if (isRunTargetsLoading) {
@@ -14257,6 +14272,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return nextTasks;
   }, [
     activeFilePath,
+    bottomPanelMode,
     gitHistory?.targetFilePath,
     isDebugDetailsLoading,
     isGitHistoryLoading,
@@ -19551,7 +19567,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         )}
         <RuntimeActivityIndicator
           runtimeStore={runtimeStoreRef.current}
-          hasActiveTasks={activePerformanceTasks.length > 0}
+          hasActiveTasks={hasActivePerformanceTasks}
           label={t('codePane.performanceBusy')}
         />
         <span>{viewMode === 'diff' ? t('codePane.diffView') : t('codePane.editorView')}</span>
@@ -19566,7 +19582,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     </div>
   ), [
     activeFileStatusLabel,
-    activePerformanceTasks.length,
+    hasActivePerformanceTasks,
     handleToggleFormatOnSave,
     handleToggleImportsOnSave,
     handleToggleLintOnSave,
