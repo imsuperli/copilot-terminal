@@ -25,6 +25,8 @@ import { updateSettingsCategories } from './categoryHelpers';
 
 // 全局标志：是否启用自动保存
 let autoSaveEnabled = true;
+const WINDOW_STORE_AUTOSAVE_STATE_KEY = '__copilotTerminalWindowStoreAutoSaveState__';
+const RENDERER_AUTOSAVE_DEBOUNCE_MS = 80;
 const runtimeOnlyPaneFields = new Set<keyof Pane>([
   'status',
   'pid',
@@ -41,6 +43,101 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
   'tmuxScopeId',
 ]);
 
+type PendingAutoSavePayload = {
+  windows: Window[];
+  groups: WindowGroup[];
+};
+
+type WindowStoreAutoSaveState = {
+  timer: ReturnType<typeof setTimeout> | null;
+  pendingPayload: PendingAutoSavePayload | null;
+  lastSentSignature: string | null;
+  lifecycleBound: boolean;
+};
+
+const fallbackAutoSaveState: WindowStoreAutoSaveState = {
+  timer: null,
+  pendingPayload: null,
+  lastSentSignature: null,
+  lifecycleBound: false,
+};
+
+function getWindowStoreAutoSaveState(): WindowStoreAutoSaveState {
+  if (typeof window === 'undefined') {
+    return fallbackAutoSaveState;
+  }
+
+  const host = window as typeof window & {
+    [WINDOW_STORE_AUTOSAVE_STATE_KEY]?: WindowStoreAutoSaveState;
+  };
+  if (!host[WINDOW_STORE_AUTOSAVE_STATE_KEY]) {
+    host[WINDOW_STORE_AUTOSAVE_STATE_KEY] = {
+      timer: null,
+      pendingPayload: null,
+      lastSentSignature: null,
+      lifecycleBound: false,
+    };
+  }
+
+  return host[WINDOW_STORE_AUTOSAVE_STATE_KEY]!;
+}
+
+function clearScheduledAutoSave(state = getWindowStoreAutoSaveState()): void {
+  if (state.timer) {
+    clearTimeout(state.timer);
+    state.timer = null;
+  }
+  state.pendingPayload = null;
+}
+
+function flushPendingAutoSave(): void {
+  const state = getWindowStoreAutoSaveState();
+  if (state.timer) {
+    clearTimeout(state.timer);
+    state.timer = null;
+  }
+
+  if (!autoSaveEnabled || !window.electronAPI) {
+    state.pendingPayload = null;
+    return;
+  }
+
+  const payload = state.pendingPayload;
+  state.pendingPayload = null;
+  if (!payload) {
+    return;
+  }
+
+  const persistableWindows = getPersistableWindows(payload.windows);
+  const groups = payload.groups;
+  const signature = JSON.stringify({
+    windows: persistableWindows,
+    groups,
+  });
+
+  if (signature === state.lastSentSignature) {
+    return;
+  }
+
+  window.electronAPI.triggerAutoSave(persistableWindows, groups);
+  state.lastSentSignature = signature;
+}
+
+function ensureAutoSaveLifecycleHooks(): void {
+  const state = getWindowStoreAutoSaveState();
+  if (state.lifecycleBound || typeof window === 'undefined') {
+    return;
+  }
+
+  const flush = () => {
+    flushPendingAutoSave();
+  };
+
+  window.addEventListener('beforeunload', flush);
+  window.addEventListener('pagehide', flush);
+  state.lifecycleBound = true;
+}
+
 /**
  * 触发自动保存
  * 通过 IPC 事件通知主进程触发保存
@@ -48,9 +145,24 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
  * @param groups 当前窗口组列表
  */
 function triggerAutoSave(windows: Window[], groups?: WindowGroup[]): void {
-  if (autoSaveEnabled && window.electronAPI) {
-    window.electronAPI.triggerAutoSave(getPersistableWindows(windows), groups);
+  if (!autoSaveEnabled || !window.electronAPI) {
+    return;
   }
+
+  ensureAutoSaveLifecycleHooks();
+  const state = getWindowStoreAutoSaveState();
+  state.pendingPayload = {
+    windows,
+    groups: groups ?? [],
+  };
+
+  if (state.timer) {
+    clearTimeout(state.timer);
+  }
+
+  state.timer = setTimeout(() => {
+    flushPendingAutoSave();
+  }, RENDERER_AUTOSAVE_DEBOUNCE_MS);
 }
 
 /**
@@ -58,6 +170,22 @@ function triggerAutoSave(windows: Window[], groups?: WindowGroup[]): void {
  */
 export function setAutoSaveEnabled(enabled: boolean): void {
   autoSaveEnabled = enabled;
+  if (!enabled) {
+    const state = getWindowStoreAutoSaveState();
+    clearScheduledAutoSave(state);
+    state.lastSentSignature = null;
+  }
+}
+
+export function __flushWindowStoreAutoSaveForTests(): void {
+  flushPendingAutoSave();
+}
+
+export function __resetWindowStoreAutoSaveStateForTests(): void {
+  autoSaveEnabled = true;
+  const state = getWindowStoreAutoSaveState();
+  clearScheduledAutoSave(state);
+  state.lastSentSignature = null;
 }
 
 function isRuntimeOnlyPaneUpdate(updateKeys: string[]): boolean {
@@ -364,7 +492,14 @@ export const useWindowStore = create<WindowStore>()(
 
     // 删除窗口
     removeWindow: (id) => {
+      let didChange = false;
       set((state) => {
+        const existingWindow = state.windows.find((window) => window.id === id);
+        if (!existingWindow) {
+          return;
+        }
+
+        didChange = true;
         state.windows = state.windows.filter(w => w.id !== id);
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
@@ -402,33 +537,58 @@ export const useWindowStore = create<WindowStore>()(
           }
         }
       });
-      // 触发自动保存，传递最新的窗口列表和组列表
-      const { windows, groups, customCategories } = get();
-      triggerAutoSave(windows, groups);
-      // 异步保存分类更新
-      updateSettingsCategories(customCategories).catch(error => {
-        console.error('[WindowStore] Failed to save categories after window removal:', error);
-      });
+
+      if (didChange) {
+        const { windows, groups, customCategories } = get();
+        triggerAutoSave(windows, groups);
+        updateSettingsCategories(customCategories).catch(error => {
+          console.error('[WindowStore] Failed to save categories after window removal:', error);
+        });
+      }
     },
 
     // 更新窗口（支持更新多个属性）
     updateWindow: (id, updates) => {
+      const updateKeys = Object.keys(updates) as Array<keyof Window>;
+      if (updateKeys.length === 0) {
+        return;
+      }
+
+      let didChange = false;
       set((state) => {
         const window = state.windows.find(w => w.id === id);
         if (window) {
+          const hasActualChange = updateKeys.some((key) => window[key] !== updates[key]);
+          if (!hasActualChange) {
+            return;
+          }
+
+          didChange = true;
           Object.assign(window, updates);
           window.lastActiveAt = new Date().toISOString();
         }
       });
-      // 触发自动保存，传递最新的窗口列表和组列表
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+
+      if (didChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     updateWindowRuntime: (id, updates) => {
+      const updateKeys = Object.keys(updates) as Array<keyof Window>;
+      if (updateKeys.length === 0) {
+        return;
+      }
+
       set((state) => {
         const window = state.windows.find(w => w.id === id);
         if (window) {
+          const hasActualChange = updateKeys.some((key) => window[key] !== updates[key]);
+          if (!hasActualChange) {
+            return;
+          }
+
           Object.assign(window, updates);
         }
       });
@@ -440,20 +600,29 @@ export const useWindowStore = create<WindowStore>()(
      * 此方法仅为向后兼容保留，不应在新代码中使用。
      */
     updateWindowStatus: (id, status) => {
+      let didChange = false;
       set((state) => {
         const window = state.windows.find(w => w.id === id);
         if (window) {
           // 更新所有窗格的状态
           const panes = getAllPanes(window.layout);
+          const hasActualChange = panes.some((pane) => pane.status !== status);
+          if (!hasActualChange) {
+            return;
+          }
+
+          didChange = true;
           panes.forEach(pane => {
             window.layout = updatePaneInLayout(window.layout, pane.id, { status });
           });
           window.lastActiveAt = new Date().toISOString();
         }
       });
-      // 触发自动保存
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+
+      if (didChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     // 更新窗格
@@ -569,35 +738,44 @@ export const useWindowStore = create<WindowStore>()(
 
     // 拆分窗格
     splitPaneInWindow: (windowId, targetPaneId, direction, newPane, sizes) => {
+      let didChange = false;
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
         if (window) {
           const newLayout = splitPaneInLayout(window.layout, targetPaneId, direction, newPane, false, sizes);
           if (newLayout) {
+            didChange = true;
             window.layout = newLayout;
             // 保持当前激活的窗格不变，不自动切换到新窗格
             window.lastActiveAt = new Date().toISOString();
           }
         }
       });
-      // 触发自动保存
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+
+      if (didChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     placePaneInWindow: (windowId, targetPaneId, direction, newPane, insertBefore, sizes) => {
+      let didChange = false;
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
         if (window) {
           const newLayout = splitPaneInLayout(window.layout, targetPaneId, direction, newPane, insertBefore, sizes);
           if (newLayout) {
+            didChange = true;
             window.layout = newLayout;
             window.lastActiveAt = new Date().toISOString();
           }
         }
       });
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+
+      if (didChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     movePaneInWindow: (windowId, paneId, targetPaneId, direction, insertBefore) => {
@@ -605,6 +783,7 @@ export const useWindowStore = create<WindowStore>()(
         return;
       }
 
+      let didChange = false;
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
         if (!window) {
@@ -618,9 +797,13 @@ export const useWindowStore = create<WindowStore>()(
 
         window.layout = newLayout;
         window.lastActiveAt = new Date().toISOString();
+        didChange = true;
       });
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+
+      if (didChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     // 关闭窗格
@@ -632,11 +815,13 @@ export const useWindowStore = create<WindowStore>()(
         });
       }
 
+      let didChange = false;
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
         if (window) {
           const newLayout = closePaneInLayout(window.layout, paneId);
           if (newLayout) {
+            didChange = true;
             window.layout = newLayout;
             // 如果关闭的是当前激活的窗格，切换到第一个窗格
             if (window.activePaneId === paneId) {
@@ -647,9 +832,11 @@ export const useWindowStore = create<WindowStore>()(
           }
         }
       });
-      // 触发自动保存
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+
+      if (didChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     updateSplitSizes: (windowId, splitPath, sizes) => {
@@ -683,6 +870,10 @@ export const useWindowStore = create<WindowStore>()(
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
         if (window) {
+          if (window.activePaneId === paneId) {
+            return;
+          }
+
           window.activePaneId = paneId;
           window.lastActiveAt = new Date().toISOString();
           didSetActivePane = true;
@@ -703,7 +894,7 @@ export const useWindowStore = create<WindowStore>()(
       let didArchive = false;
       set((state) => {
         const window = state.windows.find(w => w.id === id);
-        if (!window || window.ephemeral) {
+        if (!window || window.ephemeral || window.archived) {
           return;
         }
 
@@ -746,16 +937,24 @@ export const useWindowStore = create<WindowStore>()(
 
     // 取消归档窗口
     unarchiveWindow: (id) => {
+      let didChange = false;
       set((state) => {
         const window = state.windows.find(w => w.id === id);
         if (window) {
+          if (!window.archived) {
+            return;
+          }
+
+          didChange = true;
           window.archived = false;
           window.lastActiveAt = new Date().toISOString();
         }
       });
-      // 触发自动保存
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+
+      if (didChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     // 设置活跃窗口（与 activeGroupId 互斥）
@@ -893,7 +1092,14 @@ export const useWindowStore = create<WindowStore>()(
 
     // 删除组（不删除组内窗口）
     removeGroup: (id) => {
+      let didChange = false;
       set((state) => {
+        const existingGroup = state.groups.find((group) => group.id === id);
+        if (!existingGroup) {
+          return;
+        }
+
+        didChange = true;
         state.groups = state.groups.filter(g => g.id !== id);
         if (state.activeGroupId === id) {
           state.activeGroupId = null;
@@ -908,31 +1114,54 @@ export const useWindowStore = create<WindowStore>()(
           }
         });
       });
-      const { windows, groups, customCategories } = get();
-      triggerAutoSave(windows, groups);
-      // 异步保存分类更新
-      updateSettingsCategories(customCategories).catch(error => {
-        console.error('[WindowStore] Failed to save categories after group removal:', error);
-      });
+
+      if (didChange) {
+        const { windows, groups, customCategories } = get();
+        triggerAutoSave(windows, groups);
+        updateSettingsCategories(customCategories).catch(error => {
+          console.error('[WindowStore] Failed to save categories after group removal:', error);
+        });
+      }
     },
 
     // 更新组
     updateGroup: (id, updates) => {
+      const updateKeys = Object.keys(updates) as Array<keyof WindowGroup>;
+      if (updateKeys.length === 0) {
+        return;
+      }
+
+      let didChange = false;
       set((state) => {
         const group = state.groups.find(g => g.id === id);
         if (group) {
+          const hasActualChange = updateKeys.some((key) => group[key] !== updates[key]);
+          if (!hasActualChange) {
+            return;
+          }
+
+          didChange = true;
           Object.assign(group, updates);
           group.lastActiveAt = new Date().toISOString();
         }
       });
-      triggerAutoSave(get().windows, get().groups);
+
+      if (didChange) {
+        triggerAutoSave(get().windows, get().groups);
+      }
     },
 
     // 归档组
     archiveGroup: (id) => {
+      let didChange = false;
       set((state) => {
         const group = state.groups.find(g => g.id === id);
         if (group) {
+          if (group.archived) {
+            return;
+          }
+
+          didChange = true;
           group.archived = true;
           group.lastActiveAt = new Date().toISOString();
 
@@ -950,14 +1179,23 @@ export const useWindowStore = create<WindowStore>()(
           state.activeGroupId = null;
         }
       });
-      triggerAutoSave(get().windows, get().groups);
+
+      if (didChange) {
+        triggerAutoSave(get().windows, get().groups);
+      }
     },
 
     // 取消归档组
     unarchiveGroup: (id) => {
+      let didChange = false;
       set((state) => {
         const group = state.groups.find(g => g.id === id);
         if (group) {
+          if (!group.archived) {
+            return;
+          }
+
+          didChange = true;
           group.archived = false;
           group.lastActiveAt = new Date().toISOString();
 
@@ -972,7 +1210,10 @@ export const useWindowStore = create<WindowStore>()(
           });
         }
       });
-      triggerAutoSave(get().windows, get().groups);
+
+      if (didChange) {
+        triggerAutoSave(get().windows, get().groups);
+      }
     },
 
     // 设置活跃组（与 activeWindowId 互斥）
@@ -1004,6 +1245,7 @@ export const useWindowStore = create<WindowStore>()(
 
     // 添加窗口到组布局
     addWindowToGroupLayout: (groupId, targetWindowId, newWindowId, direction) => {
+      let didChange = false;
       set((state) => {
         const group = state.groups.find(g => g.id === groupId);
         if (!group) {
@@ -1022,21 +1264,29 @@ export const useWindowStore = create<WindowStore>()(
                 { type: 'window', id: newWindowId },
               ],
             };
+            didChange = true;
           }
         } else {
           // 使用工具函数在布局树中添加
           const newLayout = addWindowToGroupInLayout(group.layout, targetWindowId, newWindowId, direction);
           if (newLayout) {
             group.layout = newLayout;
+            didChange = true;
           }
         }
-        group.lastActiveAt = new Date().toISOString();
+        if (didChange) {
+          group.lastActiveAt = new Date().toISOString();
+        }
       });
-      triggerAutoSave(get().windows, get().groups);
+
+      if (didChange) {
+        triggerAutoSave(get().windows, get().groups);
+      }
     },
 
     // 从组中移除窗口
     removeWindowFromGroupLayout: (groupId, windowId) => {
+      let didChange = false;
       set((state) => {
         const groupIndex = state.groups.findIndex(g => g.id === groupId);
         if (groupIndex < 0) {
@@ -1049,23 +1299,33 @@ export const useWindowStore = create<WindowStore>()(
         if (!newLayout || getWindowCount(newLayout) < 2) {
           // 组内不足 2 个窗口，解散组
           state.groups.splice(groupIndex, 1);
+          didChange = true;
           if (state.activeGroupId === groupId) {
             state.activeGroupId = null;
           }
           state.groupMruList = state.groupMruList.filter(gid => gid !== groupId);
         } else {
           group.layout = newLayout;
+          didChange = true;
           if (group.activeWindowId === windowId) {
             group.activeWindowId = getAllWindowIds(newLayout)[0];
           }
           group.lastActiveAt = new Date().toISOString();
         }
       });
-      triggerAutoSave(get().windows, get().groups);
+
+      if (didChange) {
+        triggerAutoSave(get().windows, get().groups);
+      }
     },
 
     // 组内窗口重新排列（原子操作，避免中间状态触发解散）
     rearrangeWindowInGroupLayout: (groupId, dragWindowId, targetWindowId, direction, insertBefore) => {
+      if (dragWindowId === targetWindowId) {
+        return;
+      }
+
+      let didChange = false;
       set((state) => {
         const group = state.groups.find(g => g.id === groupId);
         if (!group) return;
@@ -1080,8 +1340,12 @@ export const useWindowStore = create<WindowStore>()(
 
         group.layout = finalLayout;
         group.lastActiveAt = new Date().toISOString();
+        didChange = true;
       });
-      triggerAutoSave(get().windows, get().groups);
+
+      if (didChange) {
+        triggerAutoSave(get().windows, get().groups);
+      }
     },
 
     // 更新组布局的 split sizes

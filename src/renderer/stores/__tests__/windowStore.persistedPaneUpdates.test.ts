@@ -1,10 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useWindowStore } from '../windowStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  __flushWindowStoreAutoSaveForTests,
+  __resetWindowStoreAutoSaveStateForTests,
+  useWindowStore,
+} from '../windowStore';
 import { createSinglePaneWindow } from '../../utils/layoutHelpers';
 
 describe('windowStore persisted pane updates', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetWindowStoreAutoSaveStateForTests();
     useWindowStore.setState({
       windows: [],
       activeWindowId: null,
@@ -12,6 +17,10 @@ describe('windowStore persisted pane updates', () => {
       sidebarExpanded: false,
       sidebarWidth: 200,
     });
+  });
+
+  afterEach(() => {
+    __resetWindowStoreAutoSaveStateForTests();
   });
 
   it('auto-saves persisted pane cwd changes', () => {
@@ -29,6 +38,7 @@ describe('windowStore persisted pane updates', () => {
     useWindowStore.getState().updatePane(terminalWindow.id, paneId, {
       cwd: 'D:\\repo\\next',
     });
+    __flushWindowStoreAutoSaveForTests();
 
     const pane = useWindowStore.getState().getPaneById(terminalWindow.id, paneId);
     expect(pane?.cwd).toBe('D:\\repo\\next');

@@ -1,10 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useWindowStore, WindowStatus } from '../windowStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  __flushWindowStoreAutoSaveForTests,
+  __resetWindowStoreAutoSaveStateForTests,
+  useWindowStore,
+  WindowStatus,
+} from '../windowStore';
 import { createSinglePaneWindow, getAllPanes } from '../../utils/layoutHelpers';
 
 describe('windowStore auto-save gating', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetWindowStoreAutoSaveStateForTests();
     useWindowStore.setState({
       windows: [],
       activeWindowId: null,
@@ -12,6 +18,11 @@ describe('windowStore auto-save gating', () => {
       sidebarExpanded: false,
       sidebarWidth: 200,
     });
+  });
+
+  afterEach(() => {
+    __resetWindowStoreAutoSaveStateForTests();
+    vi.useRealTimers();
   });
 
   it('does not auto-save when switching the active pane', () => {
@@ -184,6 +195,7 @@ describe('windowStore auto-save gating', () => {
     useWindowStore.getState().updateWindow(ownerWindow.id, {
       name: 'Owner Updated',
     });
+    __flushWindowStoreAutoSaveForTests();
 
     expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
     expect(window.electronAPI.triggerAutoSave).toHaveBeenLastCalledWith(
@@ -271,6 +283,7 @@ describe('windowStore auto-save gating', () => {
     });
 
     useWindowStore.getState().pauseWindowState(terminalWindow.id);
+    __flushWindowStoreAutoSaveForTests();
 
     const storedWindow = useWindowStore.getState().windows[0];
     expect(storedWindow.activePaneId).toBe(leaderPaneId);
@@ -349,6 +362,85 @@ describe('windowStore auto-save gating', () => {
         expect.objectContaining({ id: teammatePaneId, status: WindowStatus.Paused, pid: null }),
       ]),
     );
+    expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
+  });
+
+  it('coalesces repeated persisted updates into a single auto-save payload', () => {
+    vi.useFakeTimers();
+    const terminalWindow = createSinglePaneWindow('Coalesce', 'D:\\repo', 'pwsh.exe');
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      activeWindowId: terminalWindow.id,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    useWindowStore.getState().updateWindow(terminalWindow.id, {
+      name: 'Coalesce 1',
+    });
+    useWindowStore.getState().updateWindow(terminalWindow.id, {
+      name: 'Coalesce 2',
+    });
+
+    expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(80);
+
+    expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.triggerAutoSave).toHaveBeenLastCalledWith(
+      [
+        expect.objectContaining({
+          id: terminalWindow.id,
+          name: 'Coalesce 2',
+        }),
+      ],
+      [],
+    );
+  });
+
+  it('skips sending auto-save when the persisted snapshot is unchanged', () => {
+    vi.useFakeTimers();
+    const terminalWindow = createSinglePaneWindow('Noop', 'D:\\repo', 'pwsh.exe');
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      activeWindowId: terminalWindow.id,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    useWindowStore.getState().updateWindow(terminalWindow.id, {
+      name: 'Noop Updated',
+    });
+    vi.advanceTimersByTime(80);
+    expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
+
+    useWindowStore.getState().updateWindow(terminalWindow.id, {
+      name: 'Noop Updated',
+    });
+    vi.advanceTimersByTime(80);
+
+    expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not auto-save when updating a window with unchanged persisted fields', () => {
+    const terminalWindow = createSinglePaneWindow('Stable', 'D:\\repo', 'pwsh.exe');
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      activeWindowId: terminalWindow.id,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    useWindowStore.getState().updateWindow(terminalWindow.id, {
+      name: terminalWindow.name,
+    });
+
     expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
   });
 });
