@@ -13987,12 +13987,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     let cancelled = false;
-    setIsSearching((currentSearching) => (
-      currentSearching ? currentSearching : true
-    ));
-    setSearchError((currentError) => (
-      currentError === null ? currentError : null
-    ));
     const requestKey = `search-files:${rootPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
     const cacheKey = `${requestKey}:${trimmedQuery}`;
@@ -14005,11 +13999,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setSearchResults((currentResults) => (
         areStringListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
       ));
+      setSearchError((currentError) => (
+        currentError === null ? currentError : null
+      ));
       setIsSearching((currentSearching) => (
         currentSearching ? false : currentSearching
       ));
       return undefined;
     }
+
+    setIsSearching((currentSearching) => (
+      currentSearching ? currentSearching : true
+    ));
+    setSearchError((currentError) => (
+      currentError === null ? currentError : null
+    ));
 
     const timer = setTimeout(async () => {
       const response = await trackRequest(
@@ -14067,12 +14071,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     let cancelled = false;
-    setIsContentSearching((currentSearching) => (
-      currentSearching ? currentSearching : true
-    ));
-    setContentSearchError((currentError) => (
-      currentError === null ? currentError : null
-    ));
     const requestKey = `search-contents:${rootPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
     const cacheKey = `${requestKey}:${trimmedQuery}`;
@@ -14085,11 +14083,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setContentSearchResults((currentResults) => (
         areContentMatchListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
       ));
+      setContentSearchError((currentError) => (
+        currentError === null ? currentError : null
+      ));
       setIsContentSearching((currentSearching) => (
         currentSearching ? false : currentSearching
       ));
       return undefined;
     }
+
+    setIsContentSearching((currentSearching) => (
+      currentSearching ? currentSearching : true
+    ));
+    setContentSearchError((currentError) => (
+      currentError === null ? currentError : null
+    ));
 
     const timer = setTimeout(async () => {
       const response = await trackRequest(
@@ -14150,12 +14158,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     let cancelled = false;
-    setIsWorkspaceSymbolSearching((currentSearching) => (
-      currentSearching ? currentSearching : true
-    ));
-    setWorkspaceSymbolError((currentError) => (
-      currentError === null ? currentError : null
-    ));
     const requestKey = `workspace-symbols:${rootPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
     const cacheKey = `${requestKey}:${trimmedQuery}`;
@@ -14168,11 +14170,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setWorkspaceSymbolResults((currentResults) => (
         areWorkspaceSymbolListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
       ));
+      setWorkspaceSymbolError((currentError) => (
+        currentError === null ? currentError : null
+      ));
       setIsWorkspaceSymbolSearching((currentSearching) => (
         currentSearching ? false : currentSearching
       ));
       return undefined;
     }
+
+    setIsWorkspaceSymbolSearching((currentSearching) => (
+      currentSearching ? currentSearching : true
+    ));
+    setWorkspaceSymbolError((currentError) => (
+      currentError === null ? currentError : null
+    ));
 
     const timer = setTimeout(async () => {
       const response = await trackRequest(
@@ -16560,12 +16572,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     let cancelled = false;
-    setIsSearchEverywhereLoading((currentLoading) => (
-      currentLoading ? currentLoading : true
-    ));
-    setSearchEverywhereError((currentError) => (
-      currentError === null ? currentError : null
-    ));
     const requestKey = `search-everywhere:${rootPath}`;
     const cacheKey = `${requestKey}:${searchEverywhereMode}:${trimmedQuery}`;
     const cachedResults = runtimeStoreRef.current.getCache<{
@@ -16579,11 +16585,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setSearchEverywhereSymbolResults((currentResults) => (
         areWorkspaceSymbolListsEqual(currentResults, cachedResults.symbols) ? currentResults : cachedResults.symbols
       ));
+      setSearchEverywhereError((currentError) => (
+        currentError === null ? currentError : null
+      ));
       setIsSearchEverywhereLoading((currentLoading) => (
         currentLoading ? false : currentLoading
       ));
       return;
     }
+
+    setIsSearchEverywhereLoading((currentLoading) => (
+      currentLoading ? currentLoading : true
+    ));
+    setSearchEverywhereError((currentError) => (
+      currentError === null ? currentError : null
+    ));
 
     const timer = window.setTimeout(async () => {
       const [fileResponse, symbolResponse] = await Promise.all([
