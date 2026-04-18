@@ -340,7 +340,10 @@ export const CommitWindow = React.memo(function CommitWindow({
         return [];
       }
 
-      const availablePaths = new Set(entries.map((entry) => entry.path));
+      const availablePaths = new Set<string>();
+      for (const entry of entries) {
+        availablePaths.add(entry.path);
+      }
       const preferredPaths = initialSelectedPaths.filter((path) => availablePaths.has(path));
       if (preferredPaths.length > 0) {
         return preferredPaths;
@@ -395,7 +398,10 @@ export const CommitWindow = React.memo(function CommitWindow({
       return;
     }
 
-    const visibleGroupKeys = new Set(visibleEntryGroups.map((group) => group.key));
+    const visibleGroupKeys = new Set<string>();
+    for (const group of visibleEntryGroups) {
+      visibleGroupKeys.add(group.key);
+    }
     setCollapsedGroupKeys((currentKeys) => currentKeys.filter((groupKey) => visibleGroupKeys.has(groupKey)));
   }, [open, visibleEntryGroups]);
 
@@ -429,7 +435,10 @@ export const CommitWindow = React.memo(function CommitWindow({
         return Array.from(nextSelectedPathSet);
       }
 
-      const groupPathSet = new Set(groupEntries.map((entry) => entry.path));
+      const groupPathSet = new Set<string>();
+      for (const entry of groupEntries) {
+        groupPathSet.add(entry.path);
+      }
       return currentSelectedPaths.filter((path) => !groupPathSet.has(path));
     });
   }, []);

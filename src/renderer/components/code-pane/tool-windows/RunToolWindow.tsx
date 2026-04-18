@@ -82,6 +82,26 @@ function useFixedWindowedList<T>(items: T[], rowHeight: number) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const pendingScrollTopRef = useRef<number | null>(null);
+  const scrollAnimationFrameRef = useRef<number | null>(null);
+
+  const scheduleScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingScrollTopRef.current = nextScrollTop;
+    if (scrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    scrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      scrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingScrollTopRef.current;
+      pendingScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -101,6 +121,10 @@ function useFixedWindowedList<T>(items: T[], rowHeight: number) {
     });
     resizeObserver.observe(container);
     return () => {
+      if (scrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollAnimationFrameRef.current);
+        scrollAnimationFrameRef.current = null;
+      }
       resizeObserver.disconnect();
     };
   }, []);
@@ -116,7 +140,7 @@ function useFixedWindowedList<T>(items: T[], rowHeight: number) {
     scrollRef,
     slice,
     handleScroll: (event: React.UIEvent<HTMLDivElement>) => {
-      setScrollTop(event.currentTarget.scrollTop);
+      scheduleScrollTopUpdate(event.currentTarget.scrollTop);
     },
   };
 }

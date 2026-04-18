@@ -556,6 +556,26 @@ function useFixedWindowedList<T>(
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
+  const pendingScrollTopRef = useRef<number | null>(null);
+  const scrollAnimationFrameRef = useRef<number | null>(null);
+
+  const scheduleScrollTopUpdate = useCallback((nextScrollTop: number) => {
+    pendingScrollTopRef.current = nextScrollTop;
+    if (scrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    scrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      scrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingScrollTopRef.current;
+      pendingScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const scrollElement = scrollRef.current;
@@ -578,6 +598,10 @@ function useFixedWindowedList<T>(
     resizeObserver.observe(scrollElement);
 
     return () => {
+      if (scrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollAnimationFrameRef.current);
+        scrollAnimationFrameRef.current = null;
+      }
       resizeObserver.disconnect();
     };
   }, []);
@@ -595,7 +619,7 @@ function useFixedWindowedList<T>(
     scrollRef,
     slice,
     handleScroll: (event: React.UIEvent<HTMLDivElement>) => {
-      setScrollTop(event.currentTarget.scrollTop);
+      scheduleScrollTopUpdate(event.currentTarget.scrollTop);
     },
   };
 }
@@ -1043,20 +1067,26 @@ const BranchListSection = React.memo(function BranchListSection({
     ...section,
     rows: flattenBranchTreeRows(section.nodes, collapsedNodeKeySet),
   })), [collapsedNodeKeySet, sections]);
-  const visibleItems = useMemo<BranchListVisibleItem[]>(() => visibleSections.flatMap((section) => ([
-    {
-      key: `section:${section.key}`,
-      kind: 'section',
-      label: section.label,
-      count: section.count,
-    },
-    ...section.rows.map((row) => ({
-      key: row.key,
-      kind: 'row' as const,
-      depth: row.depth,
-      node: row.node,
-    })),
-  ])), [visibleSections]);
+  const visibleItems = useMemo<BranchListVisibleItem[]>(() => {
+    const nextItems: BranchListVisibleItem[] = [];
+    for (const section of visibleSections) {
+      nextItems.push({
+        key: `section:${section.key}`,
+        kind: 'section',
+        label: section.label,
+        count: section.count,
+      });
+      for (const row of section.rows) {
+        nextItems.push({
+          key: row.key,
+          kind: 'row',
+          depth: row.depth,
+          node: row.node,
+        });
+      }
+    }
+    return nextItems;
+  }, [visibleSections]);
   const { scrollRef, slice: visibleItemSlice, handleScroll } = useFixedWindowedList(
     visibleItems,
     GIT_BRANCH_LIST_ROW_HEIGHT,

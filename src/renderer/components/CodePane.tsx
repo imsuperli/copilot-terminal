@@ -1973,6 +1973,8 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
     scrollTop: 0,
     viewportHeight: 0,
   });
+  const pendingViewportRef = React.useRef<FileTreeViewport | null>(null);
+  const viewportAnimationFrameRef = React.useRef<number | null>(null);
 
   const updateViewport = React.useCallback((nextViewport: FileTreeViewport) => {
     setViewport((currentViewport) => (
@@ -1982,6 +1984,22 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
         : nextViewport
     ));
   }, []);
+
+  const scheduleViewportUpdate = React.useCallback((nextViewport: FileTreeViewport) => {
+    pendingViewportRef.current = nextViewport;
+    if (viewportAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    viewportAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      viewportAnimationFrameRef.current = null;
+      const pendingViewport = pendingViewportRef.current;
+      pendingViewportRef.current = null;
+      if (pendingViewport) {
+        updateViewport(pendingViewport);
+      }
+    });
+  }, [updateViewport]);
 
   React.useEffect(() => {
     const container = scrollRef.current;
@@ -2003,6 +2021,10 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
     });
     resizeObserver.observe(container);
     return () => {
+      if (viewportAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(viewportAnimationFrameRef.current);
+        viewportAnimationFrameRef.current = null;
+      }
       resizeObserver.disconnect();
     };
   }, [scrollRef, updateViewport]);
@@ -2025,7 +2047,7 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
         ref={scrollRef}
         className="min-h-0 flex-1 overflow-auto px-1 py-2"
         onScroll={(event) => {
-          updateViewport({
+          scheduleViewportUpdate({
             scrollTop: event.currentTarget.scrollTop,
             viewportHeight: event.currentTarget.clientHeight,
           });
@@ -4534,6 +4556,26 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
   const listScrollRef = React.useRef<HTMLDivElement | null>(null);
   const [listScrollTop, setListScrollTop] = React.useState(0);
   const [listViewportHeight, setListViewportHeight] = React.useState(0);
+  const pendingListScrollTopRef = React.useRef<number | null>(null);
+  const listScrollAnimationFrameRef = React.useRef<number | null>(null);
+
+  const scheduleListScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingListScrollTopRef.current = nextScrollTop;
+    if (listScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    listScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      listScrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingListScrollTopRef.current;
+      pendingListScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setListScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
 
   React.useEffect(() => {
     const container = listScrollRef.current;
@@ -4553,6 +4595,10 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
     });
     resizeObserver.observe(container);
     return () => {
+      if (listScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(listScrollAnimationFrameRef.current);
+        listScrollAnimationFrameRef.current = null;
+      }
       resizeObserver.disconnect();
     };
   }, []);
@@ -4602,7 +4648,7 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
             ref={listScrollRef}
             className="min-h-0 overflow-auto border-r border-zinc-800 px-2 py-2"
             onScroll={(event) => {
-              setListScrollTop(event.currentTarget.scrollTop);
+              scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
             }}
           >
             {visibleEntries.isWindowed ? (
@@ -11867,49 +11913,47 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
     loadedDirectoriesRef.current = nextLoadedDirectories;
 
-    startTransition(() => {
-      setLoadedDirectories(new Set(nextLoadedDirectories));
-      setExpandedDirectories((currentExpandedDirectories) => {
-        if (removedDirectoryPaths.length === 0) {
-          return currentExpandedDirectories;
-        }
+    setLoadedDirectories(new Set(nextLoadedDirectories));
+    setExpandedDirectories((currentExpandedDirectories) => {
+      if (removedDirectoryPaths.length === 0) {
+        return currentExpandedDirectories;
+      }
 
-        const nextExpandedDirectories = new Set(
-          Array.from(currentExpandedDirectories).filter((directoryPath) => (
-            !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
-          )),
-        );
+      const nextExpandedDirectories = new Set(
+        Array.from(currentExpandedDirectories).filter((directoryPath) => (
+          !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
+        )),
+      );
 
-        if (nextExpandedDirectories.size === currentExpandedDirectories.size) {
-          return currentExpandedDirectories;
-        }
+      if (nextExpandedDirectories.size === currentExpandedDirectories.size) {
+        return currentExpandedDirectories;
+      }
 
-        persistCodeState({
-          expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
-        });
-
-        return nextExpandedDirectories;
+      persistCodeState({
+        expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
       });
-      setTreeEntriesByDirectory((currentTreeEntries) => (
-        Object.fromEntries(
-          Object.entries(currentTreeEntries)
-            .filter(([directoryPath]) => (
-              !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
-            ))
-            .map(([directoryPath, entries]) => [
-              directoryPath,
-              entries.filter((entry) => {
-                const normalizedEntryPath = normalizePath(entry.path);
-                if (removedFilePaths.has(normalizedEntryPath)) {
-                  return false;
-                }
 
-                return !isPathAffectedByRemovedDirectory(removedDirectoryPaths, normalizedEntryPath);
-              }),
-            ]),
-        )
-      ));
+      return nextExpandedDirectories;
     });
+    setTreeEntriesByDirectory((currentTreeEntries) => (
+      Object.fromEntries(
+        Object.entries(currentTreeEntries)
+          .filter(([directoryPath]) => (
+            !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
+          ))
+          .map(([directoryPath, entries]) => [
+            directoryPath,
+            entries.filter((entry) => {
+              const normalizedEntryPath = normalizePath(entry.path);
+              if (removedFilePaths.has(normalizedEntryPath)) {
+                return false;
+              }
+
+              return !isPathAffectedByRemovedDirectory(removedDirectoryPaths, normalizedEntryPath);
+            }),
+          ]),
+      )
+    ));
   }, [persistCodeState, rootPath]);
 
   const ensureMarkerListenerRef = useRef(ensureMarkerListener);
@@ -12757,6 +12801,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return Array.from(nextChangesByPath.values());
   }, []);
 
+  const shouldFlushFsChangesImmediately = useCallback((changes: CodePaneFsChange[]) => (
+    changes.some((change) => change.type === 'unlink' || change.type === 'unlinkDir')
+  ), []);
+
   const flushPendingFsChanges = useCallback(() => {
     isFsChangeFlushQueuedRef.current = false;
     if (fsChangeFlushTimerRef.current) {
@@ -12827,6 +12875,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       pendingFsChangesRef.current = pendingFsChangesRef.current.concat(payload.changes);
+
+      if (shouldFlushFsChangesImmediately(payload.changes)) {
+        flushPendingFsChanges();
+        return;
+      }
 
       if (isFsChangeFlushQueuedRef.current) {
         return;
