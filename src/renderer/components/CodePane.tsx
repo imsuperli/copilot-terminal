@@ -217,6 +217,11 @@ type CompactDirectoryPresentation = {
   visibleDirectoryPaths: string[];
 };
 
+type CompactDirectoryPresentationCacheEntry = {
+  entries: CodePaneTreeEntry[];
+  presentations: CompactDirectoryPresentation[];
+};
+
 type ExplorerTreeRow = {
   key: string;
   sourcePath: string;
@@ -5721,6 +5726,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const queuedEditorSurfaceRefreshRef = useRef(false);
   const editorSurfaceRefreshSequenceRef = useRef(0);
   const editorSurfaceBindingStateRef = useRef<EditorSurfaceBindingState | null>(null);
+  const compactDirectoryPresentationsCacheRef = useRef<Map<string, CompactDirectoryPresentationCacheEntry>>(new Map());
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
@@ -6003,6 +6009,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     localHistoryEntriesRef.current.clear();
     localHistoryTimersRef.current.forEach((timer) => clearTimeout(timer));
     localHistoryTimersRef.current.clear();
+    compactDirectoryPresentationsCacheRef.current.clear();
     setTodoItems([]);
     setTodoError(null);
     setLocalHistoryVersion((currentVersion) => currentVersion + 1);
@@ -8005,6 +8012,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
             return currentTreeEntries;
           }
 
+          compactDirectoryPresentationsCacheRef.current.delete(directoryPath);
+
           return {
             ...currentTreeEntries,
             [directoryPath]: entries,
@@ -8206,11 +8215,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (response.success) {
       setExternalLibrariesError(null);
       startTransition(() => {
-        setExternalEntriesByDirectory((currentTreeEntries) => ({
-          ...currentTreeEntries,
-          [directoryPath]: response.data ?? [],
-        }));
+        setExternalEntriesByDirectory((currentTreeEntries) => {
+          const currentEntries = currentTreeEntries[directoryPath];
+          if (currentEntries && areTreeEntriesEqual(currentEntries, nextEntries)) {
+            return currentTreeEntries;
+          }
+
+          compactDirectoryPresentationsCacheRef.current.delete(directoryPath);
+          return {
+            ...currentTreeEntries,
+            [directoryPath]: nextEntries,
+          };
+        });
         setLoadedExternalDirectories((currentLoadedDirectories) => {
+          if (currentLoadedDirectories.has(directoryPath)) {
+            return currentLoadedDirectories;
+          }
+
           const nextLoadedDirectories = new Set(currentLoadedDirectories);
           nextLoadedDirectories.add(directoryPath);
           return nextLoadedDirectories;
@@ -8262,38 +8283,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
       : (externalEntriesByDirectory[directoryPath] ?? [])
   ), [externalEntriesByDirectory, rootPath, treeEntriesByDirectory]);
 
-  const compactDirectoryPresentationsByDirectory = useMemo(() => {
-    if (!isSidebarVisible || sidebarMode !== 'files') {
-      return new Map<string, CompactDirectoryPresentation[]>();
+  const getCompactDirectoryPresentations = useCallback((directoryPath: string) => {
+    const entries = getDirectoryEntries(directoryPath);
+    const cachedPresentations = compactDirectoryPresentationsCacheRef.current.get(directoryPath);
+    if (cachedPresentations && cachedPresentations.entries === entries) {
+      return cachedPresentations.presentations;
     }
 
-    const presentationsByDirectory = new Map<string, CompactDirectoryPresentation[]>();
-    const directoryPaths = new Set<string>([
-      ...Object.keys(treeEntriesByDirectory),
-      ...Object.keys(externalEntriesByDirectory),
-    ]);
-    const getEntriesForPresentation = (directoryPath: string) => (
-      isPathInside(rootPath, directoryPath)
-        ? (treeEntriesByDirectory[directoryPath] ?? [])
-        : (externalEntriesByDirectory[directoryPath] ?? [])
-    );
-
-    for (const directoryPath of directoryPaths) {
-      presentationsByDirectory.set(
-        directoryPath,
-        getEntriesForPresentation(directoryPath).map((entry) => (
-          buildCompactDirectoryPresentation(rootPath, entry, getEntriesForPresentation)
-        )),
-      );
-    }
-
-    return presentationsByDirectory;
-  }, [externalEntriesByDirectory, isSidebarVisible, rootPath, sidebarMode, treeEntriesByDirectory]);
-
-  const getCompactDirectoryPresentations = useCallback((directoryPath: string) => (
-    compactDirectoryPresentationsByDirectory.get(directoryPath)
-      ?? getDirectoryEntries(directoryPath).map((entry) => buildCompactDirectoryPresentation(rootPath, entry, getDirectoryEntries))
-  ), [compactDirectoryPresentationsByDirectory, getDirectoryEntries, rootPath]);
+    const presentations = entries.map((entry) => (
+      buildCompactDirectoryPresentation(rootPath, entry, getDirectoryEntries)
+    ));
+    compactDirectoryPresentationsCacheRef.current.set(directoryPath, {
+      entries,
+      presentations,
+    });
+    return presentations;
+  }, [getDirectoryEntries, rootPath]);
 
   const ensureCompactDirectoryChainLoaded = useCallback(async (
     directoryPath: string,
@@ -11406,6 +11411,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             }
             const nextTreeEntries = { ...currentTreeEntries };
             for (const directoryPath of nextMissingDirectoryPaths) {
+              compactDirectoryPresentationsCacheRef.current.delete(directoryPath);
               delete nextTreeEntries[directoryPath];
             }
             return nextTreeEntries;
@@ -11416,6 +11422,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             }
             const nextTreeEntries = { ...currentTreeEntries };
             for (const directoryPath of nextMissingDirectoryPaths) {
+              compactDirectoryPresentationsCacheRef.current.delete(directoryPath);
               delete nextTreeEntries[directoryPath];
             }
             return nextTreeEntries;
@@ -12341,6 +12348,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       for (const [directoryPath, entries] of Object.entries(currentTreeEntries)) {
         if (isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)) {
+          compactDirectoryPresentationsCacheRef.current.delete(directoryPath);
           didChange = true;
           continue;
         }
@@ -12369,6 +12377,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
 
         nextTreeEntries[directoryPath] = nextEntries;
+        if (nextEntries !== entries) {
+          compactDirectoryPresentationsCacheRef.current.delete(directoryPath);
+        }
       }
 
       return didChange ? nextTreeEntries : currentTreeEntries;
@@ -13456,6 +13467,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setTreeLoadError(null);
       setSearchError(null);
       setContentSearchError(null);
+      compactDirectoryPresentationsCacheRef.current.clear();
       setTreeEntriesByDirectory({});
       setExternalEntriesByDirectory({});
       setExternalLibrariesError(null);
@@ -13550,6 +13562,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       if (cachedRootEntries) {
         startTransition(() => {
+          compactDirectoryPresentationsCacheRef.current.clear();
           setTreeEntriesByDirectory({
             [rootPath]: cachedRootEntries,
             ...cachedExpandedDirectoryEntries,
