@@ -15594,6 +15594,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [isActive]);
 
   useEffect(() => {
+    if (!isSidebarVisible || sidebarMode !== 'files') {
+      setSearchResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setIsSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
+      setSearchError((currentError) => (
+        currentError === null ? currentError : null
+      ));
+      return;
+    }
+
     const trimmedQuery = deferredSearchQuery.trim();
     if (!trimmedQuery) {
       setSearchResults((currentResults) => (
@@ -15675,9 +15688,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [deferredSearchQuery, rootPath, t, trackRequest]);
+  }, [deferredSearchQuery, isSidebarVisible, rootPath, sidebarMode, t, trackRequest]);
 
   useEffect(() => {
+    if (!isSidebarVisible || sidebarMode !== 'search' || searchPanelMode !== 'contents') {
+      setContentSearchResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setIsContentSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
+      setContentSearchError((currentError) => (
+        currentError === null ? currentError : null
+      ));
+      return;
+    }
+
     const trimmedQuery = deferredContentSearchQuery.trim();
     if (!trimmedQuery) {
       setContentSearchResults((currentResults) => (
@@ -15762,9 +15788,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [deferredContentSearchQuery, rootPath, t, trackRequest]);
+  }, [deferredContentSearchQuery, isSidebarVisible, rootPath, searchPanelMode, sidebarMode, t, trackRequest]);
 
   useEffect(() => {
+    if (!isSidebarVisible || sidebarMode !== 'search' || searchPanelMode !== 'symbols') {
+      setWorkspaceSymbolResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setIsWorkspaceSymbolSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
+      setWorkspaceSymbolError((currentError) => (
+        currentError === null ? currentError : null
+      ));
+      return;
+    }
+
     const trimmedQuery = deferredWorkspaceSymbolQuery.trim();
     if (!trimmedQuery) {
       setWorkspaceSymbolResults((currentResults) => (
@@ -15848,7 +15887,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [deferredWorkspaceSymbolQuery, rootPath, t, trackRequest]);
+  }, [
+    deferredWorkspaceSymbolQuery,
+    isSidebarVisible,
+    rootPath,
+    searchPanelMode,
+    sidebarMode,
+    t,
+    trackRequest,
+  ]);
 
   const getCurrentNavigationLocation = useCallback((): NavigationHistoryEntry | null => {
     const context = getActiveEditorContext();
