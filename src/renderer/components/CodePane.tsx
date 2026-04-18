@@ -838,24 +838,27 @@ const SearchResultRowButton = React.memo(function SearchResultRowButton({
 });
 
 const SidebarRailButton = React.memo(function SidebarRailButton({
-  tab,
+  mode,
+  icon: Icon,
+  label,
   isSelected,
   onSelect,
 }: {
-  tab: SidebarTabItem;
+  mode: SidebarMode;
+  icon: LucideIcon;
+  label: string;
   isSelected: boolean;
   onSelect: (mode: SidebarMode) => void;
 }) {
-  const Icon = tab.icon;
 
   return (
-    <AppTooltip content={tab.label} placement="pane-corner">
+    <AppTooltip content={label} placement="pane-corner">
       <button
         type="button"
-        aria-label={tab.label}
+        aria-label={label}
         aria-pressed={isSelected}
         onClick={() => {
-          onSelect(tab.mode);
+          onSelect(mode);
         }}
         className={`flex h-9 w-9 items-center justify-center rounded text-zinc-400 transition-colors ${isSelected ? 'bg-zinc-800 text-zinc-100' : 'hover:bg-zinc-900 hover:text-zinc-100'}`}
       >
@@ -866,22 +869,28 @@ const SidebarRailButton = React.memo(function SidebarRailButton({
 });
 
 const ToolWindowRailButton = React.memo(function ToolWindowRailButton({
-  item,
+  label,
+  icon: Icon,
+  disabled,
+  active,
+  onClick,
 }: {
-  item: ToolWindowLauncher;
+  label: string;
+  icon: LucideIcon;
+  disabled?: boolean;
+  active?: boolean;
+  onClick: () => void;
 }) {
-  const Icon = item.icon;
-
   return (
-    <AppTooltip content={item.label} placement="pane-corner">
+    <AppTooltip content={label} placement="pane-corner">
       <button
         type="button"
-        aria-label={item.label}
-        aria-pressed={item.active}
-        onClick={item.onClick}
-        disabled={item.disabled}
+        aria-label={label}
+        aria-pressed={active}
+        onClick={onClick}
+        disabled={disabled}
         className={`flex h-9 w-9 items-center justify-center rounded transition-colors ${
-          item.active
+          active
             ? 'bg-zinc-800 text-zinc-100'
             : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
         } disabled:cursor-not-allowed disabled:opacity-40`}
@@ -914,7 +923,9 @@ const ActivityRail = React.memo(function ActivityRail({
         {sidebarTabs.map((tab) => (
           <SidebarRailButton
             key={tab.mode}
-            tab={tab}
+            mode={tab.mode}
+            icon={tab.icon}
+            label={tab.label}
             isSelected={sidebarMode === tab.mode && isSidebarVisible}
             onSelect={onSidebarModeSelect}
           />
@@ -924,7 +935,14 @@ const ActivityRail = React.memo(function ActivityRail({
       <div className="mt-auto border-t border-zinc-800">
         <div className="flex max-h-full flex-col items-center gap-1 overflow-y-auto px-1 py-2">
           {toolWindowLaunchers.map((item) => (
-            <ToolWindowRailButton key={item.id} item={item} />
+            <ToolWindowRailButton
+              key={item.id}
+              label={item.label}
+              icon={item.icon}
+              disabled={item.disabled}
+              active={item.active}
+              onClick={item.onClick}
+            />
           ))}
         </div>
       </div>
@@ -933,7 +951,9 @@ const ActivityRail = React.memo(function ActivityRail({
 });
 
 const OpenFileTab = React.memo(function OpenFileTab({
-  tab,
+  path,
+  pinned,
+  preview,
   isActive,
   isReadOnly,
   entryTextClassName,
@@ -945,7 +965,9 @@ const OpenFileTab = React.memo(function OpenFileTab({
   onClose,
   t,
 }: {
-  tab: CodePaneOpenFile;
+  path: string;
+  pinned?: boolean;
+  preview?: boolean;
   isActive: boolean;
   isReadOnly: boolean;
   entryTextClassName: string;
@@ -965,12 +987,12 @@ const OpenFileTab = React.memo(function OpenFileTab({
   onClose: (filePath: string) => void | Promise<void>;
   t: ReturnType<typeof useI18n>['t'];
 }) {
-  const isPinned = Boolean(tab.pinned);
+  const isPinned = Boolean(pinned);
 
   return (
     <LazyContextMenu
-      children={() => renderContextMenu(tab.path, 'file', {
-        allowDiff: isPathInside(rootPath, tab.path),
+      children={() => renderContextMenu(path, 'file', {
+        allowDiff: isPathInside(rootPath, path),
         pinned: isPinned,
         showPinToggle: true,
       })}
@@ -982,11 +1004,11 @@ const OpenFileTab = React.memo(function OpenFileTab({
             type="button"
             className="flex min-w-0 flex-1 items-center gap-2 text-left"
             onClick={() => {
-              void onActivate(tab.path);
+              void onActivate(path);
             }}
             onDoubleClick={() => {
-              if (tab.preview) {
-                void onActivate(tab.path, { promotePreview: true });
+              if (preview) {
+                void onActivate(path, { promotePreview: true });
               }
             }}
           >
@@ -1004,7 +1026,7 @@ const OpenFileTab = React.memo(function OpenFileTab({
           <button
             type="button"
             onClick={() => {
-              void onClose(tab.path);
+              void onClose(path);
             }}
             className="rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
           >
@@ -17572,7 +17594,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return (
         <OpenFileTab
           key={tab.path}
-          tab={tab}
+          path={tab.path}
+          pinned={tab.pinned}
+          preview={tab.preview}
           isActive={isTabActive}
           isReadOnly={isReadOnlyTab}
           entryTextClassName={entryTextClassName}
