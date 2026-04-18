@@ -3837,6 +3837,15 @@ function collectDirectoryRefreshPaths(
   changes: CodePaneFsChange[],
   loadedDirectories: Set<string>,
 ): string[] {
+  const shouldRefreshLoadedDirectories = changes.some((change) => (
+    change.type !== 'change'
+    && change.type !== 'unlink'
+    && change.type !== 'unlinkDir'
+  ));
+  if (!shouldRefreshLoadedDirectories) {
+    return [];
+  }
+
   const loadedDirectoryPaths = new Set<string>();
   for (const directoryPath of loadedDirectories) {
     loadedDirectoryPaths.add(normalizePath(directoryPath));
