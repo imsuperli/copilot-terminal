@@ -3143,9 +3143,11 @@ function summarizeSemanticTokens(result: CodePaneSemanticTokensResult): {
     counts.set(tokenType, (counts.get(tokenType) ?? 0) + 1);
   }
 
-  const summary = Array.from(counts.entries())
-    .map(([tokenType, count]) => ({ tokenType, count }))
-    .sort((left, right) => right.count - left.count || left.tokenType.localeCompare(right.tokenType));
+  const summary: SemanticTokenSummaryEntry[] = [];
+  for (const [tokenType, count] of counts.entries()) {
+    summary.push({ tokenType, count });
+  }
+  summary.sort((left, right) => right.count - left.count || left.tokenType.localeCompare(right.tokenType));
 
   return {
     totalTokens: summary.reduce((total, entry) => total + entry.count, 0),
@@ -9858,7 +9860,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return true;
     }
 
-    const editedFilePaths = Array.from(new Set(edits.map((edit) => edit.filePath)));
+    const editedFilePathSet = new Set<string>();
+    for (const edit of edits) {
+      editedFilePathSet.add(edit.filePath);
+    }
+
+    const editedFilePaths = [...editedFilePathSet];
     for (const editedFilePath of editedFilePaths) {
       if (!fileModelsRef.current.has(editedFilePath)) {
         continue;
@@ -11042,7 +11049,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       refreshGitStatus?: boolean;
     },
   ) => {
-    const uniqueDirectoryPaths = Array.from(new Set(directoryPaths));
+    const uniqueDirectoryPathSet = new Set<string>();
+    for (const directoryPath of directoryPaths) {
+      uniqueDirectoryPathSet.add(directoryPath);
+    }
+
+    const uniqueDirectoryPaths = [...uniqueDirectoryPathSet];
     if (uniqueDirectoryPaths.length > 0) {
       const missingDirectoryPaths = new Set<string>();
       await runWithConcurrency(
@@ -11140,11 +11152,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     refreshExternalLibraries?: boolean;
   }) => {
     invalidateProjectCache(rootPath, 'directories');
-    const directoriesToRefresh = Array.from(new Set([
-      rootPath,
-      ...loadedDirectoriesRef.current,
-      ...loadedExternalDirectoriesRef.current,
-    ]));
+    const directoriesToRefresh = new Set<string>([rootPath]);
+    for (const directoryPath of loadedDirectoriesRef.current) {
+      directoriesToRefresh.add(directoryPath);
+    }
+    for (const directoryPath of loadedExternalDirectoriesRef.current) {
+      directoriesToRefresh.add(directoryPath);
+    }
 
     const refreshTasks: Array<Promise<unknown>> = [
       refreshDirectoryPaths(directoriesToRefresh, {
@@ -12808,8 +12822,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [bookmarks, getActiveEditorContext, persistCodeState]);
 
   const restoreLocalHistoryEntry = useCallback(async (entryId: string) => {
-    const allEntries = Array.from(localHistoryEntriesRef.current.values()).flat();
-    const entry = allEntries.find((candidate) => candidate.id === entryId);
+    let entry: LocalHistoryEntry | null = null;
+    for (const entries of localHistoryEntriesRef.current.values()) {
+      const matchedEntry = entries.find((candidate) => candidate.id === entryId);
+      if (matchedEntry) {
+        entry = matchedEntry;
+        break;
+      }
+    }
     if (!entry) {
       return;
     }
@@ -13097,16 +13117,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
         canNavigateForward: false,
       });
       const cachedRootEntries = getDirectoryCache(rootPath, rootPath);
-      const cachedExpandedDirectoryEntries = Object.fromEntries(
-        Array.from(initialExpandedDirectories)
-          .filter((directoryPath) => directoryPath !== rootPath)
-          .map((directoryPath) => [directoryPath, getDirectoryCache(rootPath, directoryPath)])
-          .filter((entry): entry is [string, CodePaneTreeEntry[]] => Array.isArray(entry[1])),
-      );
-      const cachedDirectoryPaths = new Set<string>([
-        ...(cachedRootEntries ? [rootPath] : []),
-        ...Object.keys(cachedExpandedDirectoryEntries),
-      ]);
+      const cachedExpandedDirectoryEntries: Record<string, CodePaneTreeEntry[]> = {};
+      const cachedDirectoryPaths = new Set<string>();
+      if (cachedRootEntries) {
+        cachedDirectoryPaths.add(rootPath);
+      }
+      for (const directoryPath of initialExpandedDirectories) {
+        if (directoryPath === rootPath) {
+          continue;
+        }
+
+        const cachedEntries = getDirectoryCache(rootPath, directoryPath);
+        if (Array.isArray(cachedEntries)) {
+          cachedExpandedDirectoryEntries[directoryPath] = cachedEntries;
+          cachedDirectoryPaths.add(directoryPath);
+        }
+      }
       const cachedGitStatusEntries = getGitStatusCache(rootPath) ?? [];
       const cachedGitSummary = getGitSummaryCache(rootPath);
       const cachedGitGraph = getGitGraphCache(rootPath) ?? [];
@@ -15025,10 +15051,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       groups.set(match.filePath, matches);
     }
 
-    return Array.from(groups.entries()).map(([filePath, matches]) => ({
-      filePath,
-      matches,
-    }));
+    const nextGroups: Array<{ filePath: string; matches: CodePaneContentMatch[] }> = [];
+    for (const [filePath, matches] of groups.entries()) {
+      nextGroups.push({
+        filePath,
+        matches,
+      });
+    }
+    return nextGroups;
   }, [contentSearchResults, isSidebarVisible, searchPanelMode, sidebarMode]);
 
   const usageGroups = useMemo(() => {
@@ -15043,10 +15073,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       groups.set(reference.filePath, references);
     }
 
-    return Array.from(groups.entries()).map(([filePath, references]) => ({
-      filePath,
-      references,
-    }));
+    const nextGroups: Array<{ filePath: string; references: CodePaneReference[] }> = [];
+    for (const [filePath, references] of groups.entries()) {
+      nextGroups.push({
+        filePath,
+        references,
+      });
+    }
+    return nextGroups;
   }, [isSidebarVisible, searchPanelMode, sidebarMode, usageResults]);
 
   const scmEntryValues = useMemo(() => Object.values(gitStatusByPath), [gitStatusByPath]);
@@ -15164,7 +15198,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ? scmEntries
       : (commitWindowState.entriesSnapshot ?? []);
     const nextCache = new Map<string, CodePaneGitStatusEntry & { relativePath: string }>();
-    const nextEntries: Array<CodePaneGitStatusEntry & { relativePath: string }> = sourceEntries.map((entry) => {
+    const nextEntries: Array<CodePaneGitStatusEntry & { relativePath: string }> = [];
+    for (const entry of sourceEntries) {
       const relativePath = getProjectRelativePath(entry.path) || getPathLeafLabel(entry.path) || entry.path;
       const cachedEntry = commitWindowEntriesCacheRef.current.get(entry.path);
       if (
@@ -15178,7 +15213,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         && cachedEntry.originalPath === entry.originalPath
       ) {
         nextCache.set(entry.path, cachedEntry);
-        return cachedEntry;
+        nextEntries.push(cachedEntry);
+        continue;
       }
 
       const nextEntry = {
@@ -15186,8 +15222,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         relativePath,
       };
       nextCache.set(entry.path, nextEntry);
-      return nextEntry;
-    });
+      nextEntries.push(nextEntry);
+    }
     commitWindowEntriesCacheRef.current = nextCache;
     return nextEntries;
   }, [commitWindowState, getProjectRelativePath, scmEntries]);
@@ -15466,10 +15502,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       groups.set(problem.filePath, entries);
     }
 
-    return Array.from(groups.entries()).map(([filePath, entries]) => ({
-      filePath,
-      entries,
-    }));
+    const nextGroups: Array<{ filePath: string; entries: Array<MonacoMarker & { filePath: string }> }> = [];
+    for (const [filePath, entries] of groups.entries()) {
+      nextGroups.push({
+        filePath,
+        entries,
+      });
+    }
+    return nextGroups;
   }, [isSidebarVisible, problems, sidebarMode]);
 
   const problemSummary = useMemo(() => {
