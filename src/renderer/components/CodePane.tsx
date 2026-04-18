@@ -16620,6 +16620,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const selectedCodeAction = codeActionItems[selectedCodeActionIndex] ?? null;
   const visibleDebugSessions = debugSessions;
   const debugTargets = useMemo(() => {
+    if (bottomPanelMode !== 'debug') {
+      return [];
+    }
+
     const nextTargets: CodePaneRunTarget[] = [];
     for (const target of runTargets) {
       if (target.canDebug) {
@@ -16627,8 +16631,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
     return nextTargets;
-  }, [runTargets]);
+  }, [bottomPanelMode, runTargets]);
   const runSessionState = useMemo(() => {
+    if (bottomPanelMode !== 'run' && bottomPanelMode !== 'tests' && bottomPanelMode !== 'project') {
+      return {
+        hasFailedTests: false,
+        selectedSession: null,
+        selectedSessionOutput: '',
+        visibleSessions: [] as CodePaneRunSession[],
+      };
+    }
+
     const visibleSessions: CodePaneRunSession[] = [];
     let selectedSession: CodePaneRunSession | null = null;
     let firstVisibleSession: CodePaneRunSession | null = null;
