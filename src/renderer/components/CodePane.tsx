@@ -8849,7 +8849,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
     );
 
-    setExternalLibrariesError(null);
+    setExternalLibrariesError((currentError) => (currentError === null ? currentError : null));
     setExternalLibrarySections((currentSections) => (
       areExternalLibrarySectionsEqual(currentSections, nextSections) ? currentSections : nextSections
     ));
@@ -9638,7 +9638,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const nextEntries = response.success ? (response.data ?? []) : [];
 
     if (response.success) {
-      setExternalLibrariesError(null);
+      setExternalLibrariesError((currentError) => (currentError === null ? currentError : null));
       startTransition(() => {
         setExternalEntriesByDirectory((currentTreeEntries) => {
           const currentEntries = currentTreeEntries[directoryPath];
