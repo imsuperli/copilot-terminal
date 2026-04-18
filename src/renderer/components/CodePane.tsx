@@ -7285,10 +7285,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const selectedGitCommitOrderRef = useRef<string[]>(selectedGitCommitOrder);
   const gitRebaseBaseRefRef = useRef(gitRebaseBaseRef);
   const activeGitWorkbenchTabRef = useRef<GitToolWindowTab>('log');
+  const isPaneMountedRef = useRef(true);
 
   useEffect(() => {
     paneRef.current = pane;
   }, [pane]);
+
+  useEffect(() => {
+    isPaneMountedRef.current = true;
+    return () => {
+      isPaneMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     localHistoryEntriesRef.current.clear();
@@ -7512,6 +7520,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   const persistCodeState = useCallback((updates: Partial<NonNullable<Pane['code']>>) => {
+    if (!isPaneMountedRef.current) {
+      return;
+    }
+
     const currentCodeState = {
       rootPath,
       openFiles: [],
