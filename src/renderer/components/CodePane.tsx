@@ -437,6 +437,26 @@ type PendingFsChangeDisplayState = {
   changedAt: number;
 };
 
+function areExternalChangeDiffRequestsEqual(
+  previousRequest: ExternalChangeDiffRequest | null,
+  nextRequest: ExternalChangeDiffRequest | null,
+): boolean {
+  return previousRequest?.filePath === nextRequest?.filePath
+    && previousRequest?.leftLabel === nextRequest?.leftLabel
+    && previousRequest?.rightLabel === nextRequest?.rightLabel;
+}
+
+function areGitRevisionDiffRequestsEqual(
+  previousRequest: GitRevisionDiffRequest | null,
+  nextRequest: GitRevisionDiffRequest | null,
+): boolean {
+  return previousRequest?.filePath === nextRequest?.filePath
+    && previousRequest?.leftCommitSha === nextRequest?.leftCommitSha
+    && previousRequest?.rightCommitSha === nextRequest?.rightCommitSha
+    && previousRequest?.leftLabel === nextRequest?.leftLabel
+    && previousRequest?.rightLabel === nextRequest?.rightLabel;
+}
+
 type BranchManagerTreeNode =
   | {
     key: string;
@@ -10696,14 +10716,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [ensureDiffModel, loadFileIntoModel, openFiles, persistCodeState, rootPath, t]);
 
   const openGitRevisionDiff = useCallback(async (request: GitRevisionDiffRequest) => {
-    pendingGitRevisionDiffRef.current = request;
-    setPendingGitRevisionDiff(request);
-    setPendingExternalChangeDiff(null);
+    if (!areGitRevisionDiffRequestsEqual(pendingGitRevisionDiffRef.current, request)) {
+      pendingGitRevisionDiffRef.current = request;
+      setPendingGitRevisionDiff(request);
+    } else {
+      pendingGitRevisionDiffRef.current = request;
+    }
+    if (pendingExternalChangeDiffRef.current !== null) {
+      setPendingExternalChangeDiff(null);
+    }
     pendingExternalChangeDiffRef.current = null;
     const didEnsureRevisionDiffModel = await ensureRevisionDiffModel(request);
     if (!didEnsureRevisionDiffModel) {
       pendingGitRevisionDiffRef.current = null;
-      setPendingGitRevisionDiff(null);
+      setPendingGitRevisionDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
       return;
     }
 
@@ -10839,20 +10867,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setPendingGitRevisionDiff(null);
+    setPendingGitRevisionDiff((currentRequest) => (
+      currentRequest === null ? currentRequest : null
+    ));
     pendingGitRevisionDiffRef.current = null;
     const externalDiffRequest: ExternalChangeDiffRequest = {
       filePath: entry.filePath,
       leftLabel: t('codePane.externalChangeBefore'),
       rightLabel: t('codePane.externalChangeAfter'),
     };
-    setPendingExternalChangeDiff(externalDiffRequest);
+    if (!areExternalChangeDiffRequestsEqual(pendingExternalChangeDiffRef.current, externalDiffRequest)) {
+      setPendingExternalChangeDiff(externalDiffRequest);
+    }
     pendingExternalChangeDiffRef.current = externalDiffRequest;
     applyExternalChangeState(externalChangeStateRef.current.entries, filePath);
 
     const didEnsureDiffModel = await ensureExternalChangeDiffModel(entry);
     if (!didEnsureDiffModel) {
-      setPendingExternalChangeDiff(null);
+      setPendingExternalChangeDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
       pendingExternalChangeDiffRef.current = null;
       return;
     }
