@@ -5793,8 +5793,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isRunTargetsLoading, setIsRunTargetsLoading] = useState(false);
   const [runTargetsError, setRunTargetsError] = useState<string | null>(null);
   const [debugSessions, setDebugSessions] = useState<CodePaneDebugSession[]>([]);
-  const [debugSessionOutputs, setDebugSessionOutputs] = useState<Record<string, string>>({});
+  const debugSessionOutputsRef = useRef<Record<string, string>>({});
+  const [selectedDebugSessionOutput, setSelectedDebugSessionOutput] = useState('');
   const [selectedDebugSessionId, setSelectedDebugSessionId] = useState<string | null>(null);
+  const selectedDebugSessionIdRef = useRef<string | null>(null);
   const [debugSessionDetails, setDebugSessionDetails] = useState<CodePaneDebugSessionDetails | null>(null);
   const [watchExpressions, setWatchExpressions] = useState<string[]>(
     () => normalizeWatchExpressions(pane.code?.debug?.watchExpressions),
@@ -5809,8 +5811,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isProjectLoading, setIsProjectLoading] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
   const [runSessions, setRunSessions] = useState<CodePaneRunSession[]>([]);
-  const [runSessionOutputs, setRunSessionOutputs] = useState<Record<string, string>>({});
+  const runSessionOutputsRef = useRef<Record<string, string>>({});
+  const [selectedRunSessionOutput, setSelectedRunSessionOutput] = useState('');
   const [selectedRunSessionId, setSelectedRunSessionId] = useState<string | null>(null);
+  const selectedRunSessionIdRef = useRef<string | null>(null);
   const [usageResults, setUsageResults] = useState<CodePaneReference[]>([]);
   const [isFindingUsages, setIsFindingUsages] = useState(false);
   const [usageError, setUsageError] = useState<string | null>(null);
@@ -6082,6 +6086,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     selectedGitChangePathRef.current = selectedGitChangePath;
   }, [selectedGitChangePath]);
+
+  useEffect(() => {
+    selectedRunSessionIdRef.current = selectedRunSessionId;
+  }, [selectedRunSessionId]);
+
+  useEffect(() => {
+    selectedDebugSessionIdRef.current = selectedDebugSessionId;
+  }, [selectedDebugSessionId]);
 
   useEffect(() => {
     selectedGitHunksPathRef.current = selectedGitHunksPath;
@@ -6666,12 +6678,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const snapshots = response.data ?? [];
     setDebugSessions(snapshots.map((snapshot) => snapshot.session));
-    setDebugSessionOutputs(
-      snapshots.reduce<Record<string, string>>((accumulator, snapshot) => {
-        accumulator[snapshot.session.id] = snapshot.output;
-        return accumulator;
-      }, {}),
-    );
+    debugSessionOutputsRef.current = snapshots.reduce<Record<string, string>>((accumulator, snapshot) => {
+      accumulator[snapshot.session.id] = snapshot.output;
+      return accumulator;
+    }, {});
     setSelectedDebugSessionId((currentSelectedSessionId) => {
       if (currentSelectedSessionId && snapshots.some((snapshot) => snapshot.session.id === currentSelectedSessionId)) {
         return currentSelectedSessionId;
@@ -13494,7 +13504,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setIsGitHunksLoading(false);
       setGitHunksError(null);
       setRunSessions([]);
-      setRunSessionOutputs({});
+      runSessionOutputsRef.current = {};
+      debugSessionOutputsRef.current = {};
+      setSelectedRunSessionOutput('');
+      setSelectedDebugSessionOutput('');
       setSelectedRunSessionId(null);
       setPendingGitRevisionDiff(null);
       setPendingExternalChangeDiff(null);
@@ -16733,7 +16746,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return {
         hasFailedTests: false,
         selectedSession: null,
-        selectedSessionOutput: '',
         visibleSessions: [] as CodePaneRunSession[],
       };
     }
@@ -16772,10 +16784,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return {
       hasFailedTests,
       selectedSession,
-      selectedSessionOutput: selectedSession ? (runSessionOutputs[selectedSession.id] ?? '') : '',
       visibleSessions,
     };
-  }, [bottomPanelMode, runSessionOutputs, runSessions, selectedRunSessionId]);
+  }, [bottomPanelMode, runSessions, selectedRunSessionId]);
   const selectedDebugSession = useMemo(() => {
     for (const session of visibleDebugSessions) {
       if (session.id === selectedDebugSessionId) {
@@ -16784,10 +16795,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
     return visibleDebugSessions[0] ?? null;
   }, [selectedDebugSessionId, visibleDebugSessions]);
-  const selectedDebugSessionOutput = selectedDebugSession ? (debugSessionOutputs[selectedDebugSession.id] ?? '') : '';
   const visibleRunSessions = runSessionState.visibleSessions;
   const selectedRunSession = runSessionState.selectedSession;
-  const selectedRunSessionOutput = runSessionState.selectedSessionOutput;
   const hasFailedTestSessions = runSessionState.hasFailedTests;
 
   useEffect(() => {
@@ -17002,10 +17011,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
-      setRunSessionOutputs((currentOutputs) => ({
-        ...currentOutputs,
-        [payload.sessionId]: `${currentOutputs[payload.sessionId] ?? ''}${payload.chunk}`,
-      }));
+      const nextOutput = `${runSessionOutputsRef.current[payload.sessionId] ?? ''}${payload.chunk}`;
+      runSessionOutputsRef.current = {
+        ...runSessionOutputsRef.current,
+        [payload.sessionId]: nextOutput,
+      };
+      setSelectedRunSessionOutput((currentOutput) => (
+        selectedRunSessionIdRef.current === payload.sessionId && currentOutput !== nextOutput
+          ? nextOutput
+          : currentOutput
+      ));
     };
 
     window.electronAPI.onCodePaneRunSessionChanged(handleRunSessionChanged);
@@ -17043,10 +17058,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
-      setDebugSessionOutputs((currentOutputs) => ({
-        ...currentOutputs,
-        [payload.sessionId]: `${currentOutputs[payload.sessionId] ?? ''}${payload.chunk}`,
-      }));
+      const nextOutput = `${debugSessionOutputsRef.current[payload.sessionId] ?? ''}${payload.chunk}`;
+      debugSessionOutputsRef.current = {
+        ...debugSessionOutputsRef.current,
+        [payload.sessionId]: nextOutput,
+      };
+      setSelectedDebugSessionOutput((currentOutput) => (
+        selectedDebugSessionIdRef.current === payload.sessionId && currentOutput !== nextOutput
+          ? nextOutput
+          : currentOutput
+      ));
     };
 
     window.electronAPI.onCodePaneDebugSessionChanged(handleDebugSessionChanged);
@@ -18028,6 +18049,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     void loadDebugSessionDetails(selectedDebugSessionId);
   }, [loadDebugSessionDetails, selectedDebugSessionId]);
+
+  useEffect(() => {
+    const nextOutput = selectedRunSession ? (runSessionOutputsRef.current[selectedRunSession.id] ?? '') : '';
+    setSelectedRunSessionOutput((currentOutput) => (
+      currentOutput === nextOutput ? currentOutput : nextOutput
+    ));
+  }, [selectedRunSession]);
+
+  useEffect(() => {
+    const nextOutput = selectedDebugSession ? (debugSessionOutputsRef.current[selectedDebugSession.id] ?? '') : '';
+    setSelectedDebugSessionOutput((currentOutput) => (
+      currentOutput === nextOutput ? currentOutput : nextOutput
+    ));
+  }, [selectedDebugSession]);
 
   useEffect(() => {
     setDebugEvaluations([]);
