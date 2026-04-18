@@ -378,7 +378,6 @@ function directoryGroupContainsPath(directoryGroup: GitChangeWorkbenchDirectoryG
 }
 
 interface GitToolWindowProps {
-  initialTab?: GitToolWindowTab;
   activeTab?: GitToolWindowTab;
   onTabChange?: (tab: GitToolWindowTab) => void;
   branches: CodePaneGitBranchEntry[];
@@ -625,7 +624,6 @@ function useFixedWindowedList<T>(
 }
 
 export const GitToolWindow = React.memo(function GitToolWindow({
-  initialTab = 'log',
   activeTab: controlledActiveTab,
   onTabChange,
   branches,
@@ -679,16 +677,9 @@ export const GitToolWindow = React.memo(function GitToolWindow({
   onClose,
 }: GitToolWindowProps) {
   const { t } = useI18n();
-  const [uncontrolledActiveTab, setUncontrolledActiveTab] = useState<GitToolWindowTab>(initialTab);
   const [draftEntries, setDraftEntries] = useState<CodePaneGitRebasePlanEntry[]>([]);
 
-  const activeTab = controlledActiveTab ?? uncontrolledActiveTab;
-
-  useEffect(() => {
-    if (controlledActiveTab === undefined) {
-      setUncontrolledActiveTab(initialTab);
-    }
-  }, [controlledActiveTab, initialTab]);
+  const activeTab = controlledActiveTab ?? 'log';
 
   useEffect(() => {
     setDraftEntries(rebasePlan?.commits ?? []);
@@ -752,11 +743,8 @@ export const GitToolWindow = React.memo(function GitToolWindow({
   }, []);
 
   const handleTabChange = useCallback((tab: GitToolWindowTab) => {
-    if (controlledActiveTab === undefined) {
-      setUncontrolledActiveTab(tab);
-    }
     onTabChange?.(tab);
-  }, [controlledActiveTab, onTabChange]);
+  }, [onTabChange]);
 
   return (
     <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/95">

@@ -7064,7 +7064,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [codeActionMenuError, setCodeActionMenuError] = useState<string | null>(null);
   const [selectedCodeActionIndex, setSelectedCodeActionIndex] = useState(0);
   const [bottomPanelMode, setBottomPanelMode] = useState<BottomPanelMode | null>(null);
-  const [gitWorkbenchInitialTab, setGitWorkbenchInitialTab] = useState<GitToolWindowTab>('log');
   const [activeGitWorkbenchTab, setActiveGitWorkbenchTab] = useState<GitToolWindowTab>('log');
   const [breakpoints, setBreakpoints] = useState<CodePaneBreakpoint[]>(() => normalizeBreakpoints(pane.code?.breakpoints));
   const [exceptionBreakpoints, setExceptionBreakpoints] = useState<CodePaneExceptionBreakpoint[]>(
@@ -9809,8 +9808,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     setExpandedDirectories((currentExpandedDirectories) => (
-      currentExpandedDirectories.size === nextExpandedDirectories.size
-      && [...nextExpandedDirectories].every((directoryPath) => currentExpandedDirectories.has(directoryPath))
+      areStringSetsEqual(currentExpandedDirectories, nextExpandedDirectories)
         ? currentExpandedDirectories
         : nextExpandedDirectories
     ));
@@ -10851,8 +10849,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         const diagnostics = lintResponse.data ?? [];
         applySaveQualityDiagnostics(filePath, diagnostics);
-        const errorCount = diagnostics.filter((diagnostic) => diagnostic.severity === 'error').length;
-        const warningCount = diagnostics.filter((diagnostic) => diagnostic.severity === 'warning').length;
+        let errorCount = 0;
+        let warningCount = 0;
+        for (const diagnostic of diagnostics) {
+          if (diagnostic.severity === 'error') {
+            errorCount += 1;
+            continue;
+          }
+          if (diagnostic.severity === 'warning') {
+            warningCount += 1;
+          }
+        }
         const issueCount = diagnostics.length;
         steps.push({
           id: 'lint',
@@ -12875,8 +12882,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const nextExpandedDirectories = new Set(currentExpandedDirectories);
       nextExpandedDirectories.delete(directoryPath);
       setExpandedDirectories((currentDirectories) => (
-        currentDirectories.size === nextExpandedDirectories.size
-        && [...nextExpandedDirectories].every((candidatePath) => currentDirectories.has(candidatePath))
+        areStringSetsEqual(currentDirectories, nextExpandedDirectories)
           ? currentDirectories
           : nextExpandedDirectories
       ));
@@ -12908,8 +12914,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
     nextExpandedDirectories.add(terminalPath);
     setExpandedDirectories((currentDirectories) => (
-      currentDirectories.size === nextExpandedDirectories.size
-      && [...nextExpandedDirectories].every((candidatePath) => currentDirectories.has(candidatePath))
+      areStringSetsEqual(currentDirectories, nextExpandedDirectories)
         ? currentDirectories
         : nextExpandedDirectories
     ));
@@ -13993,8 +13998,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     loadedDirectoriesRef.current = nextLoadedDirectories;
 
     setLoadedDirectories((currentLoadedDirectories) => (
-      currentLoadedDirectories.size === nextLoadedDirectories.size
-      && [...nextLoadedDirectories].every((directoryPath) => currentLoadedDirectories.has(directoryPath))
+      areStringSetsEqual(currentLoadedDirectories, nextLoadedDirectories)
         ? currentLoadedDirectories
         : nextLoadedDirectories
     ));
@@ -15084,7 +15088,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
-      pendingFsChangesRef.current = pendingFsChangesRef.current.concat(payload.changes);
+      if (payload.changes.length > 0) {
+        pendingFsChangesRef.current.push(...payload.changes);
+      }
 
       if (shouldFlushFsChangesImmediately(payload.changes)) {
         flushPendingFsChanges();
@@ -15128,7 +15134,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       startTransition(() => {
-        setLanguageWorkspaceState(payload.state);
+        setLanguageWorkspaceState((currentState) => (
+          areLanguageWorkspaceStatesEqual(currentState, payload.state) ? currentState : payload.state
+        ));
       });
     };
 
@@ -15159,10 +15167,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setIndexStatus((currentStatus) => (currentStatus === null ? currentStatus : null));
       setLanguageWorkspaceState((currentState) => (currentState === null ? currentState : null));
       setExpandedDirectories((currentDirectories) => (
-        areStringArraysEqual(
-          Array.from(currentDirectories).sort(),
-          Array.from(initialExpandedDirectories).sort(),
-        )
+        areStringSetsEqual(currentDirectories, initialExpandedDirectories)
           ? currentDirectories
           : initialExpandedDirectories
       ));
@@ -18819,8 +18824,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const shouldLoadSelectedSessionDetails = selectedDebugSessionIdRef.current === null
         || selectedDebugSessionIdRef.current === payload.session.id;
       if (
+        bottomPanelModeRef.current === 'debug'
+        && (
         shouldLoadSelectedSessionDetails
         && (payload.session.state === 'paused' || payload.session.state === 'stopped' || payload.session.state === 'error')
+        )
       ) {
         void loadDebugSessionDetailsRef.current(payload.session.id);
       }
@@ -19637,7 +19645,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const openGitWorkbench = useCallback((initialTab: GitToolWindowTab = 'log') => {
-    setGitWorkbenchInitialTab((currentTab) => (currentTab === initialTab ? currentTab : initialTab));
     setActiveGitWorkbenchTab((currentTab) => (currentTab === initialTab ? currentTab : initialTab));
     setBottomPanelMode((currentMode) => (currentMode === 'git' ? currentMode : 'git'));
   }, []);
@@ -19852,8 +19859,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   useEffect(() => {
+    if (bottomPanelMode !== 'debug') {
+      return;
+    }
+
     void loadDebugSessionDetails(selectedDebugSessionId);
-  }, [loadDebugSessionDetails, selectedDebugSessionId]);
+  }, [bottomPanelMode, loadDebugSessionDetails, selectedDebugSessionId]);
 
   useEffect(() => {
     const nextOutput = selectedRunSession ? (runSessionOutputsRef.current[selectedRunSession.id] ?? '') : '';
@@ -19876,8 +19887,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [selectedDebugSessionId]);
 
   useEffect(() => {
+    if (bottomPanelMode !== 'debug') {
+      return;
+    }
+
     void refreshDebugWatches(selectedDebugSession);
-  }, [refreshDebugWatches, selectedDebugSession, watchExpressions]);
+  }, [bottomPanelMode, refreshDebugWatches, selectedDebugSession, watchExpressions]);
 
   const handlePaneClose = useCallback(async () => {
     if (!onClose) {
@@ -19901,7 +19916,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const handleGitWorkbenchTabChange = useCallback((tab: GitToolWindowTab) => {
-    setGitWorkbenchInitialTab((currentTab) => (currentTab === tab ? currentTab : tab));
     setActiveGitWorkbenchTab((currentTab) => (currentTab === tab ? currentTab : tab));
   }, []);
 
@@ -20787,7 +20801,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       case 'git':
         return (
           <GitToolWindow
-            initialTab={gitWorkbenchInitialTab}
             activeTab={activeGitWorkbenchTab}
             onTabChange={handleGitWorkbenchTabChange}
             branches={gitBranches}
