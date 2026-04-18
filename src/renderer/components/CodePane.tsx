@@ -6756,9 +6756,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, []);
 
-  const gitDirectoryStatusByPath = useMemo(() => (
-    collectGitDirectoryStatuses(rootPath, Object.values(gitStatusByPath))
-  ), [gitStatusByPath, rootPath]);
+  const gitDirectoryStatusByPath = useMemo(() => {
+    const gitStatusEntries: CodePaneGitStatusEntry[] = [];
+    for (const entry of Object.values(gitStatusByPath)) {
+      gitStatusEntries.push(entry);
+    }
+    return collectGitDirectoryStatuses(rootPath, gitStatusEntries);
+  }, [gitStatusByPath, rootPath]);
 
   const getEntryStatus = useCallback((entryPath: string, entryType: CodePaneTreeEntry['type']) => {
     if (gitStatusByPath[entryPath]) {
@@ -15098,76 +15102,84 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
 
+    const renderedSections: React.ReactNode[] = [];
+    for (const section of externalLibrarySections) {
+      const renderedRoots: React.ReactNode[] = [];
+      for (const root of section.roots) {
+        const isExpanded = expandedDirectories.has(root.path);
+        const isSelected = selectedPath === root.path;
+        const helperText = root.description ?? root.path;
+
+        renderedRoots.push(
+          <div key={root.id}>
+            <LazyContextMenu
+              children={() => renderFileContextMenu(root.path, 'directory', {
+                allowDiff: false,
+                allowMutations: false,
+                allowGitActions: false,
+              })}
+              trigger={(
+                <button
+                  type="button"
+                  title={root.path}
+                  onClick={() => {
+                    selectExplorerPath(root.path);
+                  }}
+                  onDoubleClick={() => {
+                    void toggleDirectory(root.path);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+                >
+                  <span
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
+                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    role="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void toggleDirectory(root.path);
+                    }}
+                  >
+                    {isExpanded ? (
+                      <ChevronDown size={14} className="shrink-0" />
+                    ) : (
+                      <ChevronRight size={14} className="shrink-0" />
+                    )}
+                  </span>
+                  {isExpanded ? (
+                    <FolderOpen size={14} className="shrink-0 text-amber-300" />
+                  ) : (
+                    <Folder size={14} className="shrink-0 text-amber-300" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate">{root.label}</span>
+                  {isDirectoryLoading(root.path) && (
+                    <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
+                  )}
+                </button>
+              )}
+            />
+            <div className="truncate px-8 pb-1 text-[10px] text-zinc-600">{helperText}</div>
+            {isExpanded ? renderExplorerTreeRows(externalLibraryExplorerRowsByRoot.get(root.path) ?? []) : null}
+          </div>,
+        );
+      }
+
+      renderedSections.push(
+        <div key={section.id} className="pb-3">
+          <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+            {`${t('codePane.externalLibraries')} · ${formatLanguageLabel(section.languageId)}`}
+          </div>
+          {renderedRoots}
+        </div>,
+      );
+    }
+
     return (
       <div className="mt-3 border-t border-zinc-800/80 pt-3">
         {externalLibrariesError ? (
           <div className="px-2 pb-2 text-xs text-red-300">{externalLibrariesError}</div>
         ) : null}
-        {externalLibrarySections.map((section) => (
-          <div key={section.id} className="pb-3">
-            <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-              {`${t('codePane.externalLibraries')} · ${formatLanguageLabel(section.languageId)}`}
-            </div>
-            {section.roots.map((root) => {
-              const isExpanded = expandedDirectories.has(root.path);
-              const isSelected = selectedPath === root.path;
-              const helperText = root.description ?? root.path;
-
-              return (
-                <div key={root.id}>
-                  <LazyContextMenu
-                    children={() => renderFileContextMenu(root.path, 'directory', {
-                      allowDiff: false,
-                      allowMutations: false,
-                      allowGitActions: false,
-                    })}
-                    trigger={(
-                      <button
-                        type="button"
-                        title={root.path}
-                        onClick={() => {
-                          selectExplorerPath(root.path);
-                        }}
-                        onDoubleClick={() => {
-                          void toggleDirectory(root.path);
-                        }}
-                        className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
-                      >
-                        <span
-                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
-                          aria-label={isExpanded ? 'Collapse' : 'Expand'}
-                          role="button"
-                          onClick={(event) => {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            void toggleDirectory(root.path);
-                          }}
-                        >
-                          {isExpanded ? (
-                            <ChevronDown size={14} className="shrink-0" />
-                          ) : (
-                            <ChevronRight size={14} className="shrink-0" />
-                          )}
-                        </span>
-                        {isExpanded ? (
-                          <FolderOpen size={14} className="shrink-0 text-amber-300" />
-                        ) : (
-                          <Folder size={14} className="shrink-0 text-amber-300" />
-                        )}
-                        <span className="min-w-0 flex-1 truncate">{root.label}</span>
-                        {isDirectoryLoading(root.path) && (
-                          <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
-                        )}
-                      </button>
-                    )}
-                  />
-                  <div className="truncate px-8 pb-1 text-[10px] text-zinc-600">{helperText}</div>
-                  {isExpanded ? renderExplorerTreeRows(externalLibraryExplorerRowsByRoot.get(root.path) ?? []) : null}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+        {renderedSections}
       </div>
     );
   }, [expandedDirectories, externalLibrariesError, externalLibraryExplorerRowsByRoot, externalLibrarySections, hasExternalLibraries, isDirectoryLoading, isSidebarVisible, renderExplorerTreeRows, renderFileContextMenu, selectExplorerPath, selectedPath, sidebarMode, t, toggleDirectory]);
@@ -19462,8 +19474,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     viewMode,
   ]);
 
-  const renderedOpenFileTabs = useMemo(() => (
-    orderedOpenFiles.length > 0 ? orderedOpenFiles.map((tab) => {
+  const renderedOpenFileTabs = useMemo(() => {
+    if (orderedOpenFiles.length === 0) {
+      return (
+        <div className="flex items-center px-3 text-xs text-zinc-500">
+          {t('codePane.openEditors')}
+        </div>
+      );
+    }
+
+    const renderedTabs: React.ReactNode[] = [];
+    for (const tab of orderedOpenFiles) {
       const isTabActive = tab.path === activeFilePath;
       const tabStatus = getEntryStatus(tab.path, 'file');
       const externalChangeEntry = externalChangesByPath.get(tab.path);
@@ -19472,9 +19493,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const entryTextClassName = tabStatus
         ? getStatusTextClassName(tabStatus)
         : getExternalChangeTextClassName(externalChangeEntry?.changeType);
-      const isTabPinned = Boolean(tab.pinned);
 
-      return (
+      renderedTabs.push(
         <OpenFileTab
           key={tab.path}
           path={tab.path}
@@ -19490,14 +19510,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
           onActivate={activateFile}
           onClose={closeFileTab}
           t={t}
-        />
+        />,
       );
-    }) : (
-      <div className="flex items-center px-3 text-xs text-zinc-500">
-        {t('codePane.openEditors')}
-      </div>
-    )
-  ), [
+    }
+    return renderedTabs;
+  }, [
     activeFilePath,
     activateFile,
     closeFileTab,
