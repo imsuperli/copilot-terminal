@@ -1030,38 +1030,47 @@ const BranchListSection = React.memo(function BranchListSection({
   const [collapsedNodeKeys, setCollapsedNodeKeys] = useState<string[]>([]);
   const collapsedNodeKeySet = useMemo(() => new Set(collapsedNodeKeys), [collapsedNodeKeys]);
   const sections = useMemo<BranchTreeSection[]>(() => {
-    const headNodes = currentBranches.map((branch) => ({
-      key: `head:branch:${branch.name}`,
-      kind: 'branch',
-      label: branch.shortName || branch.name,
-      branch,
-    } satisfies BranchTreeNode));
+    const headNodes: BranchTreeNode[] = [];
+    for (const branch of currentBranches) {
+      headNodes.push({
+        key: `head:branch:${branch.name}`,
+        kind: 'branch',
+        label: branch.shortName || branch.name,
+        branch,
+      } satisfies BranchTreeNode);
+    }
     const localNodes = buildBranchTree(localBranches, 'local', (branch) => splitBranchPath(branch.shortName || branch.name));
     const remoteNodes = buildBranchTree(remoteBranches, 'remote', (branch) => {
       const [remoteName, ...restPath] = splitBranchPath(branch.shortName || branch.name);
       return [remoteName || branch.name, ...restPath];
     });
 
-    return [
-      {
+    const nextSections: BranchTreeSection[] = [];
+    if (headNodes.length > 0) {
+      nextSections.push({
         key: 'head',
         label: t('codePane.gitCurrentBranchGroup'),
         count: headNodes.length,
         nodes: headNodes,
-      },
-      {
+      });
+    }
+    if (localBranches.length > 0) {
+      nextSections.push({
         key: 'local',
         label: t('codePane.gitLocalBranches'),
         count: localBranches.length,
         nodes: localNodes,
-      },
-      {
+      });
+    }
+    if (remoteBranches.length > 0) {
+      nextSections.push({
         key: 'remote',
         label: t('codePane.gitRemoteBranches'),
         count: remoteBranches.length,
         nodes: remoteNodes,
-      },
-    ].filter((section) => section.count > 0);
+      });
+    }
+    return nextSections;
   }, [currentBranches, localBranches, remoteBranches, t]);
   const visibleSections = useMemo(() => sections.map((section) => ({
     ...section,

@@ -80,6 +80,10 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
     () => visibleRows.map((row) => row.node.id),
     [visibleRows],
   );
+  const visibleNodeIdSet = React.useMemo(
+    () => new Set(visibleNodeIds),
+    [visibleNodeIds],
+  );
 
   React.useEffect(() => {
     setCollapsedNodeIds(new Set());
@@ -92,9 +96,9 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
     }
 
     setSelectedNodeId((currentValue) => (
-      currentValue && visibleNodeIds.includes(currentValue) ? currentValue : visibleNodeIds[0]
+      currentValue && visibleNodeIdSet.has(currentValue) ? currentValue : visibleNodeIds[0]
     ));
-  }, [visibleNodeIds]);
+  }, [visibleNodeIdSet, visibleNodeIds]);
 
   const handleRefresh = React.useCallback(() => {
     void onRefresh();

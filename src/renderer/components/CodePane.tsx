@@ -14738,7 +14738,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         };
 
         if (isDirectory && isExpanded) {
-          rows.push(row, ...collectRows(resolvedEntry.path, depth + 1));
+          rows.push(row);
+          rows.push(...collectRows(resolvedEntry.path, depth + 1));
         } else {
           rows.push(row);
         }
