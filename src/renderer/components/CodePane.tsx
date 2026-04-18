@@ -5637,9 +5637,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const viewMode = pane.code?.viewMode ?? 'editor';
   const diffTargetPath = pane.code?.diffTargetPath ?? null;
   const savePipelineState = getInitialSavePipelineState(pane);
-  const [qualityGateState, setQualityGateState] = useState<CodePaneSaveQualityState | null>(
-    () => pane.code?.qualityGate ?? null,
-  );
   const initialSidebarLayout = useMemo(() => getInitialSidebarLayout(pane), [pane]);
   const initialEditorSplitLayout = useMemo(() => getInitialEditorSplitLayout(pane), [pane]);
   const initialBottomPanelLayout = useMemo(() => getInitialBottomPanelLayout(pane), [pane]);
@@ -5997,10 +5994,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     paneRef.current = pane;
   }, [pane]);
-
-  useEffect(() => {
-    setQualityGateState(pane.code?.qualityGate ?? null);
-  }, [pane.id, pane.code?.qualityGate]);
 
   useEffect(() => {
     localHistoryEntriesRef.current.clear();
@@ -6423,9 +6416,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [persistCodeState]);
 
   const persistQualityGateState = useCallback((qualityGate: CodePaneSaveQualityState) => {
-    setQualityGateState((currentQualityGate) => (
-      currentQualityGate === qualityGate ? currentQualityGate : qualityGate
-    ));
+    void qualityGate;
   }, []);
 
   const getPersistedExpandedPaths = useCallback((paths: Set<string>) => {
