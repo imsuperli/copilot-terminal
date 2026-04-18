@@ -5428,6 +5428,15 @@ function areEditorSurfaceBindingStatesEqual(
     && previousState.readonlySecondary === nextState.readonlySecondary;
 }
 
+function shouldFocusEditorSurface(editorElement: HTMLElement | null | undefined): boolean {
+  if (!editorElement) {
+    return false;
+  }
+
+  const activeElement = document.activeElement;
+  return !(activeElement instanceof Node) || !editorElement.contains(activeElement);
+}
+
 function hasCodePaneStateUpdates(
   currentState: CodePaneState,
   updates: Partial<CodePaneState>,
@@ -9574,7 +9583,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (isActive) {
         focusedEditorTargetRef.current = 'diff';
         cursorStoreRef.current.setSnapshot({ target: 'diff' });
-        diffEditorRef.current.getModifiedEditor().focus();
+        const modifiedEditor = diffEditorRef.current.getModifiedEditor();
+        const modifiedEditorDomNode = modifiedEditor.getDomNode?.() ?? null;
+        if (shouldFocusEditorSurface(modifiedEditorDomNode)) {
+          modifiedEditor.focus();
+        }
       }
       editorSurfaceBindingStateRef.current = nextBindingState;
       return;
@@ -9723,7 +9736,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (isActive) {
       focusedEditorTargetRef.current = 'editor';
       cursorStoreRef.current.setSnapshot({ target: 'editor' });
-      primaryEditor.focus();
+      const primaryEditorDomNode = primaryEditor.getDomNode?.() ?? null;
+      if (shouldFocusEditorSurface(primaryEditorDomNode)) {
+        primaryEditor.focus();
+      }
     }
     editorSurfaceBindingStateRef.current = nextBindingState;
   }, [
