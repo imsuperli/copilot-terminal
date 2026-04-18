@@ -8492,7 +8492,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     fileMetaRef.current.get(filePath)?.documentUri ?? filePath
   ), []);
 
-  const invalidateFileScopedRuntimeCaches = useCallback((filePath: string) => {
+  const invalidateDocumentRuntimeCaches = useCallback((filePath: string) => {
     const requestPath = getModelRequestPath(filePath);
     runtimeStoreRef.current.invalidateCachePrefix(`quick-documentation:${requestPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`document-symbols:${requestPath}`);
@@ -8501,13 +8501,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     runtimeStoreRef.current.invalidateCachePrefix(`hierarchy:type-parents:${requestPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`hierarchy:type-children:${requestPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`semantic:${requestPath}`);
+  }, [getModelRequestPath]);
+
+  const invalidateWorkspaceRuntimeCaches = useCallback((filePath: string) => {
+    invalidateDocumentRuntimeCaches(filePath);
     runtimeStoreRef.current.invalidateCachePrefix(`git-history:${rootPath}:${filePath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`search-everywhere:${rootPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`search-files:${rootPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`search-contents:${rootPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`workspace-symbols:${rootPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`todo-scan:${rootPath}`);
-  }, [getModelRequestPath, rootPath]);
+  }, [invalidateDocumentRuntimeCaches, rootPath]);
 
   const markDirty = useCallback((filePath: string, dirty: boolean) => {
     const currentDirtyPaths = dirtyPathsRef.current;
@@ -8517,11 +8521,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (dirty) {
       currentDirtyPaths.add(filePath);
-      invalidateFileScopedRuntimeCaches(filePath);
+      invalidateDocumentRuntimeCaches(filePath);
     } else {
       currentDirtyPaths.delete(filePath);
     }
-  }, [invalidateFileScopedRuntimeCaches]);
+  }, [invalidateDocumentRuntimeCaches]);
 
   const getDefinitionLookupRange = useCallback((model: MonacoModel, lineNumber: number, column: number): MonacoRange => {
     const word = model.getWordAtPosition?.({ lineNumber, column });
@@ -10793,7 +10797,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       wroteToDisk = true;
-      invalidateFileScopedRuntimeCaches(filePath);
+      invalidateWorkspaceRuntimeCaches(filePath);
     }
 
     if (wroteToDisk && !options?.skipGitRefresh) {
@@ -10803,7 +10807,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       didApply: true,
       wroteToDisk,
     };
-  }, [clearDefinitionLookupCache, invalidateFileScopedRuntimeCaches, markDirty, rootPath, scheduleGitStatusRefresh, syncLanguageDocument, t]);
+  }, [clearDefinitionLookupCache, invalidateWorkspaceRuntimeCaches, markDirty, rootPath, scheduleGitStatusRefresh, syncLanguageDocument, t]);
 
   const runSaveQualityPipeline = useCallback(async (filePath: string) => {
     const model = fileModelsRef.current.get(filePath);
@@ -11074,7 +11078,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       lastSavedAt: Date.now(),
       lastSavedVersionId: saveVersionId,
     });
-    invalidateFileScopedRuntimeCaches(filePath);
+    invalidateWorkspaceRuntimeCaches(filePath);
     addLocalHistoryEntry(filePath, 'save', saveContent);
     if (getModelVersionId(model) === saveVersionId) {
       markDirty(filePath, false);
@@ -11115,7 +11119,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     queueLanguageDocumentSync,
     rootPath,
     runSaveQualityPipeline,
-    invalidateFileScopedRuntimeCaches,
+    invalidateWorkspaceRuntimeCaches,
     scheduleGitStatusRefresh,
     syncLanguageDocument,
     t,
@@ -12910,7 +12914,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     fileMetaRef.current.delete(filePath);
     problemsByFileRef.current.delete(filePath);
     preloadedReadResultsRef.current.delete(filePath);
-    invalidateFileScopedRuntimeCaches(filePath);
+    invalidateWorkspaceRuntimeCaches(filePath);
     clearDefinitionLookupCache();
     viewStatesRef.current.delete(filePath);
     markDirty(filePath, false);
@@ -12948,7 +12952,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     closeLanguageDocument,
     detachDiffEditorModel,
     flushDirtyFiles,
-    invalidateFileScopedRuntimeCaches,
+    invalidateWorkspaceRuntimeCaches,
     markDirty,
     openFiles,
     persistCodeState,
@@ -12991,7 +12995,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     for (const change of response.data.files) {
       if (change.kind === 'modify') {
         const existingModel = fileModelsRef.current.get(change.filePath);
-        invalidateFileScopedRuntimeCaches(change.filePath);
+        invalidateWorkspaceRuntimeCaches(change.filePath);
         if (existingModel) {
           await flushPendingLanguageSync(change.filePath);
           suppressModelEventsRef.current.add(change.filePath);
@@ -13023,7 +13027,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       if ((change.kind === 'rename' || change.kind === 'move') && wasActive && change.targetFilePath) {
-        invalidateFileScopedRuntimeCaches(change.targetFilePath);
+        invalidateWorkspaceRuntimeCaches(change.targetFilePath);
         await activateFile(change.targetFilePath);
       }
     }
@@ -13043,7 +13047,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     clearDefinitionLookupCache,
     closeFileTab,
     flushPendingLanguageSync,
-    invalidateFileScopedRuntimeCaches,
+    invalidateWorkspaceRuntimeCaches,
     markDirty,
     openFiles,
     queueLanguageDocumentSync,
@@ -15280,7 +15284,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     for (const change of pendingChanges) {
-      invalidateFileScopedRuntimeCaches(change.path);
+      invalidateWorkspaceRuntimeCaches(change.path);
     }
 
     pruneRemovedDirectoriesRef.current(pendingChanges);
@@ -15335,7 +15339,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void refreshDirectoryPathsRef.current(directoriesToRefresh, {
       showLoadingIndicator: false,
     });
-  }, [buildConsolidatedFsChanges, invalidateFileScopedRuntimeCaches, openExternalChangeDiff, revealPathInExplorer, rootPath, updateExternalChangeEntries]);
+  }, [buildConsolidatedFsChanges, invalidateWorkspaceRuntimeCaches, openExternalChangeDiff, revealPathInExplorer, rootPath, updateExternalChangeEntries]);
 
   useEffect(() => {
     flushPendingFsChangesRef.current = flushPendingFsChanges;
