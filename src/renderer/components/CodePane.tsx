@@ -8356,9 +8356,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     createOrUpdateModel(filePath, response.data);
-    await refreshEditorSurface();
     return true;
-  }, [createOrUpdateModel, refreshEditorSurface, rootPath, t]);
+  }, [createOrUpdateModel, rootPath, t]);
 
   const suppressExternalChangesForPaths = useCallback((paths: string[]) => {
     const normalizedPaths = paths.map((filePath) => normalizePath(filePath));
@@ -10251,10 +10250,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (existingModel) {
       createOrUpdateModel(filePath, response.data);
-      await refreshEditorSurface();
     }
     return nextEntry;
-  }, [createOrUpdateModel, readExternalChangeBaseContent, refreshEditorSurface, revealExternalChangeEntry, rootPath, t]);
+  }, [createOrUpdateModel, readExternalChangeBaseContent, revealExternalChangeEntry, rootPath, t]);
 
   const closeFileTab = useCallback(async (filePath: string) => {
     const didFlush = await flushDirtyFiles([filePath]);
