@@ -12982,37 +12982,55 @@ export const CodePane: React.FC<CodePaneProps> = ({
         const nextMissingDirectoryPaths = missingDirectoryPaths;
         startTransition(() => {
           setLoadedDirectories((currentLoadedDirectories) => {
-            const nextLoadedDirectories = new Set(currentLoadedDirectories);
+            let nextLoadedDirectories: Set<string> | null = null;
             for (const directoryPath of nextMissingDirectoryPaths) {
-              nextLoadedDirectories.delete(directoryPath);
+              if (currentLoadedDirectories.has(directoryPath)) {
+                nextLoadedDirectories ??= new Set(currentLoadedDirectories);
+                nextLoadedDirectories.delete(directoryPath);
+              }
             }
-            return nextLoadedDirectories;
+            return nextLoadedDirectories ?? currentLoadedDirectories;
           });
           setLoadedExternalDirectories((currentLoadedDirectories) => {
-            const nextLoadedDirectories = new Set(currentLoadedDirectories);
+            let nextLoadedDirectories: Set<string> | null = null;
             for (const directoryPath of nextMissingDirectoryPaths) {
-              nextLoadedDirectories.delete(directoryPath);
+              if (currentLoadedDirectories.has(directoryPath)) {
+                nextLoadedDirectories ??= new Set(currentLoadedDirectories);
+                nextLoadedDirectories.delete(directoryPath);
+              }
             }
-            return nextLoadedDirectories;
+            return nextLoadedDirectories ?? currentLoadedDirectories;
           });
           setLoadingDirectories((currentLoadingDirectories) => {
-            const nextLoadingDirectories = new Set(currentLoadingDirectories);
+            let nextLoadingDirectories: Set<string> | null = null;
             for (const directoryPath of nextMissingDirectoryPaths) {
-              nextLoadingDirectories.delete(directoryPath);
+              if (currentLoadingDirectories.has(directoryPath)) {
+                nextLoadingDirectories ??= new Set(currentLoadingDirectories);
+                nextLoadingDirectories.delete(directoryPath);
+              }
             }
-            return nextLoadingDirectories;
+            return nextLoadingDirectories ?? currentLoadingDirectories;
           });
           setLoadingExternalDirectories((currentLoadingDirectories) => {
-            const nextLoadingDirectories = new Set(currentLoadingDirectories);
+            let nextLoadingDirectories: Set<string> | null = null;
             for (const directoryPath of nextMissingDirectoryPaths) {
-              nextLoadingDirectories.delete(directoryPath);
+              if (currentLoadingDirectories.has(directoryPath)) {
+                nextLoadingDirectories ??= new Set(currentLoadingDirectories);
+                nextLoadingDirectories.delete(directoryPath);
+              }
             }
-            return nextLoadingDirectories;
+            return nextLoadingDirectories ?? currentLoadingDirectories;
           });
           setExpandedDirectories((currentExpandedDirectories) => {
-            const nextExpandedDirectories = new Set(currentExpandedDirectories);
+            let nextExpandedDirectories: Set<string> | null = null;
             for (const directoryPath of nextMissingDirectoryPaths) {
-              nextExpandedDirectories.delete(directoryPath);
+              if (currentExpandedDirectories.has(directoryPath)) {
+                nextExpandedDirectories ??= new Set(currentExpandedDirectories);
+                nextExpandedDirectories.delete(directoryPath);
+              }
+            }
+            if (!nextExpandedDirectories) {
+              return currentExpandedDirectories;
             }
             persistCodeState({
               expandedPaths: getPersistedExpandedPaths(nextExpandedDirectories),
@@ -13046,9 +13064,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (options?.refreshGitStatus !== false) {
-      await refreshGitSnapshot({ force: true, includeGraph: false });
+      scheduleGitStatusRefresh({ force: true });
     }
-  }, [getPersistedExpandedPaths, loadExplorerDirectory, persistCodeState, refreshGitSnapshot, rootPath]);
+  }, [getPersistedExpandedPaths, loadExplorerDirectory, persistCodeState, rootPath, scheduleGitStatusRefresh]);
 
   const refreshLoadedDirectories = useCallback(async (options?: {
     refreshGitStatus?: boolean;
@@ -19148,9 +19166,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (refresh && response.success) {
       void loadExternalLibrarySections({ force: true });
-      void refreshGitSnapshot({ force: true, includeGraph: false });
+      scheduleGitStatusRefresh({ force: true });
     }
-  }, [loadExternalLibrarySections, refreshGitSnapshot, rootPath, t, trackRequest]);
+  }, [loadExternalLibrarySections, rootPath, scheduleGitStatusRefresh, t, trackRequest]);
 
   const runTargetById = useCallback(async (targetId: string) => {
     const response = await window.electronAPI.codePaneRunTarget({
@@ -19974,12 +19992,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const handleCommitWindowRefresh = useCallback(() => {
-    void refreshGitSnapshot({ force: true, includeGraph: false });
-  }, [refreshGitSnapshot]);
+    scheduleGitStatusRefresh({ force: true });
+  }, [scheduleGitStatusRefresh]);
 
   const handleScmRefreshStatus = useCallback(() => {
-    void refreshGitSnapshot({ force: true, includeGraph: false });
-  }, [refreshGitSnapshot]);
+    scheduleGitStatusRefresh({ force: true });
+  }, [scheduleGitStatusRefresh]);
 
   const handleScmOpenRepository = useCallback(() => {
     void window.electronAPI.openFolder(gitRepositorySummaryRef.current?.repoRootPath ?? rootPath);
