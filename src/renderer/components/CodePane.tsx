@@ -13636,7 +13636,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       debugSessionOutputsRef.current = {};
       setSelectedRunSessionOutput('');
       setSelectedDebugSessionOutput('');
-      setSelectedRunSessionId(null);
+      setSelectedRunSessionId((currentSessionId) => (
+        currentSessionId === null ? currentSessionId : null
+      ));
       setPendingGitRevisionDiff(null);
       setPendingExternalChangeDiff(null);
       applyExternalChangeState([], null);
@@ -15808,9 +15810,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [getRelativePath, rootPath, scmEntryValues, shouldSortScmEntries]);
 
   const handleCommitWindowSelectPath = useCallback(async (filePath: string) => {
+    const shouldReloadHunks = selectedGitHunksPathRef.current !== filePath;
+    selectedGitChangePathRef.current = filePath;
     setSelectedGitChangePath((currentPath) => (
       currentPath === filePath ? currentPath : filePath
     ));
+    if (!shouldReloadHunks) {
+      return;
+    }
     await loadGitDiffHunks(filePath);
   }, [loadGitDiffHunks]);
 
@@ -15866,9 +15873,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ), [rootPath]);
 
   const selectGitChangeEntry = useCallback((entry: CodePaneGitStatusEntry, options?: { activate?: boolean }) => {
+    const shouldReloadHunks = selectedGitHunksPathRef.current !== entry.path;
     selectedGitChangePathRef.current = entry.path;
     setSelectedGitChangePath((currentPath) => (currentPath === entry.path ? currentPath : entry.path));
-    void loadGitDiffHunks(entry.path);
+    if (shouldReloadHunks) {
+      void loadGitDiffHunks(entry.path);
+    }
 
     if ((options?.activate ?? true) && entry.status !== 'deleted') {
       void activateFile(entry.path, { preview: true });
@@ -17152,7 +17162,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
         return nextSessions.slice(0, 20);
       });
-      setSelectedRunSessionId((currentSelectedSessionId) => currentSelectedSessionId ?? payload.session.id);
+      setSelectedRunSessionId((currentSelectedSessionId) => (
+        currentSelectedSessionId ?? payload.session.id
+      ));
     };
 
     const handleRunSessionOutput = (_event: unknown, payload: CodePaneRunSessionOutputPayload) => {
@@ -17193,7 +17205,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
         return nextSessions.slice(0, 20);
       });
-      setSelectedDebugSessionId((currentSelectedSessionId) => currentSelectedSessionId ?? payload.session.id);
+      setSelectedDebugSessionId((currentSelectedSessionId) => (
+        currentSelectedSessionId ?? payload.session.id
+      ));
       if (payload.session.state === 'paused' || payload.session.state === 'stopped' || payload.session.state === 'error') {
         void loadDebugSessionDetailsRef.current(payload.session.id);
       }
@@ -17543,7 +17557,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     setBottomPanelMode('run');
-    setSelectedRunSessionId(response.data.id);
+    setSelectedRunSessionId((currentSessionId) => (
+      currentSessionId === response.data!.id ? currentSessionId : response.data!.id
+    ));
   }, [getRunTargetCustomization, rootPath, t]);
 
   const debugTargetById = useCallback(async (targetId: string) => {
@@ -17563,7 +17579,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     setBottomPanelMode('debug');
-    setSelectedDebugSessionId(response.data.id);
+    setSelectedDebugSessionId((currentSessionId) => (
+      currentSessionId === response.data!.id ? currentSessionId : response.data!.id
+    ));
   }, [getRunTargetCustomization, loadExceptionBreakpoints, rootPath, t]);
 
   const runTestTarget = useCallback(async (targetId: string) => {
@@ -17582,7 +17600,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     setBottomPanelMode('tests');
-    setSelectedRunSessionId(response.data.id);
+    setSelectedRunSessionId((currentSessionId) => (
+      currentSessionId === response.data!.id ? currentSessionId : response.data!.id
+    ));
   }, [getRunTargetCustomization, rootPath, t]);
 
   const rerunFailedTests = useCallback(async () => {
@@ -17601,7 +17621,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const latestSession = response.data?.at(-1) ?? null;
     if (latestSession) {
       setBottomPanelMode('tests');
-      setSelectedRunSessionId(latestSession.id);
+      setSelectedRunSessionId((currentSessionId) => (
+        currentSessionId === latestSession.id ? currentSessionId : latestSession.id
+      ));
     }
   }, [rootPath, t]);
 
@@ -17634,7 +17656,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     setBottomPanelMode('project');
     if (response.data) {
-      setSelectedRunSessionId(response.data.id);
+      setSelectedRunSessionId((currentSessionId) => (
+        currentSessionId === response.data!.id ? currentSessionId : response.data!.id
+      ));
       return;
     }
 
