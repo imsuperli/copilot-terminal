@@ -16012,22 +16012,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [isSidebarVisible, problems, sidebarMode]);
 
   const navigateProblem = useCallback(async (direction: 1 | -1) => {
-    const sortedProblemLocations = [...problems].sort((left, right) => (
-      left.filePath.localeCompare(right.filePath)
-      || left.startLineNumber - right.startLineNumber
-      || left.startColumn - right.startColumn
-    ));
-
-    if (sortedProblemLocations.length === 0) {
+    if (problems.length === 0) {
       return;
     }
 
     const currentLocation = getCurrentNavigationLocation();
-    let nextProblem = sortedProblemLocations[0];
+    let nextProblem = problems[0];
 
     if (currentLocation) {
       if (direction > 0) {
-        for (const problem of sortedProblemLocations) {
+        for (const problem of problems) {
           if (
             problem.filePath > currentLocation.filePath
             || (
@@ -16046,9 +16040,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
           }
         }
       } else {
-        nextProblem = sortedProblemLocations[sortedProblemLocations.length - 1]!;
-        for (let index = sortedProblemLocations.length - 1; index >= 0; index -= 1) {
-          const problem = sortedProblemLocations[index]!;
+        nextProblem = problems[problems.length - 1]!;
+        for (let index = problems.length - 1; index >= 0; index -= 1) {
+          const problem = problems[index]!;
           if (
             problem.filePath < currentLocation.filePath
             || (
