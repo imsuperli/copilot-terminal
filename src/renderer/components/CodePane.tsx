@@ -59,6 +59,7 @@ import type {
   CodePaneBreakpoint,
   CodePaneCallHierarchyDirection,
   CodePaneCodeAction,
+  CodePaneCodeActionDiagnostic,
   CodePaneDiagnostic,
   CodePaneContentMatch,
   CodePaneDocumentSymbol,
@@ -6453,6 +6454,77 @@ function arePreviewChangeSetsEqual(
     && arePreviewStatsEqual(previousPreview.stats, nextPreview.stats);
 }
 
+function areCodeActionDiagnosticListsEqual(
+  previousDiagnostics: CodePaneCodeActionDiagnostic[],
+  nextDiagnostics: CodePaneCodeActionDiagnostic[],
+): boolean {
+  if (previousDiagnostics.length !== nextDiagnostics.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousDiagnostics.length; index += 1) {
+    const previousDiagnostic = previousDiagnostics[index];
+    const nextDiagnostic = nextDiagnostics[index];
+    if (
+      previousDiagnostic?.message !== nextDiagnostic?.message
+      || !areRangesEqual(previousDiagnostic?.range, nextDiagnostic?.range)
+      || previousDiagnostic?.severity !== nextDiagnostic?.severity
+      || previousDiagnostic?.code !== nextDiagnostic?.code
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areCodeActionListsEqual(previousActions: CodePaneCodeAction[], nextActions: CodePaneCodeAction[]): boolean {
+  if (previousActions.length !== nextActions.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousActions.length; index += 1) {
+    const previousAction = previousActions[index];
+    const nextAction = nextActions[index];
+    if (
+      previousAction?.id !== nextAction?.id
+      || previousAction?.title !== nextAction?.title
+      || previousAction?.kind !== nextAction?.kind
+      || previousAction?.isPreferred !== nextAction?.isPreferred
+      || previousAction?.disabledReason !== nextAction?.disabledReason
+      || !areCodeActionDiagnosticListsEqual(previousAction?.diagnostics ?? [], nextAction?.diagnostics ?? [])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areLanguageWorkspaceStatesEqual(
+  previousState: CodePaneLanguageWorkspaceState | null,
+  nextState: CodePaneLanguageWorkspaceState | null,
+): boolean {
+  if (previousState === nextState) {
+    return true;
+  }
+
+  if (!previousState || !nextState) {
+    return false;
+  }
+
+  return previousState.pluginId === nextState.pluginId
+    && previousState.workspaceRoot === nextState.workspaceRoot
+    && previousState.projectRoot === nextState.projectRoot
+    && previousState.languageId === nextState.languageId
+    && previousState.runtimeState === nextState.runtimeState
+    && previousState.phase === nextState.phase
+    && previousState.message === nextState.message
+    && previousState.progressText === nextState.progressText
+    && areStringListsEqual(previousState.readyFeatures, nextState.readyFeatures)
+    && previousState.timestamp === nextState.timestamp;
+}
+
 function areRunSessionsEqual(previousSessions: CodePaneRunSession[], nextSessions: CodePaneRunSession[]): boolean {
   if (previousSessions.length !== nextSessions.length) {
     return false;
@@ -9295,7 +9367,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (response.data && matchesLanguageWorkspaceRoot(rootPath, response.data)) {
       startTransition(() => {
-        setLanguageWorkspaceState(response.data ?? null);
+        setLanguageWorkspaceState((currentState) => (
+          areLanguageWorkspaceStatesEqual(currentState, response.data ?? null) ? currentState : (response.data ?? null)
+        ));
       });
       return;
     }
@@ -9311,7 +9385,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (snapshotResponse.data && matchesLanguageWorkspaceRoot(rootPath, snapshotResponse.data)) {
       startTransition(() => {
-        setLanguageWorkspaceState(snapshotResponse.data ?? null);
+        setLanguageWorkspaceState((currentState) => (
+          areLanguageWorkspaceStatesEqual(currentState, snapshotResponse.data ?? null)
+            ? currentState
+            : (snapshotResponse.data ?? null)
+        ));
       });
     }
   }, [pane.id, rootPath]);
@@ -18528,10 +18606,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
         };
 
     setIsCodeActionMenuOpen(true);
-    setCodeActionItems([]);
-    setCodeActionMenuError(null);
-    setIsCodeActionMenuLoading(true);
-    setSelectedCodeActionIndex(0);
+    setCodeActionItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
+    setCodeActionMenuError((currentError) => (currentError === null ? currentError : null));
+    setIsCodeActionMenuLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setSelectedCodeActionIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
 
     const response = await window.electronAPI.codePaneGetCodeActions({
       rootPath,
@@ -18541,10 +18619,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
 
     startTransition(() => {
-      setCodeActionItems(response.success ? (response.data ?? []) : []);
+      const nextItems = response.success ? (response.data ?? []) : [];
+      setCodeActionItems((currentItems) => (
+        areCodeActionListsEqual(currentItems, nextItems) ? currentItems : nextItems
+      ));
     });
-    setCodeActionMenuError(response.success ? null : (response.error || t('common.retry')));
-    setIsCodeActionMenuLoading(false);
+    const nextError = response.success ? null : (response.error || t('common.retry'));
+    setCodeActionMenuError((currentError) => (
+      currentError === nextError ? currentError : nextError
+    ));
+    setIsCodeActionMenuLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [getActiveEditorContext, rootPath, t]);
 
   useEffect(() => {
