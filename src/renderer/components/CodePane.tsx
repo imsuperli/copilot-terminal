@@ -5524,9 +5524,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const localHistoryEntriesRef = useRef(new Map<string, LocalHistoryEntry[]>());
   const suppressedExternalChangePathsRef = useRef(new Map<string, number>());
   const suppressModelEventsRef = useRef(new Set<string>());
-  const previewOpenFilePathsRef = useRef(new Set((pane.code?.openFiles ?? [])
-    .filter((tab) => tab.preview)
-    .map((tab) => tab.path)));
+  const previewOpenFilePathsRef = useRef((() => {
+    const previewPaths = new Set<string>();
+    for (const tab of pane.code?.openFiles ?? []) {
+      if (tab.preview) {
+        previewPaths.add(tab.path);
+      }
+    }
+    return previewPaths;
+  })());
   const markerListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseMoveListenerRef = useRef<MonacoDisposable | null>(null);
@@ -10544,10 +10550,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [ensureExternalChangeDiffModel, openFiles, persistCodeState, t]);
 
   const updateExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
-    const nextEntries = [
-      entry,
-      ...externalChangeEntriesRef.current.filter((candidate) => candidate.filePath !== entry.filePath),
-    ].slice(0, CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES);
+    const nextEntries: ExternalChangeEntry[] = [entry];
+    for (const candidate of externalChangeEntriesRef.current) {
+      if (candidate.filePath !== entry.filePath) {
+        nextEntries.push(candidate);
+        if (nextEntries.length >= CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES) {
+          break;
+        }
+      }
+    }
     externalChangeEntriesRef.current = nextEntries;
     setExternalChangeEntries(nextEntries);
     setSelectedExternalChangePath(entry.filePath);
@@ -13974,9 +13985,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       showSpinner: true,
     };
   }, [languageWorkspaceState]);
-  const externalChangesByPath = useMemo(() => (
-    new Map(externalChangeEntries.map((entry) => [entry.filePath, entry]))
-  ), [externalChangeEntries]);
+  const externalChangesByPath = useMemo(() => {
+    const nextEntriesByPath = new Map<string, ExternalChangeEntry>();
+    for (const entry of externalChangeEntries) {
+      nextEntriesByPath.set(entry.filePath, entry);
+    }
+    return nextEntriesByPath;
+  }, [externalChangeEntries]);
   const selectedExternalChangeEntry = useMemo(() => (
     selectedExternalChangePath
       ? externalChangeEntries.find((entry) => entry.filePath === selectedExternalChangePath) ?? externalChangeEntries[0] ?? null
@@ -14696,7 +14711,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const buildExplorerTreeRows = useMemo(() => {
     const collectRows = (directoryPath: string, depth: number): ExplorerTreeRow[] => {
       const compactEntries = getCompactDirectoryPresentations(directoryPath);
-      return compactEntries.flatMap((compactPresentation) => {
+      const rows: ExplorerTreeRow[] = [];
+      for (const compactPresentation of compactEntries) {
         const resolvedEntry = compactPresentation.entry;
         const sourcePath = compactPresentation.startPath;
         const isDirectory = resolvedEntry.type === 'directory';
@@ -14722,11 +14738,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         };
 
         if (isDirectory && isExpanded) {
-          return [row, ...collectRows(resolvedEntry.path, depth + 1)];
+          rows.push(row, ...collectRows(resolvedEntry.path, depth + 1));
+        } else {
+          rows.push(row);
         }
-
-        return [row];
-      });
+      }
+      return rows;
     };
 
     return collectRows;
