@@ -335,6 +335,15 @@ type FileRuntimeMeta = {
   documentUri?: string;
 };
 
+type EditorSurfaceBindingState = {
+  mode: 'editor' | 'diff';
+  activeFilePath: string | null;
+  secondaryFilePath: string | null;
+  diffRequestKey: string | null;
+  readonlyPrimary: boolean;
+  readonlySecondary: boolean;
+};
+
 type NavigationHistoryEntry = {
   filePath: string;
   lineNumber: number;
@@ -5024,6 +5033,22 @@ function getModelVersionId(model: MonacoModel): number {
   return Number.isFinite(versionId) ? versionId : model.getValue().length;
 }
 
+function areEditorSurfaceBindingStatesEqual(
+  previousState: EditorSurfaceBindingState | null,
+  nextState: EditorSurfaceBindingState,
+): boolean {
+  if (!previousState) {
+    return false;
+  }
+
+  return previousState.mode === nextState.mode
+    && previousState.activeFilePath === nextState.activeFilePath
+    && previousState.secondaryFilePath === nextState.secondaryFilePath
+    && previousState.diffRequestKey === nextState.diffRequestKey
+    && previousState.readonlyPrimary === nextState.readonlyPrimary
+    && previousState.readonlySecondary === nextState.readonlySecondary;
+}
+
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -5130,6 +5155,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const pendingEditorSurfaceRefreshRef = useRef<Promise<void> | null>(null);
   const queuedEditorSurfaceRefreshRef = useRef(false);
   const editorSurfaceRefreshSequenceRef = useRef(0);
+  const editorSurfaceBindingStateRef = useRef<EditorSurfaceBindingState | null>(null);
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
@@ -6724,12 +6750,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     editorRef.current = null;
     secondaryEditorRef.current = null;
     diffEditorRef.current = null;
+    editorSurfaceBindingStateRef.current = null;
   }, [clearDebugDecorations, clearDefinitionLinkDecoration, detachDiffEditorModel, saveCurrentViewState]);
 
   const disposeAllModels = useCallback(() => {
     editorSurfaceRequestIdRef.current += 1;
     queuedEditorSurfaceRefreshRef.current = false;
     pendingEditorSurfaceRefreshRef.current = null;
+    editorSurfaceBindingStateRef.current = null;
     for (const timer of autoSaveTimersRef.current.values()) {
       clearTimeout(timer);
     }
@@ -8011,8 +8039,31 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
     const isReadOnlyFile = fileMetaRef.current.get(currentActiveFilePath)?.readOnly === true;
+    const readonlySecondaryFile = currentSecondaryFilePath
+      ? fileMetaRef.current.get(currentSecondaryFilePath)?.readOnly === true
+      : false;
+    const diffRequestKey = currentViewMode === 'diff'
+      ? revisionRequest
+        ? `revision:${revisionRequest.filePath}:${revisionRequest.leftCommitSha ?? ''}:${revisionRequest.rightCommitSha ?? ''}:${revisionRequest.leftLabel ?? ''}:${revisionRequest.rightLabel ?? ''}`
+        : externalChangeRequest
+          ? `external:${externalChangeRequest.filePath}:${externalChangeRequest.leftLabel}:${externalChangeRequest.rightLabel}`
+          : `base:${currentActiveFilePath}:${paneRef.current.code?.diffTargetPath ?? currentActiveFilePath}`
+      : null;
+    const nextBindingState: EditorSurfaceBindingState = {
+      mode: currentViewMode,
+      activeFilePath: currentActiveFilePath,
+      secondaryFilePath: currentViewMode === 'editor' && shouldShowSplit ? currentSecondaryFilePath ?? null : null,
+      diffRequestKey,
+      readonlyPrimary: usesReadonlyDiffModel ? true : isReadOnlyFile,
+      readonlySecondary: currentViewMode === 'editor' && shouldShowSplit ? readonlySecondaryFile : false,
+    };
+    const canSkipPrimaryRebind = currentViewMode === 'editor'
+      && areEditorSurfaceBindingStatesEqual(editorSurfaceBindingStateRef.current, nextBindingState)
+      && editorRef.current?.getModel?.() === model;
 
-    saveCurrentViewState();
+    if (!canSkipPrimaryRebind) {
+      saveCurrentViewState();
+    }
 
     if (currentViewMode === 'diff') {
       const diffModel = diffModelsRef.current.get(currentActiveFilePath);
@@ -8097,6 +8148,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         cursorStoreRef.current.setSnapshot({ target: 'diff' });
         diffEditorRef.current.getModifiedEditor().focus();
       }
+      editorSurfaceBindingStateRef.current = nextBindingState;
       return;
     }
 
@@ -8188,16 +8240,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
 
     const primaryEditor = ensureCodeEditor('editor', hostElement);
-    primaryEditor.setModel(model);
-    primaryEditor.updateOptions?.({
-      readOnly: isReadOnlyFile,
-      ...editorInlayHintOptions,
-    });
+    if (!canSkipPrimaryRebind) {
+      primaryEditor.setModel(model);
+      primaryEditor.updateOptions?.({
+        readOnly: isReadOnlyFile,
+        ...editorInlayHintOptions,
+      });
+    }
     applyDebugDecorations(primaryEditor, currentActiveFilePath);
 
-    const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
-    if (savedViewState) {
-      restoreEditorViewStateSafely(primaryEditor, model, savedViewState);
+    if (!canSkipPrimaryRebind) {
+      const savedViewState = viewStatesRef.current.get(currentActiveFilePath);
+      if (savedViewState) {
+        restoreEditorViewStateSafely(primaryEditor, model, savedViewState);
+      }
     }
 
     applyPendingNavigation(primaryEditor, currentActiveFilePath);
@@ -8206,15 +8262,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const secondaryModel = fileModelsRef.current.get(currentSecondaryFilePath);
       if (secondaryModel && secondaryEditorHostRef.current) {
         const secondaryEditor = ensureCodeEditor('secondary', secondaryEditorHostRef.current);
-        secondaryEditor.setModel(secondaryModel);
-        secondaryEditor.updateOptions?.({
-          readOnly: fileMetaRef.current.get(currentSecondaryFilePath)?.readOnly === true,
-          ...editorInlayHintOptions,
-        });
+        const shouldRebindSecondaryEditor = !canSkipPrimaryRebind
+          || secondaryEditor.getModel?.() !== secondaryModel
+          || editorSurfaceBindingStateRef.current?.secondaryFilePath !== currentSecondaryFilePath
+          || editorSurfaceBindingStateRef.current?.readonlySecondary !== readonlySecondaryFile;
+        if (shouldRebindSecondaryEditor) {
+          secondaryEditor.setModel(secondaryModel);
+          secondaryEditor.updateOptions?.({
+            readOnly: readonlySecondaryFile,
+            ...editorInlayHintOptions,
+          });
 
-        const savedSecondaryViewState = secondaryViewStatesRef.current.get(currentSecondaryFilePath);
-        if (savedSecondaryViewState) {
-          restoreEditorViewStateSafely(secondaryEditor, secondaryModel, savedSecondaryViewState);
+          const savedSecondaryViewState = secondaryViewStatesRef.current.get(currentSecondaryFilePath);
+          if (savedSecondaryViewState) {
+            restoreEditorViewStateSafely(secondaryEditor, secondaryModel, savedSecondaryViewState);
+          }
         }
       }
     } else {
@@ -8235,6 +8297,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cursorStoreRef.current.setSnapshot({ target: 'editor' });
       primaryEditor.focus();
     }
+    editorSurfaceBindingStateRef.current = nextBindingState;
   }, [
     applyDebugDecorations,
     applyPendingNavigation,
