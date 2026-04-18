@@ -11012,6 +11012,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     savePipelineState.organizeImportsOnSave,
     t,
   ]);
+  const hasSaveQualityPipelineEnabled = savePipelineState.formatOnSave
+    || savePipelineState.organizeImportsOnSave
+    || savePipelineState.lintOnSave;
 
   const saveFile = useCallback(async (filePath: string, options?: SaveFileOptions) => {
     const model = fileModelsRef.current.get(filePath);
@@ -11035,7 +11038,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     await flushPendingLanguageSync(filePath);
     let qualityGateStateBeforeWrite: CodePaneSaveQualityState | null = null;
     let didWriteIntermediateFiles = false;
-    if (!options?.skipQualityPipeline) {
+    if (!options?.skipQualityPipeline && hasSaveQualityPipelineEnabled) {
       persistQualityGateState(createSaveQualityState({
         status: 'running',
         message: t('codePane.saveQualityRunning'),
@@ -11141,6 +11144,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     scheduleGitStatusRefresh,
     syncLanguageDocument,
     t,
+    hasSaveQualityPipelineEnabled,
     persistQualityGateState,
   ]);
 
@@ -13581,7 +13585,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
         filePath: hunk.filePath,
         patch: hunk.patch,
       }),
-      { successMessage: t('codePane.gitDiscardHunkSuccess') },
+      {
+        successMessage: t('codePane.gitDiscardHunkSuccess'),
+        refreshDirectories: false,
+      },
     );
     if (didApply) {
       await loadGitDiffHunks(hunk.filePath);
@@ -16419,7 +16426,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     rootPath,
     selectedDebugSessionId,
   ]);
-
   const activeFileReadOnly = activeFilePath ? Boolean(fileMetaRef.current.get(activeFilePath)?.readOnly) : false;
   const activeFileDisplayPath = activeFilePath ? getDisplayPath(activeFilePath) : null;
   const currentGitBranch = useMemo(
