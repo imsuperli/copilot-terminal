@@ -94,6 +94,12 @@ import type {
   CodePaneLocation,
   IpcResponse,
   CodePaneProjectContribution,
+  CodePaneProjectCommand,
+  CodePaneProjectCommandGroup,
+  CodePaneProjectDetailCard,
+  CodePaneProjectDiagnostic,
+  CodePaneProjectStatusItem,
+  CodePaneProjectTreeSection,
   CodePaneProjectTreeItem,
   CodePaneRange,
   CodePaneReadFileResult,
@@ -5672,6 +5678,315 @@ function areWorkspaceSymbolListsEqual(
   return true;
 }
 
+function areRangesEqual(previousRange?: CodePaneRange | null, nextRange?: CodePaneRange | null): boolean {
+  if (previousRange === nextRange) {
+    return true;
+  }
+
+  if (!previousRange || !nextRange) {
+    return false;
+  }
+
+  return previousRange.startLineNumber === nextRange.startLineNumber
+    && previousRange.startColumn === nextRange.startColumn
+    && previousRange.endLineNumber === nextRange.endLineNumber
+    && previousRange.endColumn === nextRange.endColumn;
+}
+
+function areDocumentSymbolsEqual(
+  previousSymbol?: CodePaneDocumentSymbol | null,
+  nextSymbol?: CodePaneDocumentSymbol | null,
+): boolean {
+  if (previousSymbol === nextSymbol) {
+    return true;
+  }
+
+  if (!previousSymbol || !nextSymbol) {
+    return false;
+  }
+
+  return previousSymbol.name === nextSymbol.name
+    && previousSymbol.detail === nextSymbol.detail
+    && previousSymbol.kind === nextSymbol.kind
+    && areRangesEqual(previousSymbol.range, nextSymbol.range)
+    && areRangesEqual(previousSymbol.selectionRange, nextSymbol.selectionRange)
+    && areDocumentSymbolListsEqual(previousSymbol.children ?? [], nextSymbol.children ?? []);
+}
+
+function areDocumentSymbolListsEqual(
+  previousList: CodePaneDocumentSymbol[],
+  nextList: CodePaneDocumentSymbol[],
+): boolean {
+  if (previousList.length !== nextList.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousList.length; index += 1) {
+    if (!areDocumentSymbolsEqual(previousList[index], nextList[index])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areTestItemsEqual(previousItem?: CodePaneTestItem | null, nextItem?: CodePaneTestItem | null): boolean {
+  if (previousItem === nextItem) {
+    return true;
+  }
+
+  if (!previousItem || !nextItem) {
+    return false;
+  }
+
+  return previousItem.id === nextItem.id
+    && previousItem.label === nextItem.label
+    && previousItem.kind === nextItem.kind
+    && previousItem.filePath === nextItem.filePath
+    && previousItem.runnableTargetId === nextItem.runnableTargetId
+    && areTestItemListsEqual(previousItem.children ?? [], nextItem.children ?? []);
+}
+
+function areTestItemListsEqual(previousList: CodePaneTestItem[], nextList: CodePaneTestItem[]): boolean {
+  if (previousList.length !== nextList.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousList.length; index += 1) {
+    if (!areTestItemsEqual(previousList[index], nextList[index])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areProjectStatusItemListsEqual(
+  previousItems: CodePaneProjectStatusItem[],
+  nextItems: CodePaneProjectStatusItem[],
+): boolean {
+  if (previousItems.length !== nextItems.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousItems.length; index += 1) {
+    const previousItem = previousItems[index];
+    const nextItem = nextItems[index];
+    if (
+      previousItem?.id !== nextItem?.id
+      || previousItem?.label !== nextItem?.label
+      || previousItem?.tone !== nextItem?.tone
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areProjectDiagnosticListsEqual(
+  previousDiagnostics: CodePaneProjectDiagnostic[],
+  nextDiagnostics: CodePaneProjectDiagnostic[],
+): boolean {
+  if (previousDiagnostics.length !== nextDiagnostics.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousDiagnostics.length; index += 1) {
+    const previousDiagnostic = previousDiagnostics[index];
+    const nextDiagnostic = nextDiagnostics[index];
+    if (
+      previousDiagnostic?.id !== nextDiagnostic?.id
+      || previousDiagnostic?.severity !== nextDiagnostic?.severity
+      || previousDiagnostic?.message !== nextDiagnostic?.message
+      || previousDiagnostic?.detail !== nextDiagnostic?.detail
+      || previousDiagnostic?.filePath !== nextDiagnostic?.filePath
+      || previousDiagnostic?.lineNumber !== nextDiagnostic?.lineNumber
+      || previousDiagnostic?.commandId !== nextDiagnostic?.commandId
+      || previousDiagnostic?.commandLabel !== nextDiagnostic?.commandLabel
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areProjectCommandListsEqual(
+  previousCommands: CodePaneProjectCommand[],
+  nextCommands: CodePaneProjectCommand[],
+): boolean {
+  if (previousCommands.length !== nextCommands.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousCommands.length; index += 1) {
+    const previousCommand = previousCommands[index];
+    const nextCommand = nextCommands[index];
+    if (
+      previousCommand?.id !== nextCommand?.id
+      || previousCommand?.title !== nextCommand?.title
+      || previousCommand?.detail !== nextCommand?.detail
+      || previousCommand?.kind !== nextCommand?.kind
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areProjectCommandGroupListsEqual(
+  previousGroups: CodePaneProjectCommandGroup[],
+  nextGroups: CodePaneProjectCommandGroup[],
+): boolean {
+  if (previousGroups.length !== nextGroups.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousGroups.length; index += 1) {
+    const previousGroup = previousGroups[index];
+    const nextGroup = nextGroups[index];
+    if (
+      previousGroup?.id !== nextGroup?.id
+      || previousGroup?.title !== nextGroup?.title
+      || !areProjectCommandListsEqual(previousGroup?.commands ?? [], nextGroup?.commands ?? [])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areProjectDetailCardListsEqual(
+  previousCards: CodePaneProjectDetailCard[],
+  nextCards: CodePaneProjectDetailCard[],
+): boolean {
+  if (previousCards.length !== nextCards.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousCards.length; index += 1) {
+    const previousCard = previousCards[index];
+    const nextCard = nextCards[index];
+    if (
+      previousCard?.id !== nextCard?.id
+      || previousCard?.title !== nextCard?.title
+      || !areStringListsEqual(previousCard?.lines ?? [], nextCard?.lines ?? [])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areProjectTreeItemsEqual(
+  previousItem?: CodePaneProjectTreeItem | null,
+  nextItem?: CodePaneProjectTreeItem | null,
+): boolean {
+  if (previousItem === nextItem) {
+    return true;
+  }
+
+  if (!previousItem || !nextItem) {
+    return false;
+  }
+
+  return previousItem.id === nextItem.id
+    && previousItem.label === nextItem.label
+    && previousItem.kind === nextItem.kind
+    && previousItem.description === nextItem.description
+    && previousItem.filePath === nextItem.filePath
+    && previousItem.lineNumber === nextItem.lineNumber
+    && previousItem.column === nextItem.column
+    && areProjectTreeItemListsEqual(previousItem.children ?? [], nextItem.children ?? []);
+}
+
+function areProjectTreeItemListsEqual(
+  previousItems: CodePaneProjectTreeItem[],
+  nextItems: CodePaneProjectTreeItem[],
+): boolean {
+  if (previousItems.length !== nextItems.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousItems.length; index += 1) {
+    if (!areProjectTreeItemsEqual(previousItems[index], nextItems[index])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areProjectTreeSectionListsEqual(
+  previousSections: CodePaneProjectTreeSection[],
+  nextSections: CodePaneProjectTreeSection[],
+): boolean {
+  if (previousSections.length !== nextSections.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousSections.length; index += 1) {
+    const previousSection = previousSections[index];
+    const nextSection = nextSections[index];
+    if (
+      previousSection?.id !== nextSection?.id
+      || previousSection?.title !== nextSection?.title
+      || !areProjectTreeItemListsEqual(previousSection?.items ?? [], nextSection?.items ?? [])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areProjectContributionListsEqual(
+  previousContributions: CodePaneProjectContribution[],
+  nextContributions: CodePaneProjectContribution[],
+): boolean {
+  if (previousContributions.length !== nextContributions.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousContributions.length; index += 1) {
+    const previousContribution = previousContributions[index];
+    const nextContribution = nextContributions[index];
+    if (
+      previousContribution?.id !== nextContribution?.id
+      || previousContribution?.title !== nextContribution?.title
+      || previousContribution?.languageId !== nextContribution?.languageId
+      || !areProjectStatusItemListsEqual(
+        previousContribution?.statusItems ?? [],
+        nextContribution?.statusItems ?? [],
+      )
+      || !areProjectDiagnosticListsEqual(
+        previousContribution?.diagnostics ?? [],
+        nextContribution?.diagnostics ?? [],
+      )
+      || !areProjectCommandGroupListsEqual(
+        previousContribution?.commandGroups ?? [],
+        nextContribution?.commandGroups ?? [],
+      )
+      || !areProjectDetailCardListsEqual(
+        previousContribution?.detailCards ?? [],
+        nextContribution?.detailCards ?? [],
+      )
+      || !areProjectTreeSectionListsEqual(
+        previousContribution?.treeSections ?? [],
+        nextContribution?.treeSections ?? [],
+      )
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function areRunSessionsEqual(previousSessions: CodePaneRunSession[], nextSessions: CodePaneRunSession[]): boolean {
   if (previousSessions.length !== nextSessions.length) {
     return false;
@@ -10031,10 +10346,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       : getActiveEditorContext();
     if (!context) {
       documentSymbolsRequestIdRef.current += 1;
-      setDocumentSymbols([]);
-      setDocumentSymbolsFilePath(null);
-      setDocumentSymbolsError(null);
-      setIsDocumentSymbolsLoading(false);
+      setDocumentSymbols((currentSymbols) => (currentSymbols.length === 0 ? currentSymbols : []));
+      setDocumentSymbolsFilePath((currentFilePath) => (currentFilePath === null ? currentFilePath : null));
+      setDocumentSymbolsError((currentError) => (currentError === null ? currentError : null));
+      setIsDocumentSymbolsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
@@ -10042,9 +10357,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const requestKey = `document-symbols:${requestPath}`;
     const requestVersion = ++documentSymbolsRequestIdRef.current;
     const requestFilePath = context.filePath;
-    setIsDocumentSymbolsLoading(true);
-    setDocumentSymbolsError(null);
-    setDocumentSymbolsFilePath(requestFilePath);
+    setIsDocumentSymbolsLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setDocumentSymbolsError((currentError) => (currentError === null ? currentError : null));
+    setDocumentSymbolsFilePath((currentFilePath) => (
+      currentFilePath === requestFilePath ? currentFilePath : requestFilePath
+    ));
 
     try {
       const response = await trackRequest(
@@ -10062,18 +10379,27 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
-      setDocumentSymbols(response.success ? (response.data ?? []) : []);
-      setDocumentSymbolsError(response.success ? null : (response.error || t('common.retry')));
+      const nextSymbols = response.success ? (response.data ?? []) : [];
+      const nextError = response.success ? null : (response.error || t('common.retry'));
+      setDocumentSymbols((currentSymbols) => (
+        areDocumentSymbolListsEqual(currentSymbols, nextSymbols) ? currentSymbols : nextSymbols
+      ));
+      setDocumentSymbolsError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
     } catch (error) {
       if (documentSymbolsRequestIdRef.current !== requestVersion) {
         return;
       }
 
-      setDocumentSymbols([]);
-      setDocumentSymbolsError(error instanceof Error ? error.message : t('common.retry'));
+      const nextError = error instanceof Error ? error.message : t('common.retry');
+      setDocumentSymbols((currentSymbols) => (currentSymbols.length === 0 ? currentSymbols : []));
+      setDocumentSymbolsError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
     } finally {
       if (documentSymbolsRequestIdRef.current === requestVersion) {
-        setIsDocumentSymbolsLoading(false);
+        setIsDocumentSymbolsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       }
     }
   }, [getActiveEditorContext, getModelRequestPath, resolveInspectorTargetContext, rootPath, t, trackRequest]);
@@ -17723,8 +18049,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [loadDebugSessionDetails]);
 
   const loadTests = useCallback(async () => {
-    setIsTestsLoading(true);
-    setTestsError(null);
+    setIsTestsLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setTestsError((currentError) => (currentError === null ? currentError : null));
 
     const response = await trackRequest(
       `tests:${rootPath}`,
@@ -17736,14 +18062,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }),
     );
 
-    setTestItems(response.success ? (response.data ?? []) : []);
-    setTestsError(response.success ? null : (response.error || t('common.retry')));
-    setIsTestsLoading(false);
+    const nextTestItems = response.success ? (response.data ?? []) : [];
+    const nextError = response.success ? null : (response.error || t('common.retry'));
+    setTestItems((currentItems) => (
+      areTestItemListsEqual(currentItems, nextTestItems) ? currentItems : nextTestItems
+    ));
+    setTestsError((currentError) => (
+      currentError === nextError ? currentError : nextError
+    ));
+    setIsTestsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [rootPath, t, trackRequest]);
 
   const loadProjectContributions = useCallback(async (refresh = false) => {
-    setIsProjectLoading(true);
-    setProjectError(null);
+    setIsProjectLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setProjectError((currentError) => (currentError === null ? currentError : null));
 
     if (refresh) {
       invalidateProjectCache(rootPath, 'external-libraries');
@@ -17758,9 +18090,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
         : await window.electronAPI.codePaneGetProjectContribution({ rootPath }),
     );
 
-    setProjectContributions(response.success ? (response.data ?? []) : []);
-    setProjectError(response.success ? null : (response.error || t('common.retry')));
-    setIsProjectLoading(false);
+    const nextContributions = response.success ? (response.data ?? []) : [];
+    const nextError = response.success ? null : (response.error || t('common.retry'));
+    setProjectContributions((currentContributions) => (
+      areProjectContributionListsEqual(currentContributions, nextContributions)
+        ? currentContributions
+        : nextContributions
+    ));
+    setProjectError((currentError) => (
+      currentError === nextError ? currentError : nextError
+    ));
+    setIsProjectLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
 
     if (refresh && response.success) {
       void loadExternalLibrarySections({ force: true });
