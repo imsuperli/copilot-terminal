@@ -111,6 +111,8 @@ import type {
   CodePaneRunTarget,
   CodePaneRunTargetCustomization,
   CodePanePreviewChangeSet,
+  CodePanePreviewFileChange,
+  CodePanePreviewStats,
   CodePaneSemanticTokensLegend,
   CodePaneSemanticTokensResult,
   CodePaneTextEdit,
@@ -6288,6 +6290,96 @@ function areSemanticSummaryEntriesEqual(
   return true;
 }
 
+function arePreviewStatsEqual(
+  previousStats?: CodePanePreviewStats | null,
+  nextStats?: CodePanePreviewStats | null,
+): boolean {
+  if (previousStats === nextStats) {
+    return true;
+  }
+
+  if (!previousStats || !nextStats) {
+    return false;
+  }
+
+  return previousStats.fileCount === nextStats.fileCount
+    && previousStats.editCount === nextStats.editCount
+    && previousStats.renameCount === nextStats.renameCount
+    && previousStats.moveCount === nextStats.moveCount
+    && previousStats.deleteCount === nextStats.deleteCount
+    && previousStats.modifyCount === nextStats.modifyCount;
+}
+
+function areTextEditsEqual(previousEdits: CodePaneTextEdit[], nextEdits: CodePaneTextEdit[]): boolean {
+  if (previousEdits.length !== nextEdits.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousEdits.length; index += 1) {
+    const previousEdit = previousEdits[index];
+    const nextEdit = nextEdits[index];
+    if (
+      previousEdit?.filePath !== nextEdit?.filePath
+      || previousEdit?.newText !== nextEdit?.newText
+      || !areRangesEqual(previousEdit?.range, nextEdit?.range)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function arePreviewFileChangesEqual(
+  previousFiles: CodePanePreviewFileChange[],
+  nextFiles: CodePanePreviewFileChange[],
+): boolean {
+  if (previousFiles.length !== nextFiles.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousFiles.length; index += 1) {
+    const previousFile = previousFiles[index];
+    const nextFile = nextFiles[index];
+    if (
+      previousFile?.id !== nextFile?.id
+      || previousFile?.kind !== nextFile?.kind
+      || previousFile?.filePath !== nextFile?.filePath
+      || previousFile?.targetFilePath !== nextFile?.targetFilePath
+      || previousFile?.language !== nextFile?.language
+      || previousFile?.beforeContent !== nextFile?.beforeContent
+      || previousFile?.afterContent !== nextFile?.afterContent
+      || !areTextEditsEqual(previousFile?.edits ?? [], nextFile?.edits ?? [])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function arePreviewChangeSetsEqual(
+  previousPreview: CodePanePreviewChangeSet | null,
+  nextPreview: CodePanePreviewChangeSet | null,
+): boolean {
+  if (previousPreview === nextPreview) {
+    return true;
+  }
+
+  if (!previousPreview || !nextPreview) {
+    return false;
+  }
+
+  return previousPreview.id === nextPreview.id
+    && previousPreview.title === nextPreview.title
+    && previousPreview.source === nextPreview.source
+    && previousPreview.description === nextPreview.description
+    && previousPreview.createdAt === nextPreview.createdAt
+    && arePreviewFileChangesEqual(previousPreview.files, nextPreview.files)
+    && areStringListsEqual(previousPreview.warnings ?? [], nextPreview.warnings ?? [])
+    && arePreviewStatsEqual(previousPreview.stats, nextPreview.stats);
+}
+
 function areRunSessionsEqual(previousSessions: CodePaneRunSession[], nextSessions: CodePaneRunSession[]): boolean {
   if (previousSessions.length !== nextSessions.length) {
     return false;
@@ -11160,7 +11252,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [applyLanguageTextEditsWithoutSaving, refreshGitSnapshot, rootPath, saveFile]);
 
   const prepareRefactorPreview = useCallback(async (config: Parameters<typeof window.electronAPI.codePanePrepareRefactor>[0]) => {
-    setRefactorPreviewError(null);
+    setRefactorPreviewError((currentError) => (currentError === null ? currentError : null));
 
     const response = await window.electronAPI.codePanePrepareRefactor(config);
     if (!response.success || !response.data) {
@@ -11172,9 +11264,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return null;
     }
 
-    setRefactorPreview(response.data);
-    setSelectedPreviewChangeId(response.data.files[0]?.id ?? null);
-    setBottomPanelMode('preview');
+    const nextPreview = response.data;
+    setRefactorPreview((currentPreview) => (
+      arePreviewChangeSetsEqual(currentPreview, nextPreview) ? currentPreview : nextPreview
+    ));
+    setSelectedPreviewChangeId((currentChangeId) => {
+      const nextChangeId = nextPreview.files[0]?.id ?? null;
+      return currentChangeId === nextChangeId ? currentChangeId : nextChangeId;
+    });
+    setBottomPanelMode((currentMode) => (currentMode === 'preview' ? currentMode : 'preview'));
     return response.data;
   }, [t]);
 
