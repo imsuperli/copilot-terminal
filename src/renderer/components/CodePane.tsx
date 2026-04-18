@@ -6026,6 +6026,137 @@ function areHoverResultsEqual(
   return areRangesEqual(previousResult.range, nextResult.range);
 }
 
+function areGitCommitFileChangesEqual(
+  previousFiles: CodePaneGitCommitFileChange[],
+  nextFiles: CodePaneGitCommitFileChange[],
+): boolean {
+  if (previousFiles.length !== nextFiles.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousFiles.length; index += 1) {
+    const previousFile = previousFiles[index];
+    const nextFile = nextFiles[index];
+    if (
+      previousFile?.path !== nextFile?.path
+      || previousFile?.relativePath !== nextFile?.relativePath
+      || previousFile?.status !== nextFile?.status
+      || previousFile?.additions !== nextFile?.additions
+      || previousFile?.deletions !== nextFile?.deletions
+      || previousFile?.previousPath !== nextFile?.previousPath
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areGitCommitDetailsEqual(
+  previousDetails: CodePaneGitCommitDetails | null,
+  nextDetails: CodePaneGitCommitDetails | null,
+): boolean {
+  if (previousDetails === nextDetails) {
+    return true;
+  }
+
+  if (!previousDetails || !nextDetails) {
+    return false;
+  }
+
+  return previousDetails.commitSha === nextDetails.commitSha
+    && previousDetails.shortSha === nextDetails.shortSha
+    && previousDetails.subject === nextDetails.subject
+    && previousDetails.author === nextDetails.author
+    && previousDetails.email === nextDetails.email
+    && previousDetails.timestamp === nextDetails.timestamp
+    && previousDetails.body === nextDetails.body
+    && areStringListsEqual(previousDetails.refs, nextDetails.refs)
+    && areGitCommitFileChangesEqual(previousDetails.files, nextDetails.files);
+}
+
+function areGitCompareCommitsEqual(
+  previousComparison: CodePaneGitCompareCommitsResult | null,
+  nextComparison: CodePaneGitCompareCommitsResult | null,
+): boolean {
+  if (previousComparison === nextComparison) {
+    return true;
+  }
+
+  if (!previousComparison || !nextComparison) {
+    return false;
+  }
+
+  return previousComparison.baseCommitSha === nextComparison.baseCommitSha
+    && previousComparison.targetCommitSha === nextComparison.targetCommitSha
+    && areGitCommitFileChangesEqual(previousComparison.files, nextComparison.files);
+}
+
+function areGitRebasePlanEntriesEqual(
+  previousEntries: CodePaneGitRebasePlanEntry[],
+  nextEntries: CodePaneGitRebasePlanEntry[],
+): boolean {
+  if (previousEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousEntries.length; index += 1) {
+    const previousEntry = previousEntries[index];
+    const nextEntry = nextEntries[index];
+    if (
+      previousEntry?.commitSha !== nextEntry?.commitSha
+      || previousEntry?.shortSha !== nextEntry?.shortSha
+      || previousEntry?.subject !== nextEntry?.subject
+      || previousEntry?.author !== nextEntry?.author
+      || previousEntry?.timestamp !== nextEntry?.timestamp
+      || previousEntry?.action !== nextEntry?.action
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areGitRebasePlansEqual(
+  previousPlan: CodePaneGitRebasePlanResult | null,
+  nextPlan: CodePaneGitRebasePlanResult | null,
+): boolean {
+  if (previousPlan === nextPlan) {
+    return true;
+  }
+
+  if (!previousPlan || !nextPlan) {
+    return false;
+  }
+
+  return previousPlan.baseRef === nextPlan.baseRef
+    && previousPlan.currentBranch === nextPlan.currentBranch
+    && previousPlan.hasMergeCommits === nextPlan.hasMergeCommits
+    && areGitRebasePlanEntriesEqual(previousPlan.commits, nextPlan.commits);
+}
+
+function areGitConflictDetailsEqual(
+  previousDetails: CodePaneGitConflictDetails | null,
+  nextDetails: CodePaneGitConflictDetails | null,
+): boolean {
+  if (previousDetails === nextDetails) {
+    return true;
+  }
+
+  if (!previousDetails || !nextDetails) {
+    return false;
+  }
+
+  return previousDetails.filePath === nextDetails.filePath
+    && previousDetails.relativePath === nextDetails.relativePath
+    && previousDetails.baseContent === nextDetails.baseContent
+    && previousDetails.oursContent === nextDetails.oursContent
+    && previousDetails.theirsContent === nextDetails.theirsContent
+    && previousDetails.mergedContent === nextDetails.mergedContent
+    && previousDetails.language === nextDetails.language;
+}
+
 function areRunSessionsEqual(previousSessions: CodePaneRunSession[], nextSessions: CodePaneRunSession[]): boolean {
   if (previousSessions.length !== nextSessions.length) {
     return false;
@@ -7257,8 +7388,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const loadSelectedGitCommitDetails = useCallback(async (commitSha: string) => {
-    setIsGitCommitDetailsLoading(true);
-    setGitCommitDetailsError(null);
+    setIsGitCommitDetailsLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setGitCommitDetailsError((currentError) => (currentError === null ? currentError : null));
     try {
       const response = await trackRequest(
         `git-commit-details:${rootPath}`,
@@ -7272,19 +7403,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (!response.success || !response.data) {
         throw new Error(response.error || t('common.retry'));
       }
-      setSelectedGitCommitDetails(response.data);
-      setComparedGitCommits(null);
+      const nextDetails = response.data;
+      setSelectedGitCommitDetails((currentDetails) => (
+        areGitCommitDetailsEqual(currentDetails, nextDetails) ? currentDetails : nextDetails
+      ));
+      setComparedGitCommits((currentComparison) => (currentComparison === null ? currentComparison : null));
     } catch (error) {
-      setGitCommitDetailsError(error instanceof Error ? error.message : t('common.retry'));
-      setSelectedGitCommitDetails(null);
+      const nextError = error instanceof Error ? error.message : t('common.retry');
+      setGitCommitDetailsError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
+      setSelectedGitCommitDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
     } finally {
-      setIsGitCommitDetailsLoading(false);
+      setIsGitCommitDetailsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
     }
   }, [rootPath, t, trackRequest]);
 
   const compareSelectedGitCommits = useCallback(async (baseCommitSha: string, targetCommitSha: string) => {
-    setIsGitCommitDetailsLoading(true);
-    setGitCommitDetailsError(null);
+    setIsGitCommitDetailsLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setGitCommitDetailsError((currentError) => (currentError === null ? currentError : null));
     try {
       const response = await trackRequest(
         `git-compare:${rootPath}`,
@@ -7299,13 +7436,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (!response.success || !response.data) {
         throw new Error(response.error || t('common.retry'));
       }
-      setComparedGitCommits(response.data);
-      setSelectedGitCommitDetails(null);
+      const nextComparison = response.data;
+      setComparedGitCommits((currentComparison) => (
+        areGitCompareCommitsEqual(currentComparison, nextComparison) ? currentComparison : nextComparison
+      ));
+      setSelectedGitCommitDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
     } catch (error) {
-      setGitCommitDetailsError(error instanceof Error ? error.message : t('common.retry'));
-      setComparedGitCommits(null);
+      const nextError = error instanceof Error ? error.message : t('common.retry');
+      setGitCommitDetailsError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
+      setComparedGitCommits((currentComparison) => (currentComparison === null ? currentComparison : null));
     } finally {
-      setIsGitCommitDetailsLoading(false);
+      setIsGitCommitDetailsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
     }
   }, [rootPath, t, trackRequest]);
 
@@ -8528,25 +8671,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const loadGitRebasePlan = useCallback(async (baseRef: string) => {
     if (!baseRef) {
-      setGitRebasePlan(null);
-      setGitRebaseError(null);
-      setIsGitRebaseLoading(false);
+      setGitRebasePlan((currentPlan) => (currentPlan === null ? currentPlan : null));
+      setGitRebaseError((currentError) => (currentError === null ? currentError : null));
+      setIsGitRebaseLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
     const cachedRebasePlan = getGitRebasePlanCache(rootPath, baseRef);
     if (cachedRebasePlan) {
-      setGitRebaseError(null);
-      setIsGitRebaseLoading(false);
+      setGitRebaseError((currentError) => (currentError === null ? currentError : null));
+      setIsGitRebaseLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       startTransition(() => {
-        setGitRebasePlan(cachedRebasePlan);
-        setGitRebaseBaseRef(cachedRebasePlan.baseRef);
+        setGitRebasePlan((currentPlan) => (
+          areGitRebasePlansEqual(currentPlan, cachedRebasePlan) ? currentPlan : cachedRebasePlan
+        ));
+        setGitRebaseBaseRef((currentBaseRef) => (
+          currentBaseRef === cachedRebasePlan.baseRef ? currentBaseRef : cachedRebasePlan.baseRef
+        ));
       });
       return;
     }
 
-    setIsGitRebaseLoading(true);
-    setGitRebaseError(null);
+    setIsGitRebaseLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setGitRebaseError((currentError) => (currentError === null ? currentError : null));
     const response = await dedupeProjectRequest(
       rootPath,
       `git-rebase-plan:${baseRef}`,
@@ -8557,48 +8704,60 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
 
     if (!response.success || !response.data) {
-      setGitRebasePlan(null);
-      setGitRebaseError(response.error || t('common.retry'));
-      setIsGitRebaseLoading(false);
+      const nextError = response.error || t('common.retry');
+      setGitRebasePlan((currentPlan) => (currentPlan === null ? currentPlan : null));
+      setGitRebaseError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
+      setIsGitRebaseLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
     const rebasePlan = response.data;
     setGitRebasePlanCache(rootPath, baseRef, rebasePlan);
     startTransition(() => {
-      setGitRebasePlan(rebasePlan);
-      setGitRebaseBaseRef(rebasePlan.baseRef);
+      setGitRebasePlan((currentPlan) => (
+        areGitRebasePlansEqual(currentPlan, rebasePlan) ? currentPlan : rebasePlan
+      ));
+      setGitRebaseBaseRef((currentBaseRef) => (
+        currentBaseRef === rebasePlan.baseRef ? currentBaseRef : rebasePlan.baseRef
+      ));
     });
-    setIsGitRebaseLoading(false);
+    setIsGitRebaseLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [rootPath, t]);
 
   const loadGitConflictDetails = useCallback(async (filePath: string | null) => {
     if (!filePath) {
-      setGitConflictDetails(null);
-      setGitConflictError(null);
-      setIsGitConflictLoading(false);
+      setGitConflictDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
+      setGitConflictError((currentError) => (currentError === null ? currentError : null));
+      setIsGitConflictLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
-    setIsGitConflictLoading(true);
-    setGitConflictError(null);
+    setIsGitConflictLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setGitConflictError((currentError) => (currentError === null ? currentError : null));
     const response = await window.electronAPI.codePaneGetGitConflictDetails({
       rootPath,
       filePath,
     });
 
     if (!response.success || !response.data) {
-      setGitConflictDetails(null);
-      setGitConflictError(response.error || t('common.retry'));
-      setIsGitConflictLoading(false);
+      const nextError = response.error || t('common.retry');
+      setGitConflictDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
+      setGitConflictError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
+      setIsGitConflictLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
     startTransition(() => {
-      setSelectedGitConflictPath(filePath);
-      setGitConflictDetails(response.data ?? null);
+      setSelectedGitConflictPath((currentPath) => (currentPath === filePath ? currentPath : filePath));
+      setGitConflictDetails((currentDetails) => (
+        areGitConflictDetailsEqual(currentDetails, response.data ?? null) ? currentDetails : (response.data ?? null)
+      ));
     });
-    setIsGitConflictLoading(false);
+    setIsGitConflictLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [rootPath, t]);
 
   const loadGitDiffHunks = useCallback(async (filePath: string | null) => {
