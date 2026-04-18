@@ -2910,6 +2910,63 @@ function areNavigationAvailabilitiesEqual(
     && previousAvailability.canNavigateForward === nextAvailability.canNavigateForward;
 }
 
+function areStringSetsEqual(previousValues: Set<string>, nextValues: Set<string>): boolean {
+  if (previousValues.size !== nextValues.size) {
+    return false;
+  }
+
+  for (const value of previousValues) {
+    if (!nextValues.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areTreeEntriesByDirectoryEqual(
+  previousEntries: Record<string, CodePaneTreeEntry[]>,
+  nextEntries: Record<string, CodePaneTreeEntry[]>,
+): boolean {
+  const previousPaths = Object.keys(previousEntries);
+  const nextPaths = Object.keys(nextEntries);
+  if (previousPaths.length !== nextPaths.length) {
+    return false;
+  }
+
+  for (const directoryPath of previousPaths) {
+    const currentEntries = previousEntries[directoryPath];
+    const candidateEntries = nextEntries[directoryPath];
+    if (!candidateEntries || !areTreeEntriesEqual(currentEntries ?? [], candidateEntries)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areIndexStatusesEqual(
+  previousStatus: CodePaneIndexStatus | null,
+  nextStatus: CodePaneIndexStatus | null,
+): boolean {
+  if (previousStatus === nextStatus) {
+    return true;
+  }
+
+  if (!previousStatus || !nextStatus) {
+    return false;
+  }
+
+  return previousStatus.paneId === nextStatus.paneId
+    && previousStatus.rootPath === nextStatus.rootPath
+    && previousStatus.state === nextStatus.state
+    && previousStatus.processedDirectoryCount === nextStatus.processedDirectoryCount
+    && previousStatus.totalDirectoryCount === nextStatus.totalDirectoryCount
+    && previousStatus.indexedFileCount === nextStatus.indexedFileCount
+    && previousStatus.reusedPersistedIndex === nextStatus.reusedPersistedIndex
+    && (previousStatus.error ?? '') === (nextStatus.error ?? '');
+}
+
 type ActionInputDialogState =
   | {
     kind: 'rename-symbol';
@@ -9082,14 +9139,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const cachedBranches = getGitBranchesCache(rootPath);
     if (cachedBranches) {
-      setGitBranchesError(null);
-      setIsGitBranchesLoading(false);
+      setGitBranchesError((currentError) => (currentError === null ? currentError : null));
+      setIsGitBranchesLoading((currentLoading) => (currentLoading ? false : currentLoading));
       commitBranches(cachedBranches);
       return;
     }
 
-    setIsGitBranchesLoading(true);
-    setGitBranchesError(null);
+    setIsGitBranchesLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setGitBranchesError((currentError) => (currentError === null ? currentError : null));
 
     const response = await dedupeProjectRequest(
       rootPath,
@@ -9097,16 +9154,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       async () => await window.electronAPI.codePaneGetGitBranches({ rootPath }),
     );
     if (!response.success || !response.data) {
-      setGitBranches([]);
-      setGitBranchesError(response.error || t('common.retry'));
-      setIsGitBranchesLoading(false);
+      setGitBranches((currentBranches) => (currentBranches.length === 0 ? currentBranches : []));
+      setGitBranchesError((currentError) => {
+        const nextError = response.error || t('common.retry');
+        return currentError === nextError ? currentError : nextError;
+      });
+      setIsGitBranchesLoading((currentLoading) => (currentLoading ? false : currentLoading));
       return;
     }
 
     const branches = response.data;
     setGitBranchesCache(rootPath, branches);
     commitBranches(branches);
-    setIsGitBranchesLoading(false);
+    setIsGitBranchesLoading((currentLoading) => (currentLoading ? false : currentLoading));
   }, [rootPath, t]);
 
   const selectGitLogCommit = useCallback((commitSha: string, event?: { metaKey?: boolean; ctrlKey?: boolean }) => {
@@ -9339,12 +9399,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       commitDirectoryEntries(cachedEntries);
 
       if (directoryPath === rootPath) {
-        setTreeLoadError(null);
+        setTreeLoadError((currentError) => (currentError === null ? currentError : null));
       }
     }
 
     if (showLoadingIndicator) {
       setLoadingDirectories((currentLoadingDirectories) => {
+        if (currentLoadingDirectories.has(directoryPath)) {
+          return currentLoadingDirectories;
+        }
+
         const nextLoadingDirectories = new Set(currentLoadingDirectories);
         nextLoadingDirectories.add(directoryPath);
         return nextLoadingDirectories;
@@ -9385,7 +9449,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (nextEntries.length > 0 || hasCachedEntries || directoryPath === rootPath) {
       if (directoryPath === rootPath && !didRequestFail) {
-        setTreeLoadError(null);
+        setTreeLoadError((currentError) => (currentError === null ? currentError : null));
       }
 
       commitDirectoryEntries(nextEntries);
@@ -9393,6 +9457,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (showLoadingIndicator) {
       setLoadingDirectories((currentLoadingDirectories) => {
+        if (!currentLoadingDirectories.has(directoryPath)) {
+          return currentLoadingDirectories;
+        }
+
         const nextLoadingDirectories = new Set(currentLoadingDirectories);
         nextLoadingDirectories.delete(directoryPath);
         return nextLoadingDirectories;
@@ -14887,11 +14955,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       startTransition(() => {
         if (payload.state === 'ready') {
-          setIndexStatus(null);
+          setIndexStatus((currentStatus) => (currentStatus === null ? currentStatus : null));
           return;
         }
 
-        setIndexStatus(payload);
+        setIndexStatus((currentStatus) => (
+          areIndexStatusesEqual(currentStatus, payload) ? currentStatus : payload
+        ));
       });
     };
 
@@ -15050,15 +15120,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       if (cachedRootEntries) {
         startTransition(() => {
-          compactDirectoryPresentationsCacheRef.current.clear();
-          setTreeEntriesByDirectory({
+          const nextTreeEntriesByDirectory = {
             [rootPath]: cachedRootEntries,
             ...cachedExpandedDirectoryEntries,
-          });
-          setLoadedDirectories(new Set(cachedDirectoryPaths));
-          setLoadingDirectories(new Set());
+          };
+          compactDirectoryPresentationsCacheRef.current.clear();
+          setTreeEntriesByDirectory((currentEntries) => (
+            areTreeEntriesByDirectoryEqual(currentEntries, nextTreeEntriesByDirectory)
+              ? currentEntries
+              : nextTreeEntriesByDirectory
+          ));
+          setLoadedDirectories((currentDirectories) => (
+            areStringSetsEqual(currentDirectories, cachedDirectoryPaths)
+              ? currentDirectories
+              : new Set(cachedDirectoryPaths)
+          ));
+          setLoadingDirectories((currentDirectories) => (
+            currentDirectories.size === 0 ? currentDirectories : new Set()
+          ));
         });
-        setIsBootstrapping(false);
+        setIsBootstrapping((currentBootstrapping) => (currentBootstrapping ? false : currentBootstrapping));
       }
 
       try {
@@ -15084,7 +15165,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             return;
           }
 
-          setIndexStatus({
+          const nextIndexStatus = {
             paneId: pane.id,
             rootPath,
             state: 'error',
@@ -15093,13 +15174,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
             indexedFileCount: 0,
             reusedPersistedIndex: false,
             error: response.error || t('codePane.indexingFailed'),
-          });
+          };
+          setIndexStatus((currentStatus) => (
+            areIndexStatusesEqual(currentStatus, nextIndexStatus) ? currentStatus : nextIndexStatus
+          ));
         }).catch((error) => {
           if (!mounted) {
             return;
           }
 
-          setIndexStatus({
+          const nextIndexStatus = {
             paneId: pane.id,
             rootPath,
             state: 'error',
@@ -15108,7 +15192,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
             indexedFileCount: 0,
             reusedPersistedIndex: false,
             error: error instanceof Error ? error.message : t('codePane.indexingFailed'),
-          });
+          };
+          setIndexStatus((currentStatus) => (
+            areIndexStatusesEqual(currentStatus, nextIndexStatus) ? currentStatus : nextIndexStatus
+          ));
         });
 
         const nestedExpandedDirectories: string[] = [];
@@ -15133,7 +15220,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
 
         if (mounted && cachedRootEntries === null) {
-          setIsBootstrapping(false);
+          setIsBootstrapping((currentBootstrapping) => (currentBootstrapping ? false : currentBootstrapping));
         }
 
         void refreshProjectBootstrapCachesRef.current().catch((error) => {
@@ -15152,7 +15239,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       if (mounted && isBootstrapping) {
-        setIsBootstrapping(false);
+        setIsBootstrapping((currentBootstrapping) => (currentBootstrapping ? false : currentBootstrapping));
       }
     };
 
