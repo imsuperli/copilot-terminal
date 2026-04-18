@@ -67,7 +67,9 @@ import type {
   CodePaneDebugSessionChangedPayload,
   CodePaneDebugSessionDetails,
   CodePaneDebugSessionOutputPayload,
+  CodePaneDebugScope,
   CodePaneDebugStackFrame,
+  CodePaneDebugVariable,
   CodePaneExternalLibrarySection,
   CodePaneGitDiffHunk,
   CodePaneGitBranchEntry,
@@ -5725,6 +5727,163 @@ function areDebugSessionsEqual(previousSessions: CodePaneDebugSession[], nextSes
       || previousSession?.currentFrame?.filePath !== nextSession?.currentFrame?.filePath
       || previousSession?.currentFrame?.lineNumber !== nextSession?.currentFrame?.lineNumber
       || previousSession?.currentFrame?.column !== nextSession?.currentFrame?.column
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function prependRecentSession<T extends { id: string }>(
+  currentSessions: T[],
+  nextSession: T,
+  areEqual: (previousSessions: T[], nextSessions: T[]) => boolean,
+): T[] {
+  const nextSessions = [nextSession];
+  for (const session of currentSessions) {
+    if (session.id !== nextSession.id) {
+      nextSessions.push(session);
+    }
+  }
+
+  const limitedSessions = nextSessions.slice(0, 20);
+  return areEqual(currentSessions, limitedSessions) ? currentSessions : limitedSessions;
+}
+
+function areRunTargetsEqual(previousTargets: CodePaneRunTarget[], nextTargets: CodePaneRunTarget[]): boolean {
+  if (previousTargets.length !== nextTargets.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousTargets.length; index += 1) {
+    const previousTarget = previousTargets[index];
+    const nextTarget = nextTargets[index];
+    const previousCustomization = previousTarget?.customization;
+    const nextCustomization = nextTarget?.customization;
+    if (
+      previousTarget?.id !== nextTarget?.id
+      || previousTarget?.label !== nextTarget?.label
+      || previousTarget?.detail !== nextTarget?.detail
+      || previousTarget?.kind !== nextTarget?.kind
+      || previousTarget?.languageId !== nextTarget?.languageId
+      || previousTarget?.workingDirectory !== nextTarget?.workingDirectory
+      || previousTarget?.filePath !== nextTarget?.filePath
+      || previousTarget?.canDebug !== nextTarget?.canDebug
+      || previousTarget?.debugRequest !== nextTarget?.debugRequest
+      || (
+        previousCustomization
+          ? (!nextCustomization || !areRunTargetCustomizationsEqual(previousCustomization, nextCustomization))
+          : Boolean(nextCustomization)
+      )
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areDebugStackFramesEqual(
+  previousFrames: CodePaneDebugStackFrame[],
+  nextFrames: CodePaneDebugStackFrame[],
+): boolean {
+  if (previousFrames.length !== nextFrames.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousFrames.length; index += 1) {
+    const previousFrame = previousFrames[index];
+    const nextFrame = nextFrames[index];
+    if (
+      previousFrame?.id !== nextFrame?.id
+      || previousFrame?.name !== nextFrame?.name
+      || previousFrame?.filePath !== nextFrame?.filePath
+      || previousFrame?.lineNumber !== nextFrame?.lineNumber
+      || previousFrame?.column !== nextFrame?.column
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areDebugVariablesEqual(
+  previousVariables: CodePaneDebugVariable[],
+  nextVariables: CodePaneDebugVariable[],
+): boolean {
+  if (previousVariables.length !== nextVariables.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousVariables.length; index += 1) {
+    const previousVariable = previousVariables[index];
+    const nextVariable = nextVariables[index];
+    if (
+      previousVariable?.id !== nextVariable?.id
+      || previousVariable?.name !== nextVariable?.name
+      || previousVariable?.value !== nextVariable?.value
+      || previousVariable?.type !== nextVariable?.type
+      || previousVariable?.evaluateName !== nextVariable?.evaluateName
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areDebugScopesEqual(previousScopes: CodePaneDebugScope[], nextScopes: CodePaneDebugScope[]): boolean {
+  if (previousScopes.length !== nextScopes.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousScopes.length; index += 1) {
+    const previousScope = previousScopes[index];
+    const nextScope = nextScopes[index];
+    if (
+      previousScope?.id !== nextScope?.id
+      || previousScope?.name !== nextScope?.name
+      || !areDebugVariablesEqual(previousScope?.variables ?? [], nextScope?.variables ?? [])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areDebugSessionDetailsEqual(
+  previousDetails: CodePaneDebugSessionDetails | null,
+  nextDetails: CodePaneDebugSessionDetails | null,
+): boolean {
+  if (previousDetails === nextDetails) {
+    return true;
+  }
+
+  if (!previousDetails || !nextDetails) {
+    return false;
+  }
+
+  return previousDetails.sessionId === nextDetails.sessionId
+    && areDebugStackFramesEqual(previousDetails.stackFrames, nextDetails.stackFrames)
+    && areDebugScopesEqual(previousDetails.scopes, nextDetails.scopes);
+}
+
+function areDebugWatchEntriesEqual(previousEntries: DebugWatchEntry[], nextEntries: DebugWatchEntry[]): boolean {
+  if (previousEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousEntries.length; index += 1) {
+    const previousEntry = previousEntries[index];
+    const nextEntry = nextEntries[index];
+    if (
+      previousEntry?.id !== nextEntry?.id
+      || previousEntry?.expression !== nextEntry?.expression
+      || previousEntry?.value !== nextEntry?.value
+      || previousEntry?.error !== nextEntry?.error
     ) {
       return false;
     }
@@ -17220,13 +17379,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       setRunSessions((currentSessions) => {
-        const nextSessions = [payload.session];
-        for (const session of currentSessions) {
-          if (session.id !== payload.session.id) {
-            nextSessions.push(session);
-          }
-        }
-        return nextSessions.slice(0, 20);
+        return prependRecentSession(currentSessions, payload.session, areRunSessionsEqual);
       });
       setSelectedRunSessionId((currentSelectedSessionId) => (
         currentSelectedSessionId ?? payload.session.id
@@ -17263,18 +17416,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       setDebugSessions((currentSessions) => {
-        const nextSessions = [payload.session];
-        for (const session of currentSessions) {
-          if (session.id !== payload.session.id) {
-            nextSessions.push(session);
-          }
-        }
-        return nextSessions.slice(0, 20);
+        return prependRecentSession(currentSessions, payload.session, areDebugSessionsEqual);
       });
       setSelectedDebugSessionId((currentSelectedSessionId) => (
         currentSelectedSessionId ?? payload.session.id
       ));
-      if (payload.session.state === 'paused' || payload.session.state === 'stopped' || payload.session.state === 'error') {
+      const shouldLoadSelectedSessionDetails = selectedDebugSessionIdRef.current === null
+        || selectedDebugSessionIdRef.current === payload.session.id;
+      if (
+        shouldLoadSelectedSessionDetails
+        && (payload.session.state === 'paused' || payload.session.state === 'stopped' || payload.session.state === 'error')
+      ) {
         void loadDebugSessionDetailsRef.current(payload.session.id);
       }
     };
@@ -17520,8 +17672,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [runSelectedCodeAction]);
 
   const loadRunTargets = useCallback(async () => {
-    setIsRunTargetsLoading(true);
-    setRunTargetsError(null);
+    setIsRunTargetsLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setRunTargetsError((currentError) => (currentError === null ? currentError : null));
 
     const response = await trackRequest(
       `run-targets:${rootPath}`,
@@ -17533,18 +17685,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }),
     );
 
-    setRunTargets(response.success ? (response.data ?? []) : []);
-    setRunTargetsError(response.success ? null : (response.error || t('common.retry')));
-    setIsRunTargetsLoading(false);
+    const nextTargets = response.success ? (response.data ?? []) : [];
+    const nextError = response.success ? null : (response.error || t('common.retry'));
+    setRunTargets((currentTargets) => (
+      areRunTargetsEqual(currentTargets, nextTargets) ? currentTargets : nextTargets
+    ));
+    setRunTargetsError((currentError) => (
+      currentError === nextError ? currentError : nextError
+    ));
+    setIsRunTargetsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [rootPath, t, trackRequest]);
 
   const loadDebugSessionDetails = useCallback(async (sessionId: string | null) => {
     if (!sessionId) {
-      setDebugSessionDetails(null);
+      setDebugSessionDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
       return;
     }
 
-    setIsDebugDetailsLoading(true);
+    setIsDebugDetailsLoading((currentLoading) => (currentLoading ? currentLoading : true));
     const response = await trackRequest(
       `debug-details:${sessionId}`,
       'Debug session details',
@@ -17553,8 +17711,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
         sessionId,
       }),
     );
-    setDebugSessionDetails(response.success ? (response.data ?? null) : null);
-    setIsDebugDetailsLoading(false);
+    const nextDetails = response.success ? (response.data ?? null) : null;
+    setDebugSessionDetails((currentDetails) => (
+      areDebugSessionDetailsEqual(currentDetails, nextDetails) ? currentDetails : nextDetails
+    ));
+    setIsDebugDetailsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [trackRequest]);
 
   useEffect(() => {
@@ -17826,7 +17987,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const targetSession = sessionOverride ?? selectedDebugSession;
     const expressions = expressionsOverride ?? watchExpressions;
     if (expressions.length === 0) {
-      setWatchEntries([]);
+      setWatchEntries((currentEntries) => (currentEntries.length === 0 ? currentEntries : []));
       return;
     }
 
@@ -17844,7 +18005,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             expression,
           });
         }
-        return nextEntries;
+        return areDebugWatchEntriesEqual(currentEntries, nextEntries) ? currentEntries : nextEntries;
       });
       return;
     }
@@ -17872,7 +18033,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       })());
     }
     const nextEntries = await Promise.all(evaluationRequests);
-    setWatchEntries(nextEntries);
+    setWatchEntries((currentEntries) => (
+      areDebugWatchEntriesEqual(currentEntries, nextEntries) ? currentEntries : nextEntries
+    ));
   }, [selectedDebugSession, t, watchExpressions]);
 
   const addDebugWatchExpression = useCallback(async (expression: string) => {
@@ -17901,7 +18064,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           nextEntries.push(entry);
         }
       }
-      return nextEntries;
+      return areDebugWatchEntriesEqual(currentEntries, nextEntries) ? currentEntries : nextEntries;
     });
   }, [persistWatchExpressions, watchExpressions]);
 
@@ -18298,7 +18461,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [selectedDebugSession]);
 
   useEffect(() => {
-    setDebugEvaluations([]);
+    setDebugEvaluations((currentEvaluations) => (
+      currentEvaluations.length === 0 ? currentEvaluations : []
+    ));
   }, [selectedDebugSessionId]);
 
   useEffect(() => {
