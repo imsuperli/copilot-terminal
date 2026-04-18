@@ -2112,7 +2112,17 @@ function getGitEntrySections(entry: CodePaneGitStatusEntry): GitChangeSection[] 
     sections.push(entry.status === 'untracked' ? 'untracked' : 'unstaged');
   }
 
-  return Array.from(new Set(sections));
+  if (sections.length <= 1) {
+    return sections;
+  }
+
+  const uniqueSections: GitChangeSection[] = [];
+  for (const section of sections) {
+    if (!uniqueSections.includes(section)) {
+      uniqueSections.push(section);
+    }
+  }
+  return uniqueSections;
 }
 
 function getDirectoryLabel(relativePath: string): string {

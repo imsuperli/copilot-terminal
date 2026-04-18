@@ -6269,9 +6269,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
     ));
   }, []);
 
-  const getPersistedExpandedPaths = useCallback((paths: Set<string>) => (
-    Array.from(paths).filter((directoryPath) => isPathInside(rootPath, directoryPath))
-  ), [rootPath]);
+  const getPersistedExpandedPaths = useCallback((paths: Set<string>) => {
+    const persistedPaths: string[] = [];
+    for (const directoryPath of paths) {
+      if (isPathInside(rootPath, directoryPath)) {
+        persistedPaths.push(directoryPath);
+      }
+    }
+    return persistedPaths;
+  }, [rootPath]);
 
   const persistDebugBreakpoints = useCallback((nextBreakpoints: CodePaneBreakpoint[]) => {
     const normalizedBreakpoints = normalizeBreakpoints(nextBreakpoints);
@@ -6314,9 +6320,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (areOpenFilesEqual(currentOpenFiles, nextOpenFiles)) {
       return currentOpenFiles;
     }
-    previewOpenFilePathsRef.current = new Set(nextOpenFiles
-      .filter((tab) => tab.preview)
-      .map((tab) => tab.path));
+    const nextPreviewOpenFilePaths = new Set<string>();
+    for (const tab of nextOpenFiles) {
+      if (tab.preview) {
+        nextPreviewOpenFilePaths.add(tab.path);
+      }
+    }
+    previewOpenFilePathsRef.current = nextPreviewOpenFilePaths;
     persistCodeState({
       openFiles: nextOpenFiles,
     });
@@ -6688,12 +6698,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-      const nextProblems = Array.from(fileModelsRef.current.values())
-      .flatMap((model) => monaco.editor.getModelMarkers({ resource: model.uri }).map((marker) => ({
-        ...marker,
-        filePath: model.uri.fsPath || model.uri.path,
-      })))
-      .sort((left, right) => {
+    const nextProblems: Array<MonacoMarker & { filePath: string }> = [];
+    for (const model of fileModelsRef.current.values()) {
+      const filePath = model.uri.fsPath || model.uri.path;
+      for (const marker of monaco.editor.getModelMarkers({ resource: model.uri })) {
+        nextProblems.push({
+          ...marker,
+          filePath,
+        });
+      }
+    }
+    nextProblems.sort((left, right) => {
         if (left.severity !== right.severity) {
           return right.severity - left.severity;
         }
@@ -12914,7 +12929,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       nextChangesByPath.set(normalizedPath, normalizedChange);
     }
 
-    return Array.from(nextChangesByPath.values());
+    return [...nextChangesByPath.values()];
   }, []);
 
   const shouldFlushFsChangesImmediately = useCallback((changes: CodePaneFsChange[]) => (
@@ -13799,12 +13814,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const visibleLocalHistoryEntries = useMemo(() => {
-    const sourceEntries = activeFilePath
-      ? (localHistoryEntriesRef.current.get(activeFilePath) ?? [])
-      : Array.from(localHistoryEntriesRef.current.values()).flat();
-    return [...sourceEntries]
-      .sort((left, right) => right.timestamp - left.timestamp)
-      .slice(0, 24);
+    const sourceEntries: LocalHistoryEntry[] = [];
+    if (activeFilePath) {
+      sourceEntries.push(...(localHistoryEntriesRef.current.get(activeFilePath) ?? []));
+    } else {
+      for (const entries of localHistoryEntriesRef.current.values()) {
+        sourceEntries.push(...entries);
+      }
+    }
+
+    sourceEntries.sort((left, right) => right.timestamp - left.timestamp);
+    if (sourceEntries.length > 24) {
+      sourceEntries.length = 24;
+    }
+    return sourceEntries;
   }, [activeFilePath, localHistoryVersion]);
 
   const activePerformanceTasks = useMemo(() => {

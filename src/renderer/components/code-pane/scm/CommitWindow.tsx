@@ -438,7 +438,13 @@ export const CommitWindow = React.memo(function CommitWindow({
   const toggleSelectedGroup = useCallback((groupEntries: CommitWindowEntry[]) => {
     setSelectedPaths((currentSelectedPaths) => {
       const currentSelectedPathSet = new Set(currentSelectedPaths);
-      const shouldSelectGroup = groupEntries.some((entry) => !currentSelectedPathSet.has(entry.path));
+      let shouldSelectGroup = false;
+      for (const entry of groupEntries) {
+        if (!currentSelectedPathSet.has(entry.path)) {
+          shouldSelectGroup = true;
+          break;
+        }
+      }
 
       if (shouldSelectGroup) {
         const nextSelectedPathSet = new Set(currentSelectedPaths);
@@ -446,7 +452,7 @@ export const CommitWindow = React.memo(function CommitWindow({
           nextSelectedPathSet.add(entry.path);
         }
 
-        return Array.from(nextSelectedPathSet);
+        return [...nextSelectedPathSet];
       }
 
       const groupPathSet = new Set<string>();
