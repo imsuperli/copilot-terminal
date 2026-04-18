@@ -186,6 +186,7 @@ type MonacoEditor = import('monaco-editor').editor.IStandaloneCodeEditor;
 type MonacoDiffEditor = import('monaco-editor').editor.IStandaloneDiffEditor;
 type MonacoModel = import('monaco-editor').editor.ITextModel;
 type MonacoDisposable = import('monaco-editor').IDisposable;
+type MonacoUri = import('monaco-editor').Uri;
 type MonacoViewState = import('monaco-editor').editor.ICodeEditorViewState | null;
 type MonacoMarker = import('monaco-editor').editor.IMarker;
 type MonacoRange = import('monaco-editor').IRange;
@@ -5591,6 +5592,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const modelDisposersRef = useRef(new Map<string, MonacoDisposable>());
   const fileMetaRef = useRef(new Map<string, FileRuntimeMeta>());
   const modelFilePathRef = useRef(new Map<string, string>());
+  const problemsByFileRef = useRef(new Map<string, Array<MonacoMarker & { filePath: string }>>());
   const preloadedReadResultsRef = useRef(new Map<string, CodePaneReadFileResult>());
   const viewStatesRef = useRef(new Map<string, MonacoViewState>());
   const secondaryViewStatesRef = useRef(new Map<string, MonacoViewState>());
@@ -6775,23 +6777,57 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return undefined;
   }, [gitDirectoryStatusByPath, gitStatusByPath]);
 
-  const refreshProblems = useCallback(() => {
+  const refreshProblems = useCallback((filePaths?: Iterable<string> | null) => {
     const monaco = monacoRef.current;
     if (!monaco) {
+      problemsByFileRef.current.clear();
       setProblems((currentProblems) => (
         currentProblems.length === 0 ? currentProblems : []
       ));
       return;
     }
 
-    const nextProblems: Array<MonacoMarker & { filePath: string }> = [];
-    for (const model of fileModelsRef.current.values()) {
-      const filePath = model.uri.fsPath || model.uri.path;
-      for (const marker of monaco.editor.getModelMarkers({ resource: model.uri })) {
-        nextProblems.push({
+    const nextProblemsByFile = filePaths
+      ? new Map(problemsByFileRef.current)
+      : new Map<string, Array<MonacoMarker & { filePath: string }>>();
+    if (filePaths) {
+      for (const filePath of filePaths) {
+        if (!filePath) {
+          continue;
+        }
+
+        const model = fileModelsRef.current.get(filePath);
+        if (!model) {
+          nextProblemsByFile.delete(filePath);
+          continue;
+        }
+
+        const nextFileProblems = monaco.editor.getModelMarkers({ resource: model.uri }).map((marker) => ({
           ...marker,
           filePath,
-        });
+        }));
+        if (nextFileProblems.length === 0) {
+          nextProblemsByFile.delete(filePath);
+        } else {
+          nextProblemsByFile.set(filePath, nextFileProblems);
+        }
+      }
+    } else {
+      for (const [filePath, model] of fileModelsRef.current.entries()) {
+        const nextFileProblems = monaco.editor.getModelMarkers({ resource: model.uri }).map((marker) => ({
+          ...marker,
+          filePath,
+        }));
+        if (nextFileProblems.length > 0) {
+          nextProblemsByFile.set(filePath, nextFileProblems);
+        }
+      }
+    }
+
+    const nextProblems: Array<MonacoMarker & { filePath: string }> = [];
+    for (const fileProblems of nextProblemsByFile.values()) {
+      for (const problem of fileProblems) {
+        nextProblems.push(problem);
       }
     }
     nextProblems.sort((left, right) => {
@@ -6810,6 +6846,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return left.startColumn - right.startColumn;
       });
 
+    problemsByFileRef.current = nextProblemsByFile;
     startTransition(() => {
       setProblems((currentProblems) => (
         areProblemListsEqual(currentProblems, nextProblems) ? currentProblems : nextProblems
@@ -6822,8 +6859,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    markerListenerRef.current = monaco.editor.onDidChangeMarkers(() => {
-      refreshProblems();
+    markerListenerRef.current = monaco.editor.onDidChangeMarkers((resources?: unknown) => {
+      if (!Array.isArray(resources) || resources.length === 0) {
+        refreshProblems();
+        return;
+      }
+      const changedFilePaths = new Set<string>();
+      for (const resource of resources) {
+        if (!resource || typeof resource !== 'object' || !('path' in resource)) {
+          refreshProblems();
+          return;
+        }
+        const filePath = modelFilePathRef.current.get(resource.path)
+          ?? ('fsPath' in resource ? resource.fsPath : undefined)
+          ?? resource.path;
+        if (filePath) {
+          changedFilePaths.add(filePath);
+        }
+      }
+      refreshProblems(changedFilePaths);
     });
   }, [refreshProblems]);
 
@@ -7362,6 +7416,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     fileMetaRef.current.clear();
     preloadedReadResultsRef.current.clear();
+    problemsByFileRef.current.clear();
     clearDefinitionLookupCache();
     viewStatesRef.current.clear();
     setProblems([]);
@@ -8348,7 +8403,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     markDirty(filePath, false);
     clearBannerForFile(filePath);
     if (!wasExistingModel) {
-      refreshProblems();
+      refreshProblems([filePath]);
       addLocalHistoryEntry(filePath, 'open', readResult.content);
       if (!readResult.readOnly) {
         void queueLanguageDocumentSync(filePath, 'open', async () => {
@@ -8359,7 +8414,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (didChangeContent || didChangeLanguage || previousMeta?.readOnly !== readResult.readOnly) {
-      refreshProblems();
+      refreshProblems([filePath]);
     }
     if (!readResult.readOnly && (didChangeContent || didChangeLanguage || previousMeta?.readOnly !== readResult.readOnly)) {
       void queueLanguageDocumentSync(filePath, 'change', async () => {
@@ -10959,11 +11014,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     fileModelsRef.current.delete(filePath);
     releaseDiffModelsForFile(filePath);
     fileMetaRef.current.delete(filePath);
+    problemsByFileRef.current.delete(filePath);
     preloadedReadResultsRef.current.delete(filePath);
     clearDefinitionLookupCache();
     viewStatesRef.current.delete(filePath);
     markDirty(filePath, false);
     clearBannerForFile(filePath);
+    refreshProblems([filePath]);
 
     const currentOpenFiles = sortOpenFilesByPinned(paneRef.current.code?.openFiles ?? openFiles);
     const currentActiveFilePath = paneRef.current.code?.activeFilePath ?? activeFilePath;
@@ -12625,6 +12682,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
       );
     }
     suppressModelEventsRef.current = nextSuppressModelEvents;
+
+    const nextProblemsByFile = new Map<string, Array<MonacoMarker & { filePath: string }>>();
+    for (const [candidatePath, entries] of problemsByFileRef.current.entries()) {
+      const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
+        ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+        : candidatePath;
+      nextProblemsByFile.set(
+        nextPath,
+        entries.map((entry) => (
+          nextPath === candidatePath
+            ? entry
+            : {
+                ...entry,
+                filePath: nextPath,
+              }
+        )),
+      );
+    }
+    problemsByFileRef.current = nextProblemsByFile;
 
     const nextExternalChangeEntries: ExternalChangeEntry[] = [];
     for (const entry of externalChangeEntriesRef.current) {
