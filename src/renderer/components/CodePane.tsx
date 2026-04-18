@@ -5746,6 +5746,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [problems, setProblems] = useState<Array<MonacoMarker & { filePath: string }>>([]);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [gitStatusEntries, setGitStatusEntries] = useState<CodePaneGitStatusEntry[]>(cachedGitStatusEntries);
   const [gitStatusByPath, setGitStatusByPath] = useState<Record<string, CodePaneGitStatusEntry>>(
     () => mapGitStatusEntriesByPath(cachedGitStatusEntries),
   );
@@ -5987,8 +5988,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [externalLibrarySections]);
 
   useEffect(() => {
+    gitStatusEntriesRef.current = gitStatusEntries;
     gitStatusByPathRef.current = gitStatusByPath;
-  }, [gitStatusByPath]);
+  }, [gitStatusByPath, gitStatusEntries]);
 
   useEffect(() => {
     gitBranchesRef.current = gitBranches;
@@ -6756,13 +6758,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, []);
 
-  const gitDirectoryStatusByPath = useMemo(() => {
-    const gitStatusEntries: CodePaneGitStatusEntry[] = [];
-    for (const entry of Object.values(gitStatusByPath)) {
-      gitStatusEntries.push(entry);
-    }
-    return collectGitDirectoryStatuses(rootPath, gitStatusEntries);
-  }, [gitStatusByPath, rootPath]);
+  const gitDirectoryStatusByPath = useMemo(
+    () => collectGitDirectoryStatuses(rootPath, gitStatusEntries),
+    [gitStatusEntries, rootPath],
+  );
 
   const getEntryStatus = useCallback((entryPath: string, entryType: CodePaneTreeEntry['type']) => {
     if (gitStatusByPath[entryPath]) {
@@ -7469,6 +7468,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     startTransition(() => {
+      setGitStatusEntries((currentEntries) => (
+        statusChanged ? nextStatusEntries : currentEntries
+      ));
       setGitStatusByPath((currentStatusByPath) => {
         if (!statusChanged || !nextStatusByPath) {
           return currentStatusByPath;
@@ -15408,13 +15410,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return nextGroups;
   }, [isSidebarVisible, searchPanelMode, sidebarMode, usageResults]);
 
-  const scmEntryValues = useMemo(() => {
-    const nextEntries: CodePaneGitStatusEntry[] = [];
-    for (const entry of Object.values(gitStatusByPath)) {
-      nextEntries.push(entry);
-    }
-    return nextEntries;
-  }, [gitStatusByPath]);
+  const scmEntryValues = gitStatusEntries;
   const shouldSortScmEntries = bottomPanelMode === 'git' || Boolean(commitWindowState) || (
     isSidebarVisible && sidebarMode === 'scm'
   );
@@ -17953,7 +17949,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const handleScmStageAll = useCallback(() => {
     const paths: string[] = [];
-    for (const entry of Object.values(gitStatusByPathRef.current)) {
+    for (const entry of gitStatusEntriesRef.current) {
       paths.push(entry.path);
     }
     if (paths.length > 0) {
