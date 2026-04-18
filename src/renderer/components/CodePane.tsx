@@ -11107,6 +11107,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const requestPath = getModelRequestPath(context.filePath);
     const requestKey = `quick-documentation:${requestPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${context.position.lineNumber}:${context.position.column}`;
+    const cachedResult = runtimeStoreRef.current.getCache<CodePaneHoverResult | null>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedResult) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Quick documentation', {
+        meta: `${getRelativePath(rootPath, context.filePath)}:${context.position.lineNumber}`,
+        fromCache: true,
+      });
+      setQuickDocumentation((currentResult) => (
+        areHoverResultsEqual(currentResult, cachedResult) ? currentResult : cachedResult
+      ));
+      setQuickDocumentationError((currentError) => (currentError === null ? currentError : null));
+      setIsQuickDocumentationLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
     setIsQuickDocumentationLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setQuickDocumentationError((currentError) => (currentError === null ? currentError : null));
 
@@ -11131,6 +11148,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       const nextResult = response.success ? (response.data ?? null) : null;
+      if (response.success) {
+        runtimeStoreRef.current.setCache(cacheKey, nextResult);
+      }
       const nextError = response.success ? null : (response.error || t('common.retry'));
       setQuickDocumentation((currentResult) => (
         areHoverResultsEqual(currentResult, nextResult) ? currentResult : nextResult
@@ -11216,6 +11236,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const requestKey = `document-symbols:${requestPath}`;
     const requestVersion = ++documentSymbolsRequestIdRef.current;
     const requestFilePath = context.filePath;
+    const cachedSymbols = runtimeStoreRef.current.getCache<CodePaneDocumentSymbol[]>(
+      requestKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedSymbols) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Document symbols', {
+        meta: getRelativePath(rootPath, context.filePath),
+        fromCache: true,
+      });
+      setDocumentSymbols((currentSymbols) => (
+        areDocumentSymbolListsEqual(currentSymbols, cachedSymbols) ? currentSymbols : cachedSymbols
+      ));
+      setDocumentSymbolsFilePath((currentFilePath) => (
+        currentFilePath === requestFilePath ? currentFilePath : requestFilePath
+      ));
+      setDocumentSymbolsError((currentError) => (currentError === null ? currentError : null));
+      setIsDocumentSymbolsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
     setIsDocumentSymbolsLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setDocumentSymbolsError((currentError) => (currentError === null ? currentError : null));
     setDocumentSymbolsFilePath((currentFilePath) => (
@@ -11239,6 +11278,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       const nextSymbols = response.success ? (response.data ?? []) : [];
+      if (response.success) {
+        runtimeStoreRef.current.setCache(requestKey, nextSymbols);
+      }
       const nextError = response.success ? null : (response.error || t('common.retry'));
       setDocumentSymbols((currentSymbols) => (
         areDocumentSymbolListsEqual(currentSymbols, nextSymbols) ? currentSymbols : nextSymbols
@@ -11317,12 +11359,27 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const requestPath = getModelRequestPath(context.filePath);
     const requestKey = `hierarchy:${mode}:${requestPath}`;
     const requestVersion = ++hierarchyRequestIdRef.current;
-    setIsHierarchyLoading((currentLoading) => (currentLoading ? currentLoading : true));
-    setHierarchyError((currentError) => (currentError === null ? currentError : null));
-
     const requestLabel = mode.startsWith('call')
       ? 'Call hierarchy'
       : 'Type hierarchy';
+    const cachedRootNode = runtimeStoreRef.current.getCache<HierarchyTreeNode | null>(
+      requestKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedRootNode) {
+      runtimeStoreRef.current.recordRequest(requestKey, requestLabel, {
+        meta: `${getRelativePath(rootPath, context.filePath)}:${context.position.lineNumber}`,
+        fromCache: true,
+      });
+      setHierarchyRootNode((currentNode) => (
+        areHierarchyTreeNodesEqual(currentNode, cachedRootNode) ? currentNode : cachedRootNode
+      ));
+      setHierarchyError((currentError) => (currentError === null ? currentError : null));
+      setIsHierarchyLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+    setIsHierarchyLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setHierarchyError((currentError) => (currentError === null ? currentError : null));
 
     try {
       const response = mode.startsWith('call')
@@ -11371,6 +11428,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const nextRootNode = hierarchyResult.root
         ? createHierarchyTreeNode(hierarchyResult.root, hierarchyResult.items)
         : null;
+      if (response.success) {
+        runtimeStoreRef.current.setCache(requestKey, nextRootNode);
+      }
       const nextError = response.success ? null : (response.error || t('common.retry'));
 
       setHierarchyRootNode((currentNode) => (
@@ -11610,6 +11670,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const requestKey = `semantic:${requestPath}`;
     const requestVersion = ++semanticRequestIdRef.current;
     const nextFileLabel = getRelativePath(rootPath, context.filePath);
+    const cachedSemanticResult = runtimeStoreRef.current.getCache<CodePaneSemanticTokensResult | null>(
+      requestKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedSemanticResult) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Semantic tokens', {
+        meta: getRelativePath(rootPath, context.filePath),
+        fromCache: true,
+      });
+      const nextSummary = summarizeSemanticTokens(cachedSemanticResult);
+      setSemanticLegend((currentLegend) => (
+        areSemanticLegendsEqual(currentLegend, cachedSemanticResult.legend) ? currentLegend : cachedSemanticResult.legend
+      ));
+      setSemanticSummary((currentSummary) => (
+        areSemanticSummaryEntriesEqual(currentSummary, nextSummary.summary) ? currentSummary : nextSummary.summary
+      ));
+      setSemanticTokenCount((currentCount) => (
+        currentCount === nextSummary.totalTokens ? currentCount : nextSummary.totalTokens
+      ));
+      setSemanticSummaryFileLabel((currentLabel) => (
+        currentLabel === nextFileLabel ? currentLabel : nextFileLabel
+      ));
+      setSemanticSummaryError((currentError) => (currentError === null ? currentError : null));
+      setIsSemanticSummaryLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
     setIsSemanticSummaryLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setSemanticSummaryError((currentError) => (currentError === null ? currentError : null));
     setSemanticSummaryFileLabel((currentLabel) => (
@@ -11635,6 +11721,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const semanticResult: CodePaneSemanticTokensResult | null = response.success
         ? (response.data ?? null)
         : null;
+      if (response.success) {
+        runtimeStoreRef.current.setCache(requestKey, semanticResult);
+      }
       if (!semanticResult) {
         const nextError = response.success ? null : (response.error || t('common.retry'));
         setSemanticLegend((currentLegend) => (currentLegend === null ? currentLegend : null));
