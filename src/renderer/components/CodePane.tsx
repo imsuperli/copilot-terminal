@@ -285,6 +285,7 @@ const CODE_PANE_LOCAL_HISTORY_CHANGE_DEBOUNCE_MS = 2500;
 const CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES = 60;
 const CODE_PANE_EXTERNAL_CHANGE_PREVIEW_LINE_LIMIT = 80;
 const CODE_PANE_SUPPRESSED_EXTERNAL_CHANGE_TTL_MS = 5000;
+const CODE_PANE_FS_CHANGE_FLUSH_DELAY_MS = 48;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
 const CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER = 'save-quality-linter';
@@ -408,6 +409,11 @@ type PendingGitSnapshotRefresh = {
   force: boolean;
   resolvers: Array<() => void>;
   rejecters: Array<(error: unknown) => void>;
+};
+
+type PendingFsChangeDisplayState = {
+  filePath: string;
+  changedAt: number;
 };
 
 type BranchManagerTreeNode =
@@ -5368,6 +5374,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const gitSnapshotRefreshTimerRef = useRef<number | null>(null);
   const pendingFsChangesRef = useRef<CodePaneFsChange[]>([]);
   const isFsChangeFlushQueuedRef = useRef(false);
+  const fsChangeFlushTimerRef = useRef<number | null>(null);
+  const lastAutoPresentedExternalChangeRef = useRef<PendingFsChangeDisplayState | null>(null);
   const gitStatusByPathRef = useRef(gitStatusByPath);
   const gitStatusEntriesRef = useRef<CodePaneGitStatusEntry[]>(cachedGitStatusEntries);
   const gitRepositorySummaryRef = useRef<CodePaneGitRepositorySummary | null>(cachedGitSummary);
@@ -6741,6 +6749,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     pendingFsChangesRef.current = [];
     isFsChangeFlushQueuedRef.current = false;
+    if (fsChangeFlushTimerRef.current) {
+      clearTimeout(fsChangeFlushTimerRef.current);
+      fsChangeFlushTimerRef.current = null;
+    }
+    lastAutoPresentedExternalChangeRef.current = null;
 
     for (const disposable of modelDisposersRef.current.values()) {
       disposable.dispose();
@@ -8280,6 +8293,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const applyLanguageTextEditsWithoutSaving = useCallback(async (edits: CodePaneTextEdit[]) => {
+    let wroteToDisk = false;
     if (edits.length === 0) {
       return true;
     }
@@ -8336,9 +8350,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
         return false;
       }
+
+      wroteToDisk = true;
     }
 
-    void refreshGitSnapshot({ force: true, includeGraph: false });
+    if (wroteToDisk) {
+      void refreshGitSnapshot({ force: true, includeGraph: false });
+    }
     return true;
   }, [clearDefinitionLookupCache, markDirty, refreshGitSnapshot, rootPath, syncLanguageDocument, t]);
 
@@ -12138,9 +12156,69 @@ export const CodePane: React.FC<CodePaneProps> = ({
     syncLanguageDocument,
   ]);
 
+  const buildConsolidatedFsChanges = useCallback((changes: CodePaneFsChange[]) => {
+    const nextChangesByPath = new Map<string, CodePaneFsChange>();
+
+    for (const change of changes) {
+      const normalizedPath = normalizePath(change.path);
+      const normalizedChange = normalizedPath === change.path
+        ? change
+        : {
+            ...change,
+            path: normalizedPath,
+          };
+      const existingChange = nextChangesByPath.get(normalizedPath);
+      if (!existingChange) {
+        nextChangesByPath.set(normalizedPath, normalizedChange);
+        continue;
+      }
+
+      if (normalizedChange.type === 'unlinkDir' || existingChange.type === 'unlinkDir') {
+        nextChangesByPath.set(normalizedPath, {
+          ...normalizedChange,
+          type: 'unlinkDir',
+        });
+        continue;
+      }
+
+      if (normalizedChange.type === 'unlink' || existingChange.type === 'unlink') {
+        nextChangesByPath.set(normalizedPath, {
+          ...normalizedChange,
+          type: 'unlink',
+        });
+        continue;
+      }
+
+      if (normalizedChange.type === 'addDir' || existingChange.type === 'addDir') {
+        nextChangesByPath.set(normalizedPath, {
+          ...normalizedChange,
+          type: 'addDir',
+        });
+        continue;
+      }
+
+      if (normalizedChange.type === 'add' || existingChange.type === 'add') {
+        nextChangesByPath.set(normalizedPath, {
+          ...normalizedChange,
+          type: 'add',
+        });
+        continue;
+      }
+
+      nextChangesByPath.set(normalizedPath, normalizedChange);
+    }
+
+    return Array.from(nextChangesByPath.values());
+  }, []);
+
   const flushPendingFsChanges = useCallback(() => {
     isFsChangeFlushQueuedRef.current = false;
-    const pendingChanges = pendingFsChangesRef.current;
+    if (fsChangeFlushTimerRef.current) {
+      window.clearTimeout(fsChangeFlushTimerRef.current);
+      fsChangeFlushTimerRef.current = null;
+    }
+
+    const pendingChanges = buildConsolidatedFsChanges(pendingFsChangesRef.current);
     pendingFsChangesRef.current = [];
     if (pendingChanges.length === 0) {
       return;
@@ -12152,14 +12230,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const mergedEntries = entries.filter((entry): entry is ExternalChangeEntry => Boolean(entry));
       if (mergedEntries.length > 0) {
         updateExternalChangeEntries(mergedEntries);
-        setBottomPanelMode('external-changes');
 
         const latestEntry = mergedEntries[mergedEntries.length - 1] ?? null;
-        if (latestEntry && latestEntry.changeType !== 'deleted' && (paneRef.current.code?.selectedPath ?? null) !== latestEntry.filePath) {
-          void revealPathInExplorer(latestEntry.filePath);
-        }
-        if (latestEntry?.canDiff) {
-          void openExternalChangeDiff(latestEntry.filePath);
+        const lastAutoPresentedChange = lastAutoPresentedExternalChangeRef.current;
+        const shouldAutoPresentLatestEntry = Boolean(
+          latestEntry && (
+            lastAutoPresentedChange?.filePath !== latestEntry.filePath
+            || lastAutoPresentedChange.changedAt !== latestEntry.changedAt
+          ),
+        );
+
+        if (shouldAutoPresentLatestEntry && latestEntry) {
+          lastAutoPresentedExternalChangeRef.current = {
+            filePath: latestEntry.filePath,
+            changedAt: latestEntry.changedAt,
+          };
+          setBottomPanelMode('external-changes');
+
+          if (latestEntry.changeType !== 'deleted' && (paneRef.current.code?.selectedPath ?? null) !== latestEntry.filePath) {
+            void revealPathInExplorer(latestEntry.filePath);
+          }
+          if (latestEntry.canDiff) {
+            void openExternalChangeDiff(latestEntry.filePath);
+          }
         }
       }
     });
@@ -12173,7 +12266,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void refreshDirectoryPathsRef.current(directoriesToRefresh, {
       showLoadingIndicator: false,
     });
-  }, [openExternalChangeDiff, revealPathInExplorer, rootPath, updateExternalChangeEntries]);
+  }, [buildConsolidatedFsChanges, openExternalChangeDiff, revealPathInExplorer, rootPath, updateExternalChangeEntries]);
 
   useEffect(() => {
     flushPendingFsChangesRef.current = flushPendingFsChanges;
@@ -12194,9 +12287,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       isFsChangeFlushQueuedRef.current = true;
-      void Promise.resolve().then(() => {
+      fsChangeFlushTimerRef.current = window.setTimeout(() => {
+        fsChangeFlushTimerRef.current = null;
         flushPendingFsChanges();
-      });
+      }, CODE_PANE_FS_CHANGE_FLUSH_DELAY_MS);
     };
 
     const handleIndexProgress = (_event: unknown, payload: CodePaneIndexProgressPayload) => {

@@ -505,6 +505,16 @@ async function emitFsChanged(payload: CodePaneFsChangedPayload) {
   });
 }
 
+async function emitFsChangedAndFlush(payload: CodePaneFsChangedPayload, advanceMs = 48) {
+  await emitFsChanged(payload);
+
+  await act(async () => {
+    vi.advanceTimersByTime(advanceMs);
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 async function emitDiagnosticsChanged(payload: {
   rootPath: string;
   filePath: string;
@@ -5246,6 +5256,7 @@ describe('CodePane', () => {
         content: "import './setup';\nexport const formattedValue = 2;\n",
         expectedMtimeMs: 100,
       });
+      expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -6237,15 +6248,20 @@ describe('CodePane', () => {
       },
     });
 
-    await emitFsChanged({
-      rootPath: '/workspace/project',
-      changes: [
-        {
-          type: 'change',
-          path: '/workspace/project/src/index.ts',
-        },
-      ],
-    });
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
 
     await waitFor(() => {
       expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 2;\n');
@@ -6290,7 +6306,7 @@ describe('CodePane', () => {
       },
     });
 
-    await emitFsChanged({
+    await emitFsChangedAndFlush({
       rootPath: '/workspace/project',
       changes: [
         {
@@ -6347,15 +6363,20 @@ describe('CodePane', () => {
       },
     });
 
-    await emitFsChanged({
-      rootPath: '/workspace/project',
-      changes: [
-        {
-          type: 'change',
-          path: '/workspace/project/src/other.ts',
-        },
-      ],
-    });
+    vi.useFakeTimers();
+    try {
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/other.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
 
     expect(await screen.findByText('codePane.externalChangeModified')).toBeInTheDocument();
 
@@ -6369,6 +6390,63 @@ describe('CodePane', () => {
       rootPath: '/workspace/project',
       filePath: '/workspace/project/src/other.ts',
     });
+  });
+
+  it('coalesces duplicate watcher changes for the same file into one read and one diff refresh', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 1;\n');
+    });
+
+    vi.mocked(window.electronAPI.codePaneReadFile).mockClear();
+    vi.mocked(window.electronAPI.codePaneReadFile).mockResolvedValue({
+      success: true,
+      data: {
+        content: 'export const value = 5;\n',
+        mtimeMs: 300,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    });
+
+    vi.useFakeTimers();
+    try {
+      await emitFsChanged({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+      await emitFsChangedAndFlush({
+        rootPath: '/workspace/project',
+        changes: [
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+          {
+            type: 'change',
+            path: '/workspace/project/src/index.ts',
+          },
+        ],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await waitFor(() => {
+      expect(fakeMonacoState.lastEditorModel?.getValue()).toBe('export const value = 5;\n');
+    });
+    expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledTimes(1);
   });
 
   it('removes deleted files from the tree without reloading the whole directory', async () => {
