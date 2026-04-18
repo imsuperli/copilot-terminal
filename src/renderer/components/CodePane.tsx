@@ -17161,10 +17161,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       const nextOutput = `${runSessionOutputsRef.current[payload.sessionId] ?? ''}${payload.chunk}`;
-      runSessionOutputsRef.current = {
-        ...runSessionOutputsRef.current,
-        [payload.sessionId]: nextOutput,
-      };
+      runSessionOutputsRef.current[payload.sessionId] = nextOutput;
       setSelectedRunSessionOutput((currentOutput) => (
         selectedRunSessionIdRef.current === payload.sessionId && currentOutput !== nextOutput
           ? nextOutput
@@ -17208,10 +17205,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       const nextOutput = `${debugSessionOutputsRef.current[payload.sessionId] ?? ''}${payload.chunk}`;
-      debugSessionOutputsRef.current = {
-        ...debugSessionOutputsRef.current,
-        [payload.sessionId]: nextOutput,
-      };
+      debugSessionOutputsRef.current[payload.sessionId] = nextOutput;
       setSelectedDebugSessionOutput((currentOutput) => (
         selectedDebugSessionIdRef.current === payload.sessionId && currentOutput !== nextOutput
           ? nextOutput
