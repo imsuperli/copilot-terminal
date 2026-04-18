@@ -9161,6 +9161,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [refreshGitSnapshot, rootPath]);
 
+  const refreshVisibleGitWorkbenchData = useCallback((options?: { force?: boolean }) => {
+    void refreshGitSnapshot({
+      includeGraph: shouldLoadGitGraph(),
+      ...(options?.force ? { force: true } : {}),
+    });
+  }, [refreshGitSnapshot, shouldLoadGitGraph]);
+
   const loadGitBranches = useCallback(async (options?: { preferredBaseRef?: string }) => {
     const commitBranches = (branches: CodePaneGitBranchEntry[]) => {
       startTransition(() => {
@@ -9425,7 +9432,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
           if (currentLoadedDirectories.has(directoryPath)) {
             return currentLoadedDirectories;
           }
-
           const nextLoadedDirectories = new Set(currentLoadedDirectories);
           nextLoadedDirectories.add(directoryPath);
           return nextLoadedDirectories;
@@ -9650,7 +9656,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
           if (currentLoadedDirectories.has(directoryPath)) {
             return currentLoadedDirectories;
           }
-
           const nextLoadedDirectories = new Set(currentLoadedDirectories);
           nextLoadedDirectories.add(directoryPath);
           return nextLoadedDirectories;
@@ -19678,7 +19683,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (bottomPanelMode === 'git') {
       const shouldLoadBranches = shouldLoadGitBranches();
       const shouldLoadRebasePlan = shouldLoadGitRebasePlan();
-      void refreshGitSnapshot({ includeGraph: shouldLoadGitGraph() });
+      refreshVisibleGitWorkbenchData();
       if (shouldLoadBranches) {
         void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
       }
@@ -19736,11 +19741,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     loadSemanticSummary,
     loadTodoEntries,
     loadProjectContributions,
-    refreshGitSnapshot,
+    refreshVisibleGitWorkbenchData,
     loadRunTargets,
     loadTests,
     shouldLoadGitBranches,
-    shouldLoadGitGraph,
     shouldLoadGitRebasePlan,
     selectedDebugSessionId,
     selectedHierarchyMode,
@@ -19777,7 +19781,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (bottomPanelMode === 'git') {
       const shouldLoadBranches = shouldLoadGitBranches();
       const shouldLoadRebasePlan = shouldLoadGitRebasePlan();
-      void refreshGitSnapshot({ includeGraph: shouldLoadGitGraph() });
+      refreshVisibleGitWorkbenchData();
       if (shouldLoadBranches) {
         void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
       }
@@ -19834,10 +19838,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     loadDocumentSymbols,
     loadTodoEntries,
     loadProjectContributions,
-    refreshGitSnapshot,
+    refreshVisibleGitWorkbenchData,
     loadRunTargets,
     shouldLoadGitBranches,
-    shouldLoadGitGraph,
     shouldLoadGitRebasePlan,
     loadSemanticSummary,
     loadTests,
