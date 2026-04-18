@@ -5216,6 +5216,27 @@ function areContentMatchListsEqual(
   return true;
 }
 
+function getLocalHistoryPreview(content: string): string {
+  let lineStartIndex = 0;
+  while (lineStartIndex < content.length) {
+    const lineEndIndex = content.indexOf('\n', lineStartIndex);
+    const line = lineEndIndex === -1
+      ? content.slice(lineStartIndex)
+      : content.slice(lineStartIndex, lineEndIndex);
+    const preview = line.trim();
+    if (preview) {
+      return preview;
+    }
+
+    if (lineEndIndex === -1) {
+      break;
+    }
+    lineStartIndex = lineEndIndex + 1;
+  }
+
+  return '';
+}
+
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -5290,6 +5311,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const localHistoryEntriesRef = useRef(new Map<string, LocalHistoryEntry[]>());
   const suppressedExternalChangePathsRef = useRef(new Map<string, number>());
   const suppressModelEventsRef = useRef(new Set<string>());
+  const previewOpenFilePathsRef = useRef(new Set((pane.code?.openFiles ?? [])
+    .filter((tab) => tab.preview)
+    .map((tab) => tab.path)));
   const markerListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseMoveListenerRef = useRef<MonacoDisposable | null>(null);
@@ -6040,6 +6064,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (areOpenFilesEqual(currentOpenFiles, nextOpenFiles)) {
       return currentOpenFiles;
     }
+    previewOpenFilePathsRef.current = new Set(nextOpenFiles
+      .filter((tab) => tab.preview)
+      .map((tab) => tab.path));
     persistCodeState({
       openFiles: nextOpenFiles,
     });
@@ -6047,6 +6074,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [openFiles, persistCodeState]);
 
   const promotePreviewTab = useCallback((filePath: string) => {
+    if (!previewOpenFilePathsRef.current.has(filePath)) {
+      return;
+    }
+
     updateOpenFileTabs((currentOpenFiles) => currentOpenFiles.map((tab) => (
       tab.path === filePath && tab.preview
         ? { ...tab, preview: false }
@@ -6083,7 +6114,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             : t('codePane.localHistoryOpened'),
       timestamp: Date.now(),
       content: normalizedContent,
-      preview: normalizedContent.split('\n').find((line) => line.trim().length > 0)?.trim() ?? '',
+      preview: getLocalHistoryPreview(normalizedContent),
     };
 
     localHistoryEntriesRef.current.set(filePath, [
@@ -7821,12 +7852,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
           return;
         }
 
-        clearDefinitionLookupCache();
-
         if (suppressModelEventsRef.current.has(filePath)) {
           return;
         }
 
+        clearDefinitionLookupCache();
         promotePreviewTab(filePath);
         markDirty(filePath, true);
         scheduleLocalHistorySnapshot(filePath);
