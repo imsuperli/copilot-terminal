@@ -165,6 +165,26 @@ export class CodePaneRuntimeStore {
     });
   }
 
+  deleteCache(key: string): void {
+    this.cache.delete(key);
+  }
+
+  invalidateCachePrefix(prefix: string): void {
+    if (!prefix) {
+      return;
+    }
+
+    for (const key of Array.from(this.cache.keys())) {
+      if (key.startsWith(prefix)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  clearCache(): void {
+    this.cache.clear();
+  }
+
   private trimRequests(): void {
     const maxRequests = Math.max(this.options.maxRequests ?? 60, 10);
     if (this.requestOrder.length <= maxRequests) {

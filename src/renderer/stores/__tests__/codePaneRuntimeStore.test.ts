@@ -51,4 +51,18 @@ describe('CodePaneRuntimeStore', () => {
     expect(store.getCache<string[]>('files:todo', 1000)).toBeNull();
     vi.useRealTimers();
   });
+
+  it('invalidates cached values by prefix', () => {
+    const store = new CodePaneRuntimeStore();
+
+    store.setCache('semantic:/a.ts:1', ['a']);
+    store.setCache('semantic:/a.ts:2', ['b']);
+    store.setCache('document-symbols:/a.ts', ['c']);
+
+    store.invalidateCachePrefix('semantic:/a.ts:');
+
+    expect(store.getCache<string[]>('semantic:/a.ts:1', 1000)).toBeNull();
+    expect(store.getCache<string[]>('semantic:/a.ts:2', 1000)).toBeNull();
+    expect(store.getCache<string[]>('document-symbols:/a.ts', 1000)).toEqual(['c']);
+  });
 });

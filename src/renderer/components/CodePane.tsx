@@ -7252,6 +7252,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const hierarchyRequestIdRef = useRef(0);
   const documentSymbolsRequestIdRef = useRef(0);
   const semanticRequestIdRef = useRef(0);
+  const gitCommitDetailsRequestIdRef = useRef(0);
+  const gitCompareRequestIdRef = useRef(0);
   const editorSurfaceRequestIdRef = useRef(0);
   const pendingGitSnapshotRefreshRef = useRef<PendingGitSnapshotRefresh | null>(null);
   const gitSnapshotRefreshTimerRef = useRef<number | null>(null);
@@ -7915,11 +7917,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const loadSelectedGitCommitDetails = useCallback(async (commitSha: string) => {
+    const requestKey = `git-commit-details:${rootPath}`;
+    const requestVersion = ++gitCommitDetailsRequestIdRef.current;
+    const cacheKey = `${requestKey}:${commitSha}`;
+    const cachedDetails = runtimeStoreRef.current.getCache<CodePaneGitCommitDetails>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedDetails) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Git commit details', {
+        meta: commitSha.slice(0, 7),
+        fromCache: true,
+      });
+      setSelectedGitCommitDetails((currentDetails) => (
+        areGitCommitDetailsEqual(currentDetails, cachedDetails) ? currentDetails : cachedDetails
+      ));
+      setComparedGitCommits((currentComparison) => (currentComparison === null ? currentComparison : null));
+      setGitCommitDetailsError((currentError) => (currentError === null ? currentError : null));
+      setIsGitCommitDetailsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     setIsGitCommitDetailsLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setGitCommitDetailsError((currentError) => (currentError === null ? currentError : null));
     try {
       const response = await trackRequest(
-        `git-commit-details:${rootPath}`,
+        requestKey,
         'Git commit details',
         commitSha.slice(0, 7),
         async () => await window.electronAPI.codePaneGetGitCommitDetails({
@@ -7927,31 +7950,61 @@ export const CodePane: React.FC<CodePaneProps> = ({
           commitSha,
         }),
       );
+      if (gitCommitDetailsRequestIdRef.current !== requestVersion) {
+        return;
+      }
       if (!response.success || !response.data) {
         throw new Error(response.error || t('common.retry'));
       }
       const nextDetails = response.data;
+      runtimeStoreRef.current.setCache(cacheKey, nextDetails);
       setSelectedGitCommitDetails((currentDetails) => (
         areGitCommitDetailsEqual(currentDetails, nextDetails) ? currentDetails : nextDetails
       ));
       setComparedGitCommits((currentComparison) => (currentComparison === null ? currentComparison : null));
     } catch (error) {
+      if (gitCommitDetailsRequestIdRef.current !== requestVersion) {
+        return;
+      }
       const nextError = error instanceof Error ? error.message : t('common.retry');
       setGitCommitDetailsError((currentError) => (
         currentError === nextError ? currentError : nextError
       ));
       setSelectedGitCommitDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
     } finally {
-      setIsGitCommitDetailsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
+      if (gitCommitDetailsRequestIdRef.current === requestVersion) {
+        setIsGitCommitDetailsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
+      }
     }
   }, [rootPath, t, trackRequest]);
 
   const compareSelectedGitCommits = useCallback(async (baseCommitSha: string, targetCommitSha: string) => {
+    const requestKey = `git-compare:${rootPath}`;
+    const requestVersion = ++gitCompareRequestIdRef.current;
+    const cacheKey = `${requestKey}:${baseCommitSha}:${targetCommitSha}`;
+    const cachedComparison = runtimeStoreRef.current.getCache<CodePaneGitCompareCommitsResult>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedComparison) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Git compare commits', {
+        meta: `${baseCommitSha.slice(0, 7)}..${targetCommitSha.slice(0, 7)}`,
+        fromCache: true,
+      });
+      setComparedGitCommits((currentComparison) => (
+        areGitCompareCommitsEqual(currentComparison, cachedComparison) ? currentComparison : cachedComparison
+      ));
+      setSelectedGitCommitDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
+      setGitCommitDetailsError((currentError) => (currentError === null ? currentError : null));
+      setIsGitCommitDetailsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     setIsGitCommitDetailsLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setGitCommitDetailsError((currentError) => (currentError === null ? currentError : null));
     try {
       const response = await trackRequest(
-        `git-compare:${rootPath}`,
+        requestKey,
         'Git compare commits',
         `${baseCommitSha.slice(0, 7)}..${targetCommitSha.slice(0, 7)}`,
         async () => await window.electronAPI.codePaneCompareGitCommits({
@@ -7960,22 +8013,31 @@ export const CodePane: React.FC<CodePaneProps> = ({
           targetCommitSha,
         }),
       );
+      if (gitCompareRequestIdRef.current !== requestVersion) {
+        return;
+      }
       if (!response.success || !response.data) {
         throw new Error(response.error || t('common.retry'));
       }
       const nextComparison = response.data;
+      runtimeStoreRef.current.setCache(cacheKey, nextComparison);
       setComparedGitCommits((currentComparison) => (
         areGitCompareCommitsEqual(currentComparison, nextComparison) ? currentComparison : nextComparison
       ));
       setSelectedGitCommitDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
     } catch (error) {
+      if (gitCompareRequestIdRef.current !== requestVersion) {
+        return;
+      }
       const nextError = error instanceof Error ? error.message : t('common.retry');
       setGitCommitDetailsError((currentError) => (
         currentError === nextError ? currentError : nextError
       ));
       setComparedGitCommits((currentComparison) => (currentComparison === null ? currentComparison : null));
     } finally {
-      setIsGitCommitDetailsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
+      if (gitCompareRequestIdRef.current === requestVersion) {
+        setIsGitCommitDetailsLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
+      }
     }
   }, [rootPath, t, trackRequest]);
 
@@ -8142,19 +8204,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     ));
   }, []);
 
-  const markDirty = useCallback((filePath: string, dirty: boolean) => {
-    const currentDirtyPaths = dirtyPathsRef.current;
-    if (currentDirtyPaths.has(filePath) === dirty) {
-      return;
-    }
-
-    if (dirty) {
-      currentDirtyPaths.add(filePath);
-    } else {
-      currentDirtyPaths.delete(filePath);
-    }
-  }, []);
-
   const scheduleActiveCursorUpdate = useCallback((lineNumber: number, column: number) => {
     activeCursorLineNumberRef.current = lineNumber;
     activeCursorColumnRef.current = column;
@@ -8254,20 +8303,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
     nextProblems.sort((left, right) => {
-        if (left.severity !== right.severity) {
-          return right.severity - left.severity;
-        }
+      if (left.severity !== right.severity) {
+        return right.severity - left.severity;
+      }
 
-        if (left.filePath !== right.filePath) {
-          return left.filePath.localeCompare(right.filePath, undefined, { sensitivity: 'base' });
-        }
+      if (left.filePath !== right.filePath) {
+        return left.filePath.localeCompare(right.filePath, undefined, { sensitivity: 'base' });
+      }
 
-        if (left.startLineNumber !== right.startLineNumber) {
-          return left.startLineNumber - right.startLineNumber;
-        }
+      if (left.startLineNumber !== right.startLineNumber) {
+        return left.startLineNumber - right.startLineNumber;
+      }
 
-        return left.startColumn - right.startColumn;
-      });
+      return left.startColumn - right.startColumn;
+    });
 
     problemsByFileRef.current = nextProblemsByFile;
     startTransition(() => {
@@ -8442,6 +8491,37 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const getModelRequestPath = useCallback((filePath: string) => (
     fileMetaRef.current.get(filePath)?.documentUri ?? filePath
   ), []);
+
+  const invalidateFileScopedRuntimeCaches = useCallback((filePath: string) => {
+    const requestPath = getModelRequestPath(filePath);
+    runtimeStoreRef.current.invalidateCachePrefix(`quick-documentation:${requestPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`document-symbols:${requestPath}`);
+    runtimeStoreRef.current.invalidateCachePrefix(`hierarchy:call-incoming:${requestPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`hierarchy:call-outgoing:${requestPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`hierarchy:type-parents:${requestPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`hierarchy:type-children:${requestPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`semantic:${requestPath}`);
+    runtimeStoreRef.current.invalidateCachePrefix(`git-history:${rootPath}:${filePath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`search-everywhere:${rootPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`search-files:${rootPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`search-contents:${rootPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`workspace-symbols:${rootPath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`todo-scan:${rootPath}`);
+  }, [getModelRequestPath, rootPath]);
+
+  const markDirty = useCallback((filePath: string, dirty: boolean) => {
+    const currentDirtyPaths = dirtyPathsRef.current;
+    if (currentDirtyPaths.has(filePath) === dirty) {
+      return;
+    }
+
+    if (dirty) {
+      currentDirtyPaths.add(filePath);
+      invalidateFileScopedRuntimeCaches(filePath);
+    } else {
+      currentDirtyPaths.delete(filePath);
+    }
+  }, [invalidateFileScopedRuntimeCaches]);
 
   const getDefinitionLookupRange = useCallback((model: MonacoModel, lineNumber: number, column: number): MonacoRange => {
     const word = model.getWordAtPosition?.({ lineNumber, column });
@@ -10713,6 +10793,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       wroteToDisk = true;
+      invalidateFileScopedRuntimeCaches(filePath);
     }
 
     if (wroteToDisk && !options?.skipGitRefresh) {
@@ -10722,7 +10803,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       didApply: true,
       wroteToDisk,
     };
-  }, [clearDefinitionLookupCache, markDirty, rootPath, scheduleGitStatusRefresh, syncLanguageDocument, t]);
+  }, [clearDefinitionLookupCache, invalidateFileScopedRuntimeCaches, markDirty, rootPath, scheduleGitStatusRefresh, syncLanguageDocument, t]);
 
   const runSaveQualityPipeline = useCallback(async (filePath: string) => {
     const model = fileModelsRef.current.get(filePath);
@@ -10993,6 +11074,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       lastSavedAt: Date.now(),
       lastSavedVersionId: saveVersionId,
     });
+    invalidateFileScopedRuntimeCaches(filePath);
     addLocalHistoryEntry(filePath, 'save', saveContent);
     if (getModelVersionId(model) === saveVersionId) {
       markDirty(filePath, false);
@@ -11033,6 +11115,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     queueLanguageDocumentSync,
     rootPath,
     runSaveQualityPipeline,
+    invalidateFileScopedRuntimeCaches,
     scheduleGitStatusRefresh,
     syncLanguageDocument,
     t,
@@ -11357,7 +11440,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const requestPath = getModelRequestPath(context.filePath);
-    const requestKey = `hierarchy:${mode}:${requestPath}`;
+    const requestKey = `hierarchy:${mode}:${requestPath}:${context.position.lineNumber}:${context.position.column}`;
     const requestVersion = ++hierarchyRequestIdRef.current;
     const requestLabel = mode.startsWith('call')
       ? 'Call hierarchy'
@@ -12807,6 +12890,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     fileMetaRef.current.delete(filePath);
     problemsByFileRef.current.delete(filePath);
     preloadedReadResultsRef.current.delete(filePath);
+    invalidateFileScopedRuntimeCaches(filePath);
     clearDefinitionLookupCache();
     viewStatesRef.current.delete(filePath);
     markDirty(filePath, false);
@@ -12844,6 +12928,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     closeLanguageDocument,
     detachDiffEditorModel,
     flushDirtyFiles,
+    invalidateFileScopedRuntimeCaches,
     markDirty,
     openFiles,
     persistCodeState,
@@ -12886,6 +12971,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     for (const change of response.data.files) {
       if (change.kind === 'modify') {
         const existingModel = fileModelsRef.current.get(change.filePath);
+        invalidateFileScopedRuntimeCaches(change.filePath);
         if (existingModel) {
           await flushPendingLanguageSync(change.filePath);
           suppressModelEventsRef.current.add(change.filePath);
@@ -12917,6 +13003,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       if ((change.kind === 'rename' || change.kind === 'move') && wasActive && change.targetFilePath) {
+        invalidateFileScopedRuntimeCaches(change.targetFilePath);
         await activateFile(change.targetFilePath);
       }
     }
@@ -12936,6 +13023,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     clearDefinitionLookupCache,
     closeFileTab,
     flushPendingLanguageSync,
+    invalidateFileScopedRuntimeCaches,
     markDirty,
     openFiles,
     queueLanguageDocumentSync,
@@ -15171,6 +15259,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    for (const change of pendingChanges) {
+      invalidateFileScopedRuntimeCaches(change.path);
+    }
+
     pruneRemovedDirectoriesRef.current(pendingChanges);
 
     const pendingChangeRequests: Array<Promise<ExternalChangeEntry | null>> = [];
@@ -15223,7 +15315,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void refreshDirectoryPathsRef.current(directoriesToRefresh, {
       showLoadingIndicator: false,
     });
-  }, [buildConsolidatedFsChanges, openExternalChangeDiff, revealPathInExplorer, rootPath, updateExternalChangeEntries]);
+  }, [buildConsolidatedFsChanges, invalidateFileScopedRuntimeCaches, openExternalChangeDiff, revealPathInExplorer, rootPath, updateExternalChangeEntries]);
 
   useEffect(() => {
     flushPendingFsChangesRef.current = flushPendingFsChanges;
