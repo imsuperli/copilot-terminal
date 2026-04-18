@@ -18041,6 +18041,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setSearchEverywhereError((currentError) => (
       currentError === null ? currentError : null
     ));
+    setSearchEverywhereFileResults((currentResults) => (
+      currentResults.length === 0 ? currentResults : []
+    ));
+    setSearchEverywhereSymbolResults((currentResults) => (
+      currentResults.length === 0 ? currentResults : []
+    ));
+    setIsSearchEverywhereLoading((currentLoading) => (
+      currentLoading ? false : currentLoading
+    ));
     setSearchEverywhereSelectedIndex((currentIndex) => (
       currentIndex === 0 ? currentIndex : 0
     ));
@@ -18265,12 +18274,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     let cancelled = false;
     const requestKey = `search-everywhere:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
     const cacheKey = `${requestKey}:${searchEverywhereMode}:${trimmedQuery}`;
     const cachedResults = runtimeStoreRef.current.getCache<{
       files: string[];
       symbols: CodePaneWorkspaceSymbol[];
     }>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
     if (cachedResults) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Search Everywhere', {
+        meta: `${searchEverywhereMode}:${trimmedQuery}`,
+        fromCache: true,
+      });
       setSearchEverywhereFileResults((currentResults) => (
         areStringListsEqual(currentResults, cachedResults.files) ? currentResults : cachedResults.files
       ));
@@ -18295,19 +18309,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const timer = window.setTimeout(async () => {
       const [fileResponse, symbolResponse] = await Promise.all([
-        window.electronAPI.codePaneSearchFiles({
-          rootPath,
-          query: trimmedQuery,
-          limit: 40,
-        }),
-        window.electronAPI.codePaneGetWorkspaceSymbols({
-          rootPath,
-          query: trimmedQuery,
-          limit: 40,
-        }),
+        trackRequest(
+          `${requestKey}:files`,
+          'Search Everywhere files',
+          trimmedQuery,
+          async () => await window.electronAPI.codePaneSearchFiles({
+            rootPath,
+            query: trimmedQuery,
+            limit: 40,
+          }),
+        ),
+        trackRequest(
+          `${requestKey}:symbols`,
+          'Search Everywhere symbols',
+          trimmedQuery,
+          async () => await window.electronAPI.codePaneGetWorkspaceSymbols({
+            rootPath,
+            query: trimmedQuery,
+            limit: 40,
+          }),
+        ),
       ]);
 
-      if (cancelled) {
+      if (cancelled || !runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
         return;
       }
 
@@ -18345,7 +18369,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [deferredSearchEverywhereQuery, isSearchEverywhereOpen, rootPath, searchEverywhereMode, t]);
+  }, [deferredSearchEverywhereQuery, isSearchEverywhereOpen, rootPath, searchEverywhereMode, t, trackRequest]);
 
   const searchEverywhereItems = useMemo<SearchEverywhereItem[]>(() => {
     if (!isSearchEverywhereOpen) {
@@ -20283,8 +20307,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const handleBranchManagerToggle = useCallback(() => {
     setIsBranchManagerOpen((currentOpen) => {
       const nextOpen = !currentOpen;
+      setBranchManagerQuery((currentQuery) => (currentQuery === '' ? currentQuery : ''));
       if (nextOpen && !isGitBranchesLoading) {
-        setBranchManagerQuery((currentQuery) => (currentQuery === '' ? currentQuery : ''));
         void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
       }
       return nextOpen;
