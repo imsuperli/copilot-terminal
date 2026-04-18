@@ -13920,7 +13920,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [rootPath, runGitOperation, t]);
 
   const openGitConflictResolver = useCallback(async (filePath: string) => {
-    setBottomPanelMode('conflict');
+    setBottomPanelMode((currentMode) => (currentMode === 'conflict' ? currentMode : 'conflict'));
     await loadGitConflictDetails(filePath);
   }, [loadGitConflictDetails]);
 
@@ -19633,9 +19633,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const openGitWorkbench = useCallback((initialTab: GitToolWindowTab = 'log') => {
-    setGitWorkbenchInitialTab(initialTab);
-    setActiveGitWorkbenchTab(initialTab);
-    setBottomPanelMode('git');
+    setGitWorkbenchInitialTab((currentTab) => (currentTab === initialTab ? currentTab : initialTab));
+    setActiveGitWorkbenchTab((currentTab) => (currentTab === initialTab ? currentTab : initialTab));
+    setBottomPanelMode((currentMode) => (currentMode === 'git' ? currentMode : 'git'));
   }, []);
 
   const toggleHierarchyToolWindow = useCallback(() => {
