@@ -17887,7 +17887,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       title: t('codePane.quickDocumentation'),
       meta: 'F1',
       execute: async () => {
-        setIsQuickDocumentationOpen(true);
+        setIsQuickDocumentationOpen((currentOpen) => (currentOpen ? currentOpen : true));
         await loadQuickDocumentation();
       },
     },
@@ -17968,11 +17968,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       section: t('codePane.searchEverywhereCommandsSection'),
       title: t('codePane.refresh'),
       execute: async () => {
-        setIsRefreshing(true);
+        setIsRefreshing((currentRefreshing) => (currentRefreshing ? currentRefreshing : true));
         try {
           await refreshLoadedDirectories();
         } finally {
-          setIsRefreshing(false);
+          setIsRefreshing((currentRefreshing) => (currentRefreshing ? false : currentRefreshing));
         }
       },
     },
@@ -18030,13 +18030,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       if (!branchManagerRef.current?.contains(target)) {
-        setIsBranchManagerOpen(false);
+        setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsBranchManagerOpen(false);
+        setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
       }
     };
 
@@ -20043,7 +20043,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [loadQuickDocumentation]);
 
   const handleQuickDocumentationClose = useCallback(() => {
-    setIsQuickDocumentationOpen(false);
+    setIsQuickDocumentationOpen((currentOpen) => (currentOpen ? false : currentOpen));
   }, []);
 
   const handleInspectorOutlineRefresh = useCallback(() => {
@@ -20070,7 +20070,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsBranchManagerOpen((currentOpen) => {
       const nextOpen = !currentOpen;
       if (nextOpen && !isGitBranchesLoading) {
-        setBranchManagerQuery('');
+        setBranchManagerQuery((currentQuery) => (currentQuery === '' ? currentQuery : ''));
         void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
       }
       return nextOpen;
@@ -20086,7 +20086,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [gitRebaseBaseRef, loadGitBranches]);
 
   const handleBranchManagerOpenWorkbench = useCallback(() => {
-    setIsBranchManagerOpen(false);
+    setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
     openGitWorkbench('log');
   }, [openGitWorkbench]);
 
@@ -20103,9 +20103,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [openSearchEverywhere]);
 
   const handleWorkspaceRefreshClick = useCallback(() => {
-    setIsRefreshing(true);
+    setIsRefreshing((currentRefreshing) => (currentRefreshing ? currentRefreshing : true));
     void refreshLoadedDirectories().finally(() => {
-      setIsRefreshing(false);
+      setIsRefreshing((currentRefreshing) => (currentRefreshing ? false : currentRefreshing));
     });
   }, [refreshLoadedDirectories]);
 
