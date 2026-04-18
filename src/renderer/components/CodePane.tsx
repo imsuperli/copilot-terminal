@@ -400,7 +400,6 @@ type ExternalChangeEntry = {
   changedAt: number;
   openedAtChange: boolean;
   canDiff: boolean;
-  lineSummary: ExternalChangeLineSummary;
 };
 type ExternalChangeStateSnapshot = {
   entries: ExternalChangeEntry[];
@@ -680,11 +679,18 @@ function CursorBlameGutter({
   onOpenHistory: (lineNumber: number) => void;
 }) {
   const { lineNumber } = useCodePaneCursorSnapshot(cursorStore);
+  const blameEntriesByLine = useMemo(() => {
+    const nextEntriesByLine = new Map<number, CodePaneGitBlameLine>();
+    for (const entry of blameLines) {
+      nextEntriesByLine.set(entry.lineNumber, entry);
+    }
+    return nextEntriesByLine;
+  }, [blameLines]);
   const activeBlameEntry = useMemo(() => (
-    blameLines.find((entry) => entry.lineNumber === lineNumber)
+    blameEntriesByLine.get(lineNumber)
     ?? blameLines[0]
     ?? null
-  ), [blameLines, lineNumber]);
+  ), [blameEntriesByLine, blameLines, lineNumber]);
 
   return (
     <BlameGutter
@@ -4585,6 +4591,11 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
   onOpenDiff: (filePath: string) => void;
   onClearEntry: (filePath: string) => void;
 }) {
+  const lineSummary = useMemo(
+    () => createExternalChangeLineSummary(entry.previousContent, entry.currentContent),
+    [entry.currentContent, entry.previousContent],
+  );
+
   return (
     <>
       <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
@@ -4620,7 +4631,7 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-auto py-3">
         <ExternalChangeLineSummaryPanel
-          summary={entry.lineSummary}
+          summary={lineSummary}
           t={t}
         />
         <div className="grid min-h-0 gap-3 md:grid-cols-2">
@@ -10990,7 +11001,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (change.type === 'unlink') {
       const currentContent = previousContent === null ? null : '';
-      const lineSummary = createExternalChangeLineSummary(previousContent, currentContent);
       const nextEntry: ExternalChangeEntry = {
         id: `${filePath}:${changedAt}`,
         filePath,
@@ -11002,7 +11012,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
         changedAt,
         openedAtChange,
         canDiff: previousContent !== null,
-        lineSummary,
       };
       if (shouldCommit) {
         revealExternalChangeEntry(nextEntry);
@@ -11022,7 +11031,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const changeType: ExternalChangeKind = change.type === 'add' ? 'added' : 'modified';
     const diffPreviousContent = changeType === 'added' ? (previousContent ?? '') : previousContent;
     const canDiff = changeType === 'added' || previousContent !== null;
-    const lineSummary = createExternalChangeLineSummary(diffPreviousContent, currentContent);
     const nextEntry: ExternalChangeEntry = {
       id: `${filePath}:${changedAt}`,
       filePath,
@@ -11034,7 +11042,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       changedAt,
       openedAtChange,
       canDiff,
-      lineSummary,
     };
 
     const hasUnsavedEditorContent = existingModel && (
@@ -11048,7 +11055,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ...nextEntry,
         previousContent,
         canDiff,
-        lineSummary: createExternalChangeLineSummary(previousContent, currentContent),
       };
       if (shouldCommit) {
         revealExternalChangeEntry(revealedEntry);
