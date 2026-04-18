@@ -5987,6 +5987,36 @@ function areProjectContributionListsEqual(
   return true;
 }
 
+function areHoverResultsEqual(
+  previousResult: CodePaneHoverResult | null,
+  nextResult: CodePaneHoverResult | null,
+): boolean {
+  if (previousResult === nextResult) {
+    return true;
+  }
+
+  if (!previousResult || !nextResult) {
+    return false;
+  }
+
+  if (previousResult.contents.length !== nextResult.contents.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousResult.contents.length; index += 1) {
+    const previousContent = previousResult.contents[index];
+    const nextContent = nextResult.contents[index];
+    if (
+      previousContent?.kind !== nextContent?.kind
+      || previousContent?.value !== nextContent?.value
+    ) {
+      return false;
+    }
+  }
+
+  return areRangesEqual(previousResult.range, nextResult.range);
+}
+
 function areRunSessionsEqual(previousSessions: CodePaneRunSession[], nextSessions: CodePaneRunSession[]): boolean {
   if (previousSessions.length !== nextSessions.length) {
     return false;
@@ -10248,17 +10278,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const loadQuickDocumentation = useCallback(async () => {
     const context = getActiveEditorContext();
     if (!context) {
-      setQuickDocumentation(null);
-      setQuickDocumentationError(null);
-      setIsQuickDocumentationLoading(false);
+      setQuickDocumentation((currentResult) => (currentResult === null ? currentResult : null));
+      setQuickDocumentationError((currentError) => (currentError === null ? currentError : null));
+      setIsQuickDocumentationLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
     const requestPath = getModelRequestPath(context.filePath);
     const requestKey = `quick-documentation:${requestPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
-    setIsQuickDocumentationLoading(true);
-    setQuickDocumentationError(null);
+    setIsQuickDocumentationLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setQuickDocumentationError((currentError) => (currentError === null ? currentError : null));
 
     try {
       const response = await trackRequest(
@@ -10280,29 +10310,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
-      setQuickDocumentation(response.success ? (response.data ?? null) : null);
-      setQuickDocumentationError(response.success ? null : (response.error || t('common.retry')));
+      const nextResult = response.success ? (response.data ?? null) : null;
+      const nextError = response.success ? null : (response.error || t('common.retry'));
+      setQuickDocumentation((currentResult) => (
+        areHoverResultsEqual(currentResult, nextResult) ? currentResult : nextResult
+      ));
+      setQuickDocumentationError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
     } catch (error) {
       if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
         return;
       }
 
-      setQuickDocumentation(null);
-      setQuickDocumentationError(error instanceof Error ? error.message : t('common.retry'));
+      const nextError = error instanceof Error ? error.message : t('common.retry');
+      setQuickDocumentation((currentResult) => (currentResult === null ? currentResult : null));
+      setQuickDocumentationError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
     } finally {
       if (runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-        setIsQuickDocumentationLoading(false);
+        setIsQuickDocumentationLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       }
     }
   }, [getActiveEditorContext, getModelRequestPath, rootPath, t, trackRequest]);
 
   const toggleQuickDocumentation = useCallback(() => {
     if (isQuickDocumentationOpen) {
-      setIsQuickDocumentationOpen(false);
+      setIsQuickDocumentationOpen((currentOpen) => (currentOpen ? false : currentOpen));
       return;
     }
 
-    setIsQuickDocumentationOpen(true);
+    setIsQuickDocumentationOpen((currentOpen) => (currentOpen ? currentOpen : true));
     void loadQuickDocumentation();
   }, [isQuickDocumentationOpen, loadQuickDocumentation]);
 
