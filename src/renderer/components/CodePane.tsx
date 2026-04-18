@@ -11563,12 +11563,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const openCommitWindow = useCallback((options?: { initialMessage?: string; preselectedPaths?: string[] }) => {
     const entrySnapshot = [...gitStatusEntriesRef.current];
-    const preselectedPaths = options?.preselectedPaths?.filter((candidatePath, index, currentPaths) => (
-      Boolean(candidatePath) && currentPaths.indexOf(candidatePath) === index
-    )) ?? null;
+    let preselectedPaths: string[] | null = null;
+    if (options?.preselectedPaths) {
+      const seenPaths = new Set<string>();
+      const nextPreselectedPaths: string[] = [];
+      for (const candidatePath of options.preselectedPaths) {
+        if (!candidatePath || seenPaths.has(candidatePath)) {
+          continue;
+        }
+        seenPaths.add(candidatePath);
+        nextPreselectedPaths.push(candidatePath);
+      }
+      preselectedPaths = nextPreselectedPaths;
+    }
     const initialSelectedPaths = preselectedPaths && preselectedPaths.length > 0
       ? preselectedPaths
-      : entrySnapshot.map((entry) => entry.path);
+      : (() => {
+        const nextInitialSelectedPaths: string[] = [];
+        for (const entry of entrySnapshot) {
+          nextInitialSelectedPaths.push(entry.path);
+        }
+        return nextInitialSelectedPaths;
+      })();
     if (initialSelectedPaths[0]) {
       setSelectedGitChangePath(initialSelectedPaths[0]);
       void loadGitDiffHunks(initialSelectedPaths[0]);
@@ -13126,8 +13142,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     pruneRemovedDirectoriesRef.current(pendingChanges);
 
-    void Promise.all(pendingChanges.map((change) => recordExternalChangeRef.current(change, { commit: false }))).then((entries) => {
-      const mergedEntries = entries.filter((entry): entry is ExternalChangeEntry => Boolean(entry));
+    const pendingChangeRequests: Array<Promise<ExternalChangeEntry | null>> = [];
+    for (const change of pendingChanges) {
+      pendingChangeRequests.push(recordExternalChangeRef.current(change, { commit: false }));
+    }
+
+    void Promise.all(pendingChangeRequests).then((entries) => {
+      const mergedEntries: ExternalChangeEntry[] = [];
+      for (const entry of entries) {
+        if (entry) {
+          mergedEntries.push(entry);
+        }
+      }
       if (mergedEntries.length > 0) {
         updateExternalChangeEntries(mergedEntries);
 
@@ -14911,7 +14937,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
         const entryTextClassName = entryStatus
           ? getStatusTextClassName(entryStatus)
           : getExternalChangeTextClassName(externalChangeEntry?.changeType);
-        const isLoading = compactPresentation.visibleDirectoryPaths.some((visiblePath) => isDirectoryLoading(visiblePath));
+        let isLoading = false;
+        for (const visiblePath of compactPresentation.visibleDirectoryPaths) {
+          if (isDirectoryLoading(visiblePath)) {
+            isLoading = true;
+            break;
+          }
+        }
         const row: ExplorerTreeRow = {
           key: sourcePath,
           sourcePath,
@@ -17323,7 +17355,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
     persistWatchExpressions(nextExpressions);
-    setWatchEntries((currentEntries) => currentEntries.filter((entry) => entry.expression !== expression));
+    setWatchEntries((currentEntries) => {
+      const nextEntries: DebugWatchEntry[] = [];
+      for (const entry of currentEntries) {
+        if (entry.expression !== expression) {
+          nextEntries.push(entry);
+        }
+      }
+      return nextEntries;
+    });
   }, [persistWatchExpressions, watchExpressions]);
 
   const openTestItem = useCallback(async (item: CodePaneTestItem) => {
@@ -17344,7 +17384,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [openEditorLocation]);
 
   const openDebugFrame = useCallback(async (frameId: string) => {
-    const frame = debugSessionDetails?.stackFrames.find((candidate) => candidate.id === frameId);
+    let frame: CodePaneDebugSessionDetails['stackFrames'][number] | null = null;
+    for (const candidate of debugSessionDetails?.stackFrames ?? []) {
+      if (candidate.id === frameId) {
+        frame = candidate;
+        break;
+      }
+    }
     if (!frame?.filePath || !frame.lineNumber) {
       return;
     }
