@@ -5245,6 +5245,35 @@ function areProblemListsEqual(
   return true;
 }
 
+function areWorkspaceSymbolListsEqual(
+  previousList: CodePaneWorkspaceSymbol[],
+  nextList: CodePaneWorkspaceSymbol[],
+): boolean {
+  if (previousList.length !== nextList.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousList.length; index += 1) {
+    const previousSymbol = previousList[index];
+    const nextSymbol = nextList[index];
+    if (
+      previousSymbol?.name !== nextSymbol?.name
+      || previousSymbol?.kind !== nextSymbol?.kind
+      || previousSymbol?.filePath !== nextSymbol?.filePath
+      || previousSymbol?.containerName !== nextSymbol?.containerName
+      || previousSymbol?.detail !== nextSymbol?.detail
+      || previousSymbol?.range.startLineNumber !== nextSymbol?.range.startLineNumber
+      || previousSymbol?.range.startColumn !== nextSymbol?.range.startColumn
+      || previousSymbol?.range.endLineNumber !== nextSymbol?.range.endLineNumber
+      || previousSymbol?.range.endColumn !== nextSymbol?.range.endColumn
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function getLocalHistoryPreview(content: string): string {
   let lineStartIndex = 0;
   while (lineStartIndex < content.length) {
@@ -13213,15 +13242,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     const trimmedQuery = deferredWorkspaceSymbolQuery.trim();
     if (!trimmedQuery) {
-      setWorkspaceSymbolResults([]);
-      setIsWorkspaceSymbolSearching(false);
-      setWorkspaceSymbolError(null);
+      setWorkspaceSymbolResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setIsWorkspaceSymbolSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
+      setWorkspaceSymbolError((currentError) => (
+        currentError === null ? currentError : null
+      ));
       return;
     }
 
     let cancelled = false;
-    setIsWorkspaceSymbolSearching(true);
-    setWorkspaceSymbolError(null);
+    setIsWorkspaceSymbolSearching((currentSearching) => (
+      currentSearching ? currentSearching : true
+    ));
+    setWorkspaceSymbolError((currentError) => (
+      currentError === null ? currentError : null
+    ));
     const requestKey = `workspace-symbols:${rootPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
     const cacheKey = `${requestKey}:${trimmedQuery}`;
@@ -13231,8 +13270,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         meta: trimmedQuery,
         fromCache: true,
       });
-      setWorkspaceSymbolResults(cachedResults);
-      setIsWorkspaceSymbolSearching(false);
+      setWorkspaceSymbolResults((currentResults) => (
+        areWorkspaceSymbolListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
+      ));
+      setIsWorkspaceSymbolSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
       return undefined;
     }
 
@@ -13255,11 +13298,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (response.success) {
         runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
       }
+      const nextWorkspaceSymbolResults = response.success ? (response.data ?? []) : [];
+      const nextWorkspaceSymbolError = response.success ? null : (response.error || t('common.retry'));
       startTransition(() => {
-        setWorkspaceSymbolResults(response.success ? (response.data ?? []) : []);
+        setWorkspaceSymbolResults((currentResults) => (
+          areWorkspaceSymbolListsEqual(currentResults, nextWorkspaceSymbolResults)
+            ? currentResults
+            : nextWorkspaceSymbolResults
+        ));
       });
-      setWorkspaceSymbolError(response.success ? null : (response.error || t('common.retry')));
-      setIsWorkspaceSymbolSearching(false);
+      setWorkspaceSymbolError((currentError) => (
+        currentError === nextWorkspaceSymbolError ? currentError : nextWorkspaceSymbolError
+      ));
+      setIsWorkspaceSymbolSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
     }, 220);
 
     return () => {
@@ -15161,18 +15214,36 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [getCurrentNavigationLocation, handleSidebarModeSelect, openEditorLocation, problems]);
 
   const openSearchEverywhere = useCallback((mode: SearchEverywhereMode) => {
-    setSearchEverywhereMode(mode);
-    setSearchEverywhereQuery('');
-    setSearchEverywhereError(null);
-    setSearchEverywhereSelectedIndex(0);
-    setIsSearchEverywhereOpen(true);
+    setSearchEverywhereMode((currentMode) => (
+      currentMode === mode ? currentMode : mode
+    ));
+    setSearchEverywhereQuery((currentQuery) => (
+      currentQuery.length === 0 ? currentQuery : ''
+    ));
+    setSearchEverywhereError((currentError) => (
+      currentError === null ? currentError : null
+    ));
+    setSearchEverywhereSelectedIndex((currentIndex) => (
+      currentIndex === 0 ? currentIndex : 0
+    ));
+    setIsSearchEverywhereOpen((currentOpen) => (
+      currentOpen ? currentOpen : true
+    ));
   }, []);
 
   const closeSearchEverywhere = useCallback(() => {
-    setIsSearchEverywhereOpen(false);
-    setSearchEverywhereQuery('');
-    setSearchEverywhereError(null);
-    setSearchEverywhereSelectedIndex(0);
+    setIsSearchEverywhereOpen((currentOpen) => (
+      currentOpen ? false : currentOpen
+    ));
+    setSearchEverywhereQuery((currentQuery) => (
+      currentQuery.length === 0 ? currentQuery : ''
+    ));
+    setSearchEverywhereError((currentError) => (
+      currentError === null ? currentError : null
+    ));
+    setSearchEverywhereSelectedIndex((currentIndex) => (
+      currentIndex === 0 ? currentIndex : 0
+    ));
   }, []);
 
   const searchEverywhereCommandItems = useMemo<SearchEverywhereItem[]>(() => ([
@@ -15377,16 +15448,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const trimmedQuery = deferredSearchEverywhereQuery.trim();
     if (!trimmedQuery || searchEverywhereMode === 'commands' || searchEverywhereMode === 'recent') {
-      setSearchEverywhereFileResults([]);
-      setSearchEverywhereSymbolResults([]);
-      setSearchEverywhereError(null);
-      setIsSearchEverywhereLoading(false);
+      setSearchEverywhereFileResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setSearchEverywhereSymbolResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setSearchEverywhereError((currentError) => (
+        currentError === null ? currentError : null
+      ));
+      setIsSearchEverywhereLoading((currentLoading) => (
+        currentLoading ? false : currentLoading
+      ));
       return;
     }
 
     let cancelled = false;
-    setIsSearchEverywhereLoading(true);
-    setSearchEverywhereError(null);
+    setIsSearchEverywhereLoading((currentLoading) => (
+      currentLoading ? currentLoading : true
+    ));
+    setSearchEverywhereError((currentError) => (
+      currentError === null ? currentError : null
+    ));
 
     const timer = window.setTimeout(async () => {
       const [fileResponse, symbolResponse] = await Promise.all([
@@ -15406,14 +15489,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
-      setSearchEverywhereFileResults(fileResponse.success ? (fileResponse.data ?? []) : []);
-      setSearchEverywhereSymbolResults(symbolResponse.success ? (symbolResponse.data ?? []) : []);
-      setSearchEverywhereError(
-        fileResponse.success && symbolResponse.success
-          ? null
-          : fileResponse.error || symbolResponse.error || t('common.retry'),
-      );
-      setIsSearchEverywhereLoading(false);
+      const nextSearchEverywhereFileResults = fileResponse.success ? (fileResponse.data ?? []) : [];
+      const nextSearchEverywhereSymbolResults = symbolResponse.success ? (symbolResponse.data ?? []) : [];
+      const nextSearchEverywhereError = fileResponse.success && symbolResponse.success
+        ? null
+        : fileResponse.error || symbolResponse.error || t('common.retry');
+
+      setSearchEverywhereFileResults((currentResults) => (
+        areStringListsEqual(currentResults, nextSearchEverywhereFileResults)
+          ? currentResults
+          : nextSearchEverywhereFileResults
+      ));
+      setSearchEverywhereSymbolResults((currentResults) => (
+        areWorkspaceSymbolListsEqual(currentResults, nextSearchEverywhereSymbolResults)
+          ? currentResults
+          : nextSearchEverywhereSymbolResults
+      ));
+      setSearchEverywhereError((currentError) => (
+        currentError === nextSearchEverywhereError ? currentError : nextSearchEverywhereError
+      ));
+      setIsSearchEverywhereLoading((currentLoading) => (
+        currentLoading ? false : currentLoading
+      ));
     }, 180);
 
     return () => {
