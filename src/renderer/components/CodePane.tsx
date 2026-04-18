@@ -459,6 +459,11 @@ type BranchManagerSection = {
   nodes: BranchManagerTreeNode[];
 };
 
+type BranchManagerTreeFilterResult = {
+  count: number;
+  nodes: BranchManagerTreeNode[];
+};
+
 type BranchManagerVisibleTreeRow = {
   key: string;
   depth: number;
@@ -3556,14 +3561,68 @@ function flattenBranchManagerTreeRows(
   return rows;
 }
 
+function getBranchManagerCollapsedNodeKeySignature(collapsedNodeKeys: Set<string>): string {
+  if (collapsedNodeKeys.size === 0) {
+    return '';
+  }
+
+  return [...collapsedNodeKeys].sort().join('\u0000');
+}
+
+function getCachedFlattenBranchManagerTreeRows(
+  cache: WeakMap<BranchManagerTreeNode[], Map<string, BranchManagerVisibleTreeRow[]>>,
+  nodes: BranchManagerTreeNode[],
+  collapsedNodeKeys: Set<string>,
+  collapsedNodeKeySignature: string,
+): BranchManagerVisibleTreeRow[] {
+  let rowsByState = cache.get(nodes);
+  if (!rowsByState) {
+    rowsByState = new Map();
+    cache.set(nodes, rowsByState);
+  }
+
+  const cachedRows = rowsByState.get(collapsedNodeKeySignature);
+  if (cachedRows) {
+    return cachedRows;
+  }
+
+  const rows = flattenBranchManagerTreeRows(nodes, collapsedNodeKeys);
+  rowsByState.set(collapsedNodeKeySignature, rows);
+  return rows;
+}
+
+function getCachedFilteredBranchManagerTreeNodes(
+  cache: WeakMap<BranchManagerTreeNode[], Map<string, BranchManagerTreeFilterResult>>,
+  nodes: BranchManagerTreeNode[],
+  normalizedQuery: string,
+): BranchManagerTreeFilterResult {
+  if (!normalizedQuery) {
+    return {
+      count: countBranchManagerTreeNodes(nodes),
+      nodes,
+    };
+  }
+
+  let filteredResultsByQuery = cache.get(nodes);
+  if (!filteredResultsByQuery) {
+    filteredResultsByQuery = new Map();
+    cache.set(nodes, filteredResultsByQuery);
+  }
+
+  const cachedResult = filteredResultsByQuery.get(normalizedQuery);
+  if (cachedResult) {
+    return cachedResult;
+  }
+
+  const result = filterBranchManagerTreeNodes(nodes, normalizedQuery);
+  filteredResultsByQuery.set(normalizedQuery, result);
+  return result;
+}
+
 function filterBranchManagerTreeNodes(
   nodes: BranchManagerTreeNode[],
-  query: string,
-): {
-  count: number;
-  nodes: BranchManagerTreeNode[];
-} {
-  const normalizedQuery = query.trim().toLowerCase();
+  normalizedQuery: string,
+): BranchManagerTreeFilterResult {
   if (!normalizedQuery) {
     return {
       count: countBranchManagerTreeNodes(nodes),
@@ -5727,6 +5786,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const editorSurfaceRefreshSequenceRef = useRef(0);
   const editorSurfaceBindingStateRef = useRef<EditorSurfaceBindingState | null>(null);
   const compactDirectoryPresentationsCacheRef = useRef<Map<string, CompactDirectoryPresentationCacheEntry>>(new Map());
+  const branchManagerTreeFilterCacheRef = useRef<WeakMap<BranchManagerTreeNode[], Map<string, BranchManagerTreeFilterResult>>>(new WeakMap());
+  const branchManagerTreeRowsCacheRef = useRef<WeakMap<BranchManagerTreeNode[], Map<string, BranchManagerVisibleTreeRow[]>>>(new WeakMap());
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
@@ -19408,13 +19469,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return [];
     }
 
-    const query = deferredBranchManagerQuery.trim();
-    if (!query) {
+    const normalizedQuery = deferredBranchManagerQuery.trim().toLowerCase();
+    const collapsedNodeKeySignature = getBranchManagerCollapsedNodeKeySignature(collapsedBranchManagerNodeKeys);
+    if (!normalizedQuery) {
       const nextSections: BranchManagerVisibleSection[] = [];
       for (const section of branchManagerBaseSections) {
         nextSections.push({
           ...section,
-          rows: flattenBranchManagerTreeRows(section.nodes, collapsedBranchManagerNodeKeys),
+          rows: getCachedFlattenBranchManagerTreeRows(
+            branchManagerTreeRowsCacheRef.current,
+            section.nodes,
+            collapsedBranchManagerNodeKeys,
+            collapsedNodeKeySignature,
+          ),
         });
       }
       return nextSections;
@@ -19422,7 +19489,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const nextSections: BranchManagerVisibleSection[] = [];
     for (const section of branchManagerBaseSections) {
-      const filteredSection = filterBranchManagerTreeNodes(section.nodes, query);
+      const filteredSection = getCachedFilteredBranchManagerTreeNodes(
+        branchManagerTreeFilterCacheRef.current,
+        section.nodes,
+        normalizedQuery,
+      );
       if (filteredSection.count === 0) {
         continue;
       }
@@ -19431,7 +19502,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         ...section,
         count: filteredSection.count,
         nodes: filteredSection.nodes,
-        rows: flattenBranchManagerTreeRows(filteredSection.nodes, collapsedBranchManagerNodeKeys),
+        rows: getCachedFlattenBranchManagerTreeRows(
+          branchManagerTreeRowsCacheRef.current,
+          filteredSection.nodes,
+          collapsedBranchManagerNodeKeys,
+          collapsedNodeKeySignature,
+        ),
       });
     }
     return nextSections;
