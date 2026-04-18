@@ -13206,11 +13206,36 @@ export const CodePane: React.FC<CodePaneProps> = ({
       lineNumber?: number;
     },
   ) => {
+    const requestKey = `git-history:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${config.filePath ?? ''}:${config.lineNumber ?? ''}`;
+    const cachedHistory = runtimeStoreRef.current.getCache<CodePaneGitHistoryResult>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedHistory) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Git history', {
+        meta: config.filePath ? getRelativePath(rootPath, config.filePath) : undefined,
+        fromCache: true,
+      });
+      setGitHistory((currentHistory) => (
+        areGitHistoryResultsEqual(currentHistory, cachedHistory) ? currentHistory : cachedHistory
+      ));
+      setSelectedHistoryCommitSha((currentCommitSha) => {
+        const nextCommitSha = cachedHistory.entries[0]?.commitSha ?? null;
+        return currentCommitSha === nextCommitSha ? currentCommitSha : nextCommitSha;
+      });
+      setGitHistoryError((currentError) => (currentError === null ? currentError : null));
+      setBottomPanelMode((currentMode) => (currentMode === 'history' ? currentMode : 'history'));
+      setIsGitHistoryLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     setIsGitHistoryLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setGitHistoryError((currentError) => (currentError === null ? currentError : null));
 
     const response = await trackRequest(
-      `git-history:${rootPath}`,
+      requestKey,
       'Git history',
       config.filePath ? getRelativePath(rootPath, config.filePath) : undefined,
       async () => await window.electronAPI.codePaneGitHistory({
@@ -13220,6 +13245,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         limit: 30,
       }),
     );
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
     if (!response.success || !response.data) {
       const nextError = response.error || t('common.retry');
       setGitHistoryError((currentError) => (
@@ -13230,6 +13258,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const nextHistory = response.data;
+    runtimeStoreRef.current.setCache(cacheKey, nextHistory);
     setGitHistory((currentHistory) => (
       areGitHistoryResultsEqual(currentHistory, nextHistory) ? currentHistory : nextHistory
     ));
@@ -14883,6 +14912,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [isEditorSplitVisible, openFileInSplit, persistEditorSplitLayout]);
 
   const loadTodoEntries = useCallback(async () => {
+    const requestKey = `todo-scan:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cachedTodoItems = runtimeStoreRef.current.getCache<CodePaneTodoItem[]>(
+      requestKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedTodoItems) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'TODO scan', {
+        meta: rootPath,
+        fromCache: true,
+      });
+      setTodoItems((currentItems) => (
+        areTodoItemListsEqual(currentItems, cachedTodoItems) ? currentItems : cachedTodoItems
+      ));
+      setTodoError((currentError) => (currentError === null ? currentError : null));
+      setIsTodoLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     setIsTodoLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setTodoError((currentError) => (currentError === null ? currentError : null));
 
@@ -14950,6 +14998,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         firstError = response.error ?? null;
         break;
       }
+    }
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
+    if (firstError === null) {
+      runtimeStoreRef.current.setCache(requestKey, nextTodoItems);
     }
     setTodoItems((currentItems) => (
       areTodoItemListsEqual(currentItems, nextTodoItems) ? currentItems : nextTodoItems
