@@ -11046,7 +11046,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
-      const isOpen = currentOpenFiles.some((tab) => tab.path === change.filePath);
+      let isOpen = false;
+      for (const tab of currentOpenFiles) {
+        if (tab.path === change.filePath) {
+          isOpen = true;
+          break;
+        }
+      }
       const wasActive = activeFilePathRef.current === change.filePath;
       if (isOpen) {
         await closeFileTab(change.filePath);
@@ -12942,23 +12948,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const bookmarkId = `${context.filePath}:${context.position.lineNumber}`;
     const currentBookmarks = paneRef.current.code?.bookmarks ?? bookmarks;
-    const existingBookmark = currentBookmarks.find((bookmark) => bookmark.id === bookmarkId);
-    const nextBookmarks = existingBookmark
-      ? currentBookmarks.filter((bookmark) => bookmark.id !== bookmarkId)
-      : [
-        {
-          id: bookmarkId,
-          filePath: context.filePath,
-          lineNumber: context.position.lineNumber,
-          column: context.position.column,
-          label: getPathLeafLabel(context.filePath) || context.filePath,
-          createdAt: new Date().toISOString(),
-        },
-        ...currentBookmarks,
-      ].sort((left, right) => {
+    let hasBookmark = false;
+    const nextBookmarks: typeof currentBookmarks = [];
+    for (const bookmark of currentBookmarks) {
+      if (bookmark.id === bookmarkId) {
+        hasBookmark = true;
+        continue;
+      }
+      nextBookmarks.push(bookmark);
+    }
+    if (!hasBookmark) {
+      nextBookmarks.unshift({
+        id: bookmarkId,
+        filePath: context.filePath,
+        lineNumber: context.position.lineNumber,
+        column: context.position.column,
+        label: getPathLeafLabel(context.filePath) || context.filePath,
+        createdAt: new Date().toISOString(),
+      });
+      nextBookmarks.sort((left, right) => {
         const pathOrder = left.filePath.localeCompare(right.filePath);
         return pathOrder !== 0 ? pathOrder : left.lineNumber - right.lineNumber;
       });
+    }
 
     persistCodeState({
       bookmarks: nextBookmarks,
@@ -12968,9 +12980,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const restoreLocalHistoryEntry = useCallback(async (entryId: string) => {
     let entry: LocalHistoryEntry | null = null;
     for (const entries of localHistoryEntriesRef.current.values()) {
-      const matchedEntry = entries.find((candidate) => candidate.id === entryId);
-      if (matchedEntry) {
-        entry = matchedEntry;
+      for (const candidate of entries) {
+        if (candidate.id === entryId) {
+          entry = candidate;
+          break;
+        }
+      }
+      if (entry) {
         break;
       }
     }
@@ -13437,9 +13453,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [isSidebarVisible, refreshGitSnapshot, sidebarMode]);
 
   useEffect(() => {
-    const normalizedSelectedOrder = selectedGitCommitOrder.filter((commitSha) => (
-      gitGraph.some((commit) => commit.sha === commitSha)
-    ));
+    const availableCommitShas = new Set<string>();
+    for (const commit of gitGraph) {
+      availableCommitShas.add(commit.sha);
+    }
+
+    const normalizedSelectedOrder: string[] = [];
+    for (const commitSha of selectedGitCommitOrder) {
+      if (availableCommitShas.has(commitSha)) {
+        normalizedSelectedOrder.push(commitSha);
+      }
+    }
     if (normalizedSelectedOrder.length !== selectedGitCommitOrder.length) {
       setSelectedGitCommitOrder(normalizedSelectedOrder);
       return;
@@ -17751,7 +17775,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const handleScmStageAll = useCallback(() => {
-    const paths = Object.values(gitStatusByPathRef.current).map((entry) => entry.path);
+    const paths: string[] = [];
+    for (const entry of Object.values(gitStatusByPathRef.current)) {
+      paths.push(entry.path);
+    }
     if (paths.length > 0) {
       void stageGitPaths(paths);
     }
