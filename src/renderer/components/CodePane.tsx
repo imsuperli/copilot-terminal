@@ -16148,7 +16148,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       startX: event.clientX,
       startWidth: sidebarWidthRef.current,
     };
-    setIsSidebarResizing(true);
+    setIsSidebarResizing((currentResizing) => (currentResizing ? currentResizing : true));
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
 
@@ -16179,7 +16179,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const handleMouseUp = () => {
       const resizeStart = sidebarResizeStartRef.current;
       sidebarResizeStartRef.current = null;
-      setIsSidebarResizing(false);
+      setIsSidebarResizing((currentResizing) => (currentResizing ? false : currentResizing));
 
       if (resizeStart) {
         const nextWidth = clampSidebarWidth(sidebarWidthRef.current);
@@ -16225,7 +16225,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       startX: event.clientX,
       startSize: editorSplitSizeRef.current,
     };
-    setIsEditorSplitResizing(true);
+    setIsEditorSplitResizing((currentResizing) => (currentResizing ? currentResizing : true));
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
 
@@ -16259,7 +16259,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const handleMouseUp = () => {
       const resizeStart = editorSplitResizeStartRef.current;
       editorSplitResizeStartRef.current = null;
-      setIsEditorSplitResizing(false);
+      setIsEditorSplitResizing((currentResizing) => (currentResizing ? false : currentResizing));
 
       if (resizeStart) {
         const nextSize = clampEditorSplitSize(editorSplitSizeRef.current);
@@ -16314,7 +16314,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       startY: event.clientY,
       startHeight: currentHeight,
     };
-    setIsBottomPanelResizing(true);
+    setIsBottomPanelResizing((currentResizing) => (currentResizing ? currentResizing : true));
     document.body.style.cursor = 'row-resize';
     document.body.style.userSelect = 'none';
 
@@ -16349,7 +16349,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const handleMouseUp = () => {
       const resizeStart = bottomPanelResizeStartRef.current;
       bottomPanelResizeStartRef.current = null;
-      setIsBottomPanelResizing(false);
+      setIsBottomPanelResizing((currentResizing) => (currentResizing ? false : currentResizing));
 
       if (resizeStart) {
         const nextHeight = clampBottomPanelHeight(
@@ -19766,6 +19766,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
   }, []);
 
+  const closeBranchManager = useCallback(() => {
+    setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
+  }, []);
+
   const handleGitWorkbenchTabChange = useCallback((tab: GitToolWindowTab) => {
     setGitWorkbenchInitialTab(tab);
     setActiveGitWorkbenchTab(tab);
@@ -20506,7 +20510,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             isLoading={isRunTargetsLoading}
             error={runTargetsError}
             onClose={() => {
-              setBottomPanelMode(null);
+              closeBottomPanel();
             }}
             onRefresh={refreshBottomPanel}
             onRunTarget={runTargetById}
@@ -20533,7 +20537,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             isDetailsLoading={isDebugDetailsLoading}
             error={runTargetsError}
             onClose={() => {
-              setBottomPanelMode(null);
+              closeBottomPanel();
             }}
             onRefresh={refreshBottomPanel}
             onStartDebug={debugTargetById}
@@ -20579,7 +20583,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
             isLoading={isSemanticSummaryLoading}
             error={semanticSummaryError}
             onClose={() => {
-              setBottomPanelMode(null);
+              closeBottomPanel();
             }}
             onRefresh={() => {
               void loadSemanticSummary();
@@ -21132,7 +21136,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         icon: RefreshCw,
         disabled: false,
         onSelect: () => {
-          setIsBranchManagerOpen(false);
+          closeBranchManager();
           void updateGitProject();
         },
       },
@@ -21143,7 +21147,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         icon: GitCommitHorizontal,
         disabled: false,
         onSelect: () => {
-          setIsBranchManagerOpen(false);
+          closeBranchManager();
           window.setTimeout(() => {
             void commitGitChangesFromPrompt();
           }, 0);
@@ -21156,7 +21160,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         icon: GitBranch,
         disabled: !currentBranchName,
         onSelect: () => {
-          setIsBranchManagerOpen(false);
+          closeBranchManager();
           void pushGitBranch({
             branchName: currentBranchName || undefined,
             setUpstream: !currentGitBranch?.upstream,
@@ -21170,7 +21174,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         icon: Plus,
         disabled: false,
         onSelect: () => {
-          setIsBranchManagerOpen(false);
+          closeBranchManager();
           openActionInputDialog({
             kind: 'checkout-branch',
             initialValue: '',
@@ -21186,7 +21190,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         icon: GitCompareArrows,
         disabled: false,
         onSelect: () => {
-          setIsBranchManagerOpen(false);
+          closeBranchManager();
           void checkoutGitRevisionFromPrompt();
         },
       },
@@ -21212,6 +21216,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     commitGitChangesFromPrompt,
     currentGitBranch?.name,
     currentGitBranch?.upstream,
+    closeBranchManager,
     deferredBranchManagerQuery,
     gitRepositorySummary?.currentBranch,
     isBranchManagerOpen,
@@ -21234,7 +21239,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const checkoutBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
-    setIsBranchManagerOpen(false);
+    closeBranchManager();
     if (branch.kind === 'remote') {
       void checkoutGitBranch({
         branchName: getTrackingLocalBranchName(branch.name),
@@ -21251,33 +21256,33 @@ export const CodePane: React.FC<CodePaneProps> = ({
         createBranch: false,
       });
     }
-  }, [checkoutGitBranch]);
+  }, [checkoutGitBranch, closeBranchManager]);
 
   const renameBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
     if (branch.kind !== 'local') {
       return;
     }
 
-    setIsBranchManagerOpen(false);
+    closeBranchManager();
     openActionInputDialog({
       kind: 'rename-branch',
       branchName: branch.name,
       initialValue: branch.name,
     }, { deferred: true });
-  }, [openActionInputDialog]);
+  }, [closeBranchManager, openActionInputDialog]);
 
   const deleteBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
     if (branch.kind !== 'local' || branch.current) {
       return;
     }
 
-    setIsBranchManagerOpen(false);
+    closeBranchManager();
     openActionConfirmDialog({
       kind: 'delete-branch',
       branchName: branch.name,
       force: !branch.mergedIntoCurrent,
     }, { deferred: true });
-  }, [openActionConfirmDialog]);
+  }, [closeBranchManager, openActionConfirmDialog]);
 
   const activeFileStatusLabel = useMemo(() => {
     if (!activeFilePath) {
