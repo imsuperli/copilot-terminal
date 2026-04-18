@@ -11469,11 +11469,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    await Promise.all(normalizedPaths.map(async (filePath) => {
+    const reloadRequests: Promise<void>[] = [];
+    for (const filePath of normalizedPaths) {
       if (fileModelsRef.current.has(filePath)) {
-        await reloadFileFromDisk(filePath);
+        reloadRequests.push((async () => {
+          await reloadFileFromDisk(filePath);
+        })());
       }
-    }));
+    }
+    await Promise.all(reloadRequests);
   }, [reloadFileFromDisk, rootPath, runGitOperation, suppressExternalChangesForPaths, t]);
 
   const stageGitHunk = useCallback(async (hunk: CodePaneGitDiffHunk) => {
@@ -11562,7 +11566,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [invalidateGitGraphSnapshot, isBlameVisible, loadBlameForActiveFile, refreshGitSnapshot, rootPath, shouldLoadGitGraph, t]);
 
   const openCommitWindow = useCallback((options?: { initialMessage?: string; preselectedPaths?: string[] }) => {
-    const entrySnapshot = [...gitStatusEntriesRef.current];
+    const entrySnapshot: CodePaneGitStatusEntry[] = [];
+    for (const entry of gitStatusEntriesRef.current) {
+      entrySnapshot.push(entry);
+    }
     let preselectedPaths: string[] | null = null;
     if (options?.preselectedPaths) {
       const seenPaths = new Set<string>();
@@ -12200,11 +12207,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
             removedFilePaths.has(normalizedEntryPath)
             || isPathAffectedByRemovedDirectory(removedDirectoryPaths, normalizedEntryPath)
           ) {
-            nextEntries = entries.filter((candidateEntry) => {
+            const filteredEntries: CodePaneTreeEntry[] = [];
+            for (const candidateEntry of entries) {
               const candidatePath = normalizePath(candidateEntry.path);
-              return !removedFilePaths.has(candidatePath)
-                && !isPathAffectedByRemovedDirectory(removedDirectoryPaths, candidatePath);
-            });
+              if (
+                !removedFilePaths.has(candidatePath)
+                && !isPathAffectedByRemovedDirectory(removedDirectoryPaths, candidatePath)
+              ) {
+                filteredEntries.push(candidateEntry);
+              }
+            }
+            nextEntries = filteredEntries;
             didChange = true;
             break;
           }
@@ -17328,25 +17341,29 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    const nextEntries = await Promise.all(expressions.map(async (expression) => {
-      const response = await window.electronAPI.codePaneDebugEvaluate({
-        sessionId: targetSession.id,
-        expression,
-      });
-      if (!response.success) {
+    const evaluationRequests: Array<Promise<DebugWatchEntry>> = [];
+    for (const expression of expressions) {
+      evaluationRequests.push((async () => {
+        const response = await window.electronAPI.codePaneDebugEvaluate({
+          sessionId: targetSession.id,
+          expression,
+        });
+        if (!response.success) {
+          return {
+            id: expression,
+            expression,
+            error: response.error || t('common.retry'),
+          };
+        }
+
         return {
           id: expression,
           expression,
-          error: response.error || t('common.retry'),
+          value: response.data?.value ?? '',
         };
-      }
-
-      return {
-        id: expression,
-        expression,
-        value: response.data?.value ?? '',
-      };
-    }));
+      })());
+    }
+    const nextEntries = await Promise.all(evaluationRequests);
     setWatchEntries(nextEntries);
   }, [selectedDebugSession, t, watchExpressions]);
 
@@ -17484,13 +17501,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
     breakpointId: CodePaneExceptionBreakpoint['id'],
     enabled: boolean,
   ) => {
-    const nextBreakpoints = normalizeExceptionBreakpoints(
-      exceptionBreakpointsRef.current.map((breakpoint) => (
+    const nextRawBreakpoints: typeof exceptionBreakpointsRef.current = [];
+    for (const breakpoint of exceptionBreakpointsRef.current) {
+      nextRawBreakpoints.push(
         breakpoint.id === breakpointId
           ? { ...breakpoint, enabled }
-          : breakpoint
-      )),
-    );
+          : breakpoint,
+      );
+    }
+    const nextBreakpoints = normalizeExceptionBreakpoints(nextRawBreakpoints);
     const response = await window.electronAPI.codePaneSetExceptionBreakpoints({
       rootPath,
       breakpoints: nextBreakpoints,
