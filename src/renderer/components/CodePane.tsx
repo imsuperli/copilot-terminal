@@ -402,6 +402,12 @@ type ExternalChangeEntry = {
   canDiff: boolean;
   lineSummary: ExternalChangeLineSummary;
 };
+type ExternalChangeStateSnapshot = {
+  entries: ExternalChangeEntry[];
+  entriesByPath: Map<string, ExternalChangeEntry>;
+  selectedPath: string | null;
+  selectedEntry: ExternalChangeEntry | null;
+};
 type ExternalChangeDiffRequest = {
   filePath: string;
   leftLabel: string;
@@ -4291,6 +4297,28 @@ function createEmptyExternalChangeLineSummary(): ExternalChangeLineSummary {
   };
 }
 
+function createExternalChangeStateSnapshot(
+  entries: ExternalChangeEntry[],
+  selectedPath: string | null,
+): ExternalChangeStateSnapshot {
+  const entriesByPath = new Map<string, ExternalChangeEntry>();
+  let selectedEntry: ExternalChangeEntry | null = null;
+
+  for (const entry of entries) {
+    entriesByPath.set(entry.filePath, entry);
+    if (!selectedEntry && selectedPath && entry.filePath === selectedPath) {
+      selectedEntry = entry;
+    }
+  }
+
+  return {
+    entries,
+    entriesByPath,
+    selectedPath,
+    selectedEntry: selectedEntry ?? entries[0] ?? null,
+  };
+}
+
 function splitContentLines(content: string | null): string[] {
   if (content === null) {
     return [];
@@ -5619,6 +5647,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const pendingGitRevisionDiffRef = useRef<GitRevisionDiffRequest | null>(null);
   const pendingExternalChangeDiffRef = useRef<ExternalChangeDiffRequest | null>(null);
   const externalChangeEntriesRef = useRef<ExternalChangeEntry[]>([]);
+  const externalChangeStateRef = useRef<ExternalChangeStateSnapshot>(
+    createExternalChangeStateSnapshot([], null),
+  );
   const selectedExternalChangePathRef = useRef<string | null>(null);
   const modelDisposersRef = useRef(new Map<string, MonacoDisposable>());
   const fileMetaRef = useRef(new Map<string, FileRuntimeMeta>());
@@ -5828,6 +5859,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [pendingExternalChangeDiff, setPendingExternalChangeDiff] = useState<ExternalChangeDiffRequest | null>(null);
   const [externalChangeEntries, setExternalChangeEntries] = useState<ExternalChangeEntry[]>([]);
   const [selectedExternalChangePath, setSelectedExternalChangePath] = useState<string | null>(null);
+  const [selectedExternalChangeEntry, setSelectedExternalChangeEntry] = useState<ExternalChangeEntry | null>(null);
   const [todoItems, setTodoItems] = useState<CodePaneTodoItem[]>([]);
   const [isTodoLoading, setIsTodoLoading] = useState(false);
   const [todoError, setTodoError] = useState<string | null>(null);
@@ -6020,6 +6052,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     selectedExternalChangePathRef.current = selectedExternalChangePath;
+    externalChangeStateRef.current = createExternalChangeStateSnapshot(
+      externalChangeEntriesRef.current,
+      selectedExternalChangePath,
+    );
   }, [selectedExternalChangePath]);
 
   useEffect(() => {
@@ -6118,6 +6154,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     externalChangeEntriesRef.current = externalChangeEntries;
+    externalChangeStateRef.current = createExternalChangeStateSnapshot(
+      externalChangeEntries,
+      selectedExternalChangePathRef.current,
+    );
   }, [externalChangeEntries]);
 
   useEffect(() => {
@@ -9067,6 +9107,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return pendingEditorSurfaceRefreshRef.current;
   }, []);
 
+  const applyExternalChangeState = useCallback((
+    nextEntries: ExternalChangeEntry[],
+    nextSelectedPath: string | null,
+  ) => {
+    const snapshot = createExternalChangeStateSnapshot(nextEntries, nextSelectedPath);
+    externalChangeEntriesRef.current = snapshot.entries;
+    selectedExternalChangePathRef.current = snapshot.selectedPath;
+    externalChangeStateRef.current = snapshot;
+    setExternalChangeEntries((currentEntries) => (
+      currentEntries === snapshot.entries ? currentEntries : snapshot.entries
+    ));
+    setSelectedExternalChangePath((currentPath) => (
+      currentPath === snapshot.selectedPath ? currentPath : snapshot.selectedPath
+    ));
+    setSelectedExternalChangeEntry((currentEntry) => (
+      currentEntry === snapshot.selectedEntry ? currentEntry : snapshot.selectedEntry
+    ));
+  }, []);
+
   const reloadFileFromDisk = useCallback(async (filePath: string) => {
     const response = await window.electronAPI.codePaneReadFile({
       rootPath,
@@ -10696,13 +10755,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [activeFilePathRef, clearBannerForFile, detachDiffEditorModel, ensureMonacoReady, supportsMonaco, t, viewMode]);
 
   const openExternalChangeDiff = useCallback(async (filePath: string) => {
-    let entry: ExternalChangeEntry | null = null;
-    for (const candidate of externalChangeEntriesRef.current) {
-      if (candidate.filePath === filePath) {
-        entry = candidate;
-        break;
-      }
-    }
+    const entry = externalChangeStateRef.current.entriesByPath.get(filePath) ?? null;
     if (!entry || !entry.canDiff) {
       return;
     }
@@ -10716,7 +10769,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
     setPendingExternalChangeDiff(externalDiffRequest);
     pendingExternalChangeDiffRef.current = externalDiffRequest;
-    setSelectedExternalChangePath(filePath);
+    applyExternalChangeState(externalChangeStateRef.current.entries, filePath);
 
     const didEnsureDiffModel = await ensureExternalChangeDiffModel(entry);
     if (!didEnsureDiffModel) {
@@ -10740,7 +10793,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       diffTargetPath: filePath,
     });
     setBanner(null);
-  }, [ensureExternalChangeDiffModel, openFiles, persistCodeState, t]);
+  }, [applyExternalChangeState, ensureExternalChangeDiffModel, openFiles, persistCodeState, t]);
 
   const updateExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
     const nextEntries: ExternalChangeEntry[] = [entry];
@@ -10752,10 +10805,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
       }
     }
-    externalChangeEntriesRef.current = nextEntries;
-    setExternalChangeEntries(nextEntries);
-    setSelectedExternalChangePath(entry.filePath);
-  }, []);
+    applyExternalChangeState(nextEntries, entry.filePath);
+  }, [applyExternalChangeState]);
 
   const updateExternalChangeEntries = useCallback((entries: ExternalChangeEntry[]) => {
     if (entries.length === 0) {
@@ -10785,23 +10836,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const currentEntries = externalChangeEntriesRef.current;
     const didEntriesChange = currentEntries.length !== nextEntries.length
       || currentEntries.some((entry, index) => entry !== nextEntries[index]);
-    if (didEntriesChange) {
-      externalChangeEntriesRef.current = nextEntries;
-      setExternalChangeEntries(nextEntries);
-    }
-    setSelectedExternalChangePath((currentPath) => {
-      if (!currentPath) {
-        return preferredSelectedPath;
-      }
-
+    const currentSelectedPath = selectedExternalChangePathRef.current;
+    let nextSelectedPath = preferredSelectedPath;
+    if (currentSelectedPath) {
       for (const entry of nextEntries) {
-        if (entry.filePath === currentPath) {
-          return currentPath;
+        if (entry.filePath === currentSelectedPath) {
+          nextSelectedPath = currentSelectedPath;
+          break;
         }
       }
-      return preferredSelectedPath;
-    });
-  }, []);
+    }
+    if (!didEntriesChange && nextSelectedPath === currentSelectedPath) {
+      return;
+    }
+    applyExternalChangeState(nextEntries, nextSelectedPath);
+  }, [applyExternalChangeState]);
 
   const revealExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
     updateExternalChangeEntries([entry]);
@@ -10816,13 +10865,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const clearExternalChangeEntry = useCallback((filePath: string) => {
     const nextEntries = externalChangeEntriesRef.current.filter((entry) => entry.filePath !== filePath);
-    externalChangeEntriesRef.current = nextEntries;
-    setExternalChangeEntries(nextEntries);
-    setSelectedExternalChangePath((currentPath) => (
-      currentPath === filePath
+    const currentSelectedPath = selectedExternalChangePathRef.current;
+    applyExternalChangeState(
+      nextEntries,
+      currentSelectedPath === filePath
         ? nextEntries[0]?.filePath ?? null
-        : currentPath
-    ));
+        : currentSelectedPath,
+    );
     if (pendingExternalChangeDiffRef.current?.filePath === filePath) {
       pendingExternalChangeDiffRef.current = null;
       setPendingExternalChangeDiff(null);
@@ -10833,12 +10882,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
       }
     }
-  }, [persistCodeState, viewMode]);
+  }, [applyExternalChangeState, persistCodeState, viewMode]);
 
   const clearAllExternalChanges = useCallback(() => {
-    externalChangeEntriesRef.current = [];
-    setExternalChangeEntries([]);
-    setSelectedExternalChangePath(null);
+    applyExternalChangeState([], null);
     if (pendingExternalChangeDiffRef.current) {
       pendingExternalChangeDiffRef.current = null;
       setPendingExternalChangeDiff(null);
@@ -10849,7 +10896,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         });
       }
     }
-  }, [persistCodeState, viewMode]);
+  }, [applyExternalChangeState, persistCodeState, viewMode]);
 
   const readExternalChangeBaseContent = useCallback(async (
     filePath: string,
@@ -10943,6 +10990,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     if (change.type === 'unlink') {
       const currentContent = previousContent === null ? null : '';
+      const lineSummary = createExternalChangeLineSummary(previousContent, currentContent);
       const nextEntry: ExternalChangeEntry = {
         id: `${filePath}:${changedAt}`,
         filePath,
@@ -10954,7 +11002,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         changedAt,
         openedAtChange,
         canDiff: previousContent !== null,
-        lineSummary: createExternalChangeLineSummary(previousContent, currentContent),
+        lineSummary,
       };
       if (shouldCommit) {
         revealExternalChangeEntry(nextEntry);
@@ -10972,22 +11020,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const currentContent = response.data.content;
     const changeType: ExternalChangeKind = change.type === 'add' ? 'added' : 'modified';
+    const diffPreviousContent = changeType === 'added' ? (previousContent ?? '') : previousContent;
     const canDiff = changeType === 'added' || previousContent !== null;
+    const lineSummary = createExternalChangeLineSummary(diffPreviousContent, currentContent);
     const nextEntry: ExternalChangeEntry = {
       id: `${filePath}:${changedAt}`,
       filePath,
       relativePath: getRelativePath(rootPath, filePath),
-      previousContent: changeType === 'added' ? (previousContent ?? '') : previousContent,
+      previousContent: diffPreviousContent,
       currentContent,
       language: response.data.language,
       changeType,
       changedAt,
       openedAtChange,
       canDiff,
-      lineSummary: createExternalChangeLineSummary(
-        changeType === 'added' ? (previousContent ?? '') : previousContent,
-        currentContent,
-      ),
+      lineSummary,
     };
 
     const hasUnsavedEditorContent = existingModel && (
@@ -12760,14 +12807,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
         relativePath: getRelativePath(rootPath, nextFilePath),
       });
     }
-    externalChangeEntriesRef.current = nextExternalChangeEntries;
-    setExternalChangeEntries(nextExternalChangeEntries);
-
-    setSelectedExternalChangePath((currentPath) => (
-      currentPath && isPathEqualOrDescendant(currentPath, sourcePath)
-        ? replacePathPrefix(currentPath, sourcePath, targetPath)
-        : currentPath
-    ));
+    const nextSelectedExternalChangePath = selectedExternalChangePathRef.current
+      && isPathEqualOrDescendant(selectedExternalChangePathRef.current, sourcePath)
+      ? replacePathPrefix(selectedExternalChangePathRef.current, sourcePath, targetPath)
+      : selectedExternalChangePathRef.current;
+    applyExternalChangeState(nextExternalChangeEntries, nextSelectedExternalChangePath);
     setPendingExternalChangeDiff((currentRequest) => (
       currentRequest && isPathEqualOrDescendant(currentRequest.filePath, sourcePath)
         ? {
@@ -13473,9 +13517,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setSelectedRunSessionId(null);
       setPendingGitRevisionDiff(null);
       setPendingExternalChangeDiff(null);
-      setExternalChangeEntries([]);
-      setSelectedExternalChangePath(null);
-      externalChangeEntriesRef.current = [];
+      applyExternalChangeState([], null);
       recentFilesRef.current = [];
       recentLocationsRef.current = [];
       navigationBackStackRef.current = [];
@@ -13642,6 +13684,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       });
     };
   }, [
+    applyExternalChangeState,
     pane.id,
     rootPath,
     supportsMonaco,
@@ -14360,25 +14403,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       showSpinner: true,
     };
   }, [languageWorkspaceState]);
-  const externalChangesByPath = useMemo(() => {
-    const nextEntriesByPath = new Map<string, ExternalChangeEntry>();
-    for (const entry of externalChangeEntries) {
-      nextEntriesByPath.set(entry.filePath, entry);
-    }
-    return nextEntriesByPath;
-  }, [externalChangeEntries]);
-  const selectedExternalChangeEntry = useMemo(() => {
-    let firstEntry: ExternalChangeEntry | null = null;
-    for (const entry of externalChangeEntries) {
-      if (!firstEntry) {
-        firstEntry = entry;
-      }
-      if (selectedExternalChangePath && entry.filePath === selectedExternalChangePath) {
-        return entry;
-      }
-    }
-    return firstEntry;
-  }, [externalChangeEntries, selectedExternalChangePath]);
+  const externalChangesByPath = externalChangeStateRef.current.entriesByPath;
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
   const hasExternalLibraries = useMemo(() => {
     for (const section of externalLibrarySections) {
@@ -16198,7 +16223,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     ));
   }, []);
 
-  const searchEverywhereCommandItems = useMemo<SearchEverywhereItem[]>(() => ([
+  const getSearchEverywhereCommandItems = useCallback((): SearchEverywhereItem[] => ([
     {
       id: 'command-search-everywhere',
       section: t('codePane.searchEverywhereCommandsSection'),
@@ -16502,6 +16527,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const trimmedQuery = searchEverywhereQuery.trim().toLowerCase();
     const nextItems: SearchEverywhereItem[] = [];
+    const commandItems = searchEverywhereMode === 'recent' ? [] : getSearchEverywhereCommandItems();
     const matchesQuery = (title: string, meta?: string) => (
       trimmedQuery.length === 0
       || title.toLowerCase().includes(trimmedQuery)
@@ -16509,7 +16535,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
 
     if (searchEverywhereMode === 'commands') {
-      for (const item of searchEverywhereCommandItems) {
+      for (const item of commandItems) {
         if (matchesQuery(item.title, item.meta)) {
           nextItems.push(item);
         }
@@ -16576,7 +16602,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return nextItems;
     }
 
-    for (const item of searchEverywhereCommandItems) {
+    for (const item of commandItems) {
       if (matchesQuery(item.title, item.meta)) {
         nextItems.push(item);
       }
@@ -16676,7 +16702,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     recentFiles,
     recentLocations,
     rootPath,
-    searchEverywhereCommandItems,
+    getSearchEverywhereCommandItems,
     searchEverywhereFileResults,
     searchEverywhereMode,
     searchEverywhereQuery,
@@ -18289,11 +18315,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [documentSymbolsFilePath, openFileLocation]);
 
   const handleExternalChangeSelectEntry = useCallback((entry: ExternalChangeEntry) => {
-    setSelectedExternalChangePath(entry.filePath);
+    applyExternalChangeState(externalChangeEntriesRef.current, entry.filePath);
     if (entry.changeType !== 'deleted') {
       void activateFile(entry.filePath, { preview: true });
     }
-  }, [activateFile]);
+  }, [activateFile, applyExternalChangeState]);
 
   const handleExternalChangeOpenDiff = useCallback((filePath: string) => {
     void openExternalChangeDiff(filePath);
