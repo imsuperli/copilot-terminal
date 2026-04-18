@@ -3428,14 +3428,16 @@ function insertBranchManagerTreeNode(
   }
 
   const [folderLabel, ...restSegments] = segments;
-  const folderPath = [...parentSegments, folderLabel];
+  const folderPath = parentSegments.length > 0
+    ? `${parentSegments.join('/')}/${folderLabel}`
+    : folderLabel;
   let folderNode = nodes.find((node): node is Extract<BranchManagerTreeNode, { kind: 'folder' }> => (
     node.kind === 'folder' && node.label === folderLabel
   ));
 
   if (!folderNode) {
     folderNode = {
-      key: `${keyPrefix}:folder:${folderPath.join('/')}`,
+      key: `${keyPrefix}:folder:${folderPath}`,
       kind: 'folder',
       label: folderLabel,
       children: [],
@@ -3444,40 +3446,36 @@ function insertBranchManagerTreeNode(
     nodes.push(folderNode);
   }
 
-  insertBranchManagerTreeNode(folderNode.children, restSegments, branch, keyPrefix, folderPath);
-  folderNode.branchCount = countBranchManagerTreeNodes(folderNode.children);
+  folderNode.branchCount += 1;
+  insertBranchManagerTreeNode(folderNode.children, restSegments, branch, keyPrefix, [...parentSegments, folderLabel]);
 }
 
 function sortBranchManagerTreeNodes(nodes: BranchManagerTreeNode[]): BranchManagerTreeNode[] {
-  return [...nodes]
-    .map((node) => (
-      node.kind === 'folder'
-        ? {
-          ...node,
-          children: sortBranchManagerTreeNodes(node.children),
-          branchCount: countBranchManagerTreeNodes(node.children),
-        }
-        : node
-    ))
-    .sort((leftNode, rightNode) => {
-      if (leftNode.kind !== rightNode.kind) {
-        return leftNode.kind === 'folder' ? -1 : 1;
+  const nextNodes = [...nodes];
+  for (let index = 0; index < nextNodes.length; index += 1) {
+    const node = nextNodes[index];
+    if (node?.kind === 'folder') {
+      nextNodes[index] = {
+        ...node,
+        children: sortBranchManagerTreeNodes(node.children),
+      };
+    }
+  }
+
+  nextNodes.sort((leftNode, rightNode) => {
+    if (leftNode.kind !== rightNode.kind) {
+      return leftNode.kind === 'folder' ? -1 : 1;
+    }
+
+    if (leftNode.kind === 'branch' && rightNode.kind === 'branch') {
+      if (leftNode.branch.current !== rightNode.branch.current) {
+        return leftNode.branch.current ? -1 : 1;
       }
+    }
 
-      if (leftNode.kind === 'branch' && rightNode.kind === 'branch') {
-        if (leftNode.branch.current !== rightNode.branch.current) {
-          return leftNode.branch.current ? -1 : 1;
-        }
-      }
-
-      return leftNode.label.localeCompare(rightNode.label, undefined, { sensitivity: 'base' });
-    });
-}
-
-function countBranchManagerTreeNodes(nodes: BranchManagerTreeNode[]): number {
-  return nodes.reduce((count, node) => (
-    count + (node.kind === 'folder' ? countBranchManagerTreeNodes(node.children) : 1)
-  ), 0);
+    return leftNode.label.localeCompare(rightNode.label, undefined, { sensitivity: 'base' });
+  });
+  return nextNodes;
 }
 
 function flattenBranchManagerTreeRows(
@@ -3486,16 +3484,30 @@ function flattenBranchManagerTreeRows(
   depth = 0,
 ): BranchManagerVisibleTreeRow[] {
   const rows: BranchManagerVisibleTreeRow[] = [];
+  const stack: Array<{ node: BranchManagerTreeNode; depth: number }> = [];
 
-  for (const node of nodes) {
-    rows.push({
-      key: node.key,
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    stack.push({
+      node: nodes[index]!,
       depth,
-      node,
+    });
+  }
+
+  while (stack.length > 0) {
+    const nextRow = stack.pop()!;
+    rows.push({
+      key: nextRow.node.key,
+      depth: nextRow.depth,
+      node: nextRow.node,
     });
 
-    if (node.kind === 'folder' && !collapsedNodeKeys.has(node.key)) {
-      rows.push(...flattenBranchManagerTreeRows(node.children, collapsedNodeKeys, depth + 1));
+    if (nextRow.node.kind === 'folder' && !collapsedNodeKeys.has(nextRow.node.key)) {
+      for (let index = nextRow.node.children.length - 1; index >= 0; index -= 1) {
+        stack.push({
+          node: nextRow.node.children[index]!,
+          depth: nextRow.depth + 1,
+        });
+      }
     }
   }
 
@@ -3508,9 +3520,13 @@ function filterBranchManagerTreeNodes(nodes: BranchManagerTreeNode[], query: str
     return nodes;
   }
 
-  return nodes.flatMap<BranchManagerTreeNode>((node) => {
+  const filteredNodes: BranchManagerTreeNode[] = [];
+  for (const node of nodes) {
     if (node.kind === 'branch') {
-      return doesBranchMatchQuery(node.branch, node.label, normalizedQuery) ? [node] : [];
+      if (doesBranchMatchQuery(node.branch, node.label, normalizedQuery)) {
+        filteredNodes.push(node);
+      }
+      continue;
     }
 
     const folderMatches = node.label.toLowerCase().includes(normalizedQuery);
@@ -3518,15 +3534,25 @@ function filterBranchManagerTreeNodes(nodes: BranchManagerTreeNode[], query: str
       ? node.children
       : filterBranchManagerTreeNodes(node.children, normalizedQuery);
     if (children.length === 0) {
-      return [];
+      continue;
     }
 
-    return [{
+    filteredNodes.push({
       ...node,
       children,
-      branchCount: countBranchManagerTreeNodes(children),
-    }];
-  });
+      branchCount: countBranchManagerFilteredNodes(children),
+    });
+  }
+
+  return filteredNodes;
+}
+
+function countBranchManagerFilteredNodes(nodes: BranchManagerTreeNode[]): number {
+  let count = 0;
+  for (const node of nodes) {
+    count += node.kind === 'folder' ? node.branchCount : 1;
+  }
+  return count;
 }
 
 function doesBranchMatchQuery(
@@ -18708,7 +18734,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         const nodes = filterBranchManagerTreeNodes(section.nodes, query);
         return {
           ...section,
-          count: query ? countBranchManagerTreeNodes(nodes) : section.count,
+          count: query ? countBranchManagerFilteredNodes(nodes) : section.count,
           nodes,
         };
       })
