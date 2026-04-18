@@ -4856,6 +4856,37 @@ function applyTextEditsToContent(content: string, edits: CodePaneTextEdit[]): st
     }, content);
 }
 
+function applyTextEditsToModel(model: MonacoModel, edits: CodePaneTextEdit[]): boolean {
+  if (edits.length === 0) {
+    return false;
+  }
+
+  const editModel = model as MonacoModel & {
+    pushEditOperations?: (
+      beforeCursorState: unknown[],
+      editOperations: Array<{ range: CodePaneRange; text: string; forceMoveMarkers?: boolean }>,
+      cursorStateComputer: () => null,
+    ) => unknown;
+    setValue: (value: string) => void;
+    getValue: () => string;
+  };
+  if (typeof editModel.pushEditOperations === 'function') {
+    editModel.pushEditOperations(
+      [],
+      edits.map((edit) => ({
+        range: edit.range,
+        text: edit.newText,
+        forceMoveMarkers: true,
+      })),
+      () => null,
+    );
+    return true;
+  }
+
+  editModel.setValue(applyTextEditsToContent(editModel.getValue(), edits));
+  return true;
+}
+
 async function runWithConcurrency<T>(
   items: T[],
   limit: number,
@@ -9109,10 +9140,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     for (const [filePath, fileEdits] of editsByFilePath.entries()) {
       const existingModel = fileModelsRef.current.get(filePath);
       if (existingModel) {
-        const nextContent = applyTextEditsToContent(existingModel.getValue(), fileEdits);
         suppressModelEventsRef.current.add(filePath);
-        existingModel.setValue(nextContent);
+        const didApplyToModel = applyTextEditsToModel(existingModel, fileEdits);
         suppressModelEventsRef.current.delete(filePath);
+        if (!didApplyToModel) {
+          continue;
+        }
         clearDefinitionLookupCache();
         markDirty(filePath, true);
         await syncLanguageDocument(filePath, 'change');
