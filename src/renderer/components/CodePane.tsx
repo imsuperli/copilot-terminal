@@ -3366,7 +3366,14 @@ function isPathEqualOrDescendant(targetPath: string, basePath: string): boolean 
 }
 
 function splitGitBranchPath(branchName: string): string[] {
-  return branchName.split('/').filter(Boolean);
+  const segments = branchName.split('/');
+  const nextSegments: string[] = [];
+  for (const segment of segments) {
+    if (segment) {
+      nextSegments.push(segment);
+    }
+  }
+  return nextSegments;
 }
 
 function getTrackingLocalBranchName(remoteBranchName: string): string {
@@ -3403,7 +3410,7 @@ function buildBranchManagerTree(
   const rootNodes: BranchManagerTreeNode[] = [];
 
   for (const branch of branches) {
-    const segments = getSegments(branch).filter(Boolean);
+    const segments = getSegments(branch);
     insertBranchManagerTreeNode(rootNodes, segments.length > 0 ? segments : [branch.name], branch, keyPrefix, []);
   }
 
@@ -3514,40 +3521,59 @@ function flattenBranchManagerTreeRows(
   return rows;
 }
 
-function filterBranchManagerTreeNodes(nodes: BranchManagerTreeNode[], query: string): BranchManagerTreeNode[] {
+function filterBranchManagerTreeNodes(
+  nodes: BranchManagerTreeNode[],
+  query: string,
+): {
+  count: number;
+  nodes: BranchManagerTreeNode[];
+} {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) {
-    return nodes;
+    return {
+      count: countBranchManagerTreeNodes(nodes),
+      nodes,
+    };
   }
 
   const filteredNodes: BranchManagerTreeNode[] = [];
+  let count = 0;
   for (const node of nodes) {
     if (node.kind === 'branch') {
       if (doesBranchMatchQuery(node.branch, node.label, normalizedQuery)) {
         filteredNodes.push(node);
+        count += 1;
       }
       continue;
     }
 
     const folderMatches = node.label.toLowerCase().includes(normalizedQuery);
-    const children = folderMatches
-      ? node.children
-      : filterBranchManagerTreeNodes(node.children, normalizedQuery);
-    if (children.length === 0) {
+    if (folderMatches) {
+      filteredNodes.push(node);
+      count += node.branchCount;
+      continue;
+    }
+
+    const filteredChildren = filterBranchManagerTreeNodes(node.children, normalizedQuery);
+    if (filteredChildren.count === 0) {
       continue;
     }
 
     filteredNodes.push({
       ...node,
-      children,
-      branchCount: countBranchManagerFilteredNodes(children),
+      children: filteredChildren.nodes,
+      branchCount: filteredChildren.count,
     });
+    count += filteredChildren.count;
   }
 
-  return filteredNodes;
+  return {
+    count,
+    nodes: filteredNodes,
+  };
 }
 
-function countBranchManagerFilteredNodes(nodes: BranchManagerTreeNode[]): number {
+function countBranchManagerTreeNodes(nodes: BranchManagerTreeNode[]): number {
   let count = 0;
   for (const node of nodes) {
     count += node.kind === 'folder' ? node.branchCount : 1;
@@ -3560,14 +3586,22 @@ function doesBranchMatchQuery(
   label: string,
   normalizedQuery: string,
 ): boolean {
-  return [
-    label,
-    branch.name,
-    branch.shortName,
-    branch.upstream ?? '',
-    branch.subject,
-    branch.shortSha,
-  ].some((candidate) => candidate.toLowerCase().includes(normalizedQuery));
+  if (label.toLowerCase().includes(normalizedQuery)) {
+    return true;
+  }
+  if (branch.name.toLowerCase().includes(normalizedQuery)) {
+    return true;
+  }
+  if (branch.shortName.toLowerCase().includes(normalizedQuery)) {
+    return true;
+  }
+  if (branch.upstream?.toLowerCase().includes(normalizedQuery)) {
+    return true;
+  }
+  if (branch.subject.toLowerCase().includes(normalizedQuery)) {
+    return true;
+  }
+  return branch.shortSha.toLowerCase().includes(normalizedQuery);
 }
 
 function isKnownMonacoCancellationError(error: unknown): boolean {
@@ -6899,8 +6933,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [buildLanguageDocumentContext, queueLanguageDocumentSync]);
 
   const closeAllLanguageDocuments = useCallback(async () => {
-    const filePaths = Array.from(fileModelsRef.current.keys());
-    for (const filePath of filePaths) {
+    for (const filePath of fileModelsRef.current.keys()) {
       await closeLanguageDocument(filePath);
     }
   }, [closeLanguageDocument]);
@@ -8195,9 +8228,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
     handleSidebarModeSelect('files');
 
-    const directoriesToLoad = directoryPathsToExpand.filter((directoryPath) => !loadedDirectoriesRef.current.has(directoryPath));
-    if (directoriesToLoad.length > 0) {
-      await Promise.all(directoriesToLoad.map((directoryPath) => loadDirectory(directoryPath)));
+    const loadRequests: Array<Promise<void>> = [];
+    for (const directoryPath of directoryPathsToExpand) {
+      if (!loadedDirectoriesRef.current.has(directoryPath)) {
+        loadRequests.push((async () => {
+          await loadDirectory(directoryPath);
+        })());
+      }
+    }
+    if (loadRequests.length > 0) {
+      await Promise.all(loadRequests);
     }
   }, [getPersistedExpandedPaths, handleSidebarModeSelect, loadDirectory, persistCodeState, rootPath]);
 
@@ -12830,7 +12870,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    const nextTodoItems = Array.from(todoItemsByKey.values()).sort((left, right) => {
+    const nextTodoItems: CodePaneTodoItem[] = [];
+    for (const item of todoItemsByKey.values()) {
+      nextTodoItems.push(item);
+    }
+    nextTodoItems.sort((left, right) => {
       const pathOrder = left.filePath.localeCompare(right.filePath);
       if (pathOrder !== 0) {
         return pathOrder;
@@ -16225,29 +16269,67 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const selectedSearchEverywhereItem = searchEverywhereItems[searchEverywhereSelectedIndex] ?? null;
   const selectedCodeAction = codeActionItems[selectedCodeActionIndex] ?? null;
   const visibleDebugSessions = debugSessions;
-  const selectedDebugSession = visibleDebugSessions.find((session) => session.id === selectedDebugSessionId) ?? visibleDebugSessions[0] ?? null;
+  const debugTargets = useMemo(() => {
+    const nextTargets: CodePaneRunTarget[] = [];
+    for (const target of runTargets) {
+      if (target.canDebug) {
+        nextTargets.push(target);
+      }
+    }
+    return nextTargets;
+  }, [runTargets]);
+  const runSessionState = useMemo(() => {
+    const visibleSessions: CodePaneRunSession[] = [];
+    let selectedSession: CodePaneRunSession | null = null;
+    let firstVisibleSession: CodePaneRunSession | null = null;
+    let hasFailedTests = false;
+
+    for (const session of runSessions) {
+      if (session.kind === 'test' && session.state === 'failed') {
+        hasFailedTests = true;
+      }
+
+      const isVisible = bottomPanelMode === 'tests'
+        ? session.kind === 'test'
+        : bottomPanelMode === 'project'
+          ? session.kind === 'task'
+          : bottomPanelMode === 'run'
+            ? session.kind !== 'task'
+            : true;
+      if (!isVisible) {
+        continue;
+      }
+
+      visibleSessions.push(session);
+      if (!firstVisibleSession) {
+        firstVisibleSession = session;
+      }
+      if (session.id === selectedRunSessionId) {
+        selectedSession = session;
+      }
+    }
+
+    selectedSession ??= firstVisibleSession;
+    return {
+      hasFailedTests,
+      selectedSession,
+      selectedSessionOutput: selectedSession ? (runSessionOutputs[selectedSession.id] ?? '') : '',
+      visibleSessions,
+    };
+  }, [bottomPanelMode, runSessionOutputs, runSessions, selectedRunSessionId]);
+  const selectedDebugSession = useMemo(() => {
+    for (const session of visibleDebugSessions) {
+      if (session.id === selectedDebugSessionId) {
+        return session;
+      }
+    }
+    return visibleDebugSessions[0] ?? null;
+  }, [selectedDebugSessionId, visibleDebugSessions]);
   const selectedDebugSessionOutput = selectedDebugSession ? (debugSessionOutputs[selectedDebugSession.id] ?? '') : '';
-  const debugTargets = useMemo(() => (
-    runTargets.filter((target) => target.canDebug)
-  ), [runTargets]);
-  const visibleRunSessions = useMemo(() => {
-    if (bottomPanelMode === 'tests') {
-      return runSessions.filter((session) => session.kind === 'test');
-    }
-
-    if (bottomPanelMode === 'project') {
-      return runSessions.filter((session) => session.kind === 'task');
-    }
-
-    if (bottomPanelMode === 'run') {
-      return runSessions.filter((session) => session.kind !== 'task');
-    }
-
-    return runSessions;
-  }, [bottomPanelMode, runSessions]);
-  const selectedRunSession = visibleRunSessions.find((session) => session.id === selectedRunSessionId) ?? visibleRunSessions[0] ?? null;
-  const selectedRunSessionOutput = selectedRunSession ? (runSessionOutputs[selectedRunSession.id] ?? '') : '';
-  const hasFailedTestSessions = runSessions.some((session) => session.kind === 'test' && session.state === 'failed');
+  const visibleRunSessions = runSessionState.visibleSessions;
+  const selectedRunSession = runSessionState.selectedSession;
+  const selectedRunSessionOutput = runSessionState.selectedSessionOutput;
+  const hasFailedTestSessions = runSessionState.hasFailedTests;
 
   useEffect(() => {
     debugCurrentFrameRef.current = selectedDebugSession?.currentFrame ?? null;
@@ -17032,12 +17114,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (!targetSession || targetSession.state !== 'paused') {
-      setWatchEntries((currentEntries) => expressions.map((expression) => (
-        currentEntries.find((entry) => entry.expression === expression) ?? {
-          id: expression,
-          expression,
+      setWatchEntries((currentEntries) => {
+        const currentEntriesByExpression = new Map<string, DebugWatchEntry>();
+        for (const entry of currentEntries) {
+          currentEntriesByExpression.set(entry.expression, entry);
         }
-      )));
+
+        const nextEntries: DebugWatchEntry[] = [];
+        for (const expression of expressions) {
+          nextEntries.push(currentEntriesByExpression.get(expression) ?? {
+            id: expression,
+            expression,
+          });
+        }
+        return nextEntries;
+      });
       return;
     }
 
@@ -18748,38 +18839,39 @@ export const CodePane: React.FC<CodePaneProps> = ({
     ];
   }, [gitBranches, isBranchManagerOpen, t]);
 
-  const branchManagerSections = useMemo<BranchManagerSection[]>(() => {
+  const branchManagerVisibleSections = useMemo<BranchManagerVisibleSection[]>(() => {
     if (!isBranchManagerOpen) {
       return [];
     }
 
     const query = deferredBranchManagerQuery.trim();
     if (!query) {
-      return branchManagerBaseSections;
-    }
-
-    return branchManagerBaseSections
-      .map((section) => {
-        const nodes = filterBranchManagerTreeNodes(section.nodes, query);
-        return {
+      const nextSections: BranchManagerVisibleSection[] = [];
+      for (const section of branchManagerBaseSections) {
+        nextSections.push({
           ...section,
-          count: query ? countBranchManagerFilteredNodes(nodes) : section.count,
-          nodes,
-        };
-      })
-      .filter((section) => section.count > 0);
-  }, [branchManagerBaseSections, deferredBranchManagerQuery, isBranchManagerOpen]);
-
-  const branchManagerVisibleSections = useMemo<BranchManagerVisibleSection[]>(() => {
-    if (!isBranchManagerOpen) {
-      return [];
+          rows: flattenBranchManagerTreeRows(section.nodes, collapsedBranchManagerNodeKeys),
+        });
+      }
+      return nextSections;
     }
 
-    return branchManagerSections.map((section) => ({
-      ...section,
-      rows: flattenBranchManagerTreeRows(section.nodes, collapsedBranchManagerNodeKeys),
-    }));
-  }, [branchManagerSections, collapsedBranchManagerNodeKeys, isBranchManagerOpen]);
+    const nextSections: BranchManagerVisibleSection[] = [];
+    for (const section of branchManagerBaseSections) {
+      const filteredSection = filterBranchManagerTreeNodes(section.nodes, query);
+      if (filteredSection.count === 0) {
+        continue;
+      }
+
+      nextSections.push({
+        ...section,
+        count: filteredSection.count,
+        nodes: filteredSection.nodes,
+        rows: flattenBranchManagerTreeRows(filteredSection.nodes, collapsedBranchManagerNodeKeys),
+      });
+    }
+    return nextSections;
+  }, [branchManagerBaseSections, collapsedBranchManagerNodeKeys, deferredBranchManagerQuery, isBranchManagerOpen]);
 
   const filteredBranchManagerQuickActions = useMemo<BranchManagerQuickAction[]>(() => {
     if (!isBranchManagerOpen) {
@@ -18859,10 +18951,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return actions;
     }
 
-    return actions.filter((action) => (
-      action.label.toLowerCase().includes(query)
-      || action.id.toLowerCase().includes(query)
-    ));
+    const filteredActions: BranchManagerQuickAction[] = [];
+    for (const action of actions) {
+      if (
+        action.label.toLowerCase().includes(query)
+        || action.id.toLowerCase().includes(query)
+      ) {
+        filteredActions.push(action);
+      }
+    }
+    return filteredActions;
   }, [
     checkoutGitBranch,
     checkoutGitRevisionFromPrompt,
