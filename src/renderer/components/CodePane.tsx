@@ -11857,10 +11857,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return nextInitialSelectedPaths;
       })();
     if (initialSelectedPaths[0]) {
-      setSelectedGitChangePath(initialSelectedPaths[0]);
+      setSelectedGitChangePath((currentPath) => (
+        currentPath === initialSelectedPaths[0] ? currentPath : initialSelectedPaths[0]
+      ));
       void loadGitDiffHunks(initialSelectedPaths[0]);
     } else {
-      setSelectedGitChangePath(null);
+      setSelectedGitChangePath((currentPath) => (
+        currentPath === null ? currentPath : null
+      ));
       void loadGitDiffHunks(null);
     }
     const nextCommitWindowState = {
@@ -15804,7 +15808,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [getRelativePath, rootPath, scmEntryValues, shouldSortScmEntries]);
 
   const handleCommitWindowSelectPath = useCallback(async (filePath: string) => {
-    setSelectedGitChangePath(filePath);
+    setSelectedGitChangePath((currentPath) => (
+      currentPath === filePath ? currentPath : filePath
+    ));
     await loadGitDiffHunks(filePath);
   }, [loadGitDiffHunks]);
 
@@ -16167,7 +16173,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setSelectedGitChangePath(null);
+    setSelectedGitChangePath((currentPath) => (
+      currentPath === null ? currentPath : null
+    ));
     void loadGitDiffHunks(null);
   }, [gitStatusByPath, loadGitDiffHunks, selectedGitChangePath]);
 
