@@ -4784,14 +4784,19 @@ async function runWithConcurrency<T>(
 
   const workerCount = Math.max(1, Math.min(limit, items.length));
   let nextIndex = 0;
+  const workers: Array<Promise<void>> = [];
 
-  await Promise.all(Array.from({ length: workerCount }, async () => {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex;
-      nextIndex += 1;
-      await task(items[currentIndex]!);
-    }
-  }));
+  for (let workerIndex = 0; workerIndex < workerCount; workerIndex += 1) {
+    workers.push((async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        await task(items[currentIndex]!);
+      }
+    })());
+  }
+
+  await Promise.all(workers);
 }
 
 function isRefactorCodeAction(action: CodePaneCodeAction): boolean {
@@ -4808,7 +4813,11 @@ function isRefactorCodeAction(action: CodePaneCodeAction): boolean {
 function mapGitStatusEntriesByPath(
   entries: CodePaneGitStatusEntry[],
 ): Record<string, CodePaneGitStatusEntry> {
-  return Object.fromEntries(entries.map((entry) => [entry.path, entry]));
+  const entriesByPath: Record<string, CodePaneGitStatusEntry> = {};
+  for (const entry of entries) {
+    entriesByPath[entry.path] = entry;
+  }
+  return entriesByPath;
 }
 
 function areGitStatusEntriesEqual(
@@ -5053,7 +5062,13 @@ function areGitBranchesEqual(
 function collectExternalRootPaths(
   sections: CodePaneExternalLibrarySection[],
 ): string[] {
-  return sections.flatMap((section) => section.roots.map((root) => root.path));
+  const rootPaths: string[] = [];
+  for (const section of sections) {
+    for (const root of section.roots) {
+      rootPaths.push(root.path);
+    }
+  }
+  return rootPaths;
 }
 
 function areCodePaneLayoutSidebarsEqual(
@@ -5318,6 +5333,31 @@ function areContentMatchListsEqual(
       || previousMatch?.lineNumber !== nextMatch?.lineNumber
       || previousMatch?.column !== nextMatch?.column
       || previousMatch?.lineText !== nextMatch?.lineText
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areTodoItemListsEqual(
+  previousList: CodePaneTodoItem[],
+  nextList: CodePaneTodoItem[],
+): boolean {
+  if (previousList.length !== nextList.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousList.length; index += 1) {
+    const previousItem = previousList[index];
+    const nextItem = nextList[index];
+    if (
+      previousItem?.token !== nextItem?.token
+      || previousItem?.filePath !== nextItem?.filePath
+      || previousItem?.lineNumber !== nextItem?.lineNumber
+      || previousItem?.column !== nextItem?.column
+      || previousItem?.lineText !== nextItem?.lineText
     ) {
       return false;
     }
@@ -7228,40 +7268,58 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const applyExternalLibrarySections = useCallback((nextSections: CodePaneExternalLibrarySection[]) => {
     const nextExternalRootPaths = collectExternalRootPaths(nextSections);
+    const isDirectoryInExternalRoots = (directoryPath: string) => (
+      nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
+    );
 
     setExternalLibrariesError(null);
     setExternalLibrarySections((currentSections) => (
       areExternalLibrarySectionsEqual(currentSections, nextSections) ? currentSections : nextSections
     ));
-    setExternalEntriesByDirectory((currentEntries) => (
-      Object.fromEntries(
-        Object.entries(currentEntries).filter(([directoryPath]) => (
-          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
-        )),
-      )
-    ));
-    setLoadedExternalDirectories((currentLoadedDirectories) => (
-      new Set(
-        Array.from(currentLoadedDirectories).filter((directoryPath) => (
-          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
-        )),
-      )
-    ));
-    setLoadingExternalDirectories((currentLoadingDirectories) => (
-      new Set(
-        Array.from(currentLoadingDirectories).filter((directoryPath) => (
-          nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
-        )),
-      )
-    ));
-    setExpandedDirectories((currentExpandedDirectories) => (
-      new Set(
-        Array.from(currentExpandedDirectories).filter((directoryPath) => (
-          isPathInside(rootPath, directoryPath)
-          || nextExternalRootPaths.some((rootDirectoryPath) => isPathInside(rootDirectoryPath, directoryPath))
-        )),
-      )
-    ));
+    setExternalEntriesByDirectory((currentEntries) => {
+      let didRemoveDirectory = false;
+      const nextEntries: Record<string, CodePaneTreeEntry[]> = {};
+
+      for (const [directoryPath, entries] of Object.entries(currentEntries)) {
+        if (isDirectoryInExternalRoots(directoryPath)) {
+          nextEntries[directoryPath] = entries;
+        } else {
+          didRemoveDirectory = true;
+        }
+      }
+
+      return didRemoveDirectory ? nextEntries : currentEntries;
+    });
+    setLoadedExternalDirectories((currentLoadedDirectories) => {
+      let nextLoadedDirectories: Set<string> | null = null;
+      for (const directoryPath of currentLoadedDirectories) {
+        if (!isDirectoryInExternalRoots(directoryPath)) {
+          nextLoadedDirectories ??= new Set(currentLoadedDirectories);
+          nextLoadedDirectories.delete(directoryPath);
+        }
+      }
+      return nextLoadedDirectories ?? currentLoadedDirectories;
+    });
+    setLoadingExternalDirectories((currentLoadingDirectories) => {
+      let nextLoadingDirectories: Set<string> | null = null;
+      for (const directoryPath of currentLoadingDirectories) {
+        if (!isDirectoryInExternalRoots(directoryPath)) {
+          nextLoadingDirectories ??= new Set(currentLoadingDirectories);
+          nextLoadingDirectories.delete(directoryPath);
+        }
+      }
+      return nextLoadingDirectories ?? currentLoadingDirectories;
+    });
+    setExpandedDirectories((currentExpandedDirectories) => {
+      let nextExpandedDirectories: Set<string> | null = null;
+      for (const directoryPath of currentExpandedDirectories) {
+        if (!isPathInside(rootPath, directoryPath) && !isDirectoryInExternalRoots(directoryPath)) {
+          nextExpandedDirectories ??= new Set(currentExpandedDirectories);
+          nextExpandedDirectories.delete(directoryPath);
+        }
+      }
+      return nextExpandedDirectories ?? currentExpandedDirectories;
+    });
   }, [rootPath]);
 
   const resetExternalLibrarySections = useCallback((nextSections: CodePaneExternalLibrarySection[]) => {
@@ -10494,8 +10552,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       .slice(0, CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES);
     const preferredSelectedPath = entries[entries.length - 1]?.filePath ?? nextEntries[0]?.filePath ?? null;
 
-    externalChangeEntriesRef.current = nextEntries;
-    setExternalChangeEntries(nextEntries);
+    const currentEntries = externalChangeEntriesRef.current;
+    const didEntriesChange = currentEntries.length !== nextEntries.length
+      || currentEntries.some((entry, index) => entry !== nextEntries[index]);
+    if (didEntriesChange) {
+      externalChangeEntriesRef.current = nextEntries;
+      setExternalChangeEntries(nextEntries);
+    }
     setSelectedExternalChangePath((currentPath) => (
       currentPath && nextEntries.some((entry) => entry.filePath === currentPath)
         ? currentPath
@@ -12472,12 +12535,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const targetPath = pathMutationDialog.targetPath;
     const nextPath = replacePathLeaf(targetPath, nextInput);
-    const affectedOpenFilePaths = Array.from(fileModelsRef.current.keys()).filter((filePath) => (
-      isPathEqualOrDescendant(filePath, targetPath)
-    ));
-    const affectedDirtyFiles = Array.from(dirtyPathsRef.current).filter((filePath) => (
-      isPathEqualOrDescendant(filePath, targetPath)
-    ));
+    const affectedOpenFilePaths: string[] = [];
+    for (const filePath of fileModelsRef.current.keys()) {
+      if (isPathEqualOrDescendant(filePath, targetPath)) {
+        affectedOpenFilePaths.push(filePath);
+      }
+    }
+    const affectedDirtyFiles: string[] = [];
+    for (const filePath of dirtyPathsRef.current) {
+      if (isPathEqualOrDescendant(filePath, targetPath)) {
+        affectedDirtyFiles.push(filePath);
+      }
+    }
     if (affectedDirtyFiles.length > 0) {
       const didFlush = await flushDirtyFiles(affectedDirtyFiles);
       if (!didFlush) {
@@ -12645,18 +12714,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
       })),
     );
 
-    const nextTodoItems = responses.flatMap(({ token, response }) => {
+    const todoItemsByKey = new Map<string, CodePaneTodoItem>();
+    for (const { token, response } of responses) {
       if (!response.success) {
-        return [];
+        continue;
       }
 
-      return (response.data ?? [])
-        .filter((item) => item.lineText.toUpperCase().includes(token))
-        .map((item) => ({
-          ...item,
-          token,
-        }));
-    }).sort((left, right) => {
+      for (const item of response.data ?? []) {
+        if (!item.lineText.toUpperCase().includes(token)) {
+          continue;
+        }
+
+        const itemKey = `${token}:${item.filePath}:${item.lineNumber}:${item.column}`;
+        if (!todoItemsByKey.has(itemKey)) {
+          todoItemsByKey.set(itemKey, {
+            ...item,
+            token,
+          });
+        }
+      }
+    }
+
+    const nextTodoItems = Array.from(todoItemsByKey.values()).sort((left, right) => {
       const pathOrder = left.filePath.localeCompare(right.filePath);
       if (pathOrder !== 0) {
         return pathOrder;
@@ -12667,15 +12746,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return left.column - right.column;
     });
 
-    const uniqueTodoItems = nextTodoItems.filter((item, index, items) => {
-      const itemKey = `${item.token}:${item.filePath}:${item.lineNumber}:${item.column}`;
-      return items.findIndex((candidate) => (
-        `${candidate.token}:${candidate.filePath}:${candidate.lineNumber}:${candidate.column}` === itemKey
-      )) === index;
-    });
-
     const firstError = responses.find(({ response }) => !response.success)?.response.error ?? null;
-    setTodoItems(uniqueTodoItems);
+    setTodoItems((currentItems) => (
+      areTodoItemListsEqual(currentItems, nextTodoItems) ? currentItems : nextTodoItems
+    ));
     setTodoError(firstError);
     setIsTodoLoading(false);
   }, [rootPath, trackRequest]);
