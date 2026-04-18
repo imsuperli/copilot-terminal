@@ -9296,7 +9296,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setGitStagedHunks((currentHunks) => (currentHunks.length === 0 ? currentHunks : []));
       setGitUnstagedHunks((currentHunks) => (currentHunks.length === 0 ? currentHunks : []));
       setGitHunksError((currentError) => (currentError === null ? currentError : null));
-      setIsGitHunksLoading(false);
+      setIsGitHunksLoading((currentLoading) => (currentLoading ? false : currentLoading));
       return;
     }
 
@@ -9305,10 +9305,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       selectedGitHunksPathRef.current = filePath;
       setSelectedGitHunksPath((currentPath) => (currentPath === filePath ? currentPath : filePath));
     }
-    setIsGitHunksLoading(true);
+    setIsGitHunksLoading((currentLoading) => (currentLoading ? currentLoading : true));
     if (gitHunksErrorRef.current !== null) {
       gitHunksErrorRef.current = null;
-      setGitHunksError(null);
+      setGitHunksError((currentError) => (currentError === null ? currentError : null));
     }
     const response = await window.electronAPI.codePaneGetGitDiffHunks({
       rootPath,
@@ -9328,7 +9328,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setGitHunksError((currentError) => (
         currentError === gitHunksErrorRef.current ? currentError : gitHunksErrorRef.current
       ));
-      setIsGitHunksLoading(false);
+      setIsGitHunksLoading((currentLoading) => (currentLoading ? false : currentLoading));
       return;
     }
 
@@ -9349,7 +9349,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setGitHunksError((currentError) => (currentError === null ? currentError : null));
     });
     if (gitHunksRequestIdRef.current === requestId) {
-      setIsGitHunksLoading(false);
+      setIsGitHunksLoading((currentLoading) => (currentLoading ? false : currentLoading));
     }
   }, [rootPath, t]);
 
@@ -13668,15 +13668,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   const submitActionInput = useCallback(async (value: string) => {
-    setIsSubmittingActionInput(true);
+    setIsSubmittingActionInput((currentSubmitting) => (currentSubmitting ? currentSubmitting : true));
     try {
       const didSucceed = await handleActionInputConfirm(value);
       if (didSucceed) {
-        setActionInputDialog(null);
+        setActionInputDialog((currentDialog) => (currentDialog === null ? currentDialog : null));
       }
       return didSucceed;
     } finally {
-      setIsSubmittingActionInput(false);
+      setIsSubmittingActionInput((currentSubmitting) => (currentSubmitting ? false : currentSubmitting));
     }
   }, [handleActionInputConfirm]);
 
@@ -13701,15 +13701,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [actionConfirmDialog, deleteGitBranch, prepareRefactorPreview, rootPath]);
 
   const submitActionConfirm = useCallback(async () => {
-    setIsSubmittingActionConfirm(true);
+    setIsSubmittingActionConfirm((currentSubmitting) => (currentSubmitting ? currentSubmitting : true));
     try {
       const didSucceed = await handleActionConfirmSubmit();
       if (didSucceed) {
-        setActionConfirmDialog(null);
+        setActionConfirmDialog((currentDialog) => (currentDialog === null ? currentDialog : null));
       }
       return didSucceed;
     } finally {
-      setIsSubmittingActionConfirm(false);
+      setIsSubmittingActionConfirm((currentSubmitting) => (currentSubmitting ? false : currentSubmitting));
     }
   }, [handleActionConfirmSubmit]);
 
@@ -13798,8 +13798,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setIsApplyingGitConflict(true);
-    setGitConflictError(null);
+    setIsApplyingGitConflict((currentApplying) => (currentApplying ? currentApplying : true));
+    setGitConflictError((currentError) => (currentError === null ? currentError : null));
     const response = await window.electronAPI.codePaneGitApplyConflictResolution({
       rootPath,
       filePath: selectedGitConflictPath,
@@ -13809,14 +13809,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     await refreshGitSnapshot({ includeGraph: shouldLoadGitGraph(), force: true });
 
     if (!response.success) {
-      setGitConflictError(response.error || t('common.retry'));
-      setIsApplyingGitConflict(false);
+      setGitConflictError((currentError) => {
+        const nextError = response.error || t('common.retry');
+        return currentError === nextError ? currentError : nextError;
+      });
+      setIsApplyingGitConflict((currentApplying) => (currentApplying ? false : currentApplying));
       return;
     }
 
-    setIsApplyingGitConflict(false);
-    setGitConflictDetails(null);
-    setSelectedGitConflictPath(null);
+    setIsApplyingGitConflict((currentApplying) => (currentApplying ? false : currentApplying));
+    setGitConflictDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
+    setSelectedGitConflictPath((currentPath) => (currentPath === null ? currentPath : null));
     setBottomPanelMode((currentMode) => (currentMode === 'conflict' ? null : currentMode));
     setBanner({
       tone: 'info',
