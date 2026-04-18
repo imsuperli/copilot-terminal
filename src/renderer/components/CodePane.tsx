@@ -15315,10 +15315,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const commitShaToLoad = normalizedSelectedOrder[0] ?? selectedGitLogCommitSha;
     if (!commitShaToLoad) {
-      setSelectedGitCommitDetails(null);
-      setComparedGitCommits(null);
-      setGitCommitDetailsError(null);
-      setIsGitCommitDetailsLoading(false);
+      setSelectedGitCommitDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
+      setComparedGitCommits((currentComparison) => (currentComparison === null ? currentComparison : null));
+      setGitCommitDetailsError((currentError) => (currentError === null ? currentError : null));
+      setIsGitCommitDetailsLoading((currentLoading) => (currentLoading ? false : currentLoading));
       return;
     }
 
@@ -17310,6 +17310,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }, 0);
   }, [openCommitWindow]);
 
+  const closeCodeActionMenu = useCallback(() => {
+    setIsCodeActionMenuOpen((currentOpen) => (currentOpen ? false : currentOpen));
+    setCodeActionItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
+    setCodeActionMenuError((currentError) => (currentError === null ? currentError : null));
+  }, []);
+
   const selectedGitHunksRelativePath = useMemo(
     () => selectedGitHunksPath ? getRelativePath(rootPath, selectedGitHunksPath) : null,
     [rootPath, selectedGitHunksPath],
@@ -18486,9 +18492,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         if (isCodeActionMenuOpen) {
           event.preventDefault();
-          setIsCodeActionMenuOpen(false);
-          setCodeActionItems([]);
-          setCodeActionMenuError(null);
+          closeCodeActionMenu();
           return;
         }
       }
@@ -18556,6 +18560,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [
+    closeCodeActionMenu,
     closeSearchEverywhere,
     isActive,
     isCodeActionMenuOpen,
@@ -18881,9 +18886,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         actionId: action.id,
         title: action.title,
       });
-      setIsCodeActionMenuOpen(false);
-      setCodeActionItems([]);
-      setCodeActionMenuError(null);
+      closeCodeActionMenu();
       return;
     }
 
@@ -18900,10 +18903,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     await applyLanguageTextEdits(response.data ?? []);
-    setIsCodeActionMenuOpen(false);
-    setCodeActionItems([]);
-    setCodeActionMenuError(null);
-  }, [applyLanguageTextEdits, getActiveEditorContext, prepareRefactorPreview, rootPath, t]);
+    closeCodeActionMenu();
+  }, [applyLanguageTextEdits, closeCodeActionMenu, getActiveEditorContext, prepareRefactorPreview, rootPath, t]);
 
   useEffect(() => {
     runSelectedCodeActionRef.current = runSelectedCodeAction;
@@ -20157,10 +20158,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [closeSearchEverywhere]);
 
   const handleCloseCodeActionMenu = useCallback(() => {
-    setIsCodeActionMenuOpen(false);
-    setCodeActionItems([]);
-    setCodeActionMenuError(null);
-  }, []);
+    closeCodeActionMenu();
+  }, [closeCodeActionMenu]);
 
   const handleCodeActionHoverIndex = useCallback((index: number) => {
     setSelectedCodeActionIndex(index);
