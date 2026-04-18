@@ -2776,6 +2776,7 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
 type SaveFileOptions = {
   overwrite?: boolean;
   skipQualityPipeline?: boolean;
+  skipGitRefresh?: boolean;
 };
 
 type FileTreeViewport = {
@@ -3874,9 +3875,22 @@ function getQualifiedNameForTreePath(
 }
 
 function sortOpenFilesByPinned<T extends { pinned?: boolean; preview?: boolean }>(openFiles: T[]): T[] {
-  const pinnedOpenFiles = openFiles.filter((tab) => tab.pinned);
-  const regularOpenFiles = openFiles.filter((tab) => !tab.pinned && !tab.preview);
-  const previewOpenFiles = openFiles.filter((tab) => !tab.pinned && tab.preview);
+  const pinnedOpenFiles: T[] = [];
+  const regularOpenFiles: T[] = [];
+  const previewOpenFiles: T[] = [];
+  for (const tab of openFiles) {
+    if (tab.pinned) {
+      pinnedOpenFiles.push(tab);
+      continue;
+    }
+
+    if (tab.preview) {
+      previewOpenFiles.push(tab);
+      continue;
+    }
+
+    regularOpenFiles.push(tab);
+  }
   return [...pinnedOpenFiles, ...regularOpenFiles, ...previewOpenFiles];
 }
 
@@ -4844,6 +4858,56 @@ function areGitGraphCommitsEqual(
   return true;
 }
 
+function areGitDiffHunkLinesEqual(
+  previousLines: CodePaneGitDiffHunk['lines'],
+  nextLines: CodePaneGitDiffHunk['lines'],
+): boolean {
+  if (previousLines.length !== nextLines.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousLines.length; index += 1) {
+    const previousLine = previousLines[index];
+    const nextLine = nextLines[index];
+    if (
+      previousLine?.type !== nextLine?.type
+      || previousLine?.text !== nextLine?.text
+      || previousLine?.oldLineNumber !== nextLine?.oldLineNumber
+      || previousLine?.newLineNumber !== nextLine?.newLineNumber
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areGitDiffHunksEqual(
+  previousHunks: CodePaneGitDiffHunk[],
+  nextHunks: CodePaneGitDiffHunk[],
+): boolean {
+  if (previousHunks.length !== nextHunks.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousHunks.length; index += 1) {
+    const previousHunk = previousHunks[index];
+    const nextHunk = nextHunks[index];
+    if (
+      previousHunk?.id !== nextHunk?.id
+      || previousHunk?.filePath !== nextHunk?.filePath
+      || previousHunk?.staged !== nextHunk?.staged
+      || previousHunk?.header !== nextHunk?.header
+      || previousHunk?.patch !== nextHunk?.patch
+      || !areGitDiffHunkLinesEqual(previousHunk?.lines ?? [], nextHunk?.lines ?? [])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function areTreeEntriesEqual(
   previousEntries: CodePaneTreeEntry[],
   nextEntries: CodePaneTreeEntry[],
@@ -5658,8 +5722,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const gitStatusByPathRef = useRef(gitStatusByPath);
   const gitStatusEntriesRef = useRef<CodePaneGitStatusEntry[]>(cachedGitStatusEntries);
   const gitRepositorySummaryRef = useRef<CodePaneGitRepositorySummary | null>(cachedGitSummary);
+  const gitGraphRef = useRef<CodePaneGitGraphCommit[]>(cachedGitGraph);
   const externalLibrarySectionsRef = useRef<CodePaneExternalLibrarySection[]>(cachedExternalLibrarySections);
   const gitBranchesRef = useRef<CodePaneGitBranchEntry[]>([]);
+  const selectedGitLogCommitShaRef = useRef<string | null>(null);
+  const selectedGitChangePathRef = useRef<string | null>(null);
+  const selectedGitHunksPathRef = useRef<string | null>(null);
+  const gitStagedHunksRef = useRef<CodePaneGitDiffHunk[]>([]);
+  const gitUnstagedHunksRef = useRef<CodePaneGitDiffHunk[]>([]);
+  const gitHunksErrorRef = useRef<string | null>(null);
+  const gitHunksRequestIdRef = useRef(0);
+  const commitWindowEntriesCacheRef = useRef<Map<string, CodePaneGitStatusEntry & { relativePath: string }>>(new Map());
   const selectedGitCommitOrderRef = useRef<string[]>(selectedGitCommitOrder);
   const gitRebaseBaseRefRef = useRef(gitRebaseBaseRef);
   const activeGitWorkbenchTabRef = useRef<GitToolWindowTab>('log');
@@ -5750,6 +5823,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     gitRepositorySummaryRef.current = gitRepositorySummary;
   }, [gitRepositorySummary]);
+
+  useEffect(() => {
+    gitGraphRef.current = gitGraph;
+  }, [gitGraph]);
+
+  useEffect(() => {
+    selectedGitLogCommitShaRef.current = selectedGitLogCommitSha;
+  }, [selectedGitLogCommitSha]);
+
+  useEffect(() => {
+    selectedGitChangePathRef.current = selectedGitChangePath;
+  }, [selectedGitChangePath]);
+
+  useEffect(() => {
+    selectedGitHunksPathRef.current = selectedGitHunksPath;
+  }, [selectedGitHunksPath]);
+
+  useEffect(() => {
+    gitStagedHunksRef.current = gitStagedHunks;
+  }, [gitStagedHunks]);
+
+  useEffect(() => {
+    gitUnstagedHunksRef.current = gitUnstagedHunks;
+  }, [gitUnstagedHunks]);
+
+  useEffect(() => {
+    gitHunksErrorRef.current = gitHunksError;
+  }, [gitHunksError]);
 
   useEffect(() => {
     selectedGitCommitOrderRef.current = selectedGitCommitOrder;
@@ -7132,8 +7233,33 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const includeGraph = options?.includeGraph ?? false;
     const statusChanged = !areGitStatusEntriesEqual(gitStatusEntriesRef.current, nextStatusEntries);
     const nextStatusByPath = statusChanged ? mapGitStatusEntriesByPath(nextStatusEntries) : null;
+    const summaryChanged = !areGitRepositorySummariesEqual(gitRepositorySummaryRef.current, nextSummary);
+    const graphChanged = includeGraph && nextGraph
+      ? !areGitGraphCommitsEqual(gitGraphRef.current, nextGraph)
+      : false;
+    const nextSelectedGitLogCommitSha = includeGraph && nextGraph
+      ? (
+        selectedGitLogCommitShaRef.current && nextGraph.some((commit) => commit.sha === selectedGitLogCommitShaRef.current)
+          ? selectedGitLogCommitShaRef.current
+          : nextGraph[0]?.sha ?? null
+      )
+      : selectedGitLogCommitShaRef.current;
+
+    if (!statusChanged && !summaryChanged && !graphChanged && nextSelectedGitLogCommitSha === selectedGitLogCommitShaRef.current) {
+      return;
+    }
+
     if (statusChanged) {
       gitStatusEntriesRef.current = nextStatusEntries;
+    }
+    if (summaryChanged) {
+      gitRepositorySummaryRef.current = nextSummary;
+    }
+    if (graphChanged && nextGraph) {
+      gitGraphRef.current = nextGraph;
+    }
+    if (includeGraph) {
+      selectedGitLogCommitShaRef.current = nextSelectedGitLogCommitSha;
     }
 
     startTransition(() => {
@@ -7144,16 +7270,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return nextStatusByPath;
       });
       setGitRepositorySummary((currentSummary) => (
-        areGitRepositorySummariesEqual(currentSummary, nextSummary) ? currentSummary : nextSummary
+        summaryChanged ? nextSummary : currentSummary
       ));
       if (includeGraph && nextGraph) {
-        setGitGraph((currentGraph) => (
-          areGitGraphCommitsEqual(currentGraph, nextGraph) ? currentGraph : nextGraph
-        ));
+        setGitGraph((currentGraph) => (graphChanged ? nextGraph : currentGraph));
         setSelectedGitLogCommitSha((currentCommitSha) => (
-          currentCommitSha && nextGraph.some((commit) => commit.sha === currentCommitSha)
-            ? currentCommitSha
-            : nextGraph[0]?.sha ?? null
+          nextSelectedGitLogCommitSha === currentCommitSha ? currentCommitSha : nextSelectedGitLogCommitSha
         ));
       }
     });
@@ -7468,37 +7590,71 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [rootPath, t]);
 
   const loadGitDiffHunks = useCallback(async (filePath: string | null) => {
+    const requestId = ++gitHunksRequestIdRef.current;
     if (!filePath) {
-      setSelectedGitHunksPath(null);
-      setGitStagedHunks([]);
-      setGitUnstagedHunks([]);
-      setGitHunksError(null);
+      selectedGitHunksPathRef.current = null;
+      gitStagedHunksRef.current = [];
+      gitUnstagedHunksRef.current = [];
+      gitHunksErrorRef.current = null;
+      setSelectedGitHunksPath((currentPath) => (currentPath === null ? currentPath : null));
+      setGitStagedHunks((currentHunks) => (currentHunks.length === 0 ? currentHunks : []));
+      setGitUnstagedHunks((currentHunks) => (currentHunks.length === 0 ? currentHunks : []));
+      setGitHunksError((currentError) => (currentError === null ? currentError : null));
       setIsGitHunksLoading(false);
       return;
     }
 
-    setSelectedGitHunksPath(filePath);
+    const isSameFile = selectedGitHunksPathRef.current === filePath;
+    if (!isSameFile) {
+      selectedGitHunksPathRef.current = filePath;
+      setSelectedGitHunksPath((currentPath) => (currentPath === filePath ? currentPath : filePath));
+    }
     setIsGitHunksLoading(true);
-    setGitHunksError(null);
+    if (gitHunksErrorRef.current !== null) {
+      gitHunksErrorRef.current = null;
+      setGitHunksError(null);
+    }
     const response = await window.electronAPI.codePaneGetGitDiffHunks({
       rootPath,
       filePath,
     });
 
+    if (gitHunksRequestIdRef.current !== requestId || selectedGitHunksPathRef.current !== filePath) {
+      return;
+    }
+
     if (!response.success || !response.data) {
-      setGitStagedHunks([]);
-      setGitUnstagedHunks([]);
-      setGitHunksError(response.error || t('common.retry'));
+      gitStagedHunksRef.current = [];
+      gitUnstagedHunksRef.current = [];
+      gitHunksErrorRef.current = response.error || t('common.retry');
+      setGitStagedHunks((currentHunks) => (currentHunks.length === 0 ? currentHunks : []));
+      setGitUnstagedHunks((currentHunks) => (currentHunks.length === 0 ? currentHunks : []));
+      setGitHunksError((currentError) => (
+        currentError === gitHunksErrorRef.current ? currentError : gitHunksErrorRef.current
+      ));
       setIsGitHunksLoading(false);
       return;
     }
 
     const diffHunks = response.data;
     startTransition(() => {
-      setGitStagedHunks(diffHunks.stagedHunks ?? []);
-      setGitUnstagedHunks(diffHunks.unstagedHunks ?? []);
+      if (gitHunksRequestIdRef.current !== requestId || selectedGitHunksPathRef.current !== filePath) {
+        return;
+      }
+      gitStagedHunksRef.current = diffHunks.stagedHunks ?? [];
+      gitUnstagedHunksRef.current = diffHunks.unstagedHunks ?? [];
+      gitHunksErrorRef.current = null;
+      setGitStagedHunks((currentHunks) => (
+        areGitDiffHunksEqual(currentHunks, gitStagedHunksRef.current) ? currentHunks : gitStagedHunksRef.current
+      ));
+      setGitUnstagedHunks((currentHunks) => (
+        areGitDiffHunksEqual(currentHunks, gitUnstagedHunksRef.current) ? currentHunks : gitUnstagedHunksRef.current
+      ));
+      setGitHunksError((currentError) => (currentError === null ? currentError : null));
     });
-    setIsGitHunksLoading(false);
+    if (gitHunksRequestIdRef.current === requestId) {
+      setIsGitHunksLoading(false);
+    }
   }, [rootPath, t]);
 
   const loadDirectory = useCallback(async (
@@ -9009,8 +9165,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void queueLanguageDocumentSync(filePath, 'save', async () => {
       await syncLanguageDocument(filePath, 'save');
     });
-    invalidateProjectCache(rootPath, 'git-status');
-    void refreshGitSnapshot({ includeGraph: false });
+    if (!options?.skipGitRefresh) {
+      invalidateProjectCache(rootPath, 'git-status');
+      void refreshGitSnapshot({ includeGraph: false });
+    }
     return true;
   }, [
     addLocalHistoryEntry,
@@ -9029,6 +9187,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const flushDirtyFiles = useCallback(async (targetFilePaths?: string[]) => {
     const pathsToFlush = targetFilePaths ?? Array.from(dirtyPathsRef.current);
+    let didSaveAnyFile = false;
     for (const filePath of pathsToFlush) {
       const existingTimer = autoSaveTimersRef.current.get(filePath);
       if (existingTimer) {
@@ -9036,14 +9195,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
         autoSaveTimersRef.current.delete(filePath);
       }
 
-      const didSave = await saveFile(filePath);
+      const wasDirtyBeforeSave = dirtyPathsRef.current.has(filePath);
+      const didSave = await saveFile(filePath, { skipGitRefresh: true });
       if (!didSave) {
         return false;
       }
+      didSaveAnyFile = didSaveAnyFile || wasDirtyBeforeSave;
+    }
+
+    if (didSaveAnyFile) {
+      invalidateProjectCache(rootPath, 'git-status');
+      void refreshGitSnapshot({ includeGraph: false });
     }
 
     return true;
-  }, [saveFile]);
+  }, [refreshGitSnapshot, rootPath, saveFile]);
 
   const getActiveEditorContext = useCallback(() => {
     const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
@@ -14743,11 +14909,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return scmEntryValues;
     }
 
-    return [...scmEntryValues].sort((left, right) => {
-      const leftPath = getRelativePath(rootPath, left.path);
-      const rightPath = getRelativePath(rootPath, right.path);
-      return leftPath.localeCompare(rightPath, undefined, { sensitivity: 'base' });
-    });
+    const relativePaths = new Map<string, string>();
+    for (const entry of scmEntryValues) {
+      relativePaths.set(entry.path, getRelativePath(rootPath, entry.path));
+    }
+
+    return [...scmEntryValues].sort((left, right) => (
+      (relativePaths.get(left.path) ?? left.path).localeCompare(
+        relativePaths.get(right.path) ?? right.path,
+        undefined,
+        { sensitivity: 'base' },
+      )
+    ));
   }, [getRelativePath, rootPath, scmEntryValues, shouldSortScmEntries]);
 
   const handleCommitWindowSelectPath = useCallback(async (filePath: string) => {
@@ -14802,7 +14975,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ), [rootPath]);
 
   const selectGitChangeEntry = useCallback((entry: CodePaneGitStatusEntry, options?: { activate?: boolean }) => {
-    setSelectedGitChangePath(entry.path);
+    selectedGitChangePathRef.current = entry.path;
+    setSelectedGitChangePath((currentPath) => (currentPath === entry.path ? currentPath : entry.path));
     void loadGitDiffHunks(entry.path);
 
     if ((options?.activate ?? true) && entry.status !== 'deleted') {
@@ -14826,7 +15000,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    setSelectedGitChangePath(preferredEntry.path);
+    selectedGitChangePathRef.current = preferredEntry.path;
+    setSelectedGitChangePath((currentPath) => (
+      currentPath === preferredEntry.path ? currentPath : preferredEntry.path
+    ));
   }, [activeFilePath, scmEntries, selectedGitChangePath]);
 
   const commitWindowEntries = useMemo(() => {
@@ -14834,14 +15011,36 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return [];
     }
 
-    const sourceEntries = scmEntries.length > 0
+    const sourceEntries: Array<CodePaneGitStatusEntry & { relativePath?: string }> = scmEntries.length > 0
       ? scmEntries
       : (commitWindowState.entriesSnapshot ?? []);
+    const nextCache = new Map<string, CodePaneGitStatusEntry & { relativePath: string }>();
+    const nextEntries: Array<CodePaneGitStatusEntry & { relativePath: string }> = sourceEntries.map((entry) => {
+      const relativePath = getProjectRelativePath(entry.path) || getPathLeafLabel(entry.path) || entry.path;
+      const cachedEntry = commitWindowEntriesCacheRef.current.get(entry.path);
+      if (
+        cachedEntry
+        && cachedEntry.relativePath === relativePath
+        && cachedEntry.status === entry.status
+        && cachedEntry.staged === entry.staged
+        && cachedEntry.unstaged === entry.unstaged
+        && cachedEntry.conflicted === entry.conflicted
+        && cachedEntry.section === entry.section
+        && cachedEntry.originalPath === entry.originalPath
+      ) {
+        nextCache.set(entry.path, cachedEntry);
+        return cachedEntry;
+      }
 
-    return sourceEntries.map((entry) => ({
-      ...entry,
-      relativePath: getProjectRelativePath(entry.path) || getPathLeafLabel(entry.path) || entry.path,
-    }));
+      const nextEntry = {
+        ...entry,
+        relativePath,
+      };
+      nextCache.set(entry.path, nextEntry);
+      return nextEntry;
+    });
+    commitWindowEntriesCacheRef.current = nextCache;
+    return nextEntries;
   }, [commitWindowState, getProjectRelativePath, scmEntries]);
   const commitWindowInitialSelectedPaths = useMemo(() => {
     if (!commitWindowState) {
@@ -16845,17 +17044,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     if (bottomPanelMode === 'run') {
       void loadRunTargets();
-    } else if (bottomPanelMode === 'debug') {
+      return;
+    }
+
+    if (bottomPanelMode === 'debug') {
       void loadRunTargets();
       void loadDebugSessions();
       void loadExceptionBreakpoints();
-    } else if (bottomPanelMode === 'tests') {
+      return;
+    }
+
+    if (bottomPanelMode === 'tests') {
       void loadTests();
-    } else if (bottomPanelMode === 'project') {
+      return;
+    }
+
+    if (bottomPanelMode === 'project') {
       void loadProjectContributions();
-    } else if (bottomPanelMode === 'outline') {
+      return;
+    }
+
+    if (bottomPanelMode === 'outline') {
       void loadDocumentSymbols();
-    } else if (bottomPanelMode === 'git') {
+      return;
+    }
+
+    if (bottomPanelMode === 'git') {
       const shouldLoadBranches = shouldLoadGitBranches();
       const shouldLoadRebasePlan = shouldLoadGitRebasePlan();
       void refreshGitSnapshot({ includeGraph: shouldLoadGitGraph() });
@@ -16865,22 +17079,40 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (shouldLoadRebasePlan && gitRebaseBaseRef) {
         void loadGitRebasePlan(gitRebaseBaseRef);
       }
-    } else if (bottomPanelMode === 'conflict' && selectedGitConflictPath) {
-      void loadGitConflictDetails(selectedGitConflictPath);
-    } else if (bottomPanelMode === 'history' && gitHistory?.targetFilePath) {
-      void loadGitHistory({
-        filePath: gitHistory.targetFilePath,
-        lineNumber: gitHistory.targetLineNumber,
-      });
-    } else if (bottomPanelMode === 'workspace') {
+      return;
+    }
+
+    if (bottomPanelMode === 'conflict') {
+      if (selectedGitConflictPath) {
+        void loadGitConflictDetails(selectedGitConflictPath);
+      }
+      return;
+    }
+
+    if (bottomPanelMode === 'history') {
+      if (gitHistory?.targetFilePath) {
+        void loadGitHistory({
+          filePath: gitHistory.targetFilePath,
+          lineNumber: gitHistory.targetLineNumber,
+        });
+      }
+      return;
+    }
+
+    if (bottomPanelMode === 'workspace') {
       void loadTodoEntries();
-    } else if (bottomPanelMode === 'hierarchy') {
+      return;
+    }
+
+    if (bottomPanelMode === 'hierarchy') {
       void loadHierarchyRoot(selectedHierarchyMode);
-    } else if (bottomPanelMode === 'semantic') {
+      return;
+    }
+
+    if (bottomPanelMode === 'semantic') {
       void loadSemanticSummary();
     }
   }, [
-    activeFilePath,
     bottomPanelMode,
     activeGitWorkbenchTab,
     selectedGitConflictPath,
