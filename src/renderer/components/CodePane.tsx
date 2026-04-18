@@ -12376,29 +12376,33 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
 
     const currentCodeState = paneRef.current.code;
-    const nextOpenFiles = (currentCodeState?.openFiles ?? []).map((tab) => (
-      isPathEqualOrDescendant(tab.path, sourcePath)
-        ? { ...tab, path: replacePathPrefix(tab.path, sourcePath, targetPath) }
-        : tab
-    ));
+    const nextOpenFiles: CodePaneOpenFile[] = [];
+    for (const tab of currentCodeState?.openFiles ?? []) {
+      nextOpenFiles.push(
+        isPathEqualOrDescendant(tab.path, sourcePath)
+          ? { ...tab, path: replacePathPrefix(tab.path, sourcePath, targetPath) }
+          : tab,
+      );
+    }
 
-    persistCodeState({
-      openFiles: nextOpenFiles,
-      activeFilePath: normalizeRenamedPath(currentCodeState?.activeFilePath),
-      selectedPath: normalizeRenamedPath(currentCodeState?.selectedPath),
-      bookmarks: (currentCodeState?.bookmarks ?? []).map((bookmark) => {
-        if (!isPathEqualOrDescendant(bookmark.filePath, sourcePath)) {
-          return bookmark;
-        }
+    const nextBookmarks = [] as typeof bookmarks;
+    for (const bookmark of currentCodeState?.bookmarks ?? []) {
+      if (!isPathEqualOrDescendant(bookmark.filePath, sourcePath)) {
+        nextBookmarks.push(bookmark);
+        continue;
+      }
 
-        const nextFilePath = replacePathPrefix(bookmark.filePath, sourcePath, targetPath);
-        return {
-          ...bookmark,
-          filePath: nextFilePath,
-          id: `${nextFilePath}:${bookmark.lineNumber}`,
-        };
-      }),
-      breakpoints: breakpointsRef.current.map((breakpoint) => (
+      const nextFilePath = replacePathPrefix(bookmark.filePath, sourcePath, targetPath);
+      nextBookmarks.push({
+        ...bookmark,
+        filePath: nextFilePath,
+        id: `${nextFilePath}:${bookmark.lineNumber}`,
+      });
+    }
+
+    const nextBreakpoints: CodePaneBreakpoint[] = [];
+    for (const breakpoint of breakpointsRef.current) {
+      nextBreakpoints.push(
         isPathEqualOrDescendant(breakpoint.filePath, sourcePath)
           ? {
               filePath: replacePathPrefix(breakpoint.filePath, sourcePath, targetPath),
@@ -12413,16 +12417,27 @@ export const CodePane: React.FC<CodePaneProps> = ({
               ...(breakpoint.condition ? { condition: breakpoint.condition } : {}),
               ...(breakpoint.logMessage ? { logMessage: breakpoint.logMessage } : {}),
               ...(breakpoint.enabled === false ? { enabled: false } : {}),
-            }
-      )),
+            },
+      );
+    }
+
+    persistCodeState({
+      openFiles: nextOpenFiles,
+      activeFilePath: normalizeRenamedPath(currentCodeState?.activeFilePath),
+      selectedPath: normalizeRenamedPath(currentCodeState?.selectedPath),
+      bookmarks: nextBookmarks,
+      breakpoints: nextBreakpoints,
     });
 
     setRecentFiles((currentRecentFiles) => {
-      const nextRecentFiles = currentRecentFiles.map((candidatePath) => (
-        isPathEqualOrDescendant(candidatePath, sourcePath)
-          ? replacePathPrefix(candidatePath, sourcePath, targetPath)
-          : candidatePath
-      ));
+      const nextRecentFiles: string[] = [];
+      for (const candidatePath of currentRecentFiles) {
+        nextRecentFiles.push(
+          isPathEqualOrDescendant(candidatePath, sourcePath)
+            ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+            : candidatePath,
+        );
+      }
       recentFilesRef.current = nextRecentFiles;
       return nextRecentFiles;
     });
@@ -12436,11 +12451,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const nextPath = isPathEqualOrDescendant(candidatePath, sourcePath)
         ? replacePathPrefix(candidatePath, sourcePath, targetPath)
         : candidatePath;
-      nextLocalHistoryEntries.set(nextPath, entries.map((entry) => ({
-        ...entry,
-        filePath: nextPath,
-        id: entry.id,
-      })));
+      const nextEntries: LocalHistoryEntry[] = [];
+      for (const entry of entries) {
+        nextEntries.push({
+          ...entry,
+          filePath: nextPath,
+          id: entry.id,
+        });
+      }
+      nextLocalHistoryEntries.set(nextPath, nextEntries);
     }
     localHistoryEntriesRef.current = nextLocalHistoryEntries;
 
@@ -13866,10 +13885,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const rememberRecentLocation = useCallback((location: NavigationHistoryEntry) => {
     setRecentLocations((currentRecentLocations) => {
-      const nextRecentLocations = [
-        location,
-        ...currentRecentLocations.filter((entry) => !isSameNavigationLocation(entry, location)),
-      ].slice(0, CODE_PANE_MAX_RECENT_LOCATIONS);
+      const nextRecentLocations = [location];
+      for (const entry of currentRecentLocations) {
+        if (!isSameNavigationLocation(entry, location)) {
+          nextRecentLocations.push(entry);
+          if (nextRecentLocations.length >= CODE_PANE_MAX_RECENT_LOCATIONS) {
+            break;
+          }
+        }
+      }
       recentLocationsRef.current = nextRecentLocations;
       return nextRecentLocations;
     });
@@ -15089,9 +15113,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       threshold: CODE_PANE_EXPLORER_WINDOWING_THRESHOLD,
     });
 
-    const renderedSearchResults = visibleSearchResults.items.map((filePath) => {
+    const renderedSearchResults: React.ReactNode[] = [];
+    for (const filePath of visibleSearchResults.items) {
       const entryStatus = getEntryStatus(filePath, 'file');
-      return (
+      renderedSearchResults.push(
         <SearchResultRowButton
           key={filePath}
           filePath={filePath}
@@ -15107,9 +15132,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
           renderContextMenu={(nextFilePath) => renderFileContextMenu(nextFilePath, 'file', {
             qualifiedName: getQualifiedNameForTreePath(rootPath, nextFilePath, 'file'),
           })}
-        />
+        />,
       );
-    });
+    }
 
     const renderedWindowedSearchResults = !visibleSearchResults.isWindowed
       ? renderedSearchResults
