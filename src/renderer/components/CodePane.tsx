@@ -3381,6 +3381,22 @@ function getTrackingLocalBranchName(remoteBranchName: string): string {
   return branchSegments.join('/') || remoteBranchName;
 }
 
+function getCurrentGitBranch(
+  branches: CodePaneGitBranchEntry[],
+  currentBranchName?: string | null,
+): CodePaneGitBranchEntry | null {
+  let branchMatchingName: CodePaneGitBranchEntry | null = null;
+  for (const branch of branches) {
+    if (branch.current) {
+      return branch;
+    }
+    if (!branchMatchingName && currentBranchName && branch.name === currentBranchName) {
+      branchMatchingName = branch;
+    }
+  }
+  return branchMatchingName;
+}
+
 function getActionInputDialogId(state: ActionInputDialogState): string {
   switch (state.kind) {
     case 'rename-symbol':
@@ -11605,10 +11621,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const comparePathWithBranch = useCallback(async (filePath: string) => {
     const availableBranches = await getGitBranchesForAction();
     const currentBranchName = gitRepositorySummary?.currentBranch ?? '';
-    const suggestedBranchName = availableBranches.find((branch) => branch.name === currentBranchName)?.upstream
-      ?? availableBranches.find((branch) => branch.kind === 'remote')?.name
-      ?? availableBranches.find((branch) => !branch.current)?.name
-      ?? '';
+    let suggestedBranchName = '';
+    for (const branch of availableBranches) {
+      if (branch.name === currentBranchName && branch.upstream) {
+        suggestedBranchName = branch.upstream;
+        break;
+      }
+      if (!suggestedBranchName && branch.kind === 'remote') {
+        suggestedBranchName = branch.name;
+      }
+      if (!suggestedBranchName && !branch.current) {
+        suggestedBranchName = branch.name;
+      }
+    }
     openActionInputDialog({
       kind: 'compare-file-with-reference',
       filePath,
@@ -13990,11 +14015,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const activeFileReadOnly = activeFilePath ? Boolean(fileMetaRef.current.get(activeFilePath)?.readOnly) : false;
   const activeFileDisplayPath = activeFilePath ? getDisplayPath(activeFilePath) : null;
-  const currentGitBranch = useMemo(() => (
-    gitBranches.find((branch) => branch.current)
-    ?? gitBranches.find((branch) => branch.name === gitRepositorySummary?.currentBranch)
-    ?? null
-  ), [gitBranches, gitRepositorySummary?.currentBranch]);
+  const currentGitBranch = useMemo(
+    () => getCurrentGitBranch(gitBranches, gitRepositorySummary?.currentBranch),
+    [gitBranches, gitRepositorySummary?.currentBranch],
+  );
   const indexStatusText = indexStatus?.state === 'building'
     ? t('codePane.indexingProgress', {
       processed: indexStatus.processedDirectoryCount,
@@ -14062,13 +14086,27 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
     return nextEntriesByPath;
   }, [externalChangeEntries]);
-  const selectedExternalChangeEntry = useMemo(() => (
-    selectedExternalChangePath
-      ? externalChangeEntries.find((entry) => entry.filePath === selectedExternalChangePath) ?? externalChangeEntries[0] ?? null
-      : externalChangeEntries[0] ?? null
-  ), [externalChangeEntries, selectedExternalChangePath]);
+  const selectedExternalChangeEntry = useMemo(() => {
+    let firstEntry: ExternalChangeEntry | null = null;
+    for (const entry of externalChangeEntries) {
+      if (!firstEntry) {
+        firstEntry = entry;
+      }
+      if (selectedExternalChangePath && entry.filePath === selectedExternalChangePath) {
+        return entry;
+      }
+    }
+    return firstEntry;
+  }, [externalChangeEntries, selectedExternalChangePath]);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
-  const hasExternalLibraries = externalLibrarySections.some((section) => section.roots.length > 0);
+  const hasExternalLibraries = useMemo(() => {
+    for (const section of externalLibrarySections) {
+      if (section.roots.length > 0) {
+        return true;
+      }
+    }
+    return false;
+  }, [externalLibrarySections]);
   const rootLabel = useMemo(() => getPathLeafLabel(rootPath) || rootPath, [rootPath]);
   const pathMutationLocationPath = useMemo(() => {
     if (!pathMutationDialog) {
@@ -15294,13 +15332,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    if (selectedGitChangePath && scmEntries.some((entry) => entry.path === selectedGitChangePath)) {
-      return;
+    let preferredEntry: CodePaneGitStatusEntry | null = scmEntries[0] ?? null;
+    for (const entry of scmEntries) {
+      if (selectedGitChangePath && entry.path === selectedGitChangePath) {
+        return;
+      }
+      if (activeFilePath && entry.path === activeFilePath) {
+        preferredEntry = entry;
+      }
     }
 
-    const preferredEntry = (activeFilePath
-      ? scmEntries.find((entry) => entry.path === activeFilePath)
-      : null) ?? scmEntries[0];
     if (!preferredEntry) {
       return;
     }
@@ -15358,7 +15399,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     for (const entry of commitWindowEntries) {
       availablePaths.add(entry.path);
     }
-    return commitWindowState.preselectedPaths?.filter((candidatePath) => availablePaths.has(candidatePath)) ?? [];
+    const nextSelectedPaths: string[] = [];
+    for (const candidatePath of commitWindowState.preselectedPaths ?? []) {
+      if (availablePaths.has(candidatePath)) {
+        nextSelectedPaths.push(candidatePath);
+      }
+    }
+    return nextSelectedPaths;
   }, [commitWindowEntries, commitWindowState]);
 
   const actionInputDialogKey = useMemo(() => (
@@ -17223,13 +17270,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const breakpointKey = getBreakpointKey(normalizedBreakpoint);
-    const nextBreakpoints = breakpointsRef.current.some((candidate) => getBreakpointKey(candidate) === breakpointKey)
-      ? breakpointsRef.current.map((candidate) => (
-        getBreakpointKey(candidate) === breakpointKey
-          ? normalizedBreakpoint
-          : candidate
-      ))
-      : [...breakpointsRef.current, normalizedBreakpoint];
+    const nextBreakpoints: CodePaneBreakpoint[] = [];
+    let didReplace = false;
+    for (const candidate of breakpointsRef.current) {
+      if (getBreakpointKey(candidate) === breakpointKey) {
+        nextBreakpoints.push(normalizedBreakpoint);
+        didReplace = true;
+      } else {
+        nextBreakpoints.push(candidate);
+      }
+    }
+    if (!didReplace) {
+      nextBreakpoints.push(normalizedBreakpoint);
+    }
     persistDebugBreakpoints(nextBreakpoints);
   }, [persistDebugBreakpoints, rootPath, t]);
 
@@ -17249,9 +17302,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    persistDebugBreakpoints(
-      breakpointsRef.current.filter((candidate) => getBreakpointKey(candidate) !== getBreakpointKey(normalizedBreakpoint)),
-    );
+    const breakpointKey = getBreakpointKey(normalizedBreakpoint);
+    const nextBreakpoints: CodePaneBreakpoint[] = [];
+    for (const candidate of breakpointsRef.current) {
+      if (getBreakpointKey(candidate) !== breakpointKey) {
+        nextBreakpoints.push(candidate);
+      }
+    }
+    persistDebugBreakpoints(nextBreakpoints);
   }, [persistDebugBreakpoints, rootPath, t]);
 
   const setExceptionBreakpoint = useCallback(async (
@@ -17286,7 +17344,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       lineNumber,
     });
     const breakpointKey = getBreakpointKey(normalizedBreakpoint);
-    const existingBreakpoint = breakpointsRef.current.find((candidate) => getBreakpointKey(candidate) === breakpointKey);
+    let existingBreakpoint: CodePaneBreakpoint | null = null;
+    for (const candidate of breakpointsRef.current) {
+      if (getBreakpointKey(candidate) === breakpointKey) {
+        existingBreakpoint = candidate;
+        break;
+      }
+    }
     if (existingBreakpoint) {
       await removeBreakpoint(existingBreakpoint);
       return;
@@ -17660,9 +17724,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [rootPath]);
 
   const handleScmCopyBranchName = useCallback(() => {
-    const currentBranch = gitBranchesRef.current.find((branch) => branch.current)
-      ?? gitBranchesRef.current.find((branch) => branch.name === gitRepositorySummaryRef.current?.currentBranch)
-      ?? null;
+    const currentBranch = getCurrentGitBranch(
+      gitBranchesRef.current,
+      gitRepositorySummaryRef.current?.currentBranch,
+    );
     const copyValue = currentBranch?.name ?? gitRepositorySummaryRef.current?.headSha ?? '';
     if (copyValue) {
       void window.electronAPI.writeClipboardText(copyValue);
@@ -17685,9 +17750,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [openActionInputDialog]);
 
   const handleScmNewBranch = useCallback(() => {
-    const currentBranch = gitBranchesRef.current.find((branch) => branch.current)
-      ?? gitBranchesRef.current.find((branch) => branch.name === gitRepositorySummaryRef.current?.currentBranch)
-      ?? null;
+    const currentBranch = getCurrentGitBranch(
+      gitBranchesRef.current,
+      gitRepositorySummaryRef.current?.currentBranch,
+    );
     openActionInputDialog({
       kind: 'checkout-branch',
       initialValue: '',
