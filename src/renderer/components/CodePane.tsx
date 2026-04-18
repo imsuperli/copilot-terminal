@@ -15470,6 +15470,24 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setSearchEverywhereError((currentError) => (
       currentError === null ? currentError : null
     ));
+    const requestKey = `search-everywhere:${rootPath}`;
+    const cacheKey = `${requestKey}:${searchEverywhereMode}:${trimmedQuery}`;
+    const cachedResults = runtimeStoreRef.current.getCache<{
+      files: string[];
+      symbols: CodePaneWorkspaceSymbol[];
+    }>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
+    if (cachedResults) {
+      setSearchEverywhereFileResults((currentResults) => (
+        areStringListsEqual(currentResults, cachedResults.files) ? currentResults : cachedResults.files
+      ));
+      setSearchEverywhereSymbolResults((currentResults) => (
+        areWorkspaceSymbolListsEqual(currentResults, cachedResults.symbols) ? currentResults : cachedResults.symbols
+      ));
+      setIsSearchEverywhereLoading((currentLoading) => (
+        currentLoading ? false : currentLoading
+      ));
+      return;
+    }
 
     const timer = window.setTimeout(async () => {
       const [fileResponse, symbolResponse] = await Promise.all([
@@ -15494,6 +15512,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const nextSearchEverywhereError = fileResponse.success && symbolResponse.success
         ? null
         : fileResponse.error || symbolResponse.error || t('common.retry');
+      if (fileResponse.success && symbolResponse.success) {
+        runtimeStoreRef.current.setCache(cacheKey, {
+          files: nextSearchEverywhereFileResults,
+          symbols: nextSearchEverywhereSymbolResults,
+        });
+      }
 
       setSearchEverywhereFileResults((currentResults) => (
         areStringListsEqual(currentResults, nextSearchEverywhereFileResults)
@@ -17289,7 +17313,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const handleSearchEverywhereQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchEverywhereQuery(event.target.value);
+    const nextQuery = event.target.value;
+    setSearchEverywhereQuery((currentQuery) => (
+      currentQuery === nextQuery ? currentQuery : nextQuery
+    ));
   }, []);
 
   const handleSearchEverywhereMoveSelection = useCallback((direction: 1 | -1) => {
