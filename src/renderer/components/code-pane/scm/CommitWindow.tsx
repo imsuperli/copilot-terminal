@@ -98,31 +98,38 @@ function buildCommitWindowEntryGroups(
   entries: CommitWindowEntry[],
   rootLabel: string,
 ): CommitWindowEntryGroup[] {
-  const groups = new Map<string, CommitWindowEntry[]>();
+  const groups = new Map<string, CommitWindowEntryGroup>();
 
   for (const entry of entries) {
     const groupKey = getCommitWindowGroupKey(entry.relativePath);
-    const groupEntries = groups.get(groupKey) ?? [];
-    groupEntries.push(entry);
-    groups.set(groupKey, groupEntries);
+    let group = groups.get(groupKey);
+    if (!group) {
+      group = {
+        key: groupKey,
+        label: groupKey === '.' ? rootLabel : groupKey,
+        entries: [],
+        isRoot: groupKey === '.',
+      };
+      groups.set(groupKey, group);
+    }
+    group.entries.push(entry);
   }
 
-  return Array.from(groups.entries())
-    .map(([groupKey, groupEntries]) => ({
-      key: groupKey,
-      label: groupKey === '.' ? rootLabel : groupKey,
-      entries: [...groupEntries].sort((left, right) => (
+  const groupedEntries = Array.from(groups.values());
+  for (const group of groupedEntries) {
+    group.entries.sort((left, right) => (
         left.relativePath.localeCompare(right.relativePath, undefined, { sensitivity: 'base' })
-      )),
-      isRoot: groupKey === '.',
-    }))
-    .sort((left, right) => {
-      if (left.isRoot !== right.isRoot) {
-        return left.isRoot ? -1 : 1;
-      }
+      ));
+  }
 
-      return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' });
-    });
+  groupedEntries.sort((left, right) => {
+    if (left.isRoot !== right.isRoot) {
+      return left.isRoot ? -1 : 1;
+    }
+
+    return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' });
+  });
+  return groupedEntries;
 }
 
 const CommitWindowEntryCard = React.memo(function CommitWindowEntryCard({
@@ -383,12 +390,19 @@ export const CommitWindow = React.memo(function CommitWindow({
     [groupedEntries, rootDirectoryLabel, showIncludedOnly, visibleEntries],
   );
   const visibleEntryGroups = useMemo<CommitWindowVisibleEntryGroup[]>(
-    () => visibleEntryGroupsBase.map((group) => ({
-      ...group,
-      includedCount: group.entries.reduce((count, entry) => (
-        count + (selectedPathSet.has(entry.path) ? 1 : 0)
-      ), 0),
-    })),
+    () => visibleEntryGroupsBase.map((group) => {
+      let includedCount = 0;
+      for (const entry of group.entries) {
+        if (selectedPathSet.has(entry.path)) {
+          includedCount += 1;
+        }
+      }
+
+      return {
+        ...group,
+        includedCount,
+      };
+    }),
     [selectedPathSet, visibleEntryGroupsBase],
   );
   const shouldRenderGroups = visibleEntryGroups.length > 1 || visibleEntryGroups.some((group) => !group.isRoot);

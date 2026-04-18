@@ -1927,14 +1927,16 @@ function insertBranchTreeNode(
   }
 
   const [folderLabel, ...restSegments] = segments;
-  const folderPath = [...parentSegments, folderLabel];
+  const folderPath = parentSegments.length > 0
+    ? `${parentSegments.join('/')}/${folderLabel}`
+    : folderLabel;
   let folderNode = nodes.find((node): node is Extract<BranchTreeNode, { kind: 'folder' }> => (
     node.kind === 'folder' && node.label === folderLabel
   ));
 
   if (!folderNode) {
     folderNode = {
-      key: `${keyPrefix}:folder:${folderPath.join('/')}`,
+      key: `${keyPrefix}:folder:${folderPath}`,
       kind: 'folder',
       label: folderLabel,
       children: [],
@@ -1943,40 +1945,36 @@ function insertBranchTreeNode(
     nodes.push(folderNode);
   }
 
-  insertBranchTreeNode(folderNode.children, restSegments, branch, keyPrefix, folderPath);
-  folderNode.branchCount = countBranchNodes(folderNode.children);
+  folderNode.branchCount += 1;
+  insertBranchTreeNode(folderNode.children, restSegments, branch, keyPrefix, [...parentSegments, folderLabel]);
 }
 
 function sortBranchTreeNodes(nodes: BranchTreeNode[]): BranchTreeNode[] {
-  return [...nodes]
-    .map((node) => (
-      node.kind === 'folder'
-        ? {
-          ...node,
-          children: sortBranchTreeNodes(node.children),
-          branchCount: countBranchNodes(node.children),
-        }
-        : node
-    ))
-    .sort((leftNode, rightNode) => {
-      if (leftNode.kind !== rightNode.kind) {
-        return leftNode.kind === 'folder' ? -1 : 1;
+  const nextNodes = [...nodes];
+  for (let index = 0; index < nextNodes.length; index += 1) {
+    const node = nextNodes[index];
+    if (node?.kind === 'folder') {
+      nextNodes[index] = {
+        ...node,
+        children: sortBranchTreeNodes(node.children),
+      };
+    }
+  }
+
+  nextNodes.sort((leftNode, rightNode) => {
+    if (leftNode.kind !== rightNode.kind) {
+      return leftNode.kind === 'folder' ? -1 : 1;
+    }
+
+    if (leftNode.kind === 'branch' && rightNode.kind === 'branch') {
+      if (leftNode.branch.current !== rightNode.branch.current) {
+        return leftNode.branch.current ? -1 : 1;
       }
+    }
 
-      if (leftNode.kind === 'branch' && rightNode.kind === 'branch') {
-        if (leftNode.branch.current !== rightNode.branch.current) {
-          return leftNode.branch.current ? -1 : 1;
-        }
-      }
-
-      return leftNode.label.localeCompare(rightNode.label);
-    });
-}
-
-function countBranchNodes(nodes: BranchTreeNode[]): number {
-  return nodes.reduce((count, node) => (
-    count + (node.kind === 'folder' ? countBranchNodes(node.children) : 1)
-  ), 0);
+    return leftNode.label.localeCompare(rightNode.label);
+  });
+  return nextNodes;
 }
 
 function flattenBranchTreeRows(
@@ -1985,16 +1983,30 @@ function flattenBranchTreeRows(
   depth = 0,
 ): BranchTreeVisibleRow[] {
   const rows: BranchTreeVisibleRow[] = [];
+  const stack: Array<{ node: BranchTreeNode; depth: number }> = [];
 
-  for (const node of nodes) {
-    rows.push({
-      key: node.key,
+  for (let index = nodes.length - 1; index >= 0; index -= 1) {
+    stack.push({
+      node: nodes[index]!,
       depth,
-      node,
+    });
+  }
+
+  while (stack.length > 0) {
+    const nextRow = stack.pop()!;
+    rows.push({
+      key: nextRow.node.key,
+      depth: nextRow.depth,
+      node: nextRow.node,
     });
 
-    if (node.kind === 'folder' && !collapsedNodeKeys.has(node.key)) {
-      rows.push(...flattenBranchTreeRows(node.children, collapsedNodeKeys, depth + 1));
+    if (nextRow.node.kind === 'folder' && !collapsedNodeKeys.has(nextRow.node.key)) {
+      for (let index = nextRow.node.children.length - 1; index >= 0; index -= 1) {
+        stack.push({
+          node: nextRow.node.children[index]!,
+          depth: nextRow.depth + 1,
+        });
+      }
     }
   }
 
@@ -2005,61 +2017,79 @@ function buildGitChangeWorkbenchGroups(
   changes: CodePaneGitStatusEntry[],
   getRelativePath: (filePath: string) => string,
 ): GitChangeWorkbenchSectionGroup[] {
-  const rowsBySection = new Map<GitChangeSection, GitChangeWorkbenchRow[]>();
+  const sectionGroups = new Map<GitChangeSection, {
+    count: number;
+    directoryGroups: Map<string, GitChangeWorkbenchDirectoryGroup>;
+  }>();
+  const repositoryRootLabel = getRepositoryRootLabel();
 
   for (const entry of changes) {
     const relativePath = getRelativePath(entry.path) || getPathLeafLabel(entry.path) || entry.path;
     const directoryLabel = getDirectoryLabel(relativePath);
 
     for (const section of getGitEntrySections(entry)) {
-      const rows = rowsBySection.get(section) ?? [];
-      rows.push({
+      let sectionGroup = sectionGroups.get(section);
+      if (!sectionGroup) {
+        sectionGroup = {
+          count: 0,
+          directoryGroups: new Map<string, GitChangeWorkbenchDirectoryGroup>(),
+        };
+        sectionGroups.set(section, sectionGroup);
+      }
+      sectionGroup.count += 1;
+
+      let directoryGroup = sectionGroup.directoryGroups.get(directoryLabel);
+      if (!directoryGroup) {
+        directoryGroup = {
+          key: directoryLabel,
+          label: directoryLabel,
+          rows: [],
+        };
+        sectionGroup.directoryGroups.set(directoryLabel, directoryGroup);
+      }
+
+      directoryGroup.rows.push({
         key: `${section}:${entry.path}`,
         section,
         entry,
         relativePath,
         directoryLabel,
       });
-      rowsBySection.set(section, rows);
     }
   }
 
   return GIT_CHANGE_SECTION_ORDER
     .map((section) => {
-      const rows = rowsBySection.get(section) ?? [];
-      const directoryGroupsByLabel = new Map<string, GitChangeWorkbenchRow[]>();
-
-      for (const row of rows) {
-        const groupRows = directoryGroupsByLabel.get(row.directoryLabel) ?? [];
-        groupRows.push(row);
-        directoryGroupsByLabel.set(row.directoryLabel, groupRows);
+      const sectionGroup = sectionGroups.get(section);
+      if (!sectionGroup) {
+        return null;
       }
+
+      const directoryGroups = Array.from(sectionGroup.directoryGroups.values());
+      for (const directoryGroup of directoryGroups) {
+        directoryGroup.rows.sort((left, right) => (
+          left.relativePath.localeCompare(right.relativePath, undefined, { sensitivity: 'base' })
+        ));
+      }
+      directoryGroups.sort((left, right) => {
+        if (left.label === repositoryRootLabel && right.label !== repositoryRootLabel) {
+          return -1;
+        }
+
+        if (right.label === repositoryRootLabel && left.label !== repositoryRootLabel) {
+          return 1;
+        }
+
+        return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' });
+      });
 
       return {
         section,
-        count: rows.length,
-        directoryGroups: Array.from(directoryGroupsByLabel.entries())
-          .map(([label, groupRows]) => ({
-            key: label,
-            label,
-            rows: [...groupRows].sort((left, right) => (
-              left.relativePath.localeCompare(right.relativePath, undefined, { sensitivity: 'base' })
-            )),
-          }))
-          .sort((left, right) => {
-            if (left.label === getRepositoryRootLabel() && right.label !== getRepositoryRootLabel()) {
-              return -1;
-            }
-
-            if (right.label === getRepositoryRootLabel() && left.label !== getRepositoryRootLabel()) {
-              return 1;
-            }
-
-            return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' });
-          }),
+        count: sectionGroup.count,
+        directoryGroups,
       };
     })
-    .filter((sectionGroup) => sectionGroup.count > 0);
+    .filter((sectionGroup): sectionGroup is GitChangeWorkbenchSectionGroup => Boolean(sectionGroup));
 }
 
 function getGitEntrySections(entry: CodePaneGitStatusEntry): GitChangeSection[] {

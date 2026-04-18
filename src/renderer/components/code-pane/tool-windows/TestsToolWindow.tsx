@@ -154,18 +154,35 @@ function useFixedWindowedList<T>(items: T[], rowHeight: number) {
 }
 
 function flattenTestTreeItems(items: CodePaneTestItem[], depth = 0): FlatTestTreeRow[] {
-  return items.flatMap((item) => {
-    const hasChildren = (item.children?.length ?? 0) > 0;
-    return [
-      {
-        key: item.id,
-        item,
-        depth,
-        hasChildren,
-      },
-      ...flattenTestTreeItems(item.children ?? [], depth + 1),
-    ];
-  });
+  const rows: FlatTestTreeRow[] = [];
+  const stack: Array<{ item: CodePaneTestItem; depth: number }> = [];
+
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    stack.push({
+      item: items[index]!,
+      depth,
+    });
+  }
+
+  while (stack.length > 0) {
+    const nextRow = stack.pop()!;
+    const children = nextRow.item.children ?? [];
+    rows.push({
+      key: nextRow.item.id,
+      item: nextRow.item,
+      depth: nextRow.depth,
+      hasChildren: children.length > 0,
+    });
+
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      stack.push({
+        item: children[index]!,
+        depth: nextRow.depth + 1,
+      });
+    }
+  }
+
+  return rows;
 }
 
 const TestTreeRow = React.memo(function TestTreeRow({
