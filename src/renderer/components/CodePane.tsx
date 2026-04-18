@@ -80,6 +80,7 @@ import type {
   CodePaneGitBlameLine,
   CodePaneGitConflictDetails,
   CodePaneGitHistoryResult,
+  CodePaneGitHistoryEntry,
   CodePaneGitRebasePlanEntry,
   CodePaneGitRebasePlanResult,
   CodePaneGitRepositorySummary,
@@ -6157,6 +6158,98 @@ function areGitConflictDetailsEqual(
     && previousDetails.language === nextDetails.language;
 }
 
+function areReferenceListsEqual(previousReferences: CodePaneReference[], nextReferences: CodePaneReference[]): boolean {
+  if (previousReferences.length !== nextReferences.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousReferences.length; index += 1) {
+    const previousReference = previousReferences[index];
+    const nextReference = nextReferences[index];
+    if (
+      previousReference?.filePath !== nextReference?.filePath
+      || !areRangesEqual(previousReference?.range, nextReference?.range)
+      || previousReference?.previewText !== nextReference?.previewText
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areGitHistoryEntriesEqual(
+  previousEntries: CodePaneGitHistoryEntry[],
+  nextEntries: CodePaneGitHistoryEntry[],
+): boolean {
+  if (previousEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousEntries.length; index += 1) {
+    const previousEntry = previousEntries[index];
+    const nextEntry = nextEntries[index];
+    if (
+      previousEntry?.commitSha !== nextEntry?.commitSha
+      || previousEntry?.shortSha !== nextEntry?.shortSha
+      || previousEntry?.subject !== nextEntry?.subject
+      || previousEntry?.author !== nextEntry?.author
+      || previousEntry?.email !== nextEntry?.email
+      || previousEntry?.timestamp !== nextEntry?.timestamp
+      || previousEntry?.scope !== nextEntry?.scope
+      || previousEntry?.filePath !== nextEntry?.filePath
+      || previousEntry?.lineNumber !== nextEntry?.lineNumber
+      || !areStringListsEqual(previousEntry?.refs ?? [], nextEntry?.refs ?? [])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areGitHistoryResultsEqual(
+  previousResult: CodePaneGitHistoryResult | null,
+  nextResult: CodePaneGitHistoryResult | null,
+): boolean {
+  if (previousResult === nextResult) {
+    return true;
+  }
+
+  if (!previousResult || !nextResult) {
+    return false;
+  }
+
+  return previousResult.scope === nextResult.scope
+    && previousResult.targetFilePath === nextResult.targetFilePath
+    && previousResult.targetLineNumber === nextResult.targetLineNumber
+    && areGitHistoryEntriesEqual(previousResult.entries, nextResult.entries);
+}
+
+function areGitBlameLinesEqual(previousLines: CodePaneGitBlameLine[], nextLines: CodePaneGitBlameLine[]): boolean {
+  if (previousLines.length !== nextLines.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousLines.length; index += 1) {
+    const previousLine = previousLines[index];
+    const nextLine = nextLines[index];
+    if (
+      previousLine?.lineNumber !== nextLine?.lineNumber
+      || previousLine?.commitSha !== nextLine?.commitSha
+      || previousLine?.shortSha !== nextLine?.shortSha
+      || previousLine?.author !== nextLine?.author
+      || previousLine?.summary !== nextLine?.summary
+      || previousLine?.timestamp !== nextLine?.timestamp
+      || previousLine?.text !== nextLine?.text
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function areRunSessionsEqual(previousSessions: CodePaneRunSession[], nextSessions: CodePaneRunSession[]): boolean {
   if (previousSessions.length !== nextSessions.length) {
     return false;
@@ -11062,10 +11155,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const targetWord = context.model.getWordAtPosition(context.position)?.word ?? getPathLeafLabel(context.filePath);
     setSearchPanelMode('usages');
-    setUsageResults([]);
-    setUsagesTargetLabel(targetWord);
-    setUsageError(null);
-    setIsFindingUsages(true);
+    setUsageResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+    setUsagesTargetLabel((currentLabel) => (currentLabel === targetWord ? currentLabel : targetWord));
+    setUsageError((currentError) => (currentError === null ? currentError : null));
+    setIsFindingUsages((currentFinding) => (currentFinding ? currentFinding : true));
     handleSidebarModeSelect('search');
 
     const response = await window.electronAPI.codePaneGetReferences({
@@ -11079,10 +11172,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
 
     startTransition(() => {
-      setUsageResults(response.success ? (response.data ?? []) : []);
+      const nextResults = response.success ? (response.data ?? []) : [];
+      setUsageResults((currentResults) => (
+        areReferenceListsEqual(currentResults, nextResults) ? currentResults : nextResults
+      ));
     });
-    setUsageError(response.success ? null : (response.error || t('common.retry')));
-    setIsFindingUsages(false);
+    const nextError = response.success ? null : (response.error || t('common.retry'));
+    setUsageError((currentError) => (
+      currentError === nextError ? currentError : nextError
+    ));
+    setIsFindingUsages((currentFinding) => (currentFinding === false ? currentFinding : false));
   }, [getActiveEditorContext, handleSidebarModeSelect, rootPath, t]);
 
   const renameSymbolAtCursor = useCallback(async () => {
@@ -12346,8 +12445,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
       lineNumber?: number;
     },
   ) => {
-    setIsGitHistoryLoading(true);
-    setGitHistoryError(null);
+    setIsGitHistoryLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setGitHistoryError((currentError) => (currentError === null ? currentError : null));
 
     const response = await trackRequest(
       `git-history:${rootPath}`,
@@ -12361,25 +12460,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }),
     );
     if (!response.success || !response.data) {
-      setGitHistoryError(response.error || t('common.retry'));
-      setIsGitHistoryLoading(false);
+      const nextError = response.error || t('common.retry');
+      setGitHistoryError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
+      setIsGitHistoryLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
-    setGitHistory(response.data);
-    setSelectedHistoryCommitSha(response.data.entries[0]?.commitSha ?? null);
-    setBottomPanelMode('history');
-    setIsGitHistoryLoading(false);
+    const nextHistory = response.data;
+    setGitHistory((currentHistory) => (
+      areGitHistoryResultsEqual(currentHistory, nextHistory) ? currentHistory : nextHistory
+    ));
+    setSelectedHistoryCommitSha((currentCommitSha) => {
+      const nextCommitSha = nextHistory.entries[0]?.commitSha ?? null;
+      return currentCommitSha === nextCommitSha ? currentCommitSha : nextCommitSha;
+    });
+    setBottomPanelMode((currentMode) => (currentMode === 'history' ? currentMode : 'history'));
+    setIsGitHistoryLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [rootPath, t, trackRequest]);
 
   const loadBlameForActiveFile = useCallback(async () => {
     const filePath = activeFilePathRef.current;
     if (!filePath) {
-      setBlameLines([]);
+      setBlameLines((currentLines) => (currentLines.length === 0 ? currentLines : []));
       return;
     }
 
-    setIsBlameLoading(true);
+    setIsBlameLoading((currentLoading) => (currentLoading ? currentLoading : true));
     const response = await window.electronAPI.codePaneGitBlame({
       rootPath,
       filePath,
@@ -12390,13 +12498,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
         message: response.error || t('common.retry'),
         filePath,
       });
-      setBlameLines([]);
-      setIsBlameLoading(false);
+      setBlameLines((currentLines) => (currentLines.length === 0 ? currentLines : []));
+      setIsBlameLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
-    setBlameLines(response.data ?? []);
-    setIsBlameLoading(false);
+    const nextLines = response.data ?? [];
+    setBlameLines((currentLines) => (
+      areGitBlameLinesEqual(currentLines, nextLines) ? currentLines : nextLines
+    ));
+    setIsBlameLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [rootPath, t]);
 
   const runGitOperation = useCallback(async (
