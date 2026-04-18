@@ -6062,14 +6062,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [activeFilePath]);
 
   useEffect(() => {
-    selectedExternalChangePathRef.current = selectedExternalChangePath;
-    externalChangeStateRef.current = createExternalChangeStateSnapshot(
-      externalChangeEntriesRef.current,
-      selectedExternalChangePath,
-    );
-  }, [selectedExternalChangePath]);
-
-  useEffect(() => {
     externalLibrarySectionsRef.current = externalLibrarySections;
   }, [externalLibrarySections]);
 
@@ -6162,14 +6154,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     pendingExternalChangeDiffRef.current = pendingExternalChangeDiff;
   }, [pendingExternalChangeDiff]);
-
-  useEffect(() => {
-    externalChangeEntriesRef.current = externalChangeEntries;
-    externalChangeStateRef.current = createExternalChangeStateSnapshot(
-      externalChangeEntries,
-      selectedExternalChangePathRef.current,
-    );
-  }, [externalChangeEntries]);
 
   useEffect(() => {
     bottomPanelHeightRef.current = bottomPanelHeight;
