@@ -3186,6 +3186,79 @@ function findHierarchyTreeNode(node: HierarchyTreeNode | null, targetKey: string
   return null;
 }
 
+function areHierarchyItemsEqual(
+  previousItem?: CodePaneHierarchyItem | null,
+  nextItem?: CodePaneHierarchyItem | null,
+): boolean {
+  if (previousItem === nextItem) {
+    return true;
+  }
+
+  if (!previousItem || !nextItem) {
+    return false;
+  }
+
+  return previousItem.name === nextItem.name
+    && previousItem.detail === nextItem.detail
+    && previousItem.kind === nextItem.kind
+    && previousItem.filePath === nextItem.filePath
+    && previousItem.displayPath === nextItem.displayPath
+    && previousItem.uri === nextItem.uri
+    && previousItem.readOnly === nextItem.readOnly
+    && previousItem.language === nextItem.language
+    && previousItem.content === nextItem.content
+    && areRangesEqual(previousItem.range, nextItem.range)
+    && areRangesEqual(previousItem.selectionRange, nextItem.selectionRange)
+    && areRangeListsEqual(previousItem.relationRanges ?? [], nextItem.relationRanges ?? []);
+}
+
+function areRangeListsEqual(previousRanges: CodePaneRange[], nextRanges: CodePaneRange[]): boolean {
+  if (previousRanges.length !== nextRanges.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousRanges.length; index += 1) {
+    if (!areRangesEqual(previousRanges[index], nextRanges[index])) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areHierarchyTreeNodesEqual(
+  previousNode: HierarchyTreeNode | null,
+  nextNode: HierarchyTreeNode | null,
+): boolean {
+  if (previousNode === nextNode) {
+    return true;
+  }
+
+  if (!previousNode || !nextNode) {
+    return false;
+  }
+
+  if (
+    previousNode.key !== nextNode.key
+    || !areHierarchyItemsEqual(previousNode.item, nextNode.item)
+    || previousNode.isExpanded !== nextNode.isExpanded
+    || previousNode.isLoading !== nextNode.isLoading
+    || previousNode.isExpandable !== nextNode.isExpandable
+    || previousNode.error !== nextNode.error
+    || previousNode.children.length !== nextNode.children.length
+  ) {
+    return false;
+  }
+
+  for (let index = 0; index < previousNode.children.length; index += 1) {
+    if (!areHierarchyTreeNodesEqual(previousNode.children[index] ?? null, nextNode.children[index] ?? null)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function summarizeSemanticTokens(result: CodePaneSemanticTokensResult): {
   totalTokens: number;
   summary: SemanticTokenSummaryEntry[];
@@ -10886,17 +10959,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ? await resolveInspectorTargetContext(targetFilePath, { preferredRange: resolvedPreferredRange })
       : getActiveEditorContext();
     if (!context) {
-      setHierarchyRootNode(null);
-      setHierarchyError(null);
-      setIsHierarchyLoading(false);
+      setHierarchyRootNode((currentNode) => (currentNode === null ? currentNode : null));
+      setHierarchyError((currentError) => (currentError === null ? currentError : null));
+      setIsHierarchyLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
     const requestPath = getModelRequestPath(context.filePath);
     const requestKey = `hierarchy:${mode}:${requestPath}`;
     const requestVersion = ++hierarchyRequestIdRef.current;
-    setIsHierarchyLoading(true);
-    setHierarchyError(null);
+    setIsHierarchyLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setHierarchyError((currentError) => (currentError === null ? currentError : null));
 
     const requestLabel = mode.startsWith('call')
       ? 'Call hierarchy'
@@ -10946,22 +11019,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
           items: [],
         };
 
-      setHierarchyRootNode(
-        hierarchyResult.root
-          ? createHierarchyTreeNode(hierarchyResult.root, hierarchyResult.items)
-          : null,
-      );
-      setHierarchyError(response.success ? null : (response.error || t('common.retry')));
+      const nextRootNode = hierarchyResult.root
+        ? createHierarchyTreeNode(hierarchyResult.root, hierarchyResult.items)
+        : null;
+      const nextError = response.success ? null : (response.error || t('common.retry'));
+
+      setHierarchyRootNode((currentNode) => (
+        areHierarchyTreeNodesEqual(currentNode, nextRootNode) ? currentNode : nextRootNode
+      ));
+      setHierarchyError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
     } catch (error) {
       if (hierarchyRequestIdRef.current !== requestVersion) {
         return;
       }
 
-      setHierarchyRootNode(null);
-      setHierarchyError(error instanceof Error ? error.message : t('common.retry'));
+      const nextError = error instanceof Error ? error.message : t('common.retry');
+      setHierarchyRootNode((currentNode) => (currentNode === null ? currentNode : null));
+      setHierarchyError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
     } finally {
       if (hierarchyRequestIdRef.current === requestVersion) {
-        setIsHierarchyLoading(false);
+        setIsHierarchyLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       }
     }
   }, [
@@ -10983,15 +11064,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const preferredRange = symbols?.[0]?.selectionRange ?? null;
     const context = await resolveInspectorTargetContext(filePath, { preferredRange });
     if (!context) {
-      setHierarchyRootNode(null);
-      setHierarchyError(t('common.retry'));
-      setIsHierarchyLoading(false);
+      const nextError = t('common.retry');
+      setHierarchyRootNode((currentNode) => (currentNode === null ? currentNode : null));
+      setHierarchyError((currentError) => (
+        currentError === nextError ? currentError : nextError
+      ));
+      setIsHierarchyLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
       return;
     }
 
-    setDocumentSymbols(symbols ?? []);
-    setDocumentSymbolsFilePath(filePath);
-    setDocumentSymbolsError(null);
+    const nextSymbols = symbols ?? [];
+    setDocumentSymbols((currentSymbols) => (
+      areDocumentSymbolListsEqual(currentSymbols, nextSymbols) ? currentSymbols : nextSymbols
+    ));
+    setDocumentSymbolsFilePath((currentFilePath) => (
+      currentFilePath === filePath ? currentFilePath : filePath
+    ));
+    setDocumentSymbolsError((currentError) => (currentError === null ? currentError : null));
     await loadHierarchyRoot(mode, context.filePath, preferredRange);
   }, [loadDocumentSymbolsForFile, loadHierarchyRoot, resolveInspectorTargetContext, t]);
 
@@ -11031,19 +11120,41 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (targetNode.children.length > 0) {
-      setHierarchyRootNode(updateHierarchyTreeNode(currentRootNode, nodeKey, (candidate) => ({
-        ...candidate,
-        isExpanded: !candidate.isExpanded,
-      })));
+      setHierarchyRootNode((currentNode) => {
+        if (!currentNode) {
+          return currentNode;
+        }
+
+        const nextNode = updateHierarchyTreeNode(currentNode, nodeKey, (candidate) => {
+          const nextCandidate = {
+            ...candidate,
+            isExpanded: !candidate.isExpanded,
+          };
+          return areHierarchyTreeNodesEqual(candidate, nextCandidate) ? candidate : nextCandidate;
+        });
+
+        return areHierarchyTreeNodesEqual(currentNode, nextNode) ? currentNode : nextNode;
+      });
       return;
     }
 
-    setHierarchyRootNode(updateHierarchyTreeNode(currentRootNode, nodeKey, (candidate) => ({
-      ...candidate,
-      isExpanded: true,
-      isLoading: true,
-      error: null,
-    })));
+    setHierarchyRootNode((currentNode) => {
+      if (!currentNode) {
+        return currentNode;
+      }
+
+      const nextNode = updateHierarchyTreeNode(currentNode, nodeKey, (candidate) => {
+        const nextCandidate = {
+          ...candidate,
+          isExpanded: true,
+          isLoading: true,
+          error: null,
+        };
+        return areHierarchyTreeNodesEqual(candidate, nextCandidate) ? candidate : nextCandidate;
+      });
+
+      return areHierarchyTreeNodesEqual(currentNode, nextNode) ? currentNode : nextNode;
+    });
 
     try {
       const requestLabel = selectedHierarchyMode.startsWith('call')
@@ -11083,29 +11194,39 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       setHierarchyRootNode((currentNode) => (
         currentNode
-          ? updateHierarchyTreeNode(currentNode, nodeKey, (candidate) => {
-            const nextChildren = response.success
-              ? (response.data ?? []).map((item) => createHierarchyTreeNode(item))
-              : [];
-            return {
-              ...candidate,
-              children: nextChildren,
-              isExpanded: true,
-              isLoading: false,
-              isExpandable: nextChildren.length > 0,
-              error: response.success ? null : (response.error || t('common.retry')),
-            };
-          })
+          ? (() => {
+            const nextNode = updateHierarchyTreeNode(currentNode, nodeKey, (candidate) => {
+              const nextChildren = response.success
+                ? (response.data ?? []).map((item) => createHierarchyTreeNode(item))
+                : [];
+              const nextCandidate = {
+                ...candidate,
+                children: nextChildren,
+                isExpanded: true,
+                isLoading: false,
+                isExpandable: nextChildren.length > 0,
+                error: response.success ? null : (response.error || t('common.retry')),
+              };
+              return areHierarchyTreeNodesEqual(candidate, nextCandidate) ? candidate : nextCandidate;
+            });
+            return areHierarchyTreeNodesEqual(currentNode, nextNode) ? currentNode : nextNode;
+          })()
           : currentNode
       ));
     } catch (error) {
       setHierarchyRootNode((currentNode) => (
         currentNode
-          ? updateHierarchyTreeNode(currentNode, nodeKey, (candidate) => ({
-            ...candidate,
-            isLoading: false,
-            error: error instanceof Error ? error.message : t('common.retry'),
-          }))
+          ? (() => {
+            const nextNode = updateHierarchyTreeNode(currentNode, nodeKey, (candidate) => {
+              const nextCandidate = {
+                ...candidate,
+                isLoading: false,
+                error: error instanceof Error ? error.message : t('common.retry'),
+              };
+              return areHierarchyTreeNodesEqual(candidate, nextCandidate) ? candidate : nextCandidate;
+            });
+            return areHierarchyTreeNodesEqual(currentNode, nextNode) ? currentNode : nextNode;
+          })()
           : currentNode
       ));
     }
