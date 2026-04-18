@@ -307,6 +307,7 @@ const CODE_PANE_SUPPRESSED_EXTERNAL_CHANGE_TTL_MS = 5000;
 const CODE_PANE_FS_CHANGE_FLUSH_DELAY_MS = 48;
 const CODE_PANE_TODO_TOKENS = ['TODO', 'FIXME', 'XXX'] as const;
 const CODE_PANE_SEARCH_CACHE_TTL_MS = 10_000;
+const CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS = 5_000;
 const CODE_PANE_SAVE_QUALITY_LINT_MARKER_OWNER = 'save-quality-linter';
 const CODE_PANE_COMPACT_PACKAGE_SOURCE_ROOTS = [
   ['src', 'main', 'java'],
@@ -19151,20 +19152,49 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [runSelectedCodeAction]);
 
   const loadRunTargets = useCallback(async () => {
+    const requestKey = `run-targets:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const activeFilePath = activeFilePathRef.current;
+    const cacheKey = `${requestKey}:${activeFilePath ?? ''}`;
+    const cachedTargets = runtimeStoreRef.current.getCache<CodePaneRunTarget[]>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedTargets) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Run targets', {
+        meta: activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
+        fromCache: true,
+      });
+      setRunTargets((currentTargets) => (
+        areRunTargetsEqual(currentTargets, cachedTargets) ? currentTargets : cachedTargets
+      ));
+      setRunTargetsError((currentError) => (
+        currentError === null ? currentError : null
+      ));
+      setIsRunTargetsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     setIsRunTargetsLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setRunTargetsError((currentError) => (currentError === null ? currentError : null));
 
     const response = await trackRequest(
-      `run-targets:${rootPath}`,
+      requestKey,
       'Run targets',
-      activeFilePathRef.current ? getRelativePath(rootPath, activeFilePathRef.current) : undefined,
+      activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
       async () => await window.electronAPI.codePaneListRunTargets({
         rootPath,
-        activeFilePath: activeFilePathRef.current,
+        activeFilePath,
       }),
     );
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
 
     const nextTargets = response.success ? (response.data ?? []) : [];
+    if (response.success) {
+      runtimeStoreRef.current.setCache(cacheKey, nextTargets);
+    }
     const nextError = response.success ? null : (response.error || t('common.retry'));
     setRunTargets((currentTargets) => (
       areRunTargetsEqual(currentTargets, nextTargets) ? currentTargets : nextTargets
@@ -19189,16 +19219,41 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    const requestKey = `debug-details:${sessionId}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${targetSession?.state ?? 'unknown'}`;
+    const cachedDetails = runtimeStoreRef.current.getCache<CodePaneDebugSessionDetails | null>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedDetails) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Debug session details', {
+        meta: sessionId,
+        fromCache: true,
+      });
+      setDebugSessionDetails((currentDetails) => (
+        areDebugSessionDetailsEqual(currentDetails, cachedDetails) ? currentDetails : cachedDetails
+      ));
+      setIsDebugDetailsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     setIsDebugDetailsLoading((currentLoading) => (currentLoading ? currentLoading : true));
     const response = await trackRequest(
-      `debug-details:${sessionId}`,
+      requestKey,
       'Debug session details',
       sessionId,
       async () => await window.electronAPI.codePaneGetDebugSessionDetails({
         sessionId,
       }),
     );
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
     const nextDetails = response.success ? (response.data ?? null) : null;
+    if (response.success) {
+      runtimeStoreRef.current.setCache(cacheKey, nextDetails);
+    }
     setDebugSessionDetails((currentDetails) => (
       areDebugSessionDetailsEqual(currentDetails, nextDetails) ? currentDetails : nextDetails
     ));
@@ -19210,20 +19265,49 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [loadDebugSessionDetails]);
 
   const loadTests = useCallback(async () => {
+    const requestKey = `tests:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const activeFilePath = activeFilePathRef.current;
+    const cacheKey = `${requestKey}:${activeFilePath ?? ''}`;
+    const cachedTests = runtimeStoreRef.current.getCache<CodePaneTestItem[]>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedTests) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Test discovery', {
+        meta: activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
+        fromCache: true,
+      });
+      setTestItems((currentItems) => (
+        areTestItemListsEqual(currentItems, cachedTests) ? currentItems : cachedTests
+      ));
+      setTestsError((currentError) => (
+        currentError === null ? currentError : null
+      ));
+      setIsTestsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     setIsTestsLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setTestsError((currentError) => (currentError === null ? currentError : null));
 
     const response = await trackRequest(
-      `tests:${rootPath}`,
+      requestKey,
       'Test discovery',
-      activeFilePathRef.current ? getRelativePath(rootPath, activeFilePathRef.current) : undefined,
+      activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
       async () => await window.electronAPI.codePaneListTests({
         rootPath,
-        activeFilePath: activeFilePathRef.current,
+        activeFilePath,
       }),
     );
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
 
     const nextTestItems = response.success ? (response.data ?? []) : [];
+    if (response.success) {
+      runtimeStoreRef.current.setCache(cacheKey, nextTestItems);
+    }
     const nextError = response.success ? null : (response.error || t('common.retry'));
     setTestItems((currentItems) => (
       areTestItemListsEqual(currentItems, nextTestItems) ? currentItems : nextTestItems
@@ -19235,6 +19319,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [rootPath, t, trackRequest]);
 
   const loadProjectContributions = useCallback(async (refresh = false) => {
+    const requestKey = `project-model:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${refresh ? 'refresh' : 'read'}`;
+    if (!refresh) {
+      const cachedContributions = runtimeStoreRef.current.getCache<CodePaneProjectContribution[]>(
+        cacheKey,
+        CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+      );
+      if (cachedContributions) {
+        runtimeStoreRef.current.recordRequest(requestKey, 'Project contribution', {
+          meta: rootPath,
+          fromCache: true,
+        });
+        setProjectContributions((currentContributions) => (
+          areProjectContributionListsEqual(currentContributions, cachedContributions)
+            ? currentContributions
+            : cachedContributions
+        ));
+        setProjectError((currentError) => (
+          currentError === null ? currentError : null
+        ));
+        setIsProjectLoading((currentLoading) => (currentLoading ? false : currentLoading));
+        return;
+      }
+    }
+
     setIsProjectLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setProjectError((currentError) => (currentError === null ? currentError : null));
 
@@ -19243,15 +19353,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const response = await trackRequest(
-      `project-model:${rootPath}`,
+      requestKey,
       refresh ? 'Refresh project model' : 'Project contribution',
       rootPath,
       async () => refresh
         ? await window.electronAPI.codePaneRefreshProjectModel({ rootPath })
         : await window.electronAPI.codePaneGetProjectContribution({ rootPath }),
     );
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
 
     const nextContributions = response.success ? (response.data ?? []) : [];
+    if (response.success) {
+      runtimeStoreRef.current.setCache(cacheKey, nextContributions);
+    }
     const nextError = response.success ? null : (response.error || t('common.retry'));
     setProjectContributions((currentContributions) => (
       areProjectContributionListsEqual(currentContributions, nextContributions)
