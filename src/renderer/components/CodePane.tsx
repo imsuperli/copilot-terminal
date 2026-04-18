@@ -9394,8 +9394,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   const flushDirtyFiles = useCallback(async (targetFilePaths?: string[]) => {
-    const pathsToFlush = targetFilePaths ?? [...dirtyPathsRef.current];
     let didSaveAnyFile = false;
+    const pathsToFlush = targetFilePaths ?? dirtyPathsRef.current;
     for (const filePath of pathsToFlush) {
       const existingTimer = autoSaveTimersRef.current.get(filePath);
       if (existingTimer) {
@@ -10591,7 +10591,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [activeFilePathRef, clearBannerForFile, detachDiffEditorModel, ensureMonacoReady, supportsMonaco, t, viewMode]);
 
   const openExternalChangeDiff = useCallback(async (filePath: string) => {
-    const entry = externalChangeEntriesRef.current.find((candidate) => candidate.filePath === filePath);
+    let entry: ExternalChangeEntry | null = null;
+    for (const candidate of externalChangeEntriesRef.current) {
+      if (candidate.filePath === filePath) {
+        entry = candidate;
+        break;
+      }
+    }
     if (!entry || !entry.canDiff) {
       return;
     }
@@ -10661,7 +10667,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     }
 
-    const nextEntries = [...nextEntriesByPath.values()];
+    const nextEntries: ExternalChangeEntry[] = [];
+    for (const entry of nextEntriesByPath.values()) {
+      nextEntries.push(entry);
+    }
     nextEntries.sort((leftEntry, rightEntry) => rightEntry.changedAt - leftEntry.changedAt);
     if (nextEntries.length > CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES) {
       nextEntries.length = CODE_PANE_MAX_EXTERNAL_CHANGE_ENTRIES;
@@ -10675,11 +10684,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
       externalChangeEntriesRef.current = nextEntries;
       setExternalChangeEntries(nextEntries);
     }
-    setSelectedExternalChangePath((currentPath) => (
-      currentPath && nextEntries.some((entry) => entry.filePath === currentPath)
-        ? currentPath
-        : preferredSelectedPath
-    ));
+    setSelectedExternalChangePath((currentPath) => {
+      if (!currentPath) {
+        return preferredSelectedPath;
+      }
+
+      for (const entry of nextEntries) {
+        if (entry.filePath === currentPath) {
+          return currentPath;
+        }
+      }
+      return preferredSelectedPath;
+    });
   }, []);
 
   const revealExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
