@@ -3681,7 +3681,10 @@ function collectDirectoryRefreshPaths(
   changes: CodePaneFsChange[],
   loadedDirectories: Set<string>,
 ): string[] {
-  const loadedDirectoryPaths = new Set(Array.from(loadedDirectories, (directoryPath) => normalizePath(directoryPath)));
+  const loadedDirectoryPaths = new Set<string>();
+  for (const directoryPath of loadedDirectories) {
+    loadedDirectoryPaths.add(normalizePath(directoryPath));
+  }
   const normalizedRootPath = normalizePath(rootPath);
   const directoryPathsToRefresh = new Set<string>();
 
@@ -3696,7 +3699,7 @@ function collectDirectoryRefreshPaths(
     }
   }
 
-  return Array.from(directoryPathsToRefresh);
+  return [...directoryPathsToRefresh];
 }
 
 function createExpandedDirectorySet(rootPath: string, expandedPaths?: string[] | null): Set<string> {
@@ -6618,18 +6621,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const markDirty = useCallback((filePath: string, dirty: boolean) => {
-    if (dirtyPathsRef.current.has(filePath) === dirty) {
+    const currentDirtyPaths = dirtyPathsRef.current;
+    if (currentDirtyPaths.has(filePath) === dirty) {
       return;
     }
 
-    const nextDirtyPaths = new Set(dirtyPathsRef.current);
     if (dirty) {
-      nextDirtyPaths.add(filePath);
+      currentDirtyPaths.add(filePath);
     } else {
-      nextDirtyPaths.delete(filePath);
+      currentDirtyPaths.delete(filePath);
     }
-    dirtyPathsRef.current = nextDirtyPaths;
-
   }, []);
 
   const scheduleActiveCursorUpdate = useCallback((lineNumber: number, column: number) => {
@@ -6652,14 +6653,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const markSaving = useCallback((filePath: string, saving: boolean) => {
-    const nextSavingPaths = new Set(savingPathsRef.current);
+    const currentSavingPaths = savingPathsRef.current;
     if (saving) {
-      nextSavingPaths.add(filePath);
+      currentSavingPaths.add(filePath);
     } else {
-      nextSavingPaths.delete(filePath);
+      currentSavingPaths.delete(filePath);
     }
-    savingPathsRef.current = nextSavingPaths;
-
   }, []);
 
   const gitDirectoryStatusByPath = useMemo(() => (
@@ -9290,7 +9289,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   const flushDirtyFiles = useCallback(async (targetFilePaths?: string[]) => {
-    const pathsToFlush = targetFilePaths ?? Array.from(dirtyPathsRef.current);
+    const pathsToFlush = targetFilePaths ?? [...dirtyPathsRef.current];
     let didSaveAnyFile = false;
     for (const filePath of pathsToFlush) {
       const existingTimer = autoSaveTimersRef.current.get(filePath);
@@ -11952,14 +11951,22 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [refreshGitSnapshot, rootPath, selectedGitConflictPath, shouldLoadGitGraph, t]);
 
   const pruneRemovedDirectories = useCallback((changes: CodePaneFsChange[]) => {
-    const removedFilePaths = new Set(
-      changes
-        .filter((change) => change.type === 'unlink' && isPathInside(rootPath, change.path))
-        .map((change) => normalizePath(change.path)),
-    );
-    const removedDirectoryPaths = changes
-      .filter((change) => change.type === 'unlinkDir' && isPathInside(rootPath, change.path))
-      .map((change) => normalizePath(change.path));
+    const removedFilePaths = new Set<string>();
+    const removedDirectoryPaths: string[] = [];
+    for (const change of changes) {
+      if (!isPathInside(rootPath, change.path)) {
+        continue;
+      }
+
+      if (change.type === 'unlink') {
+        removedFilePaths.add(normalizePath(change.path));
+        continue;
+      }
+
+      if (change.type === 'unlinkDir') {
+        removedDirectoryPaths.push(normalizePath(change.path));
+      }
+    }
 
     if (removedFilePaths.size === 0 && removedDirectoryPaths.length === 0) {
       return;
@@ -11969,24 +11976,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
       invalidateDirectoryCache(rootPath, removedDirectoryPath);
     }
 
-    const nextLoadedDirectories = new Set(
-      Array.from(loadedDirectoriesRef.current).filter((directoryPath) => (
-        !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
-      )),
-    );
+    const nextLoadedDirectories = new Set<string>();
+    for (const directoryPath of loadedDirectoriesRef.current) {
+      if (!isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)) {
+        nextLoadedDirectories.add(directoryPath);
+      }
+    }
     loadedDirectoriesRef.current = nextLoadedDirectories;
 
-    setLoadedDirectories(new Set(nextLoadedDirectories));
+    setLoadedDirectories(nextLoadedDirectories);
     setExpandedDirectories((currentExpandedDirectories) => {
       if (removedDirectoryPaths.length === 0) {
         return currentExpandedDirectories;
       }
 
-      const nextExpandedDirectories = new Set(
-        Array.from(currentExpandedDirectories).filter((directoryPath) => (
-          !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
-        )),
-      );
+      const nextExpandedDirectories = new Set<string>();
+      for (const directoryPath of currentExpandedDirectories) {
+        if (!isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)) {
+          nextExpandedDirectories.add(directoryPath);
+        }
+      }
 
       if (nextExpandedDirectories.size === currentExpandedDirectories.size) {
         return currentExpandedDirectories;
@@ -11998,25 +12007,38 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       return nextExpandedDirectories;
     });
-    setTreeEntriesByDirectory((currentTreeEntries) => (
-      Object.fromEntries(
-        Object.entries(currentTreeEntries)
-          .filter(([directoryPath]) => (
-            !isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)
-          ))
-          .map(([directoryPath, entries]) => [
-            directoryPath,
-            entries.filter((entry) => {
-              const normalizedEntryPath = normalizePath(entry.path);
-              if (removedFilePaths.has(normalizedEntryPath)) {
-                return false;
-              }
+    setTreeEntriesByDirectory((currentTreeEntries) => {
+      let didChange = false;
+      const nextTreeEntries: Record<string, CodePaneTreeEntry[]> = {};
 
-              return !isPathAffectedByRemovedDirectory(removedDirectoryPaths, normalizedEntryPath);
-            }),
-          ]),
-      )
-    ));
+      for (const [directoryPath, entries] of Object.entries(currentTreeEntries)) {
+        if (isPathAffectedByRemovedDirectory(removedDirectoryPaths, directoryPath)) {
+          didChange = true;
+          continue;
+        }
+
+        let nextEntries = entries;
+        for (const entry of entries) {
+          const normalizedEntryPath = normalizePath(entry.path);
+          if (
+            removedFilePaths.has(normalizedEntryPath)
+            || isPathAffectedByRemovedDirectory(removedDirectoryPaths, normalizedEntryPath)
+          ) {
+            nextEntries = entries.filter((candidateEntry) => {
+              const candidatePath = normalizePath(candidateEntry.path);
+              return !removedFilePaths.has(candidatePath)
+                && !isPathAffectedByRemovedDirectory(removedDirectoryPaths, candidatePath);
+            });
+            didChange = true;
+            break;
+          }
+        }
+
+        nextTreeEntries[directoryPath] = nextEntries;
+      }
+
+      return didChange ? nextTreeEntries : currentTreeEntries;
+    });
   }, [persistCodeState, rootPath]);
 
   const ensureMarkerListenerRef = useRef(ensureMarkerListener);
