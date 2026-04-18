@@ -17496,6 +17496,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }, [expandedDirectories, externalLibrariesError, externalLibraryExplorerRowsByRoot, externalLibrarySections, hasExternalLibraries, isDirectoryLoading, isSidebarVisible, renderExplorerTreeRows, renderFileContextMenu, selectExplorerPath, selectedPath, sidebarMode, t, toggleDirectory]);
 
+  const renderSearchResultRow = useCallback((filePath: string) => {
+    const entryStatus = getEntryStatus(filePath, 'file');
+    return (
+      <SearchResultRowButton
+        key={filePath}
+        filePath={filePath}
+        isSelected={selectedPath === filePath}
+        entryTextClassName={getStatusTextClassName(entryStatus)}
+        relativePath={getRelativePath(rootPath, filePath)}
+        onActivate={(nextFilePath) => {
+          void activateFile(nextFilePath, { preview: true });
+        }}
+        onPromote={(nextFilePath) => {
+          void activateFile(nextFilePath, { promotePreview: true });
+        }}
+        renderContextMenu={(nextFilePath) => renderFileContextMenu(nextFilePath, 'file', {
+          qualifiedName: getQualifiedNameForTreePath(rootPath, nextFilePath, 'file'),
+        })}
+      />
+    );
+  }, [activateFile, getEntryStatus, getRelativePath, renderFileContextMenu, rootPath, selectedPath]);
+
   const renderedFilesSidebarBody = useCallback((viewport: FileTreeViewport) => {
     if (!isSidebarVisible || sidebarMode !== 'files') {
       return null;
@@ -17518,29 +17540,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       overscan: CODE_PANE_EXPLORER_ROW_OVERSCAN,
       threshold: CODE_PANE_EXPLORER_WINDOWING_THRESHOLD,
     });
-
-    const renderedSearchResults: React.ReactNode[] = [];
-    for (const filePath of visibleSearchResults.items) {
-      const entryStatus = getEntryStatus(filePath, 'file');
-      renderedSearchResults.push(
-        <SearchResultRowButton
-          key={filePath}
-          filePath={filePath}
-          isSelected={selectedPath === filePath}
-          entryTextClassName={getStatusTextClassName(entryStatus)}
-          relativePath={getRelativePath(rootPath, filePath)}
-          onActivate={(nextFilePath) => {
-            void activateFile(nextFilePath, { preview: true });
-          }}
-          onPromote={(nextFilePath) => {
-            void activateFile(nextFilePath, { promotePreview: true });
-          }}
-          renderContextMenu={(nextFilePath) => renderFileContextMenu(nextFilePath, 'file', {
-            qualifiedName: getQualifiedNameForTreePath(rootPath, nextFilePath, 'file'),
-          })}
-        />,
-      );
-    }
+    const renderedSearchResults = visibleSearchResults.items.map(renderSearchResultRow);
 
     const renderedWindowedSearchResults = !visibleSearchResults.isWindowed
       ? renderedSearchResults
@@ -17662,8 +17662,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     rootExplorerRows,
     rootLabel,
     rootPath,
-    getEntryStatus,
-    selectedPath,
+    renderSearchResultRow,
     searchError,
     selectExplorerPath,
     sidebarEntries,
@@ -17672,7 +17671,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     toggleDirectory,
     treeLoadError,
     trimmedDeferredSearchQuery,
-    activateFile,
     searchResults,
   ]);
 
