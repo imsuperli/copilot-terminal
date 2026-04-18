@@ -10195,6 +10195,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const editedFilePaths = [...editedFilePathSet];
+    let didSaveAnyFile = false;
     for (const editedFilePath of editedFilePaths) {
       if (!fileModelsRef.current.has(editedFilePath)) {
         continue;
@@ -10202,14 +10203,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       const didSave = await saveFile(editedFilePath, {
         skipQualityPipeline: true,
+        skipGitRefresh: true,
       });
       if (!didSave) {
         return false;
       }
+      didSaveAnyFile = true;
+    }
+
+    if (didSaveAnyFile) {
+      invalidateProjectCache(rootPath, 'git-status');
+      void refreshGitSnapshot({ includeGraph: false });
     }
 
     return true;
-  }, [applyLanguageTextEditsWithoutSaving, saveFile]);
+  }, [applyLanguageTextEditsWithoutSaving, refreshGitSnapshot, rootPath, saveFile]);
 
   const prepareRefactorPreview = useCallback(async (config: Parameters<typeof window.electronAPI.codePanePrepareRefactor>[0]) => {
     setRefactorPreviewError(null);
