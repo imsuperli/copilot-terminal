@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import type {
   CodePaneOpenFile,
+  CodePaneState,
   CodePaneSavePipelineState,
   CodePaneSaveQualityState,
   CodePaneSaveQualityStep,
@@ -3864,6 +3865,26 @@ function sortOpenFilesByPinned<T extends { pinned?: boolean; preview?: boolean }
   return [...pinnedOpenFiles, ...regularOpenFiles, ...previewOpenFiles];
 }
 
+function areOpenFilesEqual(previousOpenFiles: CodePaneOpenFile[], nextOpenFiles: CodePaneOpenFile[]): boolean {
+  if (previousOpenFiles.length !== nextOpenFiles.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousOpenFiles.length; index += 1) {
+    const previousFile = previousOpenFiles[index];
+    const nextFile = nextOpenFiles[index];
+    if (
+      previousFile?.path !== nextFile?.path
+      || Boolean(previousFile?.pinned) !== Boolean(nextFile?.pinned)
+      || Boolean(previousFile?.preview) !== Boolean(nextFile?.preview)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function upsertOpenFileTab(
   existingTabs: CodePaneOpenFile[],
   filePath: string,
@@ -4772,6 +4793,77 @@ function collectExternalRootPaths(
   return sections.flatMap((section) => section.roots.map((root) => root.path));
 }
 
+function areCodePaneLayoutSidebarsEqual(
+  previousSidebar: NonNullable<NonNullable<CodePaneState['layout']>['sidebar']>,
+  nextSidebar: NonNullable<NonNullable<CodePaneState['layout']>['sidebar']>,
+): boolean {
+  return previousSidebar.visible === nextSidebar.visible
+    && previousSidebar.activeView === nextSidebar.activeView
+    && previousSidebar.width === nextSidebar.width
+    && (previousSidebar.lastExpandedWidth ?? previousSidebar.width) === (nextSidebar.lastExpandedWidth ?? nextSidebar.width);
+}
+
+function areCodePaneEditorSplitLayoutsEqual(
+  previousLayout: NonNullable<NonNullable<NonNullable<CodePaneState['layout']>['editorSplit']>>,
+  nextLayout: NonNullable<NonNullable<NonNullable<CodePaneState['layout']>['editorSplit']>>,
+): boolean {
+  return previousLayout.visible === nextLayout.visible
+    && previousLayout.size === nextLayout.size
+    && (previousLayout.secondaryFilePath ?? null) === (nextLayout.secondaryFilePath ?? null);
+}
+
+function areCodePaneBottomPanelLayoutsEqual(
+  previousLayout: NonNullable<NonNullable<NonNullable<CodePaneState['layout']>['bottomPanel']>>,
+  nextLayout: NonNullable<NonNullable<NonNullable<CodePaneState['layout']>['bottomPanel']>>,
+): boolean {
+  return previousLayout.height === nextLayout.height;
+}
+
+function areRunTargetCustomizationsEqual(
+  previousCustomization: CodePaneRunTargetCustomization,
+  nextCustomization: CodePaneRunTargetCustomization,
+): boolean {
+  return previousCustomization.profiles === nextCustomization.profiles
+    && previousCustomization.programArgs === nextCustomization.programArgs
+    && previousCustomization.vmArgs === nextCustomization.vmArgs;
+}
+
+function areCodePaneDebugStatesEqual(
+  previousState: NonNullable<CodePaneState['debug']>,
+  nextState: NonNullable<CodePaneState['debug']>,
+): boolean {
+  const previousWatchExpressions = previousState.watchExpressions ?? [];
+  const nextWatchExpressions = nextState.watchExpressions ?? [];
+  if (previousWatchExpressions.length !== nextWatchExpressions.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousWatchExpressions.length; index += 1) {
+    if (previousWatchExpressions[index] !== nextWatchExpressions[index]) {
+      return false;
+    }
+  }
+
+  const previousExceptionBreakpoints = previousState.exceptionBreakpoints ?? [];
+  const nextExceptionBreakpoints = nextState.exceptionBreakpoints ?? [];
+  if (previousExceptionBreakpoints.length !== nextExceptionBreakpoints.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousExceptionBreakpoints.length; index += 1) {
+    const previousBreakpoint = previousExceptionBreakpoints[index];
+    const nextBreakpoint = nextExceptionBreakpoints[index];
+    if (
+      previousBreakpoint?.id !== nextBreakpoint?.id
+      || previousBreakpoint?.enabled !== nextBreakpoint?.enabled
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function getModelVersionId(model: MonacoModel): number {
   const versionGetter = (model as MonacoModel & {
     getAlternativeVersionId?: () => number;
@@ -5362,14 +5454,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       programArgs: '',
       vmArgs: '',
     };
+    const nextCustomization = {
+      ...currentCustomization,
+      ...updates,
+    };
+
+    if (areRunTargetCustomizationsEqual(currentCustomization, nextCustomization)) {
+      return;
+    }
 
     persistCodeState({
       runConfigurations: {
         ...currentConfigurations,
-        [targetId]: {
-          ...currentCustomization,
-          ...updates,
-        },
+        [targetId]: nextCustomization,
       },
     });
   }, [persistCodeState]);
@@ -5379,14 +5476,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ...getInitialSidebarLayout(paneRef.current),
       ...(paneRef.current.code?.layout?.sidebar ?? {}),
     };
+    const nextSidebarLayout = {
+      ...currentSidebarLayout,
+      ...updates,
+    };
+
+    if (areCodePaneLayoutSidebarsEqual(currentSidebarLayout, nextSidebarLayout)) {
+      return;
+    }
 
     persistCodeState({
       layout: {
         ...(paneRef.current.code?.layout ?? {}),
-        sidebar: {
-          ...currentSidebarLayout,
-          ...updates,
-        },
+        sidebar: nextSidebarLayout,
       },
     });
   }, [persistCodeState]);
@@ -5413,6 +5515,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsEditorSplitVisible(Boolean(nextEditorSplitLayout.visible));
     setEditorSplitSize(nextEditorSplitLayout.size);
     setSecondaryFilePath(nextEditorSplitLayout.secondaryFilePath);
+
+    if (areCodePaneEditorSplitLayoutsEqual(currentEditorSplitLayout, nextEditorSplitLayout)) {
+      return;
+    }
 
     persistCodeState({
       layout: {
@@ -5454,6 +5560,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     ));
     bottomPanelHeightRef.current = nextBottomPanelLayout.height;
     setBottomPanelHeight(nextBottomPanelLayout.height);
+
+    if (areCodePaneBottomPanelLayoutsEqual(currentBottomPanelLayout, nextBottomPanelLayout)) {
+      return;
+    }
 
     persistCodeState({
       layout: {
@@ -5501,21 +5611,33 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const persistDebugState = useCallback((updates: Partial<NonNullable<NonNullable<Pane['code']>['debug']>>) => {
     const currentDebugState = paneRef.current.code?.debug ?? {};
+    const nextDebugState = {
+      ...currentDebugState,
+      ...updates,
+    };
+    if (areCodePaneDebugStatesEqual(currentDebugState, nextDebugState)) {
+      return;
+    }
     persistCodeState({
-      debug: {
-        ...currentDebugState,
-        ...updates,
-      },
+      debug: nextDebugState,
     });
   }, [persistCodeState]);
 
   const persistSavePipelineState = useCallback((updates: Partial<Required<CodePaneSavePipelineState>>) => {
     const currentSavePipelineState = getInitialSavePipelineState(paneRef.current);
+    const nextSavePipelineState = {
+      ...currentSavePipelineState,
+      ...updates,
+    };
+    if (
+      currentSavePipelineState.formatOnSave === nextSavePipelineState.formatOnSave
+      && currentSavePipelineState.organizeImportsOnSave === nextSavePipelineState.organizeImportsOnSave
+      && currentSavePipelineState.lintOnSave === nextSavePipelineState.lintOnSave
+    ) {
+      return;
+    }
     persistCodeState({
-      savePipeline: {
-        ...currentSavePipelineState,
-        ...updates,
-      },
+      savePipeline: nextSavePipelineState,
     });
   }, [persistCodeState]);
 
@@ -5567,6 +5689,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ) => {
     const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
     const nextOpenFiles = sortOpenFilesByPinned(updater(currentOpenFiles));
+    if (areOpenFilesEqual(currentOpenFiles, nextOpenFiles)) {
+      return currentOpenFiles;
+    }
     persistCodeState({
       openFiles: nextOpenFiles,
     });
