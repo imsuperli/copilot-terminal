@@ -12073,8 +12073,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const didEnsureDiffModel = await ensureDiffModel(filePath);
     if (!didEnsureDiffModel) {
-      setPendingGitRevisionDiff(null);
-      setPendingExternalChangeDiff(null);
+      setPendingGitRevisionDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
+      setPendingExternalChangeDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
       return;
     }
 
@@ -12083,8 +12087,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       promote: !options?.preserveTabs,
     });
 
-    setBanner(null);
-    setPendingExternalChangeDiff(null);
+    setBanner((currentBanner) => (currentBanner === null ? currentBanner : null));
+    setPendingExternalChangeDiff((currentRequest) => (
+      currentRequest === null ? currentRequest : null
+    ));
     persistCodeState({
       openFiles: nextTabs,
       activeFilePath: filePath,
@@ -12102,7 +12108,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       pendingGitRevisionDiffRef.current = request;
     }
     if (pendingExternalChangeDiffRef.current !== null) {
-      setPendingExternalChangeDiff(null);
+      setPendingExternalChangeDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
     }
     pendingExternalChangeDiffRef.current = null;
     const didEnsureRevisionDiffModel = await ensureRevisionDiffModel(request);
@@ -12126,7 +12134,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       viewMode: 'diff',
       diffTargetPath: request.filePath,
     });
-    setBanner(null);
+    setBanner((currentBanner) => (currentBanner === null ? currentBanner : null));
   }, [ensureRevisionDiffModel, openFiles, persistCodeState]);
 
   const ensureExternalChangeDiffModel = useCallback(async (
@@ -12284,7 +12292,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       viewMode: 'diff',
       diffTargetPath: filePath,
     });
-    setBanner(null);
+    setBanner((currentBanner) => (currentBanner === null ? currentBanner : null));
   }, [applyExternalChangeState, ensureExternalChangeDiffModel, openFiles, persistCodeState, t]);
 
   const updateExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
@@ -12366,7 +12374,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
     if (pendingExternalChangeDiffRef.current?.filePath === filePath) {
       pendingExternalChangeDiffRef.current = null;
-      setPendingExternalChangeDiff(null);
+      setPendingExternalChangeDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
       if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff') {
         persistCodeState({
           viewMode: 'editor',
@@ -12380,7 +12390,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     applyExternalChangeState([], null);
     if (pendingExternalChangeDiffRef.current) {
       pendingExternalChangeDiffRef.current = null;
-      setPendingExternalChangeDiff(null);
+      setPendingExternalChangeDiff((currentRequest) => (
+        currentRequest === null ? currentRequest : null
+      ));
       if ((paneRef.current.code?.viewMode ?? viewMode) === 'diff') {
         persistCodeState({
           viewMode: 'editor',
