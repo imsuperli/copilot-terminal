@@ -5178,6 +5178,44 @@ function hasCodePaneStateUpdates(
   return false;
 }
 
+function areStringListsEqual(previousList: string[], nextList: string[]): boolean {
+  if (previousList.length !== nextList.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousList.length; index += 1) {
+    if (previousList[index] !== nextList[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areContentMatchListsEqual(
+  previousList: CodePaneContentMatch[],
+  nextList: CodePaneContentMatch[],
+): boolean {
+  if (previousList.length !== nextList.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousList.length; index += 1) {
+    const previousMatch = previousList[index];
+    const nextMatch = nextList[index];
+    if (
+      previousMatch?.filePath !== nextMatch?.filePath
+      || previousMatch?.lineNumber !== nextMatch?.lineNumber
+      || previousMatch?.column !== nextMatch?.column
+      || previousMatch?.lineText !== nextMatch?.lineText
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export const CodePane: React.FC<CodePaneProps> = ({
   windowId,
   pane,
@@ -12949,15 +12987,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     const trimmedQuery = deferredSearchQuery.trim();
     if (!trimmedQuery) {
-      setSearchResults([]);
-      setIsSearching(false);
-      setSearchError(null);
+      setSearchResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setIsSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
+      setSearchError((currentError) => (
+        currentError === null ? currentError : null
+      ));
       return;
     }
 
     let cancelled = false;
-    setIsSearching(true);
-    setSearchError(null);
+    setIsSearching((currentSearching) => (
+      currentSearching ? currentSearching : true
+    ));
+    setSearchError((currentError) => (
+      currentError === null ? currentError : null
+    ));
     const requestKey = `search-files:${rootPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
     const cacheKey = `${requestKey}:${trimmedQuery}`;
@@ -12967,8 +13015,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         meta: trimmedQuery,
         fromCache: true,
       });
-      setSearchResults(cachedResults);
-      setIsSearching(false);
+      setSearchResults((currentResults) => (
+        areStringListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
+      ));
+      setIsSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
       return undefined;
     }
 
@@ -12991,11 +13043,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (response.success) {
         runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
       }
+      const nextSearchResults = response.success ? (response.data ?? []) : [];
+      const nextSearchError = response.success ? null : (response.error || t('common.retry'));
       startTransition(() => {
-        setSearchResults(response.success ? (response.data ?? []) : []);
+        setSearchResults((currentResults) => (
+          areStringListsEqual(currentResults, nextSearchResults) ? currentResults : nextSearchResults
+        ));
       });
-      setSearchError(response.success ? null : (response.error || t('common.retry')));
-      setIsSearching(false);
+      setSearchError((currentError) => (
+        currentError === nextSearchError ? currentError : nextSearchError
+      ));
+      setIsSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
     }, 180);
 
     return () => {
@@ -13007,15 +13067,25 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     const trimmedQuery = deferredContentSearchQuery.trim();
     if (!trimmedQuery) {
-      setContentSearchResults([]);
-      setIsContentSearching(false);
-      setContentSearchError(null);
+      setContentSearchResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setIsContentSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
+      setContentSearchError((currentError) => (
+        currentError === null ? currentError : null
+      ));
       return;
     }
 
     let cancelled = false;
-    setIsContentSearching(true);
-    setContentSearchError(null);
+    setIsContentSearching((currentSearching) => (
+      currentSearching ? currentSearching : true
+    ));
+    setContentSearchError((currentError) => (
+      currentError === null ? currentError : null
+    ));
     const requestKey = `search-contents:${rootPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
     const cacheKey = `${requestKey}:${trimmedQuery}`;
@@ -13025,8 +13095,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         meta: trimmedQuery,
         fromCache: true,
       });
-      setContentSearchResults(cachedResults);
-      setIsContentSearching(false);
+      setContentSearchResults((currentResults) => (
+        areContentMatchListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
+      ));
+      setIsContentSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
       return undefined;
     }
 
@@ -13050,11 +13124,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (response.success) {
         runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
       }
+      const nextContentSearchResults = response.success ? (response.data ?? []) : [];
+      const nextContentSearchError = response.success ? null : (response.error || t('common.retry'));
       startTransition(() => {
-        setContentSearchResults(response.success ? (response.data ?? []) : []);
+        setContentSearchResults((currentResults) => (
+          areContentMatchListsEqual(currentResults, nextContentSearchResults)
+            ? currentResults
+            : nextContentSearchResults
+        ));
       });
-      setContentSearchError(response.success ? null : (response.error || t('common.retry')));
-      setIsContentSearching(false);
+      setContentSearchError((currentError) => (
+        currentError === nextContentSearchError ? currentError : nextContentSearchError
+      ));
+      setIsContentSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
     }, 220);
 
     return () => {
@@ -14155,7 +14239,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
 
     return collectRows;
-  }, [expandedDirectories, externalChangesByPath, getCompactDirectoryPresentations, getEntryStatus, isDirectoryLoading, selectedPath]);
+  }, [expandedDirectories, externalChangesByPath, getCompactDirectoryPresentations, getEntryStatus, isDirectoryLoading]);
 
   const trimmedDeferredSearchQuery = deferredSearchQuery.trim();
 
@@ -17015,7 +17099,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [refreshLoadedDirectories]);
 
   const handleFilesSearchQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(event.target.value);
+    const nextQuery = event.target.value;
+    setSearchQuery((currentQuery) => (
+      currentQuery === nextQuery ? currentQuery : nextQuery
+    ));
   }, []);
 
   const handleSearchPanelModeChange = useCallback((nextMode: SearchPanelMode) => {
@@ -17023,11 +17110,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, []);
 
   const handleContentSearchQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setContentSearchQuery(event.target.value);
+    const nextQuery = event.target.value;
+    setContentSearchQuery((currentQuery) => (
+      currentQuery === nextQuery ? currentQuery : nextQuery
+    ));
   }, []);
 
   const handleWorkspaceSymbolQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setWorkspaceSymbolQuery(event.target.value);
+    const nextQuery = event.target.value;
+    setWorkspaceSymbolQuery((currentQuery) => (
+      currentQuery === nextQuery ? currentQuery : nextQuery
+    ));
   }, []);
 
   const handleSearchEverywhereModeChange = useCallback((mode: SearchEverywhereMode) => {
