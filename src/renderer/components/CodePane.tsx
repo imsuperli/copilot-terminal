@@ -9498,10 +9498,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const currentOpenFiles = paneRef.current.code?.openFiles ?? openFiles;
+    const currentActiveFilePath = paneRef.current.code?.activeFilePath ?? activeFilePathRef.current;
+    const currentViewMode = paneRef.current.code?.viewMode ?? viewMode;
+    const currentDiffTargetPath = paneRef.current.code?.diffTargetPath ?? diffTargetPath;
     const nextTabs = upsertOpenFileTab(currentOpenFiles, filePath, {
       preview: options?.preview,
       promote: options?.promotePreview,
     });
+    const shouldRefreshCurrentEditorSurface = currentActiveFilePath === filePath
+      && currentViewMode === 'editor'
+      && (currentDiffTargetPath ?? null) === null;
 
     setPendingGitRevisionDiff(null);
     setPendingExternalChangeDiff(null);
@@ -9523,9 +9529,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return nextRecentFiles;
       });
     }
-
-    await refreshEditorSurface();
-  }, [loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface]);
+    if (shouldRefreshCurrentEditorSurface) {
+      await refreshEditorSurface();
+    }
+  }, [diffTargetPath, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, viewMode]);
 
   const ensureDiffModel = useCallback(async (
     filePath: string,
@@ -9805,8 +9812,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       viewMode: 'diff',
       diffTargetPath: filePath,
     });
-    await refreshEditorSurface();
-  }, [ensureDiffModel, loadFileIntoModel, openFiles, persistCodeState, refreshEditorSurface, rootPath, t]);
+  }, [ensureDiffModel, loadFileIntoModel, openFiles, persistCodeState, rootPath, t]);
 
   const openGitRevisionDiff = useCallback(async (request: GitRevisionDiffRequest) => {
     pendingGitRevisionDiffRef.current = request;
@@ -9833,8 +9839,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       diffTargetPath: request.filePath,
     });
     setBanner(null);
-    await refreshEditorSurface();
-  }, [ensureRevisionDiffModel, openFiles, persistCodeState, refreshEditorSurface]);
+  }, [ensureRevisionDiffModel, openFiles, persistCodeState]);
 
   const ensureExternalChangeDiffModel = useCallback(async (
     entry: ExternalChangeEntry,
@@ -9986,8 +9991,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       diffTargetPath: filePath,
     });
     setBanner(null);
-    await refreshEditorSurface();
-  }, [ensureExternalChangeDiffModel, openFiles, persistCodeState, refreshEditorSurface, t]);
+  }, [ensureExternalChangeDiffModel, openFiles, persistCodeState, t]);
 
   const updateExternalChangeEntry = useCallback((entry: ExternalChangeEntry) => {
     const nextEntries = [
