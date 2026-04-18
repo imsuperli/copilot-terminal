@@ -7073,6 +7073,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isRunTargetsLoading, setIsRunTargetsLoading] = useState(false);
   const [runTargetsError, setRunTargetsError] = useState<string | null>(null);
   const [debugSessions, setDebugSessions] = useState<CodePaneDebugSession[]>([]);
+  const debugSessionsRef = useRef<CodePaneDebugSession[]>([]);
   const debugSessionOutputsRef = useRef<Record<string, string>>({});
   const [selectedDebugSessionOutput, setSelectedDebugSessionOutput] = useState('');
   const [selectedDebugSessionId, setSelectedDebugSessionId] = useState<string | null>(null);
@@ -7403,6 +7404,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     selectedRunSessionIdRef.current = selectedRunSessionId;
   }, [selectedRunSessionId]);
+
+  useEffect(() => {
+    debugSessionsRef.current = debugSessions;
+  }, [debugSessions]);
 
   useEffect(() => {
     selectedDebugSessionIdRef.current = selectedDebugSessionId;
@@ -18872,10 +18877,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
         || selectedDebugSessionIdRef.current === payload.session.id;
       if (
         bottomPanelModeRef.current === 'debug'
-        && (
-        shouldLoadSelectedSessionDetails
+        && shouldLoadSelectedSessionDetails
         && (payload.session.state === 'paused' || payload.session.state === 'stopped' || payload.session.state === 'error')
-        )
       ) {
         void loadDebugSessionDetailsRef.current(payload.session.id);
       }
@@ -19151,6 +19154,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const loadDebugSessionDetails = useCallback(async (sessionId: string | null) => {
     if (!sessionId) {
       setDebugSessionDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
+      setIsDebugDetailsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
+    const targetSession = debugSessionsRef.current.find((session) => session.id === sessionId) ?? null;
+    if (targetSession?.state === 'running') {
+      setDebugSessionDetails((currentDetails) => (currentDetails === null ? currentDetails : null));
+      setIsDebugDetailsLoading((currentLoading) => (currentLoading ? false : currentLoading));
       return;
     }
 
