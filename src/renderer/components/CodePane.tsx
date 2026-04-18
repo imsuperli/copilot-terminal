@@ -12951,7 +12951,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return left.column - right.column;
     });
 
-    const firstError = responses.find(({ response }) => !response.success)?.response.error ?? null;
+    let firstError: string | null = null;
+    for (const { response } of responses) {
+      if (!response.success) {
+        firstError = response.error ?? null;
+        break;
+      }
+    }
     setTodoItems((currentItems) => (
       areTodoItemListsEqual(currentItems, nextTodoItems) ? currentItems : nextTodoItems
     ));
@@ -13096,9 +13102,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return [...nextChangesByPath.values()];
   }, []);
 
-  const shouldFlushFsChangesImmediately = useCallback((changes: CodePaneFsChange[]) => (
-    changes.some((change) => change.type === 'unlink' || change.type === 'unlinkDir')
-  ), []);
+  const shouldFlushFsChangesImmediately = useCallback((changes: CodePaneFsChange[]) => {
+    for (const change of changes) {
+      if (change.type === 'unlink' || change.type === 'unlinkDir') {
+        return true;
+      }
+    }
+    return false;
+  }, []);
 
   const flushPendingFsChanges = useCallback(() => {
     isFsChangeFlushQueuedRef.current = false;
@@ -15343,7 +15354,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [loadGitDiffHunks]);
 
   const handleCommitWindowCommit = useCallback(async (config: { message: string; selectedPaths: string[] }) => {
-    const selectedPaths = config.selectedPaths.filter(Boolean);
+    const selectedPaths: string[] = [];
+    for (const filePath of config.selectedPaths) {
+      if (filePath) {
+        selectedPaths.push(filePath);
+      }
+    }
     if (selectedPaths.length === 0) {
       return;
     }
@@ -17300,7 +17316,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [persistWatchExpressions, refreshDebugWatches, selectedDebugSession, watchExpressions]);
 
   const removeDebugWatchExpression = useCallback((expression: string) => {
-    const nextExpressions = watchExpressions.filter((watchExpression) => watchExpression !== expression);
+    const nextExpressions: string[] = [];
+    for (const watchExpression of watchExpressions) {
+      if (watchExpression !== expression) {
+        nextExpressions.push(watchExpression);
+      }
+    }
     persistWatchExpressions(nextExpressions);
     setWatchEntries((currentEntries) => currentEntries.filter((entry) => entry.expression !== expression));
   }, [persistWatchExpressions, watchExpressions]);
