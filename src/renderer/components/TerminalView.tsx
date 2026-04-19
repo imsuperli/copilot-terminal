@@ -1068,7 +1068,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   );
 
   return (
-    <div className="flex h-full w-full min-w-0 bg-zinc-900 overflow-hidden">
+    <div className="flex h-full w-full min-w-0 overflow-hidden bg-[rgb(var(--background))] text-[rgb(var(--foreground))]">
       {/* 渚ц竟鏍?*/}
       {!embedded && (
         <Sidebar
@@ -1091,11 +1091,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
       {/* 主内容区 */}
       <div className="relative min-w-0 flex-1 flex flex-col overflow-hidden">
+        {/*
+          Keep these controls on shared appearance tokens so theme/skin changes don't
+          leave the top chrome visually detached from the rest of the app.
+        */}
+        {(() => {
+          const floatingChromeClass = 'pointer-events-auto rounded-full border border-[rgb(var(--border))]/85 bg-[color-mix(in_srgb,rgb(var(--card))_88%,transparent)] shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl';
+          const floatingIconButtonClass = 'flex items-center justify-center h-6 w-6 rounded bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]';
+          const floatingMutedIconButtonClass = 'flex items-center justify-center h-6 w-6 rounded bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]';
+          const floatingDividerClass = 'h-4 w-px bg-[rgb(var(--border))]';
+          return (
+            <>
         {showToolbarWindowIdentity && (
           <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
             <div
               data-testid="toolbar-window-identity"
-              className="pointer-events-auto flex h-8 min-w-0 shrink-0 items-center gap-2 rounded-full border border-zinc-800/80 bg-zinc-950/95 px-2.5 shadow-[0_16px_34px_rgba(0,0,0,0.32)]"
+              className={`${floatingChromeClass} flex h-8 min-w-0 shrink-0 items-center gap-2 px-2.5`}
             >
               <div className="relative shrink-0">
                 <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
@@ -1103,7 +1114,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   <StatusDot status={aggregatedStatus} size="sm" />
                 </span>
               </div>
-              <span className="max-w-[180px] truncate text-xs font-medium text-zinc-200">
+              <span className="max-w-[180px] truncate text-xs font-medium text-[rgb(var(--foreground))]">
                 {terminalWindow.name}
               </span>
             </div>
@@ -1112,7 +1123,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
         {showFloatingChrome && showRemoteWindowTabs && (
           <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
-            <div className="pointer-events-auto max-w-full rounded-full border border-zinc-800/80 bg-zinc-950/95 shadow-[0_16px_34px_rgba(0,0,0,0.32)]">
+            <div className={`${floatingChromeClass} max-w-full`}>
               <FloatingRemoteWindowTabs
                 activeWindowId={terminalWindow.id}
                 cloneLabel={t('terminalView.cloneSshTerminal')}
@@ -1134,7 +1145,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             data-testid="terminal-floating-actions"
             className="pointer-events-none absolute right-3 top-3 z-50 flex max-w-[calc(100%-24px)] justify-end"
           >
-            <div className="group/terminal-actions pointer-events-auto flex h-8 max-w-9 items-center gap-2 overflow-hidden rounded-full border border-zinc-800/80 bg-zinc-950/95 px-1.5 shadow-[0_16px_34px_rgba(0,0,0,0.32)] transition-colors duration-150 ease-out hover:max-w-full hover:border-zinc-700/80 hover:bg-zinc-950 focus-within:max-w-full focus-within:border-zinc-700/80 focus-within:bg-zinc-950">
+            <div className={`group/terminal-actions flex h-8 max-w-9 items-center gap-2 overflow-hidden px-1.5 transition-colors duration-150 ease-out hover:max-w-full focus-within:max-w-full ${floatingChromeClass}`}>
               <div className="relative flex h-6 w-6 shrink-0 items-center justify-center">
                 <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
                 <span className="absolute -bottom-1 -right-1">
@@ -1153,7 +1164,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   maxDisplay={6}
                 />
                 {/* 鍒嗛殧绾?*/}
-                <div className="w-px h-4 bg-zinc-700" />
+                <div className={floatingDividerClass} />
               </>
             )}
 
@@ -1170,7 +1181,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={t('common.openInIDE', { name: ide.name })}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={() => handleOpenInIDE(ide.id)}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  className={floatingIconButtonClass}
                 >
                   <IDEIcon icon={ide.icon || ''} size={14} />
                 </button>
@@ -1186,7 +1197,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={t('terminalView.archive')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handleArchiveWindow}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  className={floatingIconButtonClass}
                 >
                   <Archive size={14} />
                 </button>
@@ -1202,7 +1213,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={t('terminalView.openFolder')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handleOpenFolder}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  className={floatingIconButtonClass}
                 >
                   <Folder size={14} />
                 </button>
@@ -1221,7 +1232,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
                       sshSftpOpen
                         ? 'bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]'
-                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
+                        : floatingIconButtonClass
                     }`}
                   >
                     <FolderTree size={14} />
@@ -1240,7 +1251,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
                       sshMetricsOpen
                         ? 'bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]'
-                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100'
+                        : floatingIconButtonClass
                     }`}
                   >
                     <Activity size={14} />
@@ -1257,7 +1268,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={t('terminalView.managePortForwards')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handleOpenSSHPortForwards}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                  className={floatingIconButtonClass}
                 >
                   <Waypoints size={14} />
                 </button>
@@ -1273,7 +1284,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 onMouseDown={preventMouseButtonFocus}
                 onClick={() => handleSplitPane('horizontal')}
                 disabled={!canSplitActivePane}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className={`${floatingIconButtonClass} disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 <SplitSquareHorizontal size={14} />
               </button>
@@ -1288,7 +1299,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 onMouseDown={preventMouseButtonFocus}
                 onClick={() => handleSplitPane('vertical')}
                 disabled={!canSplitActivePane}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+                className={`${floatingIconButtonClass} disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 <SplitSquareVertical size={14} />
               </button>
@@ -1301,7 +1312,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 aria-label={t('terminalView.splitBrowser')}
                 onClick={handleSplitBrowserPane}
                 ref={browserToolButtonRef}
-                className={`flex h-6 w-6 items-center justify-center rounded text-zinc-100 transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]' : 'cursor-grab hover:bg-zinc-800/80 active:cursor-grabbing'}`}
+                className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${isDraggingBrowserTool ? 'cursor-grabbing bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]' : 'cursor-grab text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] active:cursor-grabbing'}`}
               >
                 <SplitBrowserIcon />
               </button>
@@ -1315,7 +1326,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={t('terminalView.splitChat')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handleSplitChatPane}
-                  className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700"
+                  className={floatingIconButtonClass}
                 >
                   <SplitChatIcon />
                 </button>
@@ -1336,7 +1347,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     tabIndex={-1}
                     onMouseDown={preventMouseButtonFocus}
                     onClick={() => onRemoveFromGroup?.(terminalWindow.id)}
-                    className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
+                    className={floatingMutedIconButtonClass}
                   >
                     <LogOut size={14} />
                   </button>
@@ -1357,10 +1368,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       }
                     }}
                     disabled={!isWindowRunning}
-                    className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 transition-colors ${
+                    className={`flex items-center justify-center w-6 h-6 rounded bg-[rgb(var(--secondary))] transition-colors ${
                       isWindowRunning
-                        ? 'hover:bg-zinc-700 text-red-500 cursor-pointer'
-                        : 'text-zinc-600 cursor-not-allowed'
+                        ? 'cursor-pointer text-red-500 hover:bg-[rgb(var(--accent))]'
+                        : 'cursor-not-allowed text-[rgb(var(--muted-foreground))]'
                     }`}
                   >
                     <SquareX size={14} />
@@ -1378,7 +1389,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={t('terminalView.stop')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handlePauseWindow}
-                  className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-red-500 transition-colors"
+                  className="flex items-center justify-center h-6 w-6 rounded bg-[rgb(var(--secondary))] text-red-500 transition-colors hover:bg-[rgb(var(--accent))]"
                 >
                   <Square size={14} fill="currentColor" />
                 </button>
@@ -1397,7 +1408,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={isWindowRunning ? handleRestartWindow : handleStartWindow}
-                  className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
+                  className={`flex items-center justify-center h-6 w-6 rounded bg-[rgb(var(--secondary))] transition-colors hover:bg-[rgb(var(--accent))] ${
                     isWindowRunning ? 'text-yellow-500' : 'text-green-500'
                   }`}
                 >
@@ -1409,6 +1420,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </div>
           </div>
         )}
+            </>
+          );
+        })()}
         {/* 缁堢甯冨眬鍖哄煙 */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {sshSftpOpen && activePaneCapabilities?.canOpenSFTP && (

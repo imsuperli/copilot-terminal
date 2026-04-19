@@ -37,7 +37,7 @@ describe('App - Responsive Layout', () => {
 
   it('keeps the custom title bar at a fixed height', async () => {
     const { container } = await renderApp();
-    const titleBar = container.querySelector('.h-8.bg-zinc-900.border-b.border-zinc-800');
+    const titleBar = container.querySelector('.h-8.border-b.select-none');
     expect(titleBar).toHaveClass('h-8');
   });
 

@@ -110,6 +110,10 @@ export function Sidebar({
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
+  const sidebarTooltipClass = 'rounded border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl z-[1100]';
+  const sidebarInputClass = 'rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[rgb(var(--ring))] focus:border-transparent transition-all';
+  const sidebarInlineInputClass = 'rounded border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-sm text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:outline-none focus:border-[rgb(var(--ring))]';
+  const sidebarIconButtonClass = 'rounded transition-colors text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]';
 
   // 从 settings 同步分类数据
   useEffect(() => {
@@ -359,13 +363,13 @@ export function Sidebar({
         {(allCount > 0) && (
           <div className="px-4 pb-3">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[rgb(var(--muted-foreground))]" size={14} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchChange?.(e.target.value)}
                 placeholder={t('common.searchWindows')}
-                className="w-full pl-8 pr-7 py-1.5 text-sm bg-zinc-800 border border-zinc-700 rounded-md text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[rgb(var(--ring))] focus:border-transparent transition-all"
+                className={`w-full pl-8 pr-7 py-1.5 text-sm ${sidebarInputClass}`}
               />
               {searchQuery && (
                 <Tooltip.Provider>
@@ -373,13 +377,13 @@ export function Sidebar({
                     <Tooltip.Trigger asChild>
                       <button
                         onClick={() => onSearchChange?.('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))] transition-colors"
                       >
                         <X size={12} />
                       </button>
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
-                      <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                      <Tooltip.Content className={sidebarTooltipClass} side="top" sideOffset={5}>
                         {t('common.clearSearch')}
                       </Tooltip.Content>
                     </Tooltip.Portal>
@@ -541,7 +545,7 @@ export function Sidebar({
                             }}
                             onBlur={handleSaveEdit}
                             onClick={(e) => e.stopPropagation()}
-                            className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 focus:outline-none focus:border-[rgb(var(--ring))]"
+                            className={`flex-1 min-w-0 ${sidebarInlineInputClass}`}
                           />
                           <Tooltip.Provider>
                             <Tooltip.Root delayDuration={300}>
@@ -554,7 +558,7 @@ export function Sidebar({
                                 </button>
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
-                                <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                <Tooltip.Content className={sidebarTooltipClass} side="top" sideOffset={5}>
                                   {t('common.save')}
                                 </Tooltip.Content>
                               </Tooltip.Portal>
@@ -565,13 +569,13 @@ export function Sidebar({
                               <Tooltip.Trigger asChild>
                                 <button
                                   onClick={(e) => { e.stopPropagation(); setEditingCategoryId(null); }}
-                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded transition-colors"
+                                  className={`flex-shrink-0 h-5 w-5 flex items-center justify-center ${sidebarIconButtonClass}`}
                                 >
                                   <X className="h-3 w-3" />
                                 </button>
                               </Tooltip.Trigger>
                               <Tooltip.Portal>
-                                <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                <Tooltip.Content className={sidebarTooltipClass} side="top" sideOffset={5}>
                                   {t('common.cancel')}
                                 </Tooltip.Content>
                               </Tooltip.Portal>
@@ -594,13 +598,13 @@ export function Sidebar({
                                 <Tooltip.Trigger asChild>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleStartEdit(category); }}
-                                    className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-700 transition-colors"
+                                    className={`h-5 w-5 flex items-center justify-center hover:bg-[rgb(var(--accent))] ${sidebarIconButtonClass}`}
                                   >
                                     <Edit2 className="h-3 w-3" />
                                   </button>
                                 </Tooltip.Trigger>
                                 <Tooltip.Portal>
-                                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                  <Tooltip.Content className={sidebarTooltipClass} side="top" sideOffset={5}>
                                     {t('category.rename')}
                                   </Tooltip.Content>
                                 </Tooltip.Portal>
@@ -611,13 +615,13 @@ export function Sidebar({
                                 <Tooltip.Trigger asChild>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setCategoryToDelete(category); }}
-                                    className="w-5 h-5 flex items-center justify-center text-zinc-400 hover:text-red-400 rounded hover:bg-zinc-700 transition-colors"
+                                    className="h-5 w-5 flex items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-red-400"
                                   >
                                     <Trash2 className="h-3 w-3" />
                                   </button>
                                 </Tooltip.Trigger>
                                 <Tooltip.Portal>
-                                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                                  <Tooltip.Content className={sidebarTooltipClass} side="top" sideOffset={5}>
                                     {t('category.delete')}
                                   </Tooltip.Content>
                                 </Tooltip.Portal>
@@ -655,7 +659,7 @@ export function Sidebar({
                         }
                       }}
                       placeholder={t('category.namePlaceholder')}
-                      className="flex-1 min-w-0 text-sm bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[rgb(var(--ring))]"
+                      className={`flex-1 min-w-0 ${sidebarInlineInputClass}`}
                     />
                   </div>
                 ) : (
@@ -697,7 +701,7 @@ export function Sidebar({
                   </button>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                  <Tooltip.Content className={sidebarTooltipClass} side="top" sideOffset={5}>
                     {t('quickNav.title')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
@@ -715,7 +719,7 @@ export function Sidebar({
                   </button>
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
-                  <Tooltip.Content className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700" side="top" sideOffset={5}>
+                  <Tooltip.Content className={sidebarTooltipClass} side="top" sideOffset={5}>
                     {t('about.title')}
                   </Tooltip.Content>
                 </Tooltip.Portal>
@@ -780,7 +784,7 @@ export function Sidebar({
             return (
               <button
                 onClick={() => setIsConfirmDialogOpen(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-red-600 text-zinc-300 hover:text-white transition-colors"
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-[rgb(var(--secondary))] px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-red-600 hover:text-white"
 
               >
                 <Trash2 className="h-4 w-4" />
