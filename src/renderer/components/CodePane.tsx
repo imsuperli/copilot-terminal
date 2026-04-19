@@ -1761,37 +1761,422 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
   );
 });
 
+const BranchManagerControl = React.memo(function BranchManagerControl({
+  gitBranches,
+  gitBranchesError,
+  gitSummaryBranchLabel,
+  isGitBranchesLoading,
+  isMac,
+  canPushBranch,
+  contextMenuContentClassName,
+  contextMenuDangerItemClassName,
+  contextMenuItemClassName,
+  onRefresh,
+  onOpenWorkbench,
+  onUpdateProject,
+  onOpenCommit,
+  onPushCurrentBranch,
+  onCreateBranch,
+  onCheckoutRevision,
+  onCheckoutBranch,
+  onRenameBranch,
+  onDeleteBranch,
+  preventFocus,
+  t,
+}: {
+  gitBranches: CodePaneGitBranchEntry[];
+  gitBranchesError: string | null;
+  gitSummaryBranchLabel: string | null;
+  isGitBranchesLoading: boolean;
+  isMac: boolean;
+  canPushBranch: boolean;
+  contextMenuContentClassName: string;
+  contextMenuDangerItemClassName: string;
+  contextMenuItemClassName: string;
+  onRefresh: () => void;
+  onOpenWorkbench: () => void;
+  onUpdateProject: () => void;
+  onOpenCommit: () => void;
+  onPushCurrentBranch: () => void;
+  onCreateBranch: () => void;
+  onCheckoutRevision: () => void;
+  onCheckoutBranch: (branch: CodePaneGitBranchEntry) => void;
+  onRenameBranch: (branch: CodePaneGitBranchEntry) => void;
+  onDeleteBranch: (branch: CodePaneGitBranchEntry) => void;
+  preventFocus: (event: React.MouseEvent<HTMLElement>) => void;
+  t: ReturnType<typeof useI18n>['t'];
+}) {
+  const branchManagerRef = useRef<HTMLDivElement | null>(null);
+  const branchManagerSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const branchManagerTreeFilterCacheRef = useRef<WeakMap<BranchManagerTreeNode[], Map<string, BranchManagerTreeFilterResult>>>(new WeakMap());
+  const branchManagerTreeRowsCacheRef = useRef<WeakMap<BranchManagerTreeNode[], Map<string, BranchManagerVisibleTreeRow[]>>>(new WeakMap());
+  const [isBranchManagerOpen, setIsBranchManagerOpen] = useState(false);
+  const [branchManagerQuery, setBranchManagerQuery] = useState('');
+  const deferredBranchManagerQuery = useDeferredValue(branchManagerQuery);
+  const [collapsedBranchManagerNodeKeys, setCollapsedBranchManagerNodeKeys] = useState<Set<string>>(() => new Set());
+  const branchMenuContainer = branchManagerRef.current;
+
+  const branchManagerBranchBuckets = useMemo<BranchManagerBranchBuckets>(() => {
+    if (!isBranchManagerOpen) {
+      return {
+        local: [],
+        remote: [],
+        recent: [],
+      };
+    }
+
+    const local: CodePaneGitBranchEntry[] = [];
+    const remote: CodePaneGitBranchEntry[] = [];
+    const recent = [...gitBranches];
+
+    for (const branch of gitBranches) {
+      if (branch.kind === 'local') {
+        local.push(branch);
+      } else if (branch.kind === 'remote') {
+        remote.push(branch);
+      }
+    }
+
+    recent.sort((leftBranch, rightBranch) => {
+      if (leftBranch.current !== rightBranch.current) {
+        return leftBranch.current ? -1 : 1;
+      }
+      return rightBranch.timestamp - leftBranch.timestamp;
+    });
+    if (recent.length > 8) {
+      recent.length = 8;
+    }
+
+    return {
+      local,
+      remote,
+      recent,
+    };
+  }, [gitBranches, isBranchManagerOpen]);
+
+  const branchManagerBaseSections = useMemo<BranchManagerSection[]>(() => {
+    if (!isBranchManagerOpen) {
+      return [];
+    }
+    const { local, remote, recent } = branchManagerBranchBuckets;
+
+    return [
+      {
+        key: 'recent',
+        label: t('codePane.gitRecentBranches'),
+        count: recent.length,
+        nodes: buildBranchManagerTree(recent, 'recent', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+      },
+      {
+        key: 'local',
+        label: t('codePane.gitLocalBranches'),
+        count: local.length,
+        nodes: buildBranchManagerTree(local, 'local', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+      },
+      {
+        key: 'remote',
+        label: t('codePane.gitRemoteBranches'),
+        count: remote.length,
+        nodes: buildBranchManagerTree(remote, 'remote', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
+      },
+    ];
+  }, [branchManagerBranchBuckets, isBranchManagerOpen, t]);
+
+  const branchManagerVisibleSections = useMemo<BranchManagerVisibleSection[]>(() => {
+    if (!isBranchManagerOpen) {
+      return [];
+    }
+
+    const normalizedQuery = deferredBranchManagerQuery.trim().toLowerCase();
+    const collapsedNodeKeySignature = getBranchManagerCollapsedNodeKeySignature(collapsedBranchManagerNodeKeys);
+    if (!normalizedQuery) {
+      const nextSections: BranchManagerVisibleSection[] = [];
+      for (const section of branchManagerBaseSections) {
+        nextSections.push({
+          ...section,
+          rows: getCachedFlattenBranchManagerTreeRows(
+            branchManagerTreeRowsCacheRef.current,
+            section.nodes,
+            collapsedBranchManagerNodeKeys,
+            collapsedNodeKeySignature,
+          ),
+        });
+      }
+      return nextSections;
+    }
+
+    const nextSections: BranchManagerVisibleSection[] = [];
+    for (const section of branchManagerBaseSections) {
+      const filteredSection = getCachedFilteredBranchManagerTreeNodes(
+        branchManagerTreeFilterCacheRef.current,
+        section.nodes,
+        normalizedQuery,
+      );
+      if (filteredSection.count === 0) {
+        continue;
+      }
+
+      nextSections.push({
+        ...section,
+        count: filteredSection.count,
+        nodes: filteredSection.nodes,
+        rows: getCachedFlattenBranchManagerTreeRows(
+          branchManagerTreeRowsCacheRef.current,
+          filteredSection.nodes,
+          collapsedBranchManagerNodeKeys,
+          collapsedNodeKeySignature,
+        ),
+      });
+    }
+    return nextSections;
+  }, [branchManagerBaseSections, collapsedBranchManagerNodeKeys, deferredBranchManagerQuery, isBranchManagerOpen]);
+
+  const branchManagerQuickActions = useMemo<BranchManagerQuickAction[]>(() => {
+    if (!isBranchManagerOpen) {
+      return [];
+    }
+
+    const actions: BranchManagerQuickAction[] = [
+      {
+        id: 'update-project',
+        label: t('codePane.gitUpdateProject'),
+        shortcut: '',
+        icon: RefreshCw,
+        disabled: false,
+        onSelect: onUpdateProject,
+      },
+      {
+        id: 'commit',
+        label: t('codePane.gitCommitDots'),
+        shortcut: '',
+        icon: GitCommitHorizontal,
+        disabled: false,
+        onSelect: onOpenCommit,
+      },
+      {
+        id: 'push',
+        label: t('codePane.gitPushDots'),
+        shortcut: isMac ? '⌘⇧K' : 'Ctrl+Shift+K',
+        icon: GitBranch,
+        disabled: !canPushBranch,
+        onSelect: onPushCurrentBranch,
+      },
+      {
+        id: 'new-branch',
+        label: t('codePane.gitNewBranchDots'),
+        shortcut: isMac ? '⌘⌥N' : 'Ctrl+Alt+N',
+        icon: Plus,
+        disabled: false,
+        onSelect: onCreateBranch,
+      },
+      {
+        id: 'checkout-revision',
+        label: t('codePane.gitCheckoutTagOrRevision'),
+        shortcut: '',
+        icon: GitCompareArrows,
+        disabled: false,
+        onSelect: onCheckoutRevision,
+      },
+    ];
+
+    const query = deferredBranchManagerQuery.trim().toLowerCase();
+    if (!query) {
+      return actions;
+    }
+
+    const filteredActions: BranchManagerQuickAction[] = [];
+    for (const action of actions) {
+      if (
+        action.label.toLowerCase().includes(query)
+        || action.id.toLowerCase().includes(query)
+      ) {
+        filteredActions.push(action);
+      }
+    }
+    return filteredActions;
+  }, [
+    canPushBranch,
+    deferredBranchManagerQuery,
+    isBranchManagerOpen,
+    isMac,
+    onCheckoutRevision,
+    onCreateBranch,
+    onOpenCommit,
+    onPushCurrentBranch,
+    onUpdateProject,
+    t,
+  ]);
+
+  const closeBranchManager = useCallback(() => {
+    setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
+  }, []);
+
+  const handleBranchManagerToggle = useCallback(() => {
+    setIsBranchManagerOpen((currentOpen) => {
+      const nextOpen = !currentOpen;
+      setBranchManagerQuery((currentQuery) => (currentQuery === '' ? currentQuery : ''));
+      if (nextOpen && !isGitBranchesLoading) {
+        onRefresh();
+      }
+      return nextOpen;
+    });
+  }, [isGitBranchesLoading, onRefresh]);
+
+  const handleBranchManagerQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    setBranchManagerQuery(event.target.value);
+  }, []);
+
+  const handleBranchManagerToggleNode = useCallback((nodeKey: string) => {
+    setCollapsedBranchManagerNodeKeys((currentKeys) => {
+      const nextKeys = new Set(currentKeys);
+      if (nextKeys.has(nodeKey)) {
+        nextKeys.delete(nodeKey);
+      } else {
+        nextKeys.add(nodeKey);
+      }
+      return nextKeys;
+    });
+  }, []);
+
+  const handleBranchManagerRefresh = useCallback(() => {
+    onRefresh();
+  }, [onRefresh]);
+
+  const handleBranchManagerOpenWorkbench = useCallback(() => {
+    closeBranchManager();
+    onOpenWorkbench();
+  }, [closeBranchManager, onOpenWorkbench]);
+
+  const handleQuickActionSelect = useCallback((action: BranchManagerQuickAction) => {
+    closeBranchManager();
+    action.onSelect();
+  }, [closeBranchManager]);
+
+  const handleBranchCheckout = useCallback((branch: CodePaneGitBranchEntry) => {
+    closeBranchManager();
+    onCheckoutBranch(branch);
+  }, [closeBranchManager, onCheckoutBranch]);
+
+  const handleBranchRename = useCallback((branch: CodePaneGitBranchEntry) => {
+    closeBranchManager();
+    onRenameBranch(branch);
+  }, [closeBranchManager, onRenameBranch]);
+
+  const handleBranchDelete = useCallback((branch: CodePaneGitBranchEntry) => {
+    closeBranchManager();
+    onDeleteBranch(branch);
+  }, [closeBranchManager, onDeleteBranch]);
+
+  useEffect(() => {
+    if (!isBranchManagerOpen) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      branchManagerSearchInputRef.current?.focus();
+      branchManagerSearchInputRef.current?.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isBranchManagerOpen]);
+
+  useEffect(() => {
+    if (!isBranchManagerOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!branchManagerRef.current?.contains(target)) {
+        setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
+      }
+    };
+
+    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isBranchManagerOpen]);
+
+  return (
+    <div ref={branchManagerRef} className="relative">
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={t('codePane.gitBranchManager')}
+        aria-expanded={isBranchManagerOpen}
+        onMouseDown={preventFocus}
+        onClick={handleBranchManagerToggle}
+        className={`flex h-6 max-w-[280px] items-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
+          isBranchManagerOpen
+            ? 'bg-sky-500/15 text-sky-100'
+            : 'bg-zinc-800/90 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50'
+        }`}
+      >
+        <GitBranch size={12} className="shrink-0 text-sky-300" />
+        <span className="truncate">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</span>
+        <ChevronDown size={12} className="shrink-0 text-zinc-500" />
+      </button>
+      {isBranchManagerOpen && (
+        <BranchManagerPopup
+          searchInputRef={branchManagerSearchInputRef}
+          query={branchManagerQuery}
+          quickActions={branchManagerQuickActions.map((action) => ({
+            ...action,
+            onSelect: () => {
+              handleQuickActionSelect(action);
+            },
+          }))}
+          sections={branchManagerVisibleSections}
+          collapsedNodeKeys={collapsedBranchManagerNodeKeys}
+          gitBranchesCount={gitBranches.length}
+          error={gitBranchesError}
+          isLoading={isGitBranchesLoading}
+          menuContainer={branchMenuContainer}
+          contextMenuContentClassName={contextMenuContentClassName}
+          contextMenuItemClassName={contextMenuItemClassName}
+          contextMenuDangerItemClassName={contextMenuDangerItemClassName}
+          onQueryChange={handleBranchManagerQueryChange}
+          onRefresh={handleBranchManagerRefresh}
+          onOpenWorkbench={handleBranchManagerOpenWorkbench}
+          onToggleNode={handleBranchManagerToggleNode}
+          onCheckoutBranch={handleBranchCheckout}
+          onRenameBranch={handleBranchRename}
+          onDeleteBranch={handleBranchDelete}
+          t={t}
+        />
+      )}
+    </div>
+  );
+});
+
 const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
-  branchManagerRef,
-  branchManagerSearchInputRef,
-  branchManagerQuery,
-  branchManagerQuickActions,
-  branchManagerVisibleSections,
+  branchManagerControl,
   canNavigateBack,
   canNavigateForward,
-  collapsedBranchManagerNodeKeys,
   contextMenuContentClassName,
   contextMenuDangerItemClassName,
   contextMenuItemClassName,
   editorActionMenuSections,
-  gitBranchesCount,
-  gitBranchesError,
   gitOperationLabel,
   gitRepositorySummary,
-  gitSummaryBranchLabel,
-  isBranchManagerOpen,
-  isGitBranchesLoading,
   isRefreshing,
   activeFilePath,
   onClose,
-  onBranchManagerToggle,
-  onBranchManagerQueryChange,
-  onBranchManagerRefresh,
-  onBranchManagerOpenWorkbench,
-  onBranchManagerToggleNode,
-  onBranchManagerCheckoutBranch,
-  onBranchManagerRenameBranch,
-  onBranchManagerDeleteBranch,
   onNavigateBack,
   onNavigateForward,
   onOpenSearchEverywhere,
@@ -1803,36 +2188,18 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
   t,
   viewMode,
 }: {
-  branchManagerRef: React.RefObject<HTMLDivElement | null>;
-  branchManagerSearchInputRef: React.RefObject<HTMLInputElement | null>;
-  branchManagerQuery: string;
-  branchManagerQuickActions: BranchManagerQuickAction[];
-  branchManagerVisibleSections: BranchManagerVisibleSection[];
+  branchManagerControl: React.ReactNode;
   canNavigateBack: boolean;
   canNavigateForward: boolean;
-  collapsedBranchManagerNodeKeys: Set<string>;
   contextMenuContentClassName: string;
   contextMenuDangerItemClassName: string;
   contextMenuItemClassName: string;
   editorActionMenuSections: EditorActionMenuItem[][];
-  gitBranchesCount: number;
-  gitBranchesError: string | null;
   gitOperationLabel: string;
   gitRepositorySummary: CodePaneGitRepositorySummary | null;
-  gitSummaryBranchLabel: string | null;
-  isBranchManagerOpen: boolean;
-  isGitBranchesLoading: boolean;
   isRefreshing: boolean;
   activeFilePath: string | null;
   onClose?: () => void;
-  onBranchManagerToggle: () => void;
-  onBranchManagerQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onBranchManagerRefresh: () => void;
-  onBranchManagerOpenWorkbench: () => void;
-  onBranchManagerToggleNode: (nodeKey: string) => void;
-  onBranchManagerCheckoutBranch: (branch: CodePaneGitBranchEntry) => void;
-  onBranchManagerRenameBranch: (branch: CodePaneGitBranchEntry) => void;
-  onBranchManagerDeleteBranch: (branch: CodePaneGitBranchEntry) => void;
   onNavigateBack: () => void;
   onNavigateForward: () => void;
   onOpenSearchEverywhere: () => void;
@@ -1844,55 +2211,12 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
   t: ReturnType<typeof useI18n>['t'];
   viewMode: string;
 }) {
-  const branchMenuContainer = branchManagerRef.current;
   const diffButtonLabel = viewMode === 'diff' ? t('codePane.showEditor') : t('codePane.showDiff');
 
   return (
     <div className="flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
       <div className="flex min-w-0 items-center gap-2">
-        <div ref={branchManagerRef} className="relative">
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={t('codePane.gitBranchManager')}
-            aria-expanded={isBranchManagerOpen}
-            onMouseDown={preventFocus}
-            onClick={onBranchManagerToggle}
-            className={`flex h-6 max-w-[280px] items-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
-              isBranchManagerOpen
-                ? 'bg-sky-500/15 text-sky-100'
-                : 'bg-zinc-800/90 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50'
-            }`}
-          >
-            <GitBranch size={12} className="shrink-0 text-sky-300" />
-            <span className="truncate">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</span>
-            <ChevronDown size={12} className="shrink-0 text-zinc-500" />
-          </button>
-          {isBranchManagerOpen && (
-            <BranchManagerPopup
-              searchInputRef={branchManagerSearchInputRef}
-              query={branchManagerQuery}
-              quickActions={branchManagerQuickActions}
-              sections={branchManagerVisibleSections}
-              collapsedNodeKeys={collapsedBranchManagerNodeKeys}
-              gitBranchesCount={gitBranchesCount}
-              error={gitBranchesError}
-              isLoading={isGitBranchesLoading}
-              menuContainer={branchMenuContainer}
-              contextMenuContentClassName={contextMenuContentClassName}
-              contextMenuItemClassName={contextMenuItemClassName}
-              contextMenuDangerItemClassName={contextMenuDangerItemClassName}
-              onQueryChange={onBranchManagerQueryChange}
-              onRefresh={onBranchManagerRefresh}
-              onOpenWorkbench={onBranchManagerOpenWorkbench}
-              onToggleNode={onBranchManagerToggleNode}
-              onCheckoutBranch={onBranchManagerCheckoutBranch}
-              onRenameBranch={onBranchManagerRenameBranch}
-              onDeleteBranch={onBranchManagerDeleteBranch}
-              t={t}
-            />
-          )}
-        </div>
+        {branchManagerControl}
         {gitRepositorySummary && gitRepositorySummary.operation !== 'idle' && (
           <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
             {gitOperationLabel}
@@ -7027,8 +7351,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const editorSurfaceRefreshSequenceRef = useRef(0);
   const editorSurfaceBindingStateRef = useRef<EditorSurfaceBindingState | null>(null);
   const compactDirectoryPresentationsCacheRef = useRef<Map<string, CompactDirectoryPresentationCacheEntry>>(new Map());
-  const branchManagerTreeFilterCacheRef = useRef<WeakMap<BranchManagerTreeNode[], Map<string, BranchManagerTreeFilterResult>>>(new WeakMap());
-  const branchManagerTreeRowsCacheRef = useRef<WeakMap<BranchManagerTreeNode[], Map<string, BranchManagerVisibleTreeRow[]>>>(new WeakMap());
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
@@ -7070,10 +7392,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [searchEverywhereMode, setSearchEverywhereMode] = useState<SearchEverywhereMode>('all');
   const [searchEverywhereQuery, setSearchEverywhereQuery] = useState('');
   const deferredSearchEverywhereQuery = useDeferredValue(searchEverywhereQuery);
-  const [isBranchManagerOpen, setIsBranchManagerOpen] = useState(false);
-  const [branchManagerQuery, setBranchManagerQuery] = useState('');
-  const deferredBranchManagerQuery = useDeferredValue(branchManagerQuery);
-  const [collapsedBranchManagerNodeKeys, setCollapsedBranchManagerNodeKeys] = useState<Set<string>>(() => new Set());
   const [searchEverywhereFileResults, setSearchEverywhereFileResults] = useState<string[]>([]);
   const [searchEverywhereSymbolResults, setSearchEverywhereSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
   const [isSearchEverywhereLoading, setIsSearchEverywhereLoading] = useState(false);
@@ -7260,8 +7578,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const searchEverywhereInputRef = useRef<HTMLInputElement | null>(null);
   const searchEverywhereItemsRef = useRef<SearchEverywhereItem[]>([]);
   const searchEverywhereSelectedIndexRef = useRef(0);
-  const branchManagerRef = useRef<HTMLDivElement | null>(null);
-  const branchManagerSearchInputRef = useRef<HTMLInputElement | null>(null);
   const navigateBackRef = useRef<() => Promise<void>>(async () => {});
   const navigateForwardRef = useRef<() => Promise<void>>(async () => {});
   const goToImplementationAtCursorRef = useRef<() => Promise<void>>(async () => {});
@@ -7292,6 +7608,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const isFsChangeFlushQueuedRef = useRef(false);
   const fsChangeFlushTimerRef = useRef<number | null>(null);
   const lastAutoPresentedExternalChangeRef = useRef<PendingFsChangeDisplayState | null>(null);
+  const blameCacheRef = useRef<Map<string, CodePaneGitBlameLine[]>>(new Map());
   const gitStatusByPathRef = useRef(gitStatusByPath);
   const gitStatusEntriesRef = useRef<CodePaneGitStatusEntry[]>(cachedGitStatusEntries);
   const gitRepositorySummaryRef = useRef<CodePaneGitRepositorySummary | null>(cachedGitSummary);
@@ -8631,6 +8948,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const invalidateWorkspaceRuntimeCaches = useCallback((filePath: string) => {
     invalidateDocumentRuntimeCaches(filePath);
+    blameCacheRef.current.delete(filePath);
     runtimeStoreRef.current.invalidateCachePrefix(`git-history:${rootPath}:${filePath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`git-conflict:${rootPath}:${filePath}`);
     runtimeStoreRef.current.invalidateCachePrefix(`git-hunks:${rootPath}:${filePath}`);
@@ -11246,7 +11564,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const qualityPipelineResult = await runSaveQualityPipeline(filePath);
       qualityGateStateBeforeWrite = qualityPipelineResult.qualityState;
       didWriteIntermediateFiles = qualityPipelineResult.wroteToDisk;
-      await flushPendingLanguageSync(filePath);
     }
 
     markSaving(filePath, true);
@@ -13752,11 +14069,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const cacheKey = `git-blame:${rootPath}:${filePath}`;
+    const cachedSessionBlame = blameCacheRef.current.get(filePath);
+    if (cachedSessionBlame) {
+      setBlameLines((currentLines) => (
+        areGitBlameLinesEqual(currentLines, cachedSessionBlame) ? currentLines : cachedSessionBlame
+      ));
+      setIsBlameLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     const cachedBlame = runtimeStoreRef.current.getCache<CodePaneGitBlameLine[]>(
       cacheKey,
       CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
     );
     if (cachedBlame) {
+      blameCacheRef.current.set(filePath, cachedBlame);
       setBlameLines((currentLines) => (
         areGitBlameLinesEqual(currentLines, cachedBlame) ? currentLines : cachedBlame
       ));
@@ -13765,31 +14092,39 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     setIsBlameLoading((currentLoading) => (currentLoading ? currentLoading : true));
-    const response = await dedupeProjectRequest(
-      rootPath,
-      cacheKey,
-      async () => await window.electronAPI.codePaneGitBlame({
+    try {
+      const nextLines = await dedupeProjectRequest(
         rootPath,
-        filePath,
-      }),
-    );
-    if (!response.success) {
+        cacheKey,
+        async () => {
+          const response = await window.electronAPI.codePaneGitBlame({
+            rootPath,
+            filePath,
+          });
+          if (!response.success) {
+            throw new Error(response.error || t('common.retry'));
+          }
+
+          const resolvedLines = response.data ?? [];
+          blameCacheRef.current.set(filePath, resolvedLines);
+          runtimeStoreRef.current.setCache(cacheKey, resolvedLines);
+          return resolvedLines;
+        },
+      );
+      setBlameLines((currentLines) => (
+        areGitBlameLinesEqual(currentLines, nextLines) ? currentLines : nextLines
+      ));
+      setIsBlameLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
+      return;
+    } catch (error) {
       setBanner({
         tone: 'warning',
-        message: response.error || t('common.retry'),
+        message: error instanceof Error ? error.message : t('common.retry'),
         filePath,
       });
       setBlameLines((currentLines) => (currentLines.length === 0 ? currentLines : []));
       setIsBlameLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
-      return;
     }
-
-    const nextLines = response.data ?? [];
-    runtimeStoreRef.current.setCache(cacheKey, nextLines);
-    setBlameLines((currentLines) => (
-      areGitBlameLinesEqual(currentLines, nextLines) ? currentLines : nextLines
-    ));
-    setIsBlameLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
   }, [rootPath, t]);
 
   const runGitOperation = useCallback(async (
@@ -16053,6 +16388,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
         const rootEntries = await loadDirectoryRef.current(rootPath, {
           showLoadingIndicator: cachedRootEntries === null,
         });
+
+        if (!mounted) {
+          return;
+        }
 
         if (mounted && cachedRootEntries === null) {
           setIsBootstrapping((currentBootstrapping) => (currentBootstrapping ? false : currentBootstrapping));
@@ -18876,51 +19215,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [isSearchEverywhereOpen]);
 
   useEffect(() => {
-    if (!isBranchManagerOpen) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      branchManagerSearchInputRef.current?.focus();
-      branchManagerSearchInputRef.current?.select();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [isBranchManagerOpen]);
-
-  useEffect(() => {
-    if (!isBranchManagerOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) {
-        return;
-      }
-
-      if (!branchManagerRef.current?.contains(target)) {
-        setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
-      }
-    };
-
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isBranchManagerOpen]);
-
-  useEffect(() => {
     if (!isSearchEverywhereOpen) {
       return;
     }
@@ -20786,10 +21080,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
   }, []);
 
-  const closeBranchManager = useCallback(() => {
-    setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
-  }, []);
-
   const handleGitWorkbenchTabChange = useCallback((tab: GitToolWindowTab) => {
     setActiveGitWorkbenchTab((currentTab) => (currentTab === tab ? currentTab : tab));
   }, []);
@@ -21097,27 +21387,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [inspectorPanelFilePath, openFileLocation]);
 
-  const handleBranchManagerToggle = useCallback(() => {
-    setIsBranchManagerOpen((currentOpen) => {
-      const nextOpen = !currentOpen;
-      setBranchManagerQuery((currentQuery) => (currentQuery === '' ? currentQuery : ''));
-      if (nextOpen && !isGitBranchesLoading) {
-        void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
-      }
-      return nextOpen;
-    });
-  }, [gitRebaseBaseRef, isGitBranchesLoading, loadGitBranches]);
-
-  const handleBranchManagerQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    setBranchManagerQuery(event.target.value);
-  }, []);
-
   const handleBranchManagerRefresh = useCallback(() => {
     void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
   }, [gitRebaseBaseRef, loadGitBranches]);
 
   const handleBranchManagerOpenWorkbench = useCallback(() => {
-    setIsBranchManagerOpen((currentOpen) => (currentOpen ? false : currentOpen));
     openGitWorkbench('log');
   }, [openGitWorkbench]);
 
@@ -22044,231 +22318,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     toggleBookmarkAtCursor,
   ]);
 
-  const branchManagerBranchBuckets = useMemo<BranchManagerBranchBuckets>(() => {
-    const local: CodePaneGitBranchEntry[] = [];
-    const remote: CodePaneGitBranchEntry[] = [];
-    const recent = [...gitBranches];
-
-    for (const branch of gitBranches) {
-      if (branch.kind === 'local') {
-        local.push(branch);
-      } else if (branch.kind === 'remote') {
-        remote.push(branch);
-      }
-    }
-
-    recent.sort((leftBranch, rightBranch) => {
-      if (leftBranch.current !== rightBranch.current) {
-        return leftBranch.current ? -1 : 1;
-      }
-      return rightBranch.timestamp - leftBranch.timestamp;
-    });
-    if (recent.length > 8) {
-      recent.length = 8;
-    }
-
-    return {
-      local,
-      remote,
-      recent,
-    };
-  }, [gitBranches]);
-
-  const branchManagerBaseSections = useMemo<BranchManagerSection[]>(() => {
-    if (!isBranchManagerOpen) {
-      return [];
-    }
-    const { local, remote, recent } = branchManagerBranchBuckets;
-
-    return [
-      {
-        key: 'recent',
-        label: t('codePane.gitRecentBranches'),
-        count: recent.length,
-        nodes: buildBranchManagerTree(recent, 'recent', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
-      },
-      {
-        key: 'local',
-        label: t('codePane.gitLocalBranches'),
-        count: local.length,
-        nodes: buildBranchManagerTree(local, 'local', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
-      },
-      {
-        key: 'remote',
-        label: t('codePane.gitRemoteBranches'),
-        count: remote.length,
-        nodes: buildBranchManagerTree(remote, 'remote', (branch) => splitGitBranchPath(branch.shortName || branch.name)),
-      },
-    ];
-  }, [branchManagerBranchBuckets, isBranchManagerOpen, t]);
-
-  const branchManagerVisibleSections = useMemo<BranchManagerVisibleSection[]>(() => {
-    if (!isBranchManagerOpen) {
-      return [];
-    }
-
-    const normalizedQuery = deferredBranchManagerQuery.trim().toLowerCase();
-    const collapsedNodeKeySignature = getBranchManagerCollapsedNodeKeySignature(collapsedBranchManagerNodeKeys);
-    if (!normalizedQuery) {
-      const nextSections: BranchManagerVisibleSection[] = [];
-      for (const section of branchManagerBaseSections) {
-        nextSections.push({
-          ...section,
-          rows: getCachedFlattenBranchManagerTreeRows(
-            branchManagerTreeRowsCacheRef.current,
-            section.nodes,
-            collapsedBranchManagerNodeKeys,
-            collapsedNodeKeySignature,
-          ),
-        });
-      }
-      return nextSections;
-    }
-
-    const nextSections: BranchManagerVisibleSection[] = [];
-    for (const section of branchManagerBaseSections) {
-      const filteredSection = getCachedFilteredBranchManagerTreeNodes(
-        branchManagerTreeFilterCacheRef.current,
-        section.nodes,
-        normalizedQuery,
-      );
-      if (filteredSection.count === 0) {
-        continue;
-      }
-
-      nextSections.push({
-        ...section,
-        count: filteredSection.count,
-        nodes: filteredSection.nodes,
-        rows: getCachedFlattenBranchManagerTreeRows(
-          branchManagerTreeRowsCacheRef.current,
-          filteredSection.nodes,
-          collapsedBranchManagerNodeKeys,
-          collapsedNodeKeySignature,
-        ),
-      });
-    }
-    return nextSections;
-  }, [branchManagerBaseSections, collapsedBranchManagerNodeKeys, deferredBranchManagerQuery, isBranchManagerOpen]);
-
-  const filteredBranchManagerQuickActions = useMemo<BranchManagerQuickAction[]>(() => {
-    if (!isBranchManagerOpen) {
-      return [];
-    }
-
-    const currentBranchName = currentGitBranch?.name ?? gitRepositorySummary?.currentBranch ?? '';
-    const actions = [
-      {
-        id: 'update-project',
-        label: t('codePane.gitUpdateProject'),
-        shortcut: '',
-        icon: RefreshCw,
-        disabled: false,
-        onSelect: () => {
-          closeBranchManager();
-          void updateGitProject();
-        },
-      },
-      {
-        id: 'commit',
-        label: t('codePane.gitCommitDots'),
-        shortcut: '',
-        icon: GitCommitHorizontal,
-        disabled: false,
-        onSelect: () => {
-          closeBranchManager();
-          window.setTimeout(() => {
-            void commitGitChangesFromPrompt();
-          }, 0);
-        },
-      },
-      {
-        id: 'push',
-        label: t('codePane.gitPushDots'),
-        shortcut: isMac ? '⌘⇧K' : 'Ctrl+Shift+K',
-        icon: GitBranch,
-        disabled: !currentBranchName,
-        onSelect: () => {
-          closeBranchManager();
-          void pushGitBranch({
-            branchName: currentBranchName || undefined,
-            setUpstream: !currentGitBranch?.upstream,
-          });
-        },
-      },
-      {
-        id: 'new-branch',
-        label: t('codePane.gitNewBranchDots'),
-        shortcut: isMac ? '⌘⌥N' : 'Ctrl+Alt+N',
-        icon: Plus,
-        disabled: false,
-        onSelect: () => {
-          closeBranchManager();
-          openActionInputDialog({
-            kind: 'checkout-branch',
-            initialValue: '',
-            createBranch: true,
-            startPoint: currentBranchName || undefined,
-          }, { deferred: true });
-        },
-      },
-      {
-        id: 'checkout-revision',
-        label: t('codePane.gitCheckoutTagOrRevision'),
-        shortcut: '',
-        icon: GitCompareArrows,
-        disabled: false,
-        onSelect: () => {
-          closeBranchManager();
-          void checkoutGitRevisionFromPrompt();
-        },
-      },
-    ];
-    const query = deferredBranchManagerQuery.trim().toLowerCase();
-    if (!query) {
-      return actions;
-    }
-
-    const filteredActions: BranchManagerQuickAction[] = [];
-    for (const action of actions) {
-      if (
-        action.label.toLowerCase().includes(query)
-        || action.id.toLowerCase().includes(query)
-      ) {
-        filteredActions.push(action);
-      }
-    }
-    return filteredActions;
-  }, [
-    checkoutGitBranch,
-    checkoutGitRevisionFromPrompt,
-    commitGitChangesFromPrompt,
-    currentGitBranch?.name,
-    currentGitBranch?.upstream,
-    closeBranchManager,
-    deferredBranchManagerQuery,
-    gitRepositorySummary?.currentBranch,
-    isBranchManagerOpen,
-    isMac,
-    pushGitBranch,
-    t,
-    updateGitProject,
-  ]);
-
-  const toggleBranchManagerNode = useCallback((nodeKey: string) => {
-    setCollapsedBranchManagerNodeKeys((currentKeys) => {
-      const nextKeys = new Set(currentKeys);
-      if (nextKeys.has(nodeKey)) {
-        nextKeys.delete(nodeKey);
-      } else {
-        nextKeys.add(nodeKey);
-      }
-      return nextKeys;
-    });
-  }, []);
-
   const checkoutBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
-    closeBranchManager();
     if (branch.kind === 'remote') {
       void checkoutGitBranch({
         branchName: getTrackingLocalBranchName(branch.name),
@@ -22285,33 +22335,31 @@ export const CodePane: React.FC<CodePaneProps> = ({
         createBranch: false,
       });
     }
-  }, [checkoutGitBranch, closeBranchManager]);
+  }, [checkoutGitBranch]);
 
   const renameBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
     if (branch.kind !== 'local') {
       return;
     }
 
-    closeBranchManager();
     openActionInputDialog({
       kind: 'rename-branch',
       branchName: branch.name,
       initialValue: branch.name,
     }, { deferred: true });
-  }, [closeBranchManager, openActionInputDialog]);
+  }, [openActionInputDialog]);
 
   const deleteBranchFromManager = useCallback((branch: CodePaneGitBranchEntry) => {
     if (branch.kind !== 'local' || branch.current) {
       return;
     }
 
-    closeBranchManager();
     openActionConfirmDialog({
       kind: 'delete-branch',
       branchName: branch.name,
       force: !branch.mergedIntoCurrent,
     }, { deferred: true });
-  }, [closeBranchManager, openActionConfirmDialog]);
+  }, [openActionConfirmDialog]);
 
   const activeFileStatusLabel = useMemo(() => {
     if (!activeFilePath) {
@@ -22325,38 +22373,100 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return activeFileDisplayPath;
   }, [activeFileDisplayPath, activeFilePath, rootPath, t]);
 
+  const handleBranchManagerUpdateProject = useCallback(() => {
+    void updateGitProject();
+  }, [updateGitProject]);
+
+  const handleBranchManagerOpenCommit = useCallback(() => {
+    window.setTimeout(() => {
+      void commitGitChangesFromPrompt();
+    }, 0);
+  }, [commitGitChangesFromPrompt]);
+
+  const handleBranchManagerPush = useCallback(() => {
+    const currentBranchName = currentGitBranch?.name ?? gitRepositorySummary?.currentBranch ?? '';
+    if (!currentBranchName) {
+      return;
+    }
+
+    void pushGitBranch({
+      branchName: currentBranchName,
+      setUpstream: !currentGitBranch?.upstream,
+    });
+  }, [currentGitBranch?.name, currentGitBranch?.upstream, gitRepositorySummary?.currentBranch, pushGitBranch]);
+
+  const handleBranchManagerCreateBranch = useCallback(() => {
+    const currentBranchName = currentGitBranch?.name ?? gitRepositorySummary?.currentBranch ?? '';
+    openActionInputDialog({
+      kind: 'checkout-branch',
+      initialValue: '',
+      createBranch: true,
+      startPoint: currentBranchName || undefined,
+    }, { deferred: true });
+  }, [currentGitBranch?.name, gitRepositorySummary?.currentBranch, openActionInputDialog]);
+
+  const branchManagerControl = useMemo(() => (
+    <BranchManagerControl
+      gitBranches={gitBranches}
+      gitBranchesError={gitBranchesError}
+      gitSummaryBranchLabel={gitSummaryBranchLabel}
+      isGitBranchesLoading={isGitBranchesLoading}
+      isMac={isMac}
+      canPushBranch={Boolean(currentGitBranch?.name || gitRepositorySummary?.currentBranch)}
+      contextMenuContentClassName={contextMenuContentClassName}
+      contextMenuDangerItemClassName={contextMenuDangerItemClassName}
+      contextMenuItemClassName={contextMenuItemClassName}
+      onRefresh={handleBranchManagerRefresh}
+      onOpenWorkbench={handleBranchManagerOpenWorkbench}
+      onUpdateProject={handleBranchManagerUpdateProject}
+      onOpenCommit={handleBranchManagerOpenCommit}
+      onPushCurrentBranch={handleBranchManagerPush}
+      onCreateBranch={handleBranchManagerCreateBranch}
+      onCheckoutRevision={checkoutGitRevisionFromPrompt}
+      onCheckoutBranch={checkoutBranchFromManager}
+      onRenameBranch={renameBranchFromManager}
+      onDeleteBranch={deleteBranchFromManager}
+      preventFocus={preventMouseButtonFocus}
+      t={t}
+    />
+  ), [
+    checkoutBranchFromManager,
+    checkoutGitRevisionFromPrompt,
+    contextMenuContentClassName,
+    contextMenuDangerItemClassName,
+    contextMenuItemClassName,
+    currentGitBranch?.name,
+    deleteBranchFromManager,
+    gitBranches,
+    gitBranchesError,
+    gitRepositorySummary?.currentBranch,
+    gitSummaryBranchLabel,
+    handleBranchManagerCreateBranch,
+    handleBranchManagerOpenCommit,
+    handleBranchManagerOpenWorkbench,
+    handleBranchManagerPush,
+    handleBranchManagerRefresh,
+    handleBranchManagerUpdateProject,
+    isGitBranchesLoading,
+    isMac,
+    renameBranchFromManager,
+    t,
+  ]);
+
   const renderedWorkspaceHeader = useMemo(() => (
     <CodePaneWorkspaceHeader
-      branchManagerRef={branchManagerRef}
-      branchManagerSearchInputRef={branchManagerSearchInputRef}
-      branchManagerQuery={branchManagerQuery}
-      branchManagerQuickActions={filteredBranchManagerQuickActions}
-      branchManagerVisibleSections={branchManagerVisibleSections}
+      branchManagerControl={branchManagerControl}
       canNavigateBack={canNavigateBack}
       canNavigateForward={canNavigateForward}
-      collapsedBranchManagerNodeKeys={collapsedBranchManagerNodeKeys}
       contextMenuContentClassName={contextMenuContentClassName}
       contextMenuDangerItemClassName={contextMenuDangerItemClassName}
       contextMenuItemClassName={contextMenuItemClassName}
       editorActionMenuSections={editorActionMenuSections}
-      gitBranchesCount={gitBranches.length}
-      gitBranchesError={gitBranchesError}
       gitOperationLabel={gitOperationLabel}
       gitRepositorySummary={gitRepositorySummary}
-      gitSummaryBranchLabel={gitSummaryBranchLabel}
-      isBranchManagerOpen={isBranchManagerOpen}
-      isGitBranchesLoading={isGitBranchesLoading}
       isRefreshing={isRefreshing}
       activeFilePath={activeFilePath}
       onClose={onClose}
-      onBranchManagerToggle={handleBranchManagerToggle}
-      onBranchManagerQueryChange={handleBranchManagerQueryChange}
-      onBranchManagerRefresh={handleBranchManagerRefresh}
-      onBranchManagerOpenWorkbench={handleBranchManagerOpenWorkbench}
-      onBranchManagerToggleNode={toggleBranchManagerNode}
-      onBranchManagerCheckoutBranch={checkoutBranchFromManager}
-      onBranchManagerRenameBranch={renameBranchFromManager}
-      onBranchManagerDeleteBranch={deleteBranchFromManager}
       onNavigateBack={handleNavigateBackClick}
       onNavigateForward={handleNavigateForwardClick}
       onOpenSearchEverywhere={handleOpenSearchEverywhereAll}
@@ -22370,42 +22480,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
     />
   ), [
     activeFilePath,
-    branchManagerQuery,
-    branchManagerVisibleSections,
+    branchManagerControl,
     canNavigateBack,
     canNavigateForward,
-    checkoutBranchFromManager,
-    collapsedBranchManagerNodeKeys,
     contextMenuContentClassName,
     contextMenuDangerItemClassName,
     contextMenuItemClassName,
-    deleteBranchFromManager,
     editorActionMenuSections,
-    filteredBranchManagerQuickActions,
-    handleBranchManagerOpenWorkbench,
-    handleBranchManagerQueryChange,
-    handleBranchManagerRefresh,
-    handleBranchManagerToggle,
     handleNavigateBackClick,
     handleNavigateForwardClick,
     handleOpenSearchEverywhereAll,
-    gitBranches.length,
-    gitBranchesError,
     gitOperationLabel,
     gitRepositorySummary,
-    gitSummaryBranchLabel,
     handlePaneClose,
     handleSaveActiveFile,
     handleToggleActiveDiffView,
     handleWorkspaceRefreshClick,
-    isBranchManagerOpen,
-    isGitBranchesLoading,
     isRefreshing,
     onClose,
     preventMouseButtonFocus,
-    renameBranchFromManager,
     t,
-    toggleBranchManagerNode,
     viewMode,
   ]);
 
