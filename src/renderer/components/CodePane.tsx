@@ -384,6 +384,21 @@ type SearchEverywhereItem = {
   execute: () => void | Promise<void>;
 };
 
+type CodeActionMenuLoadResult = {
+  items: CodePaneCodeAction[];
+  error: string | null;
+};
+
+type CodeActionMenuExecuteResult = {
+  close: boolean;
+  error?: string | null;
+};
+
+type CodeActionMenuControllerHandle = {
+  open: () => Promise<void>;
+  close: () => void;
+};
+
 type InspectorPanelMode = 'outline' | 'hierarchy';
 
 type InspectorTargetContext = {
@@ -1760,6 +1775,165 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
     </div>
   );
 });
+
+const CodeActionMenuController = React.memo(React.forwardRef<CodeActionMenuControllerHandle, {
+  onLoadActions: () => Promise<CodeActionMenuLoadResult | null>;
+  onExecuteAction: (action: CodePaneCodeAction) => Promise<CodeActionMenuExecuteResult>;
+  t: ReturnType<typeof useI18n>['t'];
+}>(function CodeActionMenuController({
+  onLoadActions,
+  onExecuteAction,
+  t,
+}, ref) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [items, setItems] = useState<CodePaneCodeAction[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const requestIdRef = useRef(0);
+  const itemsRef = useRef<CodePaneCodeAction[]>([]);
+  const selectedIndexRef = useRef(0);
+
+  const close = useCallback(() => {
+    requestIdRef.current += 1;
+    setIsOpen((currentOpen) => (currentOpen ? false : currentOpen));
+    setItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
+    setError((currentError) => (currentError === null ? currentError : null));
+    setIsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+    setSelectedIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
+  }, []);
+
+  const executeAction = useCallback((action: CodePaneCodeAction | undefined) => {
+    if (!action || action.disabledReason) {
+      return;
+    }
+
+    void onExecuteAction(action).then((result) => {
+      if (result.close) {
+        close();
+        return;
+      }
+      if (result.error !== undefined) {
+        setError((currentError) => (
+          currentError === result.error ? currentError : result.error ?? null
+        ));
+      }
+    });
+  }, [close, onExecuteAction]);
+
+  const open = useCallback(async () => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    setIsOpen((currentOpen) => (currentOpen ? currentOpen : true));
+    setItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
+    setError((currentError) => (currentError === null ? currentError : null));
+    setIsLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setSelectedIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
+
+    const result = await onLoadActions();
+    if (requestIdRef.current !== requestId) {
+      return;
+    }
+
+    if (!result) {
+      close();
+      return;
+    }
+
+    startTransition(() => {
+      setItems((currentItems) => (
+        areCodeActionListsEqual(currentItems, result.items) ? currentItems : result.items
+      ));
+    });
+    setError((currentError) => (
+      currentError === result.error ? currentError : result.error
+    ));
+    setIsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+  }, [close, onLoadActions]);
+
+  React.useImperativeHandle(ref, () => ({
+    open,
+    close,
+  }), [close, open]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    selectedIndexRef.current = selectedIndex;
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setSelectedIndex((currentIndex) => (
+          itemsRef.current.length === 0
+            ? 0
+            : Math.min(currentIndex + 1, itemsRef.current.length - 1)
+        ));
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setSelectedIndex((currentIndex) => (
+          itemsRef.current.length === 0
+            ? 0
+            : Math.max(currentIndex - 1, 0)
+        ));
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        const selectedAction = itemsRef.current[selectedIndexRef.current];
+        if (selectedAction) {
+          event.preventDefault();
+          executeAction(selectedAction);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [executeAction, isOpen]);
+
+  const handleClose = useCallback(() => {
+    close();
+  }, [close]);
+
+  const handleHoverIndex = useCallback((index: number) => {
+    setSelectedIndex(index);
+  }, []);
+
+  const handleExecuteAction = useCallback((action: CodePaneCodeAction) => {
+    executeAction(action);
+  }, [executeAction]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  return (
+    <CodeActionMenuDialog
+      items={items}
+      selectedIndex={selectedIndex}
+      error={error}
+      isLoading={isLoading}
+      onClose={handleClose}
+      onHoverIndex={handleHoverIndex}
+      onExecuteAction={handleExecuteAction}
+      t={t}
+    />
+  );
+}));
 
 const BranchManagerControl = React.memo(function BranchManagerControl({
   gitBranches,
@@ -7403,11 +7577,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     canNavigateBack: false,
     canNavigateForward: false,
   });
-  const [isCodeActionMenuOpen, setIsCodeActionMenuOpen] = useState(false);
-  const [codeActionItems, setCodeActionItems] = useState<CodePaneCodeAction[]>([]);
-  const [isCodeActionMenuLoading, setIsCodeActionMenuLoading] = useState(false);
-  const [codeActionMenuError, setCodeActionMenuError] = useState<string | null>(null);
-  const [selectedCodeActionIndex, setSelectedCodeActionIndex] = useState(0);
   const [bottomPanelMode, setBottomPanelMode] = useState<BottomPanelMode | null>(null);
   const [activeGitWorkbenchTab, setActiveGitWorkbenchTab] = useState<GitToolWindowTab>('log');
   const [breakpoints, setBreakpoints] = useState<CodePaneBreakpoint[]>(() => normalizeBreakpoints(pane.code?.breakpoints));
@@ -7587,10 +7756,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const openFileStructurePanelRef = useRef<() => void>(() => {});
   const openHierarchyPanelRef = useRef<(mode: HierarchyMode) => void>(() => {});
   const saveFileRef = useRef<(filePath: string, options?: SaveFileOptions) => Promise<boolean>>(async () => true);
+  const codeActionMenuControllerRef = useRef<CodeActionMenuControllerHandle | null>(null);
   const openCodeActionMenuRef = useRef<() => Promise<void>>(async () => {});
   const loadDebugSessionDetailsRef = useRef<(sessionId: string | null) => Promise<void>>(async () => {});
   const toggleBreakpointRef = useRef<(filePath: string, lineNumber: number) => Promise<void>>(async () => {});
-  const runSelectedCodeActionRef = useRef<(action: CodePaneCodeAction | undefined) => Promise<void>>(async () => {});
   const hierarchyRequestIdRef = useRef(0);
   const documentSymbolsRequestIdRef = useRef(0);
   const semanticRequestIdRef = useRef(0);
@@ -16201,9 +16370,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setContentSearchResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
       setIsSearchEverywhereOpen((currentOpen) => (currentOpen ? false : currentOpen));
       setSearchEverywhereQuery((currentQuery) => (currentQuery === '' ? currentQuery : ''));
-      setCodeActionItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
-      setIsCodeActionMenuOpen((currentOpen) => (currentOpen ? false : currentOpen));
-      setCodeActionMenuError((currentError) => (currentError === null ? currentError : null));
+      codeActionMenuControllerRef.current?.close();
       setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
       setRunTargets((currentTargets) => (currentTargets.length === 0 ? currentTargets : []));
       setIsRunTargetsLoading((currentLoading) => (currentLoading ? false : currentLoading));
@@ -18531,12 +18698,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }, 0);
   }, [openCommitWindow]);
 
-  const closeCodeActionMenu = useCallback(() => {
-    setIsCodeActionMenuOpen((currentOpen) => (currentOpen ? false : currentOpen));
-    setCodeActionItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
-    setCodeActionMenuError((currentError) => (currentError === null ? currentError : null));
-  }, []);
-
   const selectedGitHunksRelativePath = useMemo(
     () => selectedGitHunksPath ? getRelativePath(rootPath, selectedGitHunksPath) : null,
     [rootPath, selectedGitHunksPath],
@@ -19548,7 +19709,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const { canNavigateBack, canNavigateForward } = navigationAvailability;
   const selectedSearchEverywhereItem = searchEverywhereItems[searchEverywhereSelectedIndex] ?? null;
-  const selectedCodeAction = codeActionItems[selectedCodeActionIndex] ?? null;
   const visibleDebugSessions = debugSessions;
   const debugTargets = useMemo(() => {
     if (bottomPanelMode !== 'debug') {
@@ -19690,11 +19850,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           return;
         }
 
-        if (isCodeActionMenuOpen) {
-          event.preventDefault();
-          closeCodeActionMenu();
-          return;
-        }
+        codeActionMenuControllerRef.current?.close();
       }
 
       if (hasPrimaryModifier && !event.shiftKey && event.key.toLowerCase() === 'p') {
@@ -19760,54 +19916,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [
-    closeCodeActionMenu,
     closeSearchEverywhere,
     isActive,
-    isCodeActionMenuOpen,
     isMac,
     isSearchEverywhereOpen,
     navigateProblem,
     openSearchEverywhere,
     toggleQuickDocumentation,
   ]);
-
-  useEffect(() => {
-    if (!isCodeActionMenuOpen) {
-      return undefined;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        setSelectedCodeActionIndex((currentIndex) => (
-          codeActionItems.length === 0
-            ? 0
-            : Math.min(currentIndex + 1, codeActionItems.length - 1)
-        ));
-        return;
-      }
-
-      if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        setSelectedCodeActionIndex((currentIndex) => (
-          codeActionItems.length === 0
-            ? 0
-            : Math.max(currentIndex - 1, 0)
-        ));
-        return;
-      }
-
-      if (event.key === 'Enter' && selectedCodeAction) {
-        event.preventDefault();
-        void runSelectedCodeActionRef.current(selectedCodeAction);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [codeActionItems.length, isCodeActionMenuOpen, selectedCodeAction]);
 
   useEffect(() => {
     const handleRunSessionChanged = (_event: unknown, payload: CodePaneRunSessionChangedPayload) => {
@@ -20035,10 +20151,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     goToImplementationAtCursorRef.current = goToImplementationAtCursor;
   }, [goToImplementationAtCursor]);
 
-  const openCodeActionMenu = useCallback(async () => {
+  const loadCodeActionMenuItems = useCallback(async (): Promise<CodeActionMenuLoadResult | null> => {
     const context = getActiveEditorContext();
     if (!context) {
-      return;
+      return null;
     }
 
     const wordRange = context.model.getWordAtPosition(context.position);
@@ -20056,12 +20172,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
           endColumn: context.position.column + 1,
         };
 
-    setIsCodeActionMenuOpen((currentOpen) => (currentOpen ? currentOpen : true));
-    setCodeActionItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
-    setCodeActionMenuError((currentError) => (currentError === null ? currentError : null));
-    setIsCodeActionMenuLoading((currentLoading) => (currentLoading ? currentLoading : true));
-    setSelectedCodeActionIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
-
     const response = await window.electronAPI.codePaneGetCodeActions({
       rootPath,
       filePath: context.filePath,
@@ -20069,27 +20179,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
       range: requestRange,
     });
 
-    startTransition(() => {
-      const nextItems = response.success ? (response.data ?? []) : [];
-      setCodeActionItems((currentItems) => (
-        areCodeActionListsEqual(currentItems, nextItems) ? currentItems : nextItems
-      ));
-    });
-    const nextError = response.success ? null : (response.error || t('common.retry'));
-    setCodeActionMenuError((currentError) => (
-      currentError === nextError ? currentError : nextError
-    ));
-    setIsCodeActionMenuLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
+    return {
+      items: response.success ? (response.data ?? []) : [],
+      error: response.success ? null : (response.error || t('common.retry')),
+    };
   }, [getActiveEditorContext, rootPath, t]);
+
+  const openCodeActionMenu = useCallback(async () => {
+    await codeActionMenuControllerRef.current?.open();
+  }, []);
 
   useEffect(() => {
     openCodeActionMenuRef.current = openCodeActionMenu;
   }, [openCodeActionMenu]);
 
-  const runSelectedCodeAction = useCallback(async (action: CodePaneCodeAction | undefined) => {
+  const runCodeActionFromMenu = useCallback(async (action: CodePaneCodeAction) => {
     const context = getActiveEditorContext();
-    if (!context || !action || action.disabledReason) {
-      return;
+    if (!context || action.disabledReason) {
+      return {
+        close: true,
+      };
     }
 
     if (isRefactorCodeAction(action)) {
@@ -20101,8 +20210,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
         actionId: action.id,
         title: action.title,
       });
-      closeCodeActionMenu();
-      return;
+      return {
+        close: true,
+      };
     }
 
     const response = await window.electronAPI.codePaneRunCodeAction({
@@ -20113,17 +20223,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
 
     if (!response.success) {
-      setCodeActionMenuError(response.error || t('common.retry'));
-      return;
+      return {
+        close: false,
+        error: response.error || t('common.retry'),
+      };
     }
 
-    await applyLanguageTextEdits(response.data ?? []);
-    closeCodeActionMenu();
-  }, [applyLanguageTextEdits, closeCodeActionMenu, getActiveEditorContext, prepareRefactorPreview, rootPath, t]);
-
-  useEffect(() => {
-    runSelectedCodeActionRef.current = runSelectedCodeAction;
-  }, [runSelectedCodeAction]);
+    const didApply = await applyLanguageTextEdits(response.data ?? []);
+    return {
+      close: didApply,
+      error: didApply ? null : t('common.retry'),
+    };
+  }, [applyLanguageTextEdits, getActiveEditorContext, prepareRefactorPreview, rootPath, t]);
 
   const loadRunTargets = useCallback(async () => {
     const requestKey = `run-targets:${rootPath}`;
@@ -21480,18 +21591,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     closeSearchEverywhere();
     void item.execute();
   }, [closeSearchEverywhere]);
-
-  const handleCloseCodeActionMenu = useCallback(() => {
-    closeCodeActionMenu();
-  }, [closeCodeActionMenu]);
-
-  const handleCodeActionHoverIndex = useCallback((index: number) => {
-    setSelectedCodeActionIndex(index);
-  }, []);
-
-  const handleExecuteCodeAction = useCallback((action: CodePaneCodeAction) => {
-    void runSelectedCodeAction(action);
-  }, [runSelectedCodeAction]);
 
   const handleToggleFormatOnSave = useCallback(() => {
     persistSavePipelineState({
@@ -23284,18 +23383,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
         />
       )}
 
-      {isCodeActionMenuOpen && (
-        <CodeActionMenuDialog
-          items={codeActionItems}
-          selectedIndex={selectedCodeActionIndex}
-          error={codeActionMenuError}
-          isLoading={isCodeActionMenuLoading}
-          onClose={handleCloseCodeActionMenu}
-          onHoverIndex={handleCodeActionHoverIndex}
-          onExecuteAction={handleExecuteCodeAction}
-          t={t}
-        />
-      )}
+      <CodeActionMenuController
+        ref={codeActionMenuControllerRef}
+        onLoadActions={loadCodeActionMenuItems}
+        onExecuteAction={runCodeActionFromMenu}
+        t={t}
+      />
       </div>
     </>
   );
