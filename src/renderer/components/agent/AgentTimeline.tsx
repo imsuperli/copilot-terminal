@@ -145,7 +145,7 @@ function MessageActionBar({
           aria-label={rollbackLabel}
           onMouseDown={preventMouseButtonFocus}
           onClick={onRollback}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-zinc-800/90 bg-zinc-950/75 text-zinc-400 transition-colors duration-150 hover:border-zinc-700 hover:text-zinc-100"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors duration-150 hover:border-[rgb(var(--ring))] hover:text-[rgb(var(--foreground))]"
         >
           <Undo2 size={13} strokeWidth={1.9} />
         </button>
@@ -156,7 +156,7 @@ function MessageActionBar({
         aria-label={copyLabel}
         onMouseDown={preventMouseButtonFocus}
         onClick={onCopy}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-zinc-800/90 bg-zinc-950/75 text-zinc-400 transition-colors duration-150 hover:border-zinc-700 hover:text-zinc-100"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors duration-150 hover:border-[rgb(var(--ring))] hover:text-[rgb(var(--foreground))]"
       >
         {copied ? <Check size={13} strokeWidth={2.2} /> : <Copy size={13} strokeWidth={1.9} />}
       </button>
@@ -175,12 +175,12 @@ function EventShell({
 }) {
   return (
     <div className="flex gap-3">
-      <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+      <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_80%,transparent)] text-[rgb(var(--foreground))]">
         {icon}
       </div>
       <div className="min-w-0 flex-1 pt-1">
         {title ? (
-          <div className="mb-3 text-sm font-medium text-zinc-100">{title}</div>
+          <div className="mb-3 text-sm font-medium text-[rgb(var(--foreground))]">{title}</div>
         ) : null}
         {children}
       </div>
@@ -460,7 +460,7 @@ export function AgentTimeline({
                 return (
                   <div key={`reasoning-${section.event.id}`}>
                     {hasNonReasoningSection && section.event.id !== activeThinkingEventId && (
-                      <div className="mb-1.5 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
+                      <div className="mb-1.5 text-[11px] font-medium tracking-[0.02em] text-[rgb(var(--muted-foreground))]">
                         Thinking
                       </div>
                     )}
@@ -484,7 +484,7 @@ export function AgentTimeline({
                           onCopy={() => onCopyMessage(section.event.id, section.event.content)}
                         />
                       </div>
-                      <div className="space-y-2 pr-10 text-[15px] leading-6 text-zinc-200">
+                      <div className="space-y-2 pr-10 text-[15px] leading-6 text-[rgb(var(--foreground))]">
                         {renderMarkdownLike(section.event.content)}
                       </div>
                     </div>
@@ -493,7 +493,7 @@ export function AgentTimeline({
               case 'tool-call-group':
                 return (
                   <div key={`tool-call-group-${sectionIndex}`}>
-                    <div className="mb-2 text-[11px] font-medium tracking-[0.02em] text-zinc-500">
+                    <div className="mb-2 text-[11px] font-medium tracking-[0.02em] text-[rgb(var(--muted-foreground))]">
                       {section.events.length > 1 ? 'Tool Calls' : 'Tool Call'}
                     </div>
                     <ToolCallBlock items={section.events} />
@@ -502,7 +502,7 @@ export function AgentTimeline({
               case 'approval-request':
                 return task.pendingApproval?.approvalId === section.event.approvalId ? (
                   <div key={`approval-request-${section.event.id}`}>
-                    <div className="mb-3 text-[11px] font-medium tracking-[0.02em] text-zinc-500">Approval</div>
+                    <div className="mb-3 text-[11px] font-medium tracking-[0.02em] text-[rgb(var(--muted-foreground))]">Approval</div>
                     <ApprovalCard
                       approval={task.pendingApproval}
                       onApprove={() => onApprove(section.event.approvalId)}
@@ -513,7 +513,7 @@ export function AgentTimeline({
               case 'interaction-request':
                 return task.pendingInteraction?.interactionId === section.event.interactionId ? (
                   <div key={`interaction-request-${section.event.id}`}>
-                    <div className="mb-3 text-[11px] font-medium tracking-[0.02em] text-zinc-500">Interaction Needed</div>
+                    <div className="mb-3 text-[11px] font-medium tracking-[0.02em] text-[rgb(var(--muted-foreground))]">Interaction Needed</div>
                     <InteractionPrompt
                       interaction={task.pendingInteraction}
                       onSubmit={(value) => onSubmitInteraction(section.event.interactionId, value)}
@@ -526,7 +526,7 @@ export function AgentTimeline({
                 return (
                   <div
                     key={`${section.kind}-${section.event.id}`}
-                    className="rounded-[18px] border border-zinc-800/70 bg-zinc-900/50 px-4 py-2 text-xs text-zinc-400"
+                    className="rounded-[18px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_54%,transparent)] px-4 py-2 text-xs text-[rgb(var(--muted-foreground))]"
                   >
                     {section.kind === 'approval-result'
                       ? `Approval ${section.event.approved ? 'granted' : 'rejected'}`
@@ -561,8 +561,8 @@ export function AgentTimeline({
                 onCopy={() => onCopyMessage(event.id, event.content)}
                 onRollback={() => onRollbackMessage(event.id, event.content)}
               />
-              <div className="max-w-[78%] rounded-[22px] border border-zinc-700/80 bg-zinc-800/85 px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
-                <div className="space-y-2 text-[15px] leading-6 text-zinc-100">
+              <div className="max-w-[78%] rounded-[22px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_88%,transparent)] px-4 py-3 shadow-[0_24px_44px_-36px_rgba(0,0,0,0.95)] sm:max-w-[68%]">
+                <div className="space-y-2 text-[15px] leading-6 text-[rgb(var(--foreground))]">
                   {renderMarkdownLike(event.content)}
                 </div>
               </div>
@@ -598,7 +598,7 @@ export function AgentTimeline({
                     onCopy={() => onCopyMessage(event.id, event.content)}
                   />
                 </div>
-                <div className="space-y-2 pr-10 text-[15px] leading-6 text-zinc-200">
+                <div className="space-y-2 pr-10 text-[15px] leading-6 text-[rgb(var(--foreground))]">
                   {renderMarkdownLike(event.content)}
                 </div>
               </div>
@@ -608,8 +608,8 @@ export function AgentTimeline({
       case 'tool-result':
         return (
           <EventShell icon={<TerminalSquare size={15} />} title="Tool result">
-            <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/75 px-4 py-3 text-zinc-200">
-              <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
+            <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-4 py-3 text-[rgb(var(--foreground))]">
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-[rgb(var(--foreground))]">
                 {event.content}
               </pre>
             </div>
@@ -618,13 +618,13 @@ export function AgentTimeline({
       case 'command':
         return (
           <EventShell icon={<TerminalSquare size={15} />} title={`Remote command · ${event.host}`}>
-            <div className="rounded-[18px] border border-zinc-800/80 bg-zinc-900/70 px-4 py-3">
-              <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">{event.status}</div>
-              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-zinc-100">
+            <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-4 py-3">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-[rgb(var(--muted-foreground))]">{event.status}</div>
+              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-[rgb(var(--foreground))]">
                 {event.command}
               </pre>
               {typeof event.exitCode === 'number' && (
-                <div className="mt-3 text-xs text-zinc-400">exit code: {event.exitCode}</div>
+                <div className="mt-3 text-xs text-[rgb(var(--muted-foreground))]">exit code: {event.exitCode}</div>
               )}
             </div>
           </EventShell>
@@ -637,7 +637,7 @@ export function AgentTimeline({
         );
       case 'system-notice':
         return (
-          <div className="rounded-[20px] border border-zinc-800/80 bg-zinc-900/60 px-4 py-3 text-sm leading-7 text-zinc-300">
+          <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_62%,transparent)] px-4 py-3 text-sm leading-7 text-[rgb(var(--muted-foreground))]">
             {event.content}
           </div>
         );
