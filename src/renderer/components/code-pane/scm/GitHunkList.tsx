@@ -41,7 +41,7 @@ const GitHunkRows = React.memo(function GitHunkRows({
 }) {
   if (hunks.length === 0) {
     return (
-      <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/35 px-2.5 py-2 text-[11px] text-zinc-500">
+      <div className="rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_58%,transparent)] px-2.5 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
         {staged ? t('codePane.gitNoStagedHunks') : t('codePane.gitNoUnstagedHunks')}
       </div>
     );
@@ -54,9 +54,9 @@ const GitHunkRows = React.memo(function GitHunkRows({
         const hiddenLineCount = Math.max(0, hunk.lines.length - visibleLines.length);
 
         return (
-          <div key={hunk.id} className="overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-950/35">
-            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 px-2.5 py-1.5">
-              <div className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-400">
+          <div key={hunk.id} className="overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_58%,transparent)]">
+            <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-2.5 py-1.5">
+              <div className="min-w-0 flex-1 truncate font-mono text-[10px] text-[rgb(var(--muted-foreground))]">
                 {hunk.header}
               </div>
               <div className="flex shrink-0 items-center gap-1">
@@ -97,25 +97,25 @@ const GitHunkRows = React.memo(function GitHunkRows({
             <div className="max-h-40 overflow-auto px-2.5 py-1.5 font-mono text-[10px] leading-5">
               {visibleLines.map((line, index) => {
                 const tone = line.type === 'add'
-                  ? 'bg-emerald-500/[0.06] text-emerald-200'
+                  ? 'bg-[rgb(var(--success)/0.08)] text-[rgb(var(--success))]'
                   : line.type === 'delete'
-                    ? 'bg-red-500/[0.06] text-red-200'
-                    : 'text-zinc-500';
+                    ? 'bg-[rgb(var(--error)/0.08)] text-[rgb(var(--error))]'
+                    : 'text-[rgb(var(--muted-foreground))]';
                 const prefix = line.type === 'add' ? '+' : line.type === 'delete' ? '-' : ' ';
                 return (
                   <div
                     key={`${hunk.id}:${index}`}
                     className={`grid grid-cols-[2.5rem_2.5rem_1rem_minmax(0,1fr)] gap-1 rounded-sm px-1 ${tone}`}
                   >
-                    <span className="select-none text-right text-zinc-600">{line.oldLineNumber ?? ''}</span>
-                    <span className="select-none text-right text-zinc-600">{line.newLineNumber ?? ''}</span>
+                    <span className="select-none text-right text-[rgb(var(--muted-foreground))]/75">{line.oldLineNumber ?? ''}</span>
+                    <span className="select-none text-right text-[rgb(var(--muted-foreground))]/75">{line.newLineNumber ?? ''}</span>
                     <span className="select-none">{prefix}</span>
                     <span className="truncate whitespace-pre">{line.text || ' '}</span>
                   </div>
                 );
               })}
               {hiddenLineCount > 0 && (
-                <div className="px-1 pt-1 text-[10px] text-zinc-500">
+                <div className="px-1 pt-1 text-[10px] text-[rgb(var(--muted-foreground))]">
                   +{hiddenLineCount}
                 </div>
               )}
@@ -142,31 +142,31 @@ export const GitHunkList = React.memo(function GitHunkList({
   return (
     <div className={`${idePopupCardClassName} p-2.5`}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           {t('codePane.gitSelectedFileHunks')}
         </div>
-        {loading && <Loader2 size={12} className="animate-spin text-zinc-500" />}
+        {loading && <Loader2 size={12} className="animate-spin text-[rgb(var(--muted-foreground))]" />}
       </div>
 
       {!selectedPath ? (
-        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/35 px-2.5 py-2 text-xs text-zinc-500">
+        <div className="rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_58%,transparent)] px-2.5 py-2 text-xs text-[rgb(var(--muted-foreground))]">
           {t('codePane.gitSelectChangedFileForHunks')}
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="min-w-0 rounded-lg border border-zinc-800/80 bg-zinc-950/30 px-2.5 py-2">
-            <div className="truncate text-xs font-medium text-zinc-200">{getPathLeafLabel(selectedPath)}</div>
+          <div className="min-w-0 rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_54%,transparent)] px-2.5 py-2">
+            <div className="truncate text-xs font-medium text-[rgb(var(--foreground))]">{getPathLeafLabel(selectedPath)}</div>
             {relativePath && (
-              <div className="truncate text-[10px] text-zinc-500">{relativePath}</div>
+              <div className="truncate text-[10px] text-[rgb(var(--muted-foreground))]">{relativePath}</div>
             )}
           </div>
           {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/[0.08] px-2.5 py-2 text-xs text-red-200">
+            <div className="rounded-lg border border-[rgb(var(--error)/0.30)] bg-[rgb(var(--error)/0.10)] px-2.5 py-2 text-xs text-[rgb(var(--error))]">
               {error}
             </div>
           )}
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-medium text-zinc-400">
+            <div className="flex items-center justify-between text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
               <span>{t('codePane.gitSectionUnstaged')}</span>
               <span className={`rounded-md border px-1.5 py-0.5 text-[10px] ${idePopupBadgeClassName('amber')}`}>{unstagedHunks.length}</span>
             </div>
@@ -180,7 +180,7 @@ export const GitHunkList = React.memo(function GitHunkList({
             />
           </div>
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-medium text-zinc-400">
+            <div className="flex items-center justify-between text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
               <span>{t('codePane.gitSectionStaged')}</span>
               <span className={`rounded-md border px-1.5 py-0.5 text-[10px] ${idePopupBadgeClassName('emerald')}`}>{stagedHunks.length}</span>
             </div>
