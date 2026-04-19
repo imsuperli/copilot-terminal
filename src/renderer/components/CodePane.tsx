@@ -15278,12 +15278,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
           `todo-scan:${rootPath}:${token}`,
           'TODO scan',
           token,
-          async () => await window.electronAPI.codePaneSearchContents({
+          async () => await dedupeProjectRequest(
             rootPath,
-            query: token,
-            limit: 120,
-            maxMatchesPerFile: 20,
-          }),
+            `todo-token:${token}`,
+            async () => await window.electronAPI.codePaneSearchContents({
+              rootPath,
+              query: token,
+              limit: 120,
+              maxMatchesPerFile: 20,
+            }),
+          ),
         ),
       }))());
     }
