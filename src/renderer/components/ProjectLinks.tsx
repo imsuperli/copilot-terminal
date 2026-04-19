@@ -9,6 +9,10 @@ import {
   ideMenuItemClassName,
   IdeMenuItemContent,
 } from './ui/ide-menu';
+import {
+  idePopupIconButtonClassName,
+  idePopupMicroButtonClassName,
+} from './ui/ide-popup';
 
 interface ProjectLinksProps {
   links: ProjectLink[];
@@ -69,7 +73,7 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
               <Tooltip.Trigger asChild>
                 <button
                   onClick={(e) => handleOpenLink(e, link.url)}
-                  className="flex items-center gap-1 px-2 py-1 text-xs text-[rgb(var(--foreground))] bg-[rgb(var(--secondary))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-1 focus:ring-[rgb(var(--ring))] whitespace-nowrap flex-shrink-0"
+                  className={`flex flex-shrink-0 items-center gap-1 whitespace-nowrap ${idePopupMicroButtonClassName('neutral')} px-2 py-1 text-xs`}
                 >
                   <ExternalLink size={12} />
                   <span className="truncate max-w-[60px]">{link.name}</span>
@@ -148,7 +152,7 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
               <button
                 tabIndex={-1}
                 onClick={(e) => handleOpenLink(e, link.url)}
-                className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+                className={`${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]`}
                 title={link.name}
               >
                 <ExternalLink size={14} />

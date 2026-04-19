@@ -22,6 +22,13 @@ import type { SSHSftpDirectoryListing, SSHSftpEntry } from '../../shared/types/s
 import { useI18n } from '../i18n';
 import { ConfirmDialog } from './ConfirmDialog';
 import { AppTooltip } from './ui/AppTooltip';
+import {
+  idePopupActionButtonClassName,
+  idePopupIconButtonClassName,
+} from './ui/ide-popup';
+
+const sshSftpIconButtonClassName = `${idePopupIconButtonClassName} h-6 w-6`;
+const sshSftpToolbarButtonClassName = `${idePopupIconButtonClassName} h-7 w-7`;
 
 interface SSHSftpDialogProps {
   open: boolean;
@@ -650,7 +657,7 @@ export function SSHSftpDialog({
                 <button
                   type="submit"
                   aria-label={t('sshSftpDialog.go')}
-                  className="flex h-6 w-6 items-center justify-center rounded border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                  className={sshSftpIconButtonClassName}
                 >
                   <ArrowRight size={13} />
                 </button>
@@ -701,7 +708,7 @@ export function SSHSftpDialog({
                   type="button"
                   aria-label={t('sshSftpDialog.editPath')}
                   onClick={handleStartPathEditing}
-                  className="flex h-6 w-6 items-center justify-center rounded border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                  className={sshSftpIconButtonClassName}
                 >
                   <Edit2 size={12} />
                 </button>
@@ -771,7 +778,7 @@ export function SSHSftpDialog({
               <button
                 type="submit"
                 disabled={isCreatingDirectory}
-                className="rounded bg-[rgb(var(--primary))] px-2 py-1 text-[11px] font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className={`${idePopupActionButtonClassName('primary')} min-w-0 px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 {isCreatingDirectory ? t('common.creating') : t('common.create')}
               </button>
@@ -985,7 +992,7 @@ function IconToolbarButton({
         className={`flex h-7 w-7 items-center justify-center rounded border transition-colors ${
           active
             ? 'border-[rgb(var(--primary))]/40 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]'
-            : 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
+            : sshSftpToolbarButtonClassName
         } disabled:cursor-not-allowed disabled:opacity-50`}
       >
         {icon}

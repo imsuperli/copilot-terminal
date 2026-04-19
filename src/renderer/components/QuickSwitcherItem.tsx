@@ -10,6 +10,9 @@ import { useIDESettings } from '../hooks/useIDESettings';
 import { formatRelativeTime, useI18n, TranslationParams, TranslationKey } from '../i18n';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import {
+  idePopupIconButtonClassName,
+} from './ui/ide-popup';
 
 interface QuickSwitcherItemProps {
   window: Window;
@@ -54,6 +57,7 @@ function getSelectedBorderColor(status: WindowStatus, archived: boolean): string
 
 const quickSwitcherMatchHighlightClassName =
   'rounded-[4px] bg-[rgb(var(--primary))]/14 px-0.5 text-[rgb(var(--foreground))]';
+const quickSwitcherInlineIconButtonClassName = `${idePopupIconButtonClassName} h-4 w-4 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]`;
 
 /**
  * 快速切换面板列表项组件
@@ -170,7 +174,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
             {canOpenFolder && workingDirectory && (
               <button
                 onClick={handleOpenFolder}
-                className="group flex-shrink-0 rounded p-1 transition-colors hover:bg-[rgb(var(--secondary))]"
+                className="group flex-shrink-0 rounded p-1 transition-colors hover:bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]"
                 title={t('quickSwitcher.openFolderTitle', { path: workingDirectory })}
               >
                 <Folder size={16} className="text-[rgb(var(--muted-foreground))] group-hover:text-[rgb(var(--foreground))]" />
@@ -222,7 +226,7 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
                   <button
                     key={link.name}
                     onClick={(e) => handleOpenLink(e, link.url)}
-                    className="flex h-4 w-4 cursor-pointer items-center justify-center rounded bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                    className={`${quickSwitcherInlineIconButtonClassName} cursor-pointer`}
                     title={link.name}
                   >
                     <ExternalLink size={10} />

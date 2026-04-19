@@ -55,6 +55,7 @@ export const StatusBar = React.memo(function StatusBar({
   const pausedToneClassName = 'text-[rgb(var(--muted-foreground))]';
   const pausedActiveClassName =
     'bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] border-[rgb(var(--border))]';
+  const idleButtonClassName = `border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_76%,transparent)] hover:bg-[rgb(var(--accent))]`;
   const items: { tab: StatusFilterTab; icon: typeof Activity; colorClass: string; activeClass: string; label: string; count: number }[] = [
     { tab: 'status:running', icon: Activity, colorClass: 'text-green-500', activeClass: 'bg-green-500/10 border-green-500/50', label: t('status.running'), count: statusCounts.running },
     { tab: 'status:waiting', icon: Keyboard, colorClass: 'text-[rgb(var(--primary))]', activeClass: 'bg-[rgb(var(--primary))]/10 border-[rgb(var(--primary))]/40', label: t('status.waitingInput'), count: statusCounts.waiting },
@@ -76,7 +77,7 @@ export const StatusBar = React.memo(function StatusBar({
             className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border transition-colors ${
               isActive
                 ? activeClass
-                : 'bg-[rgb(var(--card))] border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))]'
+                : idleButtonClassName
             }`}
           >
             <div className="flex items-center gap-2">

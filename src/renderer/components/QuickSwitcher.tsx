@@ -13,6 +13,7 @@ import { useI18n } from '../i18n';
 import type { SSHProfile } from '../../shared/types/ssh';
 import {
   IdePopupShell,
+  idePopupBadgeClassName,
   idePopupHeaderMetaClassName,
   idePopupOverlayClassName,
   idePopupScrollAreaClassName,
@@ -20,6 +21,8 @@ import {
   idePopupSubtitleClassName,
   idePopupTitleClassName,
 } from './ui/ide-popup';
+
+const QUICK_SWITCHER_KEYCAP_CLASS_NAME = `rounded border px-1.5 py-0.5 ${idePopupBadgeClassName('zinc')}`;
 
 interface QuickSwitcherProps {
   isOpen: boolean;
@@ -387,15 +390,15 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
           <div className="border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-5 py-3 text-xs text-[rgb(var(--muted-foreground))]">
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1">
-                <kbd className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[rgb(var(--muted-foreground))]">↑↓</kbd>
+                <kbd className={QUICK_SWITCHER_KEYCAP_CLASS_NAME}>↑↓</kbd>
                 <span>{t('quickSwitcher.select')}</span>
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[rgb(var(--muted-foreground))]">Enter</kbd>
+                <kbd className={QUICK_SWITCHER_KEYCAP_CLASS_NAME}>Enter</kbd>
                 <span>{t('quickSwitcher.switch')}</span>
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[rgb(var(--muted-foreground))]">Esc</kbd>
+                <kbd className={QUICK_SWITCHER_KEYCAP_CLASS_NAME}>Esc</kbd>
                 <span>{t('quickSwitcher.cancel')}</span>
               </span>
             </div>
