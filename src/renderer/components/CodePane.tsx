@@ -20438,99 +20438,94 @@ export const CodePane: React.FC<CodePaneProps> = ({
   useEffect(() => {
     if (bottomPanelMode === 'run') {
       void loadRunTargets();
+    }
+  }, [bottomPanelMode, loadRunTargets]);
+
+  useEffect(() => {
+    if (bottomPanelMode !== 'debug') {
       return;
     }
 
-    if (bottomPanelMode === 'debug') {
-      void loadRunTargets();
-      void loadDebugSessions();
-      void loadExceptionBreakpoints();
-      return;
-    }
+    void loadRunTargets();
+    void loadDebugSessions();
+    void loadExceptionBreakpoints();
+  }, [bottomPanelMode, loadDebugSessions, loadExceptionBreakpoints, loadRunTargets]);
 
+  useEffect(() => {
     if (bottomPanelMode === 'tests') {
       void loadTests();
-      return;
     }
+  }, [bottomPanelMode, loadTests]);
 
+  useEffect(() => {
     if (bottomPanelMode === 'project') {
       void loadProjectContributions();
-      return;
     }
+  }, [bottomPanelMode, loadProjectContributions]);
 
+  useEffect(() => {
     if (bottomPanelMode === 'outline') {
       void loadDocumentSymbols();
+    }
+  }, [bottomPanelMode, loadDocumentSymbols]);
+
+  useEffect(() => {
+    if (bottomPanelMode !== 'git') {
       return;
     }
 
-    if (bottomPanelMode === 'git') {
-      const shouldLoadBranches = shouldLoadGitBranches();
-      const shouldLoadRebasePlan = shouldLoadGitRebasePlan();
-      refreshVisibleGitWorkbenchData();
-      if (shouldLoadBranches) {
-        void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
-      }
-      if (shouldLoadRebasePlan && gitRebaseBaseRef) {
-        void loadGitRebasePlan(gitRebaseBaseRef);
-      }
-      return;
+    const shouldLoadBranches = shouldLoadGitBranches();
+    const shouldLoadRebasePlan = shouldLoadGitRebasePlan();
+    refreshVisibleGitWorkbenchData();
+    if (shouldLoadBranches) {
+      void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
     }
-
-    if (bottomPanelMode === 'conflict') {
-      if (selectedGitConflictPath) {
-        void loadGitConflictDetails(selectedGitConflictPath);
-      }
-      return;
+    if (shouldLoadRebasePlan && gitRebaseBaseRef) {
+      void loadGitRebasePlan(gitRebaseBaseRef);
     }
+  }, [
+    activeGitWorkbenchTab,
+    bottomPanelMode,
+    gitRebaseBaseRef,
+    loadGitBranches,
+    loadGitRebasePlan,
+    refreshVisibleGitWorkbenchData,
+    shouldLoadGitBranches,
+    shouldLoadGitRebasePlan,
+  ]);
 
-    if (bottomPanelMode === 'history') {
-      if (gitHistory?.targetFilePath) {
-        void loadGitHistory({
-          filePath: gitHistory.targetFilePath,
-          lineNumber: gitHistory.targetLineNumber,
-        });
-      }
-      return;
+  useEffect(() => {
+    if (bottomPanelMode === 'conflict' && selectedGitConflictPath) {
+      void loadGitConflictDetails(selectedGitConflictPath);
     }
+  }, [bottomPanelMode, loadGitConflictDetails, selectedGitConflictPath]);
 
+  useEffect(() => {
+    if (bottomPanelMode === 'history' && gitHistory?.targetFilePath) {
+      void loadGitHistory({
+        filePath: gitHistory.targetFilePath,
+        lineNumber: gitHistory.targetLineNumber,
+      });
+    }
+  }, [bottomPanelMode, gitHistory?.targetFilePath, gitHistory?.targetLineNumber, loadGitHistory]);
+
+  useEffect(() => {
     if (bottomPanelMode === 'workspace') {
       void loadTodoEntries();
-      return;
     }
+  }, [bottomPanelMode, loadTodoEntries]);
 
+  useEffect(() => {
     if (bottomPanelMode === 'hierarchy') {
       void loadHierarchyRoot(selectedHierarchyMode);
-      return;
     }
+  }, [bottomPanelMode, loadHierarchyRoot, selectedHierarchyMode]);
 
+  useEffect(() => {
     if (bottomPanelMode === 'semantic') {
       void loadSemanticSummary();
     }
-  }, [
-    bottomPanelMode,
-    activeGitWorkbenchTab,
-    selectedGitConflictPath,
-    gitRebaseBaseRef,
-    gitHistory?.targetFilePath,
-    gitHistory?.targetLineNumber,
-    loadGitBranches,
-    loadGitConflictDetails,
-    loadGitHistory,
-    loadGitRebasePlan,
-    loadHierarchyRoot,
-    loadDebugSessions,
-    loadExceptionBreakpoints,
-    loadDocumentSymbols,
-    loadTodoEntries,
-    loadProjectContributions,
-    refreshVisibleGitWorkbenchData,
-    loadRunTargets,
-    shouldLoadGitBranches,
-    shouldLoadGitRebasePlan,
-    loadSemanticSummary,
-    loadTests,
-    selectedHierarchyMode,
-  ]);
+  }, [bottomPanelMode, loadSemanticSummary]);
 
   useEffect(() => {
     if (bottomPanelMode !== 'debug') {
