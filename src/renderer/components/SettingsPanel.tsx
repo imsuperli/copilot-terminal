@@ -82,10 +82,12 @@ const APPEARANCE_SKIN_PRESETS: Array<{
     descriptionKey: 'settings.appearance.skin.noneDescription',
     preview: 'linear-gradient(135deg, rgba(120, 120, 120, 0.16) 0%, rgba(120, 120, 120, 0.04) 100%)',
     skin: {
+      presetId: 'none',
       kind: 'none',
       gradient: DEFAULT_APPEARANCE_SETTINGS.skin.gradient,
       dim: 0.62,
       blur: 0,
+      motion: 'none',
     },
   },
   {
@@ -94,10 +96,12 @@ const APPEARANCE_SKIN_PRESETS: Array<{
     descriptionKey: 'settings.appearance.skin.midnightDescription',
     preview: 'radial-gradient(circle at 18% 18%, rgba(86, 130, 255, 0.38), transparent 30%), radial-gradient(circle at 82% 22%, rgba(244, 158, 73, 0.24), transparent 28%), linear-gradient(135deg, #05070a 0%, #111317 52%, #060607 100%)',
     skin: {
+      presetId: 'midnight',
       kind: 'gradient',
       gradient: 'radial-gradient(circle at 15% 12%, rgba(57, 114, 255, 0.30), transparent 28%), radial-gradient(circle at 82% 18%, rgba(245, 158, 11, 0.18), transparent 24%), linear-gradient(135deg, #05070a 0%, #111317 48%, #060607 100%)',
       dim: 0.52,
       blur: 0,
+      motion: 'ambient',
     },
   },
   {
@@ -106,10 +110,12 @@ const APPEARANCE_SKIN_PRESETS: Array<{
     descriptionKey: 'settings.appearance.skin.auroraDescription',
     preview: 'radial-gradient(circle at 22% 18%, rgba(78, 244, 207, 0.32), transparent 28%), radial-gradient(circle at 78% 16%, rgba(103, 164, 255, 0.22), transparent 30%), linear-gradient(140deg, #041417 0%, #0b2c31 54%, #07191d 100%)',
     skin: {
+      presetId: 'aurora',
       kind: 'gradient',
       gradient: 'radial-gradient(circle at 22% 18%, rgba(78, 244, 207, 0.22), transparent 28%), radial-gradient(circle at 78% 16%, rgba(103, 164, 255, 0.16), transparent 30%), linear-gradient(140deg, #041417 0%, #0b2c31 54%, #07191d 100%)',
       dim: 0.44,
       blur: 0,
+      motion: 'ambient',
     },
   },
   {
@@ -118,10 +124,12 @@ const APPEARANCE_SKIN_PRESETS: Array<{
     descriptionKey: 'settings.appearance.skin.paperDescription',
     preview: 'radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.55), transparent 24%), radial-gradient(circle at 84% 20%, rgba(184, 137, 71, 0.20), transparent 26%), linear-gradient(135deg, #efe4d1 0%, #dac9ae 48%, #f6eee2 100%)',
     skin: {
+      presetId: 'paper',
       kind: 'gradient',
       gradient: 'radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.42), transparent 24%), radial-gradient(circle at 84% 20%, rgba(184, 137, 71, 0.14), transparent 26%), linear-gradient(135deg, #efe4d1 0%, #dac9ae 48%, #f6eee2 100%)',
       dim: 0.28,
       blur: 0,
+      motion: 'ambient',
     },
   },
 ];
@@ -138,10 +146,10 @@ function isSameSkinPreset(currentSkin: AppearanceSettings['skin'], presetSkin: A
   }
 
   if (presetSkin.kind === 'image') {
-    return currentSkin.imagePath === presetSkin.imagePath;
+    return currentSkin.presetId === presetSkin.presetId && currentSkin.imagePath === presetSkin.imagePath;
   }
 
-  return currentSkin.gradient === presetSkin.gradient;
+  return currentSkin.presetId === presetSkin.presetId && currentSkin.gradient === presetSkin.gradient;
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) => {
@@ -629,11 +637,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
       await handleAppearanceSettingsChange({
         skin: {
+          presetId: 'custom',
           kind: 'image',
           imagePath: response.data,
           gradient: appearanceSettings.skin.gradient,
           dim: Math.max(appearanceSettings.skin.dim, 0.42),
           blur: 0,
+          motion: 'none',
         },
       });
     } catch (error) {

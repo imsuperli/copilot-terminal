@@ -16,6 +16,8 @@ describe('appearance settings', () => {
         gradient: '',
         dim: 9,
         blur: -1,
+        presetId: 'unknown' as never,
+        motion: 'unknown' as never,
       },
     });
 
@@ -23,8 +25,10 @@ describe('appearance settings', () => {
     expect(normalized.readabilityMode).toBe(DEFAULT_APPEARANCE_SETTINGS.readabilityMode);
     expect(normalized.terminalOpacity).toBe(0.52);
     expect(normalized.skin.kind).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.kind);
+    expect(normalized.skin.presetId).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.presetId);
     expect(normalized.skin.gradient).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.gradient);
     expect(normalized.skin.dim).toBe(0.92);
     expect(normalized.skin.blur).toBe(0);
+    expect(normalized.skin.motion).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.motion);
   });
 });

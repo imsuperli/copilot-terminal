@@ -3,6 +3,17 @@ import type { Settings } from '../../shared/types/workspace';
 import type { AppearanceSettings, AppearanceThemeId } from '../../shared/types/appearance';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 
+interface AppearanceBackdropLayer {
+  className: string;
+  style?: CSSProperties;
+}
+
+interface AppearanceBackdropDescriptor {
+  baseStyle: CSSProperties;
+  layers: AppearanceBackdropLayer[];
+  dimStyle: CSSProperties;
+}
+
 interface AppearanceThemeDefinition {
   app: Record<string, string>;
   terminal: Record<string, string>;
@@ -201,9 +212,26 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   );
   rootStyle.setProperty('--appearance-skin-dim', String(resolveSkinDim(appearance)));
   rootStyle.setProperty('--appearance-skin-blur', `${appearance.skin.blur}px`);
+  rootStyle.setProperty('--appearance-skin-motion-duration', appearance.reduceMotion ? '0s' : '18s');
+  rootStyle.setProperty('--appearance-skin-motion-opacity', appearance.reduceMotion || appearance.skin.motion === 'none' ? '0' : '1');
 }
 
 export function getAppearanceSkinStyle(appearance: AppearanceSettings): CSSProperties {
+  return getAppearanceBackdropDescriptor(appearance).baseStyle;
+}
+
+export function getAppearanceBackdropDescriptor(appearance: AppearanceSettings): AppearanceBackdropDescriptor {
+  const layers = buildAppearanceBackdropLayers(appearance);
+  return {
+    baseStyle: getBackdropBaseStyle(appearance),
+    layers,
+    dimStyle: {
+      opacity: `var(--appearance-skin-dim, ${appearance.skin.dim})`,
+    },
+  };
+}
+
+function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {
   if (appearance.skin.kind === 'none') {
     return {
       background: `rgb(var(--background))`,
@@ -224,6 +252,95 @@ export function getAppearanceSkinStyle(appearance: AppearanceSettings): CSSPrope
     background: appearance.skin.gradient,
     filter: appearance.skin.blur > 0 ? `blur(${appearance.skin.blur}px) scale(1.02)` : undefined,
   };
+}
+
+function buildAppearanceBackdropLayers(appearance: AppearanceSettings): AppearanceBackdropLayer[] {
+  if (appearance.skin.kind === 'none') {
+    return [];
+  }
+
+  if (appearance.skin.kind === 'image' && appearance.skin.imagePath) {
+    return [
+      {
+        className: 'absolute inset-[-8%] will-change-transform',
+        style: {
+          backgroundImage: 'radial-gradient(circle at 20% 16%, rgba(255,255,255,0.10), transparent 22%), radial-gradient(circle at 78% 18%, rgba(255,255,255,0.08), transparent 24%)',
+          opacity: 'var(--appearance-skin-motion-opacity, 0)',
+          animation: appearance.reduceMotion || appearance.skin.motion === 'none'
+            ? undefined
+            : 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
+          mixBlendMode: 'screen',
+        },
+      },
+    ];
+  }
+
+  const presetId = appearance.skin.presetId;
+  if (presetId === 'aurora') {
+    return [
+      {
+        className: 'absolute inset-[-10%] will-change-transform',
+        style: {
+          background: 'radial-gradient(circle at 18% 18%, rgba(94, 234, 212, 0.24), transparent 28%), radial-gradient(circle at 78% 16%, rgba(113, 183, 255, 0.18), transparent 30%)',
+          opacity: 'var(--appearance-skin-motion-opacity, 0)',
+          animation: appearance.reduceMotion || appearance.skin.motion === 'none'
+            ? undefined
+            : 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
+          mixBlendMode: 'screen',
+        },
+      },
+      {
+        className: 'absolute inset-0',
+        style: {
+          background: 'linear-gradient(180deg, rgba(4, 20, 23, 0.05) 0%, rgba(4, 20, 23, 0.36) 100%)',
+        },
+      },
+    ];
+  }
+
+  if (presetId === 'paper') {
+    return [
+      {
+        className: 'absolute inset-0',
+        style: {
+          backgroundImage: 'linear-gradient(rgba(120, 91, 52, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(120, 91, 52, 0.03) 1px, transparent 1px)',
+          backgroundSize: '120px 120px, 120px 120px',
+          opacity: 0.58,
+        },
+      },
+      {
+        className: 'absolute inset-[-6%] will-change-transform',
+        style: {
+          background: 'radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.28), transparent 20%), radial-gradient(circle at 84% 14%, rgba(184, 137, 71, 0.14), transparent 26%)',
+          opacity: 'var(--appearance-skin-motion-opacity, 0)',
+          animation: appearance.reduceMotion || appearance.skin.motion === 'none'
+            ? undefined
+            : 'appearance-skin-float calc(var(--appearance-skin-motion-duration, 18s) * 0.82) ease-in-out infinite alternate',
+          mixBlendMode: 'soft-light',
+        },
+      },
+    ];
+  }
+
+  return [
+    {
+      className: 'absolute inset-[-8%] will-change-transform',
+      style: {
+        background: 'radial-gradient(circle at 18% 18%, rgba(86, 130, 255, 0.18), transparent 28%), radial-gradient(circle at 82% 18%, rgba(244, 158, 73, 0.12), transparent 26%)',
+        opacity: 'var(--appearance-skin-motion-opacity, 0)',
+        animation: appearance.reduceMotion || appearance.skin.motion === 'none'
+          ? undefined
+          : 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
+        mixBlendMode: 'screen',
+      },
+    },
+    {
+      className: 'absolute inset-0',
+      style: {
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.36) 100%)',
+      },
+    },
+  ];
 }
 
 function resolveSkinDim(appearance: AppearanceSettings): number {

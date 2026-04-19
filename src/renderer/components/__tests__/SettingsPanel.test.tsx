@@ -104,10 +104,12 @@ describe('SettingsPanel', () => {
         appearance: {
           themeId: 'paper',
           skin: {
+            presetId: 'none',
             kind: 'none',
             gradient: 'linear-gradient(135deg, #eee 0%, #ddd 100%)',
             dim: 0.62,
             blur: 0,
+            motion: 'none',
           },
           terminalOpacity: 0.94,
           readabilityMode: 'readability',
@@ -145,6 +147,7 @@ describe('SettingsPanel', () => {
     expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
       appearance: expect.objectContaining({
         skin: expect.objectContaining({
+          presetId: 'aurora',
           kind: 'gradient',
           gradient: expect.stringContaining('#041417'),
         }),
@@ -180,6 +183,7 @@ describe('SettingsPanel', () => {
     expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
       appearance: expect.objectContaining({
         skin: expect.objectContaining({
+          presetId: 'custom',
           kind: 'image',
           imagePath: 'C:\\Wallpapers\\nebula.png',
         }),
