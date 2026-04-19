@@ -297,6 +297,8 @@ const CODE_PANE_MAX_RECENT_FILES = 20;
 const CODE_PANE_MAX_RECENT_LOCATIONS = 30;
 const CODE_PANE_DIRECTORY_REFRESH_CONCURRENCY = 6;
 const CODE_PANE_COMPACT_PRELOAD_CONCURRENCY = 4;
+const CODE_PANE_MULTI_FILE_SAVE_CONCURRENCY = 3;
+const CODE_PANE_REFACTOR_APPLY_CONCURRENCY = 4;
 const CODE_PANE_MAX_NAVIGATION_HISTORY = 50;
 const CODE_PANE_MAX_LOCAL_HISTORY_PER_FILE = 12;
 const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
@@ -445,6 +447,19 @@ type PendingGitSnapshotRefresh = {
   rejecters: Array<(error: unknown) => void>;
 };
 type InFlightGitSnapshotRefresh = PendingGitSnapshotRefresh & {
+  promise: Promise<void>;
+};
+type LoadedDirectoriesRefreshOptions = {
+  refreshGitStatus?: boolean;
+  refreshExternalLibraries?: boolean;
+};
+type PendingLoadedDirectoriesRefresh = {
+  refreshGitStatus: boolean;
+  refreshExternalLibraries: boolean;
+  resolvers: Array<() => void>;
+  rejecters: Array<(error: unknown) => void>;
+};
+type InFlightLoadedDirectoriesRefresh = PendingLoadedDirectoriesRefresh & {
   promise: Promise<void>;
 };
 
@@ -7264,6 +7279,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const pendingGitSnapshotRefreshRef = useRef<PendingGitSnapshotRefresh | null>(null);
   const gitSnapshotRefreshTimerRef = useRef<number | null>(null);
   const inFlightGitSnapshotRefreshRef = useRef<InFlightGitSnapshotRefresh | null>(null);
+  const pendingLoadedDirectoriesRefreshRef = useRef<PendingLoadedDirectoriesRefresh | null>(null);
+  const loadedDirectoriesRefreshTimerRef = useRef<number | null>(null);
+  const inFlightLoadedDirectoriesRefreshRef = useRef<InFlightLoadedDirectoriesRefresh | null>(null);
   const pendingFsChangesRef = useRef<CodePaneFsChange[]>([]);
   const isFsChangeFlushQueuedRef = useRef(false);
   const fsChangeFlushTimerRef = useRef<number | null>(null);
@@ -8911,6 +8929,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const inFlightGitSnapshotRefresh = inFlightGitSnapshotRefreshRef.current;
     inFlightGitSnapshotRefreshRef.current = null;
     inFlightGitSnapshotRefresh?.resolvers.forEach((resolve) => resolve());
+    if (loadedDirectoriesRefreshTimerRef.current) {
+      clearTimeout(loadedDirectoriesRefreshTimerRef.current);
+      loadedDirectoriesRefreshTimerRef.current = null;
+    }
+    const pendingLoadedDirectoriesRefresh = pendingLoadedDirectoriesRefreshRef.current;
+    pendingLoadedDirectoriesRefreshRef.current = null;
+    pendingLoadedDirectoriesRefresh?.resolvers.forEach((resolve) => resolve());
+    const inFlightLoadedDirectoriesRefresh = inFlightLoadedDirectoriesRefreshRef.current;
+    inFlightLoadedDirectoriesRefreshRef.current = null;
+    inFlightLoadedDirectoriesRefresh?.resolvers.forEach((resolve) => resolve());
 
     pendingFsChangesRef.current = [];
     isFsChangeFlushQueuedRef.current = false;
@@ -11918,19 +11946,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     const editedFilePaths = [...editedFilePathSet];
     let didSaveAnyFile = false;
-    for (const editedFilePath of editedFilePaths) {
-      if (!fileModelsRef.current.has(editedFilePath)) {
-        continue;
-      }
+    let didFailToSave = false;
+    await runWithConcurrency(
+      editedFilePaths,
+      CODE_PANE_MULTI_FILE_SAVE_CONCURRENCY,
+      async (editedFilePath) => {
+        if (didFailToSave || !fileModelsRef.current.has(editedFilePath)) {
+          return;
+        }
 
-      const didSave = await saveFile(editedFilePath, {
-        skipQualityPipeline: true,
-        skipGitRefresh: true,
-      });
-      if (!didSave) {
-        return false;
-      }
-      didSaveAnyFile = true;
+        const didSave = await saveFile(editedFilePath, {
+          skipQualityPipeline: true,
+          skipGitRefresh: true,
+        });
+        if (!didSave) {
+          didFailToSave = true;
+          return;
+        }
+        didSaveAnyFile = true;
+      },
+    );
+    if (didFailToSave) {
+      return false;
     }
 
     if (didSaveAnyFile) {
@@ -13014,24 +13051,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    for (const change of response.data.files) {
-      if (change.kind === 'modify') {
+    const modifyChanges = response.data.files.filter((change) => change.kind === 'modify');
+    await runWithConcurrency(
+      modifyChanges,
+      CODE_PANE_REFACTOR_APPLY_CONCURRENCY,
+      async (change) => {
         const existingModel = fileModelsRef.current.get(change.filePath);
         invalidateWorkspaceRuntimeCaches(change.filePath);
-        if (existingModel) {
-          await flushPendingLanguageSync(change.filePath);
-          suppressModelEventsRef.current.add(change.filePath);
-          existingModel.setValue(change.afterContent);
-          suppressModelEventsRef.current.delete(change.filePath);
-          clearDefinitionLookupCache();
-          markDirty(change.filePath, false);
-          await queueLanguageDocumentSync(change.filePath, 'change', async () => {
-            await syncLanguageDocument(change.filePath, 'change');
-          });
-          void queueLanguageDocumentSync(change.filePath, 'save', async () => {
-            await syncLanguageDocument(change.filePath, 'save');
-          });
+        if (!existingModel) {
+          return;
         }
+
+        await flushPendingLanguageSync(change.filePath);
+        suppressModelEventsRef.current.add(change.filePath);
+        existingModel.setValue(change.afterContent);
+        suppressModelEventsRef.current.delete(change.filePath);
+        clearDefinitionLookupCache();
+        markDirty(change.filePath, false);
+        await queueLanguageDocumentSync(change.filePath, 'change', async () => {
+          await syncLanguageDocument(change.filePath, 'change');
+        });
+        void queueLanguageDocumentSync(change.filePath, 'save', async () => {
+          await syncLanguageDocument(change.filePath, 'save');
+        });
+      },
+    );
+
+    for (const change of response.data.files) {
+      if (change.kind === 'modify') {
         continue;
       }
 
@@ -13307,17 +13354,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [getPersistedExpandedPaths, loadExplorerDirectory, persistCodeState, rootPath, scheduleGitStatusRefresh]);
 
-  const refreshLoadedDirectories = useCallback(async (options?: {
-    refreshGitStatus?: boolean;
-    refreshExternalLibraries?: boolean;
-  }) => {
+  const refreshLoadedDirectoriesNow = useCallback(async (options?: LoadedDirectoriesRefreshOptions) => {
     invalidateProjectCache(rootPath, 'directories');
     const directoriesToRefresh = new Set<string>([rootPath]);
     for (const directoryPath of loadedDirectoriesRef.current) {
       directoriesToRefresh.add(directoryPath);
     }
-    for (const directoryPath of loadedExternalDirectoriesRef.current) {
-      directoriesToRefresh.add(directoryPath);
+    if (options?.refreshExternalLibraries !== false) {
+      for (const directoryPath of loadedExternalDirectoriesRef.current) {
+        directoriesToRefresh.add(directoryPath);
+      }
     }
 
     const refreshTasks: Array<Promise<unknown>> = [
@@ -13333,6 +13379,86 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     await Promise.all(refreshTasks);
   }, [loadExternalLibrarySections, refreshDirectoryPaths, rootPath]);
+
+  const refreshLoadedDirectories = useCallback((options?: LoadedDirectoriesRefreshOptions) => {
+    const refreshGitStatus = options?.refreshGitStatus !== false;
+    const refreshExternalLibraries = options?.refreshExternalLibraries !== false;
+
+    return new Promise<void>((resolve, reject) => {
+      const inFlightRefresh = inFlightLoadedDirectoriesRefreshRef.current;
+      if (inFlightRefresh) {
+        inFlightRefresh.refreshGitStatus = inFlightRefresh.refreshGitStatus || refreshGitStatus;
+        inFlightRefresh.refreshExternalLibraries = inFlightRefresh.refreshExternalLibraries || refreshExternalLibraries;
+        inFlightRefresh.resolvers.push(resolve);
+        inFlightRefresh.rejecters.push(reject);
+        return;
+      }
+
+      const pendingRefresh = pendingLoadedDirectoriesRefreshRef.current;
+      const hadPendingRefresh = Boolean(pendingRefresh);
+      if (pendingRefresh) {
+        pendingRefresh.refreshGitStatus = pendingRefresh.refreshGitStatus || refreshGitStatus;
+        pendingRefresh.refreshExternalLibraries = pendingRefresh.refreshExternalLibraries || refreshExternalLibraries;
+        pendingRefresh.resolvers.push(resolve);
+        pendingRefresh.rejecters.push(reject);
+      } else {
+        pendingLoadedDirectoriesRefreshRef.current = {
+          refreshGitStatus,
+          refreshExternalLibraries,
+          resolvers: [resolve],
+          rejecters: [reject],
+        };
+      }
+
+      if (loadedDirectoriesRefreshTimerRef.current) {
+        window.clearTimeout(loadedDirectoriesRefreshTimerRef.current);
+      }
+
+      const queuedRefresh = pendingLoadedDirectoriesRefreshRef.current;
+      loadedDirectoriesRefreshTimerRef.current = window.setTimeout(() => {
+        loadedDirectoriesRefreshTimerRef.current = null;
+        const refresh = pendingLoadedDirectoriesRefreshRef.current;
+        pendingLoadedDirectoriesRefreshRef.current = null;
+        if (!refresh) {
+          return;
+        }
+
+        const refreshPromise = refreshLoadedDirectoriesNow({
+          refreshGitStatus: refresh.refreshGitStatus,
+          refreshExternalLibraries: refresh.refreshExternalLibraries,
+        });
+        inFlightLoadedDirectoriesRefreshRef.current = {
+          ...refresh,
+          promise: refreshPromise,
+        };
+        void refreshPromise.then(() => {
+          const completedRefresh = inFlightLoadedDirectoriesRefreshRef.current ?? refresh;
+          inFlightLoadedDirectoriesRefreshRef.current = null;
+          completedRefresh.resolvers.forEach((currentResolve) => currentResolve());
+          const trailingRefresh = pendingLoadedDirectoriesRefreshRef.current;
+          pendingLoadedDirectoriesRefreshRef.current = null;
+          if (!trailingRefresh) {
+            return;
+          }
+          void refreshLoadedDirectories({
+            refreshGitStatus: trailingRefresh.refreshGitStatus,
+            refreshExternalLibraries: trailingRefresh.refreshExternalLibraries,
+          }).then(() => {
+            trailingRefresh.resolvers.forEach((currentResolve) => currentResolve());
+          }).catch((error) => {
+            trailingRefresh.rejecters.forEach((currentReject) => currentReject(error));
+          });
+        }).catch((error) => {
+          const completedRefresh = inFlightLoadedDirectoriesRefreshRef.current ?? refresh;
+          inFlightLoadedDirectoriesRefreshRef.current = null;
+          completedRefresh.rejecters.forEach((currentReject) => currentReject(error));
+          const trailingRefresh = pendingLoadedDirectoriesRefreshRef.current;
+          pendingLoadedDirectoriesRefreshRef.current = null;
+          trailingRefresh?.rejecters.forEach((currentReject) => currentReject(error));
+        });
+      }, queuedRefresh?.refreshGitStatus || queuedRefresh?.refreshExternalLibraries || !hadPendingRefresh ? 0 : 150);
+    });
+  }, [refreshLoadedDirectoriesNow]);
 
   const loadGitHistory = useCallback(async (
     config: {
@@ -13455,13 +13581,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       invalidateGitGraphSnapshot();
     }
 
+    const followUpTasks: Array<Promise<unknown>> = [];
     if (options?.refreshDirectories !== false) {
-      await refreshLoadedDirectories({ refreshGitStatus: false, refreshExternalLibraries: false });
+      followUpTasks.push(
+        refreshLoadedDirectories({ refreshGitStatus: false, refreshExternalLibraries: false }),
+      );
     }
-    await refreshGitSnapshot({
+    followUpTasks.push(refreshGitSnapshot({
       includeGraph: options?.refreshGraph === true && shouldLoadGitGraph(),
       force: true,
-    });
+    }));
+    await Promise.all(followUpTasks);
     if (options?.successMessage) {
       setBanner({
         tone: 'info',

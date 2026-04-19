@@ -2261,6 +2261,66 @@ describe('CodePane', () => {
     expect(screen.queryByText('codePane.externalChangesSubtitle')).not.toBeInTheDocument();
   });
 
+  it('discards a git change without refreshing external library sections', async () => {
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'python-external-libraries',
+          label: 'External Libraries',
+          languageId: 'python',
+          roots: [
+            {
+              id: 'python-site-packages',
+              label: 'site-packages',
+              path: '/usr/lib/python3.12/site-packages',
+            },
+          ],
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    expect(await screen.findByText('codePane.externalLibraries · Python')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetExternalLibrarySections).toHaveBeenCalledTimes(1);
+    });
+
+    vi.mocked(window.electronAPI.codePaneGetExternalLibrarySections).mockClear();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitDiscard' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitDiscard).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        paths: ['/workspace/project/src/index.ts'],
+        restoreStaged: false,
+      });
+    });
+    expect(window.electronAPI.codePaneGetExternalLibrarySections).not.toHaveBeenCalled();
+  });
+
   it('opens git history from directory context menus', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
@@ -6733,6 +6793,75 @@ describe('CodePane', () => {
       rootPath: '/workspace/project',
       targetPath: '/workspace/project',
     });
+  });
+
+  it('coalesces overlapping manual refreshes into one directory reload', async () => {
+    let rootRequestCount = 0;
+    let resolveRootReload: (() => void) | null = null;
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        rootRequestCount += 1;
+        if (rootRequestCount === 1) {
+          return {
+            success: true,
+            data: [
+              {
+                path: '/workspace/project/src-initial',
+                name: 'src-initial',
+                type: 'directory',
+              },
+            ],
+          };
+        }
+        if (rootRequestCount > 2) {
+          throw new Error('root reload should be coalesced');
+        }
+        await new Promise<void>((resolve) => {
+          resolveRootReload = resolve;
+        });
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src-refreshed',
+              name: 'src-refreshed',
+              type: 'directory',
+            },
+          ],
+        };
+      }
+
+      return {
+        success: true,
+        data: [],
+      };
+    });
+
+    renderCodePane(createPane());
+
+    expect(await screen.findByRole('button', { name: 'src-initial' }, { timeout: 3000 })).toBeInTheDocument();
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.refresh' }));
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.refresh' }));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledTimes(1);
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        targetPath: '/workspace/project',
+      });
+    });
+
+    await act(async () => {
+      resolveRootReload?.();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByRole('button', { name: 'src-refreshed' }, { timeout: 3000 })).toBeInTheDocument();
   });
 
   it('does not request removed breadcrumb symbols for the active file', async () => {
