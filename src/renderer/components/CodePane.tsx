@@ -633,6 +633,13 @@ type CodePaneCursorSnapshot = {
   target: EditorTarget;
 };
 
+type CodePaneNavigationSnapshot = {
+  recentFiles: string[];
+  recentLocations: NavigationHistoryEntry[];
+  canNavigateBack: boolean;
+  canNavigateForward: boolean;
+};
+
 class CodePaneCursorStore {
   private snapshot: CodePaneCursorSnapshot = {
     lineNumber: 1,
@@ -661,6 +668,47 @@ class CodePaneCursorStore {
       resolvedSnapshot.lineNumber === this.snapshot.lineNumber
       && resolvedSnapshot.column === this.snapshot.column
       && resolvedSnapshot.target === this.snapshot.target
+    ) {
+      return;
+    }
+
+    this.snapshot = resolvedSnapshot;
+    for (const listener of Array.from(this.listeners)) {
+      listener();
+    }
+  }
+}
+
+class CodePaneNavigationStore {
+  private snapshot: CodePaneNavigationSnapshot = {
+    recentFiles: [],
+    recentLocations: [],
+    canNavigateBack: false,
+    canNavigateForward: false,
+  };
+
+  private readonly listeners = new Set<() => void>();
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  getSnapshot = (): CodePaneNavigationSnapshot => this.snapshot;
+
+  setSnapshot(nextSnapshot: Partial<CodePaneNavigationSnapshot>): void {
+    const resolvedSnapshot: CodePaneNavigationSnapshot = {
+      ...this.snapshot,
+      ...nextSnapshot,
+    };
+
+    if (
+      areStringListsEqual(this.snapshot.recentFiles, resolvedSnapshot.recentFiles)
+      && areNavigationHistoryEntriesEqual(this.snapshot.recentLocations, resolvedSnapshot.recentLocations)
+      && this.snapshot.canNavigateBack === resolvedSnapshot.canNavigateBack
+      && this.snapshot.canNavigateForward === resolvedSnapshot.canNavigateForward
     ) {
       return;
     }
@@ -704,6 +752,14 @@ function useCodePaneCursorSnapshot(cursorStore: CodePaneCursorStore): CodePaneCu
     cursorStore.subscribe,
     cursorStore.getSnapshot,
     cursorStore.getSnapshot,
+  );
+}
+
+function useCodePaneNavigationSnapshot(navigationStore: CodePaneNavigationStore): CodePaneNavigationSnapshot {
+  return useSyncExternalStore(
+    navigationStore.subscribe,
+    navigationStore.getSnapshot,
+    navigationStore.getSnapshot,
   );
 }
 
@@ -1404,8 +1460,7 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
 });
 
 const SearchEverywhereController = React.memo(React.forwardRef<SearchEverywhereControllerHandle, {
-  recentFiles: string[];
-  recentLocations: NavigationHistoryEntry[];
+  navigationStore: CodePaneNavigationStore;
   rootPath: string;
   onGetCommandItems: () => SearchEverywhereItem[];
   onLoadResults: (mode: SearchEverywhereMode, query: string) => Promise<SearchEverywhereLoadResult>;
@@ -1422,8 +1477,7 @@ const SearchEverywhereController = React.memo(React.forwardRef<SearchEverywhereC
   onGetFileLabel: (filePath: string) => string;
   t: ReturnType<typeof useI18n>['t'];
 }>(function SearchEverywhereController({
-  recentFiles,
-  recentLocations,
+  navigationStore,
   rootPath,
   onGetCommandItems,
   onLoadResults,
@@ -1432,6 +1486,9 @@ const SearchEverywhereController = React.memo(React.forwardRef<SearchEverywhereC
   onGetFileLabel,
   t,
 }, ref) {
+  const navigationSnapshot = useCodePaneNavigationSnapshot(navigationStore);
+  const recentFiles = navigationSnapshot.recentFiles;
+  const recentLocations = navigationSnapshot.recentLocations;
   const inputRef = useRef<HTMLInputElement | null>(null);
   const itemsRef = useRef<SearchEverywhereItem[]>([]);
   const selectedIndexRef = useRef(0);
@@ -2795,8 +2852,7 @@ const BranchManagerControl = React.memo(function BranchManagerControl({
 
 const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
   branchManagerControl,
-  canNavigateBack,
-  canNavigateForward,
+  navigationStore,
   contextMenuContentClassName,
   contextMenuDangerItemClassName,
   contextMenuItemClassName,
@@ -2818,8 +2874,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
   viewMode,
 }: {
   branchManagerControl: React.ReactNode;
-  canNavigateBack: boolean;
-  canNavigateForward: boolean;
+  navigationStore: CodePaneNavigationStore;
   contextMenuContentClassName: string;
   contextMenuDangerItemClassName: string;
   contextMenuItemClassName: string;
@@ -2840,6 +2895,9 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
   t: ReturnType<typeof useI18n>['t'];
   viewMode: string;
 }) {
+  const navigationSnapshot = useCodePaneNavigationSnapshot(navigationStore);
+  const canNavigateBack = navigationSnapshot.canNavigateBack;
+  const canNavigateForward = navigationSnapshot.canNavigateForward;
   const diffButtonLabel = viewMode === 'diff' ? t('codePane.showEditor') : t('codePane.showDiff');
 
   return (
@@ -3905,6 +3963,30 @@ function areNavigationAvailabilitiesEqual(
 ): boolean {
   return previousAvailability.canNavigateBack === nextAvailability.canNavigateBack
     && previousAvailability.canNavigateForward === nextAvailability.canNavigateForward;
+}
+
+function areNavigationHistoryEntriesEqual(
+  previousEntries: NavigationHistoryEntry[],
+  nextEntries: NavigationHistoryEntry[],
+): boolean {
+  if (previousEntries.length !== nextEntries.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previousEntries.length; index += 1) {
+    const previousEntry = previousEntries[index];
+    const nextEntry = nextEntries[index];
+    if (
+      previousEntry?.filePath !== nextEntry?.filePath
+      || previousEntry?.lineNumber !== nextEntry?.lineNumber
+      || previousEntry?.column !== nextEntry?.column
+      || previousEntry?.displayPath !== nextEntry?.displayPath
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function areStringSetsEqual(previousValues: Set<string>, nextValues: Set<string>): boolean {
@@ -7990,6 +8072,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const focusedEditorTargetRef = useRef<EditorTarget>('editor');
   const runtimeStoreRef = useRef(new CodePaneRuntimeStore());
   const cursorStoreRef = useRef(new CodePaneCursorStore());
+  const navigationStoreRef = useRef(new CodePaneNavigationStore());
   const refreshEditorSurfaceCoreRef = useRef<(() => Promise<void>) | null>(null);
   const pendingEditorSurfaceRefreshRef = useRef<Promise<void> | null>(null);
   const queuedEditorSurfaceRefreshRef = useRef(false);
@@ -8033,12 +8116,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [workspaceSymbolResults, setWorkspaceSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
   const [isWorkspaceSymbolSearching, setIsWorkspaceSymbolSearching] = useState(false);
   const [workspaceSymbolError, setWorkspaceSymbolError] = useState<string | null>(null);
-  const [recentFiles, setRecentFiles] = useState<string[]>([]);
-  const [recentLocations, setRecentLocations] = useState<NavigationHistoryEntry[]>([]);
-  const [navigationAvailability, setNavigationAvailability] = useState({
-    canNavigateBack: false,
-    canNavigateForward: false,
-  });
   const [bottomPanelMode, setBottomPanelMode] = useState<BottomPanelMode | null>(null);
   const [activeGitWorkbenchTab, setActiveGitWorkbenchTab] = useState<GitToolWindowTab>('log');
   const [breakpoints, setBreakpoints] = useState<CodePaneBreakpoint[]>(() => normalizeBreakpoints(pane.code?.breakpoints));
@@ -13372,13 +13449,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
 
     if (options?.recordRecent !== false) {
-      setRecentFiles((currentRecentFiles) => {
-        const nextRecentFiles = [
-          filePath,
-          ...currentRecentFiles.filter((currentFilePath) => currentFilePath !== filePath),
-        ].slice(0, CODE_PANE_MAX_RECENT_FILES);
-        recentFilesRef.current = nextRecentFiles;
-        return nextRecentFiles;
+      const nextRecentFiles = [
+        filePath,
+        ...recentFilesRef.current.filter((currentFilePath) => currentFilePath !== filePath),
+      ].slice(0, CODE_PANE_MAX_RECENT_FILES);
+      recentFilesRef.current = nextRecentFiles;
+      navigationStoreRef.current.setSnapshot({
+        recentFiles: nextRecentFiles,
       });
     }
     if (shouldRefreshCurrentEditorSurface) {
@@ -15991,17 +16068,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
       breakpoints: nextBreakpoints,
     });
 
-    setRecentFiles((currentRecentFiles) => {
-      const nextRecentFiles: string[] = [];
-      for (const candidatePath of currentRecentFiles) {
-        nextRecentFiles.push(
-          isPathEqualOrDescendant(candidatePath, sourcePath)
-            ? replacePathPrefix(candidatePath, sourcePath, targetPath)
-            : candidatePath,
-        );
-      }
-      recentFilesRef.current = nextRecentFiles;
-      return nextRecentFiles;
+    const nextRecentFiles: string[] = [];
+    for (const candidatePath of recentFilesRef.current) {
+      nextRecentFiles.push(
+        isPathEqualOrDescendant(candidatePath, sourcePath)
+          ? replacePathPrefix(candidatePath, sourcePath, targetPath)
+          : candidatePath,
+      );
+    }
+    recentFilesRef.current = nextRecentFiles;
+    navigationStoreRef.current.setSnapshot({
+      recentFiles: nextRecentFiles,
     });
 
     persistEditorSplitLayout({
@@ -16960,19 +17037,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       recentLocationsRef.current = [];
       navigationBackStackRef.current = [];
       navigationForwardStackRef.current = [];
-      setRecentFiles((currentFiles) => (currentFiles.length === 0 ? currentFiles : []));
-      setRecentLocations((currentLocations) => (currentLocations.length === 0 ? currentLocations : []));
-      setNavigationAvailability((currentAvailability) => (
-        areNavigationAvailabilitiesEqual(currentAvailability, {
-          canNavigateBack: false,
-          canNavigateForward: false,
-        })
-          ? currentAvailability
-          : {
-            canNavigateBack: false,
-            canNavigateForward: false,
-          }
-      ));
+      navigationStoreRef.current.setSnapshot({
+        recentFiles: [],
+        recentLocations: [],
+        canNavigateBack: false,
+        canNavigateForward: false,
+      });
       const cachedRootEntries = getDirectoryCache(rootPath, rootPath);
       const cachedExpandedDirectoryEntries: Record<string, CodePaneTreeEntry[]> = {};
       const cachedDirectoryPaths = new Set<string>();
@@ -17650,18 +17720,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [getActiveEditorContext]);
 
   const rememberRecentLocation = useCallback((location: NavigationHistoryEntry) => {
-    setRecentLocations((currentRecentLocations) => {
-      const nextRecentLocations = [location];
-      for (const entry of currentRecentLocations) {
-        if (!isSameNavigationLocation(entry, location)) {
-          nextRecentLocations.push(entry);
-          if (nextRecentLocations.length >= CODE_PANE_MAX_RECENT_LOCATIONS) {
-            break;
-          }
+    const nextRecentLocations = [location];
+    for (const entry of recentLocationsRef.current) {
+      if (!isSameNavigationLocation(entry, location)) {
+        nextRecentLocations.push(entry);
+        if (nextRecentLocations.length >= CODE_PANE_MAX_RECENT_LOCATIONS) {
+          break;
         }
       }
-      recentLocationsRef.current = nextRecentLocations;
-      return nextRecentLocations;
+    }
+    recentLocationsRef.current = nextRecentLocations;
+    navigationStoreRef.current.setSnapshot({
+      recentLocations: nextRecentLocations,
     });
   }, []);
 
@@ -17670,13 +17740,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       canNavigateBack: navigationBackStackRef.current.length > 0,
       canNavigateForward: navigationForwardStackRef.current.length > 0,
     };
-
-    setNavigationAvailability((currentAvailability) => (
-      currentAvailability.canNavigateBack === nextAvailability.canNavigateBack
-      && currentAvailability.canNavigateForward === nextAvailability.canNavigateForward
-        ? currentAvailability
-        : nextAvailability
-    ));
+    navigationStoreRef.current.setSnapshot(nextAvailability);
   }, []);
 
   const clearNavigationForwardStack = useCallback(() => {
@@ -19941,7 +20005,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
   }, [rootPath, t, trackRequest]);
 
-  const { canNavigateBack, canNavigateForward } = navigationAvailability;
   const visibleDebugSessions = debugSessions;
   const debugTargets = useMemo(() => {
     if (bottomPanelMode !== 'debug') {
@@ -22739,8 +22802,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const renderedWorkspaceHeader = useMemo(() => (
     <CodePaneWorkspaceHeader
       branchManagerControl={branchManagerControl}
-      canNavigateBack={canNavigateBack}
-      canNavigateForward={canNavigateForward}
+      navigationStore={navigationStoreRef.current}
       contextMenuContentClassName={contextMenuContentClassName}
       contextMenuDangerItemClassName={contextMenuDangerItemClassName}
       contextMenuItemClassName={contextMenuItemClassName}
@@ -22764,8 +22826,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ), [
     activeFilePath,
     branchManagerControl,
-    canNavigateBack,
-    canNavigateForward,
     contextMenuContentClassName,
     contextMenuDangerItemClassName,
     contextMenuItemClassName,
@@ -23580,8 +23640,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       <SearchEverywhereController
         ref={searchEverywhereControllerRef}
-        recentFiles={recentFiles}
-        recentLocations={recentLocations}
+        navigationStore={navigationStoreRef.current}
         rootPath={rootPath}
         onGetCommandItems={getSearchEverywhereCommandItems}
         onLoadResults={loadSearchEverywhereResults}
