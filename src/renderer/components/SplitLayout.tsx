@@ -124,17 +124,35 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [resizingIndex, setResizingIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const childRefs = useRef<Array<HTMLDivElement | null>>([]);
   const sizesRef = useRef<number[]>(sizes);
 
   // 同步 sizesRef 到最新值
   useEffect(() => {
     sizesRef.current = sizes;
+    childRefs.current.forEach((node, index) => {
+      if (node) {
+        node.style.flexGrow = `${sizes[index] ?? (1 / splitNode.children.length)}`;
+      }
+    });
   }, [sizes]);
 
   // 同步外部 sizes 变化
   useEffect(() => {
+    sizesRef.current = splitNode.sizes;
     setSizes(splitNode.sizes);
   }, [splitNode.sizes]);
+
+  const applySplitSizePreview = useCallback((nextSizes: number[]) => {
+    const leftPane = childRefs.current[resizingIndex];
+    const rightPane = childRefs.current[resizingIndex + 1];
+    if (leftPane) {
+      leftPane.style.flexGrow = `${nextSizes[resizingIndex] ?? 0}`;
+    }
+    if (rightPane) {
+      rightPane.style.flexGrow = `${nextSizes[resizingIndex + 1] ?? 0}`;
+    }
+  }, [resizingIndex]);
 
   // 处理拖拽调整大小
   const handleMouseDown = (index: number) => (e: React.MouseEvent) => {
@@ -166,11 +184,18 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
       newSizes[resizingIndex + 1] = rightSize;
 
       sizesRef.current = newSizes;
-      setSizes(newSizes);
+      applySplitSizePreview(newSizes);
     };
 
     const handleMouseUp = () => {
-      onSplitResize(windowId, splitPath, sizesRef.current);
+      const nextSizes = sizesRef.current;
+      setSizes((currentSizes) => (
+        currentSizes.length === nextSizes.length
+          && currentSizes.every((currentSize, index) => currentSize === nextSizes[index])
+          ? currentSizes
+          : [...nextSizes]
+      ));
+      onSplitResize(windowId, splitPath, nextSizes);
       setIsResizing(false);
       setResizingIndex(-1);
     };
@@ -182,7 +207,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
+  }, [applySplitSizePreview, isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, windowId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
   const dividerActiveClassName = 'bg-[rgb(var(--primary))]';
@@ -197,6 +222,9 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
         <React.Fragment key={child.type === 'pane' ? child.id : `split-${index}`}>
           {/* 子节点 */}
           <div
+            ref={(node) => {
+              childRefs.current[index] = node;
+            }}
             style={{
               flexBasis: 0,
               flexGrow: sizes[index] ?? (1 / splitNode.children.length),
