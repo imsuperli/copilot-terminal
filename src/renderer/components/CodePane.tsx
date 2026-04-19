@@ -267,6 +267,38 @@ type UsageSearchGroup = {
   references: CodePaneReference[];
 };
 
+type SearchSidebarContentRow =
+  | {
+      kind: 'content-file';
+      key: string;
+      filePath: string;
+    }
+  | {
+      kind: 'content-match';
+      key: string;
+      match: CodePaneContentMatch;
+    };
+
+type SearchSidebarSymbolRow = {
+  key: string;
+  symbol: CodePaneWorkspaceSymbol;
+};
+
+type SearchSidebarUsageRow =
+  | {
+      kind: 'usage-file';
+      key: string;
+      group: UsageSearchGroup;
+    }
+  | {
+      kind: 'usage-reference';
+      key: string;
+      filePath: string;
+      reference: CodePaneReference;
+    };
+
+type SearchSidebarRow = SearchSidebarContentRow | SearchSidebarSymbolRow | SearchSidebarUsageRow;
+
 type ProblemGroup = {
   filePath: string;
   entries: Array<MonacoMarker & { filePath: string }>;
@@ -287,9 +319,15 @@ const CODE_PANE_EXPLORER_WINDOWING_THRESHOLD = 120;
 const CODE_PANE_SEARCH_EVERYWHERE_ROW_HEIGHT = 52;
 const CODE_PANE_SEARCH_EVERYWHERE_ROW_OVERSCAN = 8;
 const CODE_PANE_SEARCH_EVERYWHERE_WINDOWING_THRESHOLD = 80;
+const CODE_PANE_CODE_ACTION_ROW_HEIGHT = 48;
+const CODE_PANE_CODE_ACTION_ROW_OVERSCAN = 8;
+const CODE_PANE_CODE_ACTION_WINDOWING_THRESHOLD = 60;
 const CODE_PANE_BRANCH_MANAGER_ROW_HEIGHT = 28;
 const CODE_PANE_BRANCH_MANAGER_ROW_OVERSCAN = 10;
 const CODE_PANE_BRANCH_MANAGER_WINDOWING_THRESHOLD = 100;
+const CODE_PANE_SEARCH_PANEL_ROW_HEIGHT = 32;
+const CODE_PANE_SEARCH_PANEL_ROW_OVERSCAN = 10;
+const CODE_PANE_SEARCH_PANEL_WINDOWING_THRESHOLD = 160;
 const CODE_PANE_PROBLEMS_ROW_HEIGHT = 28;
 const CODE_PANE_PROBLEMS_ROW_OVERSCAN = 10;
 const CODE_PANE_PROBLEMS_WINDOWING_THRESHOLD = 120;
@@ -2018,6 +2056,105 @@ const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
   onExecuteAction: (action: CodePaneCodeAction) => void;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  const listScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [listScrollTop, setListScrollTop] = React.useState(0);
+  const [listViewportHeight, setListViewportHeight] = React.useState(0);
+  const pendingListScrollTopRef = React.useRef<number | null>(null);
+  const listScrollAnimationFrameRef = React.useRef<number | null>(null);
+  const indexedItems = React.useMemo(() => (
+    items.map((action, index) => ({ action, index }))
+  ), [items]);
+  const visibleItems = React.useMemo(() => getWindowedListSlice({
+    items: indexedItems,
+    scrollTop: listScrollTop,
+    viewportHeight: listViewportHeight,
+    rowHeight: CODE_PANE_CODE_ACTION_ROW_HEIGHT,
+    overscan: CODE_PANE_CODE_ACTION_ROW_OVERSCAN,
+    threshold: CODE_PANE_CODE_ACTION_WINDOWING_THRESHOLD,
+  }), [indexedItems, listScrollTop, listViewportHeight]);
+
+  const scheduleListScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingListScrollTopRef.current = nextScrollTop;
+    if (listScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    listScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      listScrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingListScrollTopRef.current;
+      pendingListScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setListScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const container = listScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncViewport = () => {
+      setListViewportHeight(container.clientHeight);
+      setListScrollTop(container.scrollTop);
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      if (listScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(listScrollAnimationFrameRef.current);
+        listScrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  const renderActionItem = React.useCallback(({ action, index }: { action: CodePaneCodeAction; index: number }) => {
+    const isSelected = index === selectedIndex;
+    return (
+      <button
+        key={action.id}
+        type="button"
+        disabled={Boolean(action.disabledReason)}
+        onMouseEnter={() => {
+          onHoverIndex(index);
+        }}
+        onClick={() => {
+          onExecuteAction(action);
+        }}
+        className={`flex min-h-12 w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
+          action.disabledReason
+            ? 'cursor-not-allowed text-zinc-600'
+            : isSelected
+              ? 'bg-zinc-800 text-zinc-100'
+              : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+        }`}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm">{action.title}</div>
+          {(action.kind || action.disabledReason) && (
+            <div className="mt-1 truncate text-xs text-zinc-500">
+              {action.disabledReason ?? action.kind}
+            </div>
+          )}
+        </div>
+        {action.isPreferred && (
+          <div className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+            {t('codePane.codeActionsPreferred')}
+          </div>
+        )}
+      </button>
+    );
+  }, [onExecuteAction, onHoverIndex, selectedIndex, t]);
+
   return (
     <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/60 p-4">
       <div className="mt-16 flex w-full max-w-xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
@@ -2031,7 +2168,13 @@ const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
             <X size={14} />
           </button>
         </div>
-        <div className="max-h-[50vh] overflow-auto p-2">
+        <div
+          ref={listScrollRef}
+          className="max-h-[50vh] overflow-auto p-2"
+          onScroll={(event) => {
+            scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
+          }}
+        >
           {isLoading ? (
             <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500">
               <Loader2 size={13} className="animate-spin" />
@@ -2040,45 +2183,17 @@ const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
           ) : error ? (
             <div className="px-2 py-3 text-sm text-red-300">{error}</div>
           ) : items.length > 0 ? (
-            <div className="space-y-1">
-              {items.map((action, index) => {
-                const isSelected = index === selectedIndex;
-                return (
-                  <button
-                    key={action.id}
-                    type="button"
-                    disabled={Boolean(action.disabledReason)}
-                    onMouseEnter={() => {
-                      onHoverIndex(index);
-                    }}
-                    onClick={() => {
-                      onExecuteAction(action);
-                    }}
-                    className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
-                      action.disabledReason
-                        ? 'cursor-not-allowed text-zinc-600'
-                        : isSelected
-                          ? 'bg-zinc-800 text-zinc-100'
-                          : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{action.title}</div>
-                      {(action.kind || action.disabledReason) && (
-                        <div className="mt-1 truncate text-xs text-zinc-500">
-                          {action.disabledReason ?? action.kind}
-                        </div>
-                      )}
-                    </div>
-                    {action.isPreferred && (
-                      <div className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                        {t('codePane.codeActionsPreferred')}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            visibleItems.isWindowed ? (
+              <div style={{ height: `${visibleItems.totalHeight}px`, position: 'relative' }}>
+                <div style={{ transform: `translateY(${visibleItems.offsetTop}px)` }}>
+                  {visibleItems.items.map(renderActionItem)}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {indexedItems.map(renderActionItem)}
+              </div>
+            )
           ) : (
             <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.codeActionsEmpty')}</div>
           )}
@@ -3506,6 +3621,11 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
   onOpenFileLocation: (location: FileNavigationLocation) => void | Promise<void>;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [resultsScrollTop, setResultsScrollTop] = React.useState(0);
+  const [resultsViewportHeight, setResultsViewportHeight] = React.useState(0);
+  const pendingResultsScrollTopRef = React.useRef<number | null>(null);
+  const resultsScrollAnimationFrameRef = React.useRef<number | null>(null);
   const [contentQuery, setContentQuery] = React.useState(initialState.contentQuery);
   const deferredContentQuery = useDeferredValue(contentQuery);
   const [contentResults, setContentResults] = React.useState<CodePaneContentMatch[]>(initialState.contentResults);
@@ -3532,6 +3652,62 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
     }
     return nextGroups;
   }, [contentResults]);
+  const contentRows = React.useMemo<SearchSidebarContentRow[]>(() => {
+    const nextRows: SearchSidebarContentRow[] = [];
+    for (const group of contentGroups) {
+      nextRows.push({
+        kind: 'content-file',
+        key: `file:${group.filePath}`,
+        filePath: group.filePath,
+      });
+      for (const match of group.matches) {
+        nextRows.push({
+          kind: 'content-match',
+          key: `match:${group.filePath}:${match.lineNumber}:${match.column}`,
+          match,
+        });
+      }
+    }
+    return nextRows;
+  }, [contentGroups]);
+  const workspaceSymbolRows = React.useMemo<SearchSidebarSymbolRow[]>(() => (
+    workspaceSymbolResults.map((symbol) => ({
+      key: `${symbol.filePath}:${symbol.name}:${symbol.range.startLineNumber}:${symbol.range.startColumn}`,
+      symbol,
+    }))
+  ), [workspaceSymbolResults]);
+  const usageRows = React.useMemo<SearchSidebarUsageRow[]>(() => {
+    const nextRows: SearchSidebarUsageRow[] = [];
+    for (const group of usageGroups) {
+      nextRows.push({
+        kind: 'usage-file',
+        key: `file:${group.filePath}`,
+        group,
+      });
+      for (const reference of group.references) {
+        nextRows.push({
+          kind: 'usage-reference',
+          key: `reference:${group.filePath}:${reference.range.startLineNumber}:${reference.range.startColumn}`,
+          filePath: group.filePath,
+          reference,
+        });
+      }
+    }
+    return nextRows;
+  }, [usageGroups]);
+  const activeSearchRows: SearchSidebarRow[] = mode === 'contents'
+    ? contentRows
+    : mode === 'symbols'
+      ? workspaceSymbolRows
+      : usageRows;
+  const visibleSearchRows = React.useMemo(() => getWindowedListSlice({
+    items: activeSearchRows,
+    scrollTop: resultsScrollTop,
+    viewportHeight: resultsViewportHeight,
+    rowHeight: CODE_PANE_SEARCH_PANEL_ROW_HEIGHT,
+    overscan: CODE_PANE_SEARCH_PANEL_ROW_OVERSCAN,
+    threshold: CODE_PANE_SEARCH_PANEL_WINDOWING_THRESHOLD,
+  }), [activeSearchRows, resultsScrollTop, resultsViewportHeight]);
   const headingLabel = mode === 'contents'
     ? t('codePane.searchContents')
     : mode === 'symbols'
@@ -3544,6 +3720,60 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
       : t('codePane.findUsages');
   const hasDeferredContentQuery = Boolean(deferredContentQuery.trim());
   const hasDeferredWorkspaceSymbolQuery = Boolean(deferredWorkspaceSymbolQuery.trim());
+
+  const scheduleResultsScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingResultsScrollTopRef.current = nextScrollTop;
+    if (resultsScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    resultsScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      resultsScrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingResultsScrollTopRef.current;
+      pendingResultsScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setResultsScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const container = resultsScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncViewport = () => {
+      setResultsViewportHeight(container.clientHeight);
+      setResultsScrollTop(container.scrollTop);
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      if (resultsScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(resultsScrollAnimationFrameRef.current);
+        resultsScrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const container = resultsScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    container.scrollTop = 0;
+    setResultsScrollTop((currentScrollTop) => (currentScrollTop === 0 ? currentScrollTop : 0));
+  }, [mode]);
 
   React.useEffect(() => {
     onPersistState({
@@ -3666,6 +3896,126 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
     ));
   }, []);
 
+  const renderContentRow = React.useCallback((row: SearchSidebarContentRow) => {
+    if (row.kind === 'content-file') {
+      return (
+        <button
+          key={row.key}
+          type="button"
+          onClick={() => {
+            void onActivateFile(row.filePath, { preview: true });
+          }}
+          className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+        >
+          <FileIcon size={13} className="shrink-0 text-zinc-500" />
+          <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(row.filePath)}</span>
+          <span className="truncate text-[10px] text-zinc-500">
+            {getRelativePath(rootPath, row.filePath)}
+          </span>
+        </button>
+      );
+    }
+
+    const { match } = row;
+    return (
+      <button
+        key={row.key}
+        type="button"
+        onClick={() => {
+          void onOpenContentMatch(match);
+        }}
+        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
+      >
+        <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
+          {match.lineNumber}:{match.column}
+        </span>
+        <span className="min-w-0 flex-1 truncate">{match.lineText}</span>
+      </button>
+    );
+  }, [onActivateFile, onOpenContentMatch, rootPath]);
+
+  const renderSymbolRow = React.useCallback((row: SearchSidebarSymbolRow) => {
+    const { symbol } = row;
+    return (
+      <button
+        key={row.key}
+        type="button"
+        onClick={() => {
+          void onOpenFileLocation({
+            filePath: symbol.filePath,
+            lineNumber: symbol.range.startLineNumber,
+            column: symbol.range.startColumn,
+          });
+        }}
+        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+      >
+        <FileCode2 size={13} className="shrink-0 text-zinc-500" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-zinc-100">{symbol.name}</div>
+          <div className="truncate text-[10px] text-zinc-500">
+            {[symbol.containerName, getRelativePath(rootPath, symbol.filePath), `${symbol.range.startLineNumber}:${symbol.range.startColumn}`]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+        </div>
+      </button>
+    );
+  }, [onOpenFileLocation, rootPath]);
+
+  const renderUsageRow = React.useCallback((row: SearchSidebarUsageRow) => {
+    if (row.kind === 'usage-file') {
+      return (
+        <button
+          key={row.key}
+          type="button"
+          onClick={() => {
+            void onActivateFile(row.group.filePath, { preview: true });
+          }}
+          className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+        >
+          <FileIcon size={13} className="shrink-0 text-zinc-500" />
+          <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(row.group.filePath)}</span>
+          <span className="truncate text-[10px] text-zinc-500">
+            {getRelativePath(rootPath, row.group.filePath)}
+          </span>
+        </button>
+      );
+    }
+
+    const { reference } = row;
+    return (
+      <button
+        key={row.key}
+        type="button"
+        onClick={() => {
+          void onOpenFileLocation({
+            filePath: row.filePath,
+            lineNumber: reference.range.startLineNumber,
+            column: reference.range.startColumn,
+          });
+        }}
+        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
+      >
+        <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
+          {reference.range.startLineNumber}:{reference.range.startColumn}
+        </span>
+        <span className="min-w-0 flex-1 truncate">
+          {reference.previewText ?? getRelativePath(rootPath, row.filePath)}
+        </span>
+      </button>
+    );
+  }, [onActivateFile, onOpenFileLocation, rootPath]);
+
+  const renderWindowedRows = React.useCallback((children: React.ReactNode) => (
+    visibleSearchRows.isWindowed ? (
+      <div style={{ height: `${visibleSearchRows.totalHeight}px`, position: 'relative' }}>
+        <div style={{ transform: `translateY(${visibleSearchRows.offsetTop}px)` }}>
+          {children}
+        </div>
+      </div>
+    ) : children
+  ), [visibleSearchRows.isWindowed, visibleSearchRows.offsetTop, visibleSearchRows.totalHeight]);
+
   return (
     <>
       <div className="border-b border-zinc-800 px-2 py-2">
@@ -3738,46 +4088,23 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
         <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
           {resultsLabel}
         </div>
-        <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+        <div
+          ref={resultsScrollRef}
+          className="min-h-0 flex-1 overflow-auto px-2 py-2"
+          onScroll={(event) => {
+            scheduleResultsScrollTopUpdate(event.currentTarget.scrollTop);
+          }}
+        >
           {mode === 'contents' ? (
             hasDeferredContentQuery && contentError ? (
               <div className="text-xs text-red-300">{contentError}</div>
             ) : hasDeferredContentQuery ? (
-              contentGroups.length > 0 ? (
-                <div className="space-y-3">
-                  {contentGroups.map((group) => (
-                    <div key={group.filePath} className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void onActivateFile(group.filePath, { preview: true });
-                        }}
-                        className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
-                      >
-                        <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                        <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
-                        <span className="truncate text-[10px] text-zinc-500">
-                          {getRelativePath(rootPath, group.filePath)}
-                        </span>
-                      </button>
-                      {group.matches.map((match) => (
-                        <button
-                          key={`${group.filePath}:${match.lineNumber}:${match.column}`}
-                          type="button"
-                          onClick={() => {
-                            void onOpenContentMatch(match);
-                          }}
-                          className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
-                        >
-                          <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
-                            {match.lineNumber}:{match.column}
-                          </span>
-                          <span className="min-w-0 flex-1 break-words">{match.lineText}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
+              contentRows.length > 0 ? (
+                renderWindowedRows(
+                  <div className="space-y-1">
+                    {visibleSearchRows.items.map((row) => renderContentRow(row as SearchSidebarContentRow))}
+                  </div>,
+                )
               ) : (
                 <div className="text-xs text-zinc-500">{t('codePane.searchContentsEmpty')}</div>
               )
@@ -3788,33 +4115,12 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
             hasDeferredWorkspaceSymbolQuery && workspaceSymbolError ? (
               <div className="text-xs text-red-300">{workspaceSymbolError}</div>
             ) : hasDeferredWorkspaceSymbolQuery ? (
-              workspaceSymbolResults.length > 0 ? (
-                <div className="space-y-1">
-                  {workspaceSymbolResults.map((symbol) => (
-                    <button
-                      key={`${symbol.filePath}:${symbol.name}:${symbol.range.startLineNumber}:${symbol.range.startColumn}`}
-                      type="button"
-                      onClick={() => {
-                        void onOpenFileLocation({
-                          filePath: symbol.filePath,
-                          lineNumber: symbol.range.startLineNumber,
-                          column: symbol.range.startColumn,
-                        });
-                      }}
-                      className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
-                    >
-                      <FileCode2 size={13} className="mt-0.5 shrink-0 text-zinc-500" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-zinc-100">{symbol.name}</div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
-                          {symbol.containerName && <span>{symbol.containerName}</span>}
-                          <span>{getRelativePath(rootPath, symbol.filePath)}</span>
-                          <span>{symbol.range.startLineNumber}:{symbol.range.startColumn}</span>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+              workspaceSymbolRows.length > 0 ? (
+                renderWindowedRows(
+                  <div className="space-y-1">
+                    {visibleSearchRows.items.map((row) => renderSymbolRow(row as SearchSidebarSymbolRow))}
+                  </div>,
+                )
               ) : (
                 <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsEmpty')}</div>
               )
@@ -3829,47 +4135,12 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
               {t('codePane.findUsages')}
             </div>
           ) : usagesTargetLabel ? (
-            usageGroups.length > 0 ? (
-              <div className="space-y-3">
-                {usageGroups.map((group) => (
-                  <div key={group.filePath} className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void onActivateFile(group.filePath, { preview: true });
-                      }}
-                      className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
-                    >
-                      <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                      <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
-                      <span className="truncate text-[10px] text-zinc-500">
-                        {getRelativePath(rootPath, group.filePath)}
-                      </span>
-                    </button>
-                    {group.references.map((reference) => (
-                      <button
-                        key={`${group.filePath}:${reference.range.startLineNumber}:${reference.range.startColumn}`}
-                        type="button"
-                        onClick={() => {
-                          void onOpenFileLocation({
-                            filePath: group.filePath,
-                            lineNumber: reference.range.startLineNumber,
-                            column: reference.range.startColumn,
-                          });
-                        }}
-                        className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
-                      >
-                        <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
-                          {reference.range.startLineNumber}:{reference.range.startColumn}
-                        </span>
-                        <span className="min-w-0 flex-1 break-words">
-                          {reference.previewText ?? getRelativePath(rootPath, group.filePath)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
+            usageRows.length > 0 ? (
+              renderWindowedRows(
+                <div className="space-y-1">
+                  {visibleSearchRows.items.map((row) => renderUsageRow(row as SearchSidebarUsageRow))}
+                </div>,
+              )
             ) : (
               <div className="text-xs text-zinc-500">{t('codePane.findUsagesEmpty')}</div>
             )
