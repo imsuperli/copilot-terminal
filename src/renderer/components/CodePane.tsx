@@ -3053,26 +3053,31 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
 
 const FilesSidebarContent = React.memo(function FilesSidebarContent({
   scrollRef,
-  searchQuery,
-  isSearching,
   body,
-  onSearchQueryChange,
+  onSearch,
   t,
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>;
-  searchQuery: string;
-  isSearching: boolean;
-  body: (viewport: FileTreeViewport) => React.ReactNode;
-  onSearchQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  body: (viewport: FileTreeViewport, searchState: FilesSidebarSearchState) => React.ReactNode;
+  onSearch: (trimmedQuery: string) => Promise<{
+    results: string[];
+    error: string | null;
+  }>;
   t: ReturnType<typeof useI18n>['t'];
 }) {
   const [viewport, setViewport] = React.useState<FileTreeViewport>({
     scrollTop: 0,
     viewportHeight: 0,
   });
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [searchResults, setSearchResults] = React.useState<string[]>([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [searchError, setSearchError] = React.useState<string | null>(null);
   const viewportRef = React.useRef(viewport);
   const pendingViewportRef = React.useRef<FileTreeViewport | null>(null);
   const viewportAnimationFrameRef = React.useRef<number | null>(null);
+  const searchRequestIdRef = React.useRef(0);
 
   const updateViewport = React.useCallback((nextViewport: FileTreeViewport) => {
     const nextNormalizedViewport = {
@@ -3140,6 +3145,70 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
     };
   }, [scrollRef, updateViewport]);
 
+  React.useEffect(() => {
+    const trimmedQuery = deferredSearchQuery.trim();
+    if (!trimmedQuery) {
+      searchRequestIdRef.current += 1;
+      setSearchResults((currentResults) => (
+        currentResults.length === 0 ? currentResults : []
+      ));
+      setIsSearching((currentSearching) => (
+        currentSearching ? false : currentSearching
+      ));
+      setSearchError((currentError) => (
+        currentError === null ? currentError : null
+      ));
+      return undefined;
+    }
+
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
+    setIsSearching((currentSearching) => (
+      currentSearching ? currentSearching : true
+    ));
+    setSearchError((currentError) => (
+      currentError === null ? currentError : null
+    ));
+
+    const timer = window.setTimeout(() => {
+      void onSearch(trimmedQuery).then((result) => {
+        if (searchRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        startTransition(() => {
+          setSearchResults((currentResults) => (
+            areStringListsEqual(currentResults, result.results) ? currentResults : result.results
+          ));
+        });
+        setSearchError((currentError) => (
+          currentError === result.error ? currentError : result.error
+        ));
+        setIsSearching((currentSearching) => (
+          currentSearching ? false : currentSearching
+        ));
+      });
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [deferredSearchQuery, onSearch]);
+
+  const handleSearchQueryChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextQuery = event.target.value;
+    setSearchQuery((currentQuery) => (
+      currentQuery === nextQuery ? currentQuery : nextQuery
+    ));
+  }, []);
+
+  const searchState = React.useMemo<FilesSidebarSearchState>(() => ({
+    trimmedQuery: deferredSearchQuery.trim(),
+    results: searchResults,
+    isSearching,
+    error: searchError,
+  }), [deferredSearchQuery, isSearching, searchError, searchResults]);
+
   return (
     <>
       <div className="border-b border-zinc-800 px-2 py-2">
@@ -3147,7 +3216,7 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
           <Search size={12} className="shrink-0 text-zinc-500" />
           <input
             value={searchQuery}
-            onChange={onSearchQueryChange}
+            onChange={handleSearchQueryChange}
             placeholder={t('codePane.searchFilesPlaceholder')}
             className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
           />
@@ -3164,7 +3233,7 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
           });
         }}
       >
-        {body(viewport)}
+        {body(viewport, searchState)}
       </div>
     </>
   );
@@ -3172,55 +3241,71 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
 
 const SearchSidebarContent = React.memo(function SearchSidebarContent({
   mode,
-  contentQuery,
-  contentGroups,
-  deferredContentQuery,
-  contentError,
-  isContentSearching,
-  workspaceSymbolQuery,
-  deferredWorkspaceSymbolQuery,
-  workspaceSymbolResults,
-  workspaceSymbolError,
-  isWorkspaceSymbolSearching,
+  initialState,
   usageGroups,
   usageError,
   usagesTargetLabel,
   isFindingUsages,
   rootPath,
-  onModeChange,
-  onContentQueryChange,
-  onWorkspaceSymbolQueryChange,
   onFindUsages,
+  onModeChange,
+  onSearchContents,
+  onSearchWorkspaceSymbols,
+  onPersistState,
   onActivateFile,
   onOpenContentMatch,
   onOpenFileLocation,
   t,
 }: {
   mode: SearchPanelMode;
-  contentQuery: string;
-  contentGroups: ContentSearchGroup[];
-  deferredContentQuery: string;
-  contentError: string | null;
-  isContentSearching: boolean;
-  workspaceSymbolQuery: string;
-  deferredWorkspaceSymbolQuery: string;
-  workspaceSymbolResults: CodePaneWorkspaceSymbol[];
-  workspaceSymbolError: string | null;
-  isWorkspaceSymbolSearching: boolean;
+  initialState: SearchSidebarPersistedState;
   usageGroups: UsageSearchGroup[];
   usageError: string | null;
   usagesTargetLabel: string | null;
   isFindingUsages: boolean;
   rootPath: string;
-  onModeChange: (mode: SearchPanelMode) => void;
-  onContentQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  onWorkspaceSymbolQueryChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onFindUsages: () => void;
+  onModeChange: (mode: SearchPanelMode) => void;
+  onSearchContents: (trimmedQuery: string) => Promise<{
+    results: CodePaneContentMatch[];
+    error: string | null;
+  }>;
+  onSearchWorkspaceSymbols: (trimmedQuery: string) => Promise<{
+    results: CodePaneWorkspaceSymbol[];
+    error: string | null;
+  }>;
+  onPersistState: (state: SearchSidebarPersistedState) => void;
   onActivateFile: (filePath: string, options?: { preview?: boolean; promotePreview?: boolean }) => void | Promise<void>;
   onOpenContentMatch: (match: CodePaneContentMatch) => void | Promise<void>;
   onOpenFileLocation: (location: FileNavigationLocation) => void | Promise<void>;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  const [contentQuery, setContentQuery] = React.useState(initialState.contentQuery);
+  const deferredContentQuery = useDeferredValue(contentQuery);
+  const [contentResults, setContentResults] = React.useState<CodePaneContentMatch[]>(initialState.contentResults);
+  const [contentError, setContentError] = React.useState<string | null>(initialState.contentError);
+  const [isContentSearching, setIsContentSearching] = React.useState(false);
+  const [workspaceSymbolQuery, setWorkspaceSymbolQuery] = React.useState(initialState.workspaceSymbolQuery);
+  const deferredWorkspaceSymbolQuery = useDeferredValue(workspaceSymbolQuery);
+  const [workspaceSymbolResults, setWorkspaceSymbolResults] = React.useState<CodePaneWorkspaceSymbol[]>(initialState.workspaceSymbolResults);
+  const [workspaceSymbolError, setWorkspaceSymbolError] = React.useState<string | null>(initialState.workspaceSymbolError);
+  const [isWorkspaceSymbolSearching, setIsWorkspaceSymbolSearching] = React.useState(false);
+  const contentSearchRequestIdRef = React.useRef(0);
+  const workspaceSymbolSearchRequestIdRef = React.useRef(0);
+  const contentGroups = React.useMemo(() => {
+    const groups = new Map<string, CodePaneContentMatch[]>();
+    for (const match of contentResults) {
+      const matches = groups.get(match.filePath) ?? [];
+      matches.push(match);
+      groups.set(match.filePath, matches);
+    }
+
+    const nextGroups: ContentSearchGroup[] = [];
+    for (const [filePath, matches] of groups.entries()) {
+      nextGroups.push({ filePath, matches });
+    }
+    return nextGroups;
+  }, [contentResults]);
   const headingLabel = mode === 'contents'
     ? t('codePane.searchContents')
     : mode === 'symbols'
@@ -3233,6 +3318,127 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
       : t('codePane.findUsages');
   const hasDeferredContentQuery = Boolean(deferredContentQuery.trim());
   const hasDeferredWorkspaceSymbolQuery = Boolean(deferredWorkspaceSymbolQuery.trim());
+
+  React.useEffect(() => {
+    onPersistState({
+      contentQuery,
+      contentResults,
+      contentError,
+      workspaceSymbolQuery,
+      workspaceSymbolResults,
+      workspaceSymbolError,
+    });
+  }, [
+    contentError,
+    contentQuery,
+    contentResults,
+    onPersistState,
+    workspaceSymbolError,
+    workspaceSymbolQuery,
+    workspaceSymbolResults,
+  ]);
+
+  React.useEffect(() => {
+    if (mode !== 'contents') {
+      return undefined;
+    }
+
+    const trimmedQuery = deferredContentQuery.trim();
+    if (!trimmedQuery) {
+      contentSearchRequestIdRef.current += 1;
+      setContentResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+      setIsContentSearching((currentSearching) => (currentSearching ? false : currentSearching));
+      setContentError((currentError) => (currentError === null ? currentError : null));
+      return undefined;
+    }
+
+    const requestId = contentSearchRequestIdRef.current + 1;
+    contentSearchRequestIdRef.current = requestId;
+    setIsContentSearching((currentSearching) => (currentSearching ? currentSearching : true));
+    setContentError((currentError) => (currentError === null ? currentError : null));
+
+    const timer = window.setTimeout(() => {
+      void onSearchContents(trimmedQuery).then((result) => {
+        if (contentSearchRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        startTransition(() => {
+          setContentResults((currentResults) => (
+            areContentMatchListsEqual(currentResults, result.results) ? currentResults : result.results
+          ));
+        });
+        setContentError((currentError) => (
+          currentError === result.error ? currentError : result.error
+        ));
+        setIsContentSearching((currentSearching) => (
+          currentSearching ? false : currentSearching
+        ));
+      });
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [deferredContentQuery, mode, onSearchContents]);
+
+  React.useEffect(() => {
+    if (mode !== 'symbols') {
+      return undefined;
+    }
+
+    const trimmedQuery = deferredWorkspaceSymbolQuery.trim();
+    if (!trimmedQuery) {
+      workspaceSymbolSearchRequestIdRef.current += 1;
+      setWorkspaceSymbolResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+      setIsWorkspaceSymbolSearching((currentSearching) => (currentSearching ? false : currentSearching));
+      setWorkspaceSymbolError((currentError) => (currentError === null ? currentError : null));
+      return undefined;
+    }
+
+    const requestId = workspaceSymbolSearchRequestIdRef.current + 1;
+    workspaceSymbolSearchRequestIdRef.current = requestId;
+    setIsWorkspaceSymbolSearching((currentSearching) => (currentSearching ? currentSearching : true));
+    setWorkspaceSymbolError((currentError) => (currentError === null ? currentError : null));
+
+    const timer = window.setTimeout(() => {
+      void onSearchWorkspaceSymbols(trimmedQuery).then((result) => {
+        if (workspaceSymbolSearchRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        startTransition(() => {
+          setWorkspaceSymbolResults((currentResults) => (
+            areWorkspaceSymbolListsEqual(currentResults, result.results) ? currentResults : result.results
+          ));
+        });
+        setWorkspaceSymbolError((currentError) => (
+          currentError === result.error ? currentError : result.error
+        ));
+        setIsWorkspaceSymbolSearching((currentSearching) => (
+          currentSearching ? false : currentSearching
+        ));
+      });
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [deferredWorkspaceSymbolQuery, mode, onSearchWorkspaceSymbols]);
+
+  const handleContentQueryChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextQuery = event.target.value;
+    setContentQuery((currentQuery) => (
+      currentQuery === nextQuery ? currentQuery : nextQuery
+    ));
+  }, []);
+
+  const handleWorkspaceSymbolQueryChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextQuery = event.target.value;
+    setWorkspaceSymbolQuery((currentQuery) => (
+      currentQuery === nextQuery ? currentQuery : nextQuery
+    ));
+  }, []);
 
   return (
     <>
@@ -3268,7 +3474,7 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
             <Search size={12} className="shrink-0 text-zinc-500" />
             <input
               value={contentQuery}
-              onChange={onContentQueryChange}
+              onChange={handleContentQueryChange}
               placeholder={t('codePane.searchContentsPlaceholder')}
               className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
             />
@@ -3279,7 +3485,7 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
             <Search size={12} className="shrink-0 text-zinc-500" />
             <input
               value={workspaceSymbolQuery}
-              onChange={onWorkspaceSymbolQueryChange}
+              onChange={handleWorkspaceSymbolQueryChange}
               placeholder={t('codePane.workspaceSymbolsPlaceholder')}
               className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
             />
@@ -3915,6 +4121,22 @@ type SaveFileOptions = {
 type FileTreeViewport = {
   scrollTop: number;
   viewportHeight: number;
+};
+
+type FilesSidebarSearchState = {
+  trimmedQuery: string;
+  results: string[];
+  isSearching: boolean;
+  error: string | null;
+};
+
+type SearchSidebarPersistedState = {
+  contentQuery: string;
+  contentResults: CodePaneContentMatch[];
+  contentError: string | null;
+  workspaceSymbolQuery: string;
+  workspaceSymbolResults: CodePaneWorkspaceSymbol[];
+  workspaceSymbolError: string | null;
 };
 
 type GitRevisionDiffRequest = {
@@ -8079,6 +8301,26 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const editorSurfaceRefreshSequenceRef = useRef(0);
   const editorSurfaceBindingStateRef = useRef<EditorSurfaceBindingState | null>(null);
   const compactDirectoryPresentationsCacheRef = useRef<Map<string, CompactDirectoryPresentationCacheEntry>>(new Map());
+  const searchSidebarStateRootPathRef = useRef(rootPath);
+  const searchSidebarStateRef = useRef<SearchSidebarPersistedState>({
+    contentQuery: '',
+    contentResults: [],
+    contentError: null,
+    workspaceSymbolQuery: '',
+    workspaceSymbolResults: [],
+    workspaceSymbolError: null,
+  });
+  if (searchSidebarStateRootPathRef.current !== rootPath) {
+    searchSidebarStateRootPathRef.current = rootPath;
+    searchSidebarStateRef.current = {
+      contentQuery: '',
+      contentResults: [],
+      contentError: null,
+      workspaceSymbolQuery: '',
+      workspaceSymbolResults: [],
+      workspaceSymbolError: null,
+    };
+  }
 
   const [treeEntriesByDirectory, setTreeEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
   const [externalEntriesByDirectory, setExternalEntriesByDirectory] = useState<Record<string, CodePaneTreeEntry[]>>({});
@@ -8090,10 +8332,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(() => new Set([rootPath]));
   const [loadingExternalDirectories, setLoadingExternalDirectories] = useState<Set<string>>(() => new Set());
   const [externalLibrarySections, setExternalLibrarySections] = useState<CodePaneExternalLibrarySection[]>(cachedExternalLibrarySections);
-  const [searchQuery, setSearchQuery] = useState('');
-  const deferredSearchQuery = useDeferredValue(searchQuery);
-  const [searchResults, setSearchResults] = useState<string[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(initialSidebarLayout.activeView);
   const [isSidebarVisible, setIsSidebarVisible] = useState(initialSidebarLayout.visible);
   const [sidebarWidth, setSidebarWidth] = useState(initialSidebarLayout.width);
@@ -8107,15 +8345,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [bottomPanelAvailableHeight, setBottomPanelAvailableHeight] = useState(CODE_PANE_BOTTOM_PANEL_MAX_HEIGHT);
   const [isBottomPanelResizing, setIsBottomPanelResizing] = useState(false);
   const [searchPanelMode, setSearchPanelMode] = useState<SearchPanelMode>('contents');
-  const [contentSearchQuery, setContentSearchQuery] = useState('');
-  const deferredContentSearchQuery = useDeferredValue(contentSearchQuery);
-  const [contentSearchResults, setContentSearchResults] = useState<CodePaneContentMatch[]>([]);
-  const [isContentSearching, setIsContentSearching] = useState(false);
-  const [workspaceSymbolQuery, setWorkspaceSymbolQuery] = useState('');
-  const deferredWorkspaceSymbolQuery = useDeferredValue(workspaceSymbolQuery);
-  const [workspaceSymbolResults, setWorkspaceSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
-  const [isWorkspaceSymbolSearching, setIsWorkspaceSymbolSearching] = useState(false);
-  const [workspaceSymbolError, setWorkspaceSymbolError] = useState<string | null>(null);
   const [bottomPanelMode, setBottomPanelMode] = useState<BottomPanelMode | null>(null);
   const [activeGitWorkbenchTab, setActiveGitWorkbenchTab] = useState<GitToolWindowTab>('log');
   const [breakpoints, setBreakpoints] = useState<CodePaneBreakpoint[]>(() => normalizeBreakpoints(pane.code?.breakpoints));
@@ -8241,7 +8470,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [treeLoadError, setTreeLoadError] = useState<string | null>(null);
   const [externalLibrariesError, setExternalLibrariesError] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [contentSearchError, setContentSearchError] = useState<string | null>(null);
   const [indexStatus, setIndexStatus] = useState<CodePaneIndexStatus | null>(null);
   const [languageWorkspaceState, setLanguageWorkspaceState] = useState<CodePaneLanguageWorkspaceState | null>(null);
   const effectiveBottomPanelHeight = useMemo(
@@ -16956,7 +17184,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setBanner((currentBanner) => (currentBanner === null ? currentBanner : null));
       setTreeLoadError((currentError) => (currentError === null ? currentError : null));
       setSearchError((currentError) => (currentError === null ? currentError : null));
-      setContentSearchError((currentError) => (currentError === null ? currentError : null));
       compactDirectoryPresentationsCacheRef.current.clear();
       setTreeEntriesByDirectory((currentEntries) => (
         Object.keys(currentEntries).length === 0 ? currentEntries : {}
@@ -16987,8 +17214,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       setLoadingExternalDirectories((currentDirectories) => (
         currentDirectories.size === 0 ? currentDirectories : new Set()
       ));
-      setSearchResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
-      setContentSearchResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
       searchEverywhereControllerRef.current?.close();
       codeActionMenuControllerRef.current?.close();
       setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
@@ -17390,310 +17615,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     editorRef.current?.focus();
     diffEditorRef.current?.getModifiedEditor().focus();
   }, [isActive]);
-
-  useEffect(() => {
-    if (!isSidebarVisible || sidebarMode !== 'files') {
-      setSearchResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setIsSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      setSearchError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      return;
-    }
-
-    const trimmedQuery = deferredSearchQuery.trim();
-    if (!trimmedQuery) {
-      setSearchResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setIsSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      setSearchError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      return;
-    }
-
-    let cancelled = false;
-    const requestKey = `search-files:${rootPath}`;
-    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
-    const cacheKey = `${requestKey}:${trimmedQuery}`;
-    const cachedResults = runtimeStoreRef.current.getCache<string[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
-    if (cachedResults) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'File search', {
-        meta: trimmedQuery,
-        fromCache: true,
-      });
-      setSearchResults((currentResults) => (
-        areStringListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
-      ));
-      setSearchError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      setIsSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      return undefined;
-    }
-
-    setIsSearching((currentSearching) => (
-      currentSearching ? currentSearching : true
-    ));
-    setSearchError((currentError) => (
-      currentError === null ? currentError : null
-    ));
-
-    const timer = setTimeout(async () => {
-      const response = await trackRequest(
-        requestKey,
-        'File search',
-        trimmedQuery,
-        async () => await window.electronAPI.codePaneSearchFiles({
-          rootPath,
-          query: trimmedQuery,
-          limit: 80,
-        }),
-      );
-
-      if (cancelled || !runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-        return;
-      }
-
-      if (response.success) {
-        runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
-      }
-      const nextSearchResults = response.success ? (response.data ?? []) : [];
-      const nextSearchError = response.success ? null : (response.error || t('common.retry'));
-      startTransition(() => {
-        setSearchResults((currentResults) => (
-          areStringListsEqual(currentResults, nextSearchResults) ? currentResults : nextSearchResults
-        ));
-      });
-      setSearchError((currentError) => (
-        currentError === nextSearchError ? currentError : nextSearchError
-      ));
-      setIsSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [deferredSearchQuery, isSidebarVisible, rootPath, sidebarMode, t, trackRequest]);
-
-  useEffect(() => {
-    if (!isSidebarVisible || sidebarMode !== 'search' || searchPanelMode !== 'contents') {
-      setContentSearchResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setIsContentSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      setContentSearchError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      return;
-    }
-
-    const trimmedQuery = deferredContentSearchQuery.trim();
-    if (!trimmedQuery) {
-      setContentSearchResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setIsContentSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      setContentSearchError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      return;
-    }
-
-    let cancelled = false;
-    const requestKey = `search-contents:${rootPath}`;
-    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
-    const cacheKey = `${requestKey}:${trimmedQuery}`;
-    const cachedResults = runtimeStoreRef.current.getCache<CodePaneContentMatch[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
-    if (cachedResults) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Content search', {
-        meta: trimmedQuery,
-        fromCache: true,
-      });
-      setContentSearchResults((currentResults) => (
-        areContentMatchListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
-      ));
-      setContentSearchError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      setIsContentSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      return undefined;
-    }
-
-    setIsContentSearching((currentSearching) => (
-      currentSearching ? currentSearching : true
-    ));
-    setContentSearchError((currentError) => (
-      currentError === null ? currentError : null
-    ));
-
-    const timer = setTimeout(async () => {
-      const response = await trackRequest(
-        requestKey,
-        'Content search',
-        trimmedQuery,
-        async () => await window.electronAPI.codePaneSearchContents({
-          rootPath,
-          query: trimmedQuery,
-          limit: 120,
-          maxMatchesPerFile: 6,
-        }),
-      );
-
-      if (cancelled || !runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-        return;
-      }
-
-      if (response.success) {
-        runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
-      }
-      const nextContentSearchResults = response.success ? (response.data ?? []) : [];
-      const nextContentSearchError = response.success ? null : (response.error || t('common.retry'));
-      startTransition(() => {
-        setContentSearchResults((currentResults) => (
-          areContentMatchListsEqual(currentResults, nextContentSearchResults)
-            ? currentResults
-            : nextContentSearchResults
-        ));
-      });
-      setContentSearchError((currentError) => (
-        currentError === nextContentSearchError ? currentError : nextContentSearchError
-      ));
-      setIsContentSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-    }, 220);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [deferredContentSearchQuery, isSidebarVisible, rootPath, searchPanelMode, sidebarMode, t, trackRequest]);
-
-  useEffect(() => {
-    if (!isSidebarVisible || sidebarMode !== 'search' || searchPanelMode !== 'symbols') {
-      setWorkspaceSymbolResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setIsWorkspaceSymbolSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      setWorkspaceSymbolError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      return;
-    }
-
-    const trimmedQuery = deferredWorkspaceSymbolQuery.trim();
-    if (!trimmedQuery) {
-      setWorkspaceSymbolResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setIsWorkspaceSymbolSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      setWorkspaceSymbolError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      return;
-    }
-
-    let cancelled = false;
-    const requestKey = `workspace-symbols:${rootPath}`;
-    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
-    const cacheKey = `${requestKey}:${trimmedQuery}`;
-    const cachedResults = runtimeStoreRef.current.getCache<CodePaneWorkspaceSymbol[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
-    if (cachedResults) {
-      runtimeStoreRef.current.recordRequest(requestKey, 'Workspace symbols', {
-        meta: trimmedQuery,
-        fromCache: true,
-      });
-      setWorkspaceSymbolResults((currentResults) => (
-        areWorkspaceSymbolListsEqual(currentResults, cachedResults) ? currentResults : cachedResults
-      ));
-      setWorkspaceSymbolError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      setIsWorkspaceSymbolSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-      return undefined;
-    }
-
-    setIsWorkspaceSymbolSearching((currentSearching) => (
-      currentSearching ? currentSearching : true
-    ));
-    setWorkspaceSymbolError((currentError) => (
-      currentError === null ? currentError : null
-    ));
-
-    const timer = setTimeout(async () => {
-      const response = await trackRequest(
-        requestKey,
-        'Workspace symbols',
-        trimmedQuery,
-        async () => await window.electronAPI.codePaneGetWorkspaceSymbols({
-          rootPath,
-          query: trimmedQuery,
-          limit: 120,
-        }),
-      );
-
-      if (cancelled || !runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-        return;
-      }
-
-      if (response.success) {
-        runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
-      }
-      const nextWorkspaceSymbolResults = response.success ? (response.data ?? []) : [];
-      const nextWorkspaceSymbolError = response.success ? null : (response.error || t('common.retry'));
-      startTransition(() => {
-        setWorkspaceSymbolResults((currentResults) => (
-          areWorkspaceSymbolListsEqual(currentResults, nextWorkspaceSymbolResults)
-            ? currentResults
-            : nextWorkspaceSymbolResults
-        ));
-      });
-      setWorkspaceSymbolError((currentError) => (
-        currentError === nextWorkspaceSymbolError ? currentError : nextWorkspaceSymbolError
-      ));
-      setIsWorkspaceSymbolSearching((currentSearching) => (
-        currentSearching ? false : currentSearching
-      ));
-    }, 220);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [
-    deferredWorkspaceSymbolQuery,
-    isSidebarVisible,
-    rootPath,
-    searchPanelMode,
-    sidebarMode,
-    t,
-    trackRequest,
-  ]);
 
   const getCurrentNavigationLocation = useCallback((): NavigationHistoryEntry | null => {
     const context = getActiveEditorContext();
@@ -18838,15 +18759,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return collectRows;
   }, [expandedDirectories, externalChangesByPath, getCompactDirectoryPresentations, getEntryStatus, isDirectoryLoading]);
 
-  const trimmedDeferredSearchQuery = deferredSearchQuery.trim();
-
   const rootExplorerRows = useMemo(() => {
-    if (!isSidebarVisible || sidebarMode !== 'files' || !isRootExpanded || Boolean(trimmedDeferredSearchQuery)) {
+    if (!isSidebarVisible || sidebarMode !== 'files' || !isRootExpanded) {
       return [];
     }
 
     return buildExplorerTreeRows(rootPath, 1);
-  }, [buildExplorerTreeRows, isRootExpanded, isSidebarVisible, rootPath, sidebarMode, trimmedDeferredSearchQuery]);
+  }, [buildExplorerTreeRows, isRootExpanded, isSidebarVisible, rootPath, sidebarMode]);
   const externalLibraryExplorerRowsByRoot = useMemo(() => {
     const rowsByRoot = new Map<string, ExplorerTreeRow[]>();
     if (!isSidebarVisible || sidebarMode !== 'files' || !hasExternalLibraries) {
@@ -19036,12 +18955,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     );
   }, [activateFile, getEntryStatus, getRelativePath, renderFileContextMenu, rootPath, selectedPath]);
 
-  const renderedFilesSidebarBody = useCallback((viewport: FileTreeViewport) => {
+  const renderedFilesSidebarBody = useCallback((viewport: FileTreeViewport, searchState: FilesSidebarSearchState) => {
     if (!isSidebarVisible || sidebarMode !== 'files') {
       return null;
     }
 
     const { scrollTop: filesSidebarScrollTop, viewportHeight: filesSidebarViewportHeight } = viewport;
+    const { trimmedQuery, results: searchResults, error: searchError } = searchState;
     const visibleRootExplorerRows = getWindowedListSlice({
       items: rootExplorerRows,
       scrollTop: Math.max(0, filesSidebarScrollTop - CODE_PANE_EXPLORER_ROW_HEIGHT),
@@ -19083,11 +19003,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       );
     }
 
-    if (trimmedDeferredSearchQuery && searchError) {
+    if (trimmedQuery && searchError) {
       return <div className="px-2 text-xs text-red-300">{searchError}</div>;
     }
 
-    if (trimmedDeferredSearchQuery) {
+    if (trimmedQuery) {
       return searchResults.length > 0 ? renderedWindowedSearchResults : (
         <div className="px-2 text-xs text-zinc-500">{t('common.noMatchingWindows')}</div>
       );
@@ -19175,44 +19095,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
     isSidebarVisible,
     renderFileContextMenu,
     renderedExternalLibrarySections,
-    searchResults.length,
     renderExplorerTreeRows,
     rootExplorerRows,
     rootLabel,
     rootPath,
     renderSearchResultRow,
-    searchError,
     selectExplorerPath,
     sidebarEntries,
     sidebarMode,
     t,
     toggleDirectory,
     treeLoadError,
-    trimmedDeferredSearchQuery,
-    searchResults,
   ]);
-
-  const contentSearchGroups = useMemo(() => {
-    if (!isSidebarVisible || sidebarMode !== 'search' || searchPanelMode !== 'contents') {
-      return [];
-    }
-
-    const groups = new Map<string, CodePaneContentMatch[]>();
-    for (const match of contentSearchResults) {
-      const matches = groups.get(match.filePath) ?? [];
-      matches.push(match);
-      groups.set(match.filePath, matches);
-    }
-
-    const nextGroups: Array<{ filePath: string; matches: CodePaneContentMatch[] }> = [];
-    for (const [filePath, matches] of groups.entries()) {
-      nextGroups.push({
-        filePath,
-        matches,
-      });
-    }
-    return nextGroups;
-  }, [contentSearchResults, isSidebarVisible, searchPanelMode, sidebarMode]);
 
   const usageGroups = useMemo(() => {
     if (!isSidebarVisible || sidebarMode !== 'search' || searchPanelMode !== 'usages') {
@@ -21823,29 +21717,153 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [refreshLoadedDirectories]);
 
-  const handleFilesSearchQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextQuery = event.target.value;
-    setSearchQuery((currentQuery) => (
-      currentQuery === nextQuery ? currentQuery : nextQuery
-    ));
+  const searchFiles = useCallback(async (trimmedQuery: string) => {
+    const requestKey = `search-files:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${trimmedQuery}`;
+    const cachedResults = runtimeStoreRef.current.getCache<string[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
+    if (cachedResults) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'File search', {
+        meta: trimmedQuery,
+        fromCache: true,
+      });
+      return {
+        results: cachedResults,
+        error: null,
+      };
+    }
+
+    const response = await trackRequest(
+      requestKey,
+      'File search',
+      trimmedQuery,
+      async () => await window.electronAPI.codePaneSearchFiles({
+        rootPath,
+        query: trimmedQuery,
+        limit: 80,
+      }),
+    );
+
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return {
+        results: [],
+        error: null,
+      };
+    }
+
+    if (response.success) {
+      runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
+    }
+
+    return {
+      results: response.success ? (response.data ?? []) : [],
+      error: response.success ? null : (response.error || t('common.retry')),
+    };
+  }, [rootPath, t, trackRequest]);
+
+  const searchContents = useCallback(async (trimmedQuery: string) => {
+    searchSidebarStateRef.current.contentQuery = trimmedQuery;
+    const requestKey = `search-contents:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${trimmedQuery}`;
+    const cachedResults = runtimeStoreRef.current.getCache<CodePaneContentMatch[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
+    if (cachedResults) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Content search', {
+        meta: trimmedQuery,
+        fromCache: true,
+      });
+      searchSidebarStateRef.current.contentResults = cachedResults;
+      searchSidebarStateRef.current.contentError = null;
+      return {
+        results: cachedResults,
+        error: null,
+      };
+    }
+
+    const response = await trackRequest(
+      requestKey,
+      'Content search',
+      trimmedQuery,
+      async () => await window.electronAPI.codePaneSearchContents({
+        rootPath,
+        query: trimmedQuery,
+        limit: 120,
+        maxMatchesPerFile: 6,
+      }),
+    );
+
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return {
+        results: [],
+        error: null,
+      };
+    }
+
+    if (response.success) {
+      runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
+    }
+
+    const results = response.success ? (response.data ?? []) : [];
+    const error = response.success ? null : (response.error || t('common.retry'));
+    searchSidebarStateRef.current.contentResults = results;
+    searchSidebarStateRef.current.contentError = error;
+    return { results, error };
+  }, [rootPath, t, trackRequest]);
+
+  const searchWorkspaceSymbols = useCallback(async (trimmedQuery: string) => {
+    searchSidebarStateRef.current.workspaceSymbolQuery = trimmedQuery;
+    const requestKey = `workspace-symbols:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${trimmedQuery}`;
+    const cachedResults = runtimeStoreRef.current.getCache<CodePaneWorkspaceSymbol[]>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
+    if (cachedResults) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Workspace symbols', {
+        meta: trimmedQuery,
+        fromCache: true,
+      });
+      searchSidebarStateRef.current.workspaceSymbolResults = cachedResults;
+      searchSidebarStateRef.current.workspaceSymbolError = null;
+      return {
+        results: cachedResults,
+        error: null,
+      };
+    }
+
+    const response = await trackRequest(
+      requestKey,
+      'Workspace symbols',
+      trimmedQuery,
+      async () => await window.electronAPI.codePaneGetWorkspaceSymbols({
+        rootPath,
+        query: trimmedQuery,
+        limit: 120,
+      }),
+    );
+
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return {
+        results: [],
+        error: null,
+      };
+    }
+
+    if (response.success) {
+      runtimeStoreRef.current.setCache(cacheKey, response.data ?? []);
+    }
+
+    const results = response.success ? (response.data ?? []) : [];
+    const error = response.success ? null : (response.error || t('common.retry'));
+    searchSidebarStateRef.current.workspaceSymbolResults = results;
+    searchSidebarStateRef.current.workspaceSymbolError = error;
+    return { results, error };
+  }, [rootPath, t, trackRequest]);
+
+  const persistSearchSidebarState = useCallback((state: SearchSidebarPersistedState) => {
+    searchSidebarStateRef.current = state;
   }, []);
 
   const handleSearchPanelModeChange = useCallback((nextMode: SearchPanelMode) => {
     setSearchPanelMode(nextMode);
-  }, []);
-
-  const handleContentSearchQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextQuery = event.target.value;
-    setContentSearchQuery((currentQuery) => (
-      currentQuery === nextQuery ? currentQuery : nextQuery
-    ));
-  }, []);
-
-  const handleWorkspaceSymbolQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextQuery = event.target.value;
-    setWorkspaceSymbolQuery((currentQuery) => (
-      currentQuery === nextQuery ? currentQuery : nextQuery
-    ));
   }, []);
 
   const handleToggleFormatOnSave = useCallback(() => {
@@ -23110,42 +23128,30 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const renderedFilesSidebarContent = useMemo(() => (
     <FilesSidebarContent
       scrollRef={filesSidebarScrollRef}
-      searchQuery={searchQuery}
-      isSearching={isSearching}
       body={renderedFilesSidebarBody}
-      onSearchQueryChange={handleFilesSearchQueryChange}
+      onSearch={searchFiles}
       t={t}
     />
   ), [
-    handleFilesSearchQueryChange,
-    isSearching,
     renderedFilesSidebarBody,
-    searchQuery,
+    searchFiles,
     t,
   ]);
 
   const renderedSearchSidebarContent = useMemo(() => (
     <SearchSidebarContent
       mode={searchPanelMode}
-      contentQuery={contentSearchQuery}
-      contentGroups={contentSearchGroups}
-      deferredContentQuery={deferredContentSearchQuery}
-      contentError={contentSearchError}
-      isContentSearching={isContentSearching}
-      workspaceSymbolQuery={workspaceSymbolQuery}
-      deferredWorkspaceSymbolQuery={deferredWorkspaceSymbolQuery}
-      workspaceSymbolResults={workspaceSymbolResults}
-      workspaceSymbolError={workspaceSymbolError}
-      isWorkspaceSymbolSearching={isWorkspaceSymbolSearching}
+      initialState={searchSidebarStateRef.current}
       usageGroups={usageGroups}
       usageError={usageError}
       usagesTargetLabel={usagesTargetLabel}
       isFindingUsages={isFindingUsages}
       rootPath={rootPath}
       onModeChange={handleSearchPanelModeChange}
-      onContentQueryChange={handleContentSearchQueryChange}
-      onWorkspaceSymbolQueryChange={handleWorkspaceSymbolQueryChange}
       onFindUsages={handleEditorActionFindUsages}
+      onSearchContents={searchContents}
+      onSearchWorkspaceSymbols={searchWorkspaceSymbols}
+      onPersistState={persistSearchSidebarState}
       onActivateFile={activateFile}
       onOpenContentMatch={openContentSearchMatch}
       onOpenFileLocation={openFileLocation}
@@ -23153,29 +23159,20 @@ export const CodePane: React.FC<CodePaneProps> = ({
     />
   ), [
     activateFile,
-    contentSearchError,
-    contentSearchGroups,
-    contentSearchQuery,
-    deferredContentSearchQuery,
-    deferredWorkspaceSymbolQuery,
-    handleContentSearchQueryChange,
     handleEditorActionFindUsages,
     handleSearchPanelModeChange,
-    handleWorkspaceSymbolQueryChange,
-    isContentSearching,
     isFindingUsages,
-    isWorkspaceSymbolSearching,
     openContentSearchMatch,
     openFileLocation,
+    persistSearchSidebarState,
     rootPath,
     searchPanelMode,
+    searchContents,
+    searchWorkspaceSymbols,
     t,
     usageError,
     usageGroups,
     usagesTargetLabel,
-    workspaceSymbolError,
-    workspaceSymbolQuery,
-    workspaceSymbolResults,
   ]);
 
   const renderedScmSidebarContent = useMemo(() => (
