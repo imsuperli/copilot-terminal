@@ -284,6 +284,9 @@ const CODE_PANE_SIDEBAR_MAX_WIDTH = 520;
 const CODE_PANE_EXPLORER_ROW_HEIGHT = 24;
 const CODE_PANE_EXPLORER_ROW_OVERSCAN = 10;
 const CODE_PANE_EXPLORER_WINDOWING_THRESHOLD = 120;
+const CODE_PANE_SEARCH_EVERYWHERE_ROW_HEIGHT = 52;
+const CODE_PANE_SEARCH_EVERYWHERE_ROW_OVERSCAN = 8;
+const CODE_PANE_SEARCH_EVERYWHERE_WINDOWING_THRESHOLD = 80;
 const CODE_PANE_EXTERNAL_CHANGE_ROW_HEIGHT = 66;
 const CODE_PANE_EXTERNAL_CHANGE_ROW_OVERSCAN = 8;
 const CODE_PANE_EXTERNAL_CHANGE_WINDOWING_THRESHOLD = 80;
@@ -1333,6 +1336,77 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
   onExecuteItem: (item: SearchEverywhereItem) => void;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  const listScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [listScrollTop, setListScrollTop] = React.useState(0);
+  const [listViewportHeight, setListViewportHeight] = React.useState(0);
+  const pendingListScrollTopRef = React.useRef<number | null>(null);
+  const listScrollAnimationFrameRef = React.useRef<number | null>(null);
+  const sectionedItems = React.useMemo(() => {
+    const nextSectionedItems: Array<{ item: SearchEverywhereItem; index: number; showSectionLabel: boolean }> = [];
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index]!;
+      const previousItem = index > 0 ? items[index - 1] : null;
+      nextSectionedItems.push({
+        item,
+        index,
+        showSectionLabel: !previousItem || previousItem.section !== item.section,
+      });
+    }
+    return nextSectionedItems;
+  }, [items]);
+  const visibleItems = React.useMemo(() => getWindowedListSlice({
+    items: sectionedItems,
+    scrollTop: listScrollTop,
+    viewportHeight: listViewportHeight,
+    rowHeight: CODE_PANE_SEARCH_EVERYWHERE_ROW_HEIGHT,
+    overscan: CODE_PANE_SEARCH_EVERYWHERE_ROW_OVERSCAN,
+    threshold: CODE_PANE_SEARCH_EVERYWHERE_WINDOWING_THRESHOLD,
+  }), [listScrollTop, listViewportHeight, sectionedItems]);
+
+  const scheduleListScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingListScrollTopRef.current = nextScrollTop;
+    if (listScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    listScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      listScrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingListScrollTopRef.current;
+      pendingListScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setListScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const container = listScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncViewport = () => {
+      setListViewportHeight(container.clientHeight);
+      setListScrollTop(container.scrollTop);
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      if (listScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(listScrollAnimationFrameRef.current);
+        listScrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
+
   return (
     <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/70 p-4">
       <div className="mt-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
@@ -1405,51 +1479,97 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
             {isLoading && <Loader2 size={13} className="shrink-0 animate-spin text-zinc-500" />}
           </div>
         </div>
-        <div className="max-h-[60vh] overflow-auto p-2">
+        <div
+          ref={listScrollRef}
+          className="max-h-[60vh] overflow-auto p-2"
+          onScroll={(event) => {
+            scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
+          }}
+        >
           {error ? (
             <div className="px-2 py-3 text-sm text-red-300">{error}</div>
           ) : items.length > 0 ? (
-            <div className="space-y-1">
-              {items.map((item, index) => {
-                const previousItem = index > 0 ? items[index - 1] : null;
-                const showSectionLabel = !previousItem || previousItem.section !== item.section;
-                const isSelected = index === selectedIndex;
-
-                return (
-                  <React.Fragment key={item.id}>
-                    {showSectionLabel && (
-                      <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
-                        {item.section}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onMouseEnter={() => {
-                        onHoverIndex(index);
-                      }}
-                      onClick={() => {
-                        onExecuteItem(item);
-                      }}
-                      className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
-                        isSelected
-                          ? 'bg-zinc-800 text-zinc-100'
-                          : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">{item.title}</div>
-                        {item.subtitle && (
-                          <div className="mt-1 truncate text-xs text-zinc-500">{item.subtitle}</div>
+            visibleItems.isWindowed ? (
+              <div style={{ height: `${visibleItems.totalHeight}px`, position: 'relative' }}>
+                <div style={{ transform: `translateY(${visibleItems.offsetTop}px)` }}>
+                  {visibleItems.items.map(({ item, index, showSectionLabel }) => {
+                    const isSelected = index === selectedIndex;
+                    return (
+                      <React.Fragment key={item.id}>
+                        {showSectionLabel && (
+                          <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                            {item.section}
+                          </div>
                         )}
-                      </div>
-                      {item.meta && (
-                        <div className="shrink-0 text-[11px] text-zinc-500">{item.meta}</div>
+                        <button
+                          type="button"
+                          onMouseEnter={() => {
+                            onHoverIndex(index);
+                          }}
+                          onClick={() => {
+                            onExecuteItem(item);
+                          }}
+                          className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
+                            isSelected
+                              ? 'bg-zinc-800 text-zinc-100'
+                              : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm">{item.title}</div>
+                            {item.subtitle && (
+                              <div className="mt-1 truncate text-xs text-zinc-500">{item.subtitle}</div>
+                            )}
+                          </div>
+                          {item.meta && (
+                            <div className="shrink-0 text-[11px] text-zinc-500">{item.meta}</div>
+                          )}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {sectionedItems.map(({ item, index, showSectionLabel }) => {
+                  const isSelected = index === selectedIndex;
+                  return (
+                    <React.Fragment key={item.id}>
+                      {showSectionLabel && (
+                        <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                          {item.section}
+                        </div>
                       )}
-                    </button>
-                  </React.Fragment>
-                );
-              })}
-            </div>
+                      <button
+                        type="button"
+                        onMouseEnter={() => {
+                          onHoverIndex(index);
+                        }}
+                        onClick={() => {
+                          onExecuteItem(item);
+                        }}
+                        className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
+                          isSelected
+                            ? 'bg-zinc-800 text-zinc-100'
+                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm">{item.title}</div>
+                          {item.subtitle && (
+                            <div className="mt-1 truncate text-xs text-zinc-500">{item.subtitle}</div>
+                          )}
+                        </div>
+                        {item.meta && (
+                          <div className="shrink-0 text-[11px] text-zinc-500">{item.meta}</div>
+                        )}
+                      </button>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            )
           ) : (
             <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.searchEverywhereEmpty')}</div>
           )}
