@@ -9230,6 +9230,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const gitRebaseBaseRefRef = useRef(gitRebaseBaseRef);
   const activeGitWorkbenchTabRef = useRef<GitToolWindowTab>('log');
   const isPaneMountedRef = useRef(true);
+  const pendingPersistedCodeStateRef = useRef<NonNullable<Pane['code']> | null>(null);
+  const persistedCodeStateFlushQueuedRef = useRef(false);
 
   useEffect(() => {
     paneRef.current = pane;
@@ -9239,6 +9241,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     isPaneMountedRef.current = true;
     return () => {
       isPaneMountedRef.current = false;
+      persistedCodeStateFlushQueuedRef.current = false;
+      pendingPersistedCodeStateRef.current = null;
     };
   }, []);
 
@@ -9506,8 +9510,23 @@ export const CodePane: React.FC<CodePaneProps> = ({
       activeFilePathRef.current = updates.activeFilePath;
     }
 
-    updatePane(windowId, pane.id, {
-      code: nextCodeState,
+    pendingPersistedCodeStateRef.current = nextCodeState;
+    if (persistedCodeStateFlushQueuedRef.current) {
+      return;
+    }
+
+    persistedCodeStateFlushQueuedRef.current = true;
+    queueMicrotask(() => {
+      persistedCodeStateFlushQueuedRef.current = false;
+      const pendingCodeState = pendingPersistedCodeStateRef.current;
+      pendingPersistedCodeStateRef.current = null;
+      if (!pendingCodeState || !isPaneMountedRef.current) {
+        return;
+      }
+
+      updatePane(windowId, pane.id, {
+        code: pendingCodeState,
+      });
     });
   }, [pane.id, rootPath, updatePane, windowId]);
 
