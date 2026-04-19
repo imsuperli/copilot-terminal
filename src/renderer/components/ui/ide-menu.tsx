@@ -22,7 +22,7 @@ export const ideMenuItemClassName = joinClassNames(
 
 export const ideMenuDangerItemClassName = joinClassNames(
   ideMenuItemClassName,
-  'text-red-300 focus:bg-red-500/12 data-[highlighted]:bg-red-500/12',
+  'text-[rgb(var(--error))] focus:bg-[rgb(var(--error)/0.12)] data-[highlighted]:bg-[rgb(var(--error)/0.12)]',
 );
 
 export const ideMenuSubTriggerClassName = joinClassNames(

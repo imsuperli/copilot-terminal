@@ -72,10 +72,10 @@ export const idePopupActionButtonClassName = (tone: 'primary' | 'success' | 'war
   tone === 'primary'
     ? 'border-[rgb(var(--primary))]/72 bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:opacity-92'
     : tone === 'success'
-      ? 'border-emerald-500/70 bg-emerald-600/90 text-white hover:border-emerald-400 hover:bg-emerald-500'
+      ? 'border-[rgb(var(--success))/0.70] bg-[rgb(var(--success))] text-[rgb(var(--background))] hover:opacity-92'
       : tone === 'warning'
-        ? 'border-amber-500/70 bg-amber-600/90 text-white hover:border-amber-400 hover:bg-amber-500'
-        : 'border-red-500/70 bg-red-600/90 text-white hover:border-red-400 hover:bg-red-500',
+        ? 'border-[rgb(var(--warning))/0.70] bg-[rgb(var(--warning))] text-[rgb(var(--background))] hover:opacity-92'
+        : 'border-[rgb(var(--error))/0.70] bg-[rgb(var(--error))] text-[rgb(var(--foreground))] hover:opacity-92',
 );
 
 export const idePopupMicroButtonClassName = (tone: 'neutral' | 'primary' | 'success' | 'warning' | 'danger' = 'neutral') => joinClassNames(
@@ -85,10 +85,10 @@ export const idePopupMicroButtonClassName = (tone: 'neutral' | 'primary' | 'succ
     : tone === 'primary'
       ? 'border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))] hover:border-[rgb(var(--primary))]/52 hover:bg-[rgb(var(--primary))]/16'
       : tone === 'success'
-        ? 'border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-200 hover:border-emerald-400/50 hover:bg-emerald-500/[0.14]'
+        ? 'border-[rgb(var(--success))/0.30] bg-[rgb(var(--success))/0.08] text-[rgb(var(--success))] hover:border-[rgb(var(--success))/0.50] hover:bg-[rgb(var(--success))/0.14]'
         : tone === 'warning'
-          ? 'border-amber-500/30 bg-amber-500/[0.08] text-amber-200 hover:border-amber-400/50 hover:bg-amber-500/[0.14]'
-          : 'border-red-500/30 bg-red-500/[0.08] text-red-200 hover:border-red-400/50 hover:bg-red-500/[0.14]',
+          ? 'border-[rgb(var(--warning))/0.30] bg-[rgb(var(--warning))/0.08] text-[rgb(var(--warning))] hover:border-[rgb(var(--warning))/0.50] hover:bg-[rgb(var(--warning))/0.14]'
+          : 'border-[rgb(var(--error))/0.30] bg-[rgb(var(--error))/0.08] text-[rgb(var(--error))] hover:border-[rgb(var(--error))/0.50] hover:bg-[rgb(var(--error))/0.14]',
 );
 
 export const idePopupToggleButtonClassName = (active: boolean) => joinClassNames(
@@ -115,13 +115,13 @@ export const idePopupRowClassName = (active: boolean) => joinClassNames(
 export const idePopupBadgeClassName = (tone: 'red' | 'amber' | 'sky' | 'emerald' | 'violet' | 'zinc') => {
   switch (tone) {
     case 'red':
-      return 'border-red-400/45 bg-red-500/[0.08] text-red-200';
+      return 'border-[rgb(var(--error))/0.45] bg-[rgb(var(--error))/0.08] text-[rgb(var(--error))]';
     case 'amber':
-      return 'border-amber-400/45 bg-amber-500/[0.08] text-amber-200';
+      return 'border-[rgb(var(--warning))/0.45] bg-[rgb(var(--warning))/0.08] text-[rgb(var(--warning))]';
     case 'sky':
       return 'border-[rgb(var(--primary))]/45 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]';
     case 'emerald':
-      return 'border-emerald-400/45 bg-emerald-500/[0.08] text-emerald-200';
+      return 'border-[rgb(var(--success))/0.45] bg-[rgb(var(--success))/0.08] text-[rgb(var(--success))]';
     case 'violet':
       return 'border-violet-400/45 bg-violet-500/[0.08] text-violet-200';
     default:

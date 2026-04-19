@@ -34,13 +34,13 @@ export function ConflictResolutionToolWindow({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
         <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.gitConflictResolverTab')}
           </div>
-          <div className="mt-1 truncate text-xs text-zinc-200">
+          <div className="mt-1 truncate text-xs text-[rgb(var(--foreground))]">
             {conflict?.relativePath ?? t('codePane.loading')}
           </div>
         </div>
@@ -50,7 +50,7 @@ export function ConflictResolutionToolWindow({
             onClick={() => {
               void onRefresh();
             }}
-            className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -61,7 +61,7 @@ export function ConflictResolutionToolWindow({
               void onApply(mergedContent);
             }}
             disabled={!conflict || isApplying}
-            className="flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-1 text-[11px] text-emerald-200 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1 rounded bg-[rgb(var(--success)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success)/0.22)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isApplying ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
             {t('codePane.gitApplyConflictResolution')}
@@ -69,7 +69,7 @@ export function ConflictResolutionToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -78,25 +78,25 @@ export function ConflictResolutionToolWindow({
       </div>
 
       {error && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <div className="border-b border-[rgb(var(--error)/0.20)] bg-[rgb(var(--error)/0.10)] px-3 py-2 text-xs text-[rgb(var(--error))]">
           {error}
         </div>
       )}
 
       {isLoading ? (
-        <div className="flex flex-1 items-center justify-center gap-2 text-xs text-zinc-500">
+        <div className="flex flex-1 items-center justify-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
           <Loader2 size={12} className="animate-spin" />
           {t('codePane.loading')}
         </div>
       ) : conflict ? (
         <>
-          <div className="flex items-center gap-2 border-b border-zinc-800 px-3 py-2 text-[11px] text-zinc-400">
+          <div className="flex items-center gap-2 border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
             <button
               type="button"
               onClick={() => {
                 replaceMergedContent(conflict.baseContent);
               }}
-              className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+              className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseBase')}
@@ -106,7 +106,7 @@ export function ConflictResolutionToolWindow({
               onClick={() => {
                 replaceMergedContent(conflict.oursContent);
               }}
-              className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+              className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseOurs')}
@@ -116,7 +116,7 @@ export function ConflictResolutionToolWindow({
               onClick={() => {
                 replaceMergedContent(conflict.theirsContent);
               }}
-              className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+              className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseTheirs')}
@@ -136,7 +136,7 @@ export function ConflictResolutionToolWindow({
           </div>
         </>
       ) : (
-        <div className="flex flex-1 items-center justify-center text-xs text-zinc-500">
+        <div className="flex flex-1 items-center justify-center text-xs text-[rgb(var(--muted-foreground))]">
           {t('codePane.gitConflictsNone')}
         </div>
       )}
@@ -156,12 +156,12 @@ function ConflictPane({
   borderTop?: boolean;
 }) {
   return (
-    <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-zinc-800' : ''} ${borderTop ? 'border-t border-zinc-800' : ''}`}>
-      <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+    <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''} ${borderTop ? 'border-t border-[rgb(var(--border))]' : ''}`}>
+      <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {title}
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
-        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-zinc-200">
+        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[rgb(var(--foreground))]">
           {content || '[empty]'}
         </pre>
       </div>
@@ -183,8 +183,8 @@ function MergedConflictPane({
   onChange: (nextValue: string) => void;
 }) {
   return (
-    <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-zinc-800' : ''} ${borderTop ? 'border-t border-zinc-800' : ''}`}>
-      <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+    <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''} ${borderTop ? 'border-t border-[rgb(var(--border))]' : ''}`}>
+      <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {title}
       </div>
       <div className="min-h-0 flex-1 p-3">
@@ -193,7 +193,7 @@ function MergedConflictPane({
           onChange={(event) => {
             onChange(event.target.value);
           }}
-          className="h-full w-full resize-none rounded border border-zinc-800 bg-zinc-950/70 p-3 font-mono text-[11px] leading-5 text-zinc-100 outline-none transition-colors focus:border-sky-500/40"
+          className="h-full w-full resize-none rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] p-3 font-mono text-[11px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
           spellCheck={false}
         />
       </div>

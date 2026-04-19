@@ -43,7 +43,7 @@ export function GitBranchGraph({
           return (
             <div
               key={row.commit.sha}
-              className="group flex min-h-8 items-stretch rounded px-1 hover:bg-zinc-800/60"
+              className="group flex min-h-8 items-stretch rounded px-1 hover:bg-[rgb(var(--accent))]"
             >
               <div className="shrink-0" style={{ width: `${graphWidth}px` }}>
                 <svg
@@ -89,7 +89,7 @@ export function GitBranchGraph({
 
               <div className="min-w-0 flex-1 py-1.5">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="truncate text-xs text-zinc-100">{row.commit.subject || row.commit.shortSha}</span>
+                  <span className="truncate text-xs text-[rgb(var(--foreground))]">{row.commit.subject || row.commit.shortSha}</span>
                   {visibleRefs.map((ref) => (
                     <span
                       key={`${row.commit.sha}-${ref}`}
@@ -99,10 +99,10 @@ export function GitBranchGraph({
                     </span>
                   ))}
                   {row.commit.refs.length > visibleRefs.length && (
-                    <span className="text-[10px] text-zinc-500">+{row.commit.refs.length - visibleRefs.length}</span>
+                    <span className="text-[10px] text-[rgb(var(--muted-foreground))]">+{row.commit.refs.length - visibleRefs.length}</span>
                   )}
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-zinc-500">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-[rgb(var(--muted-foreground))]">
                   <span>{row.commit.author}</span>
                   <span>{new Date(row.commit.timestamp * 1000).toLocaleString()}</span>
                   <span>{row.commit.shortSha}</span>
@@ -116,7 +116,7 @@ export function GitBranchGraph({
                     onClick={() => {
                       void onCherryPick(row.commit.sha);
                     }}
-                    className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+                    className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                     aria-label={`Cherry-pick ${row.commit.shortSha}`}
                   >
                     <GitCommitHorizontal size={12} />
@@ -155,16 +155,16 @@ function getGraphColor(colorIndex: number): string {
 
 function getRefClassName(ref: string): string {
   if (ref.startsWith('HEAD ->')) {
-    return 'bg-emerald-500/15 text-emerald-200';
+    return 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]';
   }
 
   if (ref.startsWith('origin/')) {
-    return 'bg-sky-500/15 text-sky-200';
+    return 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--info))]';
   }
 
   if (ref.startsWith('tag:')) {
-    return 'bg-amber-500/15 text-amber-200';
+    return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
   }
 
-  return 'bg-zinc-800 text-zinc-300';
+  return 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]';
 }
