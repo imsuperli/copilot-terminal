@@ -232,10 +232,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
     >
       {/* 启动中加载遮罩 */}
       {aggregatedStatus === WindowStatus.Restoring && (
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-3 rounded-lg transition-opacity duration-200">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-[color-mix(in_srgb,rgb(var(--background))_84%,black)] backdrop-blur-sm transition-opacity duration-200">
           <Loader2 className="w-12 h-12 text-[rgb(var(--primary))] animate-spin" />
-          <div className="text-white text-sm font-medium">{t('windowCard.startingTerminal')}</div>
-          <div className="text-zinc-400 text-xs">{t('windowCard.pleaseWait')}</div>
+          <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('windowCard.startingTerminal')}</div>
+          <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('windowCard.pleaseWait')}</div>
         </div>
       )}
 
@@ -253,7 +253,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
               {window.name}
             </h3>
             {paneCount > 1 && (
-              <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded flex-shrink-0">
+              <span className="flex-shrink-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-0.5 text-xs text-[rgb(var(--muted-foreground))]">
                 {t('windowCard.panesCount', { count: paneCount })}
               </span>
             )}

@@ -1,4 +1,5 @@
 export const zhCNMessages = {
+  'common.confirm': '确认',
   'common.cancel': '取消',
   'common.save': '保存',
   'common.saving': '保存中...',
@@ -1299,6 +1300,7 @@ export const zhCNMessages = {
 export type TranslationKey = keyof typeof zhCNMessages;
 
 export const enUSMessages: Record<TranslationKey, string> = {
+  'common.confirm': 'Confirm',
   'common.cancel': 'Cancel',
   'common.save': 'Save',
   'common.saving': 'Saving...',

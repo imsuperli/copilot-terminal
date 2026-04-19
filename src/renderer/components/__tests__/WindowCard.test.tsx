@@ -1,159 +1,253 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { act } from 'react';
 import { WindowCard } from '../WindowCard';
 import { Window, WindowStatus } from '../../types/window';
+import { createSinglePaneWindow } from '../../utils/layoutHelpers';
+
+function createWindow(overrides: Partial<Window> = {}): Window {
+  const baseWindow = createSinglePaneWindow('Test Window', '/home/user/project', 'bash');
+
+  return {
+    ...baseWindow,
+    id: 'window-card-test',
+    createdAt: '2024-01-01T10:00:00.000Z',
+    lastActiveAt: '2024-01-01T10:30:00.000Z',
+    layout: {
+      type: 'pane',
+      id: baseWindow.activePaneId,
+      pane: {
+        id: baseWindow.activePaneId,
+        cwd: '/home/user/project',
+        command: 'bash',
+        status: WindowStatus.Running,
+        pid: 1234,
+        backend: 'local',
+      },
+    },
+    ...overrides,
+  };
+}
 
 describe('WindowCard', () => {
-  const mockWindow: Window = {
-    id: '123',
-    name: 'Test Window',
-    workingDirectory: '/home/user/project',
-    command: 'claude',
-    status: WindowStatus.Running,
-    pid: 1234,
-    createdAt: '2024-01-01T10:00:00Z',
-    lastActiveAt: '2024-01-01T10:30:00Z',
-    model: 'Claude Opus 4.6',
-    lastOutput: 'Some output text'
-  };
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(window.electronAPI, 'getSettings').mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: { useBundledConptyDll: false, defaultShellProgram: '' },
+        features: { sshEnabled: true },
+        chat: { providers: [], enableCommandSecurity: true },
+      },
+    });
+  });
 
-  it('renders window name', () => {
-    render(<WindowCard window={mockWindow} />);
+  it('renders the window name and working directory', () => {
+    render(<WindowCard window={createWindow()} />);
+
     expect(screen.getByText('Test Window')).toBeInTheDocument();
+    expect(screen.getByTestId('working-directory')).toHaveTextContent('/home/user/project');
   });
 
-  it('renders working directory', () => {
-    render(<WindowCard window={mockWindow} />);
-    expect(screen.getByText('/home/user/project')).toBeInTheDocument();
+  it('renders pane count badge for multi-pane windows', () => {
+    const multiPaneWindow = createWindow({
+      activePaneId: 'pane-1',
+      layout: {
+        type: 'split',
+        direction: 'horizontal',
+        sizes: [0.5, 0.5],
+        children: [
+          {
+            type: 'pane',
+            id: 'layout-pane-1',
+            pane: {
+              id: 'pane-1',
+              cwd: '/home/user/project',
+              command: 'bash',
+              status: WindowStatus.Running,
+              pid: 1001,
+              backend: 'local',
+            },
+          },
+          {
+            type: 'pane',
+            id: 'layout-pane-2',
+            pane: {
+              id: 'pane-2',
+              cwd: '/srv/project',
+              command: 'bash',
+              status: WindowStatus.WaitingForInput,
+              pid: 1002,
+              backend: 'ssh',
+              ssh: {
+                profileId: 'ssh-profile-1',
+                host: '10.0.0.8',
+                port: 22,
+                user: 'root',
+                authType: 'password',
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    render(<WindowCard window={multiPaneWindow} />);
+
+    expect(screen.getByText('2 个窗格')).toBeInTheDocument();
+    expect(screen.getByTestId('window-card-logo-mixed')).toHaveAttribute('data-terminal-type-logo', 'mixed');
   });
 
-  it('renders model name', () => {
-    render(<WindowCard window={mockWindow} />);
-    expect(screen.getByText('Claude Opus 4.6')).toBeInTheDocument();
-  });
+  it('shows the restoring overlay when the aggregated status is restoring', () => {
+    const restoringWindow = createWindow({
+      layout: {
+        type: 'pane',
+        id: 'layout-pane-restoring',
+        pane: {
+          id: 'pane-restoring',
+          cwd: '/home/user/project',
+          command: 'bash',
+          status: WindowStatus.Restoring,
+          pid: null,
+          backend: 'local',
+        },
+      },
+      activePaneId: 'pane-restoring',
+    });
 
-  it('renders last output', () => {
-    render(<WindowCard window={mockWindow} />);
-    expect(screen.getByText('Some output text')).toBeInTheDocument();
-  });
-
-  it('renders status label for running status', () => {
-    render(<WindowCard window={mockWindow} />);
-    expect(screen.getByText('运行中')).toBeInTheDocument();
-  });
-
-  it('renders status label for waiting status', () => {
-    const waitingWindow = { ...mockWindow, status: WindowStatus.WaitingForInput };
-    render(<WindowCard window={waitingWindow} />);
-    expect(screen.getByText('等待输入')).toBeInTheDocument();
-  });
-
-  it('renders status label for completed status', () => {
-    const completedWindow = { ...mockWindow, status: WindowStatus.Completed };
-    render(<WindowCard window={completedWindow} />);
-    expect(screen.getByText('已完成')).toBeInTheDocument();
-  });
-
-  it('renders status label for error status', () => {
-    const errorWindow = { ...mockWindow, status: WindowStatus.Error };
-    render(<WindowCard window={errorWindow} />);
-    expect(screen.getByText('出错')).toBeInTheDocument();
-  });
-
-  it('renders status label for restoring status', () => {
-    const restoringWindow = { ...mockWindow, status: WindowStatus.Restoring };
     render(<WindowCard window={restoringWindow} />);
-    expect(screen.getByText('恢复中')).toBeInTheDocument();
-  });
 
-  it('applies correct status color for running', () => {
-    const { container } = render(<WindowCard window={mockWindow} />);
-    const statusBar = container.querySelector('[data-testid="status-bar"]');
-    expect(statusBar).toHaveClass('bg-blue-500');
-  });
-
-  it('applies correct status color for waiting', () => {
-    const waitingWindow = { ...mockWindow, status: WindowStatus.WaitingForInput };
-    const { container } = render(<WindowCard window={waitingWindow} />);
-    const statusBar = container.querySelector('[data-testid="status-bar"]');
-    expect(statusBar).toHaveClass('bg-amber-500');
-  });
-
-  it('applies correct status color for completed', () => {
-    const completedWindow = { ...mockWindow, status: WindowStatus.Completed };
-    const { container } = render(<WindowCard window={completedWindow} />);
-    const statusBar = container.querySelector('[data-testid="status-bar"]');
-    expect(statusBar).toHaveClass('bg-green-500');
-  });
-
-  it('applies correct status color for error', () => {
-    const errorWindow = { ...mockWindow, status: WindowStatus.Error };
-    const { container } = render(<WindowCard window={errorWindow} />);
-    const statusBar = container.querySelector('[data-testid="status-bar"]');
-    expect(statusBar).toHaveClass('bg-red-500');
-  });
-
-  it('applies correct status color for restoring', () => {
-    const restoringWindow = { ...mockWindow, status: WindowStatus.Restoring };
-    const { container } = render(<WindowCard window={restoringWindow} />);
-    const statusBar = container.querySelector('[data-testid="status-bar"]');
-    expect(statusBar).toHaveClass('bg-gray-500');
+    expect(screen.getByText('正在启动终端...')).toBeInTheDocument();
+    expect(screen.getByText('请稍候')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Test Window/ })).toBeInTheDocument();
   });
 
   it('calls onClick when clicked', async () => {
     const onClick = vi.fn();
     const user = userEvent.setup();
-    render(<WindowCard window={mockWindow} onClick={onClick} />);
+    render(<WindowCard window={createWindow()} onClick={onClick} />);
 
-    const card = screen.getByRole('button');
-    await user.click(card);
+    await waitFor(() => {
+      expect(window.electronAPI.getSettings).toHaveBeenCalled();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Test Window/ }));
 
     expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'window-card-test' }));
   });
 
-  it('calls onClick when Enter key is pressed', async () => {
+  it('calls onClick when enter or space is pressed', async () => {
     const onClick = vi.fn();
     const user = userEvent.setup();
-    render(<WindowCard window={mockWindow} onClick={onClick} />);
+    render(<WindowCard window={createWindow()} onClick={onClick} />);
 
-    const card = screen.getByRole('button');
+    await waitFor(() => {
+      expect(window.electronAPI.getSettings).toHaveBeenCalled();
+    });
+
+    const card = screen.getByRole('button', { name: /Test Window/ });
     card.focus();
-    await user.keyboard('{Enter}');
+    await act(async () => {
+      await user.keyboard('{Enter}');
+      await user.keyboard(' ');
+    });
 
-    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onClick).toHaveBeenCalledTimes(2);
   });
 
-  it('calls onClick when Space key is pressed', async () => {
+  it('exposes an accessible label with name, status, cwd, and pane count', async () => {
+    render(<WindowCard window={createWindow()} />);
+
+    await waitFor(() => {
+      expect(window.electronAPI.getSettings).toHaveBeenCalled();
+    });
+
+    const card = screen.getByRole('button', { name: /Test Window/ });
+    const ariaLabel = card.getAttribute('aria-label') ?? '';
+
+    expect(ariaLabel).toContain('Test Window');
+    expect(ariaLabel).toContain('运行中');
+    expect(ariaLabel).toContain('/home/user/project');
+    expect(ariaLabel).toContain('1 个窗格');
+  });
+
+  it('renders stop action for running windows and triggers it without bubbling', async () => {
     const onClick = vi.fn();
+    const onPause = vi.fn();
     const user = userEvent.setup();
-    render(<WindowCard window={mockWindow} onClick={onClick} />);
+    render(<WindowCard window={createWindow()} onClick={onClick} onPause={onPause} />);
 
-    const card = screen.getByRole('button');
-    card.focus();
-    await user.keyboard(' ');
+    await user.click(screen.getByRole('button', { name: '停止' }));
 
-    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onPause).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('has correct accessibility attributes', () => {
-    render(<WindowCard window={mockWindow} />);
-    const card = screen.getByRole('button');
+  it('renders start action for paused windows and triggers it without bubbling', async () => {
+    const onClick = vi.fn();
+    const onStart = vi.fn();
+    const user = userEvent.setup();
+    const pausedWindow = createWindow({
+      layout: {
+        type: 'pane',
+        id: 'layout-pane-paused',
+        pane: {
+          id: 'pane-paused',
+          cwd: '/home/user/project',
+          command: 'bash',
+          status: WindowStatus.Paused,
+          pid: null,
+          backend: 'local',
+        },
+      },
+      activePaneId: 'pane-paused',
+    });
 
-    expect(card).toHaveAttribute('tabIndex', '0');
-    expect(card).toHaveAttribute('aria-label');
-    expect(card.getAttribute('aria-label')).toContain('Test Window');
-    expect(card.getAttribute('aria-label')).toContain('运行中');
+    render(<WindowCard window={pausedWindow} onClick={onClick} onStart={onStart} />);
+
+    await user.click(screen.getByRole('button', { name: '启动' }));
+
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
   });
 
-  it('truncates long working directory path', () => {
-    const longPathWindow = {
-      ...mockWindow,
-      workingDirectory: '/very/long/path/that/should/be/truncated/in/the/display'
-    };
-    const { container } = render(<WindowCard window={longPathWindow} />);
-    const pathElement = container.querySelector('[data-testid="working-directory"]');
-    expect(pathElement).toHaveClass('truncate');
+  it('falls back when no working directory is available', () => {
+    const missingCwdWindow = createWindow({
+      layout: {
+        type: 'pane',
+        id: 'layout-pane-empty-cwd',
+        pane: {
+          id: 'pane-empty-cwd',
+          cwd: '',
+          command: 'bash',
+          status: WindowStatus.Running,
+          pid: 1234,
+          backend: 'local',
+        },
+      },
+      activePaneId: 'pane-empty-cwd',
+    });
+
+    render(<WindowCard window={missingCwdWindow} />);
+
+    expect(screen.getByTestId('working-directory')).toHaveTextContent('(无工作目录)');
+  });
+
+  it('renders archive, edit and delete actions', async () => {
+    render(<WindowCard window={createWindow()} />);
+
+    await waitFor(() => {
+      expect(window.electronAPI.getSettings).toHaveBeenCalled();
+    });
+
+    const card = screen.getByRole('button', { name: /Test Window/ });
+    expect(within(card).getByRole('button', { name: '归档窗口' })).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: '编辑' })).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: '删除窗口' })).toBeInTheDocument();
   });
 });
-

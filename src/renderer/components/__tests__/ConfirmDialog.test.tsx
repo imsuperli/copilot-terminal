@@ -1,75 +1,87 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { ConfirmDialog } from '../ConfirmDialog'
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { ConfirmDialog } from '../ConfirmDialog';
 
 describe('ConfirmDialog', () => {
+  const onConfirm = vi.fn();
+  const onOpenChange = vi.fn();
+
   const defaultProps = {
     open: true,
-    onConfirm: vi.fn(),
-    onCancel: vi.fn(),
+    onConfirm,
+    onOpenChange,
     title: '关闭窗口',
     description: '确定关闭？终端进程将被终止',
-    confirmLabel: '关闭',
-  }
+  };
 
   beforeEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+  });
 
-  it('should render when open', () => {
-    render(<ConfirmDialog {...defaultProps} />)
-    expect(screen.getByText('关闭窗口')).toBeInTheDocument()
-    expect(screen.getByText('确定关闭？终端进程将被终止')).toBeInTheDocument()
-  })
+  it('renders when open', () => {
+    render(<ConfirmDialog {...defaultProps} />);
 
-  it('should not render when closed', () => {
-    render(<ConfirmDialog {...defaultProps} open={false} />)
-    expect(screen.queryByText('关闭窗口')).not.toBeInTheDocument()
-  })
+    expect(screen.getByText('关闭窗口')).toBeInTheDocument();
+    expect(screen.getByText('确定关闭？终端进程将被终止')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '确认' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
+  });
 
-  it('should call onConfirm when confirm button clicked', () => {
-    render(<ConfirmDialog {...defaultProps} />)
-    fireEvent.click(screen.getByText('关闭'))
-    expect(defaultProps.onConfirm).toHaveBeenCalledTimes(1)
-  })
+  it('does not render when closed', () => {
+    render(<ConfirmDialog {...defaultProps} open={false} />);
 
-  it('should call onCancel when cancel button clicked', () => {
-    render(<ConfirmDialog {...defaultProps} />)
-    fireEvent.click(screen.getByText('取消'))
-    expect(defaultProps.onCancel).toHaveBeenCalledTimes(1)
-  })
+    expect(screen.queryByText('关闭窗口')).not.toBeInTheDocument();
+  });
 
-  it('should call onCancel when Esc key pressed', async () => {
-    const user = userEvent.setup()
-    render(<ConfirmDialog {...defaultProps} />)
-    await user.keyboard('{Escape}')
-    expect(defaultProps.onCancel).toHaveBeenCalledTimes(1)
-  })
+  it('calls onConfirm and closes when confirm button is clicked', () => {
+    render(<ConfirmDialog {...defaultProps} confirmText="关闭" />);
 
-  it('should focus cancel button on open', () => {
-    render(<ConfirmDialog {...defaultProps} />)
-    const cancelButton = screen.getByText('取消')
-    expect(cancelButton).toHaveFocus()
-  })
+    fireEvent.click(screen.getByText('关闭', { selector: 'button' }));
 
-  it('should call onConfirm when Enter key pressed on confirm button', async () => {
-    const user = userEvent.setup()
-    render(<ConfirmDialog {...defaultProps} />)
-    const confirmButton = screen.getByText('关闭')
-    confirmButton.focus()
-    await user.keyboard('{Enter}')
-    expect(defaultProps.onConfirm).toHaveBeenCalledTimes(1)
-  })
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
 
-  it('should disable confirm button when processing', () => {
-    render(<ConfirmDialog {...defaultProps} confirmLabel="处理中..." />)
-    const confirmButton = screen.getByText('处理中...')
-    expect(confirmButton).toBeDisabled()
-  })
+  it('closes when cancel button is clicked', () => {
+    render(<ConfirmDialog {...defaultProps} />);
 
-  it('should render custom confirmLabel', () => {
-    render(<ConfirmDialog {...defaultProps} confirmLabel="删除" />)
-    expect(screen.getByText('删除')).toBeInTheDocument()
-  })
-})
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('closes when escape is pressed', async () => {
+    const user = userEvent.setup();
+    render(<ConfirmDialog {...defaultProps} />);
+
+    await user.keyboard('{Escape}');
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('focuses the cancel button on open', () => {
+    render(<ConfirmDialog {...defaultProps} />);
+
+    expect(screen.getByRole('button', { name: '取消' })).toHaveFocus();
+  });
+
+  it('triggers confirm when enter is pressed on the confirm button', async () => {
+    const user = userEvent.setup();
+    render(<ConfirmDialog {...defaultProps} confirmText="删除" />);
+
+    const confirmButton = screen.getByRole('button', { name: '删除' });
+    confirmButton.focus();
+    await user.keyboard('{Enter}');
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('renders a custom cancel label', () => {
+    render(<ConfirmDialog {...defaultProps} cancelText="稍后" />);
+
+    expect(screen.getByRole('button', { name: '稍后' })).toBeInTheDocument();
+  });
+});
