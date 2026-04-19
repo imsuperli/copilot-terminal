@@ -59,12 +59,58 @@ export const idePopupAccentCardClassName = joinClassNames(
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]',
 );
 
+export const idePopupPanelClassName = joinClassNames(
+  'rounded-[24px] border border-[rgb(var(--border))] p-6',
+  'bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]',
+);
+
+export const idePopupSubtlePanelClassName = joinClassNames(
+  'rounded-[20px] border border-[rgb(var(--border))] p-4',
+  'bg-[color-mix(in_srgb,rgb(var(--secondary))_68%,transparent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]',
+);
+
+export const idePopupBarePanelClassName = joinClassNames(
+  'rounded-[20px] border border-[rgb(var(--border))] p-4',
+  'bg-[color-mix(in_srgb,rgb(var(--background))_86%,transparent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]',
+);
+
+export const idePopupEmptyStateClassName = joinClassNames(
+  'rounded-[24px] border border-dashed border-[rgb(var(--border))]',
+  'bg-[color-mix(in_srgb,rgb(var(--secondary))_40%,transparent)]',
+);
+
 export const idePopupSecondaryButtonClassName = joinClassNames(
   'inline-flex items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] px-4 py-2',
   'text-sm font-medium text-[rgb(var(--foreground))] transition-colors',
   'hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]',
   'disabled:cursor-not-allowed disabled:border-[rgb(var(--border))] disabled:bg-[rgb(var(--secondary))] disabled:text-[rgb(var(--muted-foreground))]',
 );
+
+export const idePopupInputClassName = joinClassNames(
+  'w-full rounded-2xl border border-[rgb(var(--border))] px-4 py-3 text-sm text-[rgb(var(--foreground))]',
+  'bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] placeholder:text-[rgb(var(--muted-foreground))] outline-none transition-[border-color,box-shadow]',
+  'focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20',
+);
+
+export const idePopupSelectTriggerClassName = joinClassNames(
+  'flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] px-4 py-3 text-left text-sm text-[rgb(var(--foreground))]',
+  'bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] transition-[border-color,box-shadow,background-color]',
+  'hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20',
+);
+
+export const idePopupSelectContentClassName = joinClassNames(
+  'overflow-hidden rounded-2xl border border-[rgb(var(--border))]',
+  'bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_94%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)]',
+  'shadow-[0_22px_60px_rgba(0,0,0,0.34)] ring-1 ring-white/5 backdrop-blur-xl',
+);
+
+export const idePopupSelectItemClassName = joinClassNames(
+  'flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-sm text-[rgb(var(--foreground))] outline-none transition-colors',
+  'hover:bg-[rgb(var(--accent))]',
+);
+
+export const idePopupSwitchThumbClassName =
+  'block h-6 w-6 translate-x-0.5 rounded-full bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]';
 
 export const idePopupActionButtonClassName = (tone: 'primary' | 'success' | 'warning' | 'danger' = 'primary') => joinClassNames(
   'inline-flex min-w-[112px] items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors',

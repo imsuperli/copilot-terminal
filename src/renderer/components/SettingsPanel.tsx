@@ -19,6 +19,21 @@ import { AppLanguage } from '../../shared/i18n';
 import { ChatSettingsTab } from './ChatSettingsTab';
 import { PluginCenter } from './settings/PluginCenter';
 import { applyAppearanceToDocument, getAppearanceBackdropDescriptor, getAppearanceSkinStyle } from '../utils/appearance';
+import {
+  idePopupActionButtonClassName,
+  idePopupBarePanelClassName,
+  idePopupEmptyStateClassName,
+  idePopupIconButtonClassName,
+  idePopupInputClassName,
+  idePopupPanelClassName,
+  idePopupSecondaryButtonClassName,
+  idePopupSelectContentClassName,
+  idePopupSelectItemClassName,
+  idePopupSelectTriggerClassName,
+  idePopupSubtlePanelClassName,
+  idePopupSurfaceClassName,
+  idePopupSwitchThumbClassName,
+} from './ui/ide-popup';
 
 interface ShellProgramOption {
   command: string;
@@ -161,6 +176,10 @@ function getNumericOptionsWithCurrent(options: number[], currentValue: number): 
   }
 
   return [...options, currentValue].sort((left, right) => left - right);
+}
+
+function joinClassNames(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
 }
 
 function AppearanceSkinPreview({ appearance }: { appearance: AppearanceSettings }) {
@@ -852,11 +871,38 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const activeSkinPreset = APPEARANCE_SKIN_PRESETS.find((preset) => isSameSkinPreset(appearanceSettings.skin, preset.skin)) ?? APPEARANCE_SKIN_PRESETS[0];
   const skinDimOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_DIM_OPTIONS, appearanceSettings.skin.dim);
   const skinBlurOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_BLUR_OPTIONS, appearanceSettings.skin.blur);
+  const settingsPanelSectionClassName = idePopupPanelClassName;
+  const settingsPanelSelectContentClassName = `z-[10000] ${idePopupSelectContentClassName}`;
+  const settingsPanelSelectTriggerClassName = idePopupSelectTriggerClassName;
+  const settingsPanelSelectItemClassName = idePopupSelectItemClassName;
+  const settingsPanelInputClassName = idePopupInputClassName;
+  const settingsPanelSubtlePanelClassName = idePopupSubtlePanelClassName;
+  const settingsPanelBarePanelClassName = idePopupBarePanelClassName;
+  const settingsPanelEmptyStateClassName = `${idePopupEmptyStateClassName} px-6 py-16 text-center`;
+  const settingsPanelSecondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-11 rounded-2xl px-4`;
+  const settingsPanelPrimaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-11 rounded-2xl px-4`;
+  const settingsPanelSwitchThumbClassName = idePopupSwitchThumbClassName;
+  const settingsPanelSmallIconButtonClassName = `${idePopupIconButtonClassName} h-10 w-10 rounded-2xl`;
+  const settingsPanelBadgeClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]';
+  const settingsPanelInfoCardClassName = `${idePopupPanelClassName} p-5 transition-colors hover:border-[rgb(var(--primary))]`;
+  const settingsPanelSegmentedListClassName = 'inline-flex rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] p-1';
+  const settingsPanelSegmentedTriggerClassName = 'rounded-xl px-4 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]';
+  const settingsPanelPresetCardClassName = (selected: boolean) => joinClassNames(
+    'rounded-[22px] border p-4 text-left transition-all',
+    selected
+      ? 'border-[rgb(var(--primary))] bg-[rgb(var(--accent))]'
+      : 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]',
+  );
+  const settingsPanelPreviewSurfaceClassName = 'relative h-28 overflow-hidden rounded-[18px] border border-black/10 bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]';
+  const settingsPanelSidebarIconClassName = joinClassNames(
+    'flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-xl text-[rgb(var(--muted-foreground))] transition-colors',
+    'bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] group-data-[state=active]:bg-[color-mix(in_srgb,rgb(var(--card))_82%,transparent)] group-data-[state=active]:text-[rgb(var(--primary))]',
+  );
   return (
     <Dialog.Root open={open} onOpenChange={handleSettingsOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm animate-fade-in" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[9999] flex h-[72vh] w-[94vw] max-h-[720px] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] shadow-2xl animate-scale-in">
+        <Dialog.Content className={`fixed left-1/2 top-1/2 z-[9999] flex h-[72vh] w-[94vw] max-h-[720px] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col animate-scale-in ${idePopupSurfaceClassName}`} >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(var(--primary),0.16),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(var(--accent),0.18),_transparent_32%)]" />
 
           <div className="relative flex items-center justify-between border-b border-[rgb(var(--border))] px-8 py-4">
@@ -870,7 +916,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
             </div>
 
             <Dialog.Close asChild>
-              <button className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))]">
+              <button className={`${idePopupIconButtonClassName} h-10 w-10 rounded-2xl`} >
                 <X size={18} />
               </button>
             </Dialog.Close>
@@ -886,7 +932,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     className="group rounded-xl border border-transparent bg-transparent px-3 py-2 text-left transition-colors hover:bg-[rgb(var(--accent))] data-[state=active]:border-[rgb(var(--border))] data-[state=active]:bg-[rgb(var(--accent))]"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-xl bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] transition-colors group-data-[state=active]:bg-[rgb(var(--card))] group-data-[state=active]:text-[rgb(var(--primary))]">
+                      <div className={settingsPanelSidebarIconClassName}>
                         <Icon size={16} />
                       </div>
                       <div className="min-w-0 text-sm font-semibold text-[rgb(var(--foreground))] group-data-[state=active]:text-[rgb(var(--primary))]">{label}</div>
@@ -896,10 +942,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
               </Tabs.List>
             </aside>
 
-            <div className="flex-1 overflow-hidden bg-[rgb(var(--background))]">
+            <div className="flex-1 overflow-hidden bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)]">
               <Tabs.Content value="general" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
                 <div className="mx-auto max-w-3xl space-y-6">
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                  <section className={settingsPanelSectionClassName}>
                     <div className="flex items-start gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                         <Languages size={22} />
@@ -911,7 +957,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         </div>
 
                         <Select.Root value={language} onValueChange={handleLanguageChange}>
-                          <Select.Trigger className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]">
+                          <Select.Trigger className={settingsPanelSelectTriggerClassName}>
                             <Select.Value />
                             <Select.Icon>
                               <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
@@ -924,13 +970,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                             >
                               <Select.Viewport className="p-1">
-                                <Select.Item value="zh-CN" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                <Select.Item value="zh-CN" className={settingsPanelSelectItemClassName}>
                                   <Select.ItemText>{t('settings.language.zhCN')}</Select.ItemText>
                                 </Select.Item>
-                                <Select.Item value="en-US" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                <Select.Item value="en-US" className={settingsPanelSelectItemClassName}>
                                   <Select.ItemText>{t('settings.language.enUS')}</Select.ItemText>
                                 </Select.Item>
                               </Select.Viewport>
@@ -941,7 +987,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
                   </section>
 
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                  <section className={settingsPanelSectionClassName}>
                     <div className="flex items-start gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                         <Command size={22} />
@@ -965,7 +1011,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             >
                               <Select.Trigger
                                 id="default-shell-program"
-                                className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                                className={settingsPanelSelectTriggerClassName}
                               >
                                 <Select.Value placeholder={t('settings.general.defaultShellPlaceholder')} />
                                 <Select.Icon>
@@ -979,10 +1025,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   side="bottom"
                                   align="start"
                                   sideOffset={6}
-                                  className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                                  className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                                 >
                                   <Select.Viewport className="p-1">
-                                    <Select.Item value={AUTO_SHELL_OPTION_VALUE} className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                    <Select.Item value={AUTO_SHELL_OPTION_VALUE} className={settingsPanelSelectItemClassName}>
                                       <Select.ItemText>
                                         {autoShellTarget
                                           ? t('settings.general.defaultShellAutoOption', { shell: autoShellTarget })
@@ -996,7 +1042,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                       <Select.Item
                                         key={shell.path}
                                         value={shell.path}
-                                        className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                        className={settingsPanelSelectItemClassName}
                                       >
                                         <Select.ItemText>
                                           {shell.path}
@@ -1015,7 +1061,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <button
                             type="button"
                             onClick={handleSelectCustomShell}
-                            className="inline-flex h-[50px] items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] md:mt-[30px]"
+                            className={`${settingsPanelSecondaryButtonClassName} md:mt-[30px]`} 
                           >
                             {t('settings.general.defaultShellCustomButton')}
                           </button>
@@ -1025,7 +1071,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
                   </section>
 
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                  <section className={settingsPanelSectionClassName}>
                     <div className="flex items-start gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                         <Monitor size={22} />
@@ -1049,7 +1095,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             >
                               <Select.Trigger
                                 id="terminal-font-family"
-                                className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                                className={settingsPanelSelectTriggerClassName}
                               >
                                 <Select.Value />
                                 <Select.Icon>
@@ -1063,22 +1109,22 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   side="bottom"
                                   align="start"
                                   sideOffset={6}
-                                  className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                                  className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                                 >
                                   <Select.Viewport className="p-1">
-                                    <Select.Item value="default" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                    <Select.Item value="default" className={settingsPanelSelectItemClassName}>
                                       <Select.ItemText>默认</Select.ItemText>
                                     </Select.Item>
-                                    <Select.Item value="JetBrains Mono" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                    <Select.Item value="JetBrains Mono" className={settingsPanelSelectItemClassName}>
                                       <Select.ItemText>JetBrains Mono</Select.ItemText>
                                     </Select.Item>
-                                    <Select.Item value="Fira Code" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                    <Select.Item value="Fira Code" className={settingsPanelSelectItemClassName}>
                                       <Select.ItemText>Fira Code</Select.ItemText>
                                     </Select.Item>
-                                    <Select.Item value="Cascadia Code" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                    <Select.Item value="Cascadia Code" className={settingsPanelSelectItemClassName}>
                                       <Select.ItemText>Cascadia Code</Select.ItemText>
                                     </Select.Item>
-                                    <Select.Item value="Consolas" className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]">
+                                    <Select.Item value="Consolas" className={settingsPanelSelectItemClassName}>
                                       <Select.ItemText>Consolas</Select.ItemText>
                                     </Select.Item>
                                   </Select.Viewport>
@@ -1099,7 +1145,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             >
                               <Select.Trigger
                                 id="terminal-font-size"
-                                className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                                className={settingsPanelSelectTriggerClassName}
                               >
                                 <Select.Value />
                                 <Select.Icon>
@@ -1113,14 +1159,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   side="bottom"
                                   align="start"
                                   sideOffset={6}
-                                  className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                                  className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                                 >
                                   <Select.Viewport className="p-1">
                                     {[12, 13, 14, 15, 16, 18, 20].map((size) => (
                                       <Select.Item
                                         key={size}
                                         value={String(size)}
-                                        className="cursor-pointer rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                        className={settingsPanelSelectItemClassName}
                                       >
                                         <Select.ItemText>{size}</Select.ItemText>
                                       </Select.Item>
@@ -1139,7 +1185,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
               <Tabs.Content value="appearance" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
                 <div className="mx-auto max-w-5xl space-y-6">
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                  <section className={settingsPanelSectionClassName}>
                     <div className="mb-6 flex items-start gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                         <Palette size={22} />
@@ -1159,11 +1205,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             key={preset.id}
                             type="button"
                             onClick={() => handleAppearanceSettingsChange({ themeId: preset.id })}
-                            className={`rounded-[22px] border p-4 text-left transition-all ${
-                              selected
-                                ? 'border-[rgb(var(--primary))] bg-[rgb(var(--accent))]'
-                                : 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]'
-                            }`}
+                            className={settingsPanelPresetCardClassName(selected)}
                           >
                             <div
                               className="h-24 rounded-[18px] border border-black/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
@@ -1190,7 +1232,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
                   </section>
 
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                  <section className={settingsPanelSectionClassName}>
                     <div className="mb-6 flex items-start gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                         <Wallpaper size={22} />
@@ -1210,13 +1252,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             key={preset.id}
                             type="button"
                             onClick={() => handleAppearanceSettingsChange({ skin: preset.skin })}
-                            className={`rounded-[22px] border p-4 text-left transition-all ${
-                              selected
-                                ? 'border-[rgb(var(--primary))] bg-[rgb(var(--accent))]'
-                                : 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]'
-                            }`}
+                            className={settingsPanelPresetCardClassName(selected)}
                           >
-                            <div className="relative h-28 overflow-hidden rounded-[18px] border border-black/10 bg-[rgb(var(--background))]">
+                            <div className={settingsPanelPreviewSurfaceClassName}>
                               <AppearanceSkinPreview
                                 appearance={{
                                   ...appearanceSettings,
@@ -1256,7 +1294,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       })}
                     </div>
 
-                    <div className="mt-4 rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                    <div className={`mt-4 ${settingsPanelSubtlePanelClassName}`}>
                       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
                           <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.customImageTitle')}</h4>
@@ -1272,7 +1310,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <button
                             type="button"
                             onClick={handleSelectAppearanceImage}
-                            className="inline-flex h-11 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                            className={settingsPanelSecondaryButtonClassName}
                           >
                             {t('settings.appearance.customImageButton')}
                           </button>
@@ -1280,7 +1318,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             <button
                               type="button"
                               onClick={() => handleAppearanceSettingsChange({ skin: APPEARANCE_SKIN_PRESETS[1].skin })}
-                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                              className={settingsPanelSecondaryButtonClassName}
                             >
                               {t('settings.appearance.customImageReset')}
                             </button>
@@ -1290,7 +1328,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
                   </section>
 
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                  <section className={settingsPanelSectionClassName}>
                     <div className="mb-6 flex items-start gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                         <SunMoon size={22} />
@@ -1302,7 +1340,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
 
                     <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
-                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <label htmlFor="appearance-readability" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
                           {t('settings.appearance.readabilityLabel')}
                         </label>
@@ -1313,7 +1351,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <Select.Trigger
                             id="appearance-readability"
                             aria-label={t('settings.appearance.readabilityLabel')}
-                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                            className={settingsPanelSelectTriggerClassName}
                           >
                             <Select.Value />
                             <Select.Icon>
@@ -1327,14 +1365,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                             >
                               <Select.Viewport className="p-1">
                                 {APPEARANCE_READABILITY_MODES.map((mode) => (
                                   <Select.Item
                                     key={mode}
                                     value={mode}
-                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                    className={settingsPanelSelectItemClassName}
                                   >
                                     <Select.ItemText>{t(`settings.appearance.readability.${mode}`)}</Select.ItemText>
                                     <Select.ItemIndicator>
@@ -1351,7 +1389,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         </p>
                       </div>
 
-                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <label htmlFor="appearance-terminal-opacity" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
                           {t('settings.appearance.opacityLabel')}
                         </label>
@@ -1362,7 +1400,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <Select.Trigger
                             id="appearance-terminal-opacity"
                             aria-label={t('settings.appearance.opacityLabel')}
-                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                            className={settingsPanelSelectTriggerClassName}
                           >
                             <Select.Value />
                             <Select.Icon>
@@ -1376,14 +1414,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                             >
                               <Select.Viewport className="p-1">
                                 {APPEARANCE_OPACITY_OPTIONS.map((value) => (
                                   <Select.Item
                                     key={value}
                                     value={String(value)}
-                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                    className={settingsPanelSelectItemClassName}
                                   >
                                     <Select.ItemText>{t('settings.appearance.opacityValue', { value: Math.round(value * 100) })}</Select.ItemText>
                                     <Select.ItemIndicator>
@@ -1400,7 +1438,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
 
                     <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <label htmlFor="appearance-skin-dim" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
                           {t('settings.appearance.skinDimLabel')}
                         </label>
@@ -1416,7 +1454,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <Select.Trigger
                             id="appearance-skin-dim"
                             aria-label={t('settings.appearance.skinDimLabel')}
-                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                            className={settingsPanelSelectTriggerClassName}
                           >
                             <Select.Value />
                             <Select.Icon>
@@ -1430,14 +1468,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                             >
                               <Select.Viewport className="p-1">
                                 {skinDimOptions.map((value) => (
                                   <Select.Item
                                     key={value}
                                     value={String(value)}
-                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                    className={settingsPanelSelectItemClassName}
                                   >
                                     <Select.ItemText>{t('settings.appearance.skinDimValue', { value: Math.round(value * 100) })}</Select.ItemText>
                                     <Select.ItemIndicator>
@@ -1452,7 +1490,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinDimDescription')}</p>
                       </div>
 
-                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <label htmlFor="appearance-skin-blur" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
                           {t('settings.appearance.skinBlurLabel')}
                         </label>
@@ -1468,7 +1506,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <Select.Trigger
                             id="appearance-skin-blur"
                             aria-label={t('settings.appearance.skinBlurLabel')}
-                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                            className={settingsPanelSelectTriggerClassName}
                           >
                             <Select.Value />
                             <Select.Icon>
@@ -1482,14 +1520,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                             >
                               <Select.Viewport className="p-1">
                                 {skinBlurOptions.map((value) => (
                                   <Select.Item
                                     key={value}
                                     value={String(value)}
-                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                    className={settingsPanelSelectItemClassName}
                                   >
                                     <Select.ItemText>{t('settings.appearance.skinBlurValue', { value })}</Select.ItemText>
                                     <Select.ItemIndicator>
@@ -1504,7 +1542,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinBlurDescription')}</p>
                       </div>
 
-                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <label htmlFor="appearance-skin-motion" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
                           {t('settings.appearance.skinMotionLabel')}
                         </label>
@@ -1520,7 +1558,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <Select.Trigger
                             id="appearance-skin-motion"
                             aria-label={t('settings.appearance.skinMotionLabel')}
-                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                            className={settingsPanelSelectTriggerClassName}
                           >
                             <Select.Value />
                             <Select.Icon>
@@ -1534,14 +1572,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               side="bottom"
                               align="start"
                               sideOffset={6}
-                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                             >
                               <Select.Viewport className="p-1">
                                 {APPEARANCE_SKIN_MOTION_MODES.map((mode) => (
                                   <Select.Item
                                     key={mode}
                                     value={mode}
-                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                    className={settingsPanelSelectItemClassName}
                                   >
                                     <Select.ItemText>{t(`settings.appearance.skinMotion.${mode}`)}</Select.ItemText>
                                     <Select.ItemIndicator>
@@ -1557,7 +1595,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                    <div className={`mt-4 ${settingsPanelSubtlePanelClassName}`}>
                       <div className="flex items-center justify-between gap-4">
                         <div>
                           <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.reduceMotionTitle')}</h4>
@@ -1569,7 +1607,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           aria-label={t('settings.appearance.reduceMotionTitle')}
                           className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
                         >
-                          <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                          <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
                         </Switch.Root>
                       </div>
                     </div>
@@ -1580,23 +1618,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
               <Tabs.Content value="quicknav" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
                 <div className="mx-auto max-w-5xl space-y-6">
                   <Tabs.Root value={quickNavTab} onValueChange={(value) => setQuickNavTab(value as QuickNavSubTab)} className="space-y-6">
-                    <Tabs.List className="inline-flex rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-1">
+                    <Tabs.List className={settingsPanelSegmentedListClassName}>
                       <Tabs.Trigger
                         value="ide"
-                        className="rounded-xl px-4 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]"
+                        className={settingsPanelSegmentedTriggerClassName}
                       >
                         {t('settings.quickNav.ideTab')}
                       </Tabs.Trigger>
                       <Tabs.Trigger
                         value="custom"
-                        className="rounded-xl px-4 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]"
+                        className={settingsPanelSegmentedTriggerClassName}
                       >
                         {t('settings.quickNav.customTab')}
                       </Tabs.Trigger>
                     </Tabs.List>
 
                     <Tabs.Content value="ide" className="space-y-4 data-[state=inactive]:hidden">
-                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+                      <div className={idePopupPanelClassName}>
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <p className="max-w-2xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.quickNav.ideDescription')}</p>
@@ -1609,14 +1647,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             <button
                               onClick={handleScanAll}
                               disabled={scanning}
-                              className="inline-flex items-center gap-2 rounded-2xl bg-[rgb(var(--primary))] px-4 py-3 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[rgb(var(--muted))] disabled:text-[rgb(var(--muted-foreground))]"
+                              className={settingsPanelPrimaryButtonClassName}
                             >
                               <Search size={16} />
                               {scanning ? t('common.loading') : t('settings.ide.scan')}
                             </button>
                             <button
                               onClick={handleAddIDE}
-                              className="inline-flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))]"
+                              className={settingsPanelSecondaryButtonClassName}
                             >
                               <Plus size={16} />
                               {t('settings.ide.addCustom')}
@@ -1626,7 +1664,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       </div>
 
                       {ides.length === 0 ? (
-                        <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
+                        <div className={settingsPanelEmptyStateClassName}>
                           <Monitor size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
                           <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.ide.emptyTitle')}</p>
                           <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.ide.emptyDescription')}</p>
@@ -1636,14 +1674,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           {ides.map((ide) => (
                             <div
                               key={ide.id}
-                              className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 transition-colors hover:border-[rgb(var(--primary))]"
+                              className={settingsPanelInfoCardClassName}
                             >
                               <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
                                 <div className="flex min-w-0 flex-1 items-center gap-4">
                                   <button
                                     type="button"
                                     onClick={() => handleSelectIDEIcon(ide.id)}
-                                    className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] transition-colors hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--accent))]"
+                                    className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] transition-colors hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--accent))]"
                                     title="点击自定义 IDE Logo"
                                   >
                                     <IDEIcon icon={ide.icon || ''} size={30} className="text-[rgb(var(--foreground))]" />
@@ -1657,12 +1695,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                         </span>
                                       )}
                                       {ide.source && (
-                                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                        <span className={settingsPanelBadgeClassName}>
                                           {t('settings.ide.source', { source: ide.source })}
                                         </span>
                                       )}
                                       {ide.version && (
-                                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                        <span className={settingsPanelBadgeClassName}>
                                           {t('settings.ide.version', { version: ide.version })}
                                         </span>
                                       )}
@@ -1682,14 +1720,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                     onCheckedChange={(checked) => handleToggleIDE(ide.id, checked)}
                                     className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
                                   >
-                                    <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                                    <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
                                   </Switch.Root>
                                   <button
                                     onClick={() => {
                                       setEditingIDE(ide);
                                       setShowAddDialog(true);
                                     }}
-                                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))]"
+                                    className={settingsPanelSmallIconButtonClassName}
                                     title={t('common.edit')}
                                   >
                                     <Edit2 size={16} />
@@ -1710,7 +1748,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </Tabs.Content>
 
                     <Tabs.Content value="custom" className="space-y-4 data-[state=inactive]:hidden">
-                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+                      <div className={idePopupPanelClassName}>
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                           <div>
                             <p className="max-w-2xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.quickNav.customDescription')}</p>
@@ -1718,7 +1756,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
                           <button
                             onClick={handleAddNavItem}
-                            className="inline-flex items-center gap-2 rounded-2xl bg-[rgb(var(--primary))] px-4 py-3 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90"
+                            className={settingsPanelPrimaryButtonClassName}
                           >
                             <Plus size={16} />
                             {t('settings.quickNav.add')}
@@ -1727,7 +1765,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       </div>
 
                       {quickNavItems.length === 0 ? (
-                        <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
+                        <div className={settingsPanelEmptyStateClassName}>
                           <Globe size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
                           <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.quickNav.emptyTitle')}</p>
                           <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.quickNav.emptyDescription')}</p>
@@ -1737,7 +1775,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           {quickNavItems.map((item) => (
                             <div
                               key={item.id}
-                              className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-5 transition-colors hover:border-[rgb(var(--primary))]"
+                              className={settingsPanelInfoCardClassName}
                             >
                               <div className="flex flex-col gap-4 md:flex-row md:items-center">
                                 <div className="flex min-w-0 flex-1 items-center gap-4">
@@ -1751,7 +1789,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
                                       <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{item.name}</h3>
-                                      <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                      <span className={settingsPanelBadgeClassName}>
                                         {item.type === 'url' ? t('common.url') : t('common.folder')}
                                       </span>
                                     </div>
@@ -1764,7 +1802,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                 <div className="flex items-center justify-end gap-3">
                                   <button
                                     onClick={() => handleEditNavItem(item)}
-                                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))]"
+                                    className={settingsPanelSmallIconButtonClassName}
                                     title={t('common.edit')}
                                   >
                                     <Edit2 size={16} />
@@ -1803,7 +1841,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
               <Tabs.Content value="advanced" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
                 <div className="mx-auto max-w-5xl space-y-6">
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+                  <section className={idePopupPanelClassName}>
                     <div className="mb-5 flex items-start gap-4">
                       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                         <Globe size={20} />
@@ -1815,7 +1853,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
 
                     <div className="space-y-4">
-                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                           <div>
                             <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.ssh.enableTitle')}</h4>
@@ -1828,12 +1866,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             aria-label={t('settings.ssh.enableTitle')}
                             className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
                           >
-                            <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                            <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
                           </Switch.Root>
                         </div>
                       </div>
 
-                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.ssh.knownHostsTitle')}</h4>
@@ -1844,7 +1882,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           </div>
 
                           {knownHostsLoading && (
-                            <div className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
+                            <div className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
                               {t('common.loading')}
                             </div>
                           )}
@@ -1852,7 +1890,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
                         <div className="mt-5">
                           {knownHosts.length === 0 ? (
-                            <div className="rounded-[20px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--background))] px-5 py-10 text-center">
+                            <div className={`${idePopupEmptyStateClassName} px-5 py-10 text-center`} >
                               <Globe size={32} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
                               <p className="mt-4 text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.ssh.emptyTitle')}</p>
                               <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.ssh.emptyDescription')}</p>
@@ -1866,13 +1904,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                 return (
                                   <div
                                     key={entry.id}
-                                    className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4"
+                                    className={settingsPanelBarePanelClassName}
                                   >
                                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                       <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
                                           <h5 className="text-sm font-semibold text-[rgb(var(--foreground))]">{entryTarget}</h5>
-                                          <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                          <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
                                             {entry.algorithm}
                                           </span>
                                         </div>
@@ -1905,9 +1943,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
                   </section>
 
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+                  <section className={idePopupPanelClassName}>
                     {isWindows ? (
-                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                           <div className="flex items-start gap-4">
                             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
@@ -1924,14 +1962,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             onCheckedChange={(checked) => handleTerminalSettingsChange({ useBundledConptyDll: checked })}
                             className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
                           >
-                            <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                            <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
                           </Switch.Root>
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 p-5">
+                      <div className={`${idePopupEmptyStateClassName} p-5`}>
                         <div className="flex items-start gap-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--muted-foreground))]">
                             <Monitor size={20} />
                           </div>
                           <div>
@@ -1943,7 +1981,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     )}
                   </section>
 
-                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+                  <section className={idePopupPanelClassName}>
                     <div className="mb-5 flex items-start gap-4">
                       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
                         <Command size={20} />
@@ -1955,7 +1993,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     </div>
 
                     <div className="space-y-4">
-                      <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className={settingsPanelSubtlePanelClassName}>
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                           <div className="flex items-start gap-4">
                             <div>
@@ -1969,7 +2007,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             onCheckedChange={(checked) => handleTmuxSettingsChange({ enabled: checked })}
                             className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
                           >
-                            <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                            <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
                           </Switch.Root>
                         </div>
                       </div>
@@ -1982,7 +2020,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <div>
                             <div className="text-sm font-medium text-[rgb(var(--primary))]">{t('settings.tmux.agentTeamsEnvTitle')}</div>
                             <div className="mt-1 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.agentTeamsEnvDescription')}</div>
-                            <code className="mt-3 inline-flex rounded-xl border border-[rgba(var(--primary),0.24)] bg-[rgb(var(--card))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
+                            <code className="mt-3 inline-flex rounded-xl border border-[rgba(var(--primary),0.24)] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
                               CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
                             </code>
                           </div>
@@ -1990,7 +2028,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       </div>
 
                       <div className={`grid gap-4 lg:grid-cols-2 ${!tmuxSettings.enabled ? 'opacity-50' : ''}`}>
-                        <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <div className={settingsPanelSubtlePanelClassName}>
                           <div className="flex items-center justify-between gap-4">
                             <div>
                               <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.tmux.autoInjectPathTitle')}</h4>
@@ -2002,12 +2040,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               onCheckedChange={(checked) => handleTmuxSettingsChange({ autoInjectPath: checked })}
                               className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
                             >
-                              <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                              <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
                             </Switch.Root>
                           </div>
                         </div>
 
-                        <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <div className={settingsPanelSubtlePanelClassName}>
                           <div className="flex items-center justify-between gap-4">
                             <div>
                               <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.tmux.enableForAllPanesTitle')}</h4>
@@ -2019,7 +2057,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               onCheckedChange={(checked) => handleTmuxSettingsChange({ enableForAllPanes: checked })}
                               className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
                             >
-                              <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                              <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
                             </Switch.Root>
                           </div>
                         </div>
@@ -2036,7 +2074,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       <Dialog.Root open={showAddDialog} onOpenChange={handleAddDialogChange}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[10001] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-2xl">
+          <Dialog.Content className={`fixed left-1/2 top-1/2 z-[10001] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 p-6 ${idePopupSurfaceClassName}`} >
             <Dialog.Title className="text-xl font-semibold text-[rgb(var(--foreground))]">
               {editingIDE?.id ? t('settings.ideDialog.editTitle') : t('settings.ideDialog.addTitle')}
             </Dialog.Title>
@@ -2051,20 +2089,20 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     handleScanSpecific(value);
                   }}
                 >
-                  <Select.Trigger className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]">
+                  <Select.Trigger className={settingsPanelSelectTriggerClassName}>
                     <Select.Value placeholder={t('settings.ideDialog.namePlaceholder')} />
                     <Select.Icon>
                       <ChevronDown size={16} />
                     </Select.Icon>
                   </Select.Trigger>
                   <Select.Portal>
-                    <Select.Content className="z-[10000] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl">
+                    <Select.Content className={settingsPanelSelectContentClassName}>
                       <Select.Viewport className="p-1">
                         {supportedIDENames.map((name) => (
                           <Select.Item
                             key={name}
                             value={name}
-                            className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-sm text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                            className={settingsPanelSelectItemClassName}
                           >
                             <Select.ItemText>{name}</Select.ItemText>
                             <Select.ItemIndicator>
@@ -2085,7 +2123,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                   value={editingIDE?.command || ''}
                   onChange={(event) => setEditingIDE((prev) => (prev ? { ...prev, command: event.target.value } : null))}
                   placeholder={t('settings.ideDialog.commandPlaceholder')}
-                  className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:outline-none"
+                  className={settingsPanelInputClassName}
                 />
               </div>
 
@@ -2096,7 +2134,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                   value={editingIDE?.path || ''}
                   onChange={(event) => setEditingIDE((prev) => (prev ? { ...prev, path: event.target.value } : null))}
                   placeholder={t('settings.ideDialog.pathPlaceholder')}
-                  className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:outline-none"
+                  className={settingsPanelInputClassName}
                 />
               </div>
             </div>
@@ -2104,14 +2142,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
                 onClick={() => handleAddDialogChange(false)}
-                className="rounded-2xl px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))]"
+                className={settingsPanelSecondaryButtonClassName}
               >
                 {t('common.cancel')}
               </button>
               <button
                 onClick={handleSaveIDE}
                 disabled={!editingIDE?.name || !editingIDE?.command}
-                className="rounded-2xl bg-[rgb(var(--primary))] px-4 py-2 font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[rgb(var(--muted))] disabled:text-[rgb(var(--muted-foreground))]"
+                className={settingsPanelPrimaryButtonClassName}
               >
                 {t('common.save')}
               </button>
@@ -2123,7 +2161,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       <Dialog.Root open={showNavDialog} onOpenChange={handleNavDialogChange}>
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[10001] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-2xl">
+          <Dialog.Content className={`fixed left-1/2 top-1/2 z-[10001] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 p-6 ${idePopupSurfaceClassName}`} >
             <Dialog.Title className="text-xl font-semibold text-[rgb(var(--foreground))]">
               {editingNavItem?.id && quickNavItems.find((item) => item.id === editingNavItem.id)
                 ? t('settings.quickNavDialog.editTitle')
@@ -2139,12 +2177,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                     value={editingNavItem?.path || ''}
                     onChange={(event) => handlePathChange(event.target.value)}
                     placeholder={t('settings.quickNavDialog.pathPlaceholder')}
-                    className="flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:outline-none"
+                    className={`flex-1 ${settingsPanelInputClassName}`} 
                   />
                   <button
                     type="button"
                     onClick={handleBrowseFolder}
-                    className="flex h-[50px] w-[50px] items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))]"
+                    className={`${idePopupIconButtonClassName} h-[50px] w-[50px] rounded-2xl`} 
                     title={t('settings.quickNavDialog.browseFolder')}
                   >
                     <FolderOpen size={18} />
@@ -2166,7 +2204,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                   value={editingNavItem?.name || ''}
                   onChange={(event) => setEditingNavItem((prev) => (prev ? { ...prev, name: event.target.value } : null))}
                   placeholder={t('settings.quickNavDialog.namePlaceholder')}
-                  className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))] focus:outline-none"
+                  className={settingsPanelInputClassName}
                 />
               </div>
             </div>
@@ -2174,14 +2212,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
                 onClick={() => handleNavDialogChange(false)}
-                className="rounded-2xl px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))]"
+                className={settingsPanelSecondaryButtonClassName}
               >
                 {t('common.cancel')}
               </button>
               <button
                 onClick={handleSaveNavItem}
                 disabled={!editingNavItem?.name || !editingNavItem?.path}
-                className="rounded-2xl bg-[rgb(var(--primary))] px-4 py-2 font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:bg-[rgb(var(--muted))] disabled:text-[rgb(var(--muted-foreground))]"
+                className={settingsPanelPrimaryButtonClassName}
               >
                 {t('common.save')}
               </button>

@@ -24,6 +24,17 @@ import type {
 import type { TranslationKey, TranslationParams } from '../../i18n';
 import { useI18n } from '../../i18n';
 import { notifyWorkspaceSettingsUpdated } from '../../utils/settingsEvents';
+import {
+  idePopupActionButtonClassName,
+  idePopupBarePanelClassName,
+  idePopupCardClassName,
+  idePopupEmptyStateClassName,
+  idePopupInputClassName,
+  idePopupPanelClassName,
+  idePopupSecondaryButtonClassName,
+  idePopupSubtlePanelClassName,
+  idePopupSwitchThumbClassName,
+} from '../ui/ide-popup';
 
 type WorkspaceEnableMode = 'inherit' | 'enabled' | 'disabled';
 type PluginSettingScope = 'global' | 'workspace';
@@ -175,6 +186,17 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
     || actionKey.startsWith('uninstall:')
   ));
   const isLocalInstallInFlight = activeActionKeys.some((actionKey) => actionKey.startsWith('install-local:'));
+  const sectionClassName = idePopupPanelClassName;
+  const subtlePanelClassName = idePopupSubtlePanelClassName;
+  const barePanelClassName = idePopupBarePanelClassName;
+  const inputClassName = idePopupInputClassName;
+  const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} rounded-2xl px-4 py-3`;
+  const compactSecondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-10 rounded-2xl px-4`;
+  const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} rounded-2xl px-4 py-3`;
+  const emptyStateClassName = `${idePopupEmptyStateClassName} px-6 py-16 text-center`;
+  const badgeClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]';
+  const chipClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_86%,transparent)] px-3 py-1 text-xs text-[rgb(var(--foreground))]';
+  const mutedChipClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_86%,transparent)] px-3 py-1 text-xs text-[rgb(var(--muted-foreground))]';
 
   const isActionActive = useCallback((actionKey: string) => activeActionKeys.includes(actionKey), [activeActionKeys]);
 
@@ -479,7 +501,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+      <section className={sectionClassName}>
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
@@ -504,7 +526,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
               type="button"
               onClick={handleLoadCatalog}
               disabled={catalogRefreshing || hasPluginMutationInFlight}
-              className="inline-flex items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
+              className={`${secondaryButtonClassName} inline-flex items-center gap-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {catalogRefreshing ? <LoaderCircle size={16} className="animate-spin" /> : <RefreshCw size={16} />}
               {t(hasLoadedCatalog ? 'settings.plugins.actions.refreshCatalog' : 'settings.plugins.actions.loadCatalog')}
@@ -513,7 +535,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
               type="button"
               onClick={() => void handleInstallLocalPlugin()}
               disabled={hasPluginMutationInFlight}
-              className="inline-flex items-center gap-2 rounded-2xl bg-[rgb(var(--primary))] px-4 py-3 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+              className={`${primaryButtonClassName} inline-flex items-center gap-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-70`}
             >
               {isLocalInstallInFlight ? <LoaderCircle size={16} className="animate-spin" /> : <FolderUp size={16} />}
               {t('settings.plugins.actions.installLocal')}
@@ -537,7 +559,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
           <Wrench size={18} className="text-[rgb(var(--primary))]" />
           <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.plugins.sections.builtin')}</h3>
         </div>
-        <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+        <div className={sectionClassName}>
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
@@ -556,7 +578,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-4 rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-5 py-4">
+            <div className={`${subtlePanelClassName} flex items-center gap-4 px-5 py-4`}>
               <div>
                 <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.statusLine.enableTitle')}</div>
                 <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.enableDescription')}</div>
@@ -566,20 +588,20 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                 onCheckedChange={(checked) => void onToggleStatusLine(checked)}
                 className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
               >
-                <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-[rgb(var(--background))] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]" />
+                <Switch.Thumb className={idePopupSwitchThumbClassName} />
               </Switch.Root>
             </div>
           </div>
 
           {statusLineConfig.enabled && (
             <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+              <div className={`${subtlePanelClassName} p-5`}>
                 <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.statusLine.displayFormat')}</div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {(['full', 'compact'] as const).map((format) => (
                     <label
                       key={format}
-                      className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4 transition-colors hover:bg-[rgb(var(--accent))]"
+                      className={`flex cursor-pointer items-start gap-3 ${barePanelClassName} transition-colors hover:bg-[rgb(var(--accent))]`}
                     >
                       <input
                         type="radio"
@@ -596,7 +618,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         <div className="text-sm font-medium text-[rgb(var(--foreground))]">
                           {format === 'full' ? t('settings.statusLine.full') : t('settings.statusLine.compact')}
                         </div>
-                        <div className="mt-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 font-mono text-xs text-[rgb(var(--muted-foreground))]">
+                        <div className={`mt-2 ${idePopupCardClassName} font-mono text-xs text-[rgb(var(--muted-foreground))]`}>
                           {format === 'full'
                             ? 'Model: Sonnet 4.6 | Context: 45% | Cost: $0.25'
                             : 'Sonnet 4.6 • 45% • $0.25'}
@@ -607,7 +629,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                 </div>
               </div>
 
-              <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+              <div className={`${subtlePanelClassName} p-5`}>
                 <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.statusLine.displayContent')}</div>
                 <div className="mt-4 space-y-3">
                   {[
@@ -618,7 +640,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                   ].map((item) => (
                     <label
                       key={item.key}
-                      className="flex cursor-pointer items-center gap-3 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4 transition-colors hover:bg-[rgb(var(--accent))]"
+                      className={`flex cursor-pointer items-center gap-3 ${barePanelClassName} transition-colors hover:bg-[rgb(var(--accent))]`}
                     >
                       <input
                         type="checkbox"
@@ -648,7 +670,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
         {isInitialLoad ? (
           <SectionLoadingState label={t('settings.plugins.loadingSection')} />
         ) : installedPlugins.length === 0 ? (
-          <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
+          <div className={emptyStateClassName}>
             <Plug size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
             <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.emptyInstalledTitle')}</p>
             <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.emptyInstalledDescription')}</p>
@@ -663,19 +685,19 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
               return (
                 <div
                   key={plugin.id}
-                  className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 transition-colors hover:border-[rgb(var(--primary))]"
+                  className={`${sectionClassName} transition-colors hover:border-[rgb(var(--primary))]`}
                 >
                   <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="text-lg font-semibold text-[rgb(var(--foreground))]">{plugin.name}</h3>
-                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                        <span className={badgeClassName}>
                           {plugin.publisher}
                         </span>
                         <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
                           {formatInstallStatus(plugin, t)}
                         </span>
-                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                        <span className={badgeClassName}>
                           {formatPluginSource(plugin.source, t)}
                         </span>
                         {plugin.updateAvailable && (
@@ -689,18 +711,18 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         {(plugin.languages ?? []).map((language) => (
                           <span
                             key={`${plugin.id}:${language}`}
-                            className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-3 py-1 text-xs text-[rgb(var(--foreground))]"
+                            className={chipClassName}
                           >
                             {language}
                           </span>
                         ))}
-                        <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-3 py-1 text-xs text-[rgb(var(--muted-foreground))]">
+                        <span className={mutedChipClassName}>
                           {formatRuntimeState(plugin, t)}
                         </span>
                       </div>
 
                       <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                        <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
+                        <div className={subtlePanelClassName}>
                           <div className="flex items-center justify-between gap-4">
                             <div>
                               <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.globalDefaultTitle')}</div>
@@ -714,12 +736,12 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                               onCheckedChange={(checked) => void handleSetGlobalEnabled(plugin.id, checked)}
                               className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
                             >
-                              <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-[rgb(var(--background))] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]" />
+                              <Switch.Thumb className={idePopupSwitchThumbClassName} />
                             </Switch.Root>
                           </div>
                         </div>
 
-                        <label className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4 text-sm text-[rgb(var(--foreground))]">
+                        <label className={`${subtlePanelClassName} text-sm text-[rgb(var(--foreground))]`}>
                           <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.workspaceOverrideTitle')}</div>
                           <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
                             {t('settings.plugins.workspaceOverrideDescription')}
@@ -732,7 +754,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                               plugin.id,
                               event.target.value as WorkspaceEnableMode,
                             )}
-                            className="mt-3 w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+                            className={`mt-3 ${inputClassName}`}
                           >
                             <option value="inherit">{t('settings.plugins.workspaceMode.inherit')}</option>
                             <option value="enabled">{t('settings.plugins.workspaceMode.enabled')}</option>
@@ -748,7 +770,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                           type="button"
                           onClick={() => void handleUpdatePlugin(plugin.id)}
                           disabled={hasPluginMutationInFlight}
-                          className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
+                          className={`${secondaryButtonClassName} inline-flex h-11 items-center gap-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-70`}
                         >
                           {isActionActive(`update:${plugin.id}`) ? <LoaderCircle size={16} className="animate-spin" /> : <Download size={16} />}
                           {t('settings.plugins.actions.update')}
@@ -769,17 +791,17 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                   {(plugin.manifest?.capabilities.some((capability) => (capability.requirements?.length ?? 0) > 0)
                     || globalSettingsSchema.length > 0
                     || workspaceSettingsSchema.length > 0) && (
-                    <details className="mt-5 overflow-hidden rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]">
+                    <details className={`mt-5 overflow-hidden ${subtlePanelClassName}`}>
                       <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-[rgb(var(--foreground))]">
                         {t('settings.plugins.configure')}
                       </summary>
                       <div className="border-t border-[rgb(var(--border))] px-5 py-5">
                         {plugin.manifest?.capabilities.some((capability) => (capability.requirements?.length ?? 0) > 0) && (
-                          <div className="mb-5 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4">
+                          <div className={`mb-5 ${barePanelClassName}`}>
                             <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.plugins.requirements')}</div>
                             <div className="mt-3 space-y-2 text-sm text-[rgb(var(--muted-foreground))]">
                               {plugin.manifest.capabilities.flatMap((capability) => capability.requirements ?? []).map((requirement, index) => (
-                                <div key={`${plugin.id}:requirement:${index}`} className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2">
+                                <div key={`${plugin.id}:requirement:${index}`} className={idePopupCardClassName}>
                                   {formatRequirement(requirement, t)}
                                 </div>
                               ))}
@@ -828,7 +850,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
         {isInitialLoad ? (
           <SectionLoadingState label={t('settings.plugins.loadingSection')} />
         ) : !hasLoadedCatalog ? (
-          <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
+          <div className={emptyStateClassName}>
             <Plug size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
             <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.availableNotLoadedTitle')}</p>
             <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.availableNotLoadedDescription')}</p>
@@ -843,7 +865,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
             </button>
           </div>
         ) : availableCatalogEntries.length === 0 ? (
-          <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-16 text-center">
+          <div className={emptyStateClassName}>
             <Plug size={40} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
             <p className="mt-5 text-lg font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.emptyAvailableTitle')}</p>
             <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.emptyAvailableDescription')}</p>
@@ -853,13 +875,13 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
             {availableCatalogEntries.map((entry) => (
               <div
                 key={entry.id}
-                className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 transition-colors hover:border-[rgb(var(--primary))]"
+                className={`${sectionClassName} transition-colors hover:border-[rgb(var(--primary))]`}
               >
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-lg font-semibold text-[rgb(var(--foreground))]">{entry.name}</h3>
-                      <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                      <span className={badgeClassName}>
                         {entry.publisher}
                       </span>
                       <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
@@ -875,7 +897,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                       {(entry.languages ?? []).map((language) => (
                         <span
                           key={`${entry.id}:${language}`}
-                          className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-3 py-1 text-xs text-[rgb(var(--foreground))]"
+                          className={chipClassName}
                         >
                           {language}
                         </span>
@@ -888,8 +910,8 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                       type="button"
                       onClick={() => void handleInstallMarketplacePlugin(entry.id)}
                       disabled={hasPluginMutationInFlight}
-                      className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[rgb(var(--primary))] px-4 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-                    >
+                        className={`${primaryButtonClassName} inline-flex h-11 items-center gap-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-70`}
+                      >
                       {isActionActive(`install:${entry.id}`) ? <LoaderCircle size={16} className="animate-spin" /> : <Download size={16} />}
                       {t('settings.plugins.actions.install')}
                     </button>
@@ -920,7 +942,7 @@ function InfoTile({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
+    <div className={idePopupSubtlePanelClassName}>
       <div className="text-xs font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">{label}</div>
       <div className={`mt-2 break-all text-sm text-[rgb(var(--foreground))] ${mono ? 'font-mono' : ''}`}>{value}</div>
     </div>
@@ -929,7 +951,7 @@ function InfoTile({
 
 function SectionLoadingState({ label }: { label: string }) {
   return (
-    <div className="rounded-[24px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/40 px-6 py-12">
+    <div className={`${idePopupEmptyStateClassName} px-6 py-12`}>
       <div className="inline-flex items-center gap-2 text-sm text-[rgb(var(--muted-foreground))]">
         <LoaderCircle size={16} className="animate-spin" />
         <span>{label}</span>
@@ -959,7 +981,7 @@ function renderSettingsScopeCard({
 }) {
   if (entries.length === 0) {
     return (
-      <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4">
+      <div className={idePopupBarePanelClassName}>
         <div className="text-sm font-semibold text-[rgb(var(--foreground))]">
           {scope === 'global' ? t('settings.plugins.scope.global') : t('settings.plugins.scope.workspace')}
         </div>
@@ -969,7 +991,7 @@ function renderSettingsScopeCard({
   }
 
   return (
-    <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4">
+    <div className={idePopupBarePanelClassName}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold text-[rgb(var(--foreground))]">
@@ -983,7 +1005,7 @@ function renderSettingsScopeCard({
           type="button"
           onClick={() => void onSave(plugin.id, scope)}
           disabled={isActionActive(`settings:${scope}:${plugin.id}`)}
-          className="inline-flex h-10 items-center gap-2 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
+          className={`${idePopupSecondaryButtonClassName} inline-flex h-10 items-center gap-2 rounded-2xl px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-70`}
         >
           {isActionActive(`settings:${scope}:${plugin.id}`) ? <LoaderCircle size={16} className="animate-spin" /> : <Check size={16} />}
           {t('common.save')}
@@ -1023,7 +1045,7 @@ function renderSettingControl({
 }) {
   if (entry.type === 'boolean') {
     return (
-      <label className="flex items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3">
+      <label className={`${idePopupSubtlePanelClassName} flex items-center justify-between px-4 py-3`}>
         <span className="text-sm text-[rgb(var(--foreground))]">{String(value ?? entry.defaultValue ?? false)}</span>
         <Switch.Root
           aria-label={entry.title}
@@ -1031,7 +1053,7 @@ function renderSettingControl({
           onCheckedChange={(checked) => onChange(checked)}
           className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
         >
-          <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-[rgb(var(--background))] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]" />
+          <Switch.Thumb className={idePopupSwitchThumbClassName} />
         </Switch.Root>
       </label>
     );
@@ -1045,7 +1067,7 @@ function renderSettingControl({
         aria-label={entry.title}
         value={stringifySettingValue(resolvedValue)}
         onChange={(event) => onChange(parseSettingOptionValue(event.target.value, entry.options ?? []))}
-        className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+        className={idePopupInputClassName}
       >
         {(entry.options ?? []).map((option) => (
           <option key={`${option.label}:${stringifySettingValue(option.value)}`} value={stringifySettingValue(option.value)}>
@@ -1070,7 +1092,7 @@ function renderSettingControl({
         value={numericValue}
         onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))}
         placeholder={entry.placeholder}
-        className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+        className={idePopupInputClassName}
       />
     );
   }
@@ -1086,13 +1108,13 @@ function renderSettingControl({
           value={stringValue}
           onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value)}
           placeholder={entry.placeholder}
-          className="min-w-0 flex-1 rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+          className={`min-w-0 flex-1 ${idePopupInputClassName}`}
         />
         <button
           type="button"
           aria-label={`${t('common.browse')} ${entry.title}`}
           onClick={() => void handleBrowseDirectorySetting(onChange)}
-          className="inline-flex shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--primary))]"
+          className={`${idePopupSecondaryButtonClassName} inline-flex shrink-0 items-center justify-center rounded-2xl px-4 py-3 text-sm font-medium`}
         >
           {t('common.browse')}
         </button>
@@ -1107,7 +1129,7 @@ function renderSettingControl({
       value={resolveStringSettingValue(value, entry.defaultValue)}
       onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value)}
       placeholder={entry.placeholder}
-      className="w-full rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+      className={idePopupInputClassName}
     />
   );
 }

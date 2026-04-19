@@ -8,6 +8,18 @@ import { useWindowStore } from '../stores/windowStore'
 import { useI18n } from '../i18n'
 import { SSHAuthType, SSHCredentialState, SSHProfile, SSHProfileInput } from '../../shared/types/ssh'
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo'
+import {
+  idePopupActionButtonClassName,
+  idePopupBarePanelClassName,
+  idePopupCardClassName,
+  idePopupInputClassName,
+  idePopupPanelClassName,
+  idePopupSecondaryButtonClassName,
+  idePopupSelectContentClassName,
+  idePopupSelectItemClassName,
+  idePopupSelectTriggerClassName,
+  idePopupSubtlePanelClassName,
+} from './ui/ide-popup'
 
 interface CreateWindowDialogProps {
   open: boolean
@@ -701,7 +713,7 @@ export function CreateWindowDialog({
     <Tabs.Trigger
       key={value}
       value={value}
-      className="rounded-[12px] border border-transparent px-4 py-2.5 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-all hover:bg-[rgb(var(--card))] hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--card))] data-[state=active]:text-[rgb(var(--foreground))] data-[state=active]:shadow-sm"
+      className="rounded-[12px] border border-transparent px-4 py-2.5 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-all hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] data-[state=active]:text-[rgb(var(--foreground))] data-[state=active]:shadow-sm"
     >
       {title}
     </Tabs.Trigger>
@@ -711,7 +723,7 @@ export function CreateWindowDialog({
     label: string,
     value: string,
   ) => (
-    <div className="rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-2.5">
+    <div className={`${idePopupSubtlePanelClassName} px-3.5 py-2.5`}>
       <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {label}
       </div>
@@ -729,27 +741,34 @@ export function CreateWindowDialog({
   ) => (
     <label
       htmlFor={id}
-      className="flex cursor-pointer items-start gap-3 rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3.5 py-3 text-sm text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--secondary))]/80"
+      className={`flex cursor-pointer items-start gap-3 ${idePopupSubtlePanelClassName} px-3.5 py-3 text-sm text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]`}
     >
       <input
         id={id}
         type="checkbox"
         checked={checked}
         onChange={(event) => onCheckedChange(event.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-[rgb(var(--border))] bg-[rgb(var(--background))] text-[rgb(var(--ring))] [color-scheme:dark] focus:ring-[rgb(var(--ring))]"
+        className="mt-0.5 h-4 w-4 rounded border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)] text-[rgb(var(--ring))] [color-scheme:dark] focus:ring-[rgb(var(--ring))]"
       />
       <span className="leading-5">{label}</span>
     </label>
   )
 
-  const sectionShellClassName = 'rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6'
+  const sectionShellClassName = `${idePopupPanelClassName} rounded-[16px] p-6`
   const fieldLabelClassName = 'mb-2 block text-[13px] font-medium text-[rgb(var(--muted-foreground))]'
-  const textFieldClassName = 'w-full rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-4 py-2.5 text-sm text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] [color-scheme:dark] transition-[border-color,box-shadow] focus:outline-none focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20'
+  const textFieldClassName = `${idePopupInputClassName} rounded-[12px] py-2.5 [color-scheme:dark]`
   const errorFieldClassName = 'border-status-error focus:border-status-error focus:ring-status-error/80'
-  const selectTriggerClassName = 'flex w-full min-w-0 items-center justify-between gap-2 rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-4 py-2.5 text-left text-sm text-[rgb(var(--foreground))] [color-scheme:dark] transition-[border-color,box-shadow] focus:outline-none focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20'
-  const selectMenuClassName = 'z-[80] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl [color-scheme:dark]'
-  const selectItemClassName = 'flex cursor-pointer items-center justify-between gap-2 rounded-[8px] px-3 py-2 text-sm text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--secondary))]'
+  const selectTriggerClassName = `${idePopupSelectTriggerClassName} rounded-[12px] py-2.5 [color-scheme:dark]`
+  const selectMenuClassName = `z-[80] w-[var(--radix-select-trigger-width)] rounded-[12px] [color-scheme:dark] ${idePopupSelectContentClassName}`
+  const selectItemClassName = `${idePopupSelectItemClassName} rounded-[8px]`
   const compactButtonClassName = 'h-10 rounded-[10px] px-4 text-sm font-medium'
+  const compactSecondaryButtonToneClassName = `${idePopupSecondaryButtonClassName} ${compactButtonClassName}`
+  const compactPrimaryButtonToneClassName = `${idePopupActionButtonClassName('primary')} ${compactButtonClassName}`
+  const sshTabListClassName = 'mb-5 flex gap-1 rounded-[14px] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] p-1'
+  const sshRouteTabListClassName = 'grid grid-cols-2 gap-1.5 rounded-[14px] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] p-1 sm:grid-cols-3 lg:grid-cols-5'
+  const sshRouteTabTriggerClassName = 'rounded-[10px] px-2.5 py-2 text-xs font-medium text-[rgb(var(--muted-foreground))] transition-all hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] data-[state=active]:text-[rgb(var(--foreground))] data-[state=active]:shadow-sm'
+  const sshInlineCardClassName = `${idePopupSubtlePanelClassName} rounded-[14px] p-4`
+  const sshRouteSummaryCardClassName = `${idePopupSubtlePanelClassName} rounded-[12px] px-4 py-3`
   const asideCardClassName = `${sectionShellClassName}`
   const localSummaryName = name.trim() || placeholderName
   const localSummaryDirectory = workingDirectory.trim() || t('createWindow.workingDirectoryPlaceholder')
@@ -767,7 +786,7 @@ export function CreateWindowDialog({
     ? 'border-status-error/35 bg-status-error/10 text-status-error'
     : workingDirectory.trim() && !isValidating
       ? 'border-[rgb(var(--ring))] bg-[rgba(168,170,88,0.12)] text-[rgb(var(--ring))]'
-      : 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]'
+      : 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]'
 
   return (
     <Dialog
@@ -783,7 +802,7 @@ export function CreateWindowDialog({
       closeLabel={t('common.close')}
       overlayStyle={{ zIndex: 10000 }}
       contentStyle={{ zIndex: 10010 }}
-      contentClassName="!w-[min(760px,94vw)] !max-w-none flex max-h-[88vh] flex-col overflow-hidden rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]"
+      contentClassName="!w-[min(760px,94vw)] !max-w-none flex max-h-[88vh] flex-col overflow-hidden rounded-[20px] border border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_94%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] backdrop-blur-xl"
       headerClassName="px-6 pt-5 pb-0"
       bodyClassName="min-h-0 flex-1 px-6 pb-5 [color-scheme:dark]"
       titleClassName="text-lg font-semibold tracking-[-0.01em]"
@@ -995,7 +1014,7 @@ export function CreateWindowDialog({
                         </div>
 
                         <Tabs.List
-                          className="mb-5 flex gap-1 rounded-[14px] bg-[rgb(var(--secondary))] p-1"
+                          className={sshTabListClassName}
                           aria-label={t('createWindow.sshSettingsTabsAriaLabel')}
                         >
                           {renderSSHSettingsTrigger('basic', t('createWindow.sshSections.basic'))}
@@ -1106,7 +1125,7 @@ export function CreateWindowDialog({
                           </div>
 
                           {sshForm.auth === 'publicKey' && (
-                            <div className="rounded-[14px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
+                            <div className={sshInlineCardClassName}>
                               <div className="flex items-center justify-between">
                                 <div className="text-sm font-medium text-[rgb(var(--foreground))]">
                                   {t('sshProfileDialog.privateKeysLabel')}
@@ -1183,12 +1202,12 @@ export function CreateWindowDialog({
                             value={sshForm.routingMode}
                             onValueChange={(value) => setSSHField('routingMode', value as SSHRoutingMode)}
                           >
-                            <Tabs.List className="grid grid-cols-2 gap-1.5 rounded-[14px] bg-[rgb(var(--secondary))] p-1 sm:grid-cols-3 lg:grid-cols-5">
+                            <Tabs.List className={sshRouteTabListClassName}>
                               {(['direct', 'jumpHost', 'proxyCommand', 'socks', 'http'] as SSHRoutingMode[]).map((mode) => (
                                 <Tabs.Trigger
                                   key={mode}
                                   value={mode}
-                                  className="rounded-[10px] px-2.5 py-2 text-xs font-medium text-[rgb(var(--muted-foreground))] transition-all hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--card))] data-[state=active]:text-[rgb(var(--foreground))] data-[state=active]:shadow-sm"
+                                  className={sshRouteTabTriggerClassName}
                                 >
                                   {t(`sshProfileDialog.routing.${mode}` as any)}
                                 </Tabs.Trigger>
@@ -1197,7 +1216,7 @@ export function CreateWindowDialog({
 
                             <div className="mt-4">
                               <Tabs.Content value="direct" className="data-[state=inactive]:hidden">
-                                <div className="rounded-[12px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3">
+                                <div className={sshRouteSummaryCardClassName}>
                                   <div className="text-sm font-semibold text-[rgb(var(--foreground))]">
                                     {sshSummaryHost}:{sshForm.port.trim() || '22'}
                                   </div>
@@ -1400,7 +1419,7 @@ export function CreateWindowDialog({
               onOpenChange(false)
               resetDialog()
             }}
-            className={compactButtonClassName}
+            className={compactSecondaryButtonToneClassName}
           >
             {t('common.cancel')}
           </Button>
@@ -1411,7 +1430,7 @@ export function CreateWindowDialog({
               ? (!workingDirectory || !!pathError || isValidating || isCreating)
               : isSavingSSH}
             aria-busy={activeTab === 'local' ? isCreating : isSavingSSH}
-            className={compactButtonClassName}
+            className={compactPrimaryButtonToneClassName}
           >
             {activeTab === 'local'
               ? (isCreating ? t('common.creating') : t('common.create'))

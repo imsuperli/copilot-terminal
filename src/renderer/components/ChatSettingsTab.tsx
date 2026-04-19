@@ -10,6 +10,16 @@ import type {
 import { resolveLLMProviderWireApi } from '../../shared/utils/chatProvider';
 import { useI18n } from '../i18n';
 import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
+import {
+  idePopupActionButtonClassName,
+  idePopupBarePanelClassName,
+  idePopupEmptyStateClassName,
+  idePopupInputClassName,
+  idePopupPanelClassName,
+  idePopupSecondaryButtonClassName,
+  idePopupSubtlePanelClassName,
+  idePopupSwitchThumbClassName,
+} from './ui/ide-popup';
 
 interface ProviderFormState {
   id?: string;
@@ -125,6 +135,14 @@ export const ChatSettingsTab: React.FC = () => {
     () => providers.find((provider) => provider.id === chatSettings.activeProviderId) ?? null,
     [chatSettings.activeProviderId, providers],
   );
+  const sectionClassName = idePopupPanelClassName;
+  const subtlePanelClassName = idePopupSubtlePanelClassName;
+  const barePanelClassName = idePopupBarePanelClassName;
+  const inputClassName = idePopupInputClassName;
+  const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-9 rounded-2xl px-4`;
+  const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-11 rounded-2xl px-4`;
+  const emptyStateClassName = `${idePopupEmptyStateClassName} px-5 py-10 text-center`;
+  const mutedBadgeClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]';
 
   const handleAddProvider = useCallback(() => {
     setEditingProviderId('new');
@@ -238,7 +256,7 @@ export const ChatSettingsTab: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+      <section className={sectionClassName}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.providersTitle')}</h3>
@@ -256,11 +274,11 @@ export const ChatSettingsTab: React.FC = () => {
 
         <div className="mt-6 space-y-3">
           {loading ? (
-            <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--muted-foreground))]">
+            <div className={`${subtlePanelClassName} px-4 py-3 text-sm text-[rgb(var(--muted-foreground))]`}>
               {t('common.loading')}
             </div>
           ) : providers.length === 0 ? (
-            <div className="rounded-[20px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/50 px-5 py-10 text-center">
+            <div className={emptyStateClassName}>
               <div className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.noProvidersTitle')}</div>
               <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.noProvidersDescription')}</p>
             </div>
@@ -268,13 +286,13 @@ export const ChatSettingsTab: React.FC = () => {
             providers.map((provider) => (
               <div
                 key={provider.id}
-                className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4"
+                className={subtlePanelClassName}
               >
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h4 className="text-sm font-semibold text-[rgb(var(--foreground))]">{provider.name}</h4>
-                      <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                      <span className={mutedBadgeClassName}>
                         {provider.type === 'anthropic'
                           ? t('settings.chat.providerTypeAnthropic')
                           : t('settings.chat.providerTypeOpenAICompatible')}
@@ -302,7 +320,7 @@ export const ChatSettingsTab: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleEditProvider(provider)}
-                      className="inline-flex h-9 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 text-sm text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                      className={secondaryButtonClassName}
                     >
                       {t('common.edit')}
                     </button>
@@ -323,7 +341,7 @@ export const ChatSettingsTab: React.FC = () => {
         </div>
 
         {editingProviderId && (
-          <div className="mt-6 rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-5">
+          <div className={`mt-6 ${barePanelClassName} p-5`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">
                 {editingProviderId === 'new'
@@ -351,7 +369,7 @@ export const ChatSettingsTab: React.FC = () => {
                   value={providerForm.name}
                   onChange={(event) => handleProviderFieldChange('name', event.target.value)}
                   placeholder={t('settings.chat.providerNamePlaceholder')}
-                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+                  className={inputClassName}
                 />
               </label>
 
@@ -360,7 +378,7 @@ export const ChatSettingsTab: React.FC = () => {
                 <select
                   value={providerForm.type}
                   onChange={(event) => handleProviderFieldChange('type', event.target.value as LLMProviderType)}
-                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+                  className={inputClassName}
                 >
                   <option value="anthropic">{t('settings.chat.providerTypeAnthropic')}</option>
                   <option value="openai-compatible">{t('settings.chat.providerTypeOpenAICompatible')}</option>
@@ -374,7 +392,7 @@ export const ChatSettingsTab: React.FC = () => {
                   onChange={(event) => handleProviderFieldChange('baseUrl', event.target.value)}
                   placeholder={t('settings.chat.baseUrlPlaceholder')}
                   disabled={providerForm.type !== 'openai-compatible'}
-                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
                 />
               </label>
 
@@ -384,7 +402,7 @@ export const ChatSettingsTab: React.FC = () => {
                   value={providerForm.apiKey}
                   onChange={(event) => handleProviderFieldChange('apiKey', event.target.value)}
                   placeholder={t('settings.chat.apiKeyPlaceholder')}
-                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+                  className={inputClassName}
                 />
               </label>
 
@@ -394,7 +412,7 @@ export const ChatSettingsTab: React.FC = () => {
                   value={providerForm.wireApi}
                   onChange={(event) => handleProviderFieldChange('wireApi', event.target.value as LLMProviderWireApi)}
                   disabled={providerForm.type !== 'openai-compatible'}
-                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))] disabled:cursor-not-allowed disabled:opacity-50"
+                  className={`${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   <option value="chat-completions">{t('settings.chat.protocolChatCompletions')}</option>
                   <option value="responses">{t('settings.chat.protocolResponses')}</option>
@@ -408,7 +426,7 @@ export const ChatSettingsTab: React.FC = () => {
                   value={providerForm.modelsText}
                   onChange={(event) => handleProviderFieldChange('modelsText', event.target.value)}
                   placeholder={t('settings.chat.modelsPlaceholder')}
-                  className="min-h-[120px] rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm leading-6 text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+                  className={`min-h-[120px] ${inputClassName} leading-6`}
                 />
                 <span className="text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.chat.modelsHint')}</span>
               </label>
@@ -419,7 +437,7 @@ export const ChatSettingsTab: React.FC = () => {
                   value={providerForm.defaultModel}
                   onChange={(event) => handleProviderFieldChange('defaultModel', event.target.value)}
                   placeholder={t('settings.chat.defaultModelPlaceholder')}
-                  className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+                  className={inputClassName}
                 />
               </label>
             </div>
@@ -434,7 +452,7 @@ export const ChatSettingsTab: React.FC = () => {
                 onClick={() => {
                   void handleSaveProvider();
                 }}
-                className="inline-flex h-11 items-center justify-center rounded-2xl bg-[rgb(var(--primary))] px-4 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90"
+                className={primaryButtonClassName}
               >
                 {t('common.save')}
               </button>
@@ -443,7 +461,7 @@ export const ChatSettingsTab: React.FC = () => {
         )}
       </section>
 
-      <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
+      <section className={sectionClassName}>
         <div>
           <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.defaultsTitle')}</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.defaultsDescription')}</p>
@@ -460,7 +478,7 @@ export const ChatSettingsTab: React.FC = () => {
                   activeProviderId: event.target.value || undefined,
                 });
               }}
-              className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+              className={inputClassName}
             >
               <option value="">{t('settings.chat.activeProviderPlaceholder')}</option>
               {providers.map((provider) => (
@@ -469,7 +487,7 @@ export const ChatSettingsTab: React.FC = () => {
             </select>
           </label>
 
-          <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
+          <div className={subtlePanelClassName}>
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h4 className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.commandSecurityTitle')}</h4>
@@ -487,7 +505,7 @@ export const ChatSettingsTab: React.FC = () => {
                 aria-label={t('settings.chat.commandSecurityTitle')}
                 className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
               >
-                <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-[rgb(var(--background))] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]" />
+                <Switch.Thumb className={idePopupSwitchThumbClassName} />
               </Switch.Root>
             </div>
           </div>
@@ -504,7 +522,7 @@ export const ChatSettingsTab: React.FC = () => {
               }}
               onBlur={handleSystemPromptBlur}
               placeholder={t('settings.chat.systemPromptPlaceholder')}
-              className="min-h-[160px] rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 py-3 text-sm leading-6 text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+              className={`min-h-[160px] ${inputClassName} leading-6`}
             />
           </label>
         </div>

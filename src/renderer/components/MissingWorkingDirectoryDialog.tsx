@@ -2,6 +2,10 @@ import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Dialog } from './ui/Dialog';
 import { useI18n } from '../i18n';
+import {
+  idePopupActionButtonClassName,
+  idePopupSubtlePanelClassName,
+} from './ui/ide-popup';
 
 interface MissingWorkingDirectoryDialogProps {
   open: boolean;
@@ -25,6 +29,8 @@ export function MissingWorkingDirectoryDialog({
   onDeleteWindow,
 }: MissingWorkingDirectoryDialogProps) {
   const { t } = useI18n();
+  const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} rounded-lg px-4 py-2 text-sm font-medium`;
+  const dangerButtonClassName = `${idePopupActionButtonClassName('danger')} rounded-lg px-4 py-2 text-sm font-medium`;
 
   return (
     <Dialog
@@ -35,9 +41,10 @@ export function MissingWorkingDirectoryDialog({
         name: windowName,
         path: workingDirectory,
       })}
+      contentClassName="!max-w-[520px] rounded-[20px] border border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_94%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] backdrop-blur-xl"
     >
       <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
+        <div className={`flex items-start gap-3 rounded-xl ${idePopupSubtlePanelClassName} p-4`}>
           <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-[rgb(var(--warning))]" />
           <p className="break-all text-sm text-[rgb(var(--muted-foreground))]">{workingDirectory}</p>
         </div>
@@ -56,7 +63,7 @@ export function MissingWorkingDirectoryDialog({
             type="button"
             disabled={isProcessing}
             onClick={onCreateDirectory}
-            className="rounded-lg bg-[rgb(var(--primary))] px-4 py-2 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${primaryButtonClassName} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             {t('windowDirectory.autoCreate')}
           </button>
@@ -64,7 +71,7 @@ export function MissingWorkingDirectoryDialog({
             type="button"
             disabled={isProcessing}
             onClick={onDeleteWindow}
-            className="rounded-lg bg-[rgb(var(--error))] px-4 py-2 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${dangerButtonClassName} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             {t('windowDirectory.deleteWindow')}
           </button>

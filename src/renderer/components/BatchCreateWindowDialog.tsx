@@ -1,6 +1,14 @@
 import React, { useState } from 'react';
 import { X, FolderOpen, Check } from 'lucide-react';
 import { useI18n } from '../i18n';
+import {
+  idePopupActionButtonClassName,
+  idePopupEmptyStateClassName,
+  idePopupIconButtonClassName,
+  idePopupPanelClassName,
+  idePopupSecondaryButtonClassName,
+  idePopupSurfaceClassName,
+} from './ui/ide-popup';
 
 interface BatchCreateWindowDialogProps {
   open: boolean;
@@ -81,10 +89,12 @@ export function BatchCreateWindowDialog({
   if (!open) return null;
 
   const selectedCount = folders.filter(f => f.selected).length;
+  const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} rounded-lg px-4 py-2 text-sm font-medium`;
+  const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} rounded-lg px-4 py-2 text-sm font-medium`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-[rgb(var(--background))] rounded-lg shadow-xl w-[600px] max-h-[80vh] flex flex-col">
+      <div className={`${idePopupSurfaceClassName} flex w-[600px] max-h-[80vh] flex-col rounded-lg`}>
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[rgb(var(--border))]">
           <h2 className="text-lg font-semibold text-[rgb(var(--foreground))]">
@@ -92,7 +102,7 @@ export function BatchCreateWindowDialog({
           </h2>
           <button
             onClick={handleClose}
-            className="p-1 rounded-lg hover:bg-[rgb(var(--accent))] transition-colors"
+            className={`${idePopupIconButtonClassName} p-1 rounded-lg`}
           >
             <X className="h-5 w-5" />
           </button>
@@ -102,7 +112,7 @@ export function BatchCreateWindowDialog({
         <div className="flex-1 overflow-y-auto p-6">
           {folders.length === 0 ? (
             /* Empty state */
-            <div className="flex flex-col items-center justify-center py-12">
+            <div className={`flex flex-col items-center justify-center py-12 ${idePopupEmptyStateClassName}`}>
               <div className="w-20 h-20 rounded-2xl bg-[rgb(var(--primary))]/10 flex items-center justify-center mb-6">
                 <FolderOpen className="h-10 w-10 text-[rgb(var(--primary))]" />
               </div>
@@ -117,7 +127,7 @@ export function BatchCreateWindowDialog({
               <button
                 onClick={handleSelectFolder}
                 disabled={isScanning}
-                className="flex items-center gap-2 px-8 py-3 rounded-lg bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] font-medium hover:opacity-90 transition-all disabled:opacity-50 shadow-lg shadow-[rgb(var(--primary))]/20"
+                className={`${idePopupActionButtonClassName('primary')} flex items-center gap-2 rounded-lg px-8 py-3 font-medium disabled:opacity-50`}
               >
                 <FolderOpen className="h-5 w-5" />
                 <span>{isScanning ? t('common.loading') : t('batchCreate.chooseFolder')}</span>
@@ -127,7 +137,7 @@ export function BatchCreateWindowDialog({
             /* Folder list */
             <div className="space-y-4">
               {/* Parent path */}
-              <div className="p-4 rounded-lg bg-[rgb(var(--accent))]/50 border border-[rgb(var(--border))]">
+              <div className={`${idePopupPanelClassName} p-4`}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-[rgb(var(--muted-foreground))] mb-1">
@@ -140,7 +150,7 @@ export function BatchCreateWindowDialog({
                   <button
                     onClick={handleSelectFolder}
                     disabled={isScanning}
-                    className="flex-shrink-0 px-3 py-1.5 text-xs font-medium rounded-md bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:opacity-90 transition-opacity disabled:opacity-50"
+                    className={`${idePopupActionButtonClassName('primary')} flex-shrink-0 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50`}
                   >
                     {isScanning ? t('common.loading') : t('batchCreate.reselect')}
                   </button>
@@ -167,7 +177,7 @@ export function BatchCreateWindowDialog({
               </div>
 
               {/* Folder list */}
-              <div className="max-h-[320px] overflow-y-auto space-y-1.5 border border-[rgb(var(--border))] rounded-lg p-3 bg-[rgb(var(--accent))]/20">
+              <div className={`${idePopupPanelClassName} max-h-[320px] space-y-1.5 overflow-y-auto rounded-lg p-3`}>
                 {folders.map((folder, index) => (
                   <label
                     key={folder.path}
@@ -201,14 +211,14 @@ export function BatchCreateWindowDialog({
         <div className="flex items-center justify-end gap-2 p-4 border-t border-[rgb(var(--border))]">
           <button
             onClick={handleClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] transition-colors"
+            className={secondaryButtonClassName}
           >
             {t('common.cancel')}
           </button>
           <button
             onClick={handleConfirm}
             disabled={selectedCount === 0}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))] hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`${primaryButtonClassName} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             {t('batchCreate.createWindows', { count: selectedCount })}
           </button>

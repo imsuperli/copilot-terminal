@@ -84,7 +84,7 @@ export const CleanupOverlay: React.FC = () => {
                 <span>{t('cleanup.progress')}</span>
                 <span>{progress.current} / {progress.total}</span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-[rgb(var(--secondary))]">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]">
                 <div
                   className="bg-[rgb(var(--primary))] h-full transition-all duration-200 ease-out"
                   style={{ width: `${smoothProgress}%` }}
