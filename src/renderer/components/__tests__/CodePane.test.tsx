@@ -2321,6 +2321,93 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneGetExternalLibrarySections).not.toHaveBeenCalled();
   });
 
+  it('discards a git change by refreshing only the affected loaded directory', async () => {
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+
+      if (targetPath === '/workspace/project/src') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src/index.ts',
+              name: 'index.ts',
+              type: 'file',
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    const directoryButton = await screen.findByRole('button', { name: 'src' });
+    await act(async () => {
+      fireEvent.doubleClick(directoryButton);
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        targetPath: '/workspace/project/src',
+      });
+    });
+
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockClear();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitDiscard' }));
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitDiscard).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        paths: ['/workspace/project/src/index.ts'],
+        restoreStaged: false,
+      });
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledTimes(1);
+      expect(window.electronAPI.codePaneListDirectory).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        targetPath: '/workspace/project/src',
+      });
+    });
+  });
+
   it('opens git history from directory context menus', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {

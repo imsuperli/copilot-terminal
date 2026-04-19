@@ -13460,6 +13460,39 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [refreshLoadedDirectoriesNow]);
 
+  const refreshDirectoriesForPaths = useCallback(async (
+    paths: string[],
+    options?: {
+      refreshGitStatus?: boolean;
+    },
+  ) => {
+    const directoriesToRefresh = new Set<string>();
+    for (const filePath of paths) {
+      const normalizedPath = normalizePath(filePath);
+      const candidateDirectoryPath = loadedDirectoriesRef.current.has(normalizedPath)
+        ? normalizedPath
+        : getParentDirectory(normalizedPath);
+      if (
+        candidateDirectoryPath
+        && (
+          candidateDirectoryPath === rootPath
+          || loadedDirectoriesRef.current.has(candidateDirectoryPath)
+        )
+      ) {
+        directoriesToRefresh.add(candidateDirectoryPath);
+      }
+    }
+
+    if (directoriesToRefresh.size === 0) {
+      return;
+    }
+
+    await refreshDirectoryPaths(directoriesToRefresh, {
+      showLoadingIndicator: false,
+      refreshGitStatus: options?.refreshGitStatus,
+    });
+  }, [refreshDirectoryPaths, rootPath]);
+
   const loadGitHistory = useCallback(async (
     config: {
       filePath?: string;
@@ -13638,23 +13671,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const normalizedPaths = cached ? [] : suppressExternalChangesForPaths(paths);
     const didRemove = await runGitOperation(
       async () => await window.electronAPI.codePaneGitRemove({ rootPath, paths, cached }),
-      { successMessage: t('codePane.gitRemoveSuccess') },
+      {
+        successMessage: t('codePane.gitRemoveSuccess'),
+        refreshDirectories: false,
+      },
     );
-    if (didRemove || normalizedPaths.length === 0) {
+    if (didRemove) {
+      await refreshDirectoriesForPaths(paths, { refreshGitStatus: false });
+      return;
+    }
+
+    if (normalizedPaths.length === 0) {
       return;
     }
 
     for (const filePath of normalizedPaths) {
       suppressedExternalChangePathsRef.current.delete(filePath);
     }
-  }, [rootPath, runGitOperation, suppressExternalChangesForPaths, t]);
+  }, [refreshDirectoriesForPaths, rootPath, runGitOperation, suppressExternalChangesForPaths, t]);
 
   const discardGitPaths = useCallback(async (paths: string[], restoreStaged?: boolean) => {
     const normalizedPaths = suppressExternalChangesForPaths(paths);
 
     const didDiscard = await runGitOperation(
       async () => await window.electronAPI.codePaneGitDiscard({ rootPath, paths, restoreStaged }),
-      { successMessage: t('codePane.gitDiscardSuccess') },
+      {
+        successMessage: t('codePane.gitDiscardSuccess'),
+        refreshDirectories: false,
+      },
     );
     if (!didDiscard) {
       for (const filePath of normalizedPaths) {
@@ -13671,8 +13715,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
         })());
       }
     }
-    await Promise.all(reloadRequests);
-  }, [reloadFileFromDisk, rootPath, runGitOperation, suppressExternalChangesForPaths, t]);
+    await Promise.all([
+      refreshDirectoriesForPaths(paths, { refreshGitStatus: false }),
+      Promise.all(reloadRequests),
+    ]);
+  }, [refreshDirectoriesForPaths, reloadFileFromDisk, rootPath, runGitOperation, suppressExternalChangesForPaths, t]);
 
   const stageGitHunk = useCallback(async (hunk: CodePaneGitDiffHunk) => {
     const didApply = await runGitOperation(
