@@ -22147,320 +22147,339 @@ export const CodePane: React.FC<CodePaneProps> = ({
     refreshBottomPanel,
   ]);
 
-  const renderedBottomPanel = useMemo(() => {
-    switch (bottomPanelMode) {
-      case 'run':
-        return (
-          <RunToolWindow
-            targets={runTargets}
-            sessions={visibleRunSessions}
-            selectedSession={selectedRunSession}
-            selectedOutput={selectedRunSessionOutput}
-            isLoading={isRunTargetsLoading}
-            error={runTargetsError}
-            onClose={() => {
-              closeBottomPanel();
-            }}
-            onRefresh={refreshBottomPanel}
-            onRunTarget={runTargetById}
-            onDebugTarget={debugTargetById}
-            onSelectSession={setSelectedRunSessionId}
-            onStopSession={stopRunSession}
-            getCustomization={getRunTargetCustomization}
-            onCustomizationChange={updateRunTargetCustomization}
-          />
-        );
-      case 'debug':
-        return (
-          <DebugToolWindow
-            targets={debugTargets}
-            breakpoints={breakpoints}
-            exceptionBreakpoints={exceptionBreakpoints}
-            sessions={visibleDebugSessions}
-            selectedSession={selectedDebugSession}
-            selectedDetails={debugSessionDetails}
-            selectedOutput={selectedDebugSessionOutput}
-            watchEntries={watchEntries}
-            evaluations={debugEvaluations}
-            isLoading={isRunTargetsLoading}
-            isDetailsLoading={isDebugDetailsLoading}
-            error={runTargetsError}
-            onClose={() => {
-              closeBottomPanel();
-            }}
-            onRefresh={refreshBottomPanel}
-            onStartDebug={debugTargetById}
-            onSelectSession={setSelectedDebugSessionId}
-            onStopSession={stopDebugSession}
-            onPauseSession={pauseDebugSession}
-            onContinueSession={continueDebugSession}
-            onStepOver={handleDebugStepOver}
-            onStepInto={handleDebugStepInto}
-            onStepOut={handleDebugStepOut}
-            onOpenFrame={openDebugFrame}
-            onEvaluate={evaluateDebugExpression}
-            onAddWatch={addDebugWatchExpression}
-            onRemoveWatch={removeDebugWatchExpression}
-            onRefreshWatches={handleDebugRefreshWatches}
-            onUpdateBreakpoint={updateBreakpoint}
-            onRemoveBreakpoint={removeBreakpoint}
-            onSetExceptionBreakpoint={setExceptionBreakpoint}
-          />
-        );
-      case 'hierarchy':
-        return (
-          <HierarchyToolWindow
-            mode={selectedHierarchyMode}
-            root={hierarchyRootNode}
-            isLoading={isHierarchyLoading}
-            error={hierarchyError}
-            onClose={closeBottomPanel}
-            onRefresh={handleHierarchyToolWindowRefresh}
-            onSelectMode={handleHierarchyToolWindowSelectMode}
-            onToggleNode={handleHierarchyToolWindowToggleNode}
-            onOpenItem={handleHierarchyToolWindowOpenItem}
-          />
-        );
-      case 'semantic':
-        return (
-          <SemanticToolWindow
-            fileLabel={semanticSummaryFileLabel}
-            legend={semanticLegend}
-            summary={semanticSummary}
-            totalTokens={semanticTokenCount}
-            isEnabled={areSemanticTokensEnabled}
-            isLoading={isSemanticSummaryLoading}
-            error={semanticSummaryError}
-            onClose={() => {
-              closeBottomPanel();
-            }}
-            onRefresh={() => {
-              void loadSemanticSummary();
-            }}
-            onToggleEnabled={() => {
-              setAreSemanticTokensEnabled((currentValue) => !currentValue);
-            }}
-          />
-        );
-      case 'project':
-        return (
-          <ProjectToolWindow
-            contributions={projectContributions}
-            sessions={visibleRunSessions}
-            selectedSession={selectedRunSession}
-            selectedOutput={selectedRunSessionOutput}
-            languageWorkspaceState={languageWorkspaceState}
-            isLoading={isProjectLoading}
-            error={projectError}
-            onClose={closeBottomPanel}
-            onRefresh={refreshBottomPanel}
-            onRunCommand={runProjectCommandById}
-            onSelectSession={setSelectedRunSessionId}
-            onStopSession={stopRunSession}
-            onOpenTreeItem={handleProjectToolWindowOpenTreeItem}
-          />
-        );
-      case 'outline':
-        return (
-          <OutlineToolWindow
-            fileLabel={documentSymbolsFilePath ? getFileLabel(documentSymbolsFilePath) : null}
-            symbols={documentSymbols}
-            isLoading={isDocumentSymbolsLoading}
-            error={documentSymbolsError}
-            onClose={closeBottomPanel}
-            onRefresh={loadDocumentSymbols}
-            onOpenSymbol={handleOutlineToolWindowOpenSymbol}
-          />
-        );
-      case 'tests':
-        return (
-          <TestsToolWindow
-            testItems={testItems}
-            sessions={visibleRunSessions}
-            selectedSession={selectedRunSession}
-            selectedOutput={selectedRunSessionOutput}
-            isLoading={isTestsLoading}
-            error={testsError}
-            hasFailedSessions={hasFailedTestSessions}
-            onClose={closeBottomPanel}
-            onRefresh={refreshBottomPanel}
-            onRunTest={runTestTarget}
-            onSelectSession={setSelectedRunSessionId}
-            onStopSession={stopRunSession}
-            onOpenTestItem={openTestItem}
-            onRerunFailed={rerunFailedTests}
-          />
-        );
-      case 'preview':
-        return (
-          <RefactorPreviewToolWindow
-            changeSet={refactorPreview}
-            selectedChangeId={selectedPreviewChangeId}
-            isApplying={isApplyingRefactorPreview}
-            error={refactorPreviewError}
-            onSelectChange={setSelectedPreviewChangeId}
-            onApply={applyRefactorPreview}
-            onClose={closeBottomPanel}
-          />
-        );
-      case 'git':
-        return (
-          <GitToolWindow
-            activeTab={activeGitWorkbenchTab}
-            onTabChange={handleGitWorkbenchTabChange}
-            branches={gitBranches}
-            selectedBranchName={selectedGitBranchName}
-            commits={gitGraph}
-            selectedCommitSha={selectedGitLogCommitSha}
-            changes={scmEntries}
-            selectedChangePath={selectedGitChangePath}
-            selectedHunkPath={selectedGitHunksPath}
-            selectedHunkRelativePath={selectedGitHunksRelativePath}
-            stagedHunks={gitStagedHunks}
-            unstagedHunks={gitUnstagedHunks}
-            hunksLoading={isGitHunksLoading}
-            hunksError={gitHunksError}
-            rebasePlan={gitRebasePlan}
-            rebaseBaseRef={gitRebaseBaseRef}
-            isBranchesLoading={isGitBranchesLoading}
-            branchesError={gitBranchesError}
-            isRebaseLoading={isGitRebaseLoading}
-            rebaseError={gitRebaseError}
-            selectedCommitDetails={selectedGitCommitDetails}
-            comparedCommits={comparedGitCommits}
-            selectedCommitOrder={selectedGitCommitOrder}
-            isCommitDetailsLoading={isGitCommitDetailsLoading}
-            commitDetailsError={gitCommitDetailsError}
-            onSelectBranch={handleSelectGitBranch}
-            onSelectCommit={selectGitLogCommit}
-            onSelectChange={selectGitChangeEntry}
-            onChangeRebaseBaseRef={setGitRebaseBaseRef}
-            onRefresh={refreshBottomPanel}
-            onRefreshRebase={handleGitWorkbenchRefreshRebase}
-            onStagePath={handleGitStagePath}
-            onUnstagePath={handleGitUnstagePath}
-            onDiscardPath={handleGitWorkbenchDiscardPath}
-            onOpenFileDiff={handleGitOpenFileDiff}
-            onOpenConflictResolver={handleGitOpenConflictResolver}
-            onResolveConflict={handleGitResolveConflict}
-            onStageHunk={stageGitHunk}
-            onUnstageHunk={unstageGitHunk}
-            onDiscardHunk={discardGitHunk}
-            onShowFileHistory={handleGitShowFileHistory}
-            onRevealInExplorer={handleGitRevealInExplorer}
-            onCheckoutBranch={checkoutGitBranch}
-            onRequestRenameBranch={handleGitWorkbenchRequestRenameBranch}
-            onDeleteBranch={handleGitWorkbenchDeleteBranch}
-            onCherryPick={cherryPickCommit}
-            onCompareSelectedCommits={handleGitWorkbenchCompareSelectedCommits}
-            onOpenCommitFileDiff={handleGitWorkbenchOpenCommitFileDiff}
-            onApplyRebasePlan={applyGitRebasePlan}
-            getRelativePath={getProjectRelativePath}
-            onClose={closeBottomPanel}
-          />
-        );
-      case 'conflict':
-        return (
-          <ConflictResolutionToolWindow
-            conflict={gitConflictDetails}
-            isLoading={isGitConflictLoading}
-            isApplying={isApplyingGitConflict}
-            error={gitConflictError}
-            onRefresh={refreshBottomPanel}
-            onApply={applyGitConflictResolution}
-            onClose={closeBottomPanel}
-          />
-        );
-      case 'history':
-        return (
-          <GitHistoryToolWindow
-            history={gitHistory}
-            selectedCommitSha={selectedHistoryCommitSha}
-            isLoading={isGitHistoryLoading}
-            error={gitHistoryError}
-            onSelectCommit={setSelectedHistoryCommitSha}
-            onRefresh={refreshBottomPanel}
-            onCherryPick={cherryPickCommit}
-            onClose={closeBottomPanel}
-          />
-        );
-      case 'external-changes':
-        return (
-          <ExternalChangesToolWindow
-            entries={externalChangeEntries}
-            selectedEntry={selectedExternalChangeEntry}
-            onClose={closeBottomPanel}
-            onClearAll={clearAllExternalChanges}
-            onClearEntry={clearExternalChangeEntry}
-            onSelectEntry={handleExternalChangeSelectEntry}
-            onOpenDiff={handleExternalChangeOpenDiff}
-          />
-        );
-      case 'workspace':
-        return (
-          <WorkspaceToolWindow
-            bookmarks={bookmarks}
-            todoItems={todoItems}
-            localHistoryEntries={visibleLocalHistoryEntries}
-            activeFilePath={activeFilePath}
-            isTodoLoading={isTodoLoading}
-            todoError={todoError}
-            onClose={closeBottomPanel}
-            onRefresh={loadTodoEntries}
-            onOpenBookmark={handleWorkspaceOpenBookmark}
-            onOpenTodo={handleWorkspaceOpenTodo}
-            onOpenHistoryEntry={handleWorkspaceOpenHistoryEntry}
-            onRestoreHistoryEntry={handleWorkspaceRestoreHistoryEntry}
-            getFileLabel={getFileLabel}
-            getRelativePath={getProjectRelativePath}
-          />
-        );
-      case 'performance':
-        return renderedPerformancePanel;
-      default:
-        return null;
-    }
-  }, [
-    activeFilePath,
-    applyGitRebasePlan,
-    areSemanticTokensEnabled,
-    bookmarks,
+  const renderedRunPanel = useMemo(() => (
+    <RunToolWindow
+      targets={runTargets}
+      sessions={visibleRunSessions}
+      selectedSession={selectedRunSession}
+      selectedOutput={selectedRunSessionOutput}
+      isLoading={isRunTargetsLoading}
+      error={runTargetsError}
+      onClose={closeBottomPanel}
+      onRefresh={refreshBottomPanel}
+      onRunTarget={runTargetById}
+      onDebugTarget={debugTargetById}
+      onSelectSession={setSelectedRunSessionId}
+      onStopSession={stopRunSession}
+      getCustomization={getRunTargetCustomization}
+      onCustomizationChange={updateRunTargetCustomization}
+    />
+  ), [
+    closeBottomPanel,
+    debugTargetById,
+    getRunTargetCustomization,
+    isRunTargetsLoading,
+    refreshBottomPanel,
+    runTargetById,
+    runTargets,
+    runTargetsError,
+    selectedRunSession,
+    selectedRunSessionOutput,
+    stopRunSession,
+    updateRunTargetCustomization,
+    visibleRunSessions,
+  ]);
+
+  const renderedDebugPanel = useMemo(() => (
+    <DebugToolWindow
+      targets={debugTargets}
+      breakpoints={breakpoints}
+      exceptionBreakpoints={exceptionBreakpoints}
+      sessions={visibleDebugSessions}
+      selectedSession={selectedDebugSession}
+      selectedDetails={debugSessionDetails}
+      selectedOutput={selectedDebugSessionOutput}
+      watchEntries={watchEntries}
+      evaluations={debugEvaluations}
+      isLoading={isRunTargetsLoading}
+      isDetailsLoading={isDebugDetailsLoading}
+      error={runTargetsError}
+      onClose={closeBottomPanel}
+      onRefresh={refreshBottomPanel}
+      onStartDebug={debugTargetById}
+      onSelectSession={setSelectedDebugSessionId}
+      onStopSession={stopDebugSession}
+      onPauseSession={pauseDebugSession}
+      onContinueSession={continueDebugSession}
+      onStepOver={handleDebugStepOver}
+      onStepInto={handleDebugStepInto}
+      onStepOut={handleDebugStepOut}
+      onOpenFrame={openDebugFrame}
+      onEvaluate={evaluateDebugExpression}
+      onAddWatch={addDebugWatchExpression}
+      onRemoveWatch={removeDebugWatchExpression}
+      onRefreshWatches={handleDebugRefreshWatches}
+      onUpdateBreakpoint={updateBreakpoint}
+      onRemoveBreakpoint={removeBreakpoint}
+      onSetExceptionBreakpoint={setExceptionBreakpoint}
+    />
+  ), [
+    addDebugWatchExpression,
     breakpoints,
-    cherryPickCommit,
-    clearAllExternalChanges,
-    clearExternalChangeEntry,
-    comparedGitCommits,
+    closeBottomPanel,
+    continueDebugSession,
     debugEvaluations,
     debugSessionDetails,
+    debugTargetById,
     debugTargets,
-    documentSymbols,
-    documentSymbolsFilePath,
+    evaluateDebugExpression,
     exceptionBreakpoints,
-    externalChangeEntries,
-    getFileLabel,
-    getProjectRelativePath,
-    gitBranches,
-    gitCommitDetailsError,
-    gitConflictDetails,
-    gitConflictError,
-    gitGraph,
-    gitHistory,
-    gitRebaseError,
-    gitRebasePlan,
-    closeBottomPanel,
     handleDebugRefreshWatches,
     handleDebugStepInto,
     handleDebugStepOut,
     handleDebugStepOver,
-    handleExternalChangeOpenDiff,
-    handleExternalChangeSelectEntry,
+    isDebugDetailsLoading,
+    isRunTargetsLoading,
+    openDebugFrame,
+    pauseDebugSession,
+    refreshBottomPanel,
+    removeBreakpoint,
+    removeDebugWatchExpression,
+    runTargetsError,
+    selectedDebugSession,
+    selectedDebugSessionOutput,
+    setExceptionBreakpoint,
+    stopDebugSession,
+    updateBreakpoint,
+    visibleDebugSessions,
+    watchEntries,
+  ]);
+
+  const renderedHierarchyPanel = useMemo(() => (
+    <HierarchyToolWindow
+      mode={selectedHierarchyMode}
+      root={hierarchyRootNode}
+      isLoading={isHierarchyLoading}
+      error={hierarchyError}
+      onClose={closeBottomPanel}
+      onRefresh={handleHierarchyToolWindowRefresh}
+      onSelectMode={handleHierarchyToolWindowSelectMode}
+      onToggleNode={handleHierarchyToolWindowToggleNode}
+      onOpenItem={handleHierarchyToolWindowOpenItem}
+    />
+  ), [
+    closeBottomPanel,
+    handleHierarchyToolWindowOpenItem,
+    handleHierarchyToolWindowRefresh,
+    handleHierarchyToolWindowSelectMode,
+    handleHierarchyToolWindowToggleNode,
+    hierarchyError,
+    hierarchyRootNode,
+    isHierarchyLoading,
+    selectedHierarchyMode,
+  ]);
+
+  const renderedSemanticPanel = useMemo(() => (
+    <SemanticToolWindow
+      fileLabel={semanticSummaryFileLabel}
+      legend={semanticLegend}
+      summary={semanticSummary}
+      totalTokens={semanticTokenCount}
+      isEnabled={areSemanticTokensEnabled}
+      isLoading={isSemanticSummaryLoading}
+      error={semanticSummaryError}
+      onClose={closeBottomPanel}
+      onRefresh={() => {
+        void loadSemanticSummary();
+      }}
+      onToggleEnabled={() => {
+        setAreSemanticTokensEnabled((currentValue) => !currentValue);
+      }}
+    />
+  ), [
+    areSemanticTokensEnabled,
+    closeBottomPanel,
+    isSemanticSummaryLoading,
+    loadSemanticSummary,
+    semanticLegend,
+    semanticSummary,
+    semanticSummaryError,
+    semanticSummaryFileLabel,
+    semanticTokenCount,
+  ]);
+
+  const renderedProjectPanel = useMemo(() => (
+    <ProjectToolWindow
+      contributions={projectContributions}
+      sessions={visibleRunSessions}
+      selectedSession={selectedRunSession}
+      selectedOutput={selectedRunSessionOutput}
+      languageWorkspaceState={languageWorkspaceState}
+      isLoading={isProjectLoading}
+      error={projectError}
+      onClose={closeBottomPanel}
+      onRefresh={refreshBottomPanel}
+      onRunCommand={runProjectCommandById}
+      onSelectSession={setSelectedRunSessionId}
+      onStopSession={stopRunSession}
+      onOpenTreeItem={handleProjectToolWindowOpenTreeItem}
+    />
+  ), [
+    closeBottomPanel,
+    handleProjectToolWindowOpenTreeItem,
+    isProjectLoading,
+    languageWorkspaceState,
+    projectContributions,
+    projectError,
+    refreshBottomPanel,
+    runProjectCommandById,
+    selectedRunSession,
+    selectedRunSessionOutput,
+    stopRunSession,
+    visibleRunSessions,
+  ]);
+
+  const renderedOutlinePanel = useMemo(() => (
+    <OutlineToolWindow
+      fileLabel={documentSymbolsFilePath ? getFileLabel(documentSymbolsFilePath) : null}
+      symbols={documentSymbols}
+      isLoading={isDocumentSymbolsLoading}
+      error={documentSymbolsError}
+      onClose={closeBottomPanel}
+      onRefresh={loadDocumentSymbols}
+      onOpenSymbol={handleOutlineToolWindowOpenSymbol}
+    />
+  ), [
+    closeBottomPanel,
+    documentSymbols,
+    documentSymbolsError,
+    documentSymbolsFilePath,
+    getFileLabel,
+    handleOutlineToolWindowOpenSymbol,
+    isDocumentSymbolsLoading,
+    loadDocumentSymbols,
+  ]);
+
+  const renderedTestsPanel = useMemo(() => (
+    <TestsToolWindow
+      testItems={testItems}
+      sessions={visibleRunSessions}
+      selectedSession={selectedRunSession}
+      selectedOutput={selectedRunSessionOutput}
+      isLoading={isTestsLoading}
+      error={testsError}
+      hasFailedSessions={hasFailedTestSessions}
+      onClose={closeBottomPanel}
+      onRefresh={refreshBottomPanel}
+      onRunTest={runTestTarget}
+      onSelectSession={setSelectedRunSessionId}
+      onStopSession={stopRunSession}
+      onOpenTestItem={openTestItem}
+      onRerunFailed={rerunFailedTests}
+    />
+  ), [
+    closeBottomPanel,
+    hasFailedTestSessions,
+    isTestsLoading,
+    openTestItem,
+    refreshBottomPanel,
+    rerunFailedTests,
+    runTestTarget,
+    selectedRunSession,
+    selectedRunSessionOutput,
+    stopRunSession,
+    testItems,
+    testsError,
+    visibleRunSessions,
+  ]);
+
+  const renderedPreviewPanel = useMemo(() => (
+    <RefactorPreviewToolWindow
+      changeSet={refactorPreview}
+      selectedChangeId={selectedPreviewChangeId}
+      isApplying={isApplyingRefactorPreview}
+      error={refactorPreviewError}
+      onSelectChange={setSelectedPreviewChangeId}
+      onApply={applyRefactorPreview}
+      onClose={closeBottomPanel}
+    />
+  ), [
+    applyRefactorPreview,
+    closeBottomPanel,
+    isApplyingRefactorPreview,
+    refactorPreview,
+    refactorPreviewError,
+    selectedPreviewChangeId,
+  ]);
+
+  const renderedGitPanel = useMemo(() => (
+    <GitToolWindow
+      activeTab={activeGitWorkbenchTab}
+      onTabChange={handleGitWorkbenchTabChange}
+      branches={gitBranches}
+      selectedBranchName={selectedGitBranchName}
+      commits={gitGraph}
+      selectedCommitSha={selectedGitLogCommitSha}
+      changes={scmEntries}
+      selectedChangePath={selectedGitChangePath}
+      selectedHunkPath={selectedGitHunksPath}
+      selectedHunkRelativePath={selectedGitHunksRelativePath}
+      stagedHunks={gitStagedHunks}
+      unstagedHunks={gitUnstagedHunks}
+      hunksLoading={isGitHunksLoading}
+      hunksError={gitHunksError}
+      rebasePlan={gitRebasePlan}
+      rebaseBaseRef={gitRebaseBaseRef}
+      isBranchesLoading={isGitBranchesLoading}
+      branchesError={gitBranchesError}
+      isRebaseLoading={isGitRebaseLoading}
+      rebaseError={gitRebaseError}
+      selectedCommitDetails={selectedGitCommitDetails}
+      comparedCommits={comparedGitCommits}
+      selectedCommitOrder={selectedGitCommitOrder}
+      isCommitDetailsLoading={isGitCommitDetailsLoading}
+      commitDetailsError={gitCommitDetailsError}
+      onSelectBranch={handleSelectGitBranch}
+      onSelectCommit={selectGitLogCommit}
+      onSelectChange={selectGitChangeEntry}
+      onChangeRebaseBaseRef={setGitRebaseBaseRef}
+      onRefresh={refreshBottomPanel}
+      onRefreshRebase={handleGitWorkbenchRefreshRebase}
+      onStagePath={handleGitStagePath}
+      onUnstagePath={handleGitUnstagePath}
+      onDiscardPath={handleGitWorkbenchDiscardPath}
+      onOpenFileDiff={handleGitOpenFileDiff}
+      onOpenConflictResolver={handleGitOpenConflictResolver}
+      onResolveConflict={handleGitResolveConflict}
+      onStageHunk={stageGitHunk}
+      onUnstageHunk={unstageGitHunk}
+      onDiscardHunk={discardGitHunk}
+      onShowFileHistory={handleGitShowFileHistory}
+      onRevealInExplorer={handleGitRevealInExplorer}
+      onCheckoutBranch={checkoutGitBranch}
+      onRequestRenameBranch={handleGitWorkbenchRequestRenameBranch}
+      onDeleteBranch={handleGitWorkbenchDeleteBranch}
+      onCherryPick={cherryPickCommit}
+      onCompareSelectedCommits={handleGitWorkbenchCompareSelectedCommits}
+      onOpenCommitFileDiff={handleGitWorkbenchOpenCommitFileDiff}
+      onApplyRebasePlan={applyGitRebasePlan}
+      getRelativePath={getProjectRelativePath}
+      onClose={closeBottomPanel}
+    />
+  ), [
+    activeGitWorkbenchTab,
+    applyGitRebasePlan,
+    cherryPickCommit,
+    checkoutGitBranch,
+    closeBottomPanel,
+    comparedGitCommits,
+    getProjectRelativePath,
+    gitBranches,
+    gitBranchesError,
+    gitCommitDetailsError,
+    gitGraph,
+    gitHunksError,
+    gitRebaseBaseRef,
+    gitRebaseError,
+    gitRebasePlan,
+    gitStagedHunks,
+    gitUnstagedHunks,
     handleGitOpenConflictResolver,
     handleGitOpenFileDiff,
     handleGitResolveConflict,
     handleGitRevealInExplorer,
     handleGitShowFileHistory,
     handleGitStagePath,
-    handleSelectGitBranch,
     handleGitUnstagePath,
     handleGitWorkbenchCompareSelectedCommits,
     handleGitWorkbenchDeleteBranch,
@@ -22469,45 +22488,168 @@ export const CodePane: React.FC<CodePaneProps> = ({
     handleGitWorkbenchRefreshRebase,
     handleGitWorkbenchRequestRenameBranch,
     handleGitWorkbenchTabChange,
+    handleSelectGitBranch,
+    isGitBranchesLoading,
+    isGitCommitDetailsLoading,
+    isGitHunksLoading,
+    isGitRebaseLoading,
+    refreshBottomPanel,
+    scmEntries,
+    selectGitChangeEntry,
+    selectGitLogCommit,
+    selectedGitChangePath,
+    selectedGitCommitDetails,
+    selectedGitCommitOrder,
+    selectedGitHunksPath,
+    selectedGitHunksRelativePath,
+    selectedGitLogCommitSha,
+    selectedGitBranchName,
+  ]);
+
+  const renderedConflictPanel = useMemo(() => (
+    <ConflictResolutionToolWindow
+      conflict={gitConflictDetails}
+      isLoading={isGitConflictLoading}
+      isApplying={isApplyingGitConflict}
+      error={gitConflictError}
+      onRefresh={refreshBottomPanel}
+      onApply={applyGitConflictResolution}
+      onClose={closeBottomPanel}
+    />
+  ), [
+    applyGitConflictResolution,
+    closeBottomPanel,
+    gitConflictDetails,
+    gitConflictError,
+    isApplyingGitConflict,
+    isGitConflictLoading,
+    refreshBottomPanel,
+  ]);
+
+  const renderedHistoryPanel = useMemo(() => (
+    <GitHistoryToolWindow
+      history={gitHistory}
+      selectedCommitSha={selectedHistoryCommitSha}
+      isLoading={isGitHistoryLoading}
+      error={gitHistoryError}
+      onSelectCommit={setSelectedHistoryCommitSha}
+      onRefresh={refreshBottomPanel}
+      onCherryPick={cherryPickCommit}
+      onClose={closeBottomPanel}
+    />
+  ), [
+    cherryPickCommit,
+    closeBottomPanel,
+    gitHistory,
+    gitHistoryError,
+    isGitHistoryLoading,
+    refreshBottomPanel,
+    selectedHistoryCommitSha,
+  ]);
+
+  const renderedExternalChangesPanel = useMemo(() => (
+    <ExternalChangesToolWindow
+      entries={externalChangeEntries}
+      selectedEntry={selectedExternalChangeEntry}
+      onClose={closeBottomPanel}
+      onClearAll={clearAllExternalChanges}
+      onClearEntry={clearExternalChangeEntry}
+      onSelectEntry={handleExternalChangeSelectEntry}
+      onOpenDiff={handleExternalChangeOpenDiff}
+    />
+  ), [
+    clearAllExternalChanges,
+    clearExternalChangeEntry,
+    closeBottomPanel,
+    externalChangeEntries,
+    handleExternalChangeOpenDiff,
+    handleExternalChangeSelectEntry,
+    selectedExternalChangeEntry,
+  ]);
+
+  const renderedWorkspacePanel = useMemo(() => (
+    <WorkspaceToolWindow
+      bookmarks={bookmarks}
+      todoItems={todoItems}
+      localHistoryEntries={visibleLocalHistoryEntries}
+      activeFilePath={activeFilePath}
+      isTodoLoading={isTodoLoading}
+      todoError={todoError}
+      onClose={closeBottomPanel}
+      onRefresh={loadTodoEntries}
+      onOpenBookmark={handleWorkspaceOpenBookmark}
+      onOpenTodo={handleWorkspaceOpenTodo}
+      onOpenHistoryEntry={handleWorkspaceOpenHistoryEntry}
+      onRestoreHistoryEntry={handleWorkspaceRestoreHistoryEntry}
+      getFileLabel={getFileLabel}
+      getRelativePath={getProjectRelativePath}
+    />
+  ), [
+    activeFilePath,
+    bookmarks,
+    closeBottomPanel,
+    getFileLabel,
+    getProjectRelativePath,
     handleWorkspaceOpenBookmark,
     handleWorkspaceOpenHistoryEntry,
     handleWorkspaceOpenTodo,
     handleWorkspaceRestoreHistoryEntry,
-    hasFailedTestSessions,
-    hierarchyError,
-    hierarchyRootNode,
-    isApplyingGitConflict,
-    isApplyingRefactorPreview,
-    isDebugDetailsLoading,
-    isDocumentSymbolsLoading,
-    isGitBranchesLoading,
-    isGitCommitDetailsLoading,
-    isGitConflictLoading,
-    isGitHistoryLoading,
-    isGitRebaseLoading,
-    isProjectLoading,
-    isRunTargetsLoading,
-    isSemanticSummaryLoading,
-    isTestsLoading,
     isTodoLoading,
-    languageWorkspaceState,
-    loadDocumentSymbols,
     loadTodoEntries,
-    projectContributions,
-    projectError,
-    refactorPreview,
-    refactorPreviewError,
-    refreshBottomPanel,
-    rerunFailedTests,
+    todoError,
+    todoItems,
+    visibleLocalHistoryEntries,
+  ]);
+
+  const renderedBottomPanel = useMemo(() => {
+    switch (bottomPanelMode) {
+      case 'run':
+        return renderedRunPanel;
+      case 'debug':
+        return renderedDebugPanel;
+      case 'hierarchy':
+        return renderedHierarchyPanel;
+      case 'semantic':
+        return renderedSemanticPanel;
+      case 'project':
+        return renderedProjectPanel;
+      case 'outline':
+        return renderedOutlinePanel;
+      case 'tests':
+        return renderedTestsPanel;
+      case 'preview':
+        return renderedPreviewPanel;
+      case 'git':
+        return renderedGitPanel;
+      case 'conflict':
+        return renderedConflictPanel;
+      case 'history':
+        return renderedHistoryPanel;
+      case 'external-changes':
+        return renderedExternalChangesPanel;
+      case 'workspace':
+        return renderedWorkspacePanel;
+      case 'performance':
+        return renderedPerformancePanel;
+      default:
+        return null;
+    }
+  }, [
+    bottomPanelMode,
+    renderedConflictPanel,
+    renderedDebugPanel,
+    renderedExternalChangesPanel,
+    renderedGitPanel,
+    renderedHierarchyPanel,
+    renderedHistoryPanel,
+    renderedOutlinePanel,
     renderedPerformancePanel,
-    rootPath,
-    runProjectCommandById,
-    runTargetById,
-    runTargets,
-    scmEntries,
-    selectedGitChangePath,
-    selectedGitCommitOrder,
-    semanticLegend,
+    renderedPreviewPanel,
+    renderedProjectPanel,
+    renderedRunPanel,
+    renderedSemanticPanel,
+    renderedTestsPanel,
+    renderedWorkspacePanel,
   ]);
 
   const editorActionMenuSections = useMemo<EditorActionMenuItem[][]>(() => ([
