@@ -2,6 +2,12 @@ import React from 'react';
 import { AlertTriangle, KeyRound } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { Dialog } from './ui/Dialog';
+import {
+  idePopupActionButtonClassName,
+  idePopupCardClassName,
+  idePopupSecondaryButtonClassName,
+  idePopupToggleIndicatorClassName,
+} from './ui/ide-popup';
 
 interface DeleteWindowDialogProps {
   open: boolean;
@@ -51,14 +57,14 @@ export function DeleteWindowDialog({
       </div>
 
       {showCredentialOption && (
-        <div className="rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
+        <div className={idePopupCardClassName}>
           <label className="flex items-start gap-3">
             <input
               type="checkbox"
               checked={clearCredentials}
               disabled={clearCredentialsDisabled || isProcessing}
               onChange={(event) => onClearCredentialsChange(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-[rgb(var(--border))] bg-[rgb(var(--background))] text-[rgb(var(--warning))] [color-scheme:dark] focus:ring-[rgb(var(--warning))]"
+              className={`mt-0.5 ${idePopupToggleIndicatorClassName(clearCredentials)} h-4 w-4 [color-scheme:dark] focus:ring-[rgb(var(--warning))]`}
             />
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm font-medium text-[rgb(var(--foreground))]">
@@ -89,7 +95,7 @@ export function DeleteWindowDialog({
           type="button"
           disabled={isProcessing}
           onClick={() => onOpenChange(false)}
-          className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-2 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--secondary))] disabled:cursor-not-allowed disabled:opacity-60"
+          className={`${idePopupSecondaryButtonClassName} disabled:cursor-not-allowed disabled:opacity-60`}
         >
           {t('common.cancel')}
         </button>
@@ -99,7 +105,7 @@ export function DeleteWindowDialog({
           onClick={() => {
             void onConfirm();
           }}
-          className="rounded-lg bg-[rgb(var(--error))] px-4 py-2 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          className={`${idePopupActionButtonClassName('danger')} disabled:cursor-not-allowed disabled:opacity-60`}
         >
           {isProcessing ? t('windowDelete.deleting') : t('windowDelete.confirm')}
         </button>

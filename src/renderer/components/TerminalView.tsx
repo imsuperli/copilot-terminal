@@ -65,6 +65,7 @@ import {
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
+import { idePopupIconButtonClassName } from './ui/ide-popup';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
@@ -1097,8 +1098,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         */}
         {(() => {
           const floatingChromeClass = 'pointer-events-auto rounded-full border border-[rgb(var(--border))]/85 bg-[color-mix(in_srgb,rgb(var(--card))_88%,transparent)] shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl';
-          const floatingIconButtonClass = 'flex items-center justify-center h-6 w-6 rounded bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]';
-          const floatingMutedIconButtonClass = 'flex items-center justify-center h-6 w-6 rounded bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]';
+          const floatingIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--foreground))]`;
+          const floatingMutedIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]`;
           const floatingDividerClass = 'h-4 w-px bg-[rgb(var(--border))]';
           return (
             <>
@@ -1229,7 +1230,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     aria-label={t('terminalView.openSftp')}
                     onMouseDown={preventMouseButtonFocus}
                     onClick={handleOpenSSHSftp}
-                    className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
+                    className={`flex items-center justify-center h-6 w-6 rounded-md transition-colors ${
                       sshSftpOpen
                         ? 'bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]'
                         : floatingIconButtonClass
@@ -1248,7 +1249,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                     aria-label={sshMetricsOpen ? t('terminalView.hideSshMonitor') : t('terminalView.showSshMonitor')}
                     onMouseDown={preventMouseButtonFocus}
                     onClick={() => setSSHMetricsOpen((current) => !current)}
-                    className={`flex items-center justify-center w-6 h-6 rounded transition-colors ${
+                    className={`flex items-center justify-center h-6 w-6 rounded-md transition-colors ${
                       sshMetricsOpen
                         ? 'bg-[rgb(var(--primary))]/20 text-[rgb(var(--primary))]'
                         : floatingIconButtonClass
@@ -1368,9 +1369,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                       }
                     }}
                     disabled={!isWindowRunning}
-                    className={`flex items-center justify-center w-6 h-6 rounded bg-[rgb(var(--secondary))] transition-colors ${
+                    className={`flex items-center justify-center h-6 w-6 rounded-md border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] transition-colors ${
                       isWindowRunning
-                        ? 'cursor-pointer text-red-500 hover:bg-[rgb(var(--accent))]'
+                        ? 'cursor-pointer text-red-500 hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]'
                         : 'cursor-not-allowed text-[rgb(var(--muted-foreground))]'
                     }`}
                   >
@@ -1389,7 +1390,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={t('terminalView.stop')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={handlePauseWindow}
-                  className="flex items-center justify-center h-6 w-6 rounded bg-[rgb(var(--secondary))] text-red-500 transition-colors hover:bg-[rgb(var(--accent))]"
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-red-500 transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 >
                   <Square size={14} fill="currentColor" />
                 </button>
@@ -1408,7 +1409,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   aria-label={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
                   onMouseDown={preventMouseButtonFocus}
                   onClick={isWindowRunning ? handleRestartWindow : handleStartWindow}
-                  className={`flex items-center justify-center h-6 w-6 rounded bg-[rgb(var(--secondary))] transition-colors hover:bg-[rgb(var(--accent))] ${
+                  className={`flex h-6 w-6 items-center justify-center rounded-md border border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] ${
                     isWindowRunning ? 'text-yellow-500' : 'text-green-500'
                   }`}
                 >

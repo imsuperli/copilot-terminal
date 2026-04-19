@@ -2,6 +2,10 @@ import React from 'react';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { Dialog } from './ui/Dialog';
+import {
+  idePopupActionButtonClassName,
+  idePopupSecondaryButtonClassName,
+} from './ui/ide-popup';
 
 interface DeleteSSHCardDialogProps {
   open: boolean;
@@ -69,7 +73,7 @@ export function DeleteSSHCardDialog({
           type="button"
           disabled={isProcessing}
           onClick={() => onOpenChange(false)}
-          className="rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-2 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--secondary))] disabled:cursor-not-allowed disabled:opacity-60"
+          className={`${idePopupSecondaryButtonClassName} disabled:cursor-not-allowed disabled:opacity-60`}
         >
           {t('common.cancel')}
         </button>
@@ -79,7 +83,7 @@ export function DeleteSSHCardDialog({
           onClick={() => {
             void onConfirm();
           }}
-          className="inline-flex items-center gap-2 rounded-lg bg-[rgb(var(--error))] px-4 py-2 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          className={`inline-flex items-center gap-2 ${idePopupActionButtonClassName('danger')} disabled:cursor-not-allowed disabled:opacity-60`}
         >
           <Trash2 size={16} />
           <span>{isProcessing ? t('sshDelete.deleting') : t('sshDelete.confirm')}</span>
