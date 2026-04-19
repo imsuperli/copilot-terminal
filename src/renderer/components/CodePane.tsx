@@ -798,7 +798,7 @@ function RuntimeActivityIndicator({
   }
 
   return (
-    <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-200">
+    <span className="rounded bg-[rgb(var(--warning)/0.14)] px-1.5 py-0.5 text-[rgb(var(--warning))]">
       {label}
     </span>
   );
@@ -934,12 +934,12 @@ function EditorActionMenuItemRow({
     <DropdownMenu.Item
       disabled={item.disabled}
       onSelect={item.onSelect}
-      className={`${className} justify-between ${isActive ? 'bg-zinc-800/80 text-zinc-50' : ''} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
+      className={`${className} justify-between ${isActive ? 'bg-[rgb(var(--primary))]/12 text-[rgb(var(--foreground))]' : ''} data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40`}
     >
       <IdeMenuItemContent
         icon={item.icon}
         label={item.label}
-        trailing={isActive ? <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> : null}
+        trailing={isActive ? <span className="h-1.5 w-1.5 rounded-full bg-[rgb(var(--success))]" /> : null}
       />
     </DropdownMenu.Item>
   );
@@ -998,13 +998,13 @@ const ExplorerTreeRowButton = React.memo(function ExplorerTreeRowButton({
           onDoubleClick={() => {
             onPromote(row);
           }}
-          className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+          className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-[rgb(var(--foreground))]' : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}`}
           style={{ paddingLeft: `${10 + row.depth * 14}px` }}
           title={row.title}
         >
           {isDirectory ? (
             <span
-              className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700/60"
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))]"
               aria-label={row.isExpanded ? 'Collapse' : 'Expand'}
               role="button"
               onClick={(event) => {
@@ -1019,15 +1019,15 @@ const ExplorerTreeRowButton = React.memo(function ExplorerTreeRowButton({
             <span className="w-[14px] shrink-0" />
           )}
           {isDirectory ? (
-            row.isExpanded ? <FolderOpen size={14} className="shrink-0 text-amber-300" /> : <Folder size={14} className="shrink-0 text-amber-300" />
+            row.isExpanded ? <FolderOpen size={14} className="shrink-0 text-[rgb(var(--warning))]" /> : <Folder size={14} className="shrink-0 text-[rgb(var(--warning))]" />
           ) : (
-            <FileIcon size={14} className="shrink-0 text-zinc-500" />
+            <FileIcon size={14} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           )}
           <span className={`min-w-0 flex-1 truncate ${row.textClassName}`}>
             {row.displayName}
           </span>
           {row.isLoading && (
-            <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />
+            <Loader2 size={12} className="shrink-0 animate-spin text-[rgb(var(--muted-foreground))]" />
           )}
           {row.externalChangeType && (
             <span
@@ -1089,11 +1089,11 @@ const SearchResultRowButton = React.memo(function SearchResultRowButton({
           onDoubleClick={() => {
             onPromote(filePath);
           }}
-          className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-800/70'}`}
+          className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-[rgb(var(--foreground))]' : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}`}
         >
-          <FileIcon size={14} className="shrink-0 text-zinc-500" />
+          <FileIcon size={14} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           <span className={`min-w-0 flex-1 truncate ${entryTextClassName}`}>{getPathLeafLabel(filePath)}</span>
-          <span className="max-w-[160px] truncate text-[10px] text-zinc-500">
+          <span className="max-w-[160px] truncate text-[10px] text-[rgb(var(--muted-foreground))]">
             {relativePath}
           </span>
         </button>
@@ -1118,17 +1118,17 @@ const SidebarRailButton = React.memo(function SidebarRailButton({
 
   return (
     <AppTooltip content={label} placement="pane-corner">
-      <button
-        type="button"
-        aria-label={label}
-        aria-pressed={isSelected}
-        onClick={() => {
-          onSelect(mode);
-        }}
-        className={`flex h-9 w-9 items-center justify-center rounded text-zinc-400 transition-colors ${isSelected ? 'bg-zinc-800 text-zinc-100' : 'hover:bg-zinc-900 hover:text-zinc-100'}`}
-      >
-        <Icon size={15} />
-      </button>
+        <button
+          type="button"
+          aria-label={label}
+          aria-pressed={isSelected}
+          onClick={() => {
+            onSelect(mode);
+          }}
+          className={`flex h-9 w-9 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors ${isSelected ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]' : 'hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}`}
+        >
+          <Icon size={15} />
+        </button>
     </AppTooltip>
   );
 });
@@ -1148,16 +1148,16 @@ const ToolWindowRailButton = React.memo(function ToolWindowRailButton({
 }) {
   return (
     <AppTooltip content={label} placement="pane-corner">
-      <button
-        type="button"
-        aria-label={label}
-        aria-pressed={active}
-        onClick={onClick}
-        disabled={disabled}
-        className={`flex h-9 w-9 items-center justify-center rounded transition-colors ${
-          active
-            ? 'bg-zinc-800 text-zinc-100'
-            : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200'
+        <button
+          type="button"
+          aria-label={label}
+          aria-pressed={active}
+          onClick={onClick}
+          disabled={disabled}
+          className={`flex h-9 w-9 items-center justify-center rounded transition-colors ${
+            active
+            ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
+            : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
         } disabled:cursor-not-allowed disabled:opacity-40`}
       >
         <Icon size={15} />
@@ -1182,7 +1182,7 @@ const ActivityRail = React.memo(function ActivityRail({
   return (
     <div
       data-testid="code-pane-activity-rail"
-      className="flex h-full w-12 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/85"
+      className="flex h-full w-12 shrink-0 flex-col border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]"
     >
       <div className="flex flex-col items-center gap-1 px-1 py-2">
         {sidebarTabs.map((tab) => (
@@ -1197,7 +1197,7 @@ const ActivityRail = React.memo(function ActivityRail({
         ))}
       </div>
 
-      <div className="mt-auto border-t border-zinc-800">
+      <div className="mt-auto border-t border-[rgb(var(--border))]">
         <div className="flex max-h-full flex-col items-center gap-1 overflow-y-auto px-1 py-2">
           {toolWindowLaunchers.map((item) => (
             <ToolWindowRailButton
@@ -1263,7 +1263,7 @@ const OpenFileTab = React.memo(function OpenFileTab({
       })}
       trigger={(
         <div
-          className={`group relative flex min-w-0 max-w-[220px] items-center gap-2 border-r border-zinc-800 px-3 py-2 text-xs ${isActive ? 'bg-zinc-900 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-100'}`}
+          className={`group relative flex min-w-0 max-w-[220px] items-center gap-2 border-r border-[rgb(var(--border))] px-3 py-2 text-xs ${isActive ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]' : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}`}
         >
           <button
             type="button"
@@ -1278,8 +1278,8 @@ const OpenFileTab = React.memo(function OpenFileTab({
             }}
           >
             <FileIcon size={12} className="shrink-0" />
-            {isPinned && <Pin size={10} className="shrink-0 text-zinc-500" />}
-            {isReadOnly && <Lock size={10} className="shrink-0 text-zinc-500" aria-label="read-only" />}
+            {isPinned && <Pin size={10} className="shrink-0 text-[rgb(var(--muted-foreground))]" />}
+            {isReadOnly && <Lock size={10} className="shrink-0 text-[rgb(var(--muted-foreground))]" aria-label="read-only" />}
             <span className={`truncate ${entryTextClassName}`}>{label}</span>
             {externalChangeType && (
               <span
@@ -1293,7 +1293,7 @@ const OpenFileTab = React.memo(function OpenFileTab({
             onClick={() => {
               void onClose(path);
             }}
-            className="rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            className="rounded p-0.5 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           >
             <X size={11} />
           </button>
@@ -1318,35 +1318,35 @@ const SavePipelineToggles = React.memo(function SavePipelineToggles({
 }) {
   return (
     <div className="flex items-center gap-1">
-      <button
-        type="button"
-        onClick={onToggleFormat}
-        className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
-          state.formatOnSave
-            ? 'bg-emerald-500/15 text-emerald-300'
-            : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+        <button
+          type="button"
+          onClick={onToggleFormat}
+          className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+            state.formatOnSave
+            ? 'bg-[rgb(var(--success))/0.14] text-[rgb(var(--success))]'
+            : 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
         }`}
       >
         {t('codePane.saveQualityFormatToggle')}
       </button>
-      <button
-        type="button"
-        onClick={onToggleImports}
-        className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
-          state.organizeImportsOnSave
-            ? 'bg-sky-500/15 text-sky-300'
-            : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+        <button
+          type="button"
+          onClick={onToggleImports}
+          className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+            state.organizeImportsOnSave
+            ? 'bg-[rgb(var(--info))/0.14] text-[rgb(var(--info))]'
+            : 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
         }`}
       >
         {t('codePane.saveQualityImportsToggle')}
       </button>
-      <button
-        type="button"
-        onClick={onToggleLint}
-        className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
-          state.lintOnSave
-            ? 'bg-amber-500/15 text-amber-300'
-            : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+        <button
+          type="button"
+          onClick={onToggleLint}
+          className={`rounded px-1.5 py-0.5 font-medium transition-colors ${
+            state.lintOnSave
+            ? 'bg-[rgb(var(--warning))/0.14] text-[rgb(var(--warning))]'
+            : 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
         }`}
       >
         {t('codePane.saveQualityLintToggle')}
@@ -1462,20 +1462,20 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
   }, []);
 
   return (
-    <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/70 p-4">
-      <div className="mt-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
-        <div className="border-b border-zinc-800 p-3">
+    <div className="absolute inset-0 z-30 flex items-start justify-center bg-[color-mix(in_srgb,rgb(var(--background))_74%,transparent)] p-4 backdrop-blur-sm">
+      <div className="mt-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_96%,transparent)] shadow-2xl">
+        <div className="border-b border-[rgb(var(--border))] p-3">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="text-sm font-medium text-zinc-100">{t('codePane.searchEverywhereTitle')}</div>
+            <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('codePane.searchEverywhereTitle')}</div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100"
+              className="rounded p-1 text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             >
               <X size={14} />
             </button>
           </div>
-          <div className="mb-3 flex gap-1 rounded bg-zinc-900/60 p-1">
+          <div className="mb-3 flex gap-1 rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] p-1">
             {([
               ['all', t('codePane.searchEverywhereAll')],
               ['recent', t('codePane.searchEverywhereRecent')],
@@ -1489,16 +1489,16 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
                 }}
                 className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
                   mode === nextMode
-                    ? 'bg-zinc-800 text-zinc-100'
-                    : 'text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200'
+                    ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
+                    : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
                 }`}
               >
                 {label}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-3 py-2">
-            <Search size={13} className="shrink-0 text-zinc-500" />
+          <div className="flex items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-3 py-2">
+            <Search size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
             <input
               ref={inputRef}
               value={query}
@@ -1528,9 +1528,9 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
                 }
               }}
               placeholder={t('codePane.searchEverywherePlaceholder')}
-              className="w-full bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+              className="w-full bg-transparent text-sm text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
             />
-            {isLoading && <Loader2 size={13} className="shrink-0 animate-spin text-zinc-500" />}
+            {isLoading && <Loader2 size={13} className="shrink-0 animate-spin text-[rgb(var(--muted-foreground))]" />}
           </div>
         </div>
         <div
@@ -1541,7 +1541,7 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
           }}
         >
           {error ? (
-            <div className="px-2 py-3 text-sm text-red-300">{error}</div>
+            <div className="px-2 py-3 text-sm text-[rgb(var(--error))]">{error}</div>
           ) : items.length > 0 ? (
             visibleItems.isWindowed ? (
               <div style={{ height: `${visibleItems.totalHeight}px`, position: 'relative' }}>
@@ -1551,7 +1551,7 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
                     return (
                       <React.Fragment key={item.id}>
                         {showSectionLabel && (
-                          <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                          <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                             {item.section}
                           </div>
                         )}
@@ -1565,18 +1565,18 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
                           }}
                           className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
                             isSelected
-                              ? 'bg-zinc-800 text-zinc-100'
-                              : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                              ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
+                              : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
                           }`}
                         >
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm">{item.title}</div>
                             {item.subtitle && (
-                              <div className="mt-1 truncate text-xs text-zinc-500">{item.subtitle}</div>
+                              <div className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]">{item.subtitle}</div>
                             )}
                           </div>
                           {item.meta && (
-                            <div className="shrink-0 text-[11px] text-zinc-500">{item.meta}</div>
+                            <div className="shrink-0 text-[11px] text-[rgb(var(--muted-foreground))]">{item.meta}</div>
                           )}
                         </button>
                       </React.Fragment>
@@ -1591,7 +1591,7 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
                   return (
                     <React.Fragment key={item.id}>
                       {showSectionLabel && (
-                        <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                        <div className="px-2 pt-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                           {item.section}
                         </div>
                       )}
@@ -1605,18 +1605,18 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
                         }}
                         className={`flex w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
                           isSelected
-                            ? 'bg-zinc-800 text-zinc-100'
-                            : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+                            ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
+                            : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
                         }`}
                       >
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-sm">{item.title}</div>
                           {item.subtitle && (
-                            <div className="mt-1 truncate text-xs text-zinc-500">{item.subtitle}</div>
+                            <div className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]">{item.subtitle}</div>
                           )}
                         </div>
                         {item.meta && (
-                          <div className="shrink-0 text-[11px] text-zinc-500">{item.meta}</div>
+                          <div className="shrink-0 text-[11px] text-[rgb(var(--muted-foreground))]">{item.meta}</div>
                         )}
                       </button>
                     </React.Fragment>
@@ -1625,7 +1625,7 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
               </div>
             )
           ) : (
-            <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.searchEverywhereEmpty')}</div>
+            <div className="px-2 py-3 text-sm text-[rgb(var(--muted-foreground))]">{t('codePane.searchEverywhereEmpty')}</div>
           )}
         </div>
       </div>
@@ -2142,22 +2142,22 @@ const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
         }}
         className={`flex min-h-12 w-full items-start justify-between gap-3 rounded px-2 py-2 text-left transition-colors ${
           action.disabledReason
-            ? 'cursor-not-allowed text-zinc-600'
+            ? 'cursor-not-allowed text-[rgb(var(--muted-foreground))]/60'
             : isSelected
-              ? 'bg-zinc-800 text-zinc-100'
-              : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+              ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]'
+              : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
         }`}
       >
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm">{action.title}</div>
           {(action.kind || action.disabledReason) && (
-            <div className="mt-1 truncate text-xs text-zinc-500">
+            <div className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]">
               {action.disabledReason ?? action.kind}
             </div>
           )}
         </div>
         {action.isPreferred && (
-          <div className="shrink-0 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+          <div className="shrink-0 rounded border border-[rgb(var(--success))/0.30] bg-[rgb(var(--success))/0.08] px-1.5 py-0.5 text-[10px] font-medium text-[rgb(var(--success))]">
             {t('codePane.codeActionsPreferred')}
           </div>
         )}
@@ -2166,14 +2166,14 @@ const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
   }, [onExecuteAction, onHoverIndex, selectedIndex, t]);
 
   return (
-    <div className="absolute inset-0 z-30 flex items-start justify-center bg-zinc-950/60 p-4">
-      <div className="mt-16 flex w-full max-w-xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl">
-        <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
-          <div className="text-sm font-medium text-zinc-100">{t('codePane.codeActions')}</div>
+    <div className="absolute inset-0 z-30 flex items-start justify-center bg-[color-mix(in_srgb,rgb(var(--background))_70%,transparent)] p-4 backdrop-blur-sm">
+      <div className="mt-16 flex w-full max-w-xl flex-col overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_96%,transparent)] shadow-2xl">
+        <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
+          <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('codePane.codeActions')}</div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-100"
+            className="rounded p-1 text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           >
             <X size={14} />
           </button>
@@ -2186,12 +2186,12 @@ const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
           }}
         >
           {isLoading ? (
-            <div className="flex items-center gap-2 px-2 py-3 text-sm text-zinc-500">
+            <div className="flex items-center gap-2 px-2 py-3 text-sm text-[rgb(var(--muted-foreground))]">
               <Loader2 size={13} className="animate-spin" />
               {t('codePane.codeActionsLoading')}
             </div>
           ) : error ? (
-            <div className="px-2 py-3 text-sm text-red-300">{error}</div>
+            <div className="px-2 py-3 text-sm text-[rgb(var(--error))]">{error}</div>
           ) : items.length > 0 ? (
             visibleItems.isWindowed ? (
               <div style={{ height: `${visibleItems.totalHeight}px`, position: 'relative' }}>
@@ -2205,11 +2205,11 @@ const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
               </div>
             )
           ) : (
-            <div className="px-2 py-3 text-sm text-zinc-500">{t('codePane.codeActionsEmpty')}</div>
+            <div className="px-2 py-3 text-sm text-[rgb(var(--muted-foreground))]">{t('codePane.codeActionsEmpty')}</div>
           )}
         </div>
         {items.length > 0 && !isLoading && (
-          <div className="border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-500">
+          <div className="border-t border-[rgb(var(--border))] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
             <span>{t('codePane.codeActionsHint')}</span>
           </div>
         )}
@@ -2252,11 +2252,11 @@ const BranchManagerTreeRow = React.memo(function BranchManagerTreeRow({
         onClick={() => {
           onToggleNode(node.key);
         }}
-        className="group flex h-6 w-full items-center gap-1.5 rounded px-1 text-left text-xs text-zinc-400 transition-colors hover:bg-zinc-800/70 hover:text-zinc-100"
+        className="group flex h-6 w-full items-center gap-1.5 rounded px-1 text-left text-xs text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
         style={{ paddingLeft: `${10 + (depth * 16)}px` }}
       >
         {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-        <Folder size={12} className="text-zinc-500 group-hover:text-zinc-300" />
+        <Folder size={12} className="text-[rgb(var(--muted-foreground))] group-hover:text-[rgb(var(--foreground))]" />
         <span className="min-w-0 flex-1 truncate">{node.label}</span>
       </button>
     );
@@ -2275,8 +2275,8 @@ const BranchManagerTreeRow = React.memo(function BranchManagerTreeRow({
     <div
       className={`group flex h-7 items-center gap-1.5 rounded pr-1 text-xs transition-colors ${
         isCurrent
-          ? 'bg-sky-500/15 text-sky-100'
-          : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-50'
+          ? 'bg-[rgb(var(--info))/0.14] text-[rgb(var(--foreground))]'
+          : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
       }`}
       style={{ paddingLeft: `${28 + (depth * 16)}px` }}
     >
@@ -2288,18 +2288,18 @@ const BranchManagerTreeRow = React.memo(function BranchManagerTreeRow({
         className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
       >
         {isCurrent ? (
-          <Star size={12} className="shrink-0 fill-amber-300 text-amber-300" />
+          <Star size={12} className="shrink-0 fill-[rgb(var(--warning))] text-[rgb(var(--warning))]" />
         ) : (
-          <GitBranch size={12} className={`shrink-0 ${isRemote ? 'text-zinc-500' : 'text-amber-300'}`} />
+          <GitBranch size={12} className={`shrink-0 ${isRemote ? 'text-[rgb(var(--muted-foreground))]' : 'text-[rgb(var(--warning))]'}`} />
         )}
         <span className="min-w-0 flex-1 truncate">{node.label}</span>
         {branchMeta && (
-          <span className="hidden max-w-[140px] truncate text-[10px] text-zinc-500 group-hover:block">
+          <span className="hidden max-w-[140px] truncate text-[10px] text-[rgb(var(--muted-foreground))] group-hover:block">
             {branchMeta}
           </span>
         )}
         {isCurrent && (
-          <Check size={12} className="shrink-0 text-emerald-300" />
+          <Check size={12} className="shrink-0 text-[rgb(var(--success))]" />
         )}
       </button>
       <DropdownMenu.Root>
@@ -2310,7 +2310,7 @@ const BranchManagerTreeRow = React.memo(function BranchManagerTreeRow({
             onClick={(event) => {
               event.stopPropagation();
             }}
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 opacity-0 transition-opacity hover:bg-zinc-700 hover:text-zinc-100 group-hover:opacity-100"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] opacity-0 transition-opacity hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] group-hover:opacity-100"
           >
             <MoreHorizontal size={12} />
           </button>
@@ -2493,23 +2493,23 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
   }, []);
 
   return (
-    <div className="absolute left-0 top-full z-[80] mt-1 flex h-[min(72vh,680px)] w-[360px] flex-col overflow-hidden rounded border border-zinc-800 bg-zinc-950 shadow-2xl">
-      <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
-        <div className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded border border-zinc-800 bg-zinc-900/70 px-2">
-          <Search size={13} className="shrink-0 text-zinc-500" />
+    <div className="absolute left-0 top-full z-[80] mt-1 flex h-[min(72vh,680px)] w-[360px] flex-col overflow-hidden rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_96%,transparent)] shadow-2xl">
+      <div className="flex items-center gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1.5">
+        <div className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-2">
+          <Search size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           <input
             ref={searchInputRef}
             value={query}
             onChange={onQueryChange}
             placeholder={t('codePane.gitBranchSearchPlaceholder')}
-            className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
+            className="min-w-0 flex-1 bg-transparent text-xs text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
           />
         </div>
         <button
           type="button"
           aria-label={t('codePane.refresh')}
           onClick={onRefresh}
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+          className="rounded p-1 text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
         >
           {isLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
         </button>
@@ -2517,7 +2517,7 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
           type="button"
           aria-label={t('codePane.gitOpenWorkbench')}
           onClick={onOpenWorkbench}
-          className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100"
+          className="rounded p-1 text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
         >
           <Settings size={13} />
         </button>
@@ -2529,9 +2529,9 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
         onScroll={(event) => {
           scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
         }}
-      >
-        {quickActions.length > 0 && (
-          <div className="mb-3 space-y-0.5 border-b border-zinc-800 pb-2">
+        >
+          {quickActions.length > 0 && (
+          <div className="mb-3 space-y-0.5 border-b border-[rgb(var(--border))] pb-2">
             {quickActions.map((action) => {
               const ActionIcon = action.icon;
               return (
@@ -2540,12 +2540,12 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
                   type="button"
                   disabled={action.disabled}
                   onClick={action.onSelect}
-                  className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex h-7 w-full items-center gap-2 rounded px-2 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ActionIcon size={13} className="shrink-0 text-zinc-500" />
+                  <ActionIcon size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
                   <span className="min-w-0 flex-1 truncate">{action.label}</span>
                   {action.shortcut && (
-                    <span className="text-[10px] text-zinc-500">{action.shortcut}</span>
+                    <span className="text-[10px] text-[rgb(var(--muted-foreground))]">{action.shortcut}</span>
                   )}
                 </button>
               );
@@ -2554,13 +2554,13 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
         )}
 
         {error && (
-          <div className="mb-2 rounded border border-red-500/20 bg-red-500/10 px-2 py-1.5 text-xs text-red-200">
+          <div className="mb-2 rounded border border-[rgb(var(--error))/0.20] bg-[rgb(var(--error))/0.10] px-2 py-1.5 text-xs text-[rgb(var(--error))]">
             {error}
           </div>
         )}
 
         {isLoading && gitBranchesCount === 0 ? (
-          <div className="flex h-32 items-center justify-center gap-2 text-xs text-zinc-500">
+          <div className="flex h-32 items-center justify-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
             <Loader2 size={13} className="animate-spin" />
             {t('codePane.loading')}
           </div>
@@ -2591,10 +2591,10 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
             <div className="space-y-3">
               {sections.map((section) => (
                 <div key={section.key}>
-                  <div className="mb-1 flex h-6 items-center gap-1.5 px-1 text-xs font-medium text-zinc-400">
-                    <ChevronDown size={12} className="text-zinc-500" />
+                  <div className="mb-1 flex h-6 items-center gap-1.5 px-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
+                    <ChevronDown size={12} className="text-[rgb(var(--muted-foreground))]" />
                     <span className="min-w-0 flex-1 truncate">{section.label}</span>
-                    <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                    <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
                       {section.count}
                     </span>
                   </div>
@@ -2622,7 +2622,7 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
             </div>
           )
         ) : (
-          <div className="flex h-32 items-center justify-center text-xs text-zinc-500">
+          <div className="flex h-32 items-center justify-center text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.gitBranchNoResults')}
           </div>
         )}
@@ -3158,15 +3158,18 @@ const BranchManagerControl = React.memo(function BranchManagerControl({
         aria-expanded={isBranchManagerOpen}
         onMouseDown={preventFocus}
         onClick={handleBranchManagerToggle}
-        className={`flex h-6 max-w-[280px] items-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
+        className={`flex h-6 max-w-[280px] items-center gap-1 rounded border px-2 text-xs font-medium transition-colors ${
           isBranchManagerOpen
-            ? 'bg-sky-500/15 text-sky-100'
-            : 'bg-zinc-800/90 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50'
+            ? 'border-[rgb(var(--primary))]/45 bg-[rgb(var(--primary))]/10 text-[rgb(var(--foreground))]'
+            : 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] text-[rgb(var(--foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]'
         }`}
       >
-        <GitBranch size={12} className="shrink-0 text-sky-300" />
+        <GitBranch
+          size={12}
+          className={`shrink-0 ${isBranchManagerOpen ? 'text-[rgb(var(--primary))]' : 'text-[rgb(var(--muted-foreground))]'}`}
+        />
         <span className="truncate">{gitSummaryBranchLabel ?? t('codePane.gitDetachedHead')}</span>
-        <ChevronDown size={12} className="shrink-0 text-zinc-500" />
+        <ChevronDown size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
       </button>
       {isBranchManagerOpen && (
         <BranchManagerPopup
@@ -3252,16 +3255,16 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
   const diffButtonLabel = viewMode === 'diff' ? t('codePane.showEditor') : t('codePane.showDiff');
 
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1">
+    <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1">
       <div className="flex min-w-0 items-center gap-2">
         {branchManagerControl}
         {gitRepositorySummary && gitRepositorySummary.operation !== 'idle' && (
-          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200">
+          <span className="rounded bg-[rgb(var(--warning))/0.14] px-1.5 py-0.5 text-[10px] text-[rgb(var(--warning))]">
             {gitOperationLabel}
           </span>
         )}
         {gitRepositorySummary?.hasConflicts && (
-          <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200">
+          <span className="rounded bg-[rgb(var(--error))/0.14] px-1.5 py-0.5 text-[10px] text-[rgb(var(--error))]">
             {t('codePane.gitConflictsActive')}
           </span>
         )}
@@ -3275,7 +3278,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
             onMouseDown={preventFocus}
             onClick={onNavigateBack}
             disabled={!canNavigateBack}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-6 w-6 items-center justify-center rounded bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft size={13} />
           </button>
@@ -3288,7 +3291,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
             onMouseDown={preventFocus}
             onClick={onNavigateForward}
             disabled={!canNavigateForward}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-6 w-6 items-center justify-center rounded bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronRight size={13} />
           </button>
@@ -3300,7 +3303,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
             aria-label={t('codePane.searchEverywhereOpen')}
             onMouseDown={preventFocus}
             onClick={onOpenSearchEverywhere}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
+            className="flex h-6 w-6 items-center justify-center rounded bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           >
             <Search size={13} />
           </button>
@@ -3312,7 +3315,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
             aria-label={t('codePane.refresh')}
             onMouseDown={preventFocus}
             onClick={onWorkspaceRefresh}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
+            className="flex h-6 w-6 items-center justify-center rounded bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           >
             <RefreshCw size={13} className={isRefreshing ? 'animate-spin' : ''} />
           </button>
@@ -3325,7 +3328,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
             onMouseDown={preventFocus}
             onClick={onToggleActiveDiffView}
             disabled={!activeFilePath}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-6 w-6 items-center justify-center rounded bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <GitCompareArrows size={13} />
           </button>
@@ -3338,7 +3341,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
               title={t('codePane.editorActionsMenu')}
               aria-label={t('codePane.editorActionsMenu')}
               onMouseDown={preventFocus}
-              className="flex h-6 items-center justify-center rounded bg-zinc-800/90 px-1.5 text-[10px] font-medium text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+              className="flex h-6 items-center justify-center rounded bg-[rgb(var(--secondary))] px-1.5 text-[10px] font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             >
               <MoreHorizontal size={13} className="mr-1" />
               {t('common.more')}
@@ -3375,7 +3378,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
             onMouseDown={preventFocus}
             onClick={onSaveActiveFile}
             disabled={!activeFilePath}
-            className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-6 w-6 items-center justify-center rounded bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Save size={13} />
           </button>
@@ -3391,7 +3394,7 @@ const CodePaneWorkspaceHeader = React.memo(function CodePaneWorkspaceHeader({
                 event.stopPropagation();
                 void onPaneClose();
               }}
-              className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:bg-red-600 hover:text-zinc-50"
+              className="flex h-6 w-6 items-center justify-center rounded bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--error))] hover:text-[rgb(var(--foreground))]"
             >
               <X size={13} />
             </button>
@@ -3562,16 +3565,16 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
 
   return (
     <>
-      <div className="border-b border-zinc-800 px-2 py-2">
-        <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
-          <Search size={12} className="shrink-0 text-zinc-500" />
+      <div className="border-b border-[rgb(var(--border))] px-2 py-2">
+        <div className="flex items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1.5">
+          <Search size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           <input
             value={searchQuery}
             onChange={handleSearchQueryChange}
             placeholder={t('codePane.searchFilesPlaceholder')}
-            className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+            className="w-full bg-transparent text-xs text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
           />
-          {isSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+          {isSearching && <Loader2 size={12} className="shrink-0 animate-spin text-[rgb(var(--muted-foreground))]" />}
         </div>
       </div>
       <div
@@ -3915,11 +3918,11 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
           onClick={() => {
             void onActivateFile(row.filePath, { preview: true });
           }}
-          className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+          className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
         >
-          <FileIcon size={13} className="shrink-0 text-zinc-500" />
+          <FileIcon size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(row.filePath)}</span>
-          <span className="truncate text-[10px] text-zinc-500">
+          <span className="truncate text-[10px] text-[rgb(var(--muted-foreground))]">
             {getRelativePath(rootPath, row.filePath)}
           </span>
         </button>
@@ -3934,9 +3937,9 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
         onClick={() => {
           void onOpenContentMatch(match);
         }}
-        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
+        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
       >
-        <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
+        <span className="w-[44px] shrink-0 text-[10px] text-[rgb(var(--muted-foreground))]">
           {match.lineNumber}:{match.column}
         </span>
         <span className="min-w-0 flex-1 truncate">{match.lineText}</span>
@@ -3957,12 +3960,12 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
             column: symbol.range.startColumn,
           });
         }}
-        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
       >
-        <FileCode2 size={13} className="shrink-0 text-zinc-500" />
+        <FileCode2 size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-zinc-100">{symbol.name}</div>
-          <div className="truncate text-[10px] text-zinc-500">
+          <div className="truncate text-[rgb(var(--foreground))]">{symbol.name}</div>
+          <div className="truncate text-[10px] text-[rgb(var(--muted-foreground))]">
             {[symbol.containerName, getRelativePath(rootPath, symbol.filePath), `${symbol.range.startLineNumber}:${symbol.range.startColumn}`]
               .filter(Boolean)
               .join(' · ')}
@@ -3981,11 +3984,11 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
           onClick={() => {
             void onActivateFile(row.group.filePath, { preview: true });
           }}
-          className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+          className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
         >
-          <FileIcon size={13} className="shrink-0 text-zinc-500" />
+          <FileIcon size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(row.group.filePath)}</span>
-          <span className="truncate text-[10px] text-zinc-500">
+          <span className="truncate text-[10px] text-[rgb(var(--muted-foreground))]">
             {getRelativePath(rootPath, row.group.filePath)}
           </span>
         </button>
@@ -4004,9 +4007,9 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
             column: reference.range.startColumn,
           });
         }}
-        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100"
+        className="flex h-8 w-full items-center gap-2 rounded px-1 text-left text-xs text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
       >
-        <span className="w-[44px] shrink-0 text-[10px] text-zinc-500">
+        <span className="w-[44px] shrink-0 text-[10px] text-[rgb(var(--muted-foreground))]">
           {reference.range.startLineNumber}:{reference.range.startColumn}
         </span>
         <span className="min-w-0 flex-1 truncate">
@@ -4028,12 +4031,12 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
 
   return (
     <>
-      <div className="border-b border-zinc-800 px-2 py-2">
-        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+      <div className="border-b border-[rgb(var(--border))] px-2 py-2">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           <Search size={12} />
           {headingLabel}
         </div>
-        <div className="mb-2 flex gap-1 rounded bg-zinc-900/60 p-1">
+        <div className="mb-2 flex gap-1 rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-1">
           {([
             ['contents', t('codePane.searchModeContents')],
             ['symbols', t('codePane.searchModeSymbols')],
@@ -4047,8 +4050,8 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
               }}
               className={`flex-1 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
                 mode === nextMode
-                  ? 'bg-zinc-800 text-zinc-100'
-                  : 'text-zinc-500 hover:bg-zinc-800/70 hover:text-zinc-200'
+                  ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
+                  : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
               }`}
             >
               {label}
@@ -4056,29 +4059,29 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
           ))}
         </div>
         {mode === 'contents' ? (
-          <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
-            <Search size={12} className="shrink-0 text-zinc-500" />
+          <div className="flex items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1.5">
+            <Search size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
             <input
               value={contentQuery}
               onChange={handleContentQueryChange}
               placeholder={t('codePane.searchContentsPlaceholder')}
-              className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+              className="w-full bg-transparent text-xs text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
             />
-            {isContentSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+            {isContentSearching && <Loader2 size={12} className="shrink-0 animate-spin text-[rgb(var(--muted-foreground))]" />}
           </div>
         ) : mode === 'symbols' ? (
-          <div className="flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5">
-            <Search size={12} className="shrink-0 text-zinc-500" />
+          <div className="flex items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1.5">
+            <Search size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
             <input
               value={workspaceSymbolQuery}
               onChange={handleWorkspaceSymbolQueryChange}
               placeholder={t('codePane.workspaceSymbolsPlaceholder')}
-              className="w-full bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+              className="w-full bg-transparent text-xs text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
             />
-            {isWorkspaceSymbolSearching && <Loader2 size={12} className="shrink-0 animate-spin text-zinc-500" />}
+            {isWorkspaceSymbolSearching && <Loader2 size={12} className="shrink-0 animate-spin text-[rgb(var(--muted-foreground))]" />}
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs text-zinc-400">
+          <div className="flex items-center justify-between gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1.5 text-xs text-[rgb(var(--muted-foreground))]">
             <span className="truncate">
               {usagesTargetLabel
                 ? t('codePane.findUsagesFor', { symbol: usagesTargetLabel })
@@ -4087,7 +4090,7 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
             <button
               type="button"
               onClick={onFindUsages}
-              className="shrink-0 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+              className="shrink-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             >
               {t('codePane.findUsages')}
             </button>
@@ -4095,7 +4098,7 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
         )}
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="border-b border-zinc-800 px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+        <div className="border-b border-[rgb(var(--border))] px-2 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           {resultsLabel}
         </div>
         <div
@@ -4107,7 +4110,7 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
         >
           {mode === 'contents' ? (
             hasDeferredContentQuery && contentError ? (
-              <div className="text-xs text-red-300">{contentError}</div>
+              <div className="text-xs text-[rgb(var(--error))]">{contentError}</div>
             ) : hasDeferredContentQuery ? (
               contentRows.length > 0 ? (
                 renderWindowedRows(
@@ -4116,14 +4119,14 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
                   </div>,
                 )
               ) : (
-                <div className="text-xs text-zinc-500">{t('codePane.searchContentsEmpty')}</div>
+                <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.searchContentsEmpty')}</div>
               )
             ) : (
-              <div className="text-xs text-zinc-500">{t('codePane.searchContentsHint')}</div>
+              <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.searchContentsHint')}</div>
             )
           ) : mode === 'symbols' ? (
             hasDeferredWorkspaceSymbolQuery && workspaceSymbolError ? (
-              <div className="text-xs text-red-300">{workspaceSymbolError}</div>
+              <div className="text-xs text-[rgb(var(--error))]">{workspaceSymbolError}</div>
             ) : hasDeferredWorkspaceSymbolQuery ? (
               workspaceSymbolRows.length > 0 ? (
                 renderWindowedRows(
@@ -4132,15 +4135,15 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
                   </div>,
                 )
               ) : (
-                <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsEmpty')}</div>
+                <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.workspaceSymbolsEmpty')}</div>
               )
             ) : (
-              <div className="text-xs text-zinc-500">{t('codePane.workspaceSymbolsHint')}</div>
+              <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.workspaceSymbolsHint')}</div>
             )
           ) : usageError ? (
-            <div className="text-xs text-red-300">{usageError}</div>
+            <div className="text-xs text-[rgb(var(--error))]">{usageError}</div>
           ) : isFindingUsages ? (
-            <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <div className="flex items-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
               <Loader2 size={12} className="animate-spin" />
               {t('codePane.findUsages')}
             </div>
@@ -4152,10 +4155,10 @@ const SearchSidebarContent = React.memo(function SearchSidebarContent({
                 </div>,
               )
             ) : (
-              <div className="text-xs text-zinc-500">{t('codePane.findUsagesEmpty')}</div>
+              <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.findUsagesEmpty')}</div>
             )
           ) : (
-            <div className="text-xs text-zinc-500">{t('codePane.findUsagesHint')}</div>
+            <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.findUsagesHint')}</div>
           )}
         </div>
       </div>
@@ -4256,12 +4259,12 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
 
   return (
     <>
-      <div className="border-b border-zinc-800 px-2 py-2">
-        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+      <div className="border-b border-[rgb(var(--border))] px-2 py-2">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           <AlertTriangle size={12} />
           {t('codePane.problemsTab')}
         </div>
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
+        <div className="flex items-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
           <span>{t('codePane.problemErrors', { count: summary.errorCount })}</span>
           <span>{t('codePane.problemWarnings', { count: summary.warningCount })}</span>
           <span>{t('codePane.problemInfos', { count: summary.infoCount })}</span>
@@ -4289,14 +4292,14 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
                         column: problem.startColumn,
                       });
                     }}
-                    className="flex h-7 w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                    className="flex h-7 w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                     title={`${getPathLeafLabel(filePath)} · ${relativePath}`}
                   >
                     <span className={`rounded px-1 py-0.5 text-[10px] font-medium uppercase ${tone.className}`}>
                       {tone.label}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{problem.message}</span>
-                    <span className="shrink-0 text-[10px] text-zinc-500">
+                    <span className="shrink-0 text-[10px] text-[rgb(var(--muted-foreground))]">
                       {problem.startLineNumber}:{problem.startColumn}
                     </span>
                   </button>
@@ -4307,10 +4310,10 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
             <div className="space-y-3">
               {groups.map((group) => (
                 <div key={group.filePath} className="space-y-1">
-                  <div className="flex items-center gap-2 px-1 py-1 text-xs text-zinc-300">
-                    <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                  <div className="flex items-center gap-2 px-1 py-1 text-xs text-[rgb(var(--foreground))]">
+                    <FileIcon size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
                     <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
-                    <span className="truncate text-[10px] text-zinc-500">
+                    <span className="truncate text-[10px] text-[rgb(var(--muted-foreground))]">
                       {getRelativePath(rootPath, group.filePath)}
                     </span>
                   </div>
@@ -4327,14 +4330,14 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
                             column: problem.startColumn,
                           });
                         }}
-                        className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                        className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                       >
                         <span className={`mt-0.5 rounded px-1 py-0.5 text-[10px] font-medium uppercase ${tone.className}`}>
                           {tone.label}
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="break-words">{problem.message}</div>
-                          <div className="mt-1 text-[10px] text-zinc-500">
+                          <div className="mt-1 text-[10px] text-[rgb(var(--muted-foreground))]">
                             {problem.startLineNumber}:{problem.startColumn}
                           </div>
                         </div>
@@ -4346,7 +4349,7 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
             </div>
           )
         ) : (
-          <div className="text-xs text-zinc-500">{t('codePane.noProblems')}</div>
+          <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.noProblems')}</div>
         )}
       </div>
     </>
@@ -4418,14 +4421,14 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
 
   return (
     <>
-      <div className="border-b border-zinc-800 px-2 py-2">
-        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+      <div className="border-b border-[rgb(var(--border))] px-2 py-2">
+        <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           <GitBranch size={12} />
           {t('codePane.sourceControl')}
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
           {branchLabel ? (
-            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-200">
+            <span className="rounded border border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/0.08 px-1.5 py-0.5 text-[rgb(var(--primary))]">
               {branchLabel}
             </span>
           ) : null}
@@ -4440,15 +4443,15 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
         {hasRepositoryContent ? (
           <div className="space-y-3">
             {repositorySummary && (
-              <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+              <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-2">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.gitRepositorySummary')}
                   </div>
                   <button
                     type="button"
                     onClick={onRefreshStatus}
-                    className="rounded bg-zinc-800 p-1 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-50"
+                    className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                     aria-label={t('codePane.gitRefreshStatus')}
                   >
                     <RefreshCw size={12} />
@@ -4457,68 +4460,68 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                 {(repositorySummary.operation !== 'idle' || repositorySummary.hasConflicts) && (
                   <div className="mb-2 flex flex-wrap gap-2">
                     {repositorySummary.operation !== 'idle' && (
-                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                      <span className="rounded border border-[rgb(var(--warning))/0.30] bg-[rgb(var(--warning))/0.08] px-1.5 py-0.5 text-[10px] font-medium text-[rgb(var(--warning))]">
                         {operationLabel}
                       </span>
                     )}
                     {repositorySummary.hasConflicts && (
-                      <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-300">
+                      <span className="rounded border border-[rgb(var(--error))/0.30] bg-[rgb(var(--error))/0.08] px-1.5 py-0.5 text-[10px] font-medium text-[rgb(var(--error))]">
                         {t('codePane.gitConflictsActive')}
                       </span>
                     )}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-2 text-xs text-zinc-300">
-                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitBranch')}</div>
-                    <div className="mt-1 truncate text-zinc-100">{branchLabel ?? t('codePane.gitDetachedHead')}</div>
+                <div className="grid grid-cols-2 gap-2 text-xs text-[rgb(var(--foreground))]">
+                  <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">{t('codePane.gitBranch')}</div>
+                    <div className="mt-1 truncate text-[rgb(var(--foreground))]">{branchLabel ?? t('codePane.gitDetachedHead')}</div>
                   </div>
-                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitUpstream')}</div>
-                    <div className="mt-1 truncate text-zinc-100">{repositorySummary.upstreamBranch ?? t('codePane.gitNoUpstream')}</div>
+                  <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">{t('codePane.gitUpstream')}</div>
+                    <div className="mt-1 truncate text-[rgb(var(--foreground))]">{repositorySummary.upstreamBranch ?? t('codePane.gitNoUpstream')}</div>
                   </div>
-                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitAheadBehind')}</div>
-                    <div className="mt-1 text-zinc-100">
+                  <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">{t('codePane.gitAheadBehind')}</div>
+                    <div className="mt-1 text-[rgb(var(--foreground))]">
                       ↑{repositorySummary.aheadCount} ↓{repositorySummary.behindCount}
                     </div>
                   </div>
-                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitOperation')}</div>
-                    <div className="mt-1 truncate text-zinc-100">{operationLabel}</div>
+                  <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">{t('codePane.gitOperation')}</div>
+                    <div className="mt-1 truncate text-[rgb(var(--foreground))]">{operationLabel}</div>
                   </div>
-                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitConflicts')}</div>
-                    <div className="mt-1 truncate text-zinc-100">
+                  <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">{t('codePane.gitConflicts')}</div>
+                    <div className="mt-1 truncate text-[rgb(var(--foreground))]">
                       {repositorySummary.hasConflicts
                         ? t('codePane.gitConflictsActive')
                         : t('codePane.gitConflictsNone')}
                     </div>
                   </div>
-                  <div className="rounded bg-zinc-950/60 px-2 py-1.5">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-zinc-500">{t('codePane.gitRepoRoot')}</div>
-                    <div className="mt-1 truncate text-zinc-100">{repositorySummary.repoRootPath}</div>
+                  <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">{t('codePane.gitRepoRoot')}</div>
+                    <div className="mt-1 truncate text-[rgb(var(--foreground))]">{repositorySummary.repoRootPath}</div>
                   </div>
                 </div>
               </div>
             )}
 
-            <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+            <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-2">
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.gitQuickActions')}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={onRefreshStatus}
-                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                  className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 >
                   {t('codePane.gitRefreshStatus')}
                 </button>
                 <button
                   type="button"
                   onClick={onOpenRepository}
-                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                  className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 >
                   {t('codePane.gitOpenRepository')}
                 </button>
@@ -4526,7 +4529,7 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                   type="button"
                   disabled={!canCopyBranchName}
                   onClick={onCopyBranchName}
-                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {t('codePane.gitCopyBranchName')}
                 </button>
@@ -4534,28 +4537,28 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                   type="button"
                   disabled={entries.length === 0}
                   onClick={onStageAll}
-                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {t('codePane.gitStageAll')}
                 </button>
                 <button
                   type="button"
                   onClick={onStash}
-                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                  className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 >
                   {t('codePane.gitStash')}
                 </button>
                 <button
                   type="button"
                   onClick={onNewBranch}
-                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                  className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 >
                   {t('codePane.gitNewBranchDots')}
                 </button>
                 <button
                   type="button"
                   onClick={onCheckoutRevision}
-                  className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                  className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 >
                   {t('codePane.gitCheckoutTagOrRevision')}
                 </button>
@@ -4564,14 +4567,14 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                     <button
                       type="button"
                       onClick={onRebaseContinue}
-                      className="rounded bg-amber-500/15 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-500/25"
+                      className="rounded border border-[rgb(var(--warning))/0.30] bg-[rgb(var(--warning))/0.08] px-2 py-1 text-[11px] text-[rgb(var(--warning))] transition-colors hover:border-[rgb(var(--warning))/0.50] hover:bg-[rgb(var(--warning))/0.14]"
                     >
                       {t('codePane.gitRebaseContinue')}
                     </button>
                     <button
                       type="button"
                       onClick={onRebaseAbort}
-                      className="rounded bg-red-500/15 px-2 py-1 text-[11px] text-red-200 hover:bg-red-500/25"
+                      className="rounded border border-[rgb(var(--error))/0.30] bg-[rgb(var(--error))/0.08] px-2 py-1 text-[11px] text-[rgb(var(--error))] transition-colors hover:border-[rgb(var(--error))/0.50] hover:bg-[rgb(var(--error))/0.14]"
                     >
                       {t('codePane.gitRebaseAbort')}
                     </button>
@@ -4580,26 +4583,26 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
               </div>
             </div>
 
-            <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+            <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-2">
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.gitComposer')}
               </div>
               <button
                 type="button"
                 aria-label={t('codePane.gitCommitDots')}
                 onClick={onOpenCommit}
-                className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
+                className="flex w-full items-center justify-between rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-2 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
               >
                 <span>{t('codePane.gitCommitDots')}</span>
-                <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{entries.length}</span>
+                <span className="rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{entries.length}</span>
               </button>
-              <div className="mt-2 text-[11px] leading-5 text-zinc-500">
+              <div className="mt-2 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
                 {t('codePane.sourceControlHint')}
               </div>
             </div>
 
-            <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
-              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+            <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-2">
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.gitWorkbenchTab')}
               </div>
               <div className="space-y-2">
@@ -4607,30 +4610,30 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                   type="button"
                   aria-label={t('codePane.gitOpenChangesWorkbench')}
                   onClick={onOpenChangesWorkbench}
-                  className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
+                  className="flex w-full items-center justify-between rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-2 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 >
                   <span>{t('codePane.gitOpenChangesWorkbench')}</span>
-                  <span aria-hidden="true" className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{entries.length}</span>
+                  <span aria-hidden="true" className="rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{entries.length}</span>
                 </button>
                 <button
                   type="button"
                   aria-label={t('codePane.gitOpenWorkbench')}
                   onClick={onOpenGitLog}
-                  className="flex w-full items-center justify-between rounded bg-zinc-950/60 px-2 py-2 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-800/70 hover:text-zinc-50"
+                  className="flex w-full items-center justify-between rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-2 text-left text-xs text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 >
                   <span>{t('codePane.gitOpenWorkbench')}</span>
-                  <span aria-hidden="true" className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{gitGraphCount}</span>
+                  <span aria-hidden="true" className="rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{gitGraphCount}</span>
                 </button>
               </div>
             </div>
 
             {entries.length > 0 && showInlineChanges && (
-              <div className="rounded border border-zinc-800 bg-zinc-900/50 p-2">
+              <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-2">
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.sourceControl')}
                   </div>
-                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                  <span className="rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
                     {entries.length}
                   </span>
                 </div>
@@ -4648,8 +4651,8 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                         role="listitem"
                         className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors ${
                           isSelected
-                            ? 'bg-zinc-800/80 text-zinc-50'
-                            : 'text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-50'
+                            ? 'bg-[rgb(var(--primary))]/15 text-[rgb(var(--foreground))]'
+                            : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
                         }`}
                       >
                         {statusTone ? (
@@ -4657,7 +4660,7 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                             {statusTone.badge}
                           </span>
                         ) : (
-                          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-zinc-800 text-[10px] text-zinc-500">
+                          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] text-[10px] text-[rgb(var(--muted-foreground))]">
                             <FileIcon size={10} />
                           </span>
                         )}
@@ -4670,8 +4673,8 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                 </div>
 
                 {selectedEntry && (
-                  <div className="mt-3 border-t border-zinc-800 pt-2">
-                    <div className="mb-2 truncate text-[11px] text-zinc-500">
+                  <div className="mt-3 border-t border-[rgb(var(--border))] pt-2">
+                    <div className="mb-2 truncate text-[11px] text-[rgb(var(--muted-foreground))]">
                       {selectedRelativePath ?? getRelativePath(rootPath, selectedEntry.path)}
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -4681,7 +4684,7 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                         onClick={() => {
                           onOpenDiff(selectedEntry.path);
                         }}
-                        className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                        className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                       >
                         {t('codePane.openDiff')}
                       </button>
@@ -4692,7 +4695,7 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                           onClick={() => {
                             onStagePath(selectedEntry.path);
                           }}
-                          className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                          className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                         >
                           {t('codePane.gitStage')}
                         </button>
@@ -4704,7 +4707,7 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                           onClick={() => {
                             onUnstagePath(selectedEntry.path);
                           }}
-                          className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                          className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                         >
                           {t('codePane.gitUnstage')}
                         </button>
@@ -4715,7 +4718,7 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
                         onClick={() => {
                           onDiscardPath(selectedEntry.path, Boolean(selectedEntry.staged));
                         }}
-                        className="rounded bg-red-500/15 px-2 py-1 text-[11px] text-red-200 hover:bg-red-500/25"
+                        className="rounded border border-[rgb(var(--error))/0.30] bg-[rgb(var(--error))/0.08] px-2 py-1 text-[11px] text-[rgb(var(--error))] transition-colors hover:border-[rgb(var(--error))/0.50] hover:bg-[rgb(var(--error))/0.14]"
                       >
                         {t('codePane.gitDiscard')}
                       </button>
@@ -4726,7 +4729,7 @@ const ScmSidebarContent = React.memo(function ScmSidebarContent({
             )}
           </div>
         ) : (
-          <div className="text-xs text-zinc-500">{t('codePane.gitRepositoryUnavailable')}</div>
+          <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.gitRepositoryUnavailable')}</div>
         )}
       </div>
     </>
@@ -6500,15 +6503,15 @@ function getStatusTone(status?: CodePaneGitStatusEntry['status']): {
 } | null {
   switch (status) {
     case 'modified':
-      return { badge: 'M', className: 'bg-amber-500/15 text-amber-300' };
+      return { badge: 'M', className: 'border border-[rgb(var(--warning))/0.30] bg-[rgb(var(--warning))/0.08] text-[rgb(var(--warning))]' };
     case 'untracked':
-      return { badge: 'U', className: 'bg-emerald-500/15 text-emerald-300' };
+      return { badge: 'U', className: 'border border-[rgb(var(--success))/0.30] bg-[rgb(var(--success))/0.08] text-[rgb(var(--success))]' };
     case 'added':
-      return { badge: 'A', className: 'bg-emerald-500/15 text-emerald-300' };
+      return { badge: 'A', className: 'border border-[rgb(var(--success))/0.30] bg-[rgb(var(--success))/0.08] text-[rgb(var(--success))]' };
     case 'deleted':
-      return { badge: 'D', className: 'bg-red-500/15 text-red-300' };
+      return { badge: 'D', className: 'border border-[rgb(var(--error))/0.30] bg-[rgb(var(--error))/0.08] text-[rgb(var(--error))]' };
     case 'renamed':
-      return { badge: 'R', className: 'bg-sky-500/15 text-sky-300' };
+      return { badge: 'R', className: 'border border-[rgb(var(--info))/0.30] bg-[rgb(var(--info))/0.08] text-[rgb(var(--info))]' };
     default:
       return null;
   }
@@ -6517,14 +6520,14 @@ function getStatusTone(status?: CodePaneGitStatusEntry['status']): {
 function getStatusTextClassName(status?: CodePaneGitStatusEntry['status']): string {
   switch (status) {
     case 'modified':
-      return 'text-amber-300';
+      return 'text-[rgb(var(--warning))]';
     case 'untracked':
     case 'added':
-      return 'text-emerald-300';
+      return 'text-[rgb(var(--success))]';
     case 'deleted':
-      return 'text-red-300';
+      return 'text-[rgb(var(--error))]';
     case 'renamed':
-      return 'text-sky-300';
+      return 'text-[rgb(var(--info))]';
     default:
       return '';
   }
@@ -6533,11 +6536,11 @@ function getStatusTextClassName(status?: CodePaneGitStatusEntry['status']): stri
 function getExternalChangeTextClassName(changeType?: ExternalChangeKind): string {
   switch (changeType) {
     case 'added':
-      return 'text-emerald-300';
+      return 'text-[rgb(var(--success))]';
     case 'deleted':
-      return 'text-red-300';
+      return 'text-[rgb(var(--error))]';
     case 'modified':
-      return 'text-sky-300';
+      return 'text-[rgb(var(--info))]';
     default:
       return '';
   }
@@ -6546,12 +6549,12 @@ function getExternalChangeTextClassName(changeType?: ExternalChangeKind): string
 function getExternalChangeDotClassName(changeType: ExternalChangeKind): string {
   switch (changeType) {
     case 'added':
-      return 'bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.12)]';
+      return 'bg-[rgb(var(--success))] shadow-[0_0_0_3px_rgba(22,198,12,0.12)]';
     case 'deleted':
-      return 'bg-red-400 shadow-[0_0_0_3px_rgba(248,113,113,0.12)]';
+      return 'bg-[rgb(var(--error))] shadow-[0_0_0_3px_rgba(231,72,86,0.12)]';
     case 'modified':
     default:
-      return 'bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.12)]';
+      return 'bg-[rgb(var(--info))] shadow-[0_0_0_3px_rgba(97,214,214,0.12)]';
   }
 }
 
@@ -6713,13 +6716,13 @@ function ExternalChangeLinePreview({
   tone: 'added' | 'deleted';
 }) {
   const toneClassName = tone === 'added'
-    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-100'
-    : 'border-red-500/25 bg-red-500/10 text-red-100';
+    ? 'border-[rgb(var(--success))/0.28] bg-[rgb(var(--success))/0.08] text-[rgb(var(--foreground))]'
+    : 'border-[rgb(var(--error))/0.28] bg-[rgb(var(--error))/0.08] text-[rgb(var(--foreground))]';
   const prefix = tone === 'added' ? '+' : '-';
 
   return (
-    <div className={`grid grid-cols-[52px_minmax(0,1fr)] gap-2 border-b border-zinc-900/80 px-2 py-1 last:border-b-0 ${toneClassName}`}>
-      <span className="select-none text-right font-mono text-[10px] text-zinc-500">
+    <div className={`grid grid-cols-[52px_minmax(0,1fr)] gap-2 border-b border-[rgb(var(--border))] px-2 py-1 last:border-b-0 ${toneClassName}`}>
+      <span className="select-none text-right font-mono text-[10px] text-[rgb(var(--muted-foreground))]">
         {line.lineNumber}
       </span>
       <code className="min-w-0 whitespace-pre-wrap break-words font-mono text-[11px] leading-5">
@@ -6738,33 +6741,33 @@ function ExternalChangeLineSummaryPanel({
 }) {
   if (summary.addedCount === 0 && summary.deletedCount === 0) {
     return (
-      <div className="rounded border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-500">
+      <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-3 py-2 text-xs text-[rgb(var(--muted-foreground))]">
         {t('codePane.externalChangeNoLineChanges')}
       </div>
     );
   }
 
   return (
-    <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
-        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+    <div className="min-h-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-3 py-2">
+        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           {t('codePane.externalChangeLineSummary')}
         </div>
         <div className="flex items-center gap-2 text-[11px]">
-          <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-emerald-200">
+          <span className="rounded border border-[rgb(var(--success))/0.28] bg-[rgb(var(--success))/0.08] px-1.5 py-0.5 text-[rgb(var(--success))]">
             {t('codePane.externalChangeAddedLines', { count: summary.addedCount })}
           </span>
-          <span className="rounded bg-red-500/10 px-1.5 py-0.5 text-red-200">
+          <span className="rounded border border-[rgb(var(--error))/0.28] bg-[rgb(var(--error))/0.08] px-1.5 py-0.5 text-[rgb(var(--error))]">
             {t('codePane.externalChangeDeletedLines', { count: summary.deletedCount })}
           </span>
           {summary.isApproximate && (
-            <span className="text-zinc-500">{t('codePane.externalChangeLineSummaryApproximate')}</span>
+            <span className="text-[rgb(var(--muted-foreground))]">{t('codePane.externalChangeLineSummaryApproximate')}</span>
           )}
         </div>
       </div>
       <div className="grid min-h-0 md:grid-cols-2">
-        <div className="min-h-0 border-b border-zinc-800 md:border-b-0 md:border-r">
-          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-red-300">
+        <div className="min-h-0 border-b border-[rgb(var(--border))] md:border-b-0 md:border-r">
+          <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--error))]">
             {t('codePane.externalChangeDeletedLines', { count: summary.deletedCount })}
           </div>
           <div className="max-h-52 overflow-auto">
@@ -6774,18 +6777,18 @@ function ExternalChangeLineSummaryPanel({
                   <ExternalChangeLinePreview key={`deleted:${line.lineNumber}:${line.text}`} line={line} tone="deleted" />
                 ))}
                 {summary.hiddenDeletedCount > 0 && (
-                  <div className="px-3 py-2 text-[11px] text-zinc-500">
+                  <div className="px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.externalChangeHiddenLines', { count: summary.hiddenDeletedCount })}
                   </div>
                 )}
               </>
             ) : (
-              <div className="px-3 py-3 text-xs text-zinc-500">{t('codePane.externalChangeNoDeletedLines')}</div>
+              <div className="px-3 py-3 text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.externalChangeNoDeletedLines')}</div>
             )}
           </div>
         </div>
         <div className="min-h-0">
-          <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-emerald-300">
+          <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--success))]">
             {t('codePane.externalChangeAddedLines', { count: summary.addedCount })}
           </div>
           <div className="max-h-52 overflow-auto">
@@ -6795,13 +6798,13 @@ function ExternalChangeLineSummaryPanel({
                   <ExternalChangeLinePreview key={`added:${line.lineNumber}:${line.text}`} line={line} tone="added" />
                 ))}
                 {summary.hiddenAddedCount > 0 && (
-                  <div className="px-3 py-2 text-[11px] text-zinc-500">
+                  <div className="px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.externalChangeHiddenLines', { count: summary.hiddenAddedCount })}
                   </div>
                 )}
               </>
             ) : (
-              <div className="px-3 py-3 text-xs text-zinc-500">{t('codePane.externalChangeNoAddedLines')}</div>
+              <div className="px-3 py-3 text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.externalChangeNoAddedLines')}</div>
             )}
           </div>
         </div>
@@ -6834,15 +6837,15 @@ const ExternalChangeEntryRow = React.memo(function ExternalChangeEntryRow({
       onDoubleClick={() => {
         onOpenDiff(entry.filePath);
       }}
-      className={`flex w-full items-start gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-zinc-100' : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'}`}
+      className={`flex w-full items-start gap-2 rounded px-2 py-2 text-left text-xs transition-colors ${isSelected ? 'bg-[rgb(var(--primary))]/15 text-[rgb(var(--foreground))]' : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}`}
     >
       <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${getExternalChangeDotClassName(entry.changeType)}`} />
       <div className="min-w-0 flex-1">
         <div className={`truncate font-medium ${getExternalChangeTextClassName(entry.changeType)}`}>
           {getPathLeafLabel(entry.filePath) || entry.filePath}
         </div>
-        <div className="mt-1 truncate text-[10px] text-zinc-500">{entry.relativePath}</div>
-        <div className="mt-1 flex items-center gap-2 text-[10px] text-zinc-500">
+        <div className="mt-1 truncate text-[10px] text-[rgb(var(--muted-foreground))]">{entry.relativePath}</div>
+        <div className="mt-1 flex items-center gap-2 text-[10px] text-[rgb(var(--muted-foreground))]">
           <span>{changeLabel}</span>
           <span>{formatExternalChangeTime(entry.changedAt)}</span>
           {entry.openedAtChange && <span>{openedLabel}</span>}
@@ -6870,12 +6873,12 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
 
   return (
     <>
-      <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
+      <div className="flex items-start justify-between gap-3 border-b border-[rgb(var(--border))] pb-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-zinc-100">
+          <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">
             {getPathLeafLabel(entry.filePath) || entry.filePath}
           </div>
-          <div className="mt-1 truncate text-xs text-zinc-500">
+          <div className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]">
             {entry.relativePath}
           </div>
         </div>
@@ -6886,7 +6889,7 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
             onClick={() => {
               onOpenDiff(entry.filePath);
             }}
-            className="rounded bg-sky-500/15 px-2 py-1 text-[11px] text-sky-200 transition-colors hover:bg-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-[rgb(var(--primary))]/32 bg-[rgb(var(--primary))]/10 px-2 py-1 text-[11px] text-[rgb(var(--primary))] transition-colors hover:border-[rgb(var(--primary))]/52 hover:bg-[rgb(var(--primary))]/16 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('codePane.externalChangeViewDiff')}
           </button>
@@ -6895,7 +6898,7 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
             onClick={() => {
               onClearEntry(entry.filePath);
             }}
-            className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
           >
             {t('codePane.externalChangeClear')}
           </button>
@@ -6907,19 +6910,19 @@ const ExternalChangeDetailPanel = React.memo(function ExternalChangeDetailPanel(
           t={t}
         />
         <div className="grid min-h-0 gap-3 md:grid-cols-2">
-          <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
-            <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          <div className="min-h-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)]">
+            <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
               {t('codePane.externalChangeBefore')}
             </div>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-zinc-400">
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-[rgb(var(--muted-foreground))]">
               {entry.previousContent ?? t('codePane.externalChangeNoContent')}
             </pre>
           </div>
-          <div className="min-h-0 rounded border border-zinc-800 bg-zinc-950/70">
-            <div className="border-b border-zinc-800 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          <div className="min-h-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)]">
+            <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
               {t('codePane.externalChangeAfter')}
             </div>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-zinc-300">
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words p-3 text-[11px] leading-5 text-[rgb(var(--foreground))]">
               {entry.currentContent ?? t('codePane.externalChangeNoContent')}
             </pre>
           </div>
@@ -7007,13 +7010,13 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
   }), [entries, listScrollTop, listViewportHeight]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_90%,transparent)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.externalChangesTab')}
           </div>
-          <div className="truncate text-xs text-zinc-500">
+          <div className="truncate text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.externalChangesSubtitle', { count: entries.length })}
           </div>
         </div>
@@ -7022,14 +7025,14 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
             type="button"
             disabled={entries.length === 0}
             onClick={onClearAll}
-            className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('codePane.externalChangeClearAll')}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-zinc-800 p-1 text-zinc-400 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -7040,7 +7043,7 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
         <div className="grid min-h-0 flex-1 md:grid-cols-[360px_minmax(0,1fr)]">
           <section
             ref={listScrollRef}
-            className="min-h-0 overflow-auto border-r border-zinc-800 px-2 py-2"
+            className="min-h-0 overflow-auto border-r border-[rgb(var(--border))] px-2 py-2"
             onScroll={(event) => {
               scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
             }}
@@ -7094,12 +7097,12 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
                 onClearEntry={onClearEntry}
               />
             ) : (
-              <div className="text-xs text-zinc-500">{t('codePane.externalChangesEmpty')}</div>
+              <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.externalChangesEmpty')}</div>
             )}
           </section>
         </div>
       ) : (
-        <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs text-zinc-500">
+        <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-xs text-[rgb(var(--muted-foreground))]">
           {t('codePane.externalChangesEmpty')}
         </div>
       )}
@@ -7112,15 +7115,15 @@ function getProblemTone(severity: number): {
   className: string;
 } {
   if (severity >= 8) {
-    return { label: 'error', className: 'bg-red-500/15 text-red-300' };
+    return { label: 'error', className: 'border border-[rgb(var(--error))/0.30] bg-[rgb(var(--error))/0.08] text-[rgb(var(--error))]' };
   }
   if (severity >= 4) {
-    return { label: 'warning', className: 'bg-amber-500/15 text-amber-300' };
+    return { label: 'warning', className: 'border border-[rgb(var(--warning))/0.30] bg-[rgb(var(--warning))/0.08] text-[rgb(var(--warning))]' };
   }
   if (severity >= 2) {
-    return { label: 'info', className: 'bg-sky-500/15 text-sky-300' };
+    return { label: 'info', className: 'border border-[rgb(var(--info))/0.30] bg-[rgb(var(--info))/0.08] text-[rgb(var(--info))]' };
   }
-  return { label: 'hint', className: 'bg-emerald-500/15 text-emerald-300' };
+  return { label: 'hint', className: 'border border-[rgb(var(--success))/0.30] bg-[rgb(var(--success))/0.08] text-[rgb(var(--success))]' };
 }
 
 function compareTextEditsDescending(left: CodePaneTextEdit, right: CodePaneTextEdit): number {
