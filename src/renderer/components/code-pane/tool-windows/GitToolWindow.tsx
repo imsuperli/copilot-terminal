@@ -1101,12 +1101,12 @@ const BranchListSection = React.memo(function BranchListSection({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
-        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
+        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           <FolderTree size={12} />
           {t('codePane.gitBranchManager')}
         </div>
-        <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400">
+        <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
           {totalBranches}
         </span>
       </div>
@@ -1116,7 +1116,7 @@ const BranchListSection = React.memo(function BranchListSection({
         onScroll={handleScroll}
       >
         {isLoading ? (
-          <div className="flex h-full items-center justify-center gap-2 text-xs text-zinc-500">
+          <div className="flex h-full items-center justify-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.loading')}
           </div>
@@ -1128,10 +1128,10 @@ const BranchListSection = React.memo(function BranchListSection({
                   item.kind === 'section' ? (
                     <div
                       key={item.key}
-                      className="flex h-7 items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500"
+                      className="flex h-7 items-center justify-between gap-2 px-2 text-[11px] font-medium text-[rgb(var(--muted-foreground))]"
                     >
                       <span>{item.label}</span>
-                      <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{item.count}</span>
+                      <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{item.count}</span>
                     </div>
                   ) : (
                     <BranchTreeRow
@@ -1153,10 +1153,10 @@ const BranchListSection = React.memo(function BranchListSection({
                 item.kind === 'section' ? (
                   <div
                     key={item.key}
-                    className="flex h-7 items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500"
+                    className="flex h-7 items-center justify-between gap-2 px-2 text-[11px] font-medium text-[rgb(var(--muted-foreground))]"
                   >
                     <span>{item.label}</span>
-                    <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{item.count}</span>
+                    <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{item.count}</span>
                   </div>
                 ) : (
                   <BranchTreeRow
@@ -1173,7 +1173,7 @@ const BranchListSection = React.memo(function BranchListSection({
             </div>
           )
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+          <div className="flex h-full items-center justify-center text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.gitCommitGraphEmpty')}
           </div>
         )}
@@ -1265,20 +1265,20 @@ const CommitLogRow = React.memo(function CommitLogRow({
       }}
       className={`grid h-8 w-full items-center gap-2 rounded px-2 text-left text-xs transition-colors ${
         isSelected
-          ? 'bg-sky-500/15 text-sky-100'
+          ? 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--foreground))]'
           : isCompared
-            ? 'bg-amber-500/10 text-amber-100'
-            : 'text-zinc-300 hover:bg-zinc-900/80 hover:text-zinc-100'
+            ? 'bg-[rgb(var(--warning)/0.10)] text-[rgb(var(--foreground))]'
+            : 'text-[rgb(var(--muted-foreground))] hover:bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] hover:text-[rgb(var(--foreground))]'
       }`}
       style={{ gridTemplateColumns }}
     >
       <GitCommitGraphCell row={row} graphWidth={graphWidth} />
       <div className="flex min-w-0 items-center gap-1 overflow-hidden">
-        <span className="min-w-0 flex-1 truncate text-zinc-100">
+        <span className="min-w-0 flex-1 truncate text-[rgb(var(--foreground))]">
           {row.commit.subject || row.commit.shortSha}
         </span>
         {isCompared && (
-          <span className="shrink-0 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] text-amber-200">
+          <span className="shrink-0 rounded bg-[rgb(var(--warning)/0.14)] px-1 py-0.5 text-[10px] text-[rgb(var(--warning))]">
             {compareIndex}
           </span>
         )}
@@ -1291,13 +1291,13 @@ const CommitLogRow = React.memo(function CommitLogRow({
           </span>
         ))}
         {row.commit.refs.length > visibleRefs.length && (
-          <span className="shrink-0 text-[10px] text-zinc-500">
+          <span className="shrink-0 text-[10px] text-[rgb(var(--muted-foreground))]">
             +{row.commit.refs.length - visibleRefs.length}
           </span>
         )}
       </div>
-      <span className="truncate text-zinc-400">{row.commit.author}</span>
-      <span className="truncate text-zinc-500">{formatTimestamp(row.commit.timestamp)}</span>
+      <span className="truncate text-[rgb(var(--muted-foreground))]">{row.commit.author}</span>
+      <span className="truncate text-[rgb(var(--muted-foreground))]">{formatTimestamp(row.commit.timestamp)}</span>
     </button>
   );
 });
@@ -1330,9 +1330,9 @@ const CommitLogSection = React.memo(function CommitLogSection({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-zinc-800 px-3 py-2">
+      <div className="border-b border-[rgb(var(--border))] px-3 py-2">
         <div
-          className="grid gap-2 text-[11px] font-medium text-zinc-500"
+          className="grid gap-2 text-[11px] font-medium text-[rgb(var(--muted-foreground))]"
           style={{ gridTemplateColumns }}
         >
           <span>{t('codePane.gitGraph')}</span>
@@ -1341,14 +1341,14 @@ const CommitLogSection = React.memo(function CommitLogSection({
           <span>{t('codePane.gitDate')}</span>
         </div>
         {selectedCommitOrder.length > 1 && (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded bg-zinc-900/70 px-2 py-1.5 text-[11px] text-zinc-400">
+          <div className="mt-2 flex items-center justify-between gap-2 rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_70%,transparent)] px-2 py-1.5 text-[11px] text-[rgb(var(--muted-foreground))]">
             <span>{t('codePane.gitCompareSelectionCount', { count: selectedCommitOrder.length })}</span>
             <button
               type="button"
               onClick={() => {
                 void onCompareSelectedCommits();
               }}
-              className="rounded bg-zinc-800 px-2 py-1 text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+              className="rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             >
               {t('codePane.gitCompareSelectedCommits')}
             </button>
@@ -1393,7 +1393,7 @@ const CommitLogSection = React.memo(function CommitLogSection({
             </div>
           )
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+          <div className="flex h-full items-center justify-center text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.gitCommitGraphEmpty')}
           </div>
         )}
@@ -1440,14 +1440,14 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
   return (
     <div className="space-y-3">
       {selectedBranch && (
-        <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
+        <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.gitBranchManager')}
               </div>
-              <div className="mt-2 truncate text-sm font-medium text-zinc-100">{selectedBranch.name}</div>
-              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500">
+              <div className="mt-2 truncate text-sm font-medium text-[rgb(var(--foreground))]">{selectedBranch.name}</div>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[rgb(var(--muted-foreground))]">
                 <span>{selectedBranch.kind === 'local' ? t('codePane.gitLocalBranch') : t('codePane.gitRemoteBranch')}</span>
                 <span>{selectedBranch.shortSha}</span>
                 {selectedBranch.upstream && <span>{selectedBranch.upstream}</span>}
@@ -1455,13 +1455,13 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
               </div>
             </div>
             {selectedBranch.current && (
-              <span className="rounded bg-emerald-500/15 px-2 py-1 text-[11px] text-emerald-200">
+              <span className="rounded bg-[rgb(var(--success)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--success))]">
                 {t('codePane.gitCurrentBranchBadge')}
               </span>
             )}
           </div>
           {selectedBranch.subject && (
-            <div className="mt-3 rounded bg-zinc-950/50 px-2 py-1.5 text-xs text-zinc-400">
+            <div className="mt-3 rounded bg-[color-mix(in_srgb,rgb(var(--background))_68%,transparent)] px-2 py-1.5 text-xs text-[rgb(var(--muted-foreground))]">
               {selectedBranch.subject}
             </div>
           )}
@@ -1475,7 +1475,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
                     createBranch: false,
                   });
                 }}
-                className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+                className="rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
               >
                 {t('codePane.gitCheckout')}
               </button>
@@ -1492,7 +1492,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
                     preferExisting: true,
                   });
                 }}
-                className="rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+                className="rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
               >
                 {t('codePane.gitCreateTrackingBranch')}
               </button>
@@ -1503,7 +1503,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
                 onClick={() => {
                   void onRequestRenameBranch(selectedBranch.name);
                 }}
-                className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+                className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
               >
                 <Pencil size={11} />
                 {t('codePane.gitRenameBranch')}
@@ -1516,7 +1516,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
                   const forceDelete = !selectedBranch.mergedIntoCurrent;
                   void onDeleteBranch(selectedBranch.name, forceDelete);
                 }}
-                className="flex items-center gap-1 rounded bg-red-500/15 px-2 py-1 text-[11px] text-red-200 transition-colors hover:bg-red-500/25"
+                className="flex items-center gap-1 rounded bg-[rgb(var(--error)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error)/0.22)]"
               >
                 <Trash2 size={11} />
                 {t('codePane.gitDeleteBranch')}
@@ -1527,14 +1527,14 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
       )}
 
       {selectedCommit ? (
-        <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
+        <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+              <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.gitCommit')}
               </div>
-              <div className="mt-2 text-sm font-medium text-zinc-100">{selectedCommit.subject || selectedCommit.shortSha}</div>
-              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-500">
+              <div className="mt-2 text-sm font-medium text-[rgb(var(--foreground))]">{selectedCommit.subject || selectedCommit.shortSha}</div>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[rgb(var(--muted-foreground))]">
                 <span>{selectedCommit.author}</span>
                 <span>{selectedCommit.shortSha}</span>
                 <span>{formatTimestamp(selectedCommit.timestamp)}</span>
@@ -1545,7 +1545,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
               onClick={() => {
                 void onCherryPick(selectedCommit.sha);
               }}
-              className="flex shrink-0 items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+              className="flex shrink-0 items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             >
               <GitCommitHorizontal size={11} />
               {t('codePane.gitCherryPick')}
@@ -1561,30 +1561,30 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
             </div>
           )}
           {selectedCommitDetails?.body && (
-            <div className="mt-3 whitespace-pre-wrap rounded bg-zinc-950/60 px-2 py-2 text-xs text-zinc-400">
+            <div className="mt-3 whitespace-pre-wrap rounded bg-[color-mix(in_srgb,rgb(var(--background))_74%,transparent)] px-2 py-2 text-xs text-[rgb(var(--muted-foreground))]">
               {selectedCommitDetails.body}
             </div>
           )}
         </div>
       ) : (
-        <div className="text-xs text-zinc-500">{t('codePane.gitCommitGraphEmpty')}</div>
+        <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.gitCommitGraphEmpty')}</div>
       )}
 
-      <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
+      <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
         <div className="mb-2 flex items-center justify-between gap-2">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {comparedCommits ? t('codePane.gitCompareFiles') : t('codePane.gitCommitFiles')}
           </div>
           {selectedCommitOrder.length > 1 && (
-            <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">
+            <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
               {selectedCommitOrder.map((sha) => sha.slice(0, 7)).join(' -> ')}
             </span>
           )}
         </div>
         {commitDetailsError ? (
-          <div className="text-xs text-red-300">{commitDetailsError}</div>
+          <div className="text-xs text-[rgb(var(--error))]">{commitDetailsError}</div>
         ) : isCommitDetailsLoading ? (
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <div className="flex items-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.loading')}
           </div>
@@ -1623,7 +1623,7 @@ const CommitFileList = React.memo(function CommitFileList({
 }) {
   if (files.length === 0) {
     return (
-      <div className="text-xs text-zinc-500">
+      <div className="text-xs text-[rgb(var(--muted-foreground))]">
         {comparedCommits ? t('codePane.gitCompareFilesEmpty') : t('codePane.gitCommitFilesEmpty')}
       </div>
     );
@@ -1644,20 +1644,20 @@ const CommitFileList = React.memo(function CommitFileList({
               rightLabel: (comparedCommits?.targetCommitSha ?? selectedCommitDetails?.commitSha)?.slice(0, 7),
             });
           }}
-          className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs text-zinc-300 transition-colors hover:bg-zinc-950/70 hover:text-zinc-100"
+          className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)] hover:text-[rgb(var(--foreground))]"
         >
           <span className={`mt-0.5 shrink-0 rounded px-1 py-0.5 text-[10px] ${getCommitFileStatusClassName(file.status)}`}>
             {getCommitFileStatusLabel(file.status)}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-zinc-100">{file.relativePath}</div>
+            <div className="truncate text-[rgb(var(--foreground))]">{file.relativePath}</div>
             {file.previousPath && (
-              <div className="mt-0.5 truncate text-[10px] text-zinc-500">
+              <div className="mt-0.5 truncate text-[10px] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.gitComparePreviousPath')}: {file.previousPath}
               </div>
             )}
           </div>
-          <div className="shrink-0 text-[10px] text-zinc-500">
+          <div className="shrink-0 text-[10px] text-[rgb(var(--muted-foreground))]">
             +{file.additions} -{file.deletions}
           </div>
         </button>
@@ -1681,14 +1681,14 @@ const RebasePlanRow = React.memo(function RebasePlanRow({
 }) {
   return (
     <div
-      className="grid h-8 grid-cols-[92px_minmax(0,1fr)_72px_72px] items-center gap-2 rounded px-2 text-xs text-zinc-300 hover:bg-zinc-900/70"
+      className="grid h-8 grid-cols-[92px_minmax(0,1fr)_72px_72px] items-center gap-2 rounded px-2 text-xs text-[rgb(var(--muted-foreground))] hover:bg-[color-mix(in_srgb,rgb(var(--secondary))_70%,transparent)]"
     >
       <select
         value={entry.action}
         onChange={(event) => {
           onChangeAction(entryIndex, event.target.value as CodePaneGitRebasePlanEntry['action']);
         }}
-        className="rounded border border-zinc-800 bg-zinc-950 px-1.5 py-1 text-[11px] text-zinc-200 outline-none"
+        className="rounded border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-1.5 py-1 text-[11px] text-[rgb(var(--foreground))] outline-none"
       >
         {(['pick', 'squash', 'fixup', 'drop'] as const).map((action) => (
           <option key={action} value={action}>
@@ -1697,17 +1697,17 @@ const RebasePlanRow = React.memo(function RebasePlanRow({
         ))}
       </select>
       <div className="min-w-0 truncate">
-        <span className="mr-2 text-zinc-500">{entry.shortSha}</span>
+        <span className="mr-2 text-[rgb(var(--muted-foreground))]">{entry.shortSha}</span>
         <span className="truncate">{entry.subject}</span>
       </div>
-      <span className="truncate text-zinc-500">{entry.author}</span>
+      <span className="truncate text-[rgb(var(--muted-foreground))]">{entry.author}</span>
       <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={() => {
             onMoveEntry(entryIndex, -1);
           }}
-          className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+          className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           aria-label={t('codePane.moveUp')}
         >
           <ArrowUp size={11} />
@@ -1717,7 +1717,7 @@ const RebasePlanRow = React.memo(function RebasePlanRow({
           onClick={() => {
             onMoveEntry(entryIndex, 1);
           }}
-          className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+          className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           aria-label={t('codePane.moveDown')}
         >
           <ArrowDown size={11} />
@@ -1750,7 +1750,7 @@ const RebasePlanSection = React.memo(function RebasePlanSection({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="grid grid-cols-[92px_minmax(0,1fr)_72px_72px] gap-2 border-b border-zinc-800 px-3 py-2 text-[11px] font-medium text-zinc-500">
+      <div className="grid grid-cols-[92px_minmax(0,1fr)_72px_72px] gap-2 border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
         <span>{t('codePane.gitRebaseAction')}</span>
         <span>{t('codePane.gitCommit')}</span>
         <span>{t('codePane.gitAuthor')}</span>
@@ -1762,7 +1762,7 @@ const RebasePlanSection = React.memo(function RebasePlanSection({
         onScroll={handleScroll}
       >
         {isLoading ? (
-          <div className="flex h-full items-center justify-center gap-2 text-xs text-zinc-500">
+          <div className="flex h-full items-center justify-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.loading')}
           </div>
@@ -1800,7 +1800,7 @@ const RebasePlanSection = React.memo(function RebasePlanSection({
             </div>
           )
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+          <div className="flex h-full items-center justify-center text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.gitRebasePlanEmpty')}
           </div>
         )}
@@ -1834,17 +1834,17 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
 }) {
   return (
     <div className="space-y-3">
-      <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3">
-        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+      <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+        <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           {t('codePane.gitRebasePlanner')}
         </div>
-        <label className="mb-2 block text-[11px] text-zinc-500">{t('codePane.gitRebaseBaseRef')}</label>
+        <label className="mb-2 block text-[11px] text-[rgb(var(--muted-foreground))]">{t('codePane.gitRebaseBaseRef')}</label>
         <select
           value={baseRef}
           onChange={(event) => {
             onChangeBaseRef(event.target.value);
           }}
-          className="w-full rounded border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-200 outline-none"
+          className="w-full rounded border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none"
         >
           {branches.map((branchName) => (
             <option key={branchName} value={branchName}>
@@ -1858,7 +1858,7 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
             onClick={() => {
               void onRefreshRebase();
             }}
-            className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           >
             <RefreshCw size={11} />
             {t('codePane.refresh')}
@@ -1869,7 +1869,7 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
             onClick={() => {
               void onApplyRebasePlan(baseRef, draftEntries);
             }}
-            className="flex items-center gap-1 rounded bg-amber-500/15 px-2 py-1 text-[11px] text-amber-200 transition-colors hover:bg-amber-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1 rounded bg-[rgb(var(--warning)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--warning))] transition-colors hover:bg-[rgb(var(--warning)/0.22)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <RotateCcw size={11} />
             {t('codePane.gitApplyRebasePlan')}
@@ -1877,14 +1877,14 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
         </div>
       </div>
 
-      <div className="rounded border border-zinc-800 bg-zinc-900/60 p-3 text-xs text-zinc-400">
+      <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
         <div>{t('codePane.gitRebaseCommitCount', { count: entryCount })}</div>
         {hasMergeCommits ? (
-          <div className="mt-2 rounded bg-amber-500/10 px-2 py-1.5 text-amber-200">
+          <div className="mt-2 rounded bg-[rgb(var(--warning)/0.10)] px-2 py-1.5 text-[rgb(var(--warning))]">
             {t('codePane.gitRebaseMergeWarning')}
           </div>
         ) : (
-          <div className="mt-2 text-zinc-500">{t('codePane.gitRebaseHint')}</div>
+          <div className="mt-2 text-[rgb(var(--muted-foreground))]">{t('codePane.gitRebaseHint')}</div>
         )}
       </div>
     </div>
