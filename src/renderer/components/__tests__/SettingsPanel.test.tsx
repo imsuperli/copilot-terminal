@@ -87,6 +87,79 @@ describe('SettingsPanel', () => {
     expect(screen.getByText('使用随应用附带的 ConPTY 组件')).toBeInTheDocument();
   });
 
+  it('loads and updates appearance settings from the appearance tab', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        terminal: {
+          useBundledConptyDll: false,
+          defaultShellProgram: '',
+          fontFamily: '',
+          fontSize: 14,
+        },
+        appearance: {
+          themeId: 'paper',
+          skin: {
+            kind: 'none',
+            gradient: 'linear-gradient(135deg, #eee 0%, #ddd 100%)',
+            dim: 0.62,
+            blur: 0,
+          },
+          terminalOpacity: 0.94,
+          readabilityMode: 'readability',
+          reduceMotion: false,
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: '外观' }));
+
+    expect(await screen.findByText('纸页')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '可读性模式' })).toHaveTextContent('高可读');
+    expect(screen.getByRole('combobox', { name: '终端透明度' })).toHaveTextContent('94%');
+    expect(screen.getByRole('switch', { name: '减少动态效果' })).toHaveAttribute('data-state', 'unchecked');
+
+    await user.click(screen.getByRole('button', { name: /曜石/ }));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+      appearance: expect.objectContaining({
+        themeId: 'obsidian',
+        readabilityMode: 'readability',
+        terminalOpacity: 0.94,
+        reduceMotion: false,
+      }),
+    });
+
+    await user.click(screen.getByRole('button', { name: /冷雾极光/ }));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      appearance: expect.objectContaining({
+        skin: expect.objectContaining({
+          kind: 'gradient',
+          gradient: expect.stringContaining('#041417'),
+        }),
+      }),
+    });
+
+    await user.click(screen.getByRole('switch', { name: '减少动态效果' }));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      appearance: expect.objectContaining({
+        reduceMotion: true,
+      }),
+    });
+  });
+
   it('hides the bundled ConPTY setting on macOS', async () => {
     const user = userEvent.setup();
     window.electronAPI.platform = 'darwin';

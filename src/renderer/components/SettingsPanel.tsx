@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as Select from '@radix-ui/react-select';
 import * as Switch from '@radix-ui/react-switch';
 import * as Tabs from '@radix-ui/react-tabs';
-import { X, Plus, Trash2, Search, Check, ChevronDown, Globe, Folder, Edit2, FolderOpen, Languages, Compass, Plug, Wrench, Monitor, Command } from 'lucide-react';
+import { X, Plus, Trash2, Search, Check, ChevronDown, Globe, Folder, Edit2, FolderOpen, Languages, Compass, Plug, Wrench, Monitor, Command, Palette, Wallpaper, SunMoon } from 'lucide-react';
 import { IDEIcon } from './icons/IDEIcons';
 import { notifyIDESettingsUpdated } from '../hooks/useIDESettings';
 import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
@@ -11,10 +11,14 @@ import { notifyTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { QuickNavItem } from '../../shared/types/quick-nav';
 import { FeatureSettings, IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
 import { KnownHostEntry } from '../../shared/types/ssh';
+import type { AppearanceReadabilityMode, AppearanceSettings, AppearanceThemeId } from '../../shared/types/appearance';
+import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 import { useI18n } from '../i18n';
+import type { TranslationKey } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
 import { ChatSettingsTab } from './ChatSettingsTab';
 import { PluginCenter } from './settings/PluginCenter';
+import { applyAppearanceToDocument, getAppearanceSkinStyle } from '../utils/appearance';
 
 interface ShellProgramOption {
   command: string;
@@ -27,7 +31,7 @@ interface SettingsPanelProps {
   onClose: () => void;
 }
 
-type SettingsTab = 'general' | 'quicknav' | 'chat' | 'plugins' | 'advanced';
+type SettingsTab = 'general' | 'appearance' | 'quicknav' | 'chat' | 'plugins' | 'advanced';
 type QuickNavSubTab = 'ide' | 'custom';
 const AUTO_SHELL_OPTION_VALUE = '__auto__';
 const DEFAULT_STATUSLINE_CONFIG: StatusLineConfig = {
@@ -44,6 +48,101 @@ const DEFAULT_STATUSLINE_CONFIG: StatusLineConfig = {
 const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
   sshEnabled: true,
 };
+
+const APPEARANCE_OPACITY_OPTIONS = [0.72, 0.82, 0.88, 0.94];
+
+const APPEARANCE_THEME_PRESETS: Array<{
+  id: AppearanceThemeId;
+  preview: string;
+}> = [
+  {
+    id: 'obsidian',
+    preview: 'linear-gradient(135deg, #0b0d11 0%, #1b1f27 58%, #090b0e 100%)',
+  },
+  {
+    id: 'aurora',
+    preview: 'linear-gradient(135deg, #05151a 0%, #0d3940 52%, #082228 100%)',
+  },
+  {
+    id: 'paper',
+    preview: 'linear-gradient(135deg, #f4ecde 0%, #e2d8c3 58%, #f7f1e8 100%)',
+  },
+];
+
+const APPEARANCE_SKIN_PRESETS: Array<{
+  id: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
+  preview: string;
+  skin: AppearanceSettings['skin'];
+}> = [
+  {
+    id: 'none',
+    labelKey: 'settings.appearance.skin.none',
+    descriptionKey: 'settings.appearance.skin.noneDescription',
+    preview: 'linear-gradient(135deg, rgba(120, 120, 120, 0.16) 0%, rgba(120, 120, 120, 0.04) 100%)',
+    skin: {
+      kind: 'none',
+      gradient: DEFAULT_APPEARANCE_SETTINGS.skin.gradient,
+      dim: 0.62,
+      blur: 0,
+    },
+  },
+  {
+    id: 'midnight',
+    labelKey: 'settings.appearance.skin.midnight',
+    descriptionKey: 'settings.appearance.skin.midnightDescription',
+    preview: 'radial-gradient(circle at 18% 18%, rgba(86, 130, 255, 0.38), transparent 30%), radial-gradient(circle at 82% 22%, rgba(244, 158, 73, 0.24), transparent 28%), linear-gradient(135deg, #05070a 0%, #111317 52%, #060607 100%)',
+    skin: {
+      kind: 'gradient',
+      gradient: 'radial-gradient(circle at 15% 12%, rgba(57, 114, 255, 0.30), transparent 28%), radial-gradient(circle at 82% 18%, rgba(245, 158, 11, 0.18), transparent 24%), linear-gradient(135deg, #05070a 0%, #111317 48%, #060607 100%)',
+      dim: 0.52,
+      blur: 0,
+    },
+  },
+  {
+    id: 'aurora',
+    labelKey: 'settings.appearance.skin.aurora',
+    descriptionKey: 'settings.appearance.skin.auroraDescription',
+    preview: 'radial-gradient(circle at 22% 18%, rgba(78, 244, 207, 0.32), transparent 28%), radial-gradient(circle at 78% 16%, rgba(103, 164, 255, 0.22), transparent 30%), linear-gradient(140deg, #041417 0%, #0b2c31 54%, #07191d 100%)',
+    skin: {
+      kind: 'gradient',
+      gradient: 'radial-gradient(circle at 22% 18%, rgba(78, 244, 207, 0.22), transparent 28%), radial-gradient(circle at 78% 16%, rgba(103, 164, 255, 0.16), transparent 30%), linear-gradient(140deg, #041417 0%, #0b2c31 54%, #07191d 100%)',
+      dim: 0.44,
+      blur: 0,
+    },
+  },
+  {
+    id: 'paper',
+    labelKey: 'settings.appearance.skin.paper',
+    descriptionKey: 'settings.appearance.skin.paperDescription',
+    preview: 'radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.55), transparent 24%), radial-gradient(circle at 84% 20%, rgba(184, 137, 71, 0.20), transparent 26%), linear-gradient(135deg, #efe4d1 0%, #dac9ae 48%, #f6eee2 100%)',
+    skin: {
+      kind: 'gradient',
+      gradient: 'radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.42), transparent 24%), radial-gradient(circle at 84% 20%, rgba(184, 137, 71, 0.14), transparent 26%), linear-gradient(135deg, #efe4d1 0%, #dac9ae 48%, #f6eee2 100%)',
+      dim: 0.28,
+      blur: 0,
+    },
+  },
+];
+
+const APPEARANCE_READABILITY_MODES: AppearanceReadabilityMode[] = ['balanced', 'readability', 'immersive'];
+
+function isSameSkinPreset(currentSkin: AppearanceSettings['skin'], presetSkin: AppearanceSettings['skin']): boolean {
+  if (currentSkin.kind !== presetSkin.kind) {
+    return false;
+  }
+
+  if (presetSkin.kind === 'none') {
+    return true;
+  }
+
+  if (presetSkin.kind === 'image') {
+    return currentSkin.imagePath === presetSkin.imagePath;
+  }
+
+  return currentSkin.gradient === presetSkin.gradient;
+}
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) => {
   const { language, setLanguage, t } = useI18n();
@@ -72,6 +171,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     fontFamily: '',
     fontSize: 14,
   });
+  const [appearanceSettings, setAppearanceSettings] = useState<AppearanceSettings>(DEFAULT_APPEARANCE_SETTINGS);
   const [featureSettings, setFeatureSettings] = useState<FeatureSettings>(DEFAULT_FEATURE_SETTINGS);
   const [knownHosts, setKnownHosts] = useState<KnownHostEntry[]>([]);
   const [knownHostsLoading, setKnownHostsLoading] = useState(false);
@@ -127,6 +227,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
           fontFamily: settings.terminal?.fontFamily ?? '',
           fontSize: settings.terminal?.fontSize ?? 14,
         });
+        setAppearanceSettings(normalizeAppearanceSettings(settings.appearance));
         setFeatureSettings({
           ...DEFAULT_FEATURE_SETTINGS,
           ...settings.features,
@@ -493,6 +594,32 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     }
   };
 
+  const handleAppearanceSettingsChange = async (updates: Partial<AppearanceSettings>) => {
+    const previousConfig = appearanceSettings;
+    const nextConfig = normalizeAppearanceSettings({
+      ...previousConfig,
+      ...updates,
+      skin: updates.skin
+        ? {
+            ...previousConfig.skin,
+            ...updates.skin,
+          }
+        : previousConfig.skin,
+    });
+
+    setAppearanceSettings(nextConfig);
+    applyAppearanceToDocument(nextConfig);
+
+    try {
+      await window.electronAPI.updateSettings({ appearance: nextConfig });
+      notifyWorkspaceSettingsUpdated({ appearance: nextConfig });
+    } catch (error) {
+      console.error('Failed to update appearance settings:', error);
+      setAppearanceSettings(previousConfig);
+      applyAppearanceToDocument(previousConfig);
+    }
+  };
+
   const handleSelectCustomShell = async () => {
     try {
       const response = await window.electronAPI.selectExecutableFile();
@@ -613,6 +740,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       icon: Languages,
     },
     {
+      value: 'appearance' as SettingsTab,
+      label: t('settings.tab.appearance'),
+      icon: Palette,
+    },
+    {
       value: 'quicknav' as SettingsTab,
       label: t('settings.tab.quickNav'),
       icon: Compass,
@@ -657,16 +789,17 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const selectedShellValue = !effectiveSelectedShell || effectiveSelectedShell === autoShellTarget
     ? AUTO_SHELL_OPTION_VALUE
     : effectiveSelectedShell;
+  const activeSkinPreset = APPEARANCE_SKIN_PRESETS.find((preset) => isSameSkinPreset(appearanceSettings.skin, preset.skin)) ?? APPEARANCE_SKIN_PRESETS[0];
   return (
     <Dialog.Root open={open} onOpenChange={handleSettingsOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm animate-fade-in" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-[9999] flex h-[72vh] w-[94vw] max-h-[720px] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] shadow-2xl animate-scale-in">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(168,170,88,0.16),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(84,72,31,0.18),_transparent_32%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(var(--primary),0.16),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(var(--accent),0.18),_transparent_32%)]" />
 
           <div className="relative flex items-center justify-between border-b border-[rgb(var(--border))] px-8 py-4">
             <div>
-              <Dialog.Title className="text-2xl font-semibold text-white">
+              <Dialog.Title className="text-2xl font-semibold text-[rgb(var(--foreground))]">
                 {t('settings.title')}
               </Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-[rgb(var(--muted-foreground))]">
@@ -711,7 +844,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       </div>
                       <div className="flex-1">
                         <div className="mb-5">
-                          <h3 className="text-base font-semibold text-white">{t('settings.general.languageTitle')}</h3>
+                          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.general.languageTitle')}</h3>
                           <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.languageDescription')}</p>
                         </div>
 
@@ -753,7 +886,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       </div>
                       <div className="flex-1">
                         <div className="mb-5">
-                          <h3 className="text-base font-semibold text-white">{t('settings.general.defaultShellTitle')}</h3>
+                          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.general.defaultShellTitle')}</h3>
                           <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.defaultShellDescription')}</p>
                         </div>
 
@@ -837,7 +970,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       </div>
                       <div className="flex-1">
                         <div className="mb-5">
-                          <h3 className="text-base font-semibold text-white">{t('settings.general.terminalFontTitle')}</h3>
+                          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.general.terminalFontTitle')}</h3>
                           <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.terminalFontDescription')}</p>
                         </div>
 
@@ -942,19 +1075,266 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                 </div>
               </Tabs.Content>
 
+              <Tabs.Content value="appearance" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
+                <div className="mx-auto max-w-5xl space-y-6">
+                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                    <div className="mb-6 flex items-start gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
+                        <Palette size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.themeTitle')}</h3>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.themeDescription')}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-3">
+                      {APPEARANCE_THEME_PRESETS.map((preset) => {
+                        const selected = appearanceSettings.themeId === preset.id;
+
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => handleAppearanceSettingsChange({ themeId: preset.id })}
+                            className={`rounded-[22px] border p-4 text-left transition-all ${
+                              selected
+                                ? 'border-[rgb(var(--primary))] bg-[rgb(var(--accent))]'
+                                : 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]'
+                            }`}
+                          >
+                            <div
+                              className="h-24 rounded-[18px] border border-black/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                              style={{ background: preset.preview }}
+                            />
+                            <div className="mt-4 flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold text-[rgb(var(--foreground))]">
+                                  {t(`settings.appearance.theme.${preset.id}`)}
+                                </div>
+                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
+                                  {t(`settings.appearance.theme.${preset.id}Description`)}
+                                </div>
+                              </div>
+                              {selected && (
+                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
+                                  <Check size={14} />
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                    <div className="mb-6 flex items-start gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
+                        <Wallpaper size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.skinTitle')}</h3>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinDescription')}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {APPEARANCE_SKIN_PRESETS.map((preset) => {
+                        const selected = activeSkinPreset.id === preset.id;
+
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => handleAppearanceSettingsChange({ skin: preset.skin })}
+                            className={`rounded-[22px] border p-4 text-left transition-all ${
+                              selected
+                                ? 'border-[rgb(var(--primary))] bg-[rgb(var(--accent))]'
+                                : 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]'
+                            }`}
+                          >
+                            <div className="relative h-28 overflow-hidden rounded-[18px] border border-black/10 bg-[rgb(var(--background))]">
+                              <div className="absolute inset-0" style={{ background: preset.preview }} />
+                              <div
+                                className="absolute inset-0 bg-black"
+                                style={{ opacity: String(preset.skin.dim) }}
+                              />
+                              <div
+                                className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/10 px-4 py-3 text-sm shadow-[0_12px_28px_rgba(0,0,0,0.18)]"
+                                style={{
+                                  ...getAppearanceSkinStyle({
+                                    ...appearanceSettings,
+                                    skin: preset.skin,
+                                  }),
+                                  background: 'color-mix(in srgb, rgb(var(--card)) 78%, transparent)',
+                                  backdropFilter: 'blur(10px)',
+                                  filter: undefined,
+                                }}
+                              >
+                                <div className="font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.previewTitle')}</div>
+                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.appearance.previewSubtitle')}</div>
+                              </div>
+                            </div>
+                            <div className="mt-4 flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t(preset.labelKey)}</div>
+                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t(preset.descriptionKey)}</div>
+                              </div>
+                              {selected && (
+                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
+                                  <Check size={14} />
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.24)]">
+                    <div className="mb-6 flex items-start gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
+                        <SunMoon size={22} />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.readabilityTitle')}</h3>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.readabilityDescription')}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
+                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <label htmlFor="appearance-readability" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
+                          {t('settings.appearance.readabilityLabel')}
+                        </label>
+                        <Select.Root
+                          value={appearanceSettings.readabilityMode}
+                          onValueChange={(value) => handleAppearanceSettingsChange({ readabilityMode: value as AppearanceReadabilityMode })}
+                        >
+                          <Select.Trigger
+                            id="appearance-readability"
+                            aria-label={t('settings.appearance.readabilityLabel')}
+                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                          >
+                            <Select.Value />
+                            <Select.Icon>
+                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                            </Select.Icon>
+                          </Select.Trigger>
+
+                          <Select.Portal>
+                            <Select.Content
+                              position="popper"
+                              side="bottom"
+                              align="start"
+                              sideOffset={6}
+                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                            >
+                              <Select.Viewport className="p-1">
+                                {APPEARANCE_READABILITY_MODES.map((mode) => (
+                                  <Select.Item
+                                    key={mode}
+                                    value={mode}
+                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                  >
+                                    <Select.ItemText>{t(`settings.appearance.readability.${mode}`)}</Select.ItemText>
+                                    <Select.ItemIndicator>
+                                      <Check size={14} />
+                                    </Select.ItemIndicator>
+                                  </Select.Item>
+                                ))}
+                              </Select.Viewport>
+                            </Select.Content>
+                          </Select.Portal>
+                        </Select.Root>
+                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">
+                          {t(`settings.appearance.readability.${appearanceSettings.readabilityMode}Description`)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <label htmlFor="appearance-terminal-opacity" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
+                          {t('settings.appearance.opacityLabel')}
+                        </label>
+                        <Select.Root
+                          value={String(appearanceSettings.terminalOpacity)}
+                          onValueChange={(value) => handleAppearanceSettingsChange({ terminalOpacity: Number(value) })}
+                        >
+                          <Select.Trigger
+                            id="appearance-terminal-opacity"
+                            aria-label={t('settings.appearance.opacityLabel')}
+                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                          >
+                            <Select.Value />
+                            <Select.Icon>
+                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                            </Select.Icon>
+                          </Select.Trigger>
+
+                          <Select.Portal>
+                            <Select.Content
+                              position="popper"
+                              side="bottom"
+                              align="start"
+                              sideOffset={6}
+                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                            >
+                              <Select.Viewport className="p-1">
+                                {APPEARANCE_OPACITY_OPTIONS.map((value) => (
+                                  <Select.Item
+                                    key={value}
+                                    value={String(value)}
+                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                  >
+                                    <Select.ItemText>{t('settings.appearance.opacityValue', { value: Math.round(value * 100) })}</Select.ItemText>
+                                    <Select.ItemIndicator>
+                                      <Check size={14} />
+                                    </Select.ItemIndicator>
+                                  </Select.Item>
+                                ))}
+                              </Select.Viewport>
+                            </Select.Content>
+                          </Select.Portal>
+                        </Select.Root>
+                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.opacityDescription')}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.reduceMotionTitle')}</h4>
+                          <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.reduceMotionDescription')}</p>
+                        </div>
+                        <Switch.Root
+                          checked={appearanceSettings.reduceMotion}
+                          onCheckedChange={(checked) => handleAppearanceSettingsChange({ reduceMotion: checked })}
+                          aria-label={t('settings.appearance.reduceMotionTitle')}
+                          className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
+                        >
+                          <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                        </Switch.Root>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              </Tabs.Content>
+
               <Tabs.Content value="quicknav" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
                 <div className="mx-auto max-w-5xl space-y-6">
                   <Tabs.Root value={quickNavTab} onValueChange={(value) => setQuickNavTab(value as QuickNavSubTab)} className="space-y-6">
                     <Tabs.List className="inline-flex rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-1">
                       <Tabs.Trigger
                         value="ide"
-                        className="rounded-xl px-4 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-white data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]"
+                        className="rounded-xl px-4 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]"
                       >
                         {t('settings.quickNav.ideTab')}
                       </Tabs.Trigger>
                       <Tabs.Trigger
                         value="custom"
-                        className="rounded-xl px-4 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-white data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]"
+                        className="rounded-xl px-4 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]"
                       >
                         {t('settings.quickNav.customTab')}
                       </Tabs.Trigger>
@@ -1015,7 +1395,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   </button>
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <h3 className="text-base font-semibold text-white">{ide.name}</h3>
+                                      <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{ide.name}</h3>
                                       {ide.detected && ide.path && (
                                         <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
                                           {t('settings.ide.found')}
@@ -1061,7 +1441,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   </button>
                                   <button
                                     onClick={() => handleDeleteIDE(ide.id)}
-                                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(255,214,214)]"
+                                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(var(--foreground))]"
                                     title={t('common.delete')}
                                   >
                                     <Trash2 size={16} />
@@ -1115,7 +1495,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   </div>
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <h3 className="text-base font-semibold text-white">{item.name}</h3>
+                                      <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{item.name}</h3>
                                       <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
                                         {item.type === 'url' ? t('common.url') : t('common.folder')}
                                       </span>
@@ -1136,7 +1516,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   </button>
                                   <button
                                     onClick={() => handleDeleteNavItem(item.id)}
-                                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(255,214,214)]"
+                                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(var(--foreground))]"
                                     title={t('common.delete')}
                                   >
                                     <Trash2 size={16} />
@@ -1174,7 +1554,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <Globe size={20} />
                       </div>
                       <div>
-                        <h3 className="text-base font-semibold text-white">{t('settings.advanced.sshSection')}</h3>
+                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.advanced.sshSection')}</h3>
                         <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.advanced.sshDescription')}</p>
                       </div>
                     </div>
@@ -1183,7 +1563,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                           <div>
-                            <h4 className="text-base font-semibold text-white">{t('settings.ssh.enableTitle')}</h4>
+                            <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.ssh.enableTitle')}</h4>
                             <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.ssh.enableDescription')}</p>
                           </div>
 
@@ -1201,10 +1581,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
-                            <h4 className="text-base font-semibold text-white">{t('settings.ssh.knownHostsTitle')}</h4>
+                            <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.ssh.knownHostsTitle')}</h4>
                             <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.ssh.knownHostsDescription')}</p>
                             {knownHostsError && (
-                              <p className="mt-3 text-sm text-[rgb(255,214,214)]">{knownHostsError}</p>
+                              <p className="mt-3 text-sm text-[rgb(var(--foreground))]">{knownHostsError}</p>
                             )}
                           </div>
 
@@ -1236,7 +1616,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                       <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
-                                          <h5 className="text-sm font-semibold text-white">{entryTarget}</h5>
+                                          <h5 className="text-sm font-semibold text-[rgb(var(--foreground))]">{entryTarget}</h5>
                                           <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
                                             {entry.algorithm}
                                           </span>
@@ -1255,7 +1635,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                         onClick={() => handleRemoveKnownHost(entry.id)}
                                         disabled={isRemoving}
                                         aria-label={t('settings.ssh.removeKnownHostAria', { host: entry.host, port: entry.port })}
-                                        className="inline-flex h-10 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(255,214,214)] disabled:cursor-not-allowed disabled:opacity-70"
+                                        className="inline-flex h-10 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-70"
                                       >
                                         {isRemoving ? t('common.loading') : t('settings.ssh.removeKnownHost')}
                                       </button>
@@ -1279,7 +1659,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               <Wrench size={20} />
                             </div>
                             <div>
-                              <h4 className="text-base font-semibold text-white">{t('settings.general.bundledConptyTitle')}</h4>
+                              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.general.bundledConptyTitle')}</h4>
                               <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.bundledConptyDescription')}</p>
                             </div>
                           </div>
@@ -1300,7 +1680,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             <Monitor size={20} />
                           </div>
                           <div>
-                            <div className="text-base font-semibold text-white">{t('settings.advanced.windowsOnlyTitle')}</div>
+                            <div className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.advanced.windowsOnlyTitle')}</div>
                             <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.advanced.windowsOnlyDescription')}</p>
                           </div>
                         </div>
@@ -1314,7 +1694,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <Command size={20} />
                       </div>
                       <div>
-                        <h3 className="text-base font-semibold text-white">{t('settings.advanced.tmuxSection')}</h3>
+                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.advanced.tmuxSection')}</h3>
                         <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.advanced.tmuxDescription')}</p>
                       </div>
                     </div>
@@ -1324,7 +1704,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                           <div className="flex items-start gap-4">
                             <div>
-                              <h4 className="text-base font-semibold text-white">{t('settings.tmux.enableTitle')}</h4>
+                              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.tmux.enableTitle')}</h4>
                               <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.enableDescription')}</p>
                             </div>
                           </div>
@@ -1347,7 +1727,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <div>
                             <div className="text-sm font-medium text-[rgb(var(--primary))]">{t('settings.tmux.agentTeamsEnvTitle')}</div>
                             <div className="mt-1 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.agentTeamsEnvDescription')}</div>
-                            <code className="mt-3 inline-flex rounded-xl border border-[rgba(168,170,88,0.24)] bg-[rgba(12,12,10,0.45)] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
+                            <code className="mt-3 inline-flex rounded-xl border border-[rgba(var(--primary),0.24)] bg-[rgb(var(--card))] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
                               CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
                             </code>
                           </div>
@@ -1358,7 +1738,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
                           <div className="flex items-center justify-between gap-4">
                             <div>
-                              <h4 className="text-base font-semibold text-white">{t('settings.tmux.autoInjectPathTitle')}</h4>
+                              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.tmux.autoInjectPathTitle')}</h4>
                               <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.autoInjectPathDescription')}</p>
                             </div>
                             <Switch.Root
@@ -1375,7 +1755,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
                           <div className="flex items-center justify-between gap-4">
                             <div>
-                              <h4 className="text-base font-semibold text-white">{t('settings.tmux.enableForAllPanesTitle')}</h4>
+                              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.tmux.enableForAllPanesTitle')}</h4>
                               <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.enableForAllPanesDescription')}</p>
                             </div>
                             <Switch.Root
@@ -1402,7 +1782,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-[10001] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-2xl">
-            <Dialog.Title className="text-xl font-semibold text-white">
+            <Dialog.Title className="text-xl font-semibold text-[rgb(var(--foreground))]">
               {editingIDE?.id ? t('settings.ideDialog.editTitle') : t('settings.ideDialog.addTitle')}
             </Dialog.Title>
 
@@ -1469,7 +1849,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
                 onClick={() => handleAddDialogChange(false)}
-                className="rounded-2xl px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:text-white"
+                className="rounded-2xl px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))]"
               >
                 {t('common.cancel')}
               </button>
@@ -1489,7 +1869,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         <Dialog.Portal>
           <Dialog.Overlay className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-sm" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-[10001] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6 shadow-2xl">
-            <Dialog.Title className="text-xl font-semibold text-white">
+            <Dialog.Title className="text-xl font-semibold text-[rgb(var(--foreground))]">
               {editingNavItem?.id && quickNavItems.find((item) => item.id === editingNavItem.id)
                 ? t('settings.quickNavDialog.editTitle')
                 : t('settings.quickNavDialog.addTitle')}
@@ -1539,7 +1919,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
             <div className="mt-6 flex items-center justify-end gap-3">
               <button
                 onClick={() => handleNavDialogChange(false)}
-                className="rounded-2xl px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:text-white"
+                className="rounded-2xl px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))]"
               >
                 {t('common.cancel')}
               </button>

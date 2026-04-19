@@ -333,8 +333,12 @@ function AppContent() {
   useEffect(() => {
     const handleSettingsUpdated = (event: Event) => {
       const patch = (event as CustomEvent<SettingsPatch | undefined>).detail;
+      let shouldReloadSettings = false;
+
       if (typeof patch?.features?.sshEnabled === 'boolean') {
         setSSHEnabled(patch.features.sshEnabled);
+      } else if (patch?.features) {
+        shouldReloadSettings = true;
       }
 
       const appearancePatch = patch?.appearance;
@@ -354,7 +358,9 @@ function AppContent() {
         notifyTerminalSettingsUpdated({ themeChanged: true });
       }
 
-      void loadWorkspaceSettings();
+      if (!patch || shouldReloadSettings || (!appearancePatch && !patch.features)) {
+        void loadWorkspaceSettings();
+      }
     };
 
     window.addEventListener(WORKSPACE_SETTINGS_UPDATED_EVENT, handleSettingsUpdated);
