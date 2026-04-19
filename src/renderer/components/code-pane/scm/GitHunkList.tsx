@@ -22,6 +22,8 @@ interface GitHunkListProps {
   t: (key: TranslationKey, values?: TranslationParams) => string;
 }
 
+const GIT_HUNK_MAX_RENDERED_LINES = 80;
+
 const GitHunkRows = React.memo(function GitHunkRows({
   hunks,
   staged,
@@ -47,70 +49,80 @@ const GitHunkRows = React.memo(function GitHunkRows({
 
   return (
     <div className="space-y-2">
-      {hunks.map((hunk) => (
-        <div key={hunk.id} className="overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-950/35">
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 px-2.5 py-1.5">
-            <div className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-400">
-              {hunk.header}
+      {hunks.map((hunk) => {
+        const visibleLines = hunk.lines.slice(0, GIT_HUNK_MAX_RENDERED_LINES);
+        const hiddenLineCount = Math.max(0, hunk.lines.length - visibleLines.length);
+
+        return (
+          <div key={hunk.id} className="overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-950/35">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 px-2.5 py-1.5">
+              <div className="min-w-0 flex-1 truncate font-mono text-[10px] text-zinc-400">
+                {hunk.header}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {staged ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUnstageHunk(hunk);
+                    }}
+                    className={idePopupMicroButtonClassName('neutral')}
+                  >
+                    {t('codePane.gitUnstageHunk')}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onStageHunk(hunk);
+                      }}
+                      className={idePopupMicroButtonClassName('success')}
+                    >
+                      {t('codePane.gitStageHunk')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDiscardHunk(hunk);
+                      }}
+                      className={idePopupMicroButtonClassName('danger')}
+                    >
+                      {t('codePane.gitDiscardHunk')}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {staged ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUnstageHunk(hunk);
-                  }}
-                  className={idePopupMicroButtonClassName('neutral')}
-                >
-                  {t('codePane.gitUnstageHunk')}
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onStageHunk(hunk);
-                    }}
-                    className={idePopupMicroButtonClassName('success')}
+            <div className="max-h-40 overflow-auto px-2.5 py-1.5 font-mono text-[10px] leading-5">
+              {visibleLines.map((line, index) => {
+                const tone = line.type === 'add'
+                  ? 'bg-emerald-500/[0.06] text-emerald-200'
+                  : line.type === 'delete'
+                    ? 'bg-red-500/[0.06] text-red-200'
+                    : 'text-zinc-500';
+                const prefix = line.type === 'add' ? '+' : line.type === 'delete' ? '-' : ' ';
+                return (
+                  <div
+                    key={`${hunk.id}:${index}`}
+                    className={`grid grid-cols-[2.5rem_2.5rem_1rem_minmax(0,1fr)] gap-1 rounded-sm px-1 ${tone}`}
                   >
-                    {t('codePane.gitStageHunk')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onDiscardHunk(hunk);
-                    }}
-                    className={idePopupMicroButtonClassName('danger')}
-                  >
-                    {t('codePane.gitDiscardHunk')}
-                  </button>
-                </>
+                    <span className="select-none text-right text-zinc-600">{line.oldLineNumber ?? ''}</span>
+                    <span className="select-none text-right text-zinc-600">{line.newLineNumber ?? ''}</span>
+                    <span className="select-none">{prefix}</span>
+                    <span className="truncate whitespace-pre">{line.text || ' '}</span>
+                  </div>
+                );
+              })}
+              {hiddenLineCount > 0 && (
+                <div className="px-1 pt-1 text-[10px] text-zinc-500">
+                  +{hiddenLineCount}
+                </div>
               )}
             </div>
           </div>
-          <div className="max-h-40 overflow-auto px-2.5 py-1.5 font-mono text-[10px] leading-5">
-            {hunk.lines.map((line, index) => {
-              const tone = line.type === 'add'
-                ? 'bg-emerald-500/[0.06] text-emerald-200'
-                : line.type === 'delete'
-                  ? 'bg-red-500/[0.06] text-red-200'
-                  : 'text-zinc-500';
-              const prefix = line.type === 'add' ? '+' : line.type === 'delete' ? '-' : ' ';
-              return (
-                <div
-                  key={`${hunk.id}:${index}`}
-                  className={`grid grid-cols-[2.5rem_2.5rem_1rem_minmax(0,1fr)] gap-1 rounded-sm px-1 ${tone}`}
-                >
-                  <span className="select-none text-right text-zinc-600">{line.oldLineNumber ?? ''}</span>
-                  <span className="select-none text-right text-zinc-600">{line.newLineNumber ?? ''}</span>
-                  <span className="select-none">{prefix}</span>
-                  <span className="truncate whitespace-pre">{line.text || ' '}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 });
