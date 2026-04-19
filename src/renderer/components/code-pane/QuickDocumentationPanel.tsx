@@ -51,7 +51,7 @@ export function QuickDocumentationPanel({
       <div className={idePopupHeaderClassName}>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <BookOpen size={12} className="shrink-0 text-sky-300" />
+            <BookOpen size={12} className="shrink-0 text-[rgb(var(--primary))]" />
             <div className="min-w-0">
               <div className={idePopupTitleClassName}>{title}</div>
               <div className={idePopupSubtitleClassName}>{subtitle}</div>
@@ -78,14 +78,14 @@ export function QuickDocumentationPanel({
         </div>
       </div>
 
-      <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} max-h-[52vh] px-3 py-3 text-xs text-zinc-300`}>
+      <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} max-h-[52vh] px-3 py-3 text-xs text-[rgb(var(--foreground))]`}>
         {loading ? (
-          <div className="flex items-center gap-2 px-1 text-zinc-500">
+          <div className="flex items-center gap-2 px-1 text-[rgb(var(--muted-foreground))]">
             <Loader2 size={12} className="animate-spin" />
             {loadingLabel}
           </div>
         ) : error ? (
-          <div className={`${idePopupCardClassName} border-red-500/30 text-red-300`}>{error}</div>
+          <div className={`${idePopupCardClassName} border-[rgb(var(--error)/0.30)] text-[rgb(var(--error))]`}>{error}</div>
         ) : contents.length ? (
           <div className="space-y-3">
             {contents.map((content, index) => (
@@ -97,7 +97,7 @@ export function QuickDocumentationPanel({
             ))}
           </div>
         ) : (
-          <div className={`${idePopupCardClassName} text-zinc-500`}>{emptyLabel}</div>
+          <div className={`${idePopupCardClassName} text-[rgb(var(--muted-foreground))]`}>{emptyLabel}</div>
         )}
       </div>
     </IdePopupShell>
@@ -119,10 +119,10 @@ const QuickDocumentationContentCard = React.memo(function QuickDocumentationCont
           : idePopupCardClassName
       }`}
     >
-      <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+      <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {kind}
       </div>
-      <div className="whitespace-pre-wrap break-words leading-5 text-zinc-200">
+      <div className="whitespace-pre-wrap break-words leading-5 text-[rgb(var(--foreground))]">
         {value}
       </div>
     </div>
