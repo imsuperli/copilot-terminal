@@ -8852,8 +8852,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const paneRef = useRef(pane);
   const rootContainerRef = useRef<HTMLDivElement | null>(null);
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
+  const sidebarElementRef = useRef<HTMLElement | null>(null);
   const filesSidebarScrollRef = useRef<HTMLDivElement | null>(null);
   const openFileTabsScrollRef = useRef<HTMLDivElement | null>(null);
+  const primaryEditorPaneRef = useRef<HTMLDivElement | null>(null);
+  const bottomPanelElementRef = useRef<HTMLDivElement | null>(null);
   const rootPath = pane.code?.rootPath ?? pane.cwd;
   const cachedExternalLibrarySections = useMemo(
     () => getExternalLibraryCache(rootPath) ?? [],
@@ -9176,6 +9179,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const editorSplitSizeRef = useRef(editorSplitSize);
   const secondaryFilePathRef = useRef(secondaryFilePath);
   const bottomPanelHeightRef = useRef(bottomPanelHeight);
+  const bottomPanelAvailableHeightRef = useRef(bottomPanelAvailableHeight);
   const recentFilesRef = useRef<string[]>([]);
   const recentLocationsRef = useRef<NavigationHistoryEntry[]>([]);
   const navigationBackStackRef = useRef<NavigationHistoryEntry[]>([]);
@@ -9422,9 +9426,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
     activeGitWorkbenchTabRef.current = activeGitWorkbenchTab;
   }, [activeGitWorkbenchTab]);
 
+  const applySidebarWidthPreview = useCallback((nextWidth: number) => {
+    if (sidebarElementRef.current) {
+      sidebarElementRef.current.style.width = `${nextWidth}px`;
+    }
+  }, []);
+
+  const applyEditorSplitSizePreview = useCallback((nextSize: number) => {
+    if (primaryEditorPaneRef.current) {
+      primaryEditorPaneRef.current.style.width = `${nextSize * 100}%`;
+    }
+  }, []);
+
+  const applyBottomPanelHeightPreview = useCallback((nextHeight: number) => {
+    if (bottomPanelElementRef.current) {
+      bottomPanelElementRef.current.style.height = `${nextHeight}px`;
+    }
+  }, []);
+
   useEffect(() => {
     sidebarWidthRef.current = sidebarWidth;
-  }, [sidebarWidth]);
+    applySidebarWidthPreview(sidebarWidth);
+  }, [applySidebarWidthPreview, sidebarWidth]);
 
   useEffect(() => {
     lastExpandedSidebarWidthRef.current = lastExpandedSidebarWidth;
@@ -9432,7 +9455,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     editorSplitSizeRef.current = editorSplitSize;
-  }, [editorSplitSize]);
+    applyEditorSplitSizePreview(editorSplitSize);
+  }, [applyEditorSplitSizePreview, editorSplitSize]);
 
   useEffect(() => {
     secondaryFilePathRef.current = secondaryFilePath;
@@ -9449,7 +9473,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   useEffect(() => {
     bottomPanelHeightRef.current = bottomPanelHeight;
-  }, [bottomPanelHeight]);
+    applyBottomPanelHeightPreview(bottomPanelHeight);
+  }, [applyBottomPanelHeightPreview, bottomPanelHeight]);
+
+  useEffect(() => {
+    bottomPanelAvailableHeightRef.current = bottomPanelAvailableHeight;
+  }, [bottomPanelAvailableHeight]);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -9470,6 +9499,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     sidebarWidth,
     viewMode,
   ]);
+
+  const layoutEditorSurfaces = useCallback(() => {
+    editorRef.current?.layout?.();
+    secondaryEditorRef.current?.layout?.();
+    diffEditorRef.current?.layout?.();
+  }, []);
 
   const persistCodeState = useCallback((updates: Partial<NonNullable<Pane['code']>>) => {
     if (!isPaneMountedRef.current) {
@@ -18699,12 +18734,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const pendingWidth = pendingSidebarWidthRef.current;
       pendingSidebarWidthRef.current = null;
       if (pendingWidth !== null) {
-        setSidebarWidth((currentWidth) => (
-          currentWidth === pendingWidth ? currentWidth : pendingWidth
-        ));
+        applySidebarWidthPreview(pendingWidth);
+        layoutEditorSurfaces();
       }
     });
-  }, []);
+  }, [applySidebarWidthPreview, layoutEditorSurfaces]);
 
   const scheduleOpenFileTabsViewportUpdate = useCallback((nextViewport: { scrollLeft: number; viewportWidth: number }) => {
     pendingOpenFileTabsViewportRef.current = nextViewport;
@@ -18795,12 +18829,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const pendingSize = pendingEditorSplitSizeRef.current;
       pendingEditorSplitSizeRef.current = null;
       if (pendingSize !== null) {
-        setEditorSplitSize((currentSize) => (
-          currentSize === pendingSize ? currentSize : pendingSize
-        ));
+        applyEditorSplitSizePreview(pendingSize);
+        layoutEditorSurfaces();
       }
     });
-  }, []);
+  }, [applyEditorSplitSizePreview, layoutEditorSurfaces]);
 
   const scheduleBottomPanelResizeUpdate = useCallback((nextHeight: number, availableHeight: number) => {
     pendingBottomPanelResizeRef.current = {
@@ -18819,16 +18852,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
         return;
       }
 
-      setBottomPanelAvailableHeight((currentAvailableHeight) => (
-        currentAvailableHeight === pendingResize.availableHeight
-          ? currentAvailableHeight
-          : pendingResize.availableHeight
-      ));
-      setBottomPanelHeight((currentHeight) => (
-        currentHeight === pendingResize.height ? currentHeight : pendingResize.height
-      ));
+      bottomPanelAvailableHeightRef.current = pendingResize.availableHeight;
+      applyBottomPanelHeightPreview(pendingResize.height);
+      layoutEditorSurfaces();
     });
-  }, []);
+  }, [applyBottomPanelHeightPreview, layoutEditorSurfaces]);
 
   const startSidebarResize = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -18877,6 +18905,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         pendingSidebarWidthRef.current = null;
         setSidebarWidth(nextWidth);
         setLastExpandedSidebarWidth(nextWidth);
+        applySidebarWidthPreview(nextWidth);
         persistSidebarLayout({
           visible: true,
           activeView: sidebarModeRef.current,
@@ -18955,6 +18984,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         editorSplitSizeRef.current = nextSize;
         pendingEditorSplitSizeRef.current = null;
         setEditorSplitSize(nextSize);
+        applyEditorSplitSizePreview(nextSize);
         persistEditorSplitLayout({
           visible: true,
           size: nextSize,
@@ -19047,7 +19077,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
         );
         bottomPanelHeightRef.current = nextHeight;
         pendingBottomPanelResizeRef.current = null;
+        setBottomPanelAvailableHeight((currentAvailableHeight) => (
+          currentAvailableHeight === bottomPanelAvailableHeightRef.current
+            ? currentAvailableHeight
+            : bottomPanelAvailableHeightRef.current
+        ));
         setBottomPanelHeight(nextHeight);
+        applyBottomPanelHeightPreview(nextHeight);
         persistBottomPanelLayout({
           height: nextHeight,
         });
@@ -24107,6 +24143,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return (
       <>
         <aside
+          ref={sidebarElementRef}
           className="flex h-full shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/70"
           style={{ width: `${sidebarWidth}px` }}
         >
@@ -24511,6 +24548,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                     {isEditorSplitVisible && secondaryFilePath && viewMode === 'editor' ? (
                       <div className="flex min-h-0 flex-1 overflow-hidden">
                         <div
+                          ref={primaryEditorPaneRef}
                           className="min-w-0 shrink-0"
                           style={{ width: `${editorSplitSize * 100}%` }}
                         >
@@ -24587,6 +24625,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 <GripHorizontal size={12} />
               </div>
               <div
+                ref={bottomPanelElementRef}
                 data-testid="code-pane-bottom-panel"
                 className="min-h-0 shrink-0 overflow-hidden"
                 style={{
