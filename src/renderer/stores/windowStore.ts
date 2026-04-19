@@ -44,7 +44,6 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
 ]);
 
 type PendingAutoSavePayload = {
-  windows: Window[];
   groups: WindowGroup[];
   persistableWindows: Window[];
   signature: string;
@@ -63,6 +62,12 @@ const fallbackAutoSaveState: WindowStoreAutoSaveState = {
   lastSentSignature: null,
   lifecycleBound: false,
 };
+
+const autoSavePaneSignatureCache = new WeakMap<Pane, string>();
+const autoSaveLayoutSignatureCache = new WeakMap<LayoutNode, string>();
+const autoSaveWindowSignatureCache = new WeakMap<Window, string>();
+const autoSaveGroupLayoutSignatureCache = new WeakMap<GroupLayoutNode, string>();
+const autoSaveGroupSignatureCache = new WeakMap<WindowGroup, string>();
 
 function getWindowStoreAutoSaveState(): WindowStoreAutoSaveState {
   if (typeof window === 'undefined') {
@@ -137,44 +142,80 @@ function sanitizePaneForAutoSave(pane: Pane): unknown {
   };
 }
 
-function sanitizeLayoutForAutoSave(layout: LayoutNode): unknown {
-  if (layout.type === 'pane') {
-    return {
-      ...layout,
-      pane: sanitizePaneForAutoSave(layout.pane),
-    };
+function getAutoSavePaneSignature(pane: Pane): string {
+  const cachedSignature = autoSavePaneSignatureCache.get(pane);
+  if (cachedSignature) {
+    return cachedSignature;
   }
 
-  return {
-    ...layout,
-    children: layout.children.map((child) => sanitizeLayoutForAutoSave(child)),
-  };
+  const signature = JSON.stringify(sanitizePaneForAutoSave(pane));
+  autoSavePaneSignatureCache.set(pane, signature);
+  return signature;
 }
 
-function sanitizeWindowForAutoSave(window: Window): unknown {
+function getAutoSaveLayoutSignature(layout: LayoutNode): string {
+  const cachedSignature = autoSaveLayoutSignatureCache.get(layout);
+  if (cachedSignature) {
+    return cachedSignature;
+  }
+
+  const signature = layout.type === 'pane'
+    ? `{"type":"pane","id":${JSON.stringify(layout.id)},"pane":${getAutoSavePaneSignature(layout.pane)}}`
+    : `{"type":"split","direction":${JSON.stringify(layout.direction)},"sizes":${JSON.stringify(layout.sizes)},"children":[${layout.children.map((child) => getAutoSaveLayoutSignature(child)).join(',')}]}`
+  ;
+  autoSaveLayoutSignatureCache.set(layout, signature);
+  return signature;
+}
+
+function getAutoSaveWindowSignature(window: Window): string {
+  const cachedSignature = autoSaveWindowSignatureCache.get(window);
+  if (cachedSignature) {
+    return cachedSignature;
+  }
+
   const {
     claudeModel,
     claudeModelId,
     claudeContextPercentage,
     claudeCost,
+    layout,
     ...persistedWindow
   } = window;
+  const windowPrefix = JSON.stringify(persistedWindow).slice(0, -1);
+  const signature = `${windowPrefix},"layout":${getAutoSaveLayoutSignature(layout)}}`;
+  autoSaveWindowSignatureCache.set(window, signature);
+  return signature;
+}
 
-  return {
-    ...persistedWindow,
-    layout: sanitizeLayoutForAutoSave(window.layout),
-  };
+function getAutoSaveGroupLayoutSignature(layout: GroupLayoutNode): string {
+  const cachedSignature = autoSaveGroupLayoutSignatureCache.get(layout);
+  if (cachedSignature) {
+    return cachedSignature;
+  }
+
+  const signature = layout.type === 'window'
+    ? `{"type":"window","id":${JSON.stringify(layout.id)}}`
+    : `{"type":"split","direction":${JSON.stringify(layout.direction)},"sizes":${JSON.stringify(layout.sizes)},"children":[${layout.children.map((child) => getAutoSaveGroupLayoutSignature(child)).join(',')}]}`
+  ;
+  autoSaveGroupLayoutSignatureCache.set(layout, signature);
+  return signature;
+}
+
+function getAutoSaveGroupSignature(group: WindowGroup): string {
+  const cachedSignature = autoSaveGroupSignatureCache.get(group);
+  if (cachedSignature) {
+    return cachedSignature;
+  }
+
+  const { layout, ...persistedGroup } = group;
+  const groupPrefix = JSON.stringify(persistedGroup).slice(0, -1);
+  const signature = `${groupPrefix},"layout":${getAutoSaveGroupLayoutSignature(layout)}}`;
+  autoSaveGroupSignatureCache.set(group, signature);
+  return signature;
 }
 
 function getAutoSaveSignature(persistableWindows: Window[], groups: WindowGroup[]): string {
-  return JSON.stringify({
-    windows: persistableWindows.map((window) => sanitizeWindowForAutoSave(window)),
-    groups,
-  });
-}
-
-function getAutoSaveWindowSignature(window: Window): string {
-  return JSON.stringify(sanitizeWindowForAutoSave(window));
+  return `windows:[${persistableWindows.map((window) => getAutoSaveWindowSignature(window)).join(',')}];groups:[${groups.map((group) => getAutoSaveGroupSignature(group)).join(',')}]`;
 }
 
 function didPersistedWindowChange(previousWindow: Window | undefined, nextWindow: Window): boolean {
@@ -250,7 +291,6 @@ function triggerAutoSave(windows: Window[], groups?: WindowGroup[]): void {
   const resolvedGroups = groups ?? [];
   const persistableWindows = getPersistableWindows(windows);
   state.pendingPayload = {
-    windows,
     groups: resolvedGroups,
     persistableWindows,
     signature: getAutoSaveSignature(persistableWindows, resolvedGroups),
