@@ -581,6 +581,25 @@ function areGitRevisionDiffRequestsEqual(
     && previousRequest?.rightLabel === nextRequest?.rightLabel;
 }
 
+function canGitRefreshRequestSatisfy(
+  activeRefresh: Pick<PendingGitSnapshotRefresh, 'includeGraph' | 'force' | 'statusOnly'>,
+  requestedRefresh: Pick<PendingGitSnapshotRefresh, 'includeGraph' | 'force' | 'statusOnly'>,
+): boolean {
+  if (requestedRefresh.includeGraph && !activeRefresh.includeGraph) {
+    return false;
+  }
+
+  if (requestedRefresh.force && !activeRefresh.force) {
+    return false;
+  }
+
+  if (!requestedRefresh.statusOnly && activeRefresh.statusOnly) {
+    return false;
+  }
+
+  return true;
+}
+
 type BranchManagerTreeNode =
   | {
     key: string;
@@ -11374,7 +11393,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     return new Promise<void>((resolve, reject) => {
       const inFlightRefresh = inFlightGitSnapshotRefreshRef.current;
-      if (inFlightRefresh) {
+      if (inFlightRefresh && canGitRefreshRequestSatisfy(inFlightRefresh, {
+        includeGraph,
+        force,
+        statusOnly,
+      })) {
         inFlightRefresh.includeGraph = inFlightRefresh.includeGraph || includeGraph;
         inFlightRefresh.force = inFlightRefresh.force || force;
         inFlightRefresh.statusOnly = inFlightRefresh.statusOnly && statusOnly;
@@ -11402,6 +11425,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
           resolvers: [resolve],
           rejecters: [reject],
         };
+      }
+
+      if (inFlightRefresh) {
+        return;
       }
 
       if (gitSnapshotRefreshTimerRef.current) {

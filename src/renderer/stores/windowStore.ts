@@ -46,6 +46,8 @@ const runtimeOnlyPaneFields = new Set<keyof Pane>([
 type PendingAutoSavePayload = {
   windows: Window[];
   groups: WindowGroup[];
+  persistableWindows: Window[];
+  signature: string;
 };
 
 type WindowStoreAutoSaveState = {
@@ -90,6 +92,107 @@ function clearScheduledAutoSave(state = getWindowStoreAutoSaveState()): void {
   state.pendingPayload = null;
 }
 
+function sanitizePaneForAutoSave(pane: Pane): unknown {
+  const {
+    status,
+    pid,
+    sessionId,
+    lastOutput,
+    title,
+    borderColor,
+    activeBorderColor,
+    teamName,
+    agentId,
+    agentName,
+    agentColor,
+    teammateMode,
+    tmuxScopeId,
+    ...persistedPane
+  } = pane;
+
+  if (persistedPane.kind === 'browser') {
+    return {
+      ...persistedPane,
+      cwd: '',
+      command: '',
+    };
+  }
+
+  if (persistedPane.kind === 'code') {
+    return {
+      ...persistedPane,
+      command: '',
+    };
+  }
+
+  if (persistedPane.backend !== 'ssh' || !persistedPane.ssh) {
+    return persistedPane;
+  }
+
+  return {
+    ...persistedPane,
+    ssh: {
+      profileId: persistedPane.ssh.profileId,
+    },
+  };
+}
+
+function sanitizeLayoutForAutoSave(layout: LayoutNode): unknown {
+  if (layout.type === 'pane') {
+    return {
+      ...layout,
+      pane: sanitizePaneForAutoSave(layout.pane),
+    };
+  }
+
+  return {
+    ...layout,
+    children: layout.children.map((child) => sanitizeLayoutForAutoSave(child)),
+  };
+}
+
+function sanitizeWindowForAutoSave(window: Window): unknown {
+  const {
+    claudeModel,
+    claudeModelId,
+    claudeContextPercentage,
+    claudeCost,
+    ...persistedWindow
+  } = window;
+
+  return {
+    ...persistedWindow,
+    layout: sanitizeLayoutForAutoSave(window.layout),
+  };
+}
+
+function getAutoSaveSignature(persistableWindows: Window[], groups: WindowGroup[]): string {
+  return JSON.stringify({
+    windows: persistableWindows.map((window) => sanitizeWindowForAutoSave(window)),
+    groups,
+  });
+}
+
+function getAutoSaveWindowSignature(window: Window): string {
+  return JSON.stringify(sanitizeWindowForAutoSave(window));
+}
+
+function didPersistedWindowChange(previousWindow: Window | undefined, nextWindow: Window): boolean {
+  if (!previousWindow) {
+    return !nextWindow.ephemeral;
+  }
+
+  if (previousWindow.ephemeral && nextWindow.ephemeral) {
+    return false;
+  }
+
+  if (previousWindow.ephemeral !== nextWindow.ephemeral) {
+    return true;
+  }
+
+  return getAutoSaveWindowSignature(previousWindow) !== getAutoSaveWindowSignature(nextWindow);
+}
+
 function flushPendingAutoSave(): void {
   const state = getWindowStoreAutoSaveState();
   if (state.timer) {
@@ -108,19 +211,12 @@ function flushPendingAutoSave(): void {
     return;
   }
 
-  const persistableWindows = getPersistableWindows(payload.windows);
-  const groups = payload.groups;
-  const signature = JSON.stringify({
-    windows: persistableWindows,
-    groups,
-  });
-
-  if (signature === state.lastSentSignature) {
+  if (payload.signature === state.lastSentSignature) {
     return;
   }
 
-  window.electronAPI.triggerAutoSave(persistableWindows, groups);
-  state.lastSentSignature = signature;
+  window.electronAPI.triggerAutoSave(payload.persistableWindows, payload.groups);
+  state.lastSentSignature = payload.signature;
 }
 
 function ensureAutoSaveLifecycleHooks(): void {
@@ -151,9 +247,13 @@ function triggerAutoSave(windows: Window[], groups?: WindowGroup[]): void {
 
   ensureAutoSaveLifecycleHooks();
   const state = getWindowStoreAutoSaveState();
+  const resolvedGroups = groups ?? [];
+  const persistableWindows = getPersistableWindows(windows);
   state.pendingPayload = {
     windows,
-    groups: groups ?? [],
+    groups: resolvedGroups,
+    persistableWindows,
+    signature: getAutoSaveSignature(persistableWindows, resolvedGroups),
   };
 
   if (state.timer) {
@@ -485,8 +585,11 @@ export const useWindowStore = create<WindowStore>()(
 
     // 添加窗口
     addWindow: (window) => {
+      let shouldPersistChange = false;
       set((state) => {
         const existingIndex = state.windows.findIndex((item) => item.id === window.id);
+        const existingWindow = existingIndex >= 0 ? state.windows[existingIndex] : undefined;
+        shouldPersistChange = didPersistedWindowChange(existingWindow, window);
         if (existingIndex >= 0) {
           state.windows[existingIndex] = window;
         } else {
@@ -496,15 +599,19 @@ export const useWindowStore = create<WindowStore>()(
         // 添加到 MRU 列表首位
         state.mruList = [window.id, ...state.mruList.filter(id => id !== window.id)];
       });
-      // 触发自动保存，传递最新的窗口列表和组列表
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+      if (shouldPersistChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     // 同步 window（存在则替换，不存在则新增）
     syncWindow: (window) => {
+      let shouldPersistChange = false;
       set((state) => {
         const index = state.windows.findIndex((item) => item.id === window.id);
+        const existingWindow = index >= 0 ? state.windows[index] : undefined;
+        shouldPersistChange = didPersistedWindowChange(existingWindow, window);
         if (index >= 0) {
           state.windows[index] = window;
         } else {
@@ -515,13 +622,16 @@ export const useWindowStore = create<WindowStore>()(
           state.mruList = [window.id, ...state.mruList];
         }
       });
-      const { windows, groups } = get();
-      triggerAutoSave(windows, groups);
+      if (shouldPersistChange) {
+        const { windows, groups } = get();
+        triggerAutoSave(windows, groups);
+      }
     },
 
     // 删除窗口
     removeWindow: (id) => {
       let didChange = false;
+      let shouldPersistChange = false;
       set((state) => {
         const existingWindow = state.windows.find((window) => window.id === id);
         if (!existingWindow) {
@@ -529,6 +639,7 @@ export const useWindowStore = create<WindowStore>()(
         }
 
         didChange = true;
+        shouldPersistChange = !existingWindow.ephemeral;
         state.windows = state.windows.filter(w => w.id !== id);
         if (state.activeWindowId === id) {
           state.activeWindowId = null;
@@ -567,9 +678,17 @@ export const useWindowStore = create<WindowStore>()(
         }
       });
 
-      if (didChange) {
+      if (didChange && shouldPersistChange) {
         const { windows, groups, customCategories } = get();
         triggerAutoSave(windows, groups);
+        updateSettingsCategories(customCategories).catch(error => {
+          console.error('[WindowStore] Failed to save categories after window removal:', error);
+        });
+        return;
+      }
+
+      if (didChange) {
+        const { customCategories } = get();
         updateSettingsCategories(customCategories).catch(error => {
           console.error('[WindowStore] Failed to save categories after window removal:', error);
         });

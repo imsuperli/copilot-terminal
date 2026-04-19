@@ -145,6 +145,45 @@ describe('windowStore auto-save gating', () => {
     expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
   });
 
+  it('does not auto-save when syncing a window with only runtime field changes', () => {
+    vi.useFakeTimers();
+    const terminalWindow = createSinglePaneWindow('Runtime Sync', 'D:\\repo', 'pwsh.exe');
+    if (terminalWindow.layout.type !== 'pane') {
+      throw new Error('Expected single pane layout');
+    }
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      activeWindowId: terminalWindow.id,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    const runtimeOnlyWindow = {
+      ...terminalWindow,
+      layout: {
+        type: 'pane' as const,
+        id: terminalWindow.activePaneId,
+        pane: {
+          ...terminalWindow.layout.pane,
+          status: WindowStatus.Running,
+          pid: 4242,
+          title: 'runtime-only',
+        },
+      },
+      claudeModel: 'Claude Opus 4',
+      claudeModelId: 'claude-opus-4',
+      claudeContextPercentage: 72,
+      claudeCost: 1.11,
+    };
+
+    useWindowStore.getState().syncWindow(runtimeOnlyWindow);
+    vi.advanceTimersByTime(80);
+
+    expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();
+  });
+
   it('does not auto-save runtime-only window metadata updates', () => {
     const terminalWindow = createSinglePaneWindow('Metadata', 'D:\\repo', 'pwsh.exe');
 
