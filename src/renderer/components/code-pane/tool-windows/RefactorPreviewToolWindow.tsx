@@ -5,6 +5,18 @@ import type {
   CodePanePreviewFileChange,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  IdePopupShell,
+  idePopupBadgeClassName,
+  idePopupBodyClassName,
+  idePopupCardClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../../ui/ide-popup';
 
 interface RefactorPreviewToolWindowProps {
   changeSet: CodePanePreviewChangeSet | null;
@@ -150,27 +162,32 @@ export function RefactorPreviewToolWindow({
         }}
         className={`h-[74px] w-full rounded border px-2 py-2 text-left transition-colors ${
           isSelected
-            ? 'border-sky-500/30 bg-sky-500/10 text-sky-100'
-            : 'border-transparent bg-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900/70'
+            ? 'border-[rgb(var(--primary))]/40 bg-[rgb(var(--primary))]/10 text-[rgb(var(--foreground))] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]'
+            : 'border-transparent bg-transparent text-[rgb(var(--foreground))] hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))]'
         }`}
       >
         <div className="truncate text-xs font-medium">{getLeafLabel(change.filePath)}</div>
-        <div className="mt-1 truncate text-[10px] text-zinc-500">{change.filePath}</div>
+        <div className="mt-1 truncate text-[10px] text-[rgb(var(--muted-foreground))]">{change.filePath}</div>
         {change.targetFilePath && (
-          <div className="mt-1 truncate text-[10px] text-zinc-500">{change.targetFilePath}</div>
+          <div className="mt-1 truncate text-[10px] text-[rgb(var(--muted-foreground))]">{change.targetFilePath}</div>
         )}
       </button>
     );
   }, [onSelectChange, selectedChange?.id]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+    <IdePopupShell className="flex h-full min-h-0 flex-col">
+      <div className={idePopupHeaderClassName}>
         <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
+          <div className={idePopupHeaderMetaClassName}>
             {t('codePane.refactorPreviewTab')}
           </div>
-          <div className="mt-1 truncate text-xs text-zinc-200">{changeSet?.title ?? t('codePane.refactorPreviewEmpty')}</div>
+          <div className={`mt-1 ${idePopupTitleClassName}`}>{changeSet?.title ?? t('codePane.refactorPreviewEmpty')}</div>
+          <div className={idePopupSubtitleClassName}>
+            {changeSet?.stats
+              ? t('codePane.refactorPreviewStatsFiles', { count: changeSet.stats.fileCount })
+              : t('codePane.refactorPreviewEmpty')}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -179,7 +196,7 @@ export function RefactorPreviewToolWindow({
               void onApply();
             }}
             disabled={!changeSet || isApplying}
-            className="flex items-center gap-1 rounded bg-emerald-500/15 px-2 py-1 text-[11px] text-emerald-200 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-md border border-[rgb(var(--success))/0.35] bg-[rgb(var(--success))/0.12] px-2.5 py-1.5 text-[11px] font-medium text-[rgb(var(--success))] transition-colors hover:border-[rgb(var(--success))/0.5] hover:bg-[rgb(var(--success))/0.18] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isApplying ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
             {t('codePane.refactorApply')}
@@ -187,7 +204,7 @@ export function RefactorPreviewToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -196,31 +213,31 @@ export function RefactorPreviewToolWindow({
       </div>
 
       {error && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <div className="border-b border-[rgb(var(--error))/0.22] bg-[rgb(var(--error))/0.08] px-3 py-2 text-xs text-[rgb(var(--error))]">
           {error}
         </div>
       )}
 
       {changeSet?.stats && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-3 py-2 text-[11px] text-zinc-400">
-          <span className="rounded bg-zinc-900/80 px-2 py-1">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_32%,transparent)] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
+          <span className={`rounded px-2 py-1 ${idePopupBadgeClassName('zinc')}`}>
             {t('codePane.refactorPreviewStatsFiles', { count: changeSet.stats.fileCount })}
           </span>
-          <span className="rounded bg-zinc-900/80 px-2 py-1">
+          <span className={`rounded px-2 py-1 ${idePopupBadgeClassName('zinc')}`}>
             {t('codePane.refactorPreviewStatsEdits', { count: changeSet.stats.editCount })}
           </span>
           {changeSet.stats.renameCount > 0 && (
-            <span className="rounded bg-zinc-900/80 px-2 py-1">
+            <span className={`rounded px-2 py-1 ${idePopupBadgeClassName('zinc')}`}>
               {t('codePane.refactorPreviewStatsRenames', { count: changeSet.stats.renameCount })}
             </span>
           )}
           {changeSet.stats.moveCount > 0 && (
-            <span className="rounded bg-zinc-900/80 px-2 py-1">
+            <span className={`rounded px-2 py-1 ${idePopupBadgeClassName('zinc')}`}>
               {t('codePane.refactorPreviewStatsMoves', { count: changeSet.stats.moveCount })}
             </span>
           )}
           {changeSet.stats.deleteCount > 0 && (
-            <span className="rounded bg-zinc-900/80 px-2 py-1">
+            <span className={`rounded px-2 py-1 ${idePopupBadgeClassName('zinc')}`}>
               {t('codePane.refactorPreviewStatsDeletes', { count: changeSet.stats.deleteCount })}
             </span>
           )}
@@ -228,7 +245,7 @@ export function RefactorPreviewToolWindow({
       )}
 
       {changeSet?.warnings && changeSet.warnings.length > 0 && (
-        <div className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+        <div className="border-b border-[rgb(var(--warning))/0.22] bg-[rgb(var(--warning))/0.08] px-3 py-2 text-xs text-[rgb(var(--warning))]">
           <div className="flex items-center gap-2 font-medium">
             <AlertTriangle size={12} />
             {t('codePane.refactorPreviewWarnings')}
@@ -244,7 +261,7 @@ export function RefactorPreviewToolWindow({
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] overflow-hidden">
         <div
           ref={listScrollRef}
-          className="min-h-0 overflow-auto border-r border-zinc-800 px-2 py-2"
+          className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 overflow-auto border-r border-[rgb(var(--border))] px-2 py-2`}
           onScroll={(event) => {
             scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
           }}
@@ -262,7 +279,7 @@ export function RefactorPreviewToolWindow({
               </div>
             )
           ) : (
-            <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+            <div className="flex h-full items-center justify-center text-xs text-[rgb(var(--muted-foreground))]">
               {t('codePane.refactorPreviewEmpty')}
             </div>
           )}
@@ -271,7 +288,7 @@ export function RefactorPreviewToolWindow({
         <div className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] overflow-hidden">
           <PreviewPane
             title={t('codePane.refactorPreviewBefore')}
-            tone="text-zinc-500"
+            tone="text-[rgb(var(--muted-foreground))]"
             change={selectedChange}
             content={selectedChange?.beforeContent ?? ''}
           />
@@ -284,7 +301,7 @@ export function RefactorPreviewToolWindow({
           />
         </div>
       </div>
-    </div>
+    </IdePopupShell>
   );
 }
 
@@ -302,9 +319,9 @@ function PreviewPane({
   borderLeft?: boolean;
 }) {
   return (
-    <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-zinc-800' : ''}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
-        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">{title}</div>
+    <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''}`}>
+      <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2">
+        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">{title}</div>
         {change && (
           <div className={`flex items-center gap-1 text-[10px] ${tone}`}>
             <Eye size={12} />
@@ -312,8 +329,8 @@ function PreviewPane({
           </div>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
-        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-zinc-200">
+      <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
+        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[rgb(var(--foreground))]">
           {content || '[empty]'}
         </pre>
       </div>

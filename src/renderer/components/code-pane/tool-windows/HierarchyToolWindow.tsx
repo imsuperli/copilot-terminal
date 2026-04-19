@@ -120,12 +120,12 @@ export const HierarchyToolWindow = React.memo(function HierarchyToolWindow({
 
       <div className={bodyClassName ?? `${idePopupBodyClassName} ${idePopupScrollAreaClassName} px-2 py-2`}>
         {isLoading ? (
-          <div className="flex items-center gap-2 px-2 py-4 text-xs text-zinc-400">
+          <div className="flex items-center gap-2 px-2 py-4 text-xs text-[rgb(var(--muted-foreground))]">
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.hierarchyLoading')}
           </div>
         ) : error ? (
-          <div className="px-2 py-4 text-xs text-red-300">{error}</div>
+          <div className="px-2 py-4 text-xs text-[rgb(var(--error))]">{error}</div>
         ) : root ? (
           <div className="space-y-2">
             <button
@@ -133,11 +133,11 @@ export const HierarchyToolWindow = React.memo(function HierarchyToolWindow({
               onClick={() => {
                 onOpenItem(root.item);
               }}
-              className={`w-full text-left transition-colors hover:border-zinc-500 hover:bg-zinc-800/65 ${idePopupCardClassName}`}
+              className={`w-full text-left transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] ${idePopupCardClassName}`}
             >
-              <div className="text-sm font-semibold text-zinc-100">{root.item.name}</div>
+              <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{root.item.name}</div>
               {root.item.detail ? (
-                <div className="mt-1 truncate text-[11px] text-zinc-400">{root.item.detail}</div>
+                <div className="mt-1 truncate text-[11px] text-[rgb(var(--muted-foreground))]">{root.item.detail}</div>
               ) : null}
             </button>
 
@@ -155,14 +155,14 @@ export const HierarchyToolWindow = React.memo(function HierarchyToolWindow({
                   />
                 ))
               ) : (
-                <div className="mx-2 rounded-lg border border-dashed border-zinc-700/80 bg-zinc-950/35 px-3 py-4 text-xs text-zinc-500">
+                <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_40%,transparent)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
                   {t('codePane.hierarchyEmpty')}
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="mx-2 rounded-lg border border-dashed border-zinc-700/80 bg-zinc-950/35 px-3 py-4 text-xs text-zinc-500">
+          <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_40%,transparent)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.hierarchyEmpty')}
           </div>
         )}
@@ -200,7 +200,7 @@ const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
             onClick={() => {
               onToggleNode(node.key);
             }}
-            className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-200"
+            className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             aria-label={node.isExpanded ? 'Collapse' : 'Expand'}
           >
             {node.isLoading ? (
@@ -234,9 +234,9 @@ const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
           </span>
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[12px] leading-5 text-zinc-100">{node.item.name}</div>
+              <div className="truncate text-[12px] leading-5 text-[rgb(var(--foreground))]">{node.item.name}</div>
               {node.item.detail ? (
-                <div className="truncate text-[10px] leading-4 text-zinc-500">{node.item.detail}</div>
+                <div className="truncate text-[10px] leading-4 text-[rgb(var(--muted-foreground))]">{node.item.detail}</div>
               ) : null}
             </div>
             {node.item.relationRanges?.length ? (
@@ -244,7 +244,7 @@ const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
                 {node.item.relationRanges.length}
               </span>
             ) : (
-              <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/45 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+              <span className="shrink-0 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 hierarchy
               </span>
             )}
@@ -254,7 +254,7 @@ const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
 
       {node.error ? (
         <div
-          className="px-2 pb-1 text-[10px] text-red-300"
+          className="px-2 pb-1 text-[10px] text-[rgb(var(--error))]"
           style={{ paddingLeft: `${depth * 14 + 28}px` }}
         >
           {node.error}
