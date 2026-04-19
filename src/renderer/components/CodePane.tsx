@@ -7955,6 +7955,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return previewPaths;
   })());
   const markerListenerRef = useRef<MonacoDisposable | null>(null);
+  const pendingProblemsRefreshRef = useRef<{ refreshAll: boolean; paths: Set<string> } | null>(null);
+  const problemsRefreshAnimationFrameRef = useRef<number | null>(null);
   const editorMouseDownListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseMoveListenerRef = useRef<MonacoDisposable | null>(null);
   const editorMouseLeaveListenerRef = useRef<MonacoDisposable | null>(null);
@@ -8867,7 +8869,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       nextEntry,
       ...existingEntries,
     ].slice(0, CODE_PANE_MAX_LOCAL_HISTORY_PER_FILE));
-    setLocalHistoryVersion((currentVersion) => currentVersion + 1);
+    if (bottomPanelModeRef.current === 'workspace') {
+      setLocalHistoryVersion((currentVersion) => currentVersion + 1);
+    }
   }, [t]);
 
   const scheduleLocalHistorySnapshot = useCallback((filePath: string) => {
@@ -9401,6 +9405,47 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, []);
 
+  const scheduleProblemsRefresh = useCallback((filePaths?: Iterable<string> | null) => {
+    let pendingRefresh = pendingProblemsRefreshRef.current;
+    if (!pendingRefresh) {
+      pendingRefresh = {
+        refreshAll: false,
+        paths: new Set<string>(),
+      };
+      pendingProblemsRefreshRef.current = pendingRefresh;
+    }
+
+    if (!filePaths) {
+      pendingRefresh.refreshAll = true;
+      pendingRefresh.paths.clear();
+    } else if (!pendingRefresh.refreshAll) {
+      for (const filePath of filePaths) {
+        if (filePath) {
+          pendingRefresh.paths.add(filePath);
+        }
+      }
+    }
+
+    if (problemsRefreshAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    problemsRefreshAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      problemsRefreshAnimationFrameRef.current = null;
+      const currentPendingRefresh = pendingProblemsRefreshRef.current;
+      pendingProblemsRefreshRef.current = null;
+      if (!currentPendingRefresh) {
+        return;
+      }
+
+      refreshProblems(
+        currentPendingRefresh.refreshAll
+          ? undefined
+          : currentPendingRefresh.paths,
+      );
+    });
+  }, [refreshProblems]);
+
   const ensureMarkerListener = useCallback((monaco: MonacoModule) => {
     if (markerListenerRef.current) {
       return;
@@ -9408,13 +9453,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     markerListenerRef.current = monaco.editor.onDidChangeMarkers((resources?: unknown) => {
       if (!Array.isArray(resources) || resources.length === 0) {
-        refreshProblems();
+        scheduleProblemsRefresh();
         return;
       }
       const changedFilePaths = new Set<string>();
       for (const resource of resources) {
         if (!resource || typeof resource !== 'object' || !('path' in resource)) {
-          refreshProblems();
+          scheduleProblemsRefresh();
           return;
         }
         const filePath = modelFilePathRef.current.get(resource.path)
@@ -9424,9 +9469,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
           changedFilePaths.add(filePath);
         }
       }
-      refreshProblems(changedFilePaths);
+      scheduleProblemsRefresh(changedFilePaths);
     });
-  }, [refreshProblems]);
+  }, [scheduleProblemsRefresh]);
 
   const ensureMonacoReady = useCallback(async (): Promise<MonacoModule | null> => {
     if (!supportsMonaco) {
@@ -9998,6 +10043,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
       clearTimeout(timer);
     }
     localHistoryTimersRef.current.clear();
+
+    if (problemsRefreshAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(problemsRefreshAnimationFrameRef.current);
+      problemsRefreshAnimationFrameRef.current = null;
+    }
+    pendingProblemsRefreshRef.current = null;
 
     if (gitSnapshotRefreshTimerRef.current) {
       clearTimeout(gitSnapshotRefreshTimerRef.current);
