@@ -12938,6 +12938,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     edits: CodePaneTextEdit[],
     options?: {
       skipGitRefresh?: boolean;
+      deferLanguageSync?: boolean;
     },
   ) => {
     let wroteToDisk = false;
@@ -12966,7 +12967,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
         }
         invalidateDefinitionLookupCacheForFile(filePath);
         markDirty(filePath, true);
-        await syncLanguageDocument(filePath, 'change');
+        if (options?.deferLanguageSync) {
+          scheduleLanguageDocumentChangeSync(filePath);
+        } else {
+          await syncLanguageDocument(filePath, 'change');
+        }
         continue;
       }
 
@@ -13020,7 +13025,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       didApply: true,
       wroteToDisk,
     };
-  }, [invalidateDefinitionLookupCacheForFile, invalidateWorkspaceRuntimeCaches, markDirty, rootPath, scheduleGitStatusRefresh, syncLanguageDocument, t]);
+  }, [
+    invalidateDefinitionLookupCacheForFile,
+    invalidateWorkspaceRuntimeCaches,
+    markDirty,
+    rootPath,
+    scheduleGitStatusRefresh,
+    scheduleLanguageDocumentChangeSync,
+    syncLanguageDocument,
+    t,
+  ]);
 
   const runSaveQualityPipeline = useCallback(async (filePath: string) => {
     const model = fileModelsRef.current.get(filePath);
@@ -13054,7 +13068,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
         const edits = response.data ?? [];
         if (edits.length > 0) {
-          const applyResult = await applyLanguageTextEditsWithoutSaving(edits, { skipGitRefresh: true });
+          const applyResult = await applyLanguageTextEditsWithoutSaving(edits, {
+            skipGitRefresh: true,
+            deferLanguageSync: true,
+          });
           if (!applyResult.didApply) {
             throw new Error(t('common.retry'));
           }
@@ -13113,7 +13130,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
             throw new Error(runResponse.error || t('common.retry'));
           }
 
-          const applyResult = await applyLanguageTextEditsWithoutSaving(runResponse.data ?? [], { skipGitRefresh: true });
+          const applyResult = await applyLanguageTextEditsWithoutSaving(runResponse.data ?? [], {
+            skipGitRefresh: true,
+            deferLanguageSync: true,
+          });
           if (!applyResult.didApply) {
             throw new Error(t('common.retry'));
           }
@@ -13231,11 +13251,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return true;
     }
 
-    const pendingLanguageChangeSync = flushPendingLanguageSync(filePath);
     let qualityGateStateBeforeWrite: CodePaneSaveQualityState | null = null;
     let didWriteIntermediateFiles = false;
     if (!options?.skipQualityPipeline && hasSaveQualityPipelineEnabled) {
-      await pendingLanguageChangeSync;
+      await flushPendingLanguageSync(filePath);
       persistQualityGateState(createSaveQualityState({
         status: 'running',
         message: t('codePane.saveQualityRunning'),
@@ -13244,6 +13263,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       qualityGateStateBeforeWrite = qualityPipelineResult.qualityState;
       didWriteIntermediateFiles = qualityPipelineResult.wroteToDisk;
     }
+    await flushPendingLanguageSync(filePath);
 
     markSaving(filePath, true);
     const saveVersionId = getModelVersionId(model);
