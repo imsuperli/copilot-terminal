@@ -16113,7 +16113,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return undefined;
     }
 
-    scheduleGitStatusRefresh();
+    if (getGitStatusCache(rootPath) === null || getGitSummaryCache(rootPath) === null) {
+      scheduleGitStatusRefresh();
+    }
 
     const refreshInterval = window.setInterval(() => {
       if (!document.hidden) {
@@ -20559,54 +20561,56 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void openHierarchyPanel(selectedHierarchyMode);
   }, [activeFilePath, bottomPanelMode, openHierarchyPanel, selectedHierarchyMode]);
 
-  const refreshBottomPanel = useCallback(() => {
-    if (bottomPanelMode === 'run') {
+  const refreshVisibleBottomPanelData = useCallback((options?: { forceProjectRefresh?: boolean }) => {
+    const currentBottomPanelMode = bottomPanelModeRef.current;
+
+    if (currentBottomPanelMode === 'run') {
       void loadRunTargets();
       return;
     }
 
-    if (bottomPanelMode === 'debug') {
+    if (currentBottomPanelMode === 'debug') {
       void loadRunTargets();
       void loadDebugSessions();
-      void loadDebugSessionDetails(selectedDebugSessionId);
       void loadExceptionBreakpoints();
+      void loadDebugSessionDetails(selectedDebugSessionIdRef.current);
       return;
     }
 
-    if (bottomPanelMode === 'tests') {
+    if (currentBottomPanelMode === 'tests') {
       void loadTests();
       return;
     }
 
-    if (bottomPanelMode === 'project') {
-      void loadProjectContributions(true);
+    if (currentBottomPanelMode === 'project') {
+      void loadProjectContributions(options?.forceProjectRefresh === true);
       return;
     }
 
-    if (bottomPanelMode === 'outline') {
+    if (currentBottomPanelMode === 'outline') {
       void loadDocumentSymbols();
       return;
     }
 
-    if (bottomPanelMode === 'git') {
+    if (currentBottomPanelMode === 'git') {
       const shouldLoadBranches = shouldLoadGitBranches();
       const shouldLoadRebasePlan = shouldLoadGitRebasePlan();
       refreshVisibleGitWorkbenchData();
       if (shouldLoadBranches) {
-        void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
+        void loadGitBranches({ preferredBaseRef: gitRebaseBaseRefRef.current });
       }
-      if (shouldLoadRebasePlan && gitRebaseBaseRef) {
-        void loadGitRebasePlan(gitRebaseBaseRef);
+      if (shouldLoadRebasePlan && gitRebaseBaseRefRef.current) {
+        void loadGitRebasePlan(gitRebaseBaseRefRef.current);
       }
       return;
     }
 
-    if (bottomPanelMode === 'conflict') {
+    if (currentBottomPanelMode === 'conflict') {
       void loadGitConflictDetails(selectedGitConflictPath);
       return;
     }
 
-    if (bottomPanelMode === 'history') {
+    if (currentBottomPanelMode === 'history') {
       void loadGitHistory({
         filePath: gitHistory?.targetFilePath,
         lineNumber: gitHistory?.targetLineNumber,
@@ -20614,141 +20618,120 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    if (bottomPanelMode === 'workspace') {
+    if (currentBottomPanelMode === 'workspace') {
       void loadTodoEntries();
       return;
     }
 
-    if (bottomPanelMode === 'performance') {
-      return;
-    }
-
-    if (bottomPanelMode === 'hierarchy') {
+    if (currentBottomPanelMode === 'hierarchy') {
       void loadHierarchyRoot(selectedHierarchyMode);
       return;
     }
 
-    if (bottomPanelMode === 'semantic') {
+    if (currentBottomPanelMode === 'semantic') {
       void loadSemanticSummary();
     }
   }, [
-    bottomPanelMode,
-    selectedGitConflictPath,
-    gitRebaseBaseRef,
     gitHistory?.targetFilePath,
     gitHistory?.targetLineNumber,
+    loadDebugSessionDetails,
+    loadDebugSessions,
+    loadDocumentSymbols,
+    loadExceptionBreakpoints,
     loadGitBranches,
     loadGitConflictDetails,
     loadGitHistory,
     loadGitRebasePlan,
     loadHierarchyRoot,
-    loadDebugSessions,
-    loadDebugSessionDetails,
-    loadExceptionBreakpoints,
-    loadDocumentSymbols,
-    loadSemanticSummary,
-    loadTodoEntries,
     loadProjectContributions,
-    refreshVisibleGitWorkbenchData,
     loadRunTargets,
+    loadSemanticSummary,
     loadTests,
+    loadTodoEntries,
+    refreshVisibleGitWorkbenchData,
+    selectedGitConflictPath,
+    selectedHierarchyMode,
     shouldLoadGitBranches,
     shouldLoadGitRebasePlan,
-    selectedDebugSessionId,
-    selectedHierarchyMode,
   ]);
+
+  const refreshBottomPanel = useCallback(() => {
+    if (bottomPanelModeRef.current === 'performance') {
+      return;
+    }
+
+    refreshVisibleBottomPanelData({ forceProjectRefresh: true });
+  }, [refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode === 'run') {
-      void loadRunTargets();
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, loadRunTargets]);
+  }, [bottomPanelMode, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode !== 'debug') {
       return;
     }
 
-    void loadRunTargets();
-    void loadDebugSessions();
-    void loadExceptionBreakpoints();
-  }, [bottomPanelMode, loadDebugSessions, loadExceptionBreakpoints, loadRunTargets]);
+    refreshVisibleBottomPanelData();
+  }, [bottomPanelMode, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode === 'tests') {
-      void loadTests();
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, loadTests]);
+  }, [bottomPanelMode, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode === 'project') {
-      void loadProjectContributions();
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, loadProjectContributions]);
+  }, [bottomPanelMode, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode === 'outline') {
-      void loadDocumentSymbols();
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, loadDocumentSymbols]);
+  }, [bottomPanelMode, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode !== 'git') {
       return;
     }
 
-    const shouldLoadBranches = shouldLoadGitBranches();
-    const shouldLoadRebasePlan = shouldLoadGitRebasePlan();
-    refreshVisibleGitWorkbenchData();
-    if (shouldLoadBranches) {
-      void loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
-    }
-    if (shouldLoadRebasePlan && gitRebaseBaseRef) {
-      void loadGitRebasePlan(gitRebaseBaseRef);
-    }
-  }, [
-    activeGitWorkbenchTab,
-    bottomPanelMode,
-    gitRebaseBaseRef,
-    loadGitBranches,
-    loadGitRebasePlan,
-    refreshVisibleGitWorkbenchData,
-    shouldLoadGitBranches,
-    shouldLoadGitRebasePlan,
-  ]);
+    refreshVisibleBottomPanelData();
+  }, [activeGitWorkbenchTab, bottomPanelMode, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode === 'conflict' && selectedGitConflictPath) {
-      void loadGitConflictDetails(selectedGitConflictPath);
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, loadGitConflictDetails, selectedGitConflictPath]);
+  }, [bottomPanelMode, refreshVisibleBottomPanelData, selectedGitConflictPath]);
 
   useEffect(() => {
     if (bottomPanelMode === 'history' && gitHistory?.targetFilePath) {
-      void loadGitHistory({
-        filePath: gitHistory.targetFilePath,
-        lineNumber: gitHistory.targetLineNumber,
-      });
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, gitHistory?.targetFilePath, gitHistory?.targetLineNumber, loadGitHistory]);
+  }, [bottomPanelMode, gitHistory?.targetFilePath, gitHistory?.targetLineNumber, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode === 'workspace') {
-      void loadTodoEntries();
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, loadTodoEntries]);
+  }, [bottomPanelMode, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode === 'hierarchy') {
-      void loadHierarchyRoot(selectedHierarchyMode);
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, loadHierarchyRoot, selectedHierarchyMode]);
+  }, [bottomPanelMode, refreshVisibleBottomPanelData, selectedHierarchyMode]);
 
   useEffect(() => {
     if (bottomPanelMode === 'semantic') {
-      void loadSemanticSummary();
+      refreshVisibleBottomPanelData();
     }
-  }, [bottomPanelMode, loadSemanticSummary]);
+  }, [bottomPanelMode, refreshVisibleBottomPanelData]);
 
   useEffect(() => {
     if (bottomPanelMode !== 'debug') {
