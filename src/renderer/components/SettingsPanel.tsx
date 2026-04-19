@@ -620,6 +620,27 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     }
   };
 
+  const handleSelectAppearanceImage = async () => {
+    try {
+      const response = await window.electronAPI.selectImageFile(appearanceSettings.skin.imagePath);
+      if (!response?.success || !response.data) {
+        return;
+      }
+
+      await handleAppearanceSettingsChange({
+        skin: {
+          kind: 'image',
+          imagePath: response.data,
+          gradient: appearanceSettings.skin.gradient,
+          dim: Math.max(appearanceSettings.skin.dim, 0.42),
+          blur: 0,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to select appearance image:', error);
+    }
+  };
+
   const handleSelectCustomShell = async () => {
     try {
       const response = await window.electronAPI.selectExecutableFile();
@@ -1190,6 +1211,39 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           </button>
                         );
                       })}
+                    </div>
+
+                    <div className="mt-4 rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
+                          <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.customImageTitle')}</h4>
+                          <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.customImageDescription')}</p>
+                          {appearanceSettings.skin.kind === 'image' && appearanceSettings.skin.imagePath && (
+                            <p className="mt-2 truncate text-xs text-[rgb(var(--muted-foreground))]">
+                              {appearanceSettings.skin.imagePath}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            onClick={handleSelectAppearanceImage}
+                            className="inline-flex h-11 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                          >
+                            {t('settings.appearance.customImageButton')}
+                          </button>
+                          {appearanceSettings.skin.kind === 'image' && (
+                            <button
+                              type="button"
+                              onClick={() => handleAppearanceSettingsChange({ skin: APPEARANCE_SKIN_PRESETS[1].skin })}
+                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                            >
+                              {t('settings.appearance.customImageReset')}
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </section>
 

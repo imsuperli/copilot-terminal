@@ -160,6 +160,33 @@ describe('SettingsPanel', () => {
     });
   });
 
+  it('supports selecting a custom image skin', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.selectImageFile).mockResolvedValue({
+      success: true,
+      data: 'C:\\Wallpapers\\nebula.png',
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: '外观' }));
+    await user.click(await screen.findByRole('button', { name: '选择图片' }));
+
+    expect(window.electronAPI.selectImageFile).toHaveBeenCalledOnce();
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      appearance: expect.objectContaining({
+        skin: expect.objectContaining({
+          kind: 'image',
+          imagePath: 'C:\\Wallpapers\\nebula.png',
+        }),
+      }),
+    });
+  });
+
   it('hides the bundled ConPTY setting on macOS', async () => {
     const user = userEvent.setup();
     window.electronAPI.platform = 'darwin';
