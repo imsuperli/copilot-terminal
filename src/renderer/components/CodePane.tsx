@@ -8632,6 +8632,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const invalidateWorkspaceRuntimeCaches = useCallback((filePath: string) => {
     invalidateDocumentRuntimeCaches(filePath);
     runtimeStoreRef.current.invalidateCachePrefix(`git-history:${rootPath}:${filePath}:`);
+    runtimeStoreRef.current.invalidateCachePrefix(`git-conflict:${rootPath}:${filePath}`);
+    runtimeStoreRef.current.invalidateCachePrefix(`git-hunks:${rootPath}:${filePath}`);
+    runtimeStoreRef.current.invalidateCachePrefix(`git-blame:${rootPath}:${filePath}`);
     runtimeStoreRef.current.invalidateCachePrefix(`search-everywhere:${rootPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`search-files:${rootPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`search-contents:${rootPath}:`);
