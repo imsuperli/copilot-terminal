@@ -18,7 +18,7 @@ import { DraggableWindowCard, DraggableGroupCard, DropZone } from './dnd';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { useWindowDirectoryGuard } from '../hooks/useWindowDirectoryGuard';
 import { useDeleteWindowDialog } from '../hooks/useDeleteWindowDialog';
-import { Window, WindowStatus } from '../types/window';
+import { Pane, Window, WindowStatus } from '../types/window';
 import { WindowGroup } from '../../shared/types/window-group';
 import { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
 import { useI18n } from '../i18n';
@@ -33,7 +33,7 @@ import {
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
-import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
+import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
 
 // 统一的卡片项类型
@@ -43,6 +43,37 @@ type CardItem =
   | { type: 'sshProfile'; data: SSHProfile };
 
 const BUILTIN_TABS = new Set(['all', 'active', 'archived', 'local', 'ssh']);
+
+function sortGroupsByCreatedAt(groups: WindowGroup[]): WindowGroup[] {
+  return [...groups].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+function getWindowKindFromPanes(window: Window, panes: Pane[]): NonNullable<Window['kind']> {
+  if (window.kind) {
+    return window.kind;
+  }
+
+  let hasLocal = false;
+  let hasSSH = false;
+
+  for (const pane of panes) {
+    if (isSessionlessPane(pane)) {
+      continue;
+    }
+
+    if (getPaneBackend(pane) === 'ssh') {
+      hasSSH = true;
+    } else {
+      hasLocal = true;
+    }
+
+    if (hasLocal && hasSSH) {
+      return 'mixed';
+    }
+  }
+
+  return hasSSH ? 'ssh' : 'local';
+}
 
 function isBuiltinTab(tab: string | undefined): boolean {
   if (!tab) {
@@ -121,14 +152,103 @@ export const CardGrid = React.memo<CardGridProps>(({
   const [sshDeleteError, setSSHDeleteError] = useState('');
   const [isDeletingSSHCard, setIsDeletingSSHCard] = useState(false);
   const persistableWindows = useMemo(() => getPersistableWindows(windows), [windows]);
+  const windowById = useMemo(
+    () => new Map(windows.map((window) => [window.id, window])),
+    [windows],
+  );
 
   const sortedSSHProfiles = useMemo(
     () => [...sshProfiles].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [sshProfiles],
   );
-  const groupedWindowIds = useMemo(
-    () => new Set(groups.flatMap((group) => getAllWindowIds(group.layout))),
-    [groups],
+  const sshProfileIds = useMemo(
+    () => new Set(sshProfiles.map((profile) => profile.id)),
+    [sshProfiles],
+  );
+  const { groupWindowIdsByGroupId, groupedWindowIds } = useMemo(() => {
+    const idsByGroupId = new Map<string, string[]>();
+    const allGroupedIds = new Set<string>();
+
+    groups.forEach((group) => {
+      const ids = getAllWindowIds(group.layout);
+      idsByGroupId.set(group.id, ids);
+      ids.forEach((id) => allGroupedIds.add(id));
+    });
+
+    return {
+      groupWindowIdsByGroupId: idsByGroupId,
+      groupedWindowIds: allGroupedIds,
+    };
+  }, [groups]);
+  const {
+    persistableWindowById,
+    statusSetByWindowId,
+    windowKindById,
+    windowSearchTextById,
+  } = useMemo(() => {
+    const nextPersistableWindowById = new Map<string, Window>();
+    const nextStatusSetByWindowId = new Map<string, Set<WindowStatus>>();
+    const nextWindowKindById = new Map<string, NonNullable<Window['kind']>>();
+    const nextWindowSearchTextById = new Map<string, string>();
+
+    persistableWindows.forEach((window) => {
+      const panes = getAllPanes(window.layout);
+      const statusSet = new Set<WindowStatus>();
+      const cwdParts: string[] = [];
+
+      panes.forEach((pane) => {
+        statusSet.add(pane.status);
+        cwdParts.push(pane.cwd);
+      });
+
+      nextPersistableWindowById.set(window.id, window);
+      nextStatusSetByWindowId.set(window.id, statusSet);
+      nextWindowKindById.set(window.id, getWindowKindFromPanes(window, panes));
+      nextWindowSearchTextById.set(window.id, `${window.name}\n${cwdParts.join('\n')}`.toLowerCase());
+    });
+
+    return {
+      persistableWindowById: nextPersistableWindowById,
+      statusSetByWindowId: nextStatusSetByWindowId,
+      windowKindById: nextWindowKindById,
+      windowSearchTextById: nextWindowSearchTextById,
+    };
+  }, [persistableWindows]);
+  const getGroupWindows = useCallback(
+    (group: WindowGroup) => (
+      groupWindowIdsByGroupId.get(group.id)
+        ?.map((windowId) => persistableWindowById.get(windowId))
+        .filter((window): window is Window => Boolean(window)) ?? []
+    ),
+    [groupWindowIdsByGroupId, persistableWindowById],
+  );
+  const groupHasWindowMatching = useCallback(
+    (group: WindowGroup, predicate: (window: Window) => boolean) => {
+      const windowIds = groupWindowIdsByGroupId.get(group.id);
+      if (!windowIds) {
+        return false;
+      }
+
+      return windowIds.some((windowId) => {
+        const window = persistableWindowById.get(windowId);
+        return window ? predicate(window) : false;
+      });
+    },
+    [groupWindowIdsByGroupId, persistableWindowById],
+  );
+  const groupHasStatus = useCallback(
+    (group: WindowGroup, status: WindowStatus) => groupHasWindowMatching(
+      group,
+      (window) => statusSetByWindowId.get(window.id)?.has(status) ?? false,
+    ),
+    [groupHasWindowMatching, statusSetByWindowId],
+  );
+  const groupHasKind = useCallback(
+    (group: WindowGroup, predicate: (kind: NonNullable<Window['kind']>) => boolean) => groupHasWindowMatching(
+      group,
+      (window) => predicate(windowKindById.get(window.id) ?? 'local'),
+    ),
+    [groupHasWindowMatching, windowKindById],
   );
   const standaloneSSHWindowsByProfile = useMemo(
     () => buildStandaloneSSHWindowMap(
@@ -159,14 +279,11 @@ export const CardGrid = React.memo<CardGridProps>(({
       return true;
     }
 
-    return !sshEnabled || !sshProfiles.some((profile) => profile.id === profileId);
-  }, [sshEnabled, sshProfiles]);
+    return !sshEnabled || !sshProfileIds.has(profileId);
+  }, [sshEnabled, sshProfileIds]);
 
   // 根据 currentTab 过滤和排序卡片项
   const cardItems = useMemo<CardItem[]>(() => {
-    const sortGroupsByCreatedAt = (gs: WindowGroup[]) =>
-      [...gs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
     const filterVisibleStandaloneWindows = (ws: Window[]) => {
       return ws.filter((window) => (
         shouldRenderWindowCard(window) && !groupedWindowIds.has(window.id)
@@ -175,26 +292,22 @@ export const CardGrid = React.memo<CardGridProps>(({
 
     // 状态筛选标签
     if (currentTab?.startsWith('status:')) {
-      const statusMap: Record<string, string> = {
-        'status:running': 'running',
-        'status:waiting': 'waiting',
-        'status:paused': 'paused',
+      const statusMap: Record<string, WindowStatus> = {
+        'status:running': WindowStatus.Running,
+        'status:waiting': WindowStatus.WaitingForInput,
+        'status:paused': WindowStatus.Paused,
       };
       const targetStatus = statusMap[currentTab];
       if (!targetStatus) return [];
 
       // 筛选包含目标状态窗格的未归档窗口
       const matchedWindows = filterVisibleStandaloneWindows(
-        persistableWindows.filter(w => !w.archived && getAllPanes(w.layout).some(p => p.status === targetStatus))
+        persistableWindows.filter(w => !w.archived && (statusSetByWindowId.get(w.id)?.has(targetStatus) ?? false))
       );
       const windowItems: CardItem[] = sortWindows(matchedWindows, 'createdAt').map(w => ({ type: 'window', data: w }));
 
       // 筛选包含目标状态窗口的未归档组
-      const matchedGroups = groups.filter(g => {
-        if (g.archived) return false;
-        const groupWindowIds = getAllWindowIds(g.layout);
-        return persistableWindows.some(w => groupWindowIds.includes(w.id) && getAllPanes(w.layout).some(p => p.status === targetStatus));
-      });
+      const matchedGroups = groups.filter(g => !g.archived && groupHasStatus(g, targetStatus));
       const groupItems: CardItem[] = sortGroupsByCreatedAt(matchedGroups).map(g => ({ type: 'group', data: g }));
 
       return [...groupItems, ...windowItems];
@@ -204,14 +317,10 @@ export const CardGrid = React.memo<CardGridProps>(({
     if (currentTab === 'local') {
       const activeGroups = groups.filter(g => !g.archived);
       const activeWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => !w.archived));
-      const localWindows = activeWindows.filter(w => getWindowKind(w) !== 'ssh');
+      const localWindows = activeWindows.filter(w => windowKindById.get(w.id) !== 'ssh');
 
       // 过滤包含本地窗口的组
-      const localGroups = activeGroups.filter(g => {
-        const windowIds = getAllWindowIds(g.layout);
-        const groupWindows = persistableWindows.filter(w => windowIds.includes(w.id));
-        return groupWindows.some(w => getWindowKind(w) !== 'ssh');
-      });
+      const localGroups = activeGroups.filter(g => groupHasKind(g, (kind) => kind !== 'ssh'));
 
       return [
         ...sortGroupsByCreatedAt(localGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -223,14 +332,10 @@ export const CardGrid = React.memo<CardGridProps>(({
     if (currentTab === 'ssh') {
       const activeGroups = groups.filter(g => !g.archived);
       const activeWindows = filterVisibleStandaloneWindows(persistableWindows.filter(w => !w.archived));
-      const sshWindows = activeWindows.filter(w => getWindowKind(w) === 'ssh');
+      const sshWindows = activeWindows.filter(w => windowKindById.get(w.id) === 'ssh');
 
       // 过滤包含 SSH 窗口的组
-      const sshGroups = activeGroups.filter(g => {
-        const windowIds = getAllWindowIds(g.layout);
-        const groupWindows = persistableWindows.filter(w => windowIds.includes(w.id));
-        return groupWindows.some(w => getWindowKind(w) === 'ssh');
-      });
+      const sshGroups = activeGroups.filter(g => groupHasKind(g, (kind) => kind === 'ssh'));
 
       return [
         ...sortGroupsByCreatedAt(sshGroups).map(g => ({ type: 'group' as const, data: g })),
@@ -311,13 +416,10 @@ export const CardGrid = React.memo<CardGridProps>(({
       ...sortWindows(activeWindows, 'createdAt').map(w => ({ type: 'window' as const, data: w })),
       ...(sshEnabled ? sortedSSHProfiles.map(profile => ({ type: 'sshProfile' as const, data: profile })) : []),
     ];
-  }, [activeCustomCategory, currentTab, groupedWindowIds, groups, isCustomCategoryTab, persistableWindows, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById]);
+  }, [activeCustomCategory, currentTab, groupHasKind, groupHasStatus, groupedWindowIds, groups, isCustomCategoryTab, persistableWindows, shouldRenderWindowCard, sortedSSHProfiles, sshEnabled, sshProfilesById, statusSetByWindowId, windowKindById]);
 
   // 全局搜索：始终搜索所有终端和组，不受 currentTab 限制
   const allCardItems = useMemo<CardItem[]>(() => {
-    const sortGroupsByCreatedAt = (gs: WindowGroup[]) =>
-      [...gs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
     // 全部终端：活跃组 → 活跃窗口 → 归档组 → 归档窗口
     const activeGroups = groups.filter(g => !g.archived);
     const archivedGroups = groups.filter(g => g.archived);
@@ -344,13 +446,7 @@ export const CardGrid = React.memo<CardGridProps>(({
     return allCardItems.filter((item) => {
       if (item.type === 'window') {
         const win = item.data;
-        // 搜索窗口名称
-        if (win.name.toLowerCase().includes(query)) {
-          return true;
-        }
-        // 搜索窗口路径
-        const panes = getAllPanes(win.layout);
-        return panes.some((pane) => pane.cwd.toLowerCase().includes(query));
+        return windowSearchTextById.get(win.id)?.includes(query) ?? false;
       }
 
       if (item.type === 'group') {
@@ -361,12 +457,9 @@ export const CardGrid = React.memo<CardGridProps>(({
         }
 
         // 搜索组内窗口的名称和路径
-        const windowIds = getAllWindowIds(group.layout);
-        const windowsInGroup = persistableWindows.filter(w => windowIds.includes(w.id));
+        const windowsInGroup = getGroupWindows(group);
         return windowsInGroup.some(win => {
-          if (win.name.toLowerCase().includes(query)) return true;
-          const panes = getAllPanes(win.layout);
-          return panes.some(pane => pane.cwd.toLowerCase().includes(query));
+          return windowSearchTextById.get(win.id)?.includes(query) ?? false;
         });
       }
 
@@ -379,7 +472,7 @@ export const CardGrid = React.memo<CardGridProps>(({
         || (profile.notes?.toLowerCase().includes(query) ?? false)
       );
     });
-  }, [allCardItems, cardItems, persistableWindows, searchQuery]);
+  }, [allCardItems, cardItems, getGroupWindows, searchQuery, windowSearchTextById]);
 
   const handleConnectSSHProfile = useCallback(async (profile: SSHProfile) => {
     await onConnectSSHProfile?.(profile);
@@ -533,13 +626,13 @@ export const CardGrid = React.memo<CardGridProps>(({
   }, [unarchiveWindow]);
 
   const handleDeleteWindow = useCallback(async (windowId: string) => {
-    const targetWindow = windows.find((window) => window.id === windowId);
+    const targetWindow = windowById.get(windowId);
     if (!targetWindow) {
       return;
     }
 
     requestDeleteWindow(targetWindow);
-  }, [requestDeleteWindow, windows]);
+  }, [requestDeleteWindow, windowById]);
 
   const openFolder = useCallback(async (win: Window) => {
     const activePane = getCurrentWindowTerminalPane(win);
@@ -595,7 +688,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       }
 
       // 更新当前可编辑的 terminal pane
-      const window = windows.find(w => w.id === windowId);
+      const window = windowById.get(windowId);
       if (window) {
         const firstPane = getCurrentWindowTerminalPane(window);
         if (firstPane) {
@@ -617,7 +710,7 @@ export const CardGrid = React.memo<CardGridProps>(({
     } catch (error) {
       console.error('Failed to update window:', error);
     }
-  }, [updateWindow, updatePane, windows]);
+  }, [updateWindow, updatePane, windowById]);
 
   const handleCloseEdit = useCallback(() => {
     setEditingWindow(null);
@@ -636,11 +729,10 @@ export const CardGrid = React.memo<CardGridProps>(({
 
   const handleStartAllWindows = useCallback(async (group: WindowGroup) => {
     try {
-      // 从 group.layout 中提取所有 WindowNode
-      const windowIds = getAllWindowIds(group.layout);
-
-      // 获取对应的 Window 对象
-      const windowsToStart = windows.filter(w => windowIds.includes(w.id));
+      const windowIds = groupWindowIdsByGroupId.get(group.id) ?? [];
+      const windowsToStart = windowIds
+        .map((windowId) => windowById.get(windowId))
+        .filter((window): window is Window => Boolean(window));
 
       // 并发启动所有窗口
       await Promise.all(
@@ -651,15 +743,14 @@ export const CardGrid = React.memo<CardGridProps>(({
     } catch (error) {
       console.error('Failed to start all windows in group:', error);
     }
-  }, [windows, startWindow]);
+  }, [groupWindowIdsByGroupId, startWindow, windowById]);
 
   const handlePauseAllWindows = useCallback(async (group: WindowGroup) => {
     try {
-      // 从 group.layout 中提取所有 WindowNode
-      const windowIds = getAllWindowIds(group.layout);
-
-      // 获取对应的 Window 对象
-      const windowsToPause = windows.filter(w => windowIds.includes(w.id));
+      const windowIds = groupWindowIdsByGroupId.get(group.id) ?? [];
+      const windowsToPause = windowIds
+        .map((windowId) => windowById.get(windowId))
+        .filter((window): window is Window => Boolean(window));
 
       // 并发暂停所有窗口
       await Promise.all(
@@ -681,7 +772,7 @@ export const CardGrid = React.memo<CardGridProps>(({
     } catch (error) {
       console.error('Failed to pause all windows in group:', error);
     }
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, windows, pauseWindowState]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, groupWindowIdsByGroupId, pauseWindowState, windowById]);
 
   const handleArchiveGroup = useCallback(async (group: WindowGroup) => {
     try {
@@ -750,8 +841,8 @@ export const CardGrid = React.memo<CardGridProps>(({
 
       // 两个独立窗口 → 创建新组
       if (!dragGroup && !targetGroup) {
-        const dragWin = windows.find(w => w.id === dragWindowId);
-        const targetWin = windows.find(w => w.id === targetWindowId);
+        const dragWin = windowById.get(dragWindowId);
+        const targetWin = windowById.get(targetWindowId);
         if (!dragWin || !targetWin) return;
 
         const direction = (dropResult.position === 'left' || dropResult.position === 'right')
@@ -773,7 +864,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       // 如果 targetGroup 存在，将 dragWindow 添加到该组
       // 如果 dragGroup 存在，将 dragWindow 从原组移出，添加到目标组或创建新组
     },
-    [windows, findGroupByWindowId, addGroup]
+    [windowById, findGroupByWindowId, addGroup]
   );
 
   // 是否为自定义分类标签
