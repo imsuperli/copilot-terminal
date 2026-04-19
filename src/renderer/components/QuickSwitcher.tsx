@@ -4,13 +4,15 @@ import { useWindowStore } from '../stores/windowStore';
 import { QuickSwitcherItem } from './QuickSwitcherItem';
 import { QuickSwitcherGroupItem } from './QuickSwitcherGroupItem';
 import { fuzzyMatch } from '../utils/fuzzySearch';
-import { Window, WindowStatus } from '../types/window';
+import { Pane, Window, WindowStatus } from '../types/window';
 import { WindowGroup } from '../../shared/types/window-group';
-import { getAggregatedStatus } from '../utils/layoutHelpers';
-import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
+import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { getPersistableWindows, getStandaloneSSHProfileId } from '../utils/sshWindowBindings';
 import { useI18n } from '../i18n';
 import type { SSHProfile } from '../../shared/types/ssh';
+import { getAllWindowIds } from '../utils/groupLayoutHelpers';
+import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import {
   IdePopupShell,
   idePopupBadgeClassName,
@@ -36,8 +38,47 @@ interface QuickSwitcherProps {
 
 // 统一的列表项类型
 type SwitcherItem =
-  | { type: 'window'; data: Window; displayName: string; secondaryText: string }
-  | { type: 'group'; data: WindowGroup };
+  | {
+      type: 'window';
+      data: Window;
+      displayName: string;
+      secondaryText: string;
+      status: WindowStatus;
+      panes: Pane[];
+      windowKind: NonNullable<Window['kind']>;
+      activePane: Pane | null;
+      workingDirectory: string;
+      priority: number;
+      lastActiveAtTime: number;
+      searchTerms: string[];
+    }
+  | {
+      type: 'group';
+      data: WindowGroup;
+      windowCount: number;
+      windowStatuses: Array<{ id: string; status: WindowStatus }>;
+      priority: number;
+      lastActiveAtTime: number;
+    };
+
+function getWindowPriority(window: Window, status: WindowStatus): number {
+  if (window.archived) return 4;
+
+  switch (status) {
+    case WindowStatus.WaitingForInput:
+      return 1;
+    case WindowStatus.Running:
+      return 2;
+    case WindowStatus.Paused:
+      return 3;
+    default:
+      return 3;
+  }
+}
+
+function getGroupPriority(group: WindowGroup): number {
+  return group.archived ? 4 : 0;
+}
 
 /**
  * 快速切换面板组件（Ctrl+Tab）
@@ -66,89 +107,93 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
     [sshProfiles],
   );
   const visibleWindows = useMemo(() => getPersistableWindows(windows), [windows]);
+  const preparedWindows = useMemo(() => (
+    visibleWindows.map((window) => {
+      const panes = getAllPanes(window.layout);
+      const status = getAggregatedStatus(window.layout);
+      const profileId = getStandaloneSSHProfileId(window);
+      const profile = profileId ? sshProfilesById.get(profileId) : undefined;
+      const workingDirectory = getCurrentWindowWorkingDirectory(window);
+      const activePane = getCurrentWindowTerminalPane(window);
+      const windowKind = getWindowKind(window);
 
-  const getWindowDisplayInfo = (window: Window) => {
-    const profileId = getStandaloneSSHProfileId(window);
-    const profile = profileId ? sshProfilesById.get(profileId) : undefined;
-    const workingDirectory = getCurrentWindowWorkingDirectory(window);
+      if (!profile) {
+        return {
+          type: 'window' as const,
+          data: window,
+          displayName: window.name,
+          secondaryText: workingDirectory,
+          status,
+          panes,
+          windowKind,
+          activePane,
+          workingDirectory,
+          priority: getWindowPriority(window, status),
+          lastActiveAtTime: new Date(window.lastActiveAt).getTime(),
+          searchTerms: [window.name, workingDirectory],
+        };
+      }
 
-    if (!profile) {
+      const targetLabel = `${profile.user}@${profile.host}:${profile.port}`;
+      const remoteCwd = workingDirectory || profile.defaultRemoteCwd || '';
+      const secondaryText = remoteCwd ? `${targetLabel} | ${remoteCwd}` : targetLabel;
+
       return {
-        displayName: window.name,
-        secondaryText: workingDirectory,
-        searchTerms: [window.name, workingDirectory],
-      };
-    }
-
-    const targetLabel = `${profile.user}@${profile.host}:${profile.port}`;
-    const remoteCwd = workingDirectory || profile.defaultRemoteCwd || '';
-    const secondaryText = remoteCwd ? `${targetLabel} | ${remoteCwd}` : targetLabel;
-
-    return {
-      displayName: profile.name,
-      secondaryText,
-      searchTerms: [
-        profile.name,
-        window.name,
-        targetLabel,
+        type: 'window' as const,
+        data: window,
+        displayName: profile.name,
+        secondaryText,
+        status,
+        panes,
+        windowKind,
+        activePane,
         workingDirectory,
-        profile.defaultRemoteCwd || '',
-        profile.host,
-        profile.user,
-        profile.notes || '',
-        ...profile.tags,
-      ],
-    };
-  };
+        priority: getWindowPriority(window, status),
+        lastActiveAtTime: new Date(window.lastActiveAt).getTime(),
+        searchTerms: [
+          profile.name,
+          window.name,
+          targetLabel,
+          workingDirectory,
+          profile.defaultRemoteCwd || '',
+          profile.host,
+          profile.user,
+          profile.notes || '',
+          ...profile.tags,
+        ],
+      };
+    })
+  ), [sshProfilesById, visibleWindows]);
+  const preparedGroups = useMemo(() => {
+    const windowById = new Map(preparedWindows.map((item) => [item.data.id, item]));
 
-  // 获取窗口的排序优先级
-  const getWindowPriority = (window: Window): number => {
-    // 归档窗口优先级最低
-    if (window.archived) return 4;
+    return groups.map((group) => {
+      const windowIds = getAllWindowIds(group.layout);
+      const windowStatuses = windowIds.flatMap((windowId) => {
+        const item = windowById.get(windowId);
+        return item ? [{ id: windowId, status: item.status }] : [];
+      });
 
-    // 获取窗口的聚合状态
-    const status = getAggregatedStatus(window.layout);
-
-    // 根据状态返回优先级（数字越小优先级越高）
-    switch (status) {
-      case WindowStatus.WaitingForInput:
-        return 1; // 等待输入 - 最高优先级
-      case WindowStatus.Running:
-        return 2; // 运行中
-      case WindowStatus.Paused:
-        return 3; // 暂停
-      default:
-        return 3; // 其他状态按暂停处理
-    }
-  };
-
-  // 获取窗口组的排序优先级
-  const getGroupPriority = (group: WindowGroup): number => {
-    // 归档组优先级最低
-    if (group.archived) return 4;
-    // 活跃组优先级较高
-    return 0;
-  };
+      return {
+        type: 'group' as const,
+        data: group,
+        windowCount: windowIds.length,
+        windowStatuses,
+        priority: getGroupPriority(group),
+        lastActiveAtTime: new Date(group.lastActiveAt).getTime(),
+      };
+    });
+  }, [groups, preparedWindows]);
 
   // 过滤并合并窗口和窗口组
   const filteredItems = useMemo(() => {
-    const filteredWindows: SwitcherItem[] = visibleWindows.flatMap((window) => {
-      const displayInfo = getWindowDisplayInfo(window);
-      if (!displayInfo.searchTerms.some((value) => fuzzyMatch(query, value))) {
-        return [];
-      }
+    const filteredWindows: SwitcherItem[] = preparedWindows.filter((item) => (
+      item.searchTerms.some((value) => fuzzyMatch(query, value))
+    ));
 
-      return [{
-        type: 'window' as const,
-        data: window,
-        displayName: displayInfo.displayName,
-        secondaryText: displayInfo.secondaryText,
-      }];
-    });
-
-    const filteredGroups: SwitcherItem[] = groups
-      .filter((group) => fuzzyMatch(query, group.name))
-      .map((group) => ({ type: 'group' as const, data: group }));
+    const filteredGroups: SwitcherItem[] = preparedGroups.filter((item) => (
+      fuzzyMatch(query, item.data.name)
+    ));
 
     return [...filteredGroups, ...filteredWindows].sort((a, b) => {
       if (a.type === 'window' && a.data.id === currentWindowId) return -1;
@@ -160,30 +205,30 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
       if (a.type === 'window' && b.type === 'group') return 1;
 
       if (a.type === 'window' && b.type === 'window') {
-        const priorityA = getWindowPriority(a.data);
-        const priorityB = getWindowPriority(b.data);
+        const priorityA = a.priority;
+        const priorityB = b.priority;
 
         if (priorityA !== priorityB) {
           return priorityA - priorityB;
         }
 
-        return new Date(b.data.lastActiveAt).getTime() - new Date(a.data.lastActiveAt).getTime();
+        return b.lastActiveAtTime - a.lastActiveAtTime;
       }
 
       if (a.type === 'group' && b.type === 'group') {
-        const priorityA = getGroupPriority(a.data);
-        const priorityB = getGroupPriority(b.data);
+        const priorityA = a.priority;
+        const priorityB = b.priority;
 
         if (priorityA !== priorityB) {
           return priorityA - priorityB;
         }
 
-        return new Date(b.data.lastActiveAt).getTime() - new Date(a.data.lastActiveAt).getTime();
+        return b.lastActiveAtTime - a.lastActiveAtTime;
       }
 
       return 0;
     });
-  }, [visibleWindows, groups, query, currentWindowId, currentGroupId, sshProfilesById]);
+  }, [preparedWindows, preparedGroups, query, currentWindowId, currentGroupId]);
 
   useEffect(() => {
     if (!filteredItems.length) {
@@ -372,12 +417,19 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
                       window={item.data}
                       displayName={item.displayName}
                       secondaryText={item.secondaryText}
+                      status={item.status}
+                      panes={item.panes}
+                      windowKind={item.windowKind}
+                      activePane={item.activePane}
+                      workingDirectory={item.workingDirectory}
                       isSelected={index === selectedIndex}
                       query={query}
                     />
                   ) : (
                     <QuickSwitcherGroupItem
                       group={item.data}
+                      windowCount={item.windowCount}
+                      windowStatuses={item.windowStatuses}
                       isSelected={index === selectedIndex}
                       query={query}
                     />

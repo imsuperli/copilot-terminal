@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Folder, ExternalLink } from 'lucide-react';
-import { Window, WindowStatus } from '../types/window';
+import { Pane, Window, WindowStatus } from '../types/window';
 import { highlightMatches } from '../utils/fuzzySearch';
 import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
@@ -18,6 +18,11 @@ interface QuickSwitcherItemProps {
   window: Window;
   displayName?: string;
   secondaryText?: string;
+  status?: WindowStatus;
+  panes?: Pane[];
+  windowKind?: NonNullable<Window['kind']>;
+  activePane?: Pane | null;
+  workingDirectory?: string;
   isSelected: boolean;
   query: string;
 }
@@ -62,22 +67,42 @@ const quickSwitcherInlineIconButtonClassName = `${idePopupIconButtonClassName} h
 /**
  * 快速切换面板列表项组件
  */
-export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
+export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = React.memo(({
   window: terminalWindow,
   displayName,
   secondaryText,
+  status,
+  panes: precomputedPanes,
+  windowKind: precomputedWindowKind,
+  activePane: precomputedActivePane,
+  workingDirectory: precomputedWorkingDirectory,
   isSelected,
   query,
 }) => {
   const { enabledIDEs } = useIDESettings();
   const { language, t } = useI18n();
 
-  const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
-  const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
-  const windowKind = useMemo(() => getWindowKind(terminalWindow), [terminalWindow]);
-  const activePane = useMemo(() => getCurrentWindowTerminalPane(terminalWindow), [terminalWindow]);
+  const aggregatedStatus = useMemo(
+    () => status ?? getAggregatedStatus(terminalWindow.layout),
+    [status, terminalWindow.layout],
+  );
+  const panes = useMemo(
+    () => precomputedPanes ?? getAllPanes(terminalWindow.layout),
+    [precomputedPanes, terminalWindow.layout],
+  );
+  const windowKind = useMemo(
+    () => precomputedWindowKind ?? getWindowKind(terminalWindow),
+    [precomputedWindowKind, terminalWindow],
+  );
+  const activePane = useMemo(
+    () => precomputedActivePane ?? getCurrentWindowTerminalPane(terminalWindow),
+    [precomputedActivePane, terminalWindow],
+  );
   const resolvedDisplayName = displayName ?? terminalWindow.name;
-  const workingDirectory = useMemo(() => getCurrentWindowWorkingDirectory(terminalWindow), [terminalWindow]);
+  const workingDirectory = useMemo(
+    () => precomputedWorkingDirectory ?? getCurrentWindowWorkingDirectory(terminalWindow),
+    [precomputedWorkingDirectory, terminalWindow],
+  );
   const resolvedSecondaryText = secondaryText ?? workingDirectory ?? '';
   const borderColor = getSelectedBorderColor(aggregatedStatus, terminalWindow.archived || false);
   const projectLinks = terminalWindow.projectConfig?.links ?? [];
@@ -258,6 +283,6 @@ export const QuickSwitcherItem: React.FC<QuickSwitcherItemProps> = ({
       </div>
     </div>
   );
-};
+});
 
 QuickSwitcherItem.displayName = 'QuickSwitcherItem';

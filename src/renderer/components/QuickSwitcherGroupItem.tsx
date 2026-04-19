@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Archive } from 'lucide-react';
 import { WindowGroup } from '../../shared/types/window-group';
+import { WindowStatus } from '../../shared/types/window';
 import { highlightMatches } from '../utils/fuzzySearch';
 import { useWindowStore } from '../stores/windowStore';
 import { getWindowCount, getAllWindowIds } from '../utils/groupLayoutHelpers';
@@ -11,6 +12,8 @@ import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 
 interface QuickSwitcherGroupItemProps {
   group: WindowGroup;
+  windowCount?: number;
+  windowStatuses?: Array<{ id: string; status: WindowStatus }>;
   isSelected: boolean;
   query: string;
 }
@@ -29,8 +32,10 @@ const quickSwitcherMatchHighlightClassName =
 /**
  * 快速切换面板窗口组列表项组件
  */
-export const QuickSwitcherGroupItem: React.FC<QuickSwitcherGroupItemProps> = ({
+export const QuickSwitcherGroupItem: React.FC<QuickSwitcherGroupItemProps> = React.memo(({
   group,
+  windowCount: precomputedWindowCount,
+  windowStatuses: precomputedWindowStatuses,
   isSelected,
   query,
 }) => {
@@ -38,9 +43,16 @@ export const QuickSwitcherGroupItem: React.FC<QuickSwitcherGroupItemProps> = ({
   const windows = useWindowStore((state) => state.windows);
   const windowsById = useMemo(() => new Map(windows.map((window) => [window.id, window])), [windows]);
 
-  const windowCount = useMemo(() => getWindowCount(group.layout), [group.layout]);
+  const windowCount = useMemo(
+    () => precomputedWindowCount ?? getWindowCount(group.layout),
+    [group.layout, precomputedWindowCount],
+  );
 
   const windowStatuses = useMemo(() => {
+    if (precomputedWindowStatuses) {
+      return precomputedWindowStatuses;
+    }
+
     const windowIds = getAllWindowIds(group.layout);
     return windowIds
       .map((id) => windowsById.get(id))
@@ -49,7 +61,7 @@ export const QuickSwitcherGroupItem: React.FC<QuickSwitcherGroupItemProps> = ({
         id: w.id,
         status: getAggregatedStatus(w.layout),
       }));
-  }, [group.layout, windowsById]);
+  }, [group.layout, precomputedWindowStatuses, windowsById]);
 
   const borderColor = getSelectedBorderColor(group.archived || false);
   const nameHighlights = useMemo(() => highlightMatches(group.name, query), [group.name, query]);
@@ -146,6 +158,6 @@ export const QuickSwitcherGroupItem: React.FC<QuickSwitcherGroupItemProps> = ({
       </div>
     </div>
   );
-};
+});
 
 QuickSwitcherGroupItem.displayName = 'QuickSwitcherGroupItem';
