@@ -7,6 +7,16 @@ import {
 } from 'lucide-react';
 import type { CodePaneBookmark } from '../../../types/window';
 import { useI18n } from '../../../i18n';
+import {
+  IdePopupShell,
+  idePopupBodyClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../../ui/ide-popup';
 
 type TodoItem = {
   filePath: string;
@@ -251,7 +261,7 @@ const LocalHistoryRow = React.memo(function LocalHistoryRow({
         <button
           type="button"
           onClick={() => onRestoreHistoryEntry(entry)}
-          className="inline-flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[10px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+          className="inline-flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[10px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
         >
           <RotateCcw size={10} />
           {restoreLabel}
@@ -294,13 +304,16 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
   const localHistoryRestoreLabel = t('codePane.localHistoryRestore');
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+    <IdePopupShell className="flex h-full min-h-0 flex-col">
+      <div className={idePopupHeaderClassName}>
+        <div className="min-w-0 flex-1">
+          <div className={idePopupHeaderMetaClassName}>
             {t('codePane.workspaceTab')}
           </div>
-          <div className="text-xs text-[rgb(var(--muted-foreground))]">
+          <div className={`mt-1 ${idePopupTitleClassName}`}>
+            {t('codePane.workspaceOverview')}
+          </div>
+          <div className={idePopupSubtitleClassName}>
             {activeFilePath ? getFileLabel(activeFilePath) : t('codePane.workspaceOverview')}
           </div>
         </div>
@@ -308,7 +321,7 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
           <button
             type="button"
             onClick={onRefresh}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -316,7 +329,7 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -326,12 +339,12 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
 
       <div className="grid min-h-0 flex-1 gap-0 md:grid-cols-3">
         <section className="flex min-h-0 flex-col border-r border-[rgb(var(--border))]">
-          <header className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.bookmarksTitle')}
           </header>
           <div
             ref={bookmarksScrollRef}
-            className="min-h-0 flex-1 overflow-auto px-2 py-2"
+            className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-2 py-2`}
             onScroll={handleBookmarksScroll}
           >
             {bookmarks.length > 0 ? (
@@ -369,12 +382,12 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
         </section>
 
         <section className="flex min-h-0 flex-col border-r border-[rgb(var(--border))]">
-          <header className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.todoTitle')}
           </header>
           <div
             ref={todoScrollRef}
-            className="min-h-0 flex-1 overflow-auto px-2 py-2"
+            className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-2 py-2`}
             onScroll={handleTodoScroll}
           >
             {isTodoLoading ? (
@@ -419,12 +432,12 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
         </section>
 
         <section className="flex min-h-0 flex-col">
-          <header className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.localHistoryTitle')}
           </header>
           <div
             ref={historyScrollRef}
-            className="min-h-0 flex-1 overflow-auto px-2 py-2"
+            className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-2 py-2`}
             onScroll={handleHistoryScroll}
           >
             {localHistoryEntries.length > 0 ? (
@@ -465,6 +478,6 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
           </div>
         </section>
       </div>
-    </div>
+    </IdePopupShell>
   );
 });

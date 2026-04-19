@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { GitCommitHorizontal } from 'lucide-react';
 import type { CodePaneGitGraphCommit } from '../../../shared/types/electron-api';
 import { buildGitGraphLayout, type GitGraphLineSegment } from '../../utils/gitGraphLayout';
+import { idePopupMicroButtonClassName } from '../ui/ide-popup';
 
 const GIT_GRAPH_COLORS = [
   '#60a5fa',
@@ -116,7 +117,7 @@ export function GitBranchGraph({
                     onClick={() => {
                       void onCherryPick(row.commit.sha);
                     }}
-                    className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                    className={idePopupMicroButtonClassName('neutral')}
                     aria-label={`Cherry-pick ${row.commit.shortSha}`}
                   >
                     <GitCommitHorizontal size={12} />
@@ -166,5 +167,5 @@ function getRefClassName(ref: string): string {
     return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
   }
 
-  return 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]';
+  return 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]';
 }

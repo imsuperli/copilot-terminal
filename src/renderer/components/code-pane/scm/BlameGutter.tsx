@@ -2,6 +2,12 @@ import React from 'react';
 import { GitCommitHorizontal, Loader2 } from 'lucide-react';
 import type { CodePaneGitBlameLine } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupSubtitleClassName,
+  idePopupToggleButtonClassName,
+} from '../../ui/ide-popup';
 
 interface BlameGutterProps {
   enabled: boolean;
@@ -21,12 +27,12 @@ export function BlameGutter({
   const { t } = useI18n();
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-zinc-800 bg-zinc-950/70 px-3 py-2">
+    <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--secondary))_92%,transparent)_0%,color-mix(in_srgb,rgb(var(--card))_94%,transparent)_100%)] px-3 py-2 backdrop-blur">
       <div className="min-w-0">
-        <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+        <div className={idePopupHeaderMetaClassName}>
           {t('codePane.gitBlame')}
         </div>
-        <div className="mt-1 truncate text-xs text-zinc-300">
+        <div className={`mt-1 ${idePopupSubtitleClassName}`}>
           {enabled
             ? (entry ? `${entry.author} · ${entry.summary || entry.shortSha}` : t('codePane.gitBlameEmpty'))
             : t('codePane.gitBlameDisabled')}
@@ -36,11 +42,7 @@ export function BlameGutter({
         <button
           type="button"
           onClick={onToggle}
-          className={`rounded px-2 py-1 text-[11px] transition-colors ${
-            enabled
-              ? 'bg-sky-500/15 text-sky-200 hover:bg-sky-500/25'
-              : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50'
-          }`}
+          className={idePopupToggleButtonClassName(enabled)}
         >
           {enabled ? t('codePane.gitBlameHide') : t('codePane.gitBlameShow')}
         </button>
@@ -50,7 +52,7 @@ export function BlameGutter({
           onClick={() => {
             void onOpenHistory();
           }}
-          className="flex items-center gap-1 rounded bg-zinc-800 px-2 py-1 text-[11px] text-zinc-200 transition-colors hover:bg-zinc-700 hover:text-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className={`${idePopupIconButtonClassName} h-auto w-auto gap-1 px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-40`}
         >
           {loading ? <Loader2 size={12} className="animate-spin" /> : <GitCommitHorizontal size={12} />}
           {t('codePane.gitLineHistory')}

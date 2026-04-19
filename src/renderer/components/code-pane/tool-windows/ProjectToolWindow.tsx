@@ -14,6 +14,20 @@ import type {
   CodePaneRunSession,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  IdePopupShell,
+  idePopupBadgeClassName,
+  idePopupBodyClassName,
+  idePopupCardClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupMicroButtonClassName,
+  idePopupRowClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../../ui/ide-popup';
 
 interface ProjectToolWindowProps {
   contributions: CodePaneProjectContribution[];
@@ -56,19 +70,20 @@ export const ProjectToolWindow = React.memo(function ProjectToolWindow({
   }, [onStopSession, selectedSession]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+    <IdePopupShell className="flex h-full min-h-0 flex-col">
+      <div className={idePopupHeaderClassName}>
+        <div className="min-w-0 flex-1">
+          <div className={idePopupHeaderMetaClassName}>
             {t('codePane.projectTab')}
           </div>
-          <div className="text-xs text-[rgb(var(--muted-foreground))]">{contributions.length}</div>
+          <div className={`mt-1 ${idePopupTitleClassName}`}>{t('codePane.projectSummary')}</div>
+          <div className={idePopupSubtitleClassName}>{contributions.length}</div>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onRefresh}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -76,7 +91,7 @@ export const ProjectToolWindow = React.memo(function ProjectToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -97,10 +112,10 @@ export const ProjectToolWindow = React.memo(function ProjectToolWindow({
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="flex w-64 shrink-0 flex-col border-r border-[rgb(var(--border))]">
-              <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+              <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.runSessions')}
               </div>
-              <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+              <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-2 py-2`}>
                 {sessions.length > 0 ? (
                   <div className="space-y-1">
                     {sessions.map((session) => (
@@ -119,7 +134,7 @@ export const ProjectToolWindow = React.memo(function ProjectToolWindow({
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
+              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.runConsole')}
@@ -132,14 +147,14 @@ export const ProjectToolWindow = React.memo(function ProjectToolWindow({
                   <button
                     type="button"
                     onClick={handleStopSelectedSession}
-                    className="rounded bg-[rgb(var(--error)/0.14)] p-1 text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error)/0.22)] hover:text-[rgb(var(--error))]"
+                    className="rounded-md border border-[rgb(var(--error))/0.35] bg-[rgb(var(--error))/0.12] p-1.5 text-[rgb(var(--error))] transition-colors hover:border-[rgb(var(--error))/0.5] hover:bg-[rgb(var(--error))/0.18] hover:text-[rgb(var(--error))]"
                     aria-label={t('codePane.stopRun')}
                   >
                     <Square size={12} />
                   </button>
                 )}
               </div>
-              <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+              <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
                 {selectedSession ? (
                   <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[rgb(var(--foreground))]">
                     {selectedOutput || '$ '}
@@ -152,7 +167,7 @@ export const ProjectToolWindow = React.memo(function ProjectToolWindow({
           </div>
         </div>
       </div>
-    </div>
+    </IdePopupShell>
   );
 });
 
@@ -222,10 +237,10 @@ const ProjectContributionCard = React.memo(function ProjectContributionCard({
     : null;
 
   return (
-    <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+    <div className={idePopupCardClassName}>
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="text-sm font-medium text-[rgb(var(--foreground))]">{contribution.title}</div>
-        <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
+        <span className={`rounded px-1.5 py-0.5 text-[10px] ${idePopupBadgeClassName('zinc')}`}>
           {formatLanguageLabel(contribution.languageId)}
         </span>
       </div>
@@ -254,7 +269,7 @@ const ProjectContributionCard = React.memo(function ProjectContributionCard({
                 {languageWorkspaceState.readyFeatures.map((feature) => (
                   <span
                     key={`${contribution.id}-${feature}`}
-                    className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]"
+                    className={`rounded px-1.5 py-0.5 text-[10px] ${idePopupBadgeClassName('zinc')}`}
                   >
                     {feature}
                   </span>
@@ -404,7 +419,7 @@ const ProjectDiagnosticRow = React.memo(function ProjectDiagnosticRow({
             onClick={() => {
               void onRunCommand(diagnostic.commandId!);
             }}
-            className="shrink-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1 text-[10px] font-medium text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--secondary))]"
+            className={`shrink-0 ${idePopupMicroButtonClassName('neutral')} px-2 py-1`}
           >
             {diagnostic.commandLabel}
           </button>
@@ -474,8 +489,8 @@ const ProjectSessionRow = React.memo(function ProjectSessionRow({
       }}
       className={`w-full rounded border px-2 py-2 text-left transition-colors ${
         isSelected
-          ? 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))]'
-          : 'border-transparent bg-transparent text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--border))] hover:bg-[color-mix(in_srgb,rgb(var(--secondary))_70%,transparent)]'
+          ? 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--foreground))]'
+          : 'border-transparent bg-transparent text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))]'
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -515,7 +530,7 @@ const ProjectTreeItemRow = React.memo(function ProjectTreeItemRow({ item, depth,
           onClick={() => {
             onOpenTreeItem?.(item);
           }}
-          className="flex w-full items-center gap-2 rounded px-1.5 py-1 text-left transition-colors hover:bg-[rgb(var(--secondary))]"
+          className={`${idePopupRowClassName(false)} px-1.5 py-1`}
           style={{ paddingLeft: `${depth * 14 + 6}px` }}
         >
           <ChevronRight size={11} className="shrink-0 text-[rgb(var(--muted-foreground))]/75" />
@@ -594,7 +609,7 @@ function getProjectCommandTone(kind: 'run' | 'refresh' | 'configure' | 'repair' 
       return {
         badgeLabel: 'Run',
         badgeClassName: 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]',
-        buttonClassName: 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--secondary))] hover:text-[rgb(var(--foreground))]',
+        buttonClassName: 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]',
         icon: 'run',
       };
   }
@@ -716,12 +731,12 @@ function getSessionTone(state: CodePaneRunSession['state']): { label: string; cl
     case 'stopped':
       return {
         label: 'STOP',
-        className: 'bg-[rgb(var(--accent))] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
       };
     default:
       return {
         label: state,
-        className: 'bg-[rgb(var(--accent))] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
       };
   }
 }
