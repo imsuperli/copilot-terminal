@@ -58,7 +58,7 @@ function renderInlineFragments(content: string, keyPrefix: string): React.ReactN
         nodes.push(
           <code
             key={`${keyPrefix}-code-${nodeIndex}`}
-            className="rounded bg-zinc-900/90 px-1.5 py-0.5 font-mono text-[12px] text-[rgb(var(--primary))]"
+            className="rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_86%,transparent)] px-1.5 py-0.5 font-mono text-[12px] text-[rgb(var(--primary))]"
           >
             {content.slice(cursor + 1, closeIndex)}
           </code>,
@@ -258,12 +258,12 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <div
           key={`${keyPrefix}-codeblock-${blockIndex}`}
-          className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/95"
+          className="overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_86%,transparent)]"
         >
-          <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-zinc-400">
+          <div className="flex items-center justify-between border-b border-[rgb(var(--border))] px-3 py-1.5 text-[11px] uppercase tracking-[0.18em] text-[rgb(var(--muted-foreground))]">
             <span>{language || 'text'}</span>
           </div>
-          <pre className="overflow-x-auto px-3 py-2.5 text-[12px] leading-5 text-zinc-100">
+          <pre className="overflow-x-auto px-3 py-2.5 text-[12px] leading-5 text-[rgb(var(--foreground))]">
             <code>{codeLines.join('\n')}</code>
           </pre>
         </div>,
@@ -286,15 +286,15 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <div
           key={`${keyPrefix}-table-${blockIndex}`}
-          className="overflow-x-auto rounded-2xl border border-zinc-800/80 bg-zinc-950/35"
+          className="overflow-x-auto rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_66%,transparent)]"
         >
           <table className="min-w-full border-collapse text-left text-[14px] leading-5 text-inherit">
-            <thead className="bg-zinc-900/65">
+            <thead className="bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]">
               <tr>
                 {headerCells.map((cell, cellIndex) => (
                   <th
                     key={`${keyPrefix}-table-${blockIndex}-head-${cellIndex}`}
-                    className="border-b border-zinc-800 px-4 py-2.5 font-semibold text-zinc-100"
+                    className="border-b border-[rgb(var(--border))] px-4 py-2.5 font-semibold text-[rgb(var(--foreground))]"
                   >
                     {renderInlineContent(cell, `${keyPrefix}-table-${blockIndex}-head-${cellIndex}`)}
                   </th>
@@ -303,11 +303,11 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
             </thead>
             <tbody>
               {bodyRows.map((row, rowIndex) => (
-                <tr key={`${keyPrefix}-table-${blockIndex}-row-${rowIndex}`} className="border-b border-zinc-900/70 last:border-b-0">
+                <tr key={`${keyPrefix}-table-${blockIndex}-row-${rowIndex}`} className="border-b border-[rgb(var(--border))]/70 last:border-b-0">
                   {headerCells.map((_, cellIndex) => (
                     <td
                       key={`${keyPrefix}-table-${blockIndex}-row-${rowIndex}-cell-${cellIndex}`}
-                      className="px-4 py-2.5 align-top text-zinc-200"
+                      className="px-4 py-2.5 align-top text-[rgb(var(--foreground))]"
                     >
                       {renderInlineContent(row[cellIndex] ?? '', `${keyPrefix}-table-${blockIndex}-row-${rowIndex}-cell-${cellIndex}`)}
                     </td>
@@ -351,7 +351,7 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <hr
           key={`${keyPrefix}-rule-${blockIndex}`}
-          className="border-zinc-800/80"
+          className="border-[rgb(var(--border))]"
         />,
       );
       blockIndex += 1;
@@ -375,7 +375,7 @@ function renderMarkdownBlocks(content: string, keyPrefix: string): React.ReactNo
       blocks.push(
         <blockquote
           key={`${keyPrefix}-quote-${blockIndex}`}
-          className="border-l-2 border-zinc-700/90 pl-3 text-zinc-300"
+          className="border-l-2 border-[rgb(var(--border))] pl-3 text-[rgb(var(--muted-foreground))]"
         >
           {renderNestedBlocks(quoteLines.join('\n'), `${keyPrefix}-quote-${blockIndex}`)}
         </blockquote>,
