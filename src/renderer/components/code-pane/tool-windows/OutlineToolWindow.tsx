@@ -35,6 +35,13 @@ interface OutlineFilterState {
   lambdas: boolean;
 }
 
+type WindowedListSlice<T> = {
+  items: T[];
+  offsetTop: number;
+  totalHeight: number;
+  isWindowed: boolean;
+};
+
 interface OutlineToolWindowProps {
   fileLabel: string | null;
   symbols: CodePaneDocumentSymbol[];
@@ -54,6 +61,50 @@ const DEFAULT_FILTERS: OutlineFilterState = {
   lambdas: false,
 };
 
+const OUTLINE_ROW_HEIGHT = 32;
+const OUTLINE_ROW_OVERSCAN = 10;
+const OUTLINE_WINDOWING_THRESHOLD = 120;
+
+function getWindowedListSlice<T>({
+  items,
+  scrollTop,
+  viewportHeight,
+  rowHeight,
+  overscan,
+  threshold,
+}: {
+  items: T[];
+  scrollTop: number;
+  viewportHeight: number;
+  rowHeight: number;
+  overscan: number;
+  threshold: number;
+}): WindowedListSlice<T> {
+  const totalHeight = items.length * rowHeight;
+
+  if (items.length <= threshold || viewportHeight <= 0) {
+    return {
+      items,
+      offsetTop: 0,
+      totalHeight,
+      isWindowed: false,
+    };
+  }
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const endIndex = Math.min(
+    items.length,
+    Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan,
+  );
+
+  return {
+    items: items.slice(startIndex, endIndex),
+    offsetTop: startIndex * rowHeight,
+    totalHeight,
+    isWindowed: true,
+  };
+}
+
 export const OutlineToolWindow = React.memo(function OutlineToolWindow({
   fileLabel,
   symbols,
@@ -67,6 +118,11 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
   closeOnDoubleClick = false,
 }: OutlineToolWindowProps) {
   const { t } = useI18n();
+  const listScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [listScrollTop, setListScrollTop] = React.useState(0);
+  const [listViewportHeight, setListViewportHeight] = React.useState(0);
+  const pendingListScrollTopRef = React.useRef<number | null>(null);
+  const listScrollAnimationFrameRef = React.useRef<number | null>(null);
   const tree = React.useMemo(() => buildOutlineTree(symbols), [symbols]);
   const [filters, setFilters] = React.useState(DEFAULT_FILTERS);
   const [collapsedNodeIds, setCollapsedNodeIds] = React.useState<Set<string>>(() => new Set());
@@ -84,6 +140,58 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
     () => new Set(visibleNodeIds),
     [visibleNodeIds],
   );
+  const visibleRowSlice = React.useMemo(() => getWindowedListSlice({
+    items: visibleRows,
+    scrollTop: listScrollTop,
+    viewportHeight: listViewportHeight,
+    rowHeight: OUTLINE_ROW_HEIGHT,
+    overscan: OUTLINE_ROW_OVERSCAN,
+    threshold: OUTLINE_WINDOWING_THRESHOLD,
+  }), [listScrollTop, listViewportHeight, visibleRows]);
+
+  const scheduleListScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingListScrollTopRef.current = nextScrollTop;
+    if (listScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    listScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      listScrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingListScrollTopRef.current;
+      pendingListScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setListScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const container = listScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncViewport = () => {
+      setListViewportHeight(container.clientHeight);
+      setListScrollTop(container.scrollTop);
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      if (listScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(listScrollAnimationFrameRef.current);
+        listScrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
 
   React.useEffect(() => {
     setCollapsedNodeIds(new Set());
@@ -184,7 +292,13 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
         </div>
       </div>
 
-      <div className={bodyClassName ?? `${idePopupBodyClassName} ${idePopupScrollAreaClassName} px-2 py-2`}>
+      <div
+        ref={listScrollRef}
+        className={bodyClassName ?? `${idePopupBodyClassName} ${idePopupScrollAreaClassName} px-2 py-2`}
+        onScroll={(event) => {
+          scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
+        }}
+      >
         {isLoading ? (
           <div className="flex items-center gap-2 px-2 py-4 text-xs text-zinc-400">
             <Loader2 size={12} className="animate-spin" />
@@ -193,22 +307,43 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
         ) : error ? (
           <div className="px-2 py-4 text-xs text-red-300">{error}</div>
         ) : visibleRows.length > 0 ? (
-          <div className="space-y-0.5">
-            {visibleRows.map((row) => (
-              <OutlineNodeRow
-                key={row.node.id}
-                node={row.node}
-                depth={row.depth}
-                isExpanded={!collapsedNodeIds.has(row.node.id)}
-                isSelected={selectedNodeId === row.node.id}
-                onToggleExpanded={handleToggleNodeExpanded}
-                onOpenSymbol={onOpenSymbol}
-                onClose={onClose}
-                closeOnDoubleClick={closeOnDoubleClick}
-                onSelectNode={setSelectedNodeId}
-              />
-            ))}
-          </div>
+          visibleRowSlice.isWindowed ? (
+            <div style={{ height: `${visibleRowSlice.totalHeight}px`, position: 'relative' }}>
+              <div className="space-y-0.5" style={{ transform: `translateY(${visibleRowSlice.offsetTop}px)` }}>
+                {visibleRowSlice.items.map((row) => (
+                  <OutlineNodeRow
+                    key={row.node.id}
+                    node={row.node}
+                    depth={row.depth}
+                    isExpanded={!collapsedNodeIds.has(row.node.id)}
+                    isSelected={selectedNodeId === row.node.id}
+                    onToggleExpanded={handleToggleNodeExpanded}
+                    onOpenSymbol={onOpenSymbol}
+                    onClose={onClose}
+                    closeOnDoubleClick={closeOnDoubleClick}
+                    onSelectNode={setSelectedNodeId}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-0.5">
+              {visibleRows.map((row) => (
+                <OutlineNodeRow
+                  key={row.node.id}
+                  node={row.node}
+                  depth={row.depth}
+                  isExpanded={!collapsedNodeIds.has(row.node.id)}
+                  isSelected={selectedNodeId === row.node.id}
+                  onToggleExpanded={handleToggleNodeExpanded}
+                  onOpenSymbol={onOpenSymbol}
+                  onClose={onClose}
+                  closeOnDoubleClick={closeOnDoubleClick}
+                  onSelectNode={setSelectedNodeId}
+                />
+              ))}
+            </div>
+          )
         ) : (
           <div className="mx-2 rounded-lg border border-dashed border-zinc-700/80 bg-zinc-950/35 px-3 py-4 text-xs text-zinc-500">
             {t('codePane.fileStructureEmpty')}
