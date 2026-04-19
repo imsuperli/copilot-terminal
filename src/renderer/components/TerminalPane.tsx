@@ -244,7 +244,7 @@ const TerminalLinkDragOverlay: React.FC<TerminalLinkDragOverlayProps> = ({
       draggable
       aria-label={label}
       title={url}
-      className="flex max-w-[260px] items-center gap-2 rounded-full border border-[rgb(var(--primary))]/45 bg-zinc-950/96 px-2.5 py-1 text-[11px] text-[rgb(var(--primary))] shadow-[0_8px_24px_rgba(2,6,23,0.45)] backdrop-blur cursor-grab active:cursor-grabbing"
+      className="flex max-w-[260px] cursor-grab items-center gap-2 rounded-full border border-[rgb(var(--primary))]/45 bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)] px-2.5 py-1 text-[11px] text-[rgb(var(--primary))] shadow-[0_8px_24px_rgba(2,6,23,0.45)] backdrop-blur active:cursor-grabbing"
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1293,7 +1293,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     >
       {/* Pane Header - 显示 tmux 元数据（title, agentName） */}
       {showPaneHeader && (
-        <div className="flex items-center justify-between px-2 py-1 bg-zinc-900/50 border-b border-zinc-800">
+        <div className="flex items-center justify-between border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-2 py-1">
           <div className="flex items-center gap-2 min-w-0">
             {/* Agent 颜色指示器 */}
             {pane.agentColor && (
@@ -1303,7 +1303,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
               />
             )}
             {/* Pane 标题或 Agent 名称 */}
-            <span className="text-xs text-zinc-400 truncate font-mono">
+            <span className="truncate font-mono text-xs text-[rgb(var(--muted-foreground))]">
               {pane.title || pane.agentName}
             </span>
           </div>
@@ -1315,7 +1315,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                     e.stopPropagation();
                     onClose?.();
                   }}
-                  className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-red-500/40 hover:bg-red-500/14 hover:text-red-100 shadow-lg"
                   aria-label={t('terminalPane.close')}
                 >
                   <X size={14} />
@@ -1338,7 +1338,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                   e.stopPropagation();
                   onClose?.();
                 }}
-                className="w-6 h-6 flex items-center justify-center rounded bg-zinc-800/90 text-zinc-400 hover:text-zinc-100 hover:bg-red-600 transition-colors shadow-lg"
+                className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-red-500/40 hover:bg-red-500/14 hover:text-red-100 shadow-lg"
                 aria-label={t('terminalPane.close')}
               >
                 <X size={14} />

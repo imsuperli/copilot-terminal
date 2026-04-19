@@ -44,7 +44,7 @@ export const GroupSplitLayout: React.FC<GroupSplitLayoutProps> = ({
   const updateGroupSplitSizes = useWindowStore((state) => state.updateGroupSplitSizes);
 
   if (!layout) {
-    return <div className="flex items-center justify-center h-full text-zinc-500">布局无效</div>;
+    return <div className="flex h-full items-center justify-center text-[rgb(var(--muted-foreground))]">布局无效</div>;
   }
 
   const totalWindowCount = getWindowCount(layout);
@@ -174,7 +174,7 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
 
   const isHorizontal = splitNode.direction === 'horizontal';
   const dividerActiveClassName = 'bg-[rgb(var(--primary))]';
-  const dividerIdleClassName = 'bg-zinc-600/80 group-hover:bg-[rgb(var(--primary))]/75';
+  const dividerIdleClassName = 'bg-[rgb(var(--border))]/80 group-hover:bg-[rgb(var(--primary))]/75';
 
   return (
     <div

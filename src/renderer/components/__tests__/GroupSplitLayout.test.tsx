@@ -105,7 +105,7 @@ describe('GroupSplitLayout', () => {
     const dividerIndicator = separator.firstElementChild;
     expect(dividerIndicator).not.toBeNull();
     expect(dividerIndicator?.className).toContain('w-px');
-    expect(dividerIndicator?.className).toContain('bg-zinc-600/80');
+    expect(dividerIndicator?.className).toContain('bg-[rgb(var(--border))]/80');
     expect(dividerIndicator?.className).not.toContain('shadow-');
   });
 

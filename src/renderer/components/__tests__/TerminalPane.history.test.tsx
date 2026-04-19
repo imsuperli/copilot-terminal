@@ -30,7 +30,7 @@ const { terminalInstances, ptyCallbacks, terminalDataCallbacks } = vi.hoisted(()
 }));
 
 vi.mock('@xterm/xterm', () => ({
-  Terminal: vi.fn().mockImplementation((options?: Record<string, unknown>) => {
+  Terminal: vi.fn(function MockTerminal(this: unknown, options?: Record<string, unknown>) {
     const instance = {
       loadAddon: vi.fn(),
       registerLinkProvider: vi.fn(() => ({ dispose: vi.fn() })),
@@ -65,9 +65,11 @@ vi.mock('@xterm/xterm', () => ({
 }));
 
 vi.mock('../../utils/xtermAddonFit', () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(),
-  })),
+  FitAddon: vi.fn(function MockFitAddon() {
+    return {
+      fit: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock('../../api/ptyDataBus', () => ({

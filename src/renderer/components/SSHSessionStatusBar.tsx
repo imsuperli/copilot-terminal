@@ -93,7 +93,7 @@ export function SSHSessionStatusBar({
   return (
     <div
       data-testid="ssh-session-status-bar"
-      className="flex h-8 items-center gap-3 border-t border-zinc-800 bg-zinc-950/90 px-3 text-[11px] text-zinc-400"
+      className="flex h-8 items-center gap-3 border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)] px-3 text-[11px] text-[rgb(var(--muted-foreground))]"
     >
       {onClose && (
         <AppTooltip content={t('sshSessionStatusBar.hide')}>
@@ -101,7 +101,7 @@ export function SSHSessionStatusBar({
             type="button"
             aria-label={t('sshSessionStatusBar.hide')}
             onClick={onClose}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900/80 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           >
             <X size={12} />
           </button>
@@ -187,22 +187,22 @@ function StatusItem({
     green: 'text-emerald-400',
     yellow: 'text-amber-400',
     red: 'text-red-400',
-    default: 'text-zinc-100',
+    default: 'text-[rgb(var(--foreground))]',
   };
 
   return (
     <span
-      className={`inline-flex min-w-0 items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/80 px-2 py-1 ${
+      className={`inline-flex min-w-0 items-center gap-1.5 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] px-2 py-1 ${
         loading ? 'animate-pulse' : ''
       }`}
     >
-      <span className="text-zinc-500">{icon}</span>
-      <span className="text-zinc-500">{label}</span>
+      <span className="text-[rgb(var(--muted-foreground))]">{icon}</span>
+      <span className="text-[rgb(var(--muted-foreground))]">{label}</span>
       <span className={`truncate ${colorClasses[colorLevel]} ${mono ? 'font-mono' : ''}`}>
         {loading ? '...' : value}
       </span>
       {detail && (
-        <span className="truncate text-zinc-500">
+        <span className="truncate text-[rgb(var(--muted-foreground))]">
           {detail}
         </span>
       )}
