@@ -9479,6 +9479,32 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, []);
 
+  const scheduleLanguageDocumentChangeSync = useCallback((filePath: string) => {
+    const existingDocumentSyncTimer = documentSyncTimersRef.current.get(filePath);
+    if (existingDocumentSyncTimer) {
+      clearTimeout(existingDocumentSyncTimer);
+    }
+
+    documentSyncTimersRef.current.set(filePath, setTimeout(() => {
+      documentSyncTimersRef.current.delete(filePath);
+      void queueLanguageDocumentSync(filePath, 'change', async () => {
+        await syncLanguageDocument(filePath, 'change');
+      });
+    }, 150));
+  }, [queueLanguageDocumentSync, syncLanguageDocument]);
+
+  const scheduleAutoSave = useCallback((filePath: string) => {
+    const existingTimer = autoSaveTimersRef.current.get(filePath);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    autoSaveTimersRef.current.set(filePath, setTimeout(() => {
+      autoSaveTimersRef.current.delete(filePath);
+      void saveFileRef.current(filePath);
+    }, 800));
+  }, []);
+
   const flushPendingLanguageSync = useCallback(async (filePath: string) => {
     const timer = documentSyncTimersRef.current.get(filePath);
     if (!timer) {
@@ -9527,7 +9553,17 @@ export const CodePane: React.FC<CodePaneProps> = ({
     fileMetaRef.current.get(filePath)?.documentUri ?? filePath
   ), []);
 
+  const invalidateDefinitionLookupCacheForFile = useCallback((filePath: string) => {
+    const requestPath = getModelRequestPath(filePath);
+    for (const cacheKey of Array.from(definitionLookupCacheRef.current.keys())) {
+      if (cacheKey.startsWith(`${requestPath}:`)) {
+        definitionLookupCacheRef.current.delete(cacheKey);
+      }
+    }
+  }, [getModelRequestPath]);
+
   const invalidateDocumentRuntimeCaches = useCallback((filePath: string) => {
+    invalidateDefinitionLookupCacheForFile(filePath);
     const requestPath = getModelRequestPath(filePath);
     runtimeStoreRef.current.invalidateCachePrefix(`quick-documentation:${requestPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`document-symbols:${requestPath}`);
@@ -9536,7 +9572,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     runtimeStoreRef.current.invalidateCachePrefix(`hierarchy:type-parents:${requestPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`hierarchy:type-children:${requestPath}:`);
     runtimeStoreRef.current.invalidateCachePrefix(`semantic:${requestPath}`);
-  }, [getModelRequestPath]);
+  }, [getModelRequestPath, invalidateDefinitionLookupCacheForFile]);
 
   const invalidateWorkspaceRuntimeCaches = useCallback((filePath: string) => {
     invalidateDocumentRuntimeCaches(filePath);
@@ -11069,31 +11105,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
           return;
         }
 
-        clearDefinitionLookupCache();
+        invalidateDefinitionLookupCacheForFile(filePath);
         promotePreviewTab(filePath);
         markDirty(filePath, true);
         scheduleLocalHistorySnapshot(filePath);
-        const existingTimer = autoSaveTimersRef.current.get(filePath);
-        if (existingTimer) {
-          clearTimeout(existingTimer);
-        }
-
-        const existingDocumentSyncTimer = documentSyncTimersRef.current.get(filePath);
-        if (existingDocumentSyncTimer) {
-          clearTimeout(existingDocumentSyncTimer);
-        }
-
-        documentSyncTimersRef.current.set(filePath, setTimeout(() => {
-          documentSyncTimersRef.current.delete(filePath);
-          void queueLanguageDocumentSync(filePath, 'change', async () => {
-            await syncLanguageDocument(filePath, 'change');
-          });
-        }, 150));
-
-        autoSaveTimersRef.current.set(filePath, setTimeout(() => {
-          autoSaveTimersRef.current.delete(filePath);
-          void saveFile(filePath);
-        }, 800));
+        scheduleLanguageDocumentChangeSync(filePath);
+        scheduleAutoSave(filePath);
       });
 
       modelDisposersRef.current.set(filePath, disposable);
@@ -11108,7 +11125,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         suppressModelEventsRef.current.add(filePath);
         model.setValue(readResult.content);
         suppressModelEventsRef.current.delete(filePath);
-        clearDefinitionLookupCache();
+        invalidateDefinitionLookupCacheForFile(filePath);
         didChangeContent = true;
       }
     }
@@ -11155,11 +11172,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
     addLocalHistoryEntry,
     banner?.filePath,
     clearBannerForFile,
-    clearDefinitionLookupCache,
     markDirty,
+    invalidateDefinitionLookupCacheForFile,
     promotePreviewTab,
     queueLanguageDocumentSync,
     refreshProblems,
+    scheduleAutoSave,
+    scheduleLanguageDocumentChangeSync,
     scheduleLocalHistorySnapshot,
     syncLanguageDocument,
   ]);
@@ -11879,7 +11898,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         if (!didApplyToModel) {
           continue;
         }
-        clearDefinitionLookupCache();
+        invalidateDefinitionLookupCacheForFile(filePath);
         markDirty(filePath, true);
         await syncLanguageDocument(filePath, 'change');
         continue;
@@ -11935,7 +11954,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       didApply: true,
       wroteToDisk,
     };
-  }, [clearDefinitionLookupCache, invalidateWorkspaceRuntimeCaches, markDirty, rootPath, scheduleGitStatusRefresh, syncLanguageDocument, t]);
+  }, [invalidateDefinitionLookupCacheForFile, invalidateWorkspaceRuntimeCaches, markDirty, rootPath, scheduleGitStatusRefresh, syncLanguageDocument, t]);
 
   const runSaveQualityPipeline = useCallback(async (filePath: string) => {
     const model = fileModelsRef.current.get(filePath);
@@ -14056,7 +14075,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     problemsByFileRef.current.delete(filePath);
     preloadedReadResultsRef.current.delete(filePath);
     invalidateWorkspaceRuntimeCaches(filePath);
-    clearDefinitionLookupCache();
     viewStatesRef.current.delete(filePath);
     markDirty(filePath, false);
     clearBannerForFile(filePath);
@@ -14148,7 +14166,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         suppressModelEventsRef.current.add(change.filePath);
         existingModel.setValue(change.afterContent);
         suppressModelEventsRef.current.delete(change.filePath);
-        clearDefinitionLookupCache();
+        invalidateDefinitionLookupCacheForFile(change.filePath);
         markDirty(change.filePath, false);
         await queueLanguageDocumentSync(change.filePath, 'change', async () => {
           await syncLanguageDocument(change.filePath, 'change');
@@ -14195,9 +14213,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsApplyingRefactorPreview((currentApplying) => (currentApplying ? false : currentApplying));
   }, [
     activateFile,
-    clearDefinitionLookupCache,
     closeFileTab,
     flushPendingLanguageSync,
+    invalidateDefinitionLookupCacheForFile,
     invalidateWorkspaceRuntimeCaches,
     markDirty,
     openFiles,

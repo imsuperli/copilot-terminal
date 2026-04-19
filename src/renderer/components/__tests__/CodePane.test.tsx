@@ -6396,6 +6396,128 @@ describe('CodePane', () => {
     expect(activeEditor.deltaDecorations).toHaveBeenCalled();
   });
 
+  it('keeps definition lookup cache for unchanged files after editing a different file', async () => {
+    vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          filePath: '/workspace/project/src/util.ts',
+          range: {
+            startLineNumber: 3,
+            startColumn: 5,
+            endLineNumber: 3,
+            endColumn: 9,
+          },
+        },
+      ],
+    });
+
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          name: 'index.ts',
+          type: 'file',
+        },
+        {
+          path: '/workspace/project/src/util.ts',
+          name: 'util.ts',
+          type: 'file',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneReadFile).mockImplementation(async ({ filePath }) => ({
+      success: true,
+      data: {
+        content: filePath.endsWith('util.ts') ? 'export const util = 1;\n' : 'export const value = 1;\n',
+        mtimeMs: 100,
+        size: 24,
+        language: 'typescript',
+        isBinary: false,
+      },
+    }));
+
+    renderCodePane(createPane());
+    await openFileFromTree('index.ts');
+
+    await waitFor(() => {
+      expect(fakeMonacoState.definitionProviders.get('typescript')).toBeDefined();
+      expect(fakeMonacoState.models.get('/workspace/project/src/index.ts')).toBeDefined();
+    });
+
+    let activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    expect(activeEditor).toBeDefined();
+
+    await act(async () => {
+      activeEditor.fireMouseMove({
+        target: {
+          position: {
+            lineNumber: 1,
+            column: 14,
+          },
+        },
+        event: {
+          browserEvent: {
+            ctrlKey: true,
+            metaKey: false,
+          },
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(window.electronAPI.codePaneGetDefinition).toHaveBeenCalledTimes(1);
+
+    await openFileFromTree('util.ts');
+    const utilModel = fakeMonacoState.models.get('/workspace/project/src/util.ts');
+    expect(utilModel).toBeDefined();
+    activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+
+    await act(async () => {
+      utilModel?.setValue('export const changed = 2;\n');
+      activeEditor.fireMouseMove({
+        target: {
+          position: {
+            lineNumber: 1,
+            column: 14,
+          },
+        },
+        event: {
+          browserEvent: {
+            ctrlKey: true,
+            metaKey: false,
+          },
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(window.electronAPI.codePaneGetDefinition).toHaveBeenCalledTimes(2);
+
+    await openFileFromTree('index.ts');
+    activeEditor = fakeMonaco.editor.create.mock.results.at(-1)?.value;
+    await act(async () => {
+      activeEditor.fireMouseMove({
+        target: {
+          position: {
+            lineNumber: 1,
+            column: 14,
+          },
+        },
+        event: {
+          browserEvent: {
+            ctrlKey: true,
+            metaKey: false,
+          },
+        },
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(window.electronAPI.codePaneGetDefinition).toHaveBeenCalledTimes(2);
+  });
+
   it('opens read-only dependency definitions returned as virtual JDT documents', async () => {
     vi.mocked(window.electronAPI.codePaneGetDefinition).mockResolvedValue({
       success: true,
