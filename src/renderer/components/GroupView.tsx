@@ -315,12 +315,12 @@ export const GroupView: React.FC<GroupViewProps> = ({
     ? 'bg-green-500'
     : groupAggregatedStatus === WindowStatus.WaitingForInput
       ? 'bg-[rgb(var(--primary))]'
-      : 'bg-zinc-500';
+      : 'bg-[rgb(var(--muted-foreground))]';
   const toolbarButtonBaseClassName =
     'flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] transition-colors';
 
   return (
-    <div className="flex h-full bg-[rgb(var(--background))]">
+    <div className="flex h-full bg-transparent">
       {/* 侧边栏 */}
       <Sidebar
         activeWindowId={group.activeWindowId}
@@ -344,7 +344,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
       />
 
       {/* 主内容区 */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-[rgb(var(--background))]">
+      <div className="flex flex-1 flex-col overflow-hidden bg-transparent">
         {/* 顶部工具栏 */}
         <div className="flex h-8 flex-shrink-0 items-center gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-3">
           <div className="flex-1" />

@@ -350,7 +350,7 @@ const GroupWindowPane: React.FC<GroupWindowPaneProps> = ({
 
   if (!terminalWindow) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-500 bg-zinc-900">
+      <div className="flex h-full items-center justify-center bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] text-[rgb(var(--muted-foreground))]">
         窗口不存在
       </div>
     );
@@ -370,7 +370,7 @@ const GroupWindowPane: React.FC<GroupWindowPaneProps> = ({
         className="h-full w-full min-h-0 min-w-0"
       >
         <div
-          className={`h-full w-full min-h-0 min-w-0 overflow-hidden bg-zinc-900 ${
+          className={`h-full w-full min-h-0 min-w-0 overflow-hidden bg-transparent ${
             isActive ? 'ring-1 ring-inset ring-[rgb(var(--primary))]/50' : ''
           }`}
           onMouseDown={onActivate}

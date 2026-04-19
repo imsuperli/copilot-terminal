@@ -1068,7 +1068,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   );
 
   return (
-    <div className="flex h-full w-full min-w-0 overflow-hidden bg-[rgb(var(--background))] text-[rgb(var(--foreground))]">
+    <div className="flex h-full w-full min-w-0 overflow-hidden bg-transparent text-[rgb(var(--foreground))]">
       {/* 渚ц竟鏍?*/}
       {!embedded && (
         <Sidebar
