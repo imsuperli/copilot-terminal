@@ -112,8 +112,8 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
     <div
       className={`group rounded border px-2 py-2 transition-colors ${
         isSelected
-          ? 'border-sky-500/35 bg-sky-500/[0.08] text-zinc-100'
-          : 'border-transparent text-zinc-300 hover:border-zinc-700/70 hover:bg-zinc-900/80'
+          ? 'border-[rgb(var(--ring))]/45 bg-[rgb(var(--primary))]/10 text-[rgb(var(--foreground))]'
+          : 'border-transparent text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
       }`}
     >
       <button
@@ -123,7 +123,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
         }}
         className="flex w-full min-w-0 items-center gap-2 text-left"
       >
-        <FileIcon size={13} className="shrink-0 text-zinc-500" />
+        <FileIcon size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
         <span className={`min-w-0 flex-1 truncate text-xs ${entryTextClassName}`}>
           {getPathLeafLabel(entry.path)}
         </span>
@@ -131,11 +131,11 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
           {getGitStatusBadgeLabel(entry.status)}
         </span>
       </button>
-      <div className="mt-1 truncate pl-5 text-[10px] text-zinc-500">
+      <div className="mt-1 truncate pl-5 text-[10px] text-[rgb(var(--muted-foreground))]">
         {row.relativePath}
       </div>
       {entry.originalPath && (
-        <div className="mt-0.5 truncate pl-5 text-[10px] text-zinc-600">
+        <div className="mt-0.5 truncate pl-5 text-[10px] text-[rgb(var(--muted-foreground))]/75">
           {getRelativePath(entry.originalPath)} -&gt; {row.relativePath}
         </div>
       )}
@@ -147,7 +147,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
               onClick={() => {
                 void onOpenConflictResolver(entry.path);
               }}
-              className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-200 hover:bg-emerald-500/25"
+              className="rounded bg-[rgb(var(--success)/0.14)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--success))] hover:bg-[rgb(var(--success)/0.22)]"
             >
               {t('codePane.gitResolveConflict')}
             </button>
@@ -156,7 +156,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
               onClick={() => {
                 void onResolveConflict(entry.path, 'ours');
               }}
-              className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-200 hover:bg-amber-500/25"
+              className="rounded bg-[rgb(var(--warning)/0.14)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--warning))] hover:bg-[rgb(var(--warning)/0.22)]"
             >
               {t('codePane.gitUseOurs')}
             </button>
@@ -165,7 +165,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
               onClick={() => {
                 void onResolveConflict(entry.path, 'theirs');
               }}
-              className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] text-sky-200 hover:bg-sky-500/25"
+              className="rounded bg-[rgb(var(--info)/0.14)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--info))] hover:bg-[rgb(var(--info)/0.22)]"
             >
               {t('codePane.gitUseTheirs')}
             </button>
@@ -178,7 +178,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
                 onClick={() => {
                   void onStagePath(entry.path);
                 }}
-                className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
               >
                 {t('codePane.gitStage')}
               </button>
@@ -189,7 +189,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
                 onClick={() => {
                   void onUnstagePath(entry.path);
                 }}
-                className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+                className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
               >
                 {t('codePane.gitUnstage')}
               </button>
@@ -200,7 +200,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
                 onClick={() => {
                   void onDiscardPath(entry.path, row.section === 'staged');
                 }}
-                className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-200 hover:bg-red-500/25"
+                className="rounded bg-[rgb(var(--error)/0.14)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--error))] hover:bg-[rgb(var(--error)/0.22)]"
               >
                 {t('codePane.gitDiscard')}
               </button>
@@ -213,7 +213,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
             onClick={() => {
               void onOpenFileDiff(entry.path);
             }}
-            className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+            className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
           >
             {t('codePane.openDiff')}
           </button>
@@ -223,7 +223,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
           onClick={() => {
             void onShowFileHistory(entry.path);
           }}
-          className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+          className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
         >
           {t('codePane.gitFileHistory')}
         </button>
@@ -232,7 +232,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
           onClick={() => {
             void onRevealInExplorer(entry.path);
           }}
-          className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-200 hover:bg-zinc-700 hover:text-zinc-50"
+          className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
         >
           {t('codePane.gitRevealInExplorer')}
         </button>
@@ -263,13 +263,13 @@ const BranchTreeRow = React.memo(function BranchTreeRow({
         onClick={() => {
           onToggleNode(node.key);
         }}
-        className="flex h-7 w-full items-center gap-2 rounded text-left text-xs text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+        className="flex h-7 w-full items-center gap-2 rounded text-left text-xs text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
         style={{ paddingLeft: `${10 + (depth * 14)}px`, paddingRight: '8px' }}
       >
         {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-        <FolderTree size={12} className="shrink-0 text-zinc-500" />
+        <FolderTree size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
         <span className="min-w-0 flex-1 truncate">{node.label}</span>
-        <span className="rounded bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-500">
+        <span className="rounded bg-[rgb(var(--secondary))] px-1 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
           {node.branchCount}
         </span>
       </button>
@@ -284,16 +284,16 @@ const BranchTreeRow = React.memo(function BranchTreeRow({
       }}
       className={`flex h-7 w-full items-center gap-2 rounded text-left text-xs transition-colors ${
         isSelected
-          ? 'bg-sky-500/15 text-sky-100'
-          : 'text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100'
+          ? 'bg-[rgb(var(--primary))]/10 text-[rgb(var(--foreground))]'
+          : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
       }`}
       style={{ paddingLeft: `${28 + (depth * 14)}px`, paddingRight: '8px' }}
     >
-      <GitBranch size={12} className={`shrink-0 ${node.branch.current ? 'text-emerald-300' : 'text-zinc-500'}`} />
+      <GitBranch size={12} className={`shrink-0 ${node.branch.current ? 'text-[rgb(var(--success))]' : 'text-[rgb(var(--muted-foreground))]'}`} />
       <span className="min-w-0 flex-1 truncate">{node.label}</span>
-      <span className="truncate text-[10px] text-zinc-500">{node.branch.shortSha}</span>
+      <span className="truncate text-[10px] text-[rgb(var(--muted-foreground))]">{node.branch.shortSha}</span>
       {node.branch.current && (
-        <span className="rounded bg-emerald-500/15 px-1 py-0.5 text-[10px] text-emerald-200">
+        <span className="rounded bg-[rgb(var(--success)/0.14)] px-1 py-0.5 text-[10px] text-[rgb(var(--success))]">
           HEAD
         </span>
       )}
@@ -672,14 +672,14 @@ export const GitToolWindow = React.memo(function GitToolWindow({
   }, [onTabChange]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/95">
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
+    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400">
-            <GitBranch size={12} className="text-sky-300" />
+          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+            <GitBranch size={12} className="text-[rgb(var(--primary))]" />
             {t('codePane.gitWorkbenchTab')}
           </div>
-          <div className="flex rounded bg-zinc-900/80 p-0.5">
+          <div className="flex rounded bg-[rgb(var(--secondary))] p-0.5">
             {([
               ['changes', t('codePane.gitChangesWorkbenchTab')],
               ['log', t('codePane.gitLogTab')],
@@ -693,8 +693,8 @@ export const GitToolWindow = React.memo(function GitToolWindow({
                 }}
                 className={`rounded px-2 py-1 text-[11px] transition-colors ${
                   activeTab === tabId
-                    ? 'bg-sky-500/20 text-sky-100'
-                    : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+                    ? 'bg-[rgb(var(--primary))]/14 text-[rgb(var(--foreground))]'
+                    : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
                 }`}
               >
                 {label}
@@ -708,7 +708,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
             onClick={() => {
               void onRefresh();
             }}
-            className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -716,7 +716,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-zinc-800 p-1 text-zinc-300 transition-colors hover:bg-zinc-700 hover:text-zinc-50"
+            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -725,7 +725,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
       </div>
 
       {((activeTab !== 'changes' ? branchesError : null) || (activeTab === 'rebase' ? rebaseError : null)) && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+        <div className="border-b border-[rgb(var(--error)/0.20)] bg-[rgb(var(--error)/0.10)] px-3 py-2 text-xs text-[rgb(var(--error))]">
           {(activeTab !== 'changes' ? branchesError : null) || rebaseError}
         </div>
       )}
@@ -747,7 +747,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
             onRevealInExplorer={onRevealInExplorer}
             t={t}
           />
-          <div className="min-h-0 overflow-auto bg-zinc-950/40 px-3 py-3">
+          <div className="min-h-0 overflow-auto bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] px-3 py-3">
             <GitHunkList
               selectedPath={selectedHunkPath}
               relativePath={selectedHunkRelativePath}
@@ -764,7 +764,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)_340px] overflow-hidden">
-          <div className="min-h-0 border-r border-zinc-800 bg-zinc-950/70">
+          <div className="min-h-0 border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)]">
             <BranchListSection
               currentBranches={currentBranches}
               localBranches={localBranches}
@@ -776,7 +776,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
             />
           </div>
 
-          <div className="min-h-0 border-r border-zinc-800 bg-zinc-950/40">
+          <div className="min-h-0 border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)]">
             {activeTab === 'log' ? (
               <CommitLogSection
                 commits={commits}
@@ -905,10 +905,10 @@ const GitChangesSection = React.memo(function GitChangesSection({
       return (
         <div
           key={item.key}
-          className="flex h-10 items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500"
+          className="flex h-10 items-center justify-between gap-2 px-2 text-[11px] font-medium text-[rgb(var(--muted-foreground))]"
         >
           <span>{getGitSectionLabel(t, item.section)}</span>
-          <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{item.count}</span>
+          <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{item.count}</span>
         </div>
       );
     }
@@ -917,11 +917,11 @@ const GitChangesSection = React.memo(function GitChangesSection({
       return (
         <div
           key={item.key}
-          className="flex h-9 items-center gap-2 rounded border border-zinc-800/80 bg-zinc-900/35 px-2 text-[11px] text-zinc-500"
+          className="flex h-9 items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)] px-2 text-[11px] text-[rgb(var(--muted-foreground))]"
         >
-          <Folder size={12} className="shrink-0 text-zinc-500" />
+          <Folder size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           <span className="min-w-0 flex-1 truncate">{item.label}</span>
-          <span className="rounded bg-zinc-950/80 px-1 py-0.5 text-[10px]">{item.count}</span>
+          <span className="rounded bg-[rgb(var(--background))] px-1 py-0.5 text-[10px]">{item.count}</span>
         </div>
       );
     }
@@ -960,13 +960,13 @@ const GitChangesSection = React.memo(function GitChangesSection({
   ]);
 
   return (
-    <div className="flex min-h-0 flex-col border-r border-zinc-800 bg-zinc-950/70">
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-2">
-        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+    <div className="flex min-h-0 flex-col border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
+        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           <FolderTree size={12} />
           {t('codePane.gitChanges')}
         </div>
-        <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400">
+        <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
           {changes.length}
         </span>
       </div>
@@ -989,7 +989,7 @@ const GitChangesSection = React.memo(function GitChangesSection({
             </div>
           )
         ) : (
-          <div className="flex h-full items-center justify-center text-xs text-zinc-500">
+          <div className="flex h-full items-center justify-center text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.noChanges')}
           </div>
         )}
@@ -2150,14 +2150,14 @@ function getGitSectionLabel(t: ReturnType<typeof useI18n>['t'], section: GitChan
 function getGitStatusTextClassName(status?: CodePaneGitStatusEntry['status']): string {
   switch (status) {
     case 'modified':
-      return 'text-amber-300';
+      return 'text-[rgb(var(--warning))]';
     case 'untracked':
     case 'added':
-      return 'text-emerald-300';
+      return 'text-[rgb(var(--success))]';
     case 'deleted':
-      return 'text-red-300';
+      return 'text-[rgb(var(--error))]';
     case 'renamed':
-      return 'text-sky-300';
+      return 'text-[rgb(var(--info))]';
     default:
       return '';
   }
@@ -2182,14 +2182,14 @@ function getGitStatusBadgeClassName(status?: CodePaneGitStatusEntry['status']): 
   switch (status) {
     case 'added':
     case 'untracked':
-      return 'bg-emerald-500/15 text-emerald-200';
+      return 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]';
     case 'deleted':
-      return 'bg-red-500/15 text-red-200';
+      return 'bg-[rgb(var(--error)/0.14)] text-[rgb(var(--error))]';
     case 'renamed':
-      return 'bg-sky-500/15 text-sky-200';
+      return 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--info))]';
     case 'modified':
     default:
-      return 'bg-amber-500/15 text-amber-200';
+      return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
   }
 }
 
@@ -2221,18 +2221,18 @@ function getGraphColor(colorIndex: number): string {
 
 function getRefClassName(ref: string): string {
   if (ref.startsWith('HEAD ->')) {
-    return 'bg-emerald-500/15 text-emerald-200';
+    return 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]';
   }
 
   if (ref.startsWith('origin/')) {
-    return 'bg-sky-500/15 text-sky-200';
+    return 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--info))]';
   }
 
   if (ref.startsWith('tag:')) {
-    return 'bg-amber-500/15 text-amber-200';
+    return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
   }
 
-  return 'bg-zinc-800 text-zinc-300';
+  return 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]';
 }
 
 function getCommitFileStatusLabel(status: CodePaneGitCommitFileChange['status']): string {
@@ -2256,17 +2256,17 @@ function getCommitFileStatusLabel(status: CodePaneGitCommitFileChange['status'])
 function getCommitFileStatusClassName(status: CodePaneGitCommitFileChange['status']): string {
   switch (status) {
     case 'added':
-      return 'bg-emerald-500/15 text-emerald-200';
+      return 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]';
     case 'deleted':
-      return 'bg-red-500/15 text-red-200';
+      return 'bg-[rgb(var(--error)/0.14)] text-[rgb(var(--error))]';
     case 'renamed':
     case 'copied':
-      return 'bg-sky-500/15 text-sky-200';
+      return 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--info))]';
     case 'type-changed':
-      return 'bg-amber-500/15 text-amber-200';
+      return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
     case 'modified':
     default:
-      return 'bg-zinc-800 text-zinc-300';
+      return 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]';
   }
 }
 
