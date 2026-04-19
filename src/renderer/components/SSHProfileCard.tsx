@@ -41,6 +41,8 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   onDelete,
 }) => {
   const { t } = useI18n();
+  const badgeClassName =
+    'inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))]';
   const runtimeStatus = useMemo(
     () => (window ? getAggregatedStatus(window.layout) : null),
     [window],
@@ -161,9 +163,9 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {runtimeStatus && (
-              <StatusDot
-                status={runtimeStatus}
+          {runtimeStatus && (
+            <StatusDot
+              status={runtimeStatus}
                 size="md"
                 title={statusTooltip ?? undefined}
               />
@@ -175,7 +177,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
 
         <div className="space-y-2 flex-1 min-h-0">
           <div className="flex items-center gap-2 text-xs text-[rgb(var(--muted-foreground))]">
-            <Link2 size={13} className="text-zinc-400" />
+            <Link2 size={13} className="text-[rgb(var(--muted-foreground))]" />
             <span className="truncate">
               {t('sshProfileCard.remoteCwd')}: {profile.defaultRemoteCwd || '~'}
             </span>
@@ -203,20 +205,20 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
           )}
 
           <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1 text-xs text-zinc-300 bg-zinc-800 px-2 py-1 rounded-full">
+            <span className={badgeClassName}>
               <ShieldCheck size={12} className={profile.verifyHostKeys ? 'text-emerald-400' : 'text-amber-400'} />
               {profile.verifyHostKeys ? t('sshProfileCard.hostKeyVerifyOn') : t('sshProfileCard.hostKeyVerifyOff')}
             </span>
 
             {credentialState?.hasPassword && (
-              <span className="inline-flex items-center gap-1 text-xs text-zinc-300 bg-zinc-800 px-2 py-1 rounded-full">
+              <span className={badgeClassName}>
                 <LockKeyhole size={12} className="text-[rgb(var(--primary))]" />
                 {t('sshProfileCard.passwordSaved')}
               </span>
             )}
 
             {credentialState?.hasPassphrase && (
-              <span className="inline-flex items-center gap-1 text-xs text-zinc-300 bg-zinc-800 px-2 py-1 rounded-full">
+              <span className={badgeClassName}>
                 <KeyRound size={12} className="text-violet-400" />
                 {t('sshProfileCard.passphraseSaved')}
               </span>
@@ -225,7 +227,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
             {routingBadges.map((badge) => (
               <span
                 key={badge}
-                className="text-xs text-zinc-300 bg-zinc-800 px-2 py-1 rounded-full"
+                className={badgeClassName}
               >
                 {badge}
               </span>
@@ -234,7 +236,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
             {visibleTags.map((tag) => (
               <span
                 key={tag}
-                className="text-xs text-zinc-300 bg-zinc-800 px-2 py-1 rounded-full"
+                className={badgeClassName}
               >
                 #{tag}
               </span>

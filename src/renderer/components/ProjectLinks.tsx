@@ -56,6 +56,8 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
 
   const visibleLinks = links.slice(0, maxDisplay);
   const hiddenLinks = links.slice(maxDisplay);
+  const tooltipClassName =
+    'z-[1100] max-w-xs break-all rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
 
   // 卡片模式：显示在卡片底部
   if (variant === 'card') {
@@ -75,7 +77,7 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))] max-w-xs break-all"
+                  className={tooltipClassName}
                   side="top"
                   sideOffset={5}
                 >
@@ -140,13 +142,13 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
         {visibleLinks.map((link, index) => (
           <React.Fragment key={link.name}>
             {index > 0 && (
-              <div className="w-px h-4 bg-zinc-700" />
+              <div className="h-4 w-px bg-[rgb(var(--border))]" />
             )}
             <AppTooltip content={link.name} placement="toolbar-trailing">
               <button
                 tabIndex={-1}
                 onClick={(e) => handleOpenLink(e, link.url)}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
+                className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
                 title={link.name}
               >
                 <ExternalLink size={14} />

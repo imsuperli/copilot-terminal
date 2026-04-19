@@ -316,9 +316,11 @@ export const GroupView: React.FC<GroupViewProps> = ({
     : groupAggregatedStatus === WindowStatus.WaitingForInput
       ? 'bg-[rgb(var(--primary))]'
       : 'bg-zinc-500';
+  const toolbarButtonBaseClassName =
+    'flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] transition-colors';
 
   return (
-    <div className="flex h-full bg-zinc-900">
+    <div className="flex h-full bg-[rgb(var(--background))]">
       {/* 侧边栏 */}
       <Sidebar
         activeWindowId={group.activeWindowId}
@@ -342,9 +344,9 @@ export const GroupView: React.FC<GroupViewProps> = ({
       />
 
       {/* 主内容区 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden bg-[rgb(var(--background))]">
         {/* 顶部工具栏 */}
-        <div className="h-8 bg-zinc-900 flex items-center px-3 gap-2 flex-shrink-0">
+        <div className="flex h-8 flex-shrink-0 items-center gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-3">
           <div className="flex-1" />
 
           {/* 批量操作按钮 */}
@@ -353,7 +355,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
             <AppTooltip content="启动全部" placement="toolbar-trailing">
               <button
                 onClick={handleStartAll}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-green-500 transition-colors"
+                className={`${toolbarButtonBaseClassName} text-emerald-400 hover:border-emerald-400/45 hover:bg-emerald-500/[0.12] hover:text-emerald-300`}
               >
                 <Play size={14} fill="currentColor" />
               </button>
@@ -370,10 +372,10 @@ export const GroupView: React.FC<GroupViewProps> = ({
               <button
                 onClick={handlePauseAll}
                 disabled={groupAggregatedStatus !== WindowStatus.Running && groupAggregatedStatus !== WindowStatus.WaitingForInput}
-                className={`flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 transition-colors ${
+                className={`${toolbarButtonBaseClassName} ${
                   groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
-                    ? 'text-red-500 cursor-pointer'
-                    : 'text-zinc-600 cursor-not-allowed opacity-50'
+                    ? 'cursor-pointer text-red-400 hover:border-red-400/45 hover:bg-red-500/[0.12] hover:text-red-300'
+                    : 'cursor-not-allowed text-[rgb(var(--muted-foreground))] opacity-50'
                 }`}
               >
                 <Square size={14} fill="currentColor" />
@@ -384,7 +386,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
             <AppTooltip content="归档组" placement="toolbar-trailing">
               <button
                 onClick={handleArchiveGroup}
-                className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-100 transition-colors"
+                className={`${toolbarButtonBaseClassName} text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]`}
               >
                 <Archive size={14} />
               </button>
