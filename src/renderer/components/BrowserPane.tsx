@@ -10,7 +10,7 @@ import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/brow
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
-const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-zinc-950';
+const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-[rgb(var(--background))]';
 const BLANK_PAGE_THEME_CSS = `
   :root { color-scheme: dark; }
   html, body {
@@ -390,16 +390,20 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
     });
     onActivate();
   }, [consumeDragHandleClick, onActivate, pane.id, windowId]);
+  const browserToolbarButtonClassName =
+    'flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40';
+  const browserCloseButtonClassName =
+    'flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-red-500/40 hover:bg-red-500/14 hover:text-red-100';
 
   return (
     <div
       className={`
-        relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-zinc-800 bg-zinc-950
+        relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-[rgb(var(--border))] bg-[rgb(var(--background))]
       `}
       style={{ opacity: isDragging ? 0.45 : 1 }}
       onMouseDownCapture={handleMouseDownCapture}
     >
-      <div className="flex items-center gap-1 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] px-2 py-1.5">
         <div
           data-browser-drag-handle="true"
           ref={dragHandleRef ?? undefined}
@@ -417,14 +421,14 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               paneId: pane.id,
             });
           }}
-          className="flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-200 active:cursor-grabbing"
+          className="flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] active:cursor-grabbing"
           aria-label={t('browserPane.move')}
           title={t('browserPane.move')}
         >
           <GripVertical size={16} />
         </div>
 
-        <div className="flex items-center gap-1 text-zinc-400">
+        <div className="flex items-center gap-1 text-[rgb(var(--muted-foreground))]">
           <AppTooltip content={t('browserPane.back')} placement="pane-corner">
             <button
               type="button"
@@ -433,7 +437,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               disabled={!isWebviewReady || !canGoBack}
               onMouseDown={preventMouseButtonFocus}
               onClick={goBack}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className={browserToolbarButtonClassName}
             >
               <ArrowLeft size={15} />
             </button>
@@ -446,7 +450,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               disabled={!isWebviewReady || !canGoForward}
               onMouseDown={preventMouseButtonFocus}
               onClick={goForward}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className={browserToolbarButtonClassName}
             >
               <ArrowRight size={15} />
             </button>
@@ -459,7 +463,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               disabled={!isWebviewReady}
               onMouseDown={preventMouseButtonFocus}
               onClick={reloadPage}
-              className={`flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40 ${isLoading ? 'animate-spin text-[rgb(var(--primary))]' : ''}`}
+              className={`${browserToolbarButtonClassName} ${isLoading ? 'animate-spin text-[rgb(var(--primary))]' : ''}`}
             >
               <RefreshCw size={15} />
             </button>
@@ -467,20 +471,20 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         </div>
 
         <form className="min-w-0 flex-1" onSubmit={handleSubmit}>
-          <label className="flex h-7 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-2 text-zinc-300 focus-within:border-[rgb(var(--ring))]/60">
-            <Globe size={13} className="shrink-0 text-zinc-500" />
+          <label className="flex h-7 items-center gap-2 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_82%,transparent)] px-2 text-[rgb(var(--foreground))] focus-within:border-[rgb(var(--ring))]/60">
+            <Globe size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
             <input
               ref={addressInputRef}
               value={inputValue}
               onChange={(event) => setInputValue(event.target.value)}
               aria-label={t('browserPane.address')}
               placeholder={t('browserPane.addressPlaceholder')}
-              className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-zinc-500"
+              className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
             />
           </label>
         </form>
 
-        <div className="flex items-center gap-1 text-zinc-400">
+        <div className="flex items-center gap-1 text-[rgb(var(--muted-foreground))]">
           <AppTooltip content={t('browserPane.openExternal')} placement="pane-corner">
             <button
               type="button"
@@ -488,7 +492,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
               aria-label={t('browserPane.openExternal')}
               onMouseDown={preventMouseButtonFocus}
               onClick={openCurrentUrlExternally}
-              className="flex h-6 w-6 items-center justify-center rounded hover:bg-zinc-800"
+              className={browserToolbarButtonClassName}
             >
               <ExternalLink size={13} />
             </button>
@@ -505,7 +509,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
                   event.stopPropagation();
                   onClose();
                 }}
-                className="flex h-6 w-6 items-center justify-center rounded bg-zinc-800/90 hover:bg-red-600 hover:text-zinc-50"
+                className={browserCloseButtonClassName}
               >
                 <X size={13} />
               </button>
