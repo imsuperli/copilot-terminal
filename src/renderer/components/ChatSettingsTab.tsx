@@ -241,7 +241,7 @@ export const ChatSettingsTab: React.FC = () => {
       <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h3 className="text-base font-semibold text-white">{t('settings.chat.providersTitle')}</h3>
+            <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.providersTitle')}</h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.providersDescription')}</p>
           </div>
 
@@ -261,7 +261,7 @@ export const ChatSettingsTab: React.FC = () => {
             </div>
           ) : providers.length === 0 ? (
             <div className="rounded-[20px] border border-dashed border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/50 px-5 py-10 text-center">
-              <div className="text-base font-semibold text-white">{t('settings.chat.noProvidersTitle')}</div>
+              <div className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.noProvidersTitle')}</div>
               <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.noProvidersDescription')}</p>
             </div>
           ) : (
@@ -273,7 +273,7 @@ export const ChatSettingsTab: React.FC = () => {
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-sm font-semibold text-white">{provider.name}</h4>
+                      <h4 className="text-sm font-semibold text-[rgb(var(--foreground))]">{provider.name}</h4>
                       <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
                         {provider.type === 'anthropic'
                           ? t('settings.chat.providerTypeAnthropic')
@@ -311,7 +311,7 @@ export const ChatSettingsTab: React.FC = () => {
                       onClick={() => {
                         void handleDeleteProvider(provider.id);
                       }}
-                      className="inline-flex h-9 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.16)] bg-[rgba(255,92,92,0.08)] px-4 text-sm text-[rgb(var(--foreground))] transition-colors hover:bg-[rgba(255,92,92,0.14)]"
+                      className="inline-flex h-9 items-center justify-center rounded-2xl border border-[rgb(var(--error)/0.16)] bg-[rgb(var(--error)/0.08)] px-4 text-sm text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--error)/0.14)]"
                     >
                       {t('common.delete')}
                     </button>
@@ -325,7 +325,7 @@ export const ChatSettingsTab: React.FC = () => {
         {editingProviderId && (
           <div className="mt-6 rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h4 className="text-base font-semibold text-white">
+              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">
                 {editingProviderId === 'new'
                   ? t('settings.chat.addProviderTitle')
                   : t('settings.chat.editProviderTitle')}
@@ -338,7 +338,7 @@ export const ChatSettingsTab: React.FC = () => {
                   setProviderForm(createEmptyProviderForm());
                   setFormError(null);
                 }}
-                className="text-sm text-[rgb(var(--muted-foreground))] transition-colors hover:text-white"
+                className="text-sm text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))]"
               >
                 {t('common.cancel')}
               </button>
@@ -425,7 +425,7 @@ export const ChatSettingsTab: React.FC = () => {
             </div>
 
             {formError && (
-              <p className="mt-4 text-sm text-[rgb(255,214,214)]">{formError}</p>
+              <p className="mt-4 text-sm text-[rgb(var(--error))]">{formError}</p>
             )}
 
             <div className="mt-5 flex justify-end">
@@ -445,7 +445,7 @@ export const ChatSettingsTab: React.FC = () => {
 
       <section className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
         <div>
-          <h3 className="text-base font-semibold text-white">{t('settings.chat.defaultsTitle')}</h3>
+          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.defaultsTitle')}</h3>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.defaultsDescription')}</p>
         </div>
 
@@ -472,7 +472,7 @@ export const ChatSettingsTab: React.FC = () => {
           <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h4 className="text-sm font-semibold text-white">{t('settings.chat.commandSecurityTitle')}</h4>
+                <h4 className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.commandSecurityTitle')}</h4>
                 <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.commandSecurityDescription')}</p>
               </div>
 
@@ -487,7 +487,7 @@ export const ChatSettingsTab: React.FC = () => {
                 aria-label={t('settings.chat.commandSecurityTitle')}
                 className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
               >
-                <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-[rgb(var(--background))] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]" />
               </Switch.Root>
             </div>
           </div>

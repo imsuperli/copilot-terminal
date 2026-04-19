@@ -486,7 +486,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
               <Plug size={22} />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">{t('settings.plugins.title')}</h3>
+              <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.plugins.title')}</h3>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">
                 {t('settings.plugins.pageDescription')}
               </p>
@@ -524,7 +524,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
         {(feedbackMessage || errorMessage) && (
           <div className={`mt-5 rounded-[20px] border px-4 py-3 text-sm ${
             errorMessage
-              ? 'border-[rgba(255,92,92,0.24)] bg-[rgba(255,92,92,0.10)] text-[rgb(255,214,214)]'
+              ? 'border-[rgb(var(--error)/0.24)] bg-[rgb(var(--error)/0.10)] text-[rgb(var(--foreground))]'
               : 'border-[rgba(168,170,88,0.24)] bg-[rgba(168,170,88,0.10)] text-[rgb(var(--primary))]'
           }`}>
             {errorMessage ?? feedbackMessage}
@@ -535,7 +535,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
       <section className="space-y-4">
         <div className="flex items-center gap-3">
           <Wrench size={18} className="text-[rgb(var(--primary))]" />
-          <h3 className="text-base font-semibold text-white">{t('settings.plugins.sections.builtin')}</h3>
+          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.plugins.sections.builtin')}</h3>
         </div>
         <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -545,7 +545,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-base font-semibold text-white">{t('settings.statusLine.pluginName')}</h3>
+                  <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.statusLine.pluginName')}</h3>
                   <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
                     {t('settings.statusLine.builtInBadge')}
                   </span>
@@ -558,7 +558,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
 
             <div className="flex items-center gap-4 rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-5 py-4">
               <div>
-                <div className="text-sm font-medium text-white">{t('settings.statusLine.enableTitle')}</div>
+                <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.statusLine.enableTitle')}</div>
                 <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.statusLine.enableDescription')}</div>
               </div>
               <Switch.Root
@@ -566,7 +566,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                 onCheckedChange={(checked) => void onToggleStatusLine(checked)}
                 className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
               >
-                <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-[rgb(var(--background))] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]" />
               </Switch.Root>
             </div>
           </div>
@@ -574,7 +574,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
           {statusLineConfig.enabled && (
             <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
-                <div className="text-sm font-semibold text-white">{t('settings.statusLine.displayFormat')}</div>
+                <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.statusLine.displayFormat')}</div>
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   {(['full', 'compact'] as const).map((format) => (
                     <label
@@ -593,7 +593,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         className="mt-1 h-4 w-4 text-[rgb(var(--primary))]"
                       />
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-[rgb(var(--foreground))]">
                           {format === 'full' ? t('settings.statusLine.full') : t('settings.statusLine.compact')}
                         </div>
                         <div className="mt-2 rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2 font-mono text-xs text-[rgb(var(--muted-foreground))]">
@@ -608,7 +608,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
               </div>
 
               <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
-                <div className="text-sm font-semibold text-white">{t('settings.statusLine.displayContent')}</div>
+                <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.statusLine.displayContent')}</div>
                 <div className="mt-4 space-y-3">
                   {[
                     { key: 'showContext', title: t('settings.statusLine.contextPercentage'), description: t('settings.statusLine.contextExample') },
@@ -627,7 +627,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         className="h-4 w-4 text-[rgb(var(--primary))]"
                       />
                       <div>
-                        <div className="text-sm font-medium text-white">{item.title}</div>
+                        <div className="text-sm font-medium text-[rgb(var(--foreground))]">{item.title}</div>
                         <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{item.description}</div>
                       </div>
                     </label>
@@ -642,7 +642,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
       <section className="space-y-4">
         <div className="flex items-center gap-3">
           <Settings2 size={18} className="text-[rgb(var(--primary))]" />
-          <h3 className="text-base font-semibold text-white">{t('settings.plugins.sections.installed')}</h3>
+          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.plugins.sections.installed')}</h3>
         </div>
 
         {isInitialLoad ? (
@@ -668,7 +668,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                   <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-lg font-semibold text-white">{plugin.name}</h3>
+                        <h3 className="text-lg font-semibold text-[rgb(var(--foreground))]">{plugin.name}</h3>
                         <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
                           {plugin.publisher}
                         </span>
@@ -679,7 +679,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                           {formatPluginSource(plugin.source, t)}
                         </span>
                         {plugin.updateAvailable && (
-                          <span className="rounded-full border border-[rgba(255,180,92,0.24)] bg-[rgba(255,180,92,0.12)] px-2 py-0.5 text-[11px] font-medium text-[rgb(255,220,170)]">
+                          <span className="rounded-full border border-[rgb(var(--warning)/0.24)] bg-[rgb(var(--warning)/0.12)] px-2 py-0.5 text-[rgb(var(--foreground))]">
                             {t('settings.plugins.badges.updateAvailable')}
                           </span>
                         )}
@@ -703,7 +703,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
                           <div className="flex items-center justify-between gap-4">
                             <div>
-                              <div className="text-sm font-medium text-white">{t('settings.plugins.globalDefaultTitle')}</div>
+                              <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.globalDefaultTitle')}</div>
                               <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
                                 {t('settings.plugins.globalDefaultDescription')}
                               </div>
@@ -714,13 +714,13 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                               onCheckedChange={(checked) => void handleSetGlobalEnabled(plugin.id, checked)}
                               className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
                             >
-                              <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+                              <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-[rgb(var(--background))] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]" />
                             </Switch.Root>
                           </div>
                         </div>
 
                         <label className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4 text-sm text-[rgb(var(--foreground))]">
-                          <div className="text-sm font-medium text-white">{t('settings.plugins.workspaceOverrideTitle')}</div>
+                          <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.plugins.workspaceOverrideTitle')}</div>
                           <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
                             {t('settings.plugins.workspaceOverrideDescription')}
                           </div>
@@ -758,7 +758,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                         type="button"
                         onClick={() => void handleUninstallPlugin(plugin.id)}
                         disabled={hasPluginMutationInFlight}
-                        className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(255,214,214)] disabled:cursor-not-allowed disabled:opacity-70"
+                        className="inline-flex h-11 items-center gap-2 rounded-2xl border border-[rgb(var(--error)/0.14)] bg-[rgb(var(--error)/0.08)] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--error)/0.34)] hover:bg-[rgb(var(--error)/0.14)] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-70"
                       >
                         {isActionActive(`uninstall:${plugin.id}`) ? <LoaderCircle size={16} className="animate-spin" /> : <Trash2 size={16} />}
                         {t('settings.plugins.actions.uninstall')}
@@ -770,13 +770,13 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                     || globalSettingsSchema.length > 0
                     || workspaceSettingsSchema.length > 0) && (
                     <details className="mt-5 overflow-hidden rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]">
-                      <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-white">
+                      <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium text-[rgb(var(--foreground))]">
                         {t('settings.plugins.configure')}
                       </summary>
                       <div className="border-t border-[rgb(var(--border))] px-5 py-5">
                         {plugin.manifest?.capabilities.some((capability) => (capability.requirements?.length ?? 0) > 0) && (
                           <div className="mb-5 rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4">
-                            <div className="text-sm font-semibold text-white">{t('settings.plugins.requirements')}</div>
+                            <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.plugins.requirements')}</div>
                             <div className="mt-3 space-y-2 text-sm text-[rgb(var(--muted-foreground))]">
                               {plugin.manifest.capabilities.flatMap((capability) => capability.requirements ?? []).map((requirement, index) => (
                                 <div key={`${plugin.id}:requirement:${index}`} className="rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-3 py-2">
@@ -822,7 +822,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
       <section className="space-y-4">
         <div className="flex items-center gap-3">
           <Download size={18} className="text-[rgb(var(--primary))]" />
-          <h3 className="text-base font-semibold text-white">{t('settings.plugins.sections.available')}</h3>
+          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.plugins.sections.available')}</h3>
         </div>
 
         {isInitialLoad ? (
@@ -858,7 +858,7 @@ export const PluginCenter: React.FC<PluginCenterProps> = ({
                 <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-white">{entry.name}</h3>
+                      <h3 className="text-lg font-semibold text-[rgb(var(--foreground))]">{entry.name}</h3>
                       <span className="rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
                         {entry.publisher}
                       </span>
@@ -922,7 +922,7 @@ function InfoTile({
   return (
     <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-4">
       <div className="text-xs font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">{label}</div>
-      <div className={`mt-2 break-all text-sm text-white ${mono ? 'font-mono' : ''}`}>{value}</div>
+      <div className={`mt-2 break-all text-sm text-[rgb(var(--foreground))] ${mono ? 'font-mono' : ''}`}>{value}</div>
     </div>
   );
 }
@@ -960,7 +960,7 @@ function renderSettingsScopeCard({
   if (entries.length === 0) {
     return (
       <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4">
-        <div className="text-sm font-semibold text-white">
+        <div className="text-sm font-semibold text-[rgb(var(--foreground))]">
           {scope === 'global' ? t('settings.plugins.scope.global') : t('settings.plugins.scope.workspace')}
         </div>
         <div className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.plugins.noSettings')}</div>
@@ -972,7 +972,7 @@ function renderSettingsScopeCard({
     <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[rgb(var(--background))] p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-white">
+          <div className="text-sm font-semibold text-[rgb(var(--foreground))]">
             {scope === 'global' ? t('settings.plugins.scope.global') : t('settings.plugins.scope.workspace')}
           </div>
           <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
@@ -993,7 +993,7 @@ function renderSettingsScopeCard({
       <div className="mt-4 space-y-4">
         {entries.map(([key, entry]) => (
           <label key={`${plugin.id}:${scope}:${key}`} className="block text-sm text-[rgb(var(--foreground))]">
-            <span className="mb-2 block text-sm font-medium text-white">{entry.title}</span>
+            <span className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">{entry.title}</span>
             {entry.description && (
               <span className="mb-2 block text-xs leading-5 text-[rgb(var(--muted-foreground))]">{entry.description}</span>
             )}
@@ -1031,7 +1031,7 @@ function renderSettingControl({
           onCheckedChange={(checked) => onChange(checked)}
           className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
         >
-          <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-white transition-transform data-[state=checked]:translate-x-[22px]" />
+          <Switch.Thumb className="block h-6 w-6 translate-x-0.5 rounded-full bg-[rgb(var(--background))] shadow-sm transition-transform data-[state=checked]:translate-x-[22px]" />
         </Switch.Root>
       </label>
     );
