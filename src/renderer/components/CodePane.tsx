@@ -10060,8 +10060,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
     modelFilePathRef.current.set(modelUri.path, filePath);
 
-    markDirty(filePath, false);
-    clearBannerForFile(filePath);
+    if (dirtyPathsRef.current.has(filePath)) {
+      markDirty(filePath, false);
+    }
+    if (banner?.filePath === filePath) {
+      clearBannerForFile(filePath);
+    }
     if (!wasExistingModel) {
       refreshProblems([filePath]);
       addLocalHistoryEntry(filePath, 'open', readResult.content);
@@ -10084,6 +10088,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     return model;
   }, [
     addLocalHistoryEntry,
+    banner?.filePath,
     clearBannerForFile,
     clearDefinitionLookupCache,
     markDirty,
