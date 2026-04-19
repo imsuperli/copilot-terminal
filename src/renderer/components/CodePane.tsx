@@ -301,6 +301,7 @@ const CODE_PANE_DIRECTORY_REFRESH_CONCURRENCY = 6;
 const CODE_PANE_COMPACT_PRELOAD_CONCURRENCY = 4;
 const CODE_PANE_MULTI_FILE_SAVE_CONCURRENCY = 3;
 const CODE_PANE_REFACTOR_APPLY_CONCURRENCY = 4;
+const CODE_PANE_SAVE_GIT_STATUS_REFRESH_DELAY_MS = 350;
 const CODE_PANE_MAX_NAVIGATION_HISTORY = 50;
 const CODE_PANE_MAX_LOCAL_HISTORY_PER_FILE = 12;
 const CODE_PANE_MAX_LOCAL_HISTORY_CONTENT_SIZE = 200_000;
@@ -470,11 +471,13 @@ type GitSnapshotRefreshOptions = {
   includeGraph?: boolean;
   force?: boolean;
   statusOnly?: boolean;
+  delayMs?: number;
 };
 type PendingGitSnapshotRefresh = {
   includeGraph: boolean;
   force: boolean;
   statusOnly: boolean;
+  delayMs?: number;
   resolvers: Array<() => void>;
   rejecters: Array<(error: unknown) => void>;
 };
@@ -2991,15 +2994,29 @@ const FilesSidebarContent = React.memo(function FilesSidebarContent({
     scrollTop: 0,
     viewportHeight: 0,
   });
+  const viewportRef = React.useRef(viewport);
   const pendingViewportRef = React.useRef<FileTreeViewport | null>(null);
   const viewportAnimationFrameRef = React.useRef<number | null>(null);
 
   const updateViewport = React.useCallback((nextViewport: FileTreeViewport) => {
+    const nextNormalizedViewport = {
+      scrollTop: Math.max(0, Math.floor(nextViewport.scrollTop / CODE_PANE_EXPLORER_ROW_HEIGHT) * CODE_PANE_EXPLORER_ROW_HEIGHT),
+      viewportHeight: Math.max(0, Math.ceil(nextViewport.viewportHeight)),
+    };
+    const currentViewport = viewportRef.current;
+    if (
+      currentViewport.scrollTop === nextNormalizedViewport.scrollTop
+      && currentViewport.viewportHeight === nextNormalizedViewport.viewportHeight
+    ) {
+      return;
+    }
+
+    viewportRef.current = nextNormalizedViewport;
     setViewport((currentViewport) => (
-      currentViewport.scrollTop === nextViewport.scrollTop
-      && currentViewport.viewportHeight === nextViewport.viewportHeight
+      currentViewport.scrollTop === nextNormalizedViewport.scrollTop
+      && currentViewport.viewportHeight === nextNormalizedViewport.viewportHeight
         ? currentViewport
-        : nextViewport
+        : nextNormalizedViewport
     ));
   }, []);
 
@@ -8151,6 +8168,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const debugCurrentFrameRef = useRef<CodePaneDebugStackFrame | null>(null);
   const dirtyPathsRef = useRef(new Set<string>());
   const savingPathsRef = useRef(new Set<string>());
+  const pendingSavePathsRef = useRef(new Set<string>());
   const activeFilePathRef = useRef(activeFilePath);
   const activeCursorLineNumberRef = useRef(1);
   const activeCursorColumnRef = useRef(1);
@@ -9947,6 +9965,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       clearTimeout(timer);
     }
     autoSaveTimersRef.current.clear();
+    pendingSavePathsRef.current.clear();
 
     for (const timer of documentSyncTimersRef.current.values()) {
       clearTimeout(timer);
@@ -10259,6 +10278,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         inFlightRefresh.includeGraph = inFlightRefresh.includeGraph || includeGraph;
         inFlightRefresh.force = inFlightRefresh.force || force;
         inFlightRefresh.statusOnly = inFlightRefresh.statusOnly && statusOnly;
+        inFlightRefresh.delayMs = Math.min(inFlightRefresh.delayMs ?? 0, options?.delayMs ?? 0);
         inFlightRefresh.resolvers.push(resolve);
         inFlightRefresh.rejecters.push(reject);
         return;
@@ -10270,6 +10290,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         pendingRefresh.includeGraph = pendingRefresh.includeGraph || includeGraph;
         pendingRefresh.force = pendingRefresh.force || force;
         pendingRefresh.statusOnly = pendingRefresh.statusOnly && statusOnly;
+        pendingRefresh.delayMs = Math.min(pendingRefresh.delayMs ?? 0, options?.delayMs ?? 0);
         pendingRefresh.resolvers.push(resolve);
         pendingRefresh.rejecters.push(reject);
       } else {
@@ -10277,6 +10298,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           includeGraph,
           force,
           statusOnly,
+          delayMs: options?.delayMs,
           resolvers: [resolve],
           rejecters: [reject],
         };
@@ -10330,7 +10352,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           pendingGitSnapshotRefreshRef.current = null;
           trailingRefresh?.rejecters.forEach((currentReject) => currentReject(error));
         });
-      }, queuedRefresh?.force || !hadPendingRefresh ? 0 : 150);
+      }, queuedRefresh?.force ? 0 : queuedRefresh?.delayMs ?? (!hadPendingRefresh ? 0 : 150));
     });
   }, [refreshGitSnapshotNow, shouldLoadGitGraph]);
 
@@ -10339,6 +10361,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void refreshGitSnapshot({
       statusOnly: options?.forceStatusOnly !== false,
       includeGraph: false,
+      delayMs: options?.force ? 0 : CODE_PANE_SAVE_GIT_STATUS_REFRESH_DELAY_MS,
       ...(options?.force || options?.forceStatusOnly ? { force: true } : {}),
     });
   }, [refreshGitSnapshot, rootPath]);
@@ -12161,6 +12184,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (savingPathsRef.current.has(filePath)) {
+      pendingSavePathsRef.current.add(filePath);
       return true;
     }
 
@@ -12192,6 +12216,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     markSaving(filePath, false);
 
     if (!response.success || !response.data) {
+      pendingSavePathsRef.current.delete(filePath);
       if (qualityGateStateBeforeWrite) {
         const nextSteps = updateSaveQualityStep(qualityGateStateBeforeWrite.steps ?? [], {
           id: 'write',
@@ -12233,6 +12258,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (getModelVersionId(model) === saveVersionId) {
       markDirty(filePath, false);
     }
+    const shouldRunFollowUpSave = pendingSavePathsRef.current.delete(filePath) || dirtyPathsRef.current.has(filePath);
     clearBannerForFile(filePath);
     if (qualityGateStateBeforeWrite) {
       const nextSteps = updateSaveQualityStep(qualityGateStateBeforeWrite.steps ?? [], {
@@ -12254,6 +12280,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
     void queueLanguageDocumentSync(filePath, 'save', async () => {
       await syncLanguageDocument(filePath, 'save');
     });
+    if (shouldRunFollowUpSave && !options?.overwrite) {
+      scheduleAutoSave(filePath);
+    }
     if (!options?.skipGitRefresh) {
       scheduleGitStatusRefresh({
         force: didWriteIntermediateFiles,
@@ -12270,6 +12299,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     rootPath,
     runSaveQualityPipeline,
     invalidateWorkspaceRuntimeCaches,
+    scheduleAutoSave,
     scheduleGitStatusRefresh,
     syncLanguageDocument,
     t,
