@@ -2476,6 +2476,64 @@ describe('CodePane', () => {
     expect((await screen.findAllByText('Create main package')).length).toBeGreaterThan(0);
   });
 
+  it('coalesces overlapping git history refresh requests', async () => {
+    const user = userEvent.setup();
+    let resolveHistory: (() => void) | null = null;
+
+    vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
+      if (!targetPath || targetPath === '/workspace/project') {
+        return {
+          success: true,
+          data: [
+            {
+              path: '/workspace/project/src',
+              name: 'src',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ],
+        };
+      }
+
+      return { success: true, data: [] };
+    });
+    vi.mocked(window.electronAPI.codePaneGitHistory).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        resolveHistory = resolve;
+      });
+      return {
+        success: true,
+        data: {
+          scope: 'file',
+          targetFilePath: '/workspace/project/src',
+          entries: [],
+        },
+      };
+    });
+
+    renderCodePane(createPane());
+
+    const directoryButton = await screen.findByRole('button', { name: 'src' });
+    await user.pointer({ keys: '[MouseRight]', target: directoryButton });
+    await user.click(await screen.findByText('codePane.gitFileHistory'));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitHistory).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      fireEvent.click((await screen.findAllByRole('button', { name: 'codePane.refresh' }))[0]);
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneGitHistory).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveHistory?.();
+      await Promise.resolve();
+    });
+  });
+
   it('copies qualified package names from compact package directories', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.codePaneListDirectory).mockImplementation(async ({ targetPath }) => {
@@ -3356,6 +3414,62 @@ describe('CodePane', () => {
     });
   });
 
+  it('coalesces overlapping debug tool window refresh requests', async () => {
+    let resolveDebugSessions: (() => void) | null = null;
+    let resolveExceptionBreakpoints: (() => void) | null = null;
+
+    vi.mocked(window.electronAPI.codePaneListRunTargets).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(window.electronAPI.codePaneListDebugSessions).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        resolveDebugSessions = resolve;
+      });
+      return {
+        success: true,
+        data: [],
+      };
+    });
+    vi.mocked(window.electronAPI.codePaneGetExceptionBreakpoints).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        resolveExceptionBreakpoints = resolve;
+      });
+      return {
+        success: true,
+        data: [{ id: 'all', label: 'All Exceptions', enabled: false }],
+      };
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.debugTab' }));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneListDebugSessions).toHaveBeenCalledTimes(1);
+      expect(window.electronAPI.codePaneGetExceptionBreakpoints).toHaveBeenCalledTimes(1);
+      expect(window.electronAPI.codePaneListRunTargets).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      fireEvent.click(within(screen.getByTestId('code-pane-bottom-panel')).getAllByRole('button', { name: 'codePane.refresh' })[0]);
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneListDebugSessions).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.codePaneGetExceptionBreakpoints).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.codePaneListRunTargets).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveDebugSessions?.();
+      resolveExceptionBreakpoints?.();
+      await Promise.resolve();
+    });
+  });
+
   it('toggles breakpoints from the editor gutter', async () => {
     renderCodePane(createPane());
 
@@ -4136,6 +4250,47 @@ describe('CodePane', () => {
     expect(await screen.findByText(/Test User · Refine index flow/)).toBeInTheDocument();
   }, 10_000);
 
+  it('reuses cached blame results for repeated blame toggles on the same file', async () => {
+    vi.mocked(window.electronAPI.codePaneGitBlame).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          lineNumber: 1,
+          commitSha: 'abcdef1234567890',
+          shortSha: 'abcdef1',
+          author: 'Test User',
+          summary: 'Refine index flow',
+          timestamp: 1_710_000_000,
+          text: 'export const value = 1;',
+        },
+      ],
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    await triggerEditorAction('codePane.gitBlame');
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGitBlame).toHaveBeenCalledTimes(1);
+    });
+
+    await triggerEditorAction('codePane.gitBlame');
+    await triggerEditorAction('codePane.gitBlame');
+
+    expect(window.electronAPI.codePaneGitBlame).toHaveBeenCalledTimes(1);
+  });
+
   it('filters the commit window to included files without changing the selected commit paths', async () => {
     vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
       success: true,
@@ -4382,8 +4537,10 @@ describe('CodePane', () => {
       fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
     });
 
+    expect(await screen.findByRole('button', { name: 'codePane.gitCommitDots' })).toBeInTheDocument();
+
     await act(async () => {
-      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
     });
 
     await act(async () => {
@@ -4404,6 +4561,81 @@ describe('CodePane', () => {
       rootPath: '/workspace/project',
       filePath: '/workspace/project/src/index.ts',
       mergedContent: 'export const value = 2;\n',
+    });
+  });
+
+  it('coalesces overlapping conflict detail refresh requests', async () => {
+    let resolveConflict: (() => void) | null = null;
+
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          conflicted: true,
+          section: 'conflicted',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitConflictDetails).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        resolveConflict = resolve;
+      });
+      return {
+        success: true,
+        data: {
+          filePath: '/workspace/project/src/index.ts',
+          relativePath: 'src/index.ts',
+          baseContent: 'export const value = 1;\n',
+          oursContent: 'export const value = 2;\n',
+          theirsContent: 'export const value = 3;\n',
+          mergedContent: 'export const value = 2;\n',
+          language: 'typescript',
+        },
+      };
+    });
+
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
+    });
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitResolveConflict' }));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitConflictDetails).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      fireEvent.click(within(screen.getByTestId('code-pane-bottom-panel')).getAllByRole('button', { name: 'codePane.refresh' })[0]);
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneGetGitConflictDetails).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveConflict?.();
+      await Promise.resolve();
     });
   });
 
@@ -5166,6 +5398,79 @@ describe('CodePane', () => {
       rootPath: '/workspace/project',
       filePath: '/workspace/project/src/index.ts',
       patch: unstagedHunk.patch,
+    });
+  });
+
+  it('coalesces overlapping git hunk loads for the same file', async () => {
+    let resolveDiffHunks: (() => void) | null = null;
+
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockResolvedValue({
+      success: true,
+      data: [
+        {
+          path: '/workspace/project/src/index.ts',
+          status: 'modified',
+          unstaged: true,
+          section: 'unstaged',
+        },
+      ],
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockResolvedValue({
+      success: true,
+      data: {
+        repoRootPath: '/workspace/project',
+        currentBranch: 'feature/scm',
+        upstreamBranch: 'origin/feature/scm',
+        detachedHead: false,
+        headSha: '1234567890abcdef',
+        aheadCount: 1,
+        behindCount: 0,
+        operation: 'idle',
+        hasConflicts: false,
+      },
+    });
+    vi.mocked(window.electronAPI.codePaneGetGitDiffHunks).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        resolveDiffHunks = resolve;
+      });
+      return {
+        success: true,
+        data: {
+          filePath: '/workspace/project/src/index.ts',
+          stagedHunks: [],
+          unstagedHunks: [],
+        },
+      };
+    });
+
+    renderCodePane(createPane());
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'codePane.scmTab' }));
+    });
+
+    expect(await screen.findByRole('button', { name: 'codePane.gitCommitDots' })).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'codePane.gitOpenChangesWorkbench' }));
+    });
+
+    expect(await screen.findByText('codePane.gitChangesWorkbenchTab')).toBeInTheDocument();
+
+    const scmFileButton = await screen.findByRole('button', { name: /index\.ts/ });
+    await act(async () => {
+      fireEvent.click(scmFileButton);
+      fireEvent.click(scmFileButton);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitDiffHunks).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      resolveDiffHunks?.();
+      await Promise.resolve();
     });
   });
 
@@ -7729,6 +8034,52 @@ describe('CodePane', () => {
         filePath: '/workspace/project/src/index.ts',
       }),
     ]);
+  });
+
+  it('coalesces overlapping workspace todo refresh requests', async () => {
+    const user = userEvent.setup();
+    const deferredByQuery = new Map<string, () => void>();
+
+    vi.mocked(window.electronAPI.codePaneSearchContents).mockImplementation(async ({ query }) => {
+      await new Promise<void>((resolve) => {
+        deferredByQuery.set(query, resolve);
+      });
+      return {
+        success: true,
+        data: query === 'TODO'
+          ? [
+            {
+              filePath: '/workspace/project/src/index.ts',
+              lineNumber: 1,
+              column: 1,
+              lineText: '// TODO: wire service',
+            },
+          ]
+          : [],
+      };
+    });
+
+    renderCodePane(createPane());
+
+    await user.click(await screen.findByRole('button', { name: 'codePane.workspaceTab' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneSearchContents).toHaveBeenCalledTimes(3);
+    });
+
+    await act(async () => {
+      fireEvent.click(within(screen.getByTestId('code-pane-bottom-panel')).getAllByRole('button', { name: 'codePane.refresh' })[0]);
+      await Promise.resolve();
+    });
+
+    expect(window.electronAPI.codePaneSearchContents).toHaveBeenCalledTimes(3);
+
+    await act(async () => {
+      for (const resolve of deferredByQuery.values()) {
+        resolve();
+      }
+      await Promise.resolve();
+    });
   });
 
   it('does not duplicate local history opened entries after external file refreshes', async () => {

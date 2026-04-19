@@ -68,6 +68,7 @@ import type {
   CodePaneDebugSessionChangedPayload,
   CodePaneDebugSessionDetails,
   CodePaneDebugSessionOutputPayload,
+  CodePaneDebugSessionSnapshot,
   CodePaneDebugScope,
   CodePaneDebugStackFrame,
   CodePaneDebugVariable,
@@ -82,6 +83,7 @@ import type {
   CodePaneGitConflictDetails,
   CodePaneGitHistoryResult,
   CodePaneGitHistoryEntry,
+  CodePaneGitDiffHunksResult,
   CodePaneGitRebasePlanEntry,
   CodePaneGitRebasePlanResult,
   CodePaneGitRepositorySummary,
@@ -8083,13 +8085,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
   const loadExceptionBreakpoints = useCallback(async () => {
     const persistedExceptionBreakpoints = paneRef.current.code?.debug?.exceptionBreakpoints;
+    const requestKey = `exception-breakpoints:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
     if ((persistedExceptionBreakpoints?.length ?? 0) > 0) {
       const normalizedPersistedBreakpoints = normalizeExceptionBreakpoints(persistedExceptionBreakpoints);
-      const syncResponse = await window.electronAPI.codePaneSetExceptionBreakpoints({
+      const syncResponse = await trackRequest(
+        requestKey,
+        'Exception breakpoints',
         rootPath,
-        breakpoints: normalizedPersistedBreakpoints,
-      });
+        async () => await dedupeProjectRequest(
+          rootPath,
+          'exception-breakpoints:sync',
+          async () => await window.electronAPI.codePaneSetExceptionBreakpoints({
+            rootPath,
+            breakpoints: normalizedPersistedBreakpoints,
+          }),
+        ),
+      );
+      if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+        return;
+      }
       if (syncResponse.success) {
+        runtimeStoreRef.current.setCache(requestKey, normalizedPersistedBreakpoints);
         setExceptionBreakpoints((currentBreakpoints) => (
           areExceptionBreakpointsEqual(currentBreakpoints, normalizedPersistedBreakpoints)
             ? currentBreakpoints
@@ -8099,9 +8116,34 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    const response = await window.electronAPI.codePaneGetExceptionBreakpoints({
+    const cachedBreakpoints = runtimeStoreRef.current.getCache<CodePaneExceptionBreakpoint[]>(
+      requestKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedBreakpoints) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Exception breakpoints', {
+        meta: rootPath,
+        fromCache: true,
+      });
+      persistExceptionBreakpoints(cachedBreakpoints);
+      return;
+    }
+
+    const response = await trackRequest(
+      requestKey,
+      'Exception breakpoints',
       rootPath,
-    });
+      async () => await dedupeProjectRequest(
+        rootPath,
+        'exception-breakpoints',
+        async () => await window.electronAPI.codePaneGetExceptionBreakpoints({
+          rootPath,
+        }),
+      ),
+    );
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
     if (!response.success) {
       setBanner({
         tone: 'error',
@@ -8110,13 +8152,56 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
-    persistExceptionBreakpoints(response.data ?? CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS);
-  }, [persistExceptionBreakpoints, rootPath, t]);
+    const nextBreakpoints = response.data ?? CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS;
+    runtimeStoreRef.current.setCache(requestKey, nextBreakpoints);
+    persistExceptionBreakpoints(nextBreakpoints);
+  }, [persistExceptionBreakpoints, rootPath, t, trackRequest]);
 
   const loadDebugSessions = useCallback(async () => {
-    const response = await window.electronAPI.codePaneListDebugSessions({
+    const requestKey = `debug-sessions:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cachedSnapshots = runtimeStoreRef.current.getCache<CodePaneDebugSessionSnapshot[]>(
+      requestKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedSnapshots) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Debug sessions', {
+        meta: rootPath,
+        fromCache: true,
+      });
+      const cachedSessions = cachedSnapshots.map((snapshot) => snapshot.session);
+      setDebugSessions((currentSessions) => (
+        areDebugSessionsEqual(currentSessions, cachedSessions) ? currentSessions : cachedSessions
+      ));
+      debugSessionOutputsRef.current = cachedSnapshots.reduce<Record<string, string>>((accumulator, snapshot) => {
+        accumulator[snapshot.session.id] = snapshot.output;
+        return accumulator;
+      }, {});
+      setSelectedDebugSessionId((currentSelectedSessionId) => {
+        if (currentSelectedSessionId && cachedSnapshots.some((snapshot) => snapshot.session.id === currentSelectedSessionId)) {
+          return currentSelectedSessionId;
+        }
+        const nextSelectedSessionId = cachedSnapshots[0]?.session.id ?? null;
+        return currentSelectedSessionId === nextSelectedSessionId ? currentSelectedSessionId : nextSelectedSessionId;
+      });
+      return;
+    }
+
+    const response = await trackRequest(
+      requestKey,
+      'Debug sessions',
       rootPath,
-    });
+      async () => await dedupeProjectRequest(
+        rootPath,
+        'debug-sessions',
+        async () => await window.electronAPI.codePaneListDebugSessions({
+          rootPath,
+        }),
+      ),
+    );
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
     if (!response.success) {
       setBanner({
         tone: 'error',
@@ -8126,6 +8211,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const snapshots = response.data ?? [];
+    runtimeStoreRef.current.setCache(requestKey, snapshots);
     const nextSessions = snapshots.map((snapshot) => snapshot.session);
     setDebugSessions((currentSessions) => (
       areDebugSessionsEqual(currentSessions, nextSessions) ? currentSessions : nextSessions
@@ -8141,7 +8227,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       const nextSelectedSessionId = snapshots[0]?.session.id ?? null;
       return currentSelectedSessionId === nextSelectedSessionId ? currentSelectedSessionId : nextSelectedSessionId;
     });
-  }, [rootPath, t]);
+  }, [rootPath, t, trackRequest]);
 
   useEffect(() => {
     for (const breakpoint of breakpointsRef.current) {
@@ -9462,12 +9548,47 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    const requestKey = `git-conflict:${rootPath}`;
+    const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
+    const cacheKey = `${requestKey}:${filePath}`;
+    const cachedConflict = runtimeStoreRef.current.getCache<NonNullable<typeof gitConflictDetails>>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedConflict) {
+      runtimeStoreRef.current.recordRequest(requestKey, 'Git conflict details', {
+        meta: getRelativePath(rootPath, filePath) || filePath,
+        fromCache: true,
+      });
+      startTransition(() => {
+        setSelectedGitConflictPath((currentPath) => (currentPath === filePath ? currentPath : filePath));
+        setGitConflictDetails((currentDetails) => (
+          areGitConflictDetailsEqual(currentDetails, cachedConflict) ? currentDetails : cachedConflict
+        ));
+      });
+      setGitConflictError((currentError) => (currentError === null ? currentError : null));
+      setIsGitConflictLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
+      return;
+    }
+
     setIsGitConflictLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setGitConflictError((currentError) => (currentError === null ? currentError : null));
-    const response = await window.electronAPI.codePaneGetGitConflictDetails({
-      rootPath,
-      filePath,
-    });
+    const response = await trackRequest(
+      requestKey,
+      'Git conflict details',
+      getRelativePath(rootPath, filePath) || filePath,
+      async () => await dedupeProjectRequest(
+        rootPath,
+        `git-conflict:${filePath}`,
+        async () => await window.electronAPI.codePaneGetGitConflictDetails({
+          rootPath,
+          filePath,
+        }),
+      ),
+    );
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return;
+    }
 
     if (!response.success || !response.data) {
       const nextError = response.error || t('common.retry');
@@ -9479,14 +9600,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    const nextConflict = response.data;
+    runtimeStoreRef.current.setCache(cacheKey, nextConflict);
     startTransition(() => {
       setSelectedGitConflictPath((currentPath) => (currentPath === filePath ? currentPath : filePath));
       setGitConflictDetails((currentDetails) => (
-        areGitConflictDetailsEqual(currentDetails, response.data ?? null) ? currentDetails : (response.data ?? null)
+        areGitConflictDetailsEqual(currentDetails, nextConflict) ? currentDetails : nextConflict
       ));
     });
     setIsGitConflictLoading((currentLoading) => (currentLoading === false ? currentLoading : false));
-  }, [rootPath, t]);
+  }, [rootPath, t, trackRequest]);
 
   const loadGitDiffHunks = useCallback(async (filePath: string | null) => {
     const requestId = ++gitHunksRequestIdRef.current;
@@ -9508,15 +9631,43 @@ export const CodePane: React.FC<CodePaneProps> = ({
       selectedGitHunksPathRef.current = filePath;
       setSelectedGitHunksPath((currentPath) => (currentPath === filePath ? currentPath : filePath));
     }
+    const cacheKey = `git-hunks:${rootPath}:${filePath}`;
+    const cachedDiffHunks = runtimeStoreRef.current.getCache<CodePaneGitDiffHunksResult>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedDiffHunks) {
+      gitStagedHunksRef.current = cachedDiffHunks.stagedHunks ?? [];
+      gitUnstagedHunksRef.current = cachedDiffHunks.unstagedHunks ?? [];
+      gitHunksErrorRef.current = null;
+      startTransition(() => {
+        if (gitHunksRequestIdRef.current !== requestId || selectedGitHunksPathRef.current !== filePath) {
+          return;
+        }
+        setGitStagedHunks((currentHunks) => (
+          areGitDiffHunksEqual(currentHunks, gitStagedHunksRef.current) ? currentHunks : gitStagedHunksRef.current
+        ));
+        setGitUnstagedHunks((currentHunks) => (
+          areGitDiffHunksEqual(currentHunks, gitUnstagedHunksRef.current) ? currentHunks : gitUnstagedHunksRef.current
+        ));
+        setGitHunksError((currentError) => (currentError === null ? currentError : null));
+      });
+      setIsGitHunksLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
     setIsGitHunksLoading((currentLoading) => (currentLoading ? currentLoading : true));
     if (gitHunksErrorRef.current !== null) {
       gitHunksErrorRef.current = null;
       setGitHunksError((currentError) => (currentError === null ? currentError : null));
     }
-    const response = await window.electronAPI.codePaneGetGitDiffHunks({
+    const response = await dedupeProjectRequest(
       rootPath,
-      filePath,
-    });
+      cacheKey,
+      async () => await window.electronAPI.codePaneGetGitDiffHunks({
+        rootPath,
+        filePath,
+      }),
+    );
 
     if (gitHunksRequestIdRef.current !== requestId || selectedGitHunksPathRef.current !== filePath) {
       return;
@@ -9536,6 +9687,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const diffHunks = response.data;
+    runtimeStoreRef.current.setCache(cacheKey, diffHunks);
     startTransition(() => {
       if (gitHunksRequestIdRef.current !== requestId || selectedGitHunksPathRef.current !== filePath) {
         return;
@@ -13553,12 +13705,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
       requestKey,
       'Git history',
       config.filePath ? getRelativePath(rootPath, config.filePath) : undefined,
-      async () => await window.electronAPI.codePaneGitHistory({
+      async () => await dedupeProjectRequest(
         rootPath,
-        filePath: config.filePath,
-        lineNumber: config.lineNumber,
-        limit: 30,
-      }),
+        cacheKey,
+        async () => await window.electronAPI.codePaneGitHistory({
+          rootPath,
+          filePath: config.filePath,
+          lineNumber: config.lineNumber,
+          limit: 30,
+        }),
+      ),
     );
     if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
       return;
@@ -13592,11 +13748,28 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    const cacheKey = `git-blame:${rootPath}:${filePath}`;
+    const cachedBlame = runtimeStoreRef.current.getCache<CodePaneGitBlameLine[]>(
+      cacheKey,
+      CODE_PANE_TOOL_WINDOW_CACHE_TTL_MS,
+    );
+    if (cachedBlame) {
+      setBlameLines((currentLines) => (
+        areGitBlameLinesEqual(currentLines, cachedBlame) ? currentLines : cachedBlame
+      ));
+      setIsBlameLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return;
+    }
+
     setIsBlameLoading((currentLoading) => (currentLoading ? currentLoading : true));
-    const response = await window.electronAPI.codePaneGitBlame({
+    const response = await dedupeProjectRequest(
       rootPath,
-      filePath,
-    });
+      cacheKey,
+      async () => await window.electronAPI.codePaneGitBlame({
+        rootPath,
+        filePath,
+      }),
+    );
     if (!response.success) {
       setBanner({
         tone: 'warning',
@@ -13609,6 +13782,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const nextLines = response.data ?? [];
+    runtimeStoreRef.current.setCache(cacheKey, nextLines);
     setBlameLines((currentLines) => (
       areGitBlameLinesEqual(currentLines, nextLines) ? currentLines : nextLines
     ));
@@ -15274,31 +15448,33 @@ export const CodePane: React.FC<CodePaneProps> = ({
     setIsTodoLoading((currentLoading) => (currentLoading ? currentLoading : true));
     setTodoError((currentError) => (currentError === null ? currentError : null));
 
-    const scanRequests: Array<Promise<{
-      token: typeof CODE_PANE_TODO_TOKENS[number];
-      response: IpcResponse<CodePaneContentMatch[]>;
-    }>> = [];
-    for (const token of CODE_PANE_TODO_TOKENS) {
-      scanRequests.push((async () => ({
-        token,
-        response: await trackRequest(
-          `todo-scan:${rootPath}:${token}`,
-          'TODO scan',
+    const responses = await trackRequest(
+      requestKey,
+      'TODO scan',
+      rootPath,
+      async () => await dedupeProjectRequest(
+        rootPath,
+        'todo-scan:all',
+        async () => await Promise.all(CODE_PANE_TODO_TOKENS.map(async (token) => ({
           token,
-          async () => await dedupeProjectRequest(
-            rootPath,
-            `todo-token:${token}`,
-            async () => await window.electronAPI.codePaneSearchContents({
+          response: await trackRequest(
+            `todo-scan:${rootPath}:${token}`,
+            'TODO scan',
+            token,
+            async () => await dedupeProjectRequest(
               rootPath,
-              query: token,
-              limit: 120,
-              maxMatchesPerFile: 20,
-            }),
+              `todo-token:${token}`,
+              async () => await window.electronAPI.codePaneSearchContents({
+                rootPath,
+                query: token,
+                limit: 120,
+                maxMatchesPerFile: 20,
+              }),
+            ),
           ),
-        ),
-      }))());
-    }
-    const responses = await Promise.all(scanRequests);
+        }))),
+      ),
+    );
 
     const todoItemsByKey = new Map<string, CodePaneTodoItem>();
     for (const { token, response } of responses) {
@@ -19379,7 +19555,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
 
       setDebugSessions((currentSessions) => {
-        return prependRecentSession(currentSessions, payload.session, areDebugSessionsEqual);
+        const nextSessions = prependRecentSession(currentSessions, payload.session, areDebugSessionsEqual);
+        const nextSnapshots = nextSessions.map((session) => ({
+          session,
+          output: debugSessionOutputsRef.current[session.id] ?? '',
+        }));
+        runtimeStoreRef.current.setCache(`debug-sessions:${rootPath}`, nextSnapshots);
+        return nextSessions;
       });
       setSelectedDebugSessionId((currentSelectedSessionId) => (
         currentSelectedSessionId ?? (
@@ -19404,6 +19586,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
       const nextOutput = `${debugSessionOutputsRef.current[payload.sessionId] ?? ''}${payload.chunk}`;
       debugSessionOutputsRef.current[payload.sessionId] = nextOutput;
+      runtimeStoreRef.current.setCache(`debug-sessions:${rootPath}`, debugSessionsRef.current.map((session) => ({
+        session,
+        output: debugSessionOutputsRef.current[session.id] ?? '',
+      })));
       setSelectedDebugSessionOutput((currentOutput) => (
         selectedDebugSessionIdRef.current === payload.sessionId && currentOutput !== nextOutput
           ? nextOutput
@@ -20319,6 +20505,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return;
     }
 
+    runtimeStoreRef.current.setCache(`exception-breakpoints:${rootPath}`, nextBreakpoints);
     persistExceptionBreakpoints(nextBreakpoints);
   }, [persistExceptionBreakpoints, rootPath, t]);
 
