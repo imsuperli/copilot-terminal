@@ -19659,10 +19659,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       requestKey,
       'Run targets',
       activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
-      async () => await window.electronAPI.codePaneListRunTargets({
+      async () => await dedupeProjectRequest(
         rootPath,
-        activeFilePath,
-      }),
+        cacheKey,
+        async () => await window.electronAPI.codePaneListRunTargets({
+          rootPath,
+          activeFilePath,
+        }),
+      ),
     );
     if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
       return;
@@ -19720,9 +19724,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       requestKey,
       'Debug session details',
       sessionId,
-      async () => await window.electronAPI.codePaneGetDebugSessionDetails({
-        sessionId,
-      }),
+      async () => await dedupeProjectRequest(
+        rootPath,
+        cacheKey,
+        async () => await window.electronAPI.codePaneGetDebugSessionDetails({
+          sessionId,
+        }),
+      ),
     );
     if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
       return;
@@ -19772,10 +19780,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       requestKey,
       'Test discovery',
       activeFilePath ? getRelativePath(rootPath, activeFilePath) : undefined,
-      async () => await window.electronAPI.codePaneListTests({
+      async () => await dedupeProjectRequest(
         rootPath,
-        activeFilePath,
-      }),
+        cacheKey,
+        async () => await window.electronAPI.codePaneListTests({
+          rootPath,
+          activeFilePath,
+        }),
+      ),
     );
     if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
       return;
