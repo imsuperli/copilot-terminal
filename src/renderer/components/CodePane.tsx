@@ -19845,9 +19845,13 @@ export const CodePane: React.FC<CodePaneProps> = ({
       requestKey,
       refresh ? 'Refresh project model' : 'Project contribution',
       rootPath,
-      async () => refresh
-        ? await window.electronAPI.codePaneRefreshProjectModel({ rootPath })
-        : await window.electronAPI.codePaneGetProjectContribution({ rootPath }),
+      async () => await dedupeProjectRequest(
+        rootPath,
+        cacheKey,
+        async () => refresh
+          ? await window.electronAPI.codePaneRefreshProjectModel({ rootPath })
+          : await window.electronAPI.codePaneGetProjectContribution({ rootPath }),
+      ),
     );
     if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
       return;
