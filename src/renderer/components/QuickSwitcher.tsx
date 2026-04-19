@@ -129,42 +129,33 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
 
   // 过滤并合并窗口和窗口组
   const filteredItems = useMemo(() => {
-    // 过滤窗口
-    const filteredWindows: SwitcherItem[] = visibleWindows
-      .filter((window) => {
-        const displayInfo = getWindowDisplayInfo(window);
-        return displayInfo.searchTerms.some((value) => fuzzyMatch(query, value));
-      })
-      .map((window) => {
-        const displayInfo = getWindowDisplayInfo(window);
-        return {
-          type: 'window' as const,
-          data: window,
-          displayName: displayInfo.displayName,
-          secondaryText: displayInfo.secondaryText,
-        };
-      });
+    const filteredWindows: SwitcherItem[] = visibleWindows.flatMap((window) => {
+      const displayInfo = getWindowDisplayInfo(window);
+      if (!displayInfo.searchTerms.some((value) => fuzzyMatch(query, value))) {
+        return [];
+      }
 
-    // 过滤窗口组
+      return [{
+        type: 'window' as const,
+        data: window,
+        displayName: displayInfo.displayName,
+        secondaryText: displayInfo.secondaryText,
+      }];
+    });
+
     const filteredGroups: SwitcherItem[] = groups
-      .filter((group) => {
-        return fuzzyMatch(query, group.name);
-      })
+      .filter((group) => fuzzyMatch(query, group.name))
       .map((group) => ({ type: 'group' as const, data: group }));
 
-    // 合并并排序
     return [...filteredGroups, ...filteredWindows].sort((a, b) => {
-      // 当前激活的项排在最前面
       if (a.type === 'window' && a.data.id === currentWindowId) return -1;
       if (b.type === 'window' && b.data.id === currentWindowId) return 1;
       if (a.type === 'group' && a.data.id === currentGroupId) return -1;
       if (b.type === 'group' && b.data.id === currentGroupId) return 1;
 
-      // 窗口组优先于窗口
       if (a.type === 'group' && b.type === 'window') return -1;
       if (a.type === 'window' && b.type === 'group') return 1;
 
-      // 同类型按优先级排序
       if (a.type === 'window' && b.type === 'window') {
         const priorityA = getWindowPriority(a.data);
         const priorityB = getWindowPriority(b.data);
@@ -173,7 +164,6 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
           return priorityA - priorityB;
         }
 
-        // 优先级相同时，按最后活跃时间排序（最近的在前）
         return new Date(b.data.lastActiveAt).getTime() - new Date(a.data.lastActiveAt).getTime();
       }
 
@@ -185,7 +175,6 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
           return priorityA - priorityB;
         }
 
-        // 优先级相同时，按最后活跃时间排序（最近的在前）
         return new Date(b.data.lastActiveAt).getTime() - new Date(a.data.lastActiveAt).getTime();
       }
 
@@ -193,55 +182,70 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
     });
   }, [visibleWindows, groups, query, currentWindowId, currentGroupId, sshProfilesById]);
 
-  // 重置状态和处理动画
+  useEffect(() => {
+    if (!filteredItems.length) {
+      setSelectedIndex(0);
+      return;
+    }
+
+    setSelectedIndex((prev) => Math.min(prev, filteredItems.length - 1));
+  }, [filteredItems.length]);
+
   useEffect(() => {
     if (isOpen) {
       setShouldRender(true);
       setQuery('');
       setSelectedIndex(0);
-      // 延迟触发动画，确保元素已渲染
-      requestAnimationFrame(() => {
+
+      const animationFrameId = requestAnimationFrame(() => {
         setIsAnimating(true);
       });
-      // 聚焦搜索框
-      setTimeout(() => {
+
+      const focusTimerId = window.setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
-    } else {
-      // 关闭时先触发退出动画
-      setIsAnimating(false);
-      // 等待动画完成后再移除元素
-      const timer = setTimeout(() => {
-        setShouldRender(false);
-      }, 200); // 与 CSS transition 时间一致
-      return () => clearTimeout(timer);
+
+      return () => {
+        cancelAnimationFrame(animationFrameId);
+        window.clearTimeout(focusTimerId);
+      };
     }
+
+    setIsAnimating(false);
+    const timerId = window.setTimeout(() => {
+      setShouldRender(false);
+    }, 200);
+
+    return () => window.clearTimeout(timerId);
   }, [isOpen]);
 
-  // 键盘导航
   useEffect(() => {
     if (!isOpen) return;
+
+    const moveSelection = (direction: 1 | -1) => {
+      if (!filteredItems.length) {
+        return;
+      }
+
+      setSelectedIndex((prev) => (prev + direction + filteredItems.length) % filteredItems.length);
+    };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
         case 'ArrowDown':
           e.preventDefault();
           e.stopPropagation();
-          setSelectedIndex((prev) => (prev + 1) % filteredItems.length);
+          moveSelection(1);
           break;
         case 'ArrowUp':
           e.preventDefault();
           e.stopPropagation();
-          setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % filteredItems.length);
+          moveSelection(-1);
           break;
         case 'Tab':
           e.preventDefault();
           e.stopPropagation();
-          if (e.shiftKey) {
-            setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % filteredItems.length);
-          } else {
-            setSelectedIndex((prev) => (prev + 1) % filteredItems.length);
-          }
+          moveSelection(e.shiftKey ? -1 : 1);
           break;
         case 'Enter':
           e.preventDefault();
@@ -263,27 +267,25 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
           break;
       }
 
-      // Vim 风格导航（Ctrl+N 向下）
       if (e.ctrlKey && e.key === 'n') {
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => (prev + 1) % filteredItems.length);
+        moveSelection(1);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown); // 使用冒泡阶段
+    window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, filteredItems, selectedIndex, onSelect, onSelectGroup, onClose]);
 
-  // 自动滚动到选中项
   useEffect(() => {
-    if (listRef.current) {
-      const selectedElement = listRef.current.children[selectedIndex] as HTMLElement;
-      if (selectedElement) {
-        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
+    if (!listRef.current || !filteredItems.length) {
+      return;
     }
-  }, [selectedIndex]);
+
+    const selectedElement = listRef.current.children[selectedIndex] as HTMLElement | undefined;
+    selectedElement?.scrollIntoView({ block: 'nearest' });
+  }, [filteredItems.length, selectedIndex]);
 
   if (!shouldRender) return null;
 
@@ -310,16 +312,16 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
                 <div className={idePopupSubtitleClassName}>{t('quickSwitcher.shortcutHint')}</div>
               </div>
               {query ? (
-                <span className="rounded-md border border-zinc-700/80 bg-zinc-950/55 px-2 py-1 text-[11px] text-zinc-400">
+                <span className="rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--muted-foreground))]">
                   {t('quickSwitcher.resultsCount', { count: filteredItems.length })}
                 </span>
               ) : null}
             </div>
           </div>
 
-          <div className="border-b border-zinc-800/90 px-5 py-3 bg-[rgba(28,30,35,0.94)]">
+          <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_82%,transparent)] px-5 py-3">
             <div className="flex items-center gap-3">
-              <Search size={20} className="text-zinc-400 flex-shrink-0" />
+              <Search size={20} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
               <input
                 ref={inputRef}
                 type="text"
@@ -329,7 +331,7 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
                   setSelectedIndex(0);
                 }}
                 placeholder={t('quickSwitcher.searchPlaceholder')}
-                className="flex-1 bg-transparent text-zinc-100 placeholder:text-zinc-500 outline-none text-base"
+                className="flex-1 bg-transparent text-base text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
               />
             </div>
           </div>
@@ -339,13 +341,13 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
             className={`max-h-[500px] overflow-y-auto py-2 ${idePopupScrollAreaClassName}`}
             style={{
               scrollbarWidth: 'thin',
-              scrollbarColor: '#52525b transparent'
+              scrollbarColor: 'rgb(var(--border)) transparent',
             }}
           >
             {filteredItems.length === 0 ? (
               <div className="px-6 py-12 text-center">
-                <div className="text-zinc-400 text-sm mb-2">{t('quickSwitcher.noResults')}</div>
-                <div className="text-zinc-600 text-xs">
+                <div className="mb-2 text-sm text-[rgb(var(--foreground))]">{t('quickSwitcher.noResults')}</div>
+                <div className="text-xs text-[rgb(var(--muted-foreground))]">
                   {query ? t('quickSwitcher.noResultsHint') : t('quickSwitcher.emptyHint')}
                 </div>
               </div>
@@ -382,22 +384,22 @@ export const QuickSwitcher: React.FC<QuickSwitcherProps> = ({
             )}
           </div>
 
-          <div className="border-t border-zinc-800/90 bg-[rgba(35,37,42,0.94)] px-5 py-3 text-xs text-zinc-500">
+          <div className="border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-5 py-3 text-xs text-[rgb(var(--muted-foreground))]">
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">↑↓</kbd>
+                <kbd className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[rgb(var(--muted-foreground))]">↑↓</kbd>
                 <span>{t('quickSwitcher.select')}</span>
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">Enter</kbd>
+                <kbd className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[rgb(var(--muted-foreground))]">Enter</kbd>
                 <span>{t('quickSwitcher.switch')}</span>
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">Esc</kbd>
+                <kbd className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[rgb(var(--muted-foreground))]">Esc</kbd>
                 <span>{t('quickSwitcher.cancel')}</span>
               </span>
             </div>
-            <div className="text-zinc-600">
+            <div className="text-[rgb(var(--muted-foreground))]">
               {t('quickSwitcher.shortcutHint')}
             </div>
           </div>

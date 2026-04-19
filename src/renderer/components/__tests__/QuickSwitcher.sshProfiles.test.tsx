@@ -139,4 +139,36 @@ describe('QuickSwitcher SSH profile bindings', () => {
       ).toBeGreaterThan(0);
     });
   });
+
+  it('does not select or close when there are no filtered results', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const onSelect = vi.fn();
+    const onClose = vi.fn();
+
+    useWindowStore.setState({
+      windows: [runtimeWindow],
+      groups: [],
+    });
+
+    render(
+      <QuickSwitcher
+        isOpen
+        currentWindowId={runtimeWindow.id}
+        onClose={onClose}
+        onSelect={onSelect}
+        sshProfiles={[profile]}
+      />,
+    );
+
+    await user.type(screen.getByRole('textbox'), 'missing-target');
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(
+      screen.getByText(/No matching windows or groups found|没有找到匹配的窗口或窗口组/),
+    ).toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
