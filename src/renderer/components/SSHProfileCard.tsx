@@ -43,6 +43,10 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   const { t } = useI18n();
   const badgeClassName =
     'inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))]';
+  const tooltipClassName =
+    'rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
+  const cardButtonClassName =
+    'rounded bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] transition-colors hover:bg-[rgb(var(--accent))] backdrop-blur-sm';
   const runtimeStatus = useMemo(
     () => (window ? getAggregatedStatus(window.layout) : null),
     [window],
@@ -140,11 +144,11 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
       onClick={handleCardClick}
       onKeyDown={handleKeyDown}
       aria-label={`${profile.name} ${targetLabel}`}
-      className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border border-[rgb(var(--border))] relative"
+      className="relative flex h-56 min-w-[280px] flex-col overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_72%,transparent)] cursor-pointer transition-all duration-200 ease-out hover:bg-[color-mix(in_srgb,rgb(var(--card))_82%,transparent)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] backdrop-blur-xl"
       style={{ borderTop: `2px solid ${topBorderColor}` }}
     >
       {isConnecting && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-10 flex items-center justify-center text-sm font-medium text-white">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_srgb,rgb(var(--background))_76%,black)] text-sm font-medium text-[rgb(var(--foreground))] backdrop-blur-sm">
           {t('sshProfileCard.connecting')}
         </div>
       )}
@@ -193,7 +197,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-3 py-2 rounded-lg text-sm max-w-md break-all z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                    className={`${tooltipClassName} max-w-md break-all px-3 py-2 text-sm`}
                     side="top"
                     sideOffset={5}
                   >
@@ -245,11 +249,11 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 px-4 py-2 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
+      <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-4 py-2 backdrop-blur-sm">
         <button
           onClick={(event) => handleButtonClick(event, handlePrimaryAction)}
           disabled={isConnecting}
-          className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed ${
+          className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs ${cardButtonClassName} focus:outline-none whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60 ${
             isWindowRunning
               ? 'text-[rgb(var(--error))] focus:ring-2 focus:ring-[rgb(var(--error))]'
               : 'text-[rgb(var(--primary))] focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold'
@@ -274,7 +278,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                   <Tooltip.Trigger asChild>
                     <button
                       onClick={(event) => handleButtonClick(event, () => onArchiveWindow?.(window))}
-                      className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                      className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
                       aria-label={t('terminalView.archive')}
                     >
                       <Archive size={16} />
@@ -282,7 +286,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                      className={tooltipClassName}
                       side="top"
                       sideOffset={5}
                     >
@@ -297,7 +301,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                   <Tooltip.Trigger asChild>
                     <button
                       onClick={(event) => handleButtonClick(event, () => onUnarchiveWindow?.(window))}
-                      className="flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                      className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
                       aria-label={t('windowCard.unarchive')}
                     >
                       <ArchiveRestore size={16} />
@@ -305,7 +309,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                      className={tooltipClassName}
                       side="top"
                       sideOffset={5}
                     >
@@ -322,7 +326,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
               <Tooltip.Trigger asChild>
                 <button
                   onClick={(event) => handleButtonClick(event, () => onDuplicate?.(profile))}
-                  className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                  className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
                   aria-label={t('sshProfileCard.duplicate')}
                 >
                   <Copy size={16} />
@@ -330,7 +334,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                  className={tooltipClassName}
                   side="top"
                   sideOffset={5}
                 >
@@ -345,7 +349,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
               <Tooltip.Trigger asChild>
                 <button
                   onClick={(event) => handleButtonClick(event, () => onEdit?.(profile))}
-                  className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                  className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
                   aria-label={t('sshProfileCard.edit')}
                 >
                   <Edit2 size={16} />
@@ -353,7 +357,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
-                  className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                  className={tooltipClassName}
                   side="top"
                   sideOffset={5}
                 >
@@ -368,7 +372,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
                 <Tooltip.Trigger asChild>
                 <button
                   onClick={(event) => handleButtonClick(event, () => onDelete?.(profile))}
-                  className="flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
+                  className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]`}
                   aria-label={t('sshProfileCard.deleteCard')}
                 >
                   <Trash2 size={16} />
@@ -376,7 +380,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
-                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                    className={tooltipClassName}
                     side="top"
                     sideOffset={5}
                   >

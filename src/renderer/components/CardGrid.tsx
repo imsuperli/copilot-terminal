@@ -911,7 +911,7 @@ export const CardGrid = React.memo<CardGridProps>(({
           </div>
           {/* 无搜索结果提示 */}
           {searchQuery && filteredCardItems.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-zinc-500">
+            <div className="flex h-64 flex-col items-center justify-center text-[rgb(var(--muted-foreground))]">
               <Search size={48} className="mb-4 opacity-50" />
               <p className="text-lg">{t('common.noMatchingWindows')}</p>
               <p className="text-sm mt-2">{t('common.tryDifferentSearch')}</p>
@@ -920,9 +920,9 @@ export const CardGrid = React.memo<CardGridProps>(({
         </ScrollArea.Viewport>
         <ScrollArea.Scrollbar
           orientation="vertical"
-          className="flex w-2.5 touch-none select-none bg-transparent p-0.5 transition-colors hover:bg-zinc-800/50"
+          className="flex w-2.5 touch-none select-none bg-transparent p-0.5 transition-colors hover:bg-[rgb(var(--accent))]/50"
         >
-          <ScrollArea.Thumb className="relative flex-1 rounded-full bg-zinc-700 hover:bg-zinc-600 transition-colors" />
+          <ScrollArea.Thumb className="relative flex-1 rounded-full bg-[rgb(var(--muted))] transition-colors hover:bg-[rgb(var(--muted-foreground))]" />
         </ScrollArea.Scrollbar>
       </ScrollArea.Root>
 

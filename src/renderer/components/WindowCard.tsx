@@ -136,6 +136,10 @@ export const WindowCard = React.memo<WindowCardProps>(({
   // 缓存状态色和标签
   const statusColor = useMemo(() => getStatusColor(aggregatedStatus), [aggregatedStatus]);
   const statusLabel = useMemo(() => t(getStatusLabelKey(aggregatedStatus)), [aggregatedStatus, t]);
+  const tooltipClassName =
+    'rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
+  const cardButtonClassName =
+    'rounded bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] transition-colors hover:bg-[rgb(var(--accent))] backdrop-blur-sm';
 
   // 缓存格式化的上次运行时间（移除"不到"、"大约"等字样）
   const formattedLastActiveTime = useMemo(() => {
@@ -227,7 +231,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       onClick={() => onClick?.(window)}
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
-      className="min-w-[280px] h-56 bg-[rgb(var(--card))] rounded-xl overflow-hidden cursor-pointer transition-all duration-200 ease-out hover:bg-[rgb(var(--card))]/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] flex flex-col border-l border-r border-b border-[rgb(var(--border))] relative"
+      className="relative flex h-56 min-w-[280px] flex-col overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_72%,transparent)] cursor-pointer transition-all duration-200 ease-out hover:bg-[color-mix(in_srgb,rgb(var(--card))_82%,transparent)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] backdrop-blur-xl"
       style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus)}` }}
     >
       {/* 启动中加载遮罩 */}
@@ -273,7 +277,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                      className={tooltipClassName}
                       side="top"
                       sideOffset={5}
                     >
@@ -302,7 +306,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Content
-                className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-3 py-2 rounded-lg text-sm max-w-md break-all z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                className="max-w-md break-all rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-3 py-2 text-sm text-[rgb(var(--foreground))] shadow-xl backdrop-blur"
                 side="top"
                 sideOffset={5}
               >
@@ -334,7 +338,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       </div>
 
       {/* 底部按钮栏 - 两行布局 */}
-      <div className="flex flex-col gap-1.5 px-4 py-2 bg-[rgb(var(--secondary))] border-t border-[rgb(var(--border))] flex-shrink-0">
+      <div className="flex flex-shrink-0 flex-col gap-1.5 border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-4 py-2 backdrop-blur-sm">
         {/* 第一行：启动/暂停按钮（左侧） + 操作按钮（右侧） */}
         <div className="flex items-center justify-between">
           {/* 左侧：启动/暂停按钮 */}
@@ -345,7 +349,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Trigger asChild>
                     <button
                       onClick={(e) => handleButtonClick(e, () => onStart?.(window))}
-                      className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap"
+                      className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--primary))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap`}
                       aria-label={t('windowCard.start')}
                     >
                       <Play size={14} />
@@ -354,7 +358,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                      className={tooltipClassName}
                       side="top"
                       sideOffset={5}
                     >
@@ -367,7 +371,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             {aggregatedStatus === WindowStatus.Restoring && (
               <button
                 disabled
-                className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--muted-foreground))] bg-[rgb(var(--card))] rounded cursor-not-allowed opacity-60 whitespace-nowrap"
+                className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--muted-foreground))] ${cardButtonClassName} cursor-not-allowed opacity-60 whitespace-nowrap`}
                 aria-label={t('windowCard.starting')}
               >
                 <Loader2 size={14} className="animate-spin" />
@@ -380,7 +384,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Trigger asChild>
                     <button
                       onClick={(e) => handleButtonClick(e, () => onPause?.(window))}
-                      className="flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap"
+                      className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap`}
                       aria-label={t('windowCard.stop')}
                     >
                       <Square size={14} fill="currentColor" />
@@ -389,7 +393,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                      className={tooltipClassName}
                       side="top"
                       sideOffset={5}
                     >
@@ -409,7 +413,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Trigger asChild>
                     <button
                       onClick={(e) => handleButtonClick(e, () => onArchive?.(window))}
-                      className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                      className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
                       aria-label={t('terminalView.archive')}
                     >
                       <Archive size={16} />
@@ -417,7 +421,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                      className={tooltipClassName}
                       side="top"
                       sideOffset={5}
                     >
@@ -432,7 +436,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   <Tooltip.Trigger asChild>
                     <button
                       onClick={(e) => handleButtonClick(e, () => onUnarchive?.(window))}
-                      className="flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                      className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--primary))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
                       aria-label={t('windowCard.unarchive')}
                     >
                       <ArchiveRestore size={16} />
@@ -440,7 +444,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                   </Tooltip.Trigger>
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                      className={tooltipClassName}
                       side="top"
                       sideOffset={5}
                     >
@@ -456,7 +460,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <Tooltip.Trigger asChild>
                   <button
                     onClick={(e) => handleButtonClick(e, () => onEdit?.(window))}
-                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]"
+                    className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))]`}
                     aria-label={t('windowCard.edit')}
                   >
                     <Edit2 size={16} />
@@ -464,7 +468,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                    className={tooltipClassName}
                     side="top"
                     sideOffset={5}
                   >
@@ -479,7 +483,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <Tooltip.Trigger asChild>
                   <button
                     onClick={(e) => handleButtonClick(e, () => onDelete?.(window.id))}
-                    className="flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]"
+                    className={`flex items-center justify-center w-8 h-8 text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))]`}
                     aria-label={t('common.deleteWindow')}
                   >
                     <Trash2 size={16} />
@@ -487,7 +491,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 </Tooltip.Trigger>
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                    className={tooltipClassName}
                     side="top"
                     sideOffset={5}
                   >
@@ -511,7 +515,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     <Tooltip.Trigger asChild>
                       <button
                         onClick={(e) => handleButtonClick(e, () => onOpenInIDE?.(ide.id, window))}
-                        className="flex items-center justify-center w-7 h-7 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-0 border-0 flex-shrink-0"
+                        className={`flex items-center justify-center w-7 h-7 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-0 border-0 flex-shrink-0`}
                         aria-label={t('common.openInIDE', { name: ide.name })}
                       >
                         <IDEIcon icon={ide.icon || ''} size={16} />
@@ -519,7 +523,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content
-                        className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                        className={tooltipClassName}
                         side="top"
                         sideOffset={5}
                       >
@@ -537,7 +541,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     <Tooltip.Trigger asChild>
                       <button
                         onClick={(e) => handleButtonClick(e, () => onOpenFolder?.(window))}
-                        className="flex items-center justify-center w-7 h-7 text-[rgb(var(--foreground))] bg-[rgb(var(--card))] rounded hover:bg-[rgb(var(--accent))] transition-colors focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] flex-shrink-0"
+                        className={`flex items-center justify-center w-7 h-7 text-[rgb(var(--foreground))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] flex-shrink-0`}
                         aria-label={t('common.openFolder')}
                       >
                         <FolderOpen size={16} />
@@ -545,7 +549,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                     </Tooltip.Trigger>
                     <Tooltip.Portal>
                       <Tooltip.Content
-                        className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                        className={tooltipClassName}
                         side="top"
                         sideOffset={5}
                       >
