@@ -170,6 +170,63 @@ function isArchiveSwitchCandidate(window: Window): boolean {
   );
 }
 
+function getAggregatedStatusFromPanes(panes: Pane[]): WindowStatus {
+  if (panes.length === 0) {
+    return WindowStatus.Completed;
+  }
+
+  let hasRunning = false;
+  let hasRestoring = false;
+  let hasWaiting = false;
+  let hasError = false;
+  let allCompleted = true;
+  let allPaused = true;
+
+  for (const pane of panes) {
+    hasRunning ||= pane.status === WindowStatus.Running;
+    hasRestoring ||= pane.status === WindowStatus.Restoring;
+    hasWaiting ||= pane.status === WindowStatus.WaitingForInput;
+    hasError ||= pane.status === WindowStatus.Error;
+    allCompleted &&= pane.status === WindowStatus.Completed;
+    allPaused &&= pane.status === WindowStatus.Paused;
+  }
+
+  if (hasRunning) return WindowStatus.Running;
+  if (hasRestoring) return WindowStatus.Restoring;
+  if (hasWaiting) return WindowStatus.WaitingForInput;
+  if (hasError) return WindowStatus.Error;
+  if (allCompleted) return WindowStatus.Completed;
+  if (allPaused) return WindowStatus.Paused;
+  return WindowStatus.Paused;
+}
+
+function getWindowKindFromPanes(window: Window, panes: Pane[]): NonNullable<Window['kind']> {
+  if (window.kind) {
+    return window.kind;
+  }
+
+  let hasLocal = false;
+  let hasSSH = false;
+
+  for (const pane of panes) {
+    if (isSessionlessPane(pane)) {
+      continue;
+    }
+
+    if (getPaneBackend(pane) === 'ssh') {
+      hasSSH = true;
+    } else {
+      hasLocal = true;
+    }
+
+    if (hasLocal && hasSSH) {
+      return 'mixed';
+    }
+  }
+
+  return hasSSH ? 'ssh' : 'local';
+}
+
 export interface TerminalViewProps {
   window: Window;
   onReturn: () => void;
@@ -210,40 +267,69 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 }) => {
   const { t } = useI18n();
   const { enabledIDEs } = useIDESettings();
-  const aggregatedStatus = useMemo(() => getAggregatedStatus(terminalWindow.layout), [terminalWindow.layout]);
-  const windowKind = useMemo(
-    () => getWindowKind(terminalWindow),
-    [terminalWindow],
-  );
-  const panes = useMemo(() => getAllPanes(terminalWindow.layout), [terminalWindow.layout]);
-  const terminalPanes = useMemo(
-    () => panes.filter((pane) => isTerminalPane(pane)),
-    [panes]
-  );
-  const hasChatPaneInWindow = useMemo(
-    () => panes.some((pane) => isChatPane(pane)),
-    [panes],
-  );
-  const existingCodePane = useMemo(
-    () => panes.find((pane) => isCodePane(pane)) ?? null,
-    [panes],
-  );
-  const hasCodePaneInWindow = Boolean(existingCodePane);
-  const terminalPaneCount = terminalPanes.length;
-  const activePane = useMemo(
-    () => panes.find((pane) => pane.id === terminalWindow.activePaneId) ?? panes[0],
-    [panes, terminalWindow.activePaneId]
-  );
-  const activeTerminalPane = useMemo(
-    () => {
-      if (activePane && isTerminalPane(activePane)) {
-        return activePane;
+  const {
+    activePane,
+    activeTerminalPane,
+    aggregatedStatus,
+    existingCodePane,
+    firstWatchableGitCwd,
+    hasChatPaneInWindow,
+    panes,
+    terminalPanes,
+    windowKind,
+  } = useMemo<{
+    activePane: Pane | undefined;
+    activeTerminalPane: Pane | null;
+    aggregatedStatus: WindowStatus;
+    existingCodePane: Pane | null;
+    firstWatchableGitCwd: string | null;
+    hasChatPaneInWindow: boolean;
+    panes: Pane[];
+    terminalPanes: Pane[];
+    windowKind: NonNullable<Window['kind']>;
+  }>(() => {
+    const nextPanes = getAllPanes(terminalWindow.layout);
+    const nextTerminalPanes: Pane[] = [];
+    let nextExistingCodePane: Pane | null = null;
+    let nextHasChatPane = false;
+    let nextFirstWatchableGitCwd: string | null = null;
+
+    nextPanes.forEach((pane) => {
+      if (isTerminalPane(pane)) {
+        nextTerminalPanes.push(pane);
+        if (!nextFirstWatchableGitCwd && pane.cwd && canPaneWatchGitBranch(pane)) {
+          nextFirstWatchableGitCwd = pane.cwd;
+        }
       }
 
-      return terminalPanes[0] ?? null;
-    },
-    [activePane, terminalPanes]
-  );
+      if (!nextExistingCodePane && isCodePane(pane)) {
+        nextExistingCodePane = pane;
+      }
+
+      if (!nextHasChatPane && isChatPane(pane)) {
+        nextHasChatPane = true;
+      }
+    });
+
+    const nextActivePane = nextPanes.find((pane) => pane.id === terminalWindow.activePaneId) ?? nextPanes[0];
+    const nextActiveTerminalPane = nextActivePane && isTerminalPane(nextActivePane)
+      ? nextActivePane
+      : nextTerminalPanes[0] ?? null;
+
+    return {
+      activePane: nextActivePane,
+      activeTerminalPane: nextActiveTerminalPane,
+      aggregatedStatus: getAggregatedStatusFromPanes(nextPanes),
+      existingCodePane: nextExistingCodePane,
+      firstWatchableGitCwd: nextFirstWatchableGitCwd,
+      hasChatPaneInWindow: nextHasChatPane,
+      panes: nextPanes,
+      terminalPanes: nextTerminalPanes,
+      windowKind: getWindowKindFromPanes(terminalWindow, nextPanes),
+    };
+  }, [terminalWindow]);
+  const hasCodePaneInWindow = Boolean(existingCodePane);
+  const terminalPaneCount = terminalPanes.length;
   const preferredChatLinkedPaneId = useMemo(
     () => selectPreferredChatLinkedPaneId(panes),
     [panes],
@@ -252,10 +338,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => activeTerminalPane ? getPaneCapabilities(activeTerminalPane) : null,
     [activeTerminalPane]
   );
-  const isStandaloneSshWindow = useMemo(
-    () => getWindowKind(terminalWindow) === 'ssh',
-    [terminalWindow]
-  );
+  const isStandaloneSshWindow = windowKind === 'ssh';
   const activeSshRuntimeCwd = activeTerminalPane?.cwd ?? activeTerminalPane?.ssh?.remoteCwd ?? null;
   const visibleIDEs = useMemo(
     () => activePaneCapabilities?.canOpenInIDE ? enabledIDEs : [],
@@ -337,19 +420,22 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   useEffect(() => {
     if (!isActive) return;
 
-    const paneIds = panes.map(p => p.id);
-
     // 濡傛灉娌℃湁婵€娲荤殑绐楁牸锛屾垨婵€娲荤殑绐楁牸涓嶅湪褰撳墠绐楁牸鍒楄〃涓紝鍒欐縺娲荤涓€涓獥鏍?
-    if (!terminalWindow.activePaneId || !paneIds.includes(terminalWindow.activePaneId)) {
+    if (!terminalWindow.activePaneId || !panes.some((pane) => pane.id === terminalWindow.activePaneId)) {
       if (panes.length > 0) {
         setActivePane(terminalWindow.id, panes[0].id);
       }
     }
+  }, [isActive, terminalWindow.activePaneId, terminalWindow.id, panes, setActivePane]);
+
+  useEffect(() => {
+    if (!isActive || !firstWatchableGitCwd) {
+      return undefined;
+    }
 
     // 绐楀彛婵€娲绘椂锛屽惎鍔?git 鍒嗘敮鐩戝惉
-    const firstWatchablePane = terminalPanes.find((pane) => pane.cwd && canPaneWatchGitBranch(pane));
-    if (firstWatchablePane && window.electronAPI?.startGitWatch) {
-      window.electronAPI.startGitWatch(terminalWindow.id, firstWatchablePane.cwd).catch((error: any) => {
+    if (window.electronAPI?.startGitWatch) {
+      window.electronAPI.startGitWatch(terminalWindow.id, firstWatchableGitCwd).catch((error: any) => {
         // 蹇界暐閿欒
       });
     }
@@ -362,7 +448,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         });
       }
     };
-  }, [isActive, terminalWindow.activePaneId, terminalWindow.id, panes, setActivePane]);
+  }, [firstWatchableGitCwd, isActive, terminalWindow.id]);
 
   // 蹇嵎閿鐞?
   useKeyboardShortcuts({
@@ -435,11 +521,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const handlePaneExit = useCallback(
     (paneId: string) => {
       if (!terminalWindow) return;
-      const currentPanes = getAllPanes(terminalWindow.layout);
-      const exitingPane = currentPanes.find((pane) => pane.id === paneId);
-      const currentTerminalPaneCount = currentPanes.filter((pane) => isTerminalPane(pane)).length;
+      const exitingPane = panes.find((pane) => pane.id === paneId);
 
-      if (exitingPane && isTerminalPane(exitingPane) && currentTerminalPaneCount <= 1) {
+      if (exitingPane && isTerminalPane(exitingPane) && terminalPaneCount <= 1) {
         // 单窗格窗口退出
         if (embedded && onStopAndRemoveFromGroup) {
           // 窗口组内：复用"停止并移除"逻辑
@@ -481,6 +565,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     },
     [
       terminalWindow,
+      panes,
+      terminalPaneCount,
       embedded,
       onStopAndRemoveFromGroup,
       isEphemeralRemoteTab,
@@ -588,9 +674,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     return fallbackLocalTerminalPane?.cwd ?? null;
   }, [activePane, activeTerminalPane, panes]);
   const codePaneRootPath = resolveCodePaneRootPath();
-  const codePaneTerminalPanes = panes.filter((pane) => isTerminalPane(pane));
-  const isSshOnlyWindow = codePaneTerminalPanes.length > 0
-    && codePaneTerminalPanes.every((pane) => pane.backend === 'ssh');
+  const isSshOnlyWindow = terminalPanes.length > 0
+    && terminalPanes.every((pane) => getPaneBackend(pane) === 'ssh');
 
   const ensureCodePaneWidth = useCallback((codePaneId: string) => {
     const panePath = findPanePath(terminalWindow.layout, codePaneId);
