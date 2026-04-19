@@ -1,13 +1,12 @@
 import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { FolderOpen, Trash2, Play, Square, Archive, ArchiveRestore, Edit2 } from 'lucide-react';
-import { GroupStatusIcons } from './GroupStatusIcons';
+import { GroupStatusIconItem, GroupStatusIcons } from './GroupStatusIcons';
 import { WindowGroup } from '../../shared/types/window-group';
-import { WindowStatus } from '../../shared/types/window';
+import { Pane, Window, WindowStatus } from '../../shared/types/window';
 import { getAllWindowIds } from '../utils/groupLayoutHelpers';
-import { useWindowStore } from '../stores/windowStore';
-import { getAggregatedStatus } from '../utils/layoutHelpers';
-import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils/statusHelpers';
+import { getAllPanes } from '../utils/layoutHelpers';
+import { getStatusColorValue } from '../utils/statusHelpers';
 import { formatRelativeTime, useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
@@ -20,6 +19,7 @@ import {
 
 interface GroupCardProps {
   group: WindowGroup;
+  windows?: Window[];
   onClick?: (group: WindowGroup) => void;
   onDelete?: (groupId: string) => void;
   onStartAll?: (group: WindowGroup) => void;
@@ -27,6 +27,58 @@ interface GroupCardProps {
   onArchive?: (group: WindowGroup) => void;
   onUnarchive?: (group: WindowGroup) => void;
   onEdit?: (group: WindowGroup) => void;
+}
+
+function getWindowStatusFromPanes(panes: Pane[]): WindowStatus {
+  if (panes.some((pane) => pane.status === WindowStatus.Running)) {
+    return WindowStatus.Running;
+  }
+
+  if (panes.some((pane) => pane.status === WindowStatus.Restoring)) {
+    return WindowStatus.Restoring;
+  }
+
+  if (panes.some((pane) => pane.status === WindowStatus.WaitingForInput)) {
+    return WindowStatus.WaitingForInput;
+  }
+
+  if (panes.some((pane) => pane.status === WindowStatus.Error)) {
+    return WindowStatus.Error;
+  }
+
+  if (panes.length > 0 && panes.every((pane) => pane.status === WindowStatus.Completed)) {
+    return WindowStatus.Completed;
+  }
+
+  return WindowStatus.Paused;
+}
+
+function getGroupStatusFromWindowStatuses(statuses: WindowStatus[]): WindowStatus {
+  if (statuses.length === 0) {
+    return WindowStatus.Paused;
+  }
+
+  if (statuses.some((status) => status === WindowStatus.Running)) {
+    return WindowStatus.Running;
+  }
+
+  if (statuses.some((status) => status === WindowStatus.WaitingForInput)) {
+    return WindowStatus.WaitingForInput;
+  }
+
+  if (statuses.some((status) => status === WindowStatus.Restoring)) {
+    return WindowStatus.Restoring;
+  }
+
+  if (statuses.some((status) => status === WindowStatus.Error)) {
+    return WindowStatus.Error;
+  }
+
+  if (statuses.every((status) => status === WindowStatus.Completed)) {
+    return WindowStatus.Completed;
+  }
+
+  return WindowStatus.Paused;
 }
 
 /**
@@ -41,6 +93,7 @@ interface GroupCardProps {
  */
 export const GroupCard = React.memo<GroupCardProps>(({
   group,
+  windows = [],
   onClick,
   onDelete,
   onStartAll,
@@ -50,51 +103,43 @@ export const GroupCard = React.memo<GroupCardProps>(({
   onEdit
 }) => {
   const { t, language } = useI18n();
-  const windows = useWindowStore((state) => state.windows);
-
-  // 获取组内窗口数量
-  const windowCount = useMemo(() => {
-    return getAllWindowIds(group.layout).length;
-  }, [group.layout]);
-
-  // 获取组内所有窗口对象
-  const windowsInGroup = useMemo(() => {
+  const {
+    aggregatedStatus,
+    statusIconItems,
+    windowCount,
+    windowPaths,
+  } = useMemo(() => {
     const windowIds = getAllWindowIds(group.layout);
-    return windows.filter(w => windowIds.includes(w.id));
+    const windowById = new Map(windows.map((window) => [window.id, window]));
+    const statuses: WindowStatus[] = [];
+    const iconItems: GroupStatusIconItem[] = [];
+    const paths: string[] = [];
+
+    windowIds.forEach((windowId) => {
+      const window = windowById.get(windowId);
+      if (!window) {
+        return;
+      }
+
+      const panes = getAllPanes(window.layout);
+      const status = getWindowStatusFromPanes(panes);
+      statuses.push(status);
+      paths.push(getCurrentWindowWorkingDirectory(window));
+      iconItems.push({
+        id: window.id,
+        name: window.name,
+        status,
+        paneCount: panes.length,
+      });
+    });
+
+    return {
+      aggregatedStatus: getGroupStatusFromWindowStatuses(statuses),
+      statusIconItems: iconItems,
+      windowCount: windowIds.length,
+      windowPaths: paths,
+    };
   }, [group.layout, windows]);
-
-  // 计算组的聚合状态（基于组内所有窗口的状态）
-  const aggregatedStatus = useMemo(() => {
-    if (windowsInGroup.length === 0) {
-      return 'paused';
-    }
-
-    // 获取所有窗口的聚合状态
-    const statuses = windowsInGroup.map(w => getAggregatedStatus(w.layout));
-
-    // 如果有任何窗口在运行，则组状态为运行中
-    if (statuses.some(s => s === 'running')) {
-      return 'running';
-    }
-
-    // 如果有任何窗口在等待输入，则组状态为等待输入
-    if (statuses.some(s => s === 'waiting')) {
-      return 'waiting';
-    }
-
-    // 如果有任何窗口在恢复中，则组状态为恢复中
-    if (statuses.some(s => s === 'restoring')) {
-      return 'restoring';
-    }
-
-    // 否则为暂停状态
-    return 'paused';
-  }, [windowsInGroup]);
-
-  // 获取所有窗口的路径
-  const windowPaths = useMemo(() => {
-    return windowsInGroup.map(w => getCurrentWindowWorkingDirectory(w));
-  }, [windowsInGroup]);
 
   // 格式化最后活跃时间
   const formattedLastActiveTime = useMemo(() => {
@@ -156,7 +201,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
       onKeyDown={handleKeyDown}
       aria-label={`组: ${group.name}, ${windowCount} 个窗口`}
       className={`${idePopupListCardClassName} flex h-56 min-w-[280px] flex-col cursor-pointer transition-all duration-200 ease-out hover:bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.18)] hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))]`}
-      style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus as WindowStatus)}` }}
+      style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus)}` }}
     >
       {/* 卡片内容 */}
       <div className="flex-1 p-4 space-y-2 flex flex-col min-h-0">
@@ -174,7 +219,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
             </h3>
           </div>
           {/* 组内窗口状态图标（靠右，与 WindowCard 一致） */}
-          <GroupStatusIcons group={group} windows={windows} />
+          <GroupStatusIcons items={statusIconItems} />
         </div>
 
         {/* 分割线 */}

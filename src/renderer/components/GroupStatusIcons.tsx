@@ -1,10 +1,6 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
-import { WindowGroup } from '../../shared/types/window-group';
-import { Window } from '../../shared/types/window';
-import { getWindowStatus } from '../../shared/utils/status-utils';
-import { getAllWindowIds } from '../utils/groupLayoutHelpers';
-import { getAllPanes } from '../utils/layoutHelpers';
+import { WindowStatus } from '../../shared/types/window';
 import { StatusDot } from './StatusDot';
 import { getStatusLabelKey } from '../utils/statusHelpers';
 import { useI18n } from '../i18n';
@@ -12,9 +8,15 @@ import { idePopupSurfaceClassName } from './ui/ide-popup';
 
 const MAX_ICONS = 5;
 
+export interface GroupStatusIconItem {
+  id: string;
+  name: string;
+  status: WindowStatus;
+  paneCount: number;
+}
+
 export interface GroupStatusIconsProps {
-  group: WindowGroup;
-  windows: Window[];
+  items: GroupStatusIconItem[];
 }
 
 /**
@@ -23,23 +25,9 @@ export interface GroupStatusIconsProps {
  * 使用 StatusDot（与 WindowCard 一致的大小和风格）
  */
 export const GroupStatusIcons: React.FC<GroupStatusIconsProps> = React.memo(({
-  group,
-  windows,
+  items,
 }) => {
   const { t } = useI18n();
-
-  const items = useMemo(() => {
-    const windowIds = getAllWindowIds(group.layout);
-    return windowIds
-      .map(id => windows.find(w => w.id === id))
-      .filter((w): w is Window => w != null)
-      .map(w => ({
-        id: w.id,
-        name: w.name,
-        status: getWindowStatus(w),
-        paneCount: getAllPanes(w.layout).length,
-      }));
-  }, [group.layout, windows]);
 
   if (items.length === 0) {
     return null;

@@ -943,6 +943,7 @@ export const CardGrid = React.memo<CardGridProps>(({
                     >
                       <GroupCard
                         group={group}
+                        windows={getGroupWindows(group)}
                         onClick={handleGroupClick}
                         onDelete={handleDeleteGroup}
                         onStartAll={handleStartAllWindows}
