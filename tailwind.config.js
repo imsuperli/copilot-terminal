@@ -7,27 +7,27 @@ export default {
     extend: {
       colors: {
         // 状态色
-        'status-running': '#16c60c',
-        'status-waiting': '#a8aa58',
-        'status-completed': '#61d6d6',
-        'status-error': '#e74856',
-        'status-restoring': '#ffb900',
+        'status-running': 'rgb(var(--success) / <alpha-value>)',
+        'status-waiting': 'rgb(var(--primary) / <alpha-value>)',
+        'status-completed': 'rgb(var(--info) / <alpha-value>)',
+        'status-error': 'rgb(var(--error) / <alpha-value>)',
+        'status-restoring': 'rgb(var(--warning) / <alpha-value>)',
 
         // 背景色
-        'bg-app': '#0c0c0c',
-        'bg-card': '#161616',
-        'bg-card-hover': '#232323',
-        'bg-hover': '#232323',
-        'bg-elevated': '#1c1c1c',
+        'bg-app': 'rgb(var(--background) / <alpha-value>)',
+        'bg-card': 'rgb(var(--card) / <alpha-value>)',
+        'bg-card-hover': 'rgb(var(--accent) / <alpha-value>)',
+        'bg-hover': 'rgb(var(--accent) / <alpha-value>)',
+        'bg-elevated': 'rgb(var(--secondary) / <alpha-value>)',
 
         // 文字色
-        'text-primary': '#f2f2f2',
-        'text-secondary': '#a1a1a1',
-        'text-disabled': '#6a6a6a',
+        'text-primary': 'rgb(var(--foreground) / <alpha-value>)',
+        'text-secondary': 'rgb(var(--muted-foreground) / <alpha-value>)',
+        'text-disabled': 'rgb(var(--muted-foreground) / 0.68)',
 
         // 边框色
-        'border-subtle': '#323232',
-        'border-default': '#454545',
+        'border-subtle': 'rgb(var(--border) / <alpha-value>)',
+        'border-default': 'rgb(var(--input) / <alpha-value>)',
 
         // Windows Terminal 风格的 Zinc 色表
         zinc: {

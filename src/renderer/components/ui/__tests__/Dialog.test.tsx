@@ -54,7 +54,7 @@ describe('Dialog Component', () => {
       </Dialog>
     );
     const title = screen.getByText('Test');
-    expect(title.className).toContain('text-text-primary');
+    expect(title.className).toContain('text-[rgb(var(--foreground))]');
   });
 
   it('supports custom content width classes', () => {

@@ -79,7 +79,7 @@ export function DeleteSSHCardDialog({
           onClick={() => {
             void onConfirm();
           }}
-          className="inline-flex items-center gap-2 rounded-lg bg-[rgb(var(--error))] px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-lg bg-[rgb(var(--error))] px-4 py-2 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Trash2 size={16} />
           <span>{isProcessing ? t('sshDelete.deleting') : t('sshDelete.confirm')}</span>
