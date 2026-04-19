@@ -2,6 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { Check, Copy, Loader2, RefreshCw, X } from 'lucide-react';
 import type { CodePaneGitConflictDetails } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  IdePopupShell,
+  idePopupBodyClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../../ui/ide-popup';
 
 interface ConflictResolutionToolWindowProps {
   conflict: CodePaneGitConflictDetails | null;
@@ -34,14 +44,17 @@ export function ConflictResolutionToolWindow({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
+    <IdePopupShell className="flex h-full min-h-0 flex-col">
+      <div className={idePopupHeaderClassName}>
         <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <div className={idePopupHeaderMetaClassName}>
             {t('codePane.gitConflictResolverTab')}
           </div>
-          <div className="mt-1 truncate text-xs text-[rgb(var(--foreground))]">
+          <div className={`mt-1 ${idePopupTitleClassName}`}>
             {conflict?.relativePath ?? t('codePane.loading')}
+          </div>
+          <div className={idePopupSubtitleClassName}>
+            {conflict ? t('codePane.gitConflictMerged') : t('codePane.gitConflictsNone')}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -50,7 +63,7 @@ export function ConflictResolutionToolWindow({
             onClick={() => {
               void onRefresh();
             }}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -61,7 +74,7 @@ export function ConflictResolutionToolWindow({
               void onApply(mergedContent);
             }}
             disabled={!conflict || isApplying}
-            className="flex items-center gap-1 rounded bg-[rgb(var(--success)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success)/0.22)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1 rounded-md border border-[rgb(var(--success))/0.35] bg-[rgb(var(--success))/0.12] px-2.5 py-1.5 text-[11px] font-medium text-[rgb(var(--success))] transition-colors hover:border-[rgb(var(--success))/0.5] hover:bg-[rgb(var(--success))/0.18] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isApplying ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
             {t('codePane.gitApplyConflictResolution')}
@@ -69,7 +82,7 @@ export function ConflictResolutionToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -90,13 +103,13 @@ export function ConflictResolutionToolWindow({
         </div>
       ) : conflict ? (
         <>
-          <div className="flex items-center gap-2 border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
+          <div className="flex items-center gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_32%,transparent)] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
             <button
               type="button"
               onClick={() => {
                 replaceMergedContent(conflict.baseContent);
               }}
-              className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseBase')}
@@ -106,7 +119,7 @@ export function ConflictResolutionToolWindow({
               onClick={() => {
                 replaceMergedContent(conflict.oursContent);
               }}
-              className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseOurs')}
@@ -116,7 +129,7 @@ export function ConflictResolutionToolWindow({
               onClick={() => {
                 replaceMergedContent(conflict.theirsContent);
               }}
-              className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseTheirs')}
@@ -140,7 +153,7 @@ export function ConflictResolutionToolWindow({
           {t('codePane.gitConflictsNone')}
         </div>
       )}
-    </div>
+    </IdePopupShell>
   );
 }
 
@@ -157,10 +170,10 @@ function ConflictPane({
 }) {
   return (
     <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''} ${borderTop ? 'border-t border-[rgb(var(--border))]' : ''}`}>
-      <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+      <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {title}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+      <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
         <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[rgb(var(--foreground))]">
           {content || '[empty]'}
         </pre>
@@ -184,7 +197,7 @@ function MergedConflictPane({
 }) {
   return (
     <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''} ${borderTop ? 'border-t border-[rgb(var(--border))]' : ''}`}>
-      <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+      <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {title}
       </div>
       <div className="min-h-0 flex-1 p-3">

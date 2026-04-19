@@ -5,6 +5,18 @@ import type {
   CodePaneGitHistoryResult,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  IdePopupShell,
+  idePopupBadgeClassName,
+  idePopupBodyClassName,
+  idePopupCardClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../../ui/ide-popup';
 
 interface GitHistoryToolWindowProps {
   history: CodePaneGitHistoryResult | null;
@@ -167,14 +179,17 @@ export function GitHistoryToolWindow({
   }, [onSelectCommit, selectedEntry?.commitSha]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
+    <IdePopupShell className="flex h-full min-h-0 flex-col">
+      <div className={idePopupHeaderClassName}>
         <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <div className={idePopupHeaderMetaClassName}>
             {t('codePane.gitHistoryTab')}
           </div>
-          <div className="mt-1 truncate text-xs text-[rgb(var(--foreground))]">
+          <div className={`mt-1 ${idePopupTitleClassName}`}>
             {history?.targetFilePath ?? t('codePane.gitHistoryEmpty')}
+          </div>
+          <div className={idePopupSubtitleClassName}>
+            {history?.entries.length ?? 0} {t('codePane.gitHistoryRefs')}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -183,7 +198,7 @@ export function GitHistoryToolWindow({
             onClick={() => {
               void onRefresh();
             }}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -191,7 +206,7 @@ export function GitHistoryToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -208,7 +223,7 @@ export function GitHistoryToolWindow({
       <div className="grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] overflow-hidden">
         <div
           ref={listScrollRef}
-          className="min-h-0 overflow-auto border-r border-[rgb(var(--border))] px-2 py-2"
+          className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 overflow-auto border-r border-[rgb(var(--border))] px-2 py-2`}
           onScroll={(event) => {
             scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
           }}
@@ -237,7 +252,7 @@ export function GitHistoryToolWindow({
           )}
         </div>
 
-        <div className="min-h-0 overflow-auto px-3 py-3">
+        <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 overflow-auto px-3 py-3`}>
           {selectedEntry ? (
             <GitHistoryDetails entry={selectedEntry} onCherryPick={onCherryPick} />
           ) : (
@@ -245,7 +260,7 @@ export function GitHistoryToolWindow({
           )}
         </div>
       </div>
-    </div>
+    </IdePopupShell>
   );
 }
 
@@ -260,7 +275,7 @@ function GitHistoryDetails({
 
   return (
     <div className="space-y-3">
-      <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+      <div className={idePopupCardClassName}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-sm font-medium text-[rgb(var(--foreground))]">{entry.subject || entry.shortSha}</div>
@@ -275,7 +290,7 @@ function GitHistoryDetails({
             onClick={() => {
               void onCherryPick(entry.commitSha);
             }}
-            className="flex shrink-0 items-center gap-1 rounded bg-[rgb(var(--success)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success)/0.22)]"
+            className="flex shrink-0 items-center gap-1 rounded-md border border-[rgb(var(--success))/0.35] bg-[rgb(var(--success))/0.12] px-2.5 py-1.5 text-[11px] font-medium text-[rgb(var(--success))] transition-colors hover:border-[rgb(var(--success))/0.5] hover:bg-[rgb(var(--success))/0.18]"
           >
             <GitCommitHorizontal size={12} />
             {t('codePane.gitCherryPick')}
@@ -283,7 +298,7 @@ function GitHistoryDetails({
         </div>
       </div>
       {entry.refs.length > 0 && (
-        <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+        <div className={idePopupCardClassName}>
           <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.gitHistoryRefs')}
           </div>
@@ -291,7 +306,7 @@ function GitHistoryDetails({
             {entry.refs.map((ref) => (
               <span
                 key={`${entry.commitSha}-${ref}`}
-                className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--foreground))]"
+                className={`rounded px-2 py-1 text-[11px] ${idePopupBadgeClassName('zinc')}`}
               >
                 {ref}
               </span>
@@ -300,7 +315,7 @@ function GitHistoryDetails({
         </div>
       )}
       {entry.filePath && (
-        <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+        <div className={idePopupCardClassName}>
           <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {entry.scope === 'line' ? t('codePane.gitLineHistory') : t('codePane.gitFileHistory')}
           </div>

@@ -14,6 +14,16 @@ import type {
   CodePaneLanguageWorkspaceState,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  IdePopupShell,
+  idePopupBodyClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../../ui/ide-popup';
 
 interface PerformanceTask {
   id: string;
@@ -52,19 +62,20 @@ export function PerformanceToolWindow({
   const recentRequests = requests.slice(0, 20);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+    <IdePopupShell className="flex h-full min-h-0 flex-col">
+      <div className={idePopupHeaderClassName}>
+        <div className="min-w-0 flex-1">
+          <div className={idePopupHeaderMetaClassName}>
             {t('codePane.performanceTab')}
           </div>
-          <div className="text-xs text-[rgb(var(--muted-foreground))]">{requests.length}</div>
+          <div className={`mt-1 ${idePopupTitleClassName}`}>{t('codePane.performanceRequests')}</div>
+          <div className={idePopupSubtitleClassName}>{requests.length}</div>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onRefresh}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -72,7 +83,7 @@ export function PerformanceToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -82,10 +93,10 @@ export function PerformanceToolWindow({
 
       <div className="grid min-h-0 flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
         <section className="flex min-h-0 flex-col border-r border-[rgb(var(--border))]">
-          <header className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.performanceTasks')}
           </header>
-          <div className="min-h-0 flex-1 space-y-3 overflow-auto px-3 py-3">
+          <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 space-y-3 overflow-auto px-3 py-3`}>
             {indexStatus && (
               <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
                 <div className="font-medium text-[rgb(var(--foreground))]">{t('codePane.performanceIndexing')}</div>
@@ -137,10 +148,10 @@ export function PerformanceToolWindow({
         </section>
 
         <section className="flex min-h-0 flex-col">
-          <header className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.performanceRequests')}
           </header>
-          <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+          <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
             {runningRequests.length > 0 && (
               <div className="mb-4">
                 <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
@@ -199,6 +210,6 @@ export function PerformanceToolWindow({
           </div>
         </section>
       </div>
-    </div>
+    </IdePopupShell>
   );
 }

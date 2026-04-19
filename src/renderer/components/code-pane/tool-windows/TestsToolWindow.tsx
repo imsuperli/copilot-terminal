@@ -13,6 +13,16 @@ import type {
   CodePaneTestItem,
 } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  IdePopupShell,
+  idePopupBodyClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupScrollAreaClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../../ui/ide-popup';
 
 interface TestsToolWindowProps {
   testItems: CodePaneTestItem[];
@@ -217,7 +227,7 @@ const TestTreeRow = React.memo(function TestTreeRow({
         )}
         <FileCode2 size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        <span className="rounded bg-[rgb(var(--secondary))] px-1 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
+        <span className="rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-1 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
           {item.kind}
         </span>
       </button>
@@ -227,7 +237,7 @@ const TestTreeRow = React.memo(function TestTreeRow({
           onClick={() => {
             void onRunTest(item.runnableTargetId!);
           }}
-          className="rounded bg-[rgb(var(--success)/0.14)] p-1 text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success)/0.22)]"
+          className="rounded-md border border-[rgb(var(--success))/0.35] bg-[rgb(var(--success))/0.12] p-1 text-[rgb(var(--success))] transition-colors hover:border-[rgb(var(--success))/0.5] hover:bg-[rgb(var(--success))/0.18]"
         >
           <Play size={11} />
         </button>
@@ -303,13 +313,16 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+    <IdePopupShell className="flex h-full min-h-0 flex-col">
+      <div className={idePopupHeaderClassName}>
+        <div className="min-w-0 flex-1">
+          <div className={idePopupHeaderMetaClassName}>
             {t('codePane.testsTab')}
           </div>
-          <div className="text-xs text-[rgb(var(--muted-foreground))]">
+          <div className={`mt-1 ${idePopupTitleClassName}`}>
+            {t('codePane.testTree')}
+          </div>
+          <div className={idePopupSubtitleClassName}>
             {flatTestRows.length}
           </div>
         </div>
@@ -320,14 +333,14 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
               void onRerunFailed();
             }}
             disabled={!hasFailedSessions}
-            className="rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2.5 py-1.5 text-[11px] font-medium text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('codePane.rerunFailedTests')}
           </button>
           <button
             type="button"
             onClick={onRefresh}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -335,7 +348,7 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -345,12 +358,12 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex w-[320px] shrink-0 flex-col border-r border-[rgb(var(--border))]">
-          <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.testTree')}
           </div>
           <div
             ref={testTreeScrollRef}
-            className="min-h-0 flex-1 overflow-auto px-2 py-2"
+            className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-2 py-2`}
             onScroll={handleTestTreeScroll}
           >
             {isLoading ? (
@@ -395,12 +408,12 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="flex w-64 shrink-0 flex-col border-r border-[rgb(var(--border))]">
-              <div className="border-b border-[rgb(var(--border))] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+              <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.runSessions')}
               </div>
               <div
                 ref={sessionsScrollRef}
-                className="min-h-0 flex-1 overflow-auto px-2 py-2"
+                className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-2 py-2`}
                 onScroll={handleSessionsScroll}
               >
                 {sessions.length > 0 ? (
@@ -436,7 +449,7 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
+              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.runConsole')}
@@ -453,14 +466,14 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
                     onClick={() => {
                       void onStopSession(selectedSession.id);
                     }}
-                    className="rounded bg-[rgb(var(--error)/0.14)] p-1 text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error)/0.22)]"
+                    className="rounded-md border border-[rgb(var(--error))/0.35] bg-[rgb(var(--error))/0.12] p-1.5 text-[rgb(var(--error))] transition-colors hover:border-[rgb(var(--error))/0.5] hover:bg-[rgb(var(--error))/0.18]"
                     aria-label={t('codePane.stopRun')}
                   >
                     <Square size={12} />
                   </button>
                 )}
               </div>
-              <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+              <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
                 {selectedSession ? (
                   <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-[rgb(var(--foreground))]">
                     {selectedOutput || '$ '}
@@ -473,7 +486,7 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
           </div>
         </div>
       </div>
-    </div>
+    </IdePopupShell>
   );
 });
 
@@ -515,12 +528,12 @@ function getSessionTone(state: CodePaneRunSession['state']): { label: string; cl
     case 'stopped':
       return {
         label: 'STOP',
-        className: 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
       };
     default:
       return {
         label: state,
-        className: 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
       };
   }
 }
