@@ -14096,8 +14096,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     if (didControl) {
       invalidateProjectCache(rootPath, 'git-branches');
       invalidateProjectCache(rootPath, 'git-rebase');
-      await loadGitBranches({ preferredBaseRef: gitRebaseBaseRef });
-      await loadGitRebasePlan(gitRebaseBaseRef);
+      await Promise.all([
+        loadGitBranches({ preferredBaseRef: gitRebaseBaseRef }),
+        loadGitRebasePlan(gitRebaseBaseRef),
+      ]);
     }
   }, [gitRebaseBaseRef, loadGitBranches, loadGitRebasePlan, rootPath, runGitOperation, t]);
 
