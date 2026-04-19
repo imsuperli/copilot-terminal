@@ -6565,6 +6565,16 @@ function getExternalChangeTextClassName(changeType?: ExternalChangeKind): string
   }
 }
 
+function getExternalChangeEntriesKey(entries: ExternalChangeEntry[]): string {
+  if (entries.length === 0) {
+    return '';
+  }
+
+  return entries
+    .map((entry) => `${entry.filePath}:${entry.changeType}:${entry.changedAt}:${entry.openedAtChange ? 1 : 0}`)
+    .join('\u0000');
+}
+
 function getExternalChangeDotClassName(changeType: ExternalChangeKind): string {
   switch (changeType) {
     case 'added':
@@ -7265,6 +7275,16 @@ function mapGitStatusEntriesByPath(
     entriesByPath[entry.path] = entry;
   }
   return entriesByPath;
+}
+
+function getGitStatusEntriesKey(entries: CodePaneGitStatusEntry[]): string {
+  if (entries.length === 0) {
+    return '';
+  }
+
+  return entries
+    .map((entry) => `${entry.path}:${entry.status}:${entry.staged ? 1 : 0}:${entry.unstaged ? 1 : 0}:${entry.conflicted ? 1 : 0}:${entry.section}:${entry.originalPath ?? ''}`)
+    .join('\u0000');
 }
 
 function areGitStatusEntriesEqual(
@@ -18685,6 +18705,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
   }, [languageWorkspaceState]);
   const externalChangesByPath = externalChangeStateRef.current.entriesByPath;
+  const gitStatusEntriesKey = useMemo(() => getGitStatusEntriesKey(gitStatusEntries), [gitStatusEntries]);
+  const externalChangeEntriesKey = useMemo(() => getExternalChangeEntriesKey(externalChangeEntries), [externalChangeEntries]);
   const sidebarEntries = treeEntriesByDirectory[rootPath] ?? [];
   const hasExternalLibraries = useMemo(() => {
     for (const section of externalLibrarySections) {
@@ -19617,7 +19639,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     };
 
     return collectRows;
-  }, [expandedDirectories, externalChangesByPath, getCompactDirectoryPresentations, getEntryStatus, isDirectoryLoading]);
+  }, [expandedDirectories, externalChangeEntriesKey, externalChangesByPath, getCompactDirectoryPresentations, getEntryStatus, isDirectoryLoading]);
 
   const rootExplorerRows = useMemo(() => {
     if (!isSidebarVisible || sidebarMode !== 'files' || !isRootExpanded) {
@@ -19625,7 +19647,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     return buildExplorerTreeRows(rootPath, 1);
-  }, [buildExplorerTreeRows, isRootExpanded, isSidebarVisible, rootPath, sidebarMode]);
+  }, [buildExplorerTreeRows, gitStatusEntriesKey, isRootExpanded, isSidebarVisible, rootPath, sidebarMode]);
   const externalLibraryExplorerRowsByRoot = useMemo(() => {
     const rowsByRoot = new Map<string, ExplorerTreeRow[]>();
     if (!isSidebarVisible || sidebarMode !== 'files' || !hasExternalLibraries) {
@@ -19643,7 +19665,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     return rowsByRoot;
-  }, [buildExplorerTreeRows, expandedDirectories, externalLibrarySections, hasExternalLibraries, isSidebarVisible, sidebarMode]);
+  }, [buildExplorerTreeRows, expandedDirectories, externalLibrarySections, gitStatusEntriesKey, hasExternalLibraries, isSidebarVisible, sidebarMode]);
 
   const handleExplorerRowActivate = useCallback((row: ExplorerTreeRow) => {
     if (row.entryType === 'directory') {
@@ -23931,7 +23953,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       openFileDecorations.push(`${tab.path}:${status}:${externalChangeType}:${isReadOnly}`);
     }
     return openFileDecorations.join('\u0000');
-  }, [externalChangeEntries, gitStatusByPath, orderedOpenFiles]);
+  }, [externalChangeEntriesKey, gitStatusEntriesKey, orderedOpenFiles]);
 
   const renderedOpenFileTabs = useMemo(() => {
     if (orderedOpenFiles.length === 0) {
