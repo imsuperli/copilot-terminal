@@ -13986,9 +13986,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return false;
     }
 
-    await refreshLoadedDirectories({ refreshGitStatus: false, refreshExternalLibraries: false });
     invalidateGitGraphSnapshot();
-    await refreshGitSnapshot({ includeGraph: shouldLoadGitGraph(), force: true });
+    await Promise.all([
+      refreshLoadedDirectories({ refreshGitStatus: false, refreshExternalLibraries: false }),
+      refreshGitSnapshot({ includeGraph: shouldLoadGitGraph(), force: true }),
+    ]);
     setBanner({
       tone: 'info',
       message: response.data?.reference
