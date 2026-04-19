@@ -7279,6 +7279,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const gitCommitDetailsRequestIdRef = useRef(0);
   const gitCompareRequestIdRef = useRef(0);
   const editorSurfaceRequestIdRef = useRef(0);
+  const debugWatchRefreshRequestIdRef = useRef(0);
   const pendingGitSnapshotRefreshRef = useRef<PendingGitSnapshotRefresh | null>(null);
   const gitSnapshotRefreshTimerRef = useRef<number | null>(null);
   const inFlightGitSnapshotRefreshRef = useRef<InFlightGitSnapshotRefresh | null>(null);
@@ -20079,6 +20080,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ) => {
     const targetSession = sessionOverride ?? selectedDebugSession;
     const expressions = expressionsOverride ?? watchExpressions;
+    const requestId = debugWatchRefreshRequestIdRef.current + 1;
+    debugWatchRefreshRequestIdRef.current = requestId;
     if (expressions.length === 0) {
       setWatchEntries((currentEntries) => (currentEntries.length === 0 ? currentEntries : []));
       return;
@@ -20126,6 +20129,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       })());
     }
     const nextEntries = await Promise.all(evaluationRequests);
+    if (debugWatchRefreshRequestIdRef.current !== requestId) {
+      return;
+    }
     setWatchEntries((currentEntries) => (
       areDebugWatchEntriesEqual(currentEntries, nextEntries) ? currentEntries : nextEntries
     ));
