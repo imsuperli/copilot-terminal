@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   Check,
@@ -46,6 +46,25 @@ type CommitWindowVisibleEntryGroup = CommitWindowEntryGroup & {
   includedCount: number;
 };
 
+type CommitWindowVisibleItem =
+  | {
+      key: string;
+      kind: 'group';
+      group: CommitWindowVisibleEntryGroup;
+    }
+  | {
+      key: string;
+      kind: 'entry';
+      entry: CommitWindowEntry;
+    };
+
+type WindowedListSlice<T> = {
+  items: T[];
+  offsetTop: number;
+  totalHeight: number;
+  isWindowed: boolean;
+};
+
 interface CommitWindowProps {
   open: boolean;
   summary: CodePaneGitRepositorySummary | null;
@@ -72,6 +91,126 @@ interface CommitWindowProps {
   onUnstageHunk: (hunk: CodePaneGitDiffHunk) => void | Promise<void>;
   onDiscardHunk: (hunk: CodePaneGitDiffHunk) => void | Promise<void>;
   onCommit: (config: { message: string; selectedPaths: string[] }) => void | Promise<void>;
+}
+
+const COMMIT_WINDOW_FILE_ROW_HEIGHT = 116;
+const COMMIT_WINDOW_FILE_ROW_OVERSCAN = 8;
+const COMMIT_WINDOW_FILE_WINDOWING_THRESHOLD = 80;
+
+function getWindowedListSlice<T>({
+  items,
+  scrollTop,
+  viewportHeight,
+  rowHeight,
+  overscan,
+  threshold,
+}: {
+  items: T[];
+  scrollTop: number;
+  viewportHeight: number;
+  rowHeight: number;
+  overscan: number;
+  threshold: number;
+}): WindowedListSlice<T> {
+  const totalHeight = items.length * rowHeight;
+
+  if (items.length <= threshold || viewportHeight <= 0) {
+    return {
+      items,
+      offsetTop: 0,
+      totalHeight,
+      isWindowed: false,
+    };
+  }
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const endIndex = Math.min(
+    items.length,
+    Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan,
+  );
+
+  return {
+    items: items.slice(startIndex, endIndex),
+    offsetTop: startIndex * rowHeight,
+    totalHeight,
+    isWindowed: true,
+  };
+}
+
+function useFixedWindowedList<T>(
+  items: T[],
+  rowHeight: number,
+  threshold = COMMIT_WINDOW_FILE_WINDOWING_THRESHOLD,
+) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const pendingScrollTopRef = useRef<number | null>(null);
+  const scrollAnimationFrameRef = useRef<number | null>(null);
+
+  const scheduleScrollTopUpdate = useCallback((nextScrollTop: number) => {
+    pendingScrollTopRef.current = nextScrollTop;
+    if (scrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    scrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      scrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingScrollTopRef.current;
+      pendingScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    const scrollElement = scrollRef.current;
+    if (!scrollElement) {
+      return;
+    }
+
+    const syncViewportHeight = () => {
+      const nextHeight = scrollElement.clientHeight;
+      setViewportHeight((currentHeight) => (
+        currentHeight === nextHeight ? currentHeight : nextHeight
+      ));
+    };
+
+    syncViewportHeight();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewportHeight();
+    });
+    resizeObserver.observe(scrollElement);
+
+    return () => {
+      if (scrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollAnimationFrameRef.current);
+        scrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  const slice = useMemo(() => getWindowedListSlice({
+    items,
+    scrollTop,
+    viewportHeight,
+    rowHeight,
+    overscan: COMMIT_WINDOW_FILE_ROW_OVERSCAN,
+    threshold,
+  }), [items, rowHeight, scrollTop, threshold, viewportHeight]);
+
+  return {
+    scrollRef,
+    slice,
+    handleScroll: (event: React.UIEvent<HTMLDivElement>) => {
+      scheduleScrollTopUpdate(event.currentTarget.scrollTop);
+    },
+  };
 }
 
 function getStatusTone(entry: CodePaneGitStatusEntry) {
@@ -406,6 +545,43 @@ export const CommitWindow = React.memo(function CommitWindow({
     [selectedPathSet, visibleEntryGroupsBase],
   );
   const shouldRenderGroups = visibleEntryGroups.length > 1 || visibleEntryGroups.some((group) => !group.isRoot);
+  const visibleItems = useMemo<CommitWindowVisibleItem[]>(() => {
+    const nextItems: CommitWindowVisibleItem[] = [];
+    if (shouldRenderGroups) {
+      for (const group of visibleEntryGroups) {
+        const isCollapsed = collapsedGroupKeys.includes(group.key);
+        nextItems.push({
+          key: `group:${group.key}`,
+          kind: 'group',
+          group,
+        });
+        if (!isCollapsed) {
+          for (const entry of group.entries) {
+            nextItems.push({
+              key: `entry:${entry.path}`,
+              kind: 'entry',
+              entry,
+            });
+          }
+        }
+      }
+      return nextItems;
+    }
+
+    for (const entry of visibleEntries) {
+      nextItems.push({
+        key: `entry:${entry.path}`,
+        kind: 'entry',
+        entry,
+      });
+    }
+    return nextItems;
+  }, [collapsedGroupKeys, shouldRenderGroups, visibleEntries, visibleEntryGroups]);
+  const {
+    scrollRef: visibleItemsScrollRef,
+    slice: visibleItemSlice,
+    handleScroll: handleVisibleItemsScroll,
+  } = useFixedWindowedList(visibleItems, COMMIT_WINDOW_FILE_ROW_HEIGHT);
 
   useEffect(() => {
     if (!open) {
@@ -473,6 +649,93 @@ export const CommitWindow = React.memo(function CommitWindow({
       selectedPaths,
     });
   };
+
+  const renderVisibleItem = useCallback((item: CommitWindowVisibleItem) => {
+    if (item.kind === 'group') {
+      const group = item.group;
+      const isCollapsed = collapsedGroupKeys.includes(group.key);
+      const allGroupEntriesSelected = group.includedCount === group.entries.length;
+      const someGroupEntriesSelected = group.includedCount > 0 && !allGroupEntriesSelected;
+
+      return (
+        <section
+          key={item.key}
+          className={`${idePopupCardClassName} overflow-hidden px-0 py-0`}
+        >
+          <div className="flex h-16 items-center gap-2 border-b border-zinc-800/70 px-3">
+            <button
+              type="button"
+              aria-pressed={allGroupEntriesSelected}
+              aria-label={`${allGroupEntriesSelected ? 'unselect' : 'select'} group ${group.label}`}
+              onClick={() => {
+                toggleSelectedGroup(group.entries);
+              }}
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
+                allGroupEntriesSelected || someGroupEntriesSelected
+                  ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
+                  : 'border-zinc-600 bg-zinc-950/80 text-transparent'
+              }`}
+            >
+              {allGroupEntriesSelected ? <Check size={11} /> : <Minus size={11} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                toggleCollapsedGroup(group.key);
+              }}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-zinc-50"
+            >
+              {isCollapsed ? (
+                <ChevronRight size={13} className="shrink-0 text-zinc-500" />
+              ) : (
+                <ChevronDown size={13} className="shrink-0 text-zinc-500" />
+              )}
+              <Folder size={13} className="shrink-0 text-amber-300/85" />
+              <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-zinc-100">
+                {group.label}
+              </span>
+              <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/55 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                {group.includedCount}/{group.entries.length}
+              </span>
+            </button>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <CommitWindowEntryCard
+        key={item.key}
+        entry={item.entry}
+        isChecked={selectedPathSet.has(item.entry.path)}
+        isActive={selectedPath === item.entry.path}
+        onToggleSelectedPath={toggleSelectedPath}
+        onSelectPath={onSelectPath}
+        onStagePath={onStagePath}
+        onUnstagePath={onUnstagePath}
+        onDiscardPath={onDiscardPath}
+        onOpenFileDiff={onOpenFileDiff}
+        onOpenConflictResolver={onOpenConflictResolver}
+        onResolveConflict={onResolveConflict}
+        t={t}
+      />
+    );
+  }, [
+    collapsedGroupKeys,
+    onDiscardPath,
+    onOpenConflictResolver,
+    onOpenFileDiff,
+    onResolveConflict,
+    onSelectPath,
+    onStagePath,
+    onUnstagePath,
+    selectedPath,
+    selectedPathSet,
+    t,
+    toggleCollapsedGroup,
+    toggleSelectedGroup,
+    toggleSelectedPath,
+  ]);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -574,101 +837,21 @@ export const CommitWindow = React.memo(function CommitWindow({
                   </div>
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+                <div
+                  ref={visibleItemsScrollRef}
+                  className="min-h-0 flex-1 overflow-auto px-2 py-2"
+                  onScroll={handleVisibleItemsScroll}
+                >
                   {visibleEntries.length > 0 ? (
-                    shouldRenderGroups ? (
-                      <div className="space-y-2">
-                        {visibleEntryGroups.map((group) => {
-                          const isCollapsed = collapsedGroupKeys.includes(group.key);
-                          const allGroupEntriesSelected = group.includedCount === group.entries.length;
-                          const someGroupEntriesSelected = group.includedCount > 0 && !allGroupEntriesSelected;
-
-                          return (
-                            <section
-                              key={group.key}
-                              className={`${idePopupCardClassName} overflow-hidden px-0 py-0`}
-                            >
-                              <div className="flex items-center gap-2 border-b border-zinc-800/70 px-3 py-2.5">
-                                <button
-                                  type="button"
-                                  aria-pressed={allGroupEntriesSelected}
-                                  aria-label={`${allGroupEntriesSelected ? 'unselect' : 'select'} group ${group.label}`}
-                                  onClick={() => {
-                                    toggleSelectedGroup(group.entries);
-                                  }}
-                                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                                    allGroupEntriesSelected || someGroupEntriesSelected
-                                      ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
-                                      : 'border-zinc-600 bg-zinc-950/80 text-transparent'
-                                  }`}
-                                >
-                                  {allGroupEntriesSelected ? <Check size={11} /> : <Minus size={11} />}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    toggleCollapsedGroup(group.key);
-                                  }}
-                                  className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-zinc-50"
-                                >
-                                  {isCollapsed ? (
-                                    <ChevronRight size={13} className="shrink-0 text-zinc-500" />
-                                  ) : (
-                                    <ChevronDown size={13} className="shrink-0 text-zinc-500" />
-                                  )}
-                                  <Folder size={13} className="shrink-0 text-amber-300/85" />
-                                  <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-zinc-100">
-                                    {group.label}
-                                  </span>
-                                  <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/55 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
-                                    {group.includedCount}/{group.entries.length}
-                                  </span>
-                                </button>
-                              </div>
-                              {!isCollapsed && (
-                                <div className="space-y-1 px-2 py-2">
-                                  {group.entries.map((entry) => (
-                                    <CommitWindowEntryCard
-                                      key={entry.path}
-                                      entry={entry}
-                                      isChecked={selectedPathSet.has(entry.path)}
-                                      isActive={selectedPath === entry.path}
-                                      onToggleSelectedPath={toggleSelectedPath}
-                                      onSelectPath={onSelectPath}
-                                      onStagePath={onStagePath}
-                                      onUnstagePath={onUnstagePath}
-                                      onDiscardPath={onDiscardPath}
-                                      onOpenFileDiff={onOpenFileDiff}
-                                      onOpenConflictResolver={onOpenConflictResolver}
-                                      onResolveConflict={onResolveConflict}
-                                      t={t}
-                                    />
-                                  ))}
-                                </div>
-                              )}
-                            </section>
-                          );
-                        })}
+                    visibleItemSlice.isWindowed ? (
+                      <div style={{ height: `${visibleItemSlice.totalHeight}px`, position: 'relative' }}>
+                        <div className="space-y-2" style={{ transform: `translateY(${visibleItemSlice.offsetTop}px)` }}>
+                          {visibleItemSlice.items.map(renderVisibleItem)}
+                        </div>
                       </div>
                     ) : (
-                      <div className="space-y-1">
-                        {visibleEntries.map((entry) => (
-                          <CommitWindowEntryCard
-                            key={entry.path}
-                            entry={entry}
-                            isChecked={selectedPathSet.has(entry.path)}
-                            isActive={selectedPath === entry.path}
-                            onToggleSelectedPath={toggleSelectedPath}
-                            onSelectPath={onSelectPath}
-                            onStagePath={onStagePath}
-                            onUnstagePath={onUnstagePath}
-                            onDiscardPath={onDiscardPath}
-                            onOpenFileDiff={onOpenFileDiff}
-                            onOpenConflictResolver={onOpenConflictResolver}
-                            onResolveConflict={onResolveConflict}
-                            t={t}
-                          />
-                        ))}
+                      <div className="space-y-2">
+                        {visibleItems.map(renderVisibleItem)}
                       </div>
                     )
                   ) : (
