@@ -37,6 +37,15 @@ type SidebarItem =
   | { kind: 'group'; id: string; status: WindowStatus; group: WindowGroup; archived: boolean }
   | { kind: 'window'; id: string; status: WindowStatus; window: Window; archived: boolean };
 
+const sidebarTooltipClassName =
+  'z-[1100] rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
+const sidebarIconButtonClassName =
+  'flex h-7 w-7 items-center justify-center rounded-md border border-transparent text-[rgb(var(--muted-foreground))] transition-colors duration-200 hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]';
+const sidebarActionButtonBaseClassName =
+  'h-10 w-full items-center gap-2 border-b border-[rgb(var(--border))] transition-colors duration-200';
+const sidebarCardSurfaceClassName =
+  'border border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] hover:bg-[rgb(var(--accent))]';
+
 function isSidebarVisibleStatus(status: WindowStatus): boolean {
   return (
     status === WindowStatus.Running ||
@@ -272,19 +281,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       ref={sidebarRef}
-      className="flex flex-shrink-0 bg-zinc-900 border-r border-zinc-800 transition-all duration-250 ease-in-out"
+      className="flex flex-shrink-0 border-r border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--sidebar))_98%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] transition-all duration-250 ease-in-out"
       style={{ width: sidebarExpanded ? `${sidebarWidth}px` : '32px' }}
     >
       {/* 侧边栏内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 顶部：切换按钮 */}
-        <div className={`h-10 flex items-center border-b border-zinc-800 flex-shrink-0 ${sidebarExpanded ? 'justify-start pl-1' : 'justify-center'}`}>
+        <div className={`h-10 flex-shrink-0 items-center border-b border-[rgb(var(--border))] ${sidebarExpanded ? 'justify-start pl-1' : 'justify-center'}`}>
           <Tooltip.Provider>
             <Tooltip.Root delayDuration={300}>
               <Tooltip.Trigger asChild>
                 <button
                   onClick={(e) => { e.stopPropagation(); toggleSidebar(); }}
-                  className="flex h-7 w-7 items-center justify-center rounded text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100 transition-colors duration-200"
+                  className={sidebarIconButtonClassName}
                   aria-label={sidebarExpanded ? '折叠侧边栏' : '展开侧边栏'}
                 >
                   <SidebarToggleIcon
@@ -296,7 +305,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </Tooltip.Trigger>
               <Tooltip.Portal>
                 <Tooltip.Content
-                  className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                  className={sidebarTooltipClassName}
                   side="right"
                   sideOffset={5}
                 >
@@ -309,22 +318,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 标题（仅展开时显示） */}
         {sidebarExpanded && (
-          <div className="px-3 py-2 border-b border-zinc-800 flex-shrink-0 space-y-2">
-          <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 tracking-wide">
-            <span>Windows</span>
+          <div className="flex-shrink-0 space-y-2 border-b border-[rgb(var(--border))] px-3 py-2">
+            <div className="flex items-center justify-between text-xs font-semibold tracking-wide text-[rgb(var(--muted-foreground))]">
+              <span>Windows</span>
+            </div>
+            <select
+              aria-label={t('sidebar.terminalFilterLabel')}
+              value={terminalSidebarFilter}
+              onChange={(event) => setTerminalSidebarFilter(event.target.value as typeof terminalSidebarFilter)}
+              className="h-8 w-full rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] px-2 text-xs text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+            >
+              <option value="all">{t('sidebar.tab.all')}</option>
+              <option value="local">{t('sidebar.tab.local')}</option>
+              <option value="ssh">{t('sidebar.tab.ssh')}</option>
+              <option value="archived">{t('sidebar.tab.archived')}</option>
+            </select>
           </div>
-          <select
-            aria-label={t('sidebar.terminalFilterLabel')}
-            value={terminalSidebarFilter}
-            onChange={(event) => setTerminalSidebarFilter(event.target.value as typeof terminalSidebarFilter)}
-            className="w-full h-8 px-2 text-xs text-zinc-100 bg-zinc-800 border border-zinc-700 rounded focus:outline-none focus:border-[rgb(var(--ring))]"
-          >
-            <option value="all">{t('sidebar.tab.all')}</option>
-            <option value="local">{t('sidebar.tab.local')}</option>
-            <option value="ssh">{t('sidebar.tab.ssh')}</option>
-            <option value="archived">{t('sidebar.tab.archived')}</option>
-          </select>
-        </div>
         )}
 
         {/* 活跃窗口和组列表（按类型分类，可折叠） */}
@@ -344,7 +353,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* 底部操作区 */}
-        <div className="border-t border-zinc-800 flex-shrink-0">
+        <div className="flex-shrink-0 border-t border-[rgb(var(--border))]">
           {showOpenCodePaneAction && (
             <Tooltip.Provider>
               <Tooltip.Root delayDuration={300}>
@@ -353,12 +362,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onClick={() => onOpenCodePane?.()}
                     disabled={!canOpenCodePane}
                     className={`
-                      w-full h-10 flex items-center gap-2
-                      transition-all duration-200 border-b border-zinc-800
+                      ${sidebarActionButtonBaseClassName}
                       ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
                       ${isCodePaneActive
-                        ? 'bg-zinc-800 text-zinc-100'
-                        : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700'}
+                        ? 'bg-[rgb(var(--accent))] text-[rgb(var(--foreground))]'
+                        : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'}
                       disabled:cursor-not-allowed disabled:opacity-40
                     `}
                     aria-label={t('terminalView.openCode')}
@@ -374,7 +382,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {!sidebarExpanded && (
                   <Tooltip.Portal>
                     <Tooltip.Content
-                      className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                      className={sidebarTooltipClassName}
                       side="right"
                       sideOffset={5}
                     >
@@ -392,9 +400,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   onClick={handleOpenCreateWindowDialog}
                   className={`
-                    w-full h-10 flex items-center gap-2
-                    text-zinc-100 bg-zinc-800 hover:bg-zinc-700
-                    transition-all duration-200 border-b border-zinc-800
+                    ${sidebarActionButtonBaseClassName}
+                    bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]
                     ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
                   `}
                   aria-label={t('common.newTerminal')}
@@ -410,7 +417,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {!sidebarExpanded && (
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                    className={sidebarTooltipClassName}
                     side="right"
                     sideOffset={5}
                   >
@@ -427,9 +434,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   onClick={() => onSettingsClick?.()}
                   className={`
-                    w-full h-10 flex items-center gap-2
-                    text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700
-                    transition-all duration-200
+                    ${sidebarActionButtonBaseClassName}
+                    border-b-0 text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]
                     ${sidebarExpanded ? 'px-3 justify-start' : 'justify-center'}
                   `}
                   aria-label={t('settings.title')}
@@ -445,7 +451,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {!sidebarExpanded && (
                 <Tooltip.Portal>
                   <Tooltip.Content
-                    className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                    className={sidebarTooltipClassName}
                     side="right"
                     sideOffset={5}
                   >
@@ -461,7 +467,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 调整宽度的拖拽条（仅展开时显示） */}
       {sidebarExpanded && (
         <div
-          className="w-1 cursor-col-resize hover:bg-[rgb(var(--primary))] transition-colors"
+          className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[rgb(var(--primary))]/60"
           onMouseDown={() => setIsResizing(true)}
           aria-label="调整侧边栏宽度"
         />
@@ -496,10 +502,13 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   isExpanded,
   onClick,
 }) => {
+  const { t } = useI18n();
   const windows = useWindowStore((state) => state.windows);
   const windowCount = getWindowCount(group.layout);
   const aggregatedStatus = getGroupStatus(group, windows);
-  const bgColor = 'bg-zinc-800 hover:bg-zinc-700';
+  const itemSurfaceClassName = isActive
+    ? 'border-[rgb(var(--border))] bg-[rgb(var(--accent))]'
+    : sidebarCardSurfaceClassName;
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -514,7 +523,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
           <Tooltip.Trigger asChild>
             <button
               onClick={handleClick}
-              className={`w-full h-10 flex items-center justify-center transition-colors border-l-2 ${bgColor} ${isActive ? 'border-l-yellow-500' : 'border-l-transparent'}`}
+              className={`flex h-10 w-full items-center justify-center border-l-2 border-y border-r transition-colors ${itemSurfaceClassName} ${isActive ? 'border-l-[rgb(var(--primary))]' : 'border-l-transparent'}`}
               aria-label={group.name}
             >
               <div className="relative">
@@ -527,11 +536,11 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
           </Tooltip.Trigger>
           <Tooltip.Portal>
             <Tooltip.Content
-              className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+              className={sidebarTooltipClassName}
               side="right"
               sideOffset={5}
             >
-              {`${group.name} (${windowCount} 个窗口)`}
+              {`${group.name} (${t('quickSwitcher.windowCount', { count: windowCount })})`}
             </Tooltip.Content>
           </Tooltip.Portal>
         </Tooltip.Root>
@@ -542,7 +551,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   return (
     <button
       onClick={handleClick}
-      className={`w-full px-3 py-2 flex items-start gap-2 transition-colors text-left rounded border-l-2 ${bgColor} ${isActive ? 'border-l-yellow-500' : 'border-l-transparent'}`}
+      className={`flex w-full items-start gap-2 rounded-lg border border-l-2 px-3 py-2 text-left transition-colors ${itemSurfaceClassName} ${isActive ? 'border-l-[rgb(var(--primary))]' : 'border-l-transparent'}`}
       aria-label={group.name}
     >
       <div className="relative mt-0.5 flex-shrink-0">
@@ -552,8 +561,8 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-zinc-100 truncate">{group.name}</div>
-        <div className="text-xs text-zinc-400">{windowCount} 个窗口</div>
+        <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">{group.name}</div>
+        <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('quickSwitcher.windowCount', { count: windowCount })}</div>
       </div>
     </button>
   );

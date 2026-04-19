@@ -23,20 +23,26 @@ interface SidebarWindowItemProps {
  * 获取窗口背景颜色（根据状态）
  */
 function getWindowBackgroundColor(status: WindowStatus, isActive: boolean): string {
-  // 非激活状态：根据窗口状态显示不同的基础背景色和悬停色
+  if (isActive) {
+    return 'border-[rgb(var(--border))] bg-[rgb(var(--accent))]';
+  }
+
   switch (status) {
     case WindowStatus.Running:
-      return 'bg-green-900/10 hover:bg-green-900/20'; // 运行中：绿色背景
+      return 'border-emerald-500/25 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.14]';
     case WindowStatus.WaitingForInput:
-      return 'bg-[rgb(var(--primary))]/10 hover:bg-[rgb(var(--primary))]/20'; // 等待输入：主题高亮
+      return 'border-[rgb(var(--primary))]/25 bg-[rgb(var(--primary))]/10 hover:bg-[rgb(var(--primary))]/16';
     case WindowStatus.Paused:
-      return 'bg-zinc-800 hover:bg-zinc-700'; // 暂停：灰色背景
+      return 'border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] hover:bg-[rgb(var(--accent))]';
     case WindowStatus.Error:
-      return 'bg-red-900/10 hover:bg-red-900/20'; // 已退出：红色背景
+      return 'border-red-500/25 bg-red-500/[0.08] hover:bg-red-500/[0.14]';
     default:
-      return 'bg-zinc-800 hover:bg-zinc-700';
+      return 'border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] hover:bg-[rgb(var(--accent))]';
   }
 }
+
+const sidebarTooltipClassName =
+  'z-[1100] rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
 
 /**
  * 侧边栏窗口列表项组件
@@ -99,10 +105,9 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
                 onClick={handleWindowClick}
                 onContextMenu={onContextMenu}
                 className={`
-                  w-full h-10 flex items-center justify-center
-                  transition-colors border-l-2
+                  flex h-10 w-full items-center justify-center border-l-2 border-y border-r transition-colors
                   ${bgColor}
-                  ${isActive ? 'border-l-yellow-500' : 'border-l-transparent'}
+                  ${isActive ? 'border-l-[rgb(var(--primary))]' : 'border-l-transparent'}
                 `}
                 aria-label={terminalWindow.name}
               >
@@ -116,7 +121,7 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Content
-                className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700"
+                className={sidebarTooltipClassName}
                 side="right"
                 sideOffset={5}
               >
@@ -140,10 +145,9 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
         onClick={handleWindowClick}
         onContextMenu={onContextMenu}
         className={`
-          w-full px-3 py-2 flex items-start gap-2
-          transition-colors text-left rounded border-l-2
+          flex w-full items-start gap-2 rounded-lg border border-l-2 px-3 py-2 text-left transition-colors
           ${bgColor}
-          ${isActive ? 'border-l-yellow-500' : 'border-l-transparent'}
+          ${isActive ? 'border-l-[rgb(var(--primary))]' : 'border-l-transparent'}
         `}
         aria-label={terminalWindow.name}
       >
@@ -157,12 +161,12 @@ export const SidebarWindowItem: React.FC<SidebarWindowItemProps> = ({
         {/* 窗口信息 */}
         <div className="flex-1 min-w-0">
           {/* 窗口名称 */}
-          <div className="text-sm font-medium text-zinc-100 truncate">
+          <div className="truncate text-sm font-medium text-[rgb(var(--foreground))]">
             {terminalWindow.name}
           </div>
 
           {/* 工作目录 */}
-          <div className="text-xs text-zinc-400 truncate">
+          <div className="truncate text-xs text-[rgb(var(--muted-foreground))]">
             {workingDirectory}
           </div>
         </div>
