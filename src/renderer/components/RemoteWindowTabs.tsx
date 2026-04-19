@@ -22,6 +22,7 @@ interface RemoteWindowTabsProps {
   onWindowSelect: (windowId: string) => void;
   onWindowClone: (windowId: string) => void;
   onWindowClose: (windowId: string) => void;
+  variant?: 'toolbar' | 'floating';
 }
 
 interface RemoteWindowTabItem {
@@ -32,7 +33,7 @@ interface RemoteWindowTabItem {
   isActive: boolean;
 }
 
-export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
+const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
   windows,
   activeWindowId,
   cloneLabel,
@@ -40,7 +41,9 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   onWindowSelect,
   onWindowClone,
   onWindowClose,
+  variant = 'toolbar',
 }) => {
+  const isFloating = variant === 'floating';
   const remoteWindows = useMemo<RemoteWindowTabItem[]>(() => {
     const candidates = getStandaloneSSHWindowsForTarget(windows, activeWindowId);
 
@@ -68,15 +71,22 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   }
 
   return (
-    <div className="flex h-full min-w-0 self-stretch items-stretch">
-      <div className="flex h-full min-w-0 self-stretch items-stretch overflow-x-auto">
+    <div className={isFloating ? 'flex h-8 min-w-0 items-center' : 'flex h-full min-w-0 self-stretch items-stretch'}>
+      <div className={isFloating ? 'flex h-full min-w-0 items-center gap-1 overflow-x-auto px-1' : 'flex h-full min-w-0 self-stretch items-stretch overflow-x-auto'}>
         {remoteWindows.map((window, index) => (
           <ContextMenu.Root key={window.id}>
             <ContextMenu.Trigger asChild>
               <div
-                className={`group relative flex h-full min-w-[108px] max-w-[164px] items-stretch ${
-                  index > 0 ? '-ml-px' : ''
-                } border-x border-zinc-700/80`}
+                className={isFloating
+                  ? `group relative flex h-7 min-w-[108px] max-w-[164px] items-stretch rounded-full border transition-colors ${
+                    window.isActive
+                      ? 'border-[rgb(var(--primary))]/45 bg-zinc-800/80 shadow-[0_10px_26px_rgba(0,0,0,0.26)]'
+                      : 'border-zinc-800/75 bg-zinc-950/40 hover:border-zinc-700 hover:bg-zinc-900/80'
+                  }`
+                  : `group relative flex h-full min-w-[108px] max-w-[164px] items-stretch ${
+                    index > 0 ? '-ml-px' : ''
+                  } border-x border-zinc-700/80`
+                }
               >
                 <AppTooltip
                   content={window.tooltipText}
@@ -101,8 +111,10 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
                 </AppTooltip>
                 <div
                   aria-hidden="true"
-                  className={`pointer-events-none absolute bottom-0 left-0 right-0 h-0.5 transition-colors ${
-                    window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'
+                  className={`pointer-events-none absolute transition-colors ${
+                    isFloating
+                      ? `bottom-1 left-3 h-1 w-1 rounded-full ${window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'}`
+                      : `bottom-0 left-0 right-0 h-0.5 ${window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'}`
                   }`}
                 />
                 <button
@@ -150,4 +162,5 @@ export const RemoteWindowTabs: React.FC<RemoteWindowTabsProps> = ({
   );
 };
 
+export const RemoteWindowTabs = React.memo(RemoteWindowTabsComponent);
 RemoteWindowTabs.displayName = 'RemoteWindowTabs';

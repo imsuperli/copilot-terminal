@@ -416,6 +416,7 @@ describe('TerminalView', () => {
 
     expect(screen.getByTestId('sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('split-layout')).toBeInTheDocument();
+    expect(screen.getByTestId('terminal-floating-actions')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.archive' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.openFolder' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.splitHorizontal' })).toBeInTheDocument();
@@ -426,6 +427,34 @@ describe('TerminalView', () => {
     expect(screen.queryByRole('button', { name: 'terminalView.splitCode' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.stop' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'terminalView.restart' })).toBeInTheDocument();
+  });
+
+  it('does not mount remote tabs for local terminal windows', () => {
+    render(
+      <TerminalView
+        window={createLocalWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    expect(screen.queryByTestId('remote-window-tabs')).not.toBeInTheDocument();
+  });
+
+  it('does not render floating chrome for inactive mounted windows', () => {
+    render(
+      <TerminalView
+        window={createLocalWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive={false}
+      />
+    );
+
+    expect(screen.getByTestId('split-layout')).toBeInTheDocument();
+    expect(screen.queryByTestId('terminal-floating-actions')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'terminalView.archive' })).not.toBeInTheDocument();
   });
 
   it('shows start instead of stop and restart when the active pane is paused', () => {

@@ -144,6 +144,7 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
             )}
             <AppTooltip content={link.name} placement="toolbar-trailing">
               <button
+                tabIndex={-1}
                 onClick={(e) => handleOpenLink(e, link.url)}
                 className="flex items-center justify-center w-6 h-6 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors"
                 title={link.name}

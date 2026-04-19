@@ -1,6 +1,7 @@
 ﻿import React, { Suspense, lazy, useCallback, useState, useEffect, useMemo } from 'react';
 import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
+import { useShallow } from 'zustand/react/shallow';
 import { v4 as uuidv4 } from 'uuid';
 import { SplitSquareHorizontal, SplitSquareVertical, Folder, Archive, Square, LogOut, SquareX, RotateCw, Play, Waypoints, FolderTree, Activity, Globe, Plus, MessageSquare } from 'lucide-react';
 import { Window, Pane, WindowStatus } from '../types/window';
@@ -122,6 +123,43 @@ function SplitChatIcon() {
   return <MessageSquare size={15} strokeWidth={1.8} />;
 }
 
+interface FloatingRemoteWindowTabsProps {
+  activeWindowId: string;
+  cloneLabel: string;
+  closeLabel: string;
+  onWindowSelect: (windowId: string) => void;
+  onWindowClone: (windowId: string) => void;
+  onWindowClose: (windowId: string) => void;
+}
+
+const FloatingRemoteWindowTabs = React.memo(({
+  activeWindowId,
+  cloneLabel,
+  closeLabel,
+  onWindowSelect,
+  onWindowClone,
+  onWindowClose,
+}: FloatingRemoteWindowTabsProps) => {
+  const windows = useWindowStore(useShallow((state) => (
+    getStandaloneSSHWindowsForTarget(state.windows, activeWindowId)
+  )));
+
+  return (
+    <RemoteWindowTabs
+      windows={windows}
+      activeWindowId={activeWindowId}
+      cloneLabel={cloneLabel}
+      closeLabel={closeLabel}
+      onWindowSelect={onWindowSelect}
+      onWindowClone={onWindowClone}
+      onWindowClose={onWindowClose}
+      variant="floating"
+    />
+  );
+});
+
+FloatingRemoteWindowTabs.displayName = 'FloatingRemoteWindowTabs';
+
 function isArchiveSwitchCandidate(window: Window): boolean {
   const status = getAggregatedStatus(window.layout);
   return (
@@ -239,9 +277,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => !embedded && isStandaloneSshWindow,
     [embedded, isStandaloneSshWindow],
   );
+  const showFloatingChrome = isActive;
   const showToolbarWindowIdentity = useMemo(
-    () => Boolean(activePane && isSessionlessPane(activePane) && !showRemoteWindowTabs),
-    [activePane, showRemoteWindowTabs],
+    () => Boolean(showFloatingChrome && activePane && isSessionlessPane(activePane) && !showRemoteWindowTabs),
+    [activePane, showFloatingChrome, showRemoteWindowTabs],
   );
   const canSplitActivePane = useMemo(
     () => Boolean(activePane && !isChatPane(activePane) && !isCodePane(activePane)),
@@ -273,7 +312,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const findGroupByWindowId = useWindowStore((state) => state.findGroupByWindowId);
   const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
   const removeWindowFromGroupLayout = useWindowStore((state) => state.removeWindowFromGroupLayout);
-  const windows = useWindowStore((state) => state.windows);
 
   const destroyRemoteWindows = useCallback(
     async (windowIds: string[]) => {
@@ -1002,7 +1040,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         addWindowToGroupLayout(targetGroup.id, targetWindowId, dragWindowId, direction);
       } else {
         // 两个独立窗口 → 创建新组
-        const dragWin = windows.find(w => w.id === dragWindowId);
+        const dragWin = useWindowStore.getState().windows.find((window) => window.id === dragWindowId);
         if (!dragWin) return;
 
         const isReversed = dropResult.position === 'left' || dropResult.position === 'top';
@@ -1026,7 +1064,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         }
       }
     },
-    [terminalWindow.id, terminalWindow.name, windows, findGroupByWindowId, addGroup, setActiveGroup, addWindowToGroupLayout, removeWindowFromGroupLayout]
+    [terminalWindow.id, terminalWindow.name, findGroupByWindowId, addGroup, setActiveGroup, addWindowToGroupLayout, removeWindowFromGroupLayout]
   );
 
   return (
@@ -1052,29 +1090,30 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       )}
 
       {/* 主内容区 */}
-      <div className="min-w-0 flex-1 flex flex-col overflow-hidden">
-        {/* 顶部工具栏 - 在嵌入模式下也显示 */}
-        <div className="h-8 bg-zinc-900 flex items-stretch justify-between pl-2 pr-4 flex-shrink-0 gap-3">
-          <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-hidden">
-            {showToolbarWindowIdentity && (
-              <div
-                data-testid="toolbar-window-identity"
-                className="flex h-full min-w-0 shrink-0 items-center gap-2 border-r border-zinc-800 pr-3"
-              >
-                <div className="relative shrink-0">
-                  <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
-                  <span className="absolute -bottom-1 -right-1">
-                    <StatusDot status={aggregatedStatus} size="sm" />
-                  </span>
-                </div>
-                <span className="max-w-[180px] truncate text-xs font-medium text-zinc-200">
-                  {terminalWindow.name}
+      <div className="relative min-w-0 flex-1 flex flex-col overflow-hidden">
+        {showToolbarWindowIdentity && (
+          <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
+            <div
+              data-testid="toolbar-window-identity"
+              className="pointer-events-auto flex h-8 min-w-0 shrink-0 items-center gap-2 rounded-full border border-zinc-800/80 bg-zinc-950/95 px-2.5 shadow-[0_16px_34px_rgba(0,0,0,0.32)]"
+            >
+              <div className="relative shrink-0">
+                <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
+                <span className="absolute -bottom-1 -right-1">
+                  <StatusDot status={aggregatedStatus} size="sm" />
                 </span>
               </div>
-            )}
-            {showRemoteWindowTabs && (
-              <RemoteWindowTabs
-                windows={windows}
+              <span className="max-w-[180px] truncate text-xs font-medium text-zinc-200">
+                {terminalWindow.name}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {showFloatingChrome && showRemoteWindowTabs && (
+          <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
+            <div className="pointer-events-auto max-w-full rounded-full border border-zinc-800/80 bg-zinc-950/95 shadow-[0_16px_34px_rgba(0,0,0,0.32)]">
+              <FloatingRemoteWindowTabs
                 activeWindowId={terminalWindow.id}
                 cloneLabel={t('terminalView.cloneSshTerminal')}
                 closeLabel={t('common.close')}
@@ -1086,11 +1125,25 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   void handleCloseRemoteWindow(windowId);
                 }}
               />
-            )}
+            </div>
           </div>
+        )}
 
-          {/* 鍙充晶鎸夐挳缁?*/}
-          <div className="flex shrink-0 items-center self-stretch gap-2">
+        {showFloatingChrome && (
+          <div
+            data-testid="terminal-floating-actions"
+            className="pointer-events-none absolute right-3 top-3 z-50 flex max-w-[calc(100%-24px)] justify-end"
+          >
+            <div className="group/terminal-actions pointer-events-auto flex h-8 max-w-9 items-center gap-2 overflow-hidden rounded-full border border-zinc-800/80 bg-zinc-950/95 px-1.5 shadow-[0_16px_34px_rgba(0,0,0,0.32)] transition-colors duration-150 ease-out hover:max-w-full hover:border-zinc-700/80 hover:bg-zinc-950 focus-within:max-w-full focus-within:border-zinc-700/80 focus-within:bg-zinc-950">
+              <div className="relative flex h-6 w-6 shrink-0 items-center justify-center">
+                <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
+                <span className="absolute -bottom-1 -right-1">
+                  <StatusDot status={aggregatedStatus} size="sm" />
+                </span>
+              </div>
+
+              {/* 鍙充晶鎸夐挳缁?*/}
+              <div className="flex min-w-max shrink-0 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover/terminal-actions:opacity-100 group-focus-within/terminal-actions:opacity-100">
             {/* 椤圭洰閾炬帴 */}
             {terminalWindow.projectConfig && terminalWindow.projectConfig.links.length > 0 && (
               <>
@@ -1352,8 +1405,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 </button>
               </AppTooltip>
             )}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
         {/* 缁堢甯冨眬鍖哄煙 */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {sshSftpOpen && activePaneCapabilities?.canOpenSFTP && (
