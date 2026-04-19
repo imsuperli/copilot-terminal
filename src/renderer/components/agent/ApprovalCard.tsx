@@ -11,13 +11,13 @@ export function ApprovalCard({
   onReject: () => void;
 }) {
   return (
-    <div className="rounded-[22px] border border-red-500/20 bg-red-500/10 px-4 py-4">
-      <div className="text-[11px] uppercase tracking-[0.18em] text-red-200/90">Approval required</div>
-      <div className="mt-3 text-sm leading-7 text-red-50/95">
+    <div className="rounded-[22px] border border-[rgb(var(--error))]/25 bg-[rgb(var(--error))]/10 px-4 py-4">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-[rgb(var(--error))]">Approval required</div>
+      <div className="mt-3 text-sm leading-7 text-[rgb(var(--foreground))]">
         {approval.reason || 'This command requires explicit approval.'}
       </div>
       {'command' in approval.toolCall.params && typeof approval.toolCall.params.command === 'string' && (
-        <pre className="mt-3 overflow-x-auto rounded-2xl border border-red-500/10 bg-[#0d0d10] px-3 py-2.5 font-mono text-[12px] leading-6 text-zinc-100">
+        <pre className="mt-3 overflow-x-auto rounded-2xl border border-[rgb(var(--error))]/20 bg-[color-mix(in_srgb,rgb(var(--background))_82%,transparent)] px-3 py-2.5 font-mono text-[12px] leading-6 text-[rgb(var(--foreground))]">
           {approval.toolCall.params.command}
         </pre>
       )}
@@ -32,7 +32,7 @@ export function ApprovalCard({
         <button
           type="button"
           onClick={onReject}
-          className="rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-100"
+          className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] px-4 py-2 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
         >
           Reject
         </button>

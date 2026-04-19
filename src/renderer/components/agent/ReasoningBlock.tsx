@@ -12,14 +12,14 @@ export function ReasoningBlock({
   const showPlaceholder = !content.trim() && ['pending', 'running', 'streaming'].includes(status ?? '');
 
   return (
-    <div className="rounded-[22px] border border-zinc-800/80 bg-zinc-900/45 px-4 py-3">
+    <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_54%,transparent)] px-4 py-3">
       {showPlaceholder ? (
-        <div className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.18em] text-zinc-400">
+        <div className="inline-flex items-center gap-2 text-sm uppercase tracking-[0.18em] text-[rgb(var(--muted-foreground))]">
           <LoaderCircle size={14} className="animate-spin" />
           <span>Thinking...</span>
         </div>
       ) : (
-        <div className="space-y-2 text-sm leading-6 text-zinc-400">
+        <div className="space-y-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">
           {renderMarkdownLike(content)}
         </div>
       )}

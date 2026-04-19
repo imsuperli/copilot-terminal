@@ -123,7 +123,7 @@ export function ToolCallBlock({
   }, [errorIds]);
 
   return (
-    <div className="rounded-[18px] border border-zinc-800/80 bg-zinc-900/70 p-2 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
+    <div className="rounded-[18px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_82%,transparent)] p-2 shadow-[0_20px_40px_-34px_rgba(0,0,0,0.9)]">
       <div className="space-y-1">
         {items.map((item) => {
           const summary = formatToolSummary(item.event.toolCall);
@@ -135,10 +135,10 @@ export function ToolCallBlock({
           return (
             <div
               key={item.event.toolCall.id}
-              className="rounded-[15px] border border-zinc-800/80 bg-zinc-950/55"
+              className="rounded-[15px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_70%,transparent)]"
             >
               <div className="flex items-center gap-1.5 px-2 py-1">
-                <div className="min-w-0 flex-1 truncate font-mono text-[12px] leading-4 text-zinc-400">
+                <div className="min-w-0 flex-1 truncate font-mono text-[12px] leading-4 text-[rgb(var(--muted-foreground))]">
                   {summary}
                 </div>
 
@@ -163,7 +163,7 @@ export function ToolCallBlock({
                       return next;
                     });
                   }}
-                  className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-100"
+                  className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))]"
                   aria-label={`${isExpanded ? 'Hide' : 'Show'} details for ${summary}`}
                 >
                   {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -171,9 +171,9 @@ export function ToolCallBlock({
               </div>
 
               {isExpanded && (
-                <div className="border-t border-zinc-800/80 px-2 py-2">
+                <div className="border-t border-[rgb(var(--border))] px-2 py-2">
                   {detailContent ? (
-                    <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-4 text-zinc-300">
+                    <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-4 text-[rgb(var(--foreground))]">
                       {detailContent}
                     </pre>
                   ) : isRunning ? (
@@ -182,11 +182,11 @@ export function ToolCallBlock({
                       <span>Waiting for output</span>
                     </div>
                   ) : (
-                    <div className="text-xs text-zinc-500">No output</div>
+                    <div className="text-xs text-[rgb(var(--muted-foreground))]">No output</div>
                   )}
 
                   {item.event.toolCall.reason && (
-                    <p className="mt-1.5 text-xs leading-4 text-zinc-400">{item.event.toolCall.reason}</p>
+                    <p className="mt-1.5 text-xs leading-4 text-[rgb(var(--muted-foreground))]">{item.event.toolCall.reason}</p>
                   )}
                 </div>
               )}

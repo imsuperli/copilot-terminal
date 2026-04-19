@@ -48,7 +48,7 @@ export function ThinkingStatusBar() {
       className="pt-6"
     >
       <div className="flex items-center gap-3 pb-1">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-zinc-800/90 bg-zinc-900/80 text-zinc-200">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[18px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_80%,transparent)] text-[rgb(var(--foreground))]">
           <Sparkles size={15} />
         </div>
         <div
@@ -57,7 +57,7 @@ export function ThinkingStatusBar() {
           aria-label={`${THINKING_LABEL} ${formatThinkingElapsed(elapsedSeconds)}`}
           className="inline-flex items-center gap-3 whitespace-nowrap"
         >
-          <div className="relative inline-flex overflow-hidden font-mono text-[14px] font-semibold tracking-[0.06em] text-zinc-600">
+          <div className="relative inline-flex overflow-hidden font-mono text-[14px] font-semibold tracking-[0.06em] text-[rgb(var(--muted-foreground))]/70">
             <span>{THINKING_LABEL}</span>
             <span
               aria-hidden="true"
@@ -67,7 +67,7 @@ export function ThinkingStatusBar() {
               {THINKING_LABEL}
             </span>
           </div>
-          <span className="font-mono text-[13px] font-medium tabular-nums text-zinc-500">
+          <span className="font-mono text-[13px] font-medium tabular-nums text-[rgb(var(--muted-foreground))]">
             {formatThinkingElapsed(elapsedSeconds)}
           </span>
         </div>
