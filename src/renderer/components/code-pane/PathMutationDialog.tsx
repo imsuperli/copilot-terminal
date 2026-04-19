@@ -147,7 +147,7 @@ export function PathMutationDialog({
               <div className="space-y-2">
                 <label
                   htmlFor="path-mutation-input"
-                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500"
+                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]"
                 >
                   {inputLabel}
                 </label>
@@ -161,31 +161,31 @@ export function PathMutationDialog({
                     autoComplete="off"
                     spellCheck={false}
                     aria-label={inputLabel}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
                   />
                   {isSubmitting ? (
-                    <Loader2 size={14} className="shrink-0 animate-spin text-zinc-500" />
+                    <Loader2 size={14} className="shrink-0 animate-spin text-[rgb(var(--muted-foreground))]" />
                   ) : null}
                 </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className={idePopupCardClassName}>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgb(var(--muted-foreground))]">
                     {locationLabel}
                   </div>
-                  <div className="mt-2 break-all font-mono text-[12px] leading-5 text-zinc-300">
+                  <div className="mt-2 break-all font-mono text-[12px] leading-5 text-[rgb(var(--foreground))]">
                     {locationPath}
                   </div>
                 </div>
                 <div className={idePopupAccentCardClassName}>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-300/80">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgb(var(--primary))]">
                     {previewLabel}
                   </div>
                   <div className={`mt-2 break-all font-mono text-[12px] leading-5 ${
                     previewPath
-                      ? 'text-sky-100'
-                      : 'text-zinc-500'
+                      ? 'text-[rgb(var(--foreground))]'
+                      : 'text-[rgb(var(--muted-foreground))]'
                   }`}>
                     {previewPath || previewPlaceholder}
                   </div>

@@ -119,7 +119,7 @@ export function ActionInputDialog({
             <div className={idePopupHeaderClassName}>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  {icon ?? <CheckSquare size={12} className="shrink-0 text-sky-300" />}
+                  {icon ?? <CheckSquare size={12} className="shrink-0 text-[rgb(var(--primary))]" />}
                   <div className={idePopupHeaderMetaClassName}>{metaLabel}</div>
                 </div>
                 <Dialog.Title className={`mt-1 ${idePopupTitleClassName}`}>
@@ -145,7 +145,7 @@ export function ActionInputDialog({
               <div className="space-y-2">
                 <label
                   htmlFor="code-pane-action-input"
-                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-500"
+                  className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]"
                 >
                   {inputLabel}
                 </label>
@@ -159,23 +159,23 @@ export function ActionInputDialog({
                     autoComplete="off"
                     spellCheck={false}
                     aria-label={inputLabel}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
                   />
                   {isSubmitting ? (
-                    <Loader2 size={14} className="shrink-0 animate-spin text-zinc-500" />
+                    <Loader2 size={14} className="shrink-0 animate-spin text-[rgb(var(--muted-foreground))]" />
                   ) : null}
                 </div>
               </div>
 
               {previewLabel ? (
                 <div className={idePopupAccentCardClassName}>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-300/80">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgb(var(--primary))]">
                     {previewLabel}
                   </div>
                   <div className={`mt-2 break-all font-mono text-[12px] leading-5 ${
                     previewValue
-                      ? 'text-sky-100'
-                      : 'text-zinc-500'
+                      ? 'text-[rgb(var(--foreground))]'
+                      : 'text-[rgb(var(--muted-foreground))]'
                   }`}>
                     {previewValue || previewPlaceholder || ''}
                   </div>
