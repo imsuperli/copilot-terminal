@@ -8,6 +8,13 @@ import { getStatusColorValue, getStatusLabelKey } from '../utils/statusHelpers';
 import { useI18n } from '../i18n';
 import { StatusDot } from './StatusDot';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
+import {
+  idePopupListCardClassName,
+  idePopupListCardFooterClassName,
+  idePopupPillClassName,
+  idePopupTonalButtonClassName,
+  idePopupTooltipClassName,
+} from './ui/ide-popup';
 
 interface SSHProfileCardProps {
   profile: SSHProfile;
@@ -41,12 +48,9 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   onDelete,
 }) => {
   const { t } = useI18n();
-  const badgeClassName =
-    'inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))]';
-  const tooltipClassName =
-    'rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
-  const cardButtonClassName =
-    'rounded bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] transition-colors hover:bg-[rgb(var(--accent))] backdrop-blur-sm';
+  const badgeClassName = `${idePopupPillClassName} text-[rgb(var(--foreground))]`;
+  const tooltipClassName = idePopupTooltipClassName;
+  const cardButtonClassName = `${idePopupTonalButtonClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]`;
   const runtimeStatus = useMemo(
     () => (window ? getAggregatedStatus(window.layout) : null),
     [window],
@@ -144,11 +148,11 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
       onClick={handleCardClick}
       onKeyDown={handleKeyDown}
       aria-label={`${profile.name} ${targetLabel}`}
-      className="relative flex h-56 min-w-[280px] flex-col overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_72%,transparent)] cursor-pointer transition-all duration-200 ease-out hover:bg-[color-mix(in_srgb,rgb(var(--card))_82%,transparent)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] backdrop-blur-xl"
+      className={`${idePopupListCardClassName} flex h-56 min-w-[280px] flex-col cursor-pointer transition-all duration-200 ease-out hover:bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.18)] hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))]`}
       style={{ borderTop: `2px solid ${topBorderColor}` }}
     >
       {isConnecting && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_srgb,rgb(var(--background))_76%,black)] text-sm font-medium text-[rgb(var(--foreground))] backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_srgb,rgb(var(--background))_88%,black)] text-sm font-medium text-[rgb(var(--foreground))]">
           {t('sshProfileCard.connecting')}
         </div>
       )}
@@ -249,7 +253,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
         </div>
       </div>
 
-      <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-4 py-2 backdrop-blur-sm">
+      <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 items-center justify-between gap-2 px-4 py-2`}>
         <button
           onClick={(event) => handleButtonClick(event, handlePrimaryAction)}
           disabled={isConnecting}

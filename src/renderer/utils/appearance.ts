@@ -259,17 +259,21 @@ function buildAppearanceBackdropLayers(appearance: AppearanceSettings): Appearan
     return [];
   }
 
+  const motionEnabled = !appearance.reduceMotion && appearance.skin.motion !== 'none';
+
   if (appearance.skin.kind === 'image' && appearance.skin.imagePath) {
+    if (!motionEnabled) {
+      return [];
+    }
+
     return [
       {
         className: 'absolute inset-[-8%] will-change-transform',
         style: {
           backgroundImage: 'radial-gradient(circle at 20% 16%, rgba(255,255,255,0.10), transparent 22%), radial-gradient(circle at 78% 18%, rgba(255,255,255,0.08), transparent 24%)',
           opacity: 'var(--appearance-skin-motion-opacity, 0)',
-          animation: appearance.reduceMotion || appearance.skin.motion === 'none'
-            ? undefined
-            : 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
-          mixBlendMode: 'screen',
+          animation: 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
+          mixBlendMode: 'screen' as const,
         },
       },
     ];
@@ -278,17 +282,17 @@ function buildAppearanceBackdropLayers(appearance: AppearanceSettings): Appearan
   const presetId = appearance.skin.presetId;
   if (presetId === 'aurora') {
     return [
-      {
-        className: 'absolute inset-[-10%] will-change-transform',
-        style: {
-          background: 'radial-gradient(circle at 18% 18%, rgba(94, 234, 212, 0.24), transparent 28%), radial-gradient(circle at 78% 16%, rgba(113, 183, 255, 0.18), transparent 30%)',
-          opacity: 'var(--appearance-skin-motion-opacity, 0)',
-          animation: appearance.reduceMotion || appearance.skin.motion === 'none'
-            ? undefined
-            : 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
-          mixBlendMode: 'screen',
-        },
-      },
+      ...(motionEnabled
+        ? [{
+            className: 'absolute inset-[-10%] will-change-transform',
+            style: {
+              background: 'radial-gradient(circle at 18% 18%, rgba(94, 234, 212, 0.24), transparent 28%), radial-gradient(circle at 78% 16%, rgba(113, 183, 255, 0.18), transparent 30%)',
+              opacity: 'var(--appearance-skin-motion-opacity, 0)',
+              animation: 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
+              mixBlendMode: 'screen' as const,
+            },
+          }]
+        : []),
       {
         className: 'absolute inset-0',
         style: {
@@ -308,32 +312,32 @@ function buildAppearanceBackdropLayers(appearance: AppearanceSettings): Appearan
           opacity: 0.58,
         },
       },
-      {
-        className: 'absolute inset-[-6%] will-change-transform',
-        style: {
-          background: 'radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.28), transparent 20%), radial-gradient(circle at 84% 14%, rgba(184, 137, 71, 0.14), transparent 26%)',
-          opacity: 'var(--appearance-skin-motion-opacity, 0)',
-          animation: appearance.reduceMotion || appearance.skin.motion === 'none'
-            ? undefined
-            : 'appearance-skin-float calc(var(--appearance-skin-motion-duration, 18s) * 0.82) ease-in-out infinite alternate',
-          mixBlendMode: 'soft-light',
-        },
-      },
+      ...(motionEnabled
+        ? [{
+            className: 'absolute inset-[-6%] will-change-transform',
+            style: {
+              background: 'radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.28), transparent 20%), radial-gradient(circle at 84% 14%, rgba(184, 137, 71, 0.14), transparent 26%)',
+              opacity: 'var(--appearance-skin-motion-opacity, 0)',
+              animation: 'appearance-skin-float calc(var(--appearance-skin-motion-duration, 18s) * 0.82) ease-in-out infinite alternate',
+              mixBlendMode: 'soft-light' as const,
+            },
+          }]
+        : []),
     ];
   }
 
   return [
-    {
-      className: 'absolute inset-[-8%] will-change-transform',
-      style: {
-        background: 'radial-gradient(circle at 18% 18%, rgba(86, 130, 255, 0.18), transparent 28%), radial-gradient(circle at 82% 18%, rgba(244, 158, 73, 0.12), transparent 26%)',
-        opacity: 'var(--appearance-skin-motion-opacity, 0)',
-        animation: appearance.reduceMotion || appearance.skin.motion === 'none'
-          ? undefined
-          : 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
-        mixBlendMode: 'screen',
-      },
-    },
+    ...(motionEnabled
+      ? [{
+          className: 'absolute inset-[-8%] will-change-transform',
+          style: {
+            background: 'radial-gradient(circle at 18% 18%, rgba(86, 130, 255, 0.18), transparent 28%), radial-gradient(circle at 82% 18%, rgba(244, 158, 73, 0.12), transparent 26%)',
+            opacity: 'var(--appearance-skin-motion-opacity, 0)',
+            animation: 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
+            mixBlendMode: 'screen' as const,
+          },
+        }]
+      : []),
     {
       className: 'absolute inset-0',
       style: {

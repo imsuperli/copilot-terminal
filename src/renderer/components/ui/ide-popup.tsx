@@ -54,6 +54,23 @@ export const idePopupCardClassName = joinClassNames(
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]',
 );
 
+export const idePopupTooltipClassName = joinClassNames(
+  'z-[1100] rounded-lg border border-[rgb(var(--border))] px-2 py-1 text-xs text-[rgb(var(--foreground))]',
+  'bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_96%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_98%,transparent)_100%)]',
+  'shadow-[0_16px_38px_rgba(0,0,0,0.28)] ring-1 ring-white/5',
+);
+
+export const idePopupListCardClassName = joinClassNames(
+  'relative overflow-hidden rounded-xl border border-[rgb(var(--border))]',
+  'bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_84%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_94%,transparent)_100%)]',
+  'shadow-[0_18px_38px_rgba(0,0,0,0.14)]',
+);
+
+export const idePopupListCardFooterClassName = joinClassNames(
+  'border-t border-[rgb(var(--border))]',
+  'bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)_0%,color-mix(in_srgb,rgb(var(--secondary))_62%,transparent)_100%)]',
+);
+
 export const idePopupAccentCardClassName = joinClassNames(
   'rounded-[12px] border border-[rgb(var(--primary))]/28 bg-[rgb(var(--primary))]/8 px-3 py-3',
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]',
@@ -84,6 +101,13 @@ export const idePopupSecondaryButtonClassName = joinClassNames(
   'text-sm font-medium text-[rgb(var(--foreground))] transition-colors',
   'hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]',
   'disabled:cursor-not-allowed disabled:border-[rgb(var(--border))] disabled:bg-[rgb(var(--secondary))] disabled:text-[rgb(var(--muted-foreground))]',
+);
+
+export const idePopupTonalButtonClassName = joinClassNames(
+  'rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_70%,transparent)]',
+  'text-[rgb(var(--foreground))] transition-colors',
+  'hover:border-[rgb(var(--ring))]/55 hover:bg-[rgb(var(--accent))]',
+  'disabled:cursor-not-allowed disabled:opacity-60',
 );
 
 export const idePopupInputClassName = joinClassNames(
@@ -174,6 +198,11 @@ export const idePopupBadgeClassName = (tone: 'red' | 'amber' | 'sky' | 'emerald'
       return 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--muted-foreground))]';
   }
 };
+
+export const idePopupPillClassName = joinClassNames(
+  'inline-flex items-center gap-1 rounded-full border border-[rgb(var(--border))] px-2 py-1 text-xs',
+  'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)]',
+);
 
 interface IdePopupShellProps {
   className?: string;

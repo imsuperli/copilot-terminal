@@ -48,4 +48,19 @@ describe('renderer appearance utilities', () => {
     expect(descriptor.layers.length).toBeGreaterThan(0);
     expect(descriptor.layers[0]?.style?.animation).toContain('appearance-skin-drift');
   });
+
+  it('skips motion-only layers when skin motion is disabled', () => {
+    const descriptor = getAppearanceBackdropDescriptor({
+      ...DEFAULT_APPEARANCE_SETTINGS,
+      reduceMotion: true,
+      skin: {
+        ...DEFAULT_APPEARANCE_SETTINGS.skin,
+        presetId: 'aurora',
+        motion: 'none',
+      },
+    });
+
+    expect(descriptor.layers).toHaveLength(1);
+    expect(descriptor.layers[0]?.style?.animation).toBeUndefined();
+  });
 });

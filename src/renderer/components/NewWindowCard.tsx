@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { useI18n } from '../i18n';
+import { idePopupListCardClassName } from './ui/ide-popup';
 
 interface NewWindowCardProps {
   onClick: () => void;
@@ -30,9 +31,9 @@ export const NewWindowCard = React.memo<NewWindowCardProps>(({ onClick }) => {
       onKeyDown={handleKeyDown}
       aria-label={t('common.newWindow')}
       data-testid="new-window-card"
-      className="flex flex-col items-center justify-center h-56 border-2 border-dashed border-[rgb(var(--border))] rounded-lg cursor-pointer transition-all duration-200 hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--card))]/50 active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] group"
+      className={`${idePopupListCardClassName} flex h-56 flex-col items-center justify-center border-2 border-dashed border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] cursor-pointer transition-all duration-200 hover:border-[rgb(var(--primary))] hover:bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--primary))_10%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_94%,transparent)_100%)] hover:shadow-[0_22px_44px_rgba(0,0,0,0.16)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] group`}
     >
-      <div className="w-12 h-12 rounded-full bg-[rgb(var(--card))] flex items-center justify-center mb-3 group-hover:bg-[rgb(var(--primary))] transition-colors">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] group-hover:border-[rgb(var(--primary))]/55 group-hover:bg-[rgb(var(--primary))] transition-colors">
         <span className="text-3xl text-[rgb(var(--muted-foreground))] group-hover:text-[rgb(var(--primary-foreground))] leading-none transition-colors">+</span>
       </div>
       <span className="text-sm text-[rgb(var(--muted-foreground))] group-hover:text-[rgb(var(--foreground))] transition-colors">{t('common.newTerminal')}</span>

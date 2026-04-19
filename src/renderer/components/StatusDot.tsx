@@ -2,6 +2,7 @@ import React from 'react';
 import { Activity, Keyboard, Pause } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { WindowStatus } from '../types/window';
+import { idePopupTooltipClassName } from './ui/ide-popup';
 
 export interface StatusDotProps {
   status: WindowStatus;
@@ -69,7 +70,7 @@ const WithTooltip: React.FC<{ title?: string; children: React.ReactElement }> = 
         </Tooltip.Trigger>
         <Tooltip.Portal>
           <Tooltip.Content
-            className="z-[1100] rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur"
+            className={idePopupTooltipClassName}
             side="top"
             sideOffset={14}
           >

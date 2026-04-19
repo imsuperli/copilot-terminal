@@ -1,5 +1,6 @@
 import React from 'react';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
+import { idePopupTooltipClassName } from './ide-popup';
 
 type TooltipPlacement = 'top' | 'toolbar-leading' | 'toolbar-trailing' | 'pane-corner';
 
@@ -11,8 +12,7 @@ interface AppTooltipProps {
   placement?: TooltipPlacement;
 }
 
-const DEFAULT_CONTENT_CLASSNAME =
-  'z-[1100] rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
+const DEFAULT_CONTENT_CLASSNAME = idePopupTooltipClassName;
 
 const placementProps: Record<TooltipPlacement, Pick<RadixTooltip.TooltipContentProps, 'side' | 'sideOffset'>> = {
   top: {

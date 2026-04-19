@@ -11,6 +11,12 @@ import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils
 import { formatRelativeTime, useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
+import {
+  idePopupListCardClassName,
+  idePopupListCardFooterClassName,
+  idePopupTonalButtonClassName,
+  idePopupTooltipClassName,
+} from './ui/ide-popup';
 
 interface GroupCardProps {
   group: WindowGroup;
@@ -139,10 +145,8 @@ export const GroupCard = React.memo<GroupCardProps>(({
     },
     [onClick, group]
   );
-  const tooltipClassName =
-    'rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
-  const cardButtonClassName =
-    'rounded bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] transition-colors hover:bg-[rgb(var(--accent))] backdrop-blur-sm';
+  const tooltipClassName = idePopupTooltipClassName;
+  const cardButtonClassName = `${idePopupTonalButtonClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]`;
 
   return (
     <div
@@ -151,7 +155,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
       onClick={() => onClick?.(group)}
       onKeyDown={handleKeyDown}
       aria-label={`组: ${group.name}, ${windowCount} 个窗口`}
-      className="relative flex h-56 min-w-[280px] flex-col overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_72%,transparent)] cursor-pointer transition-all duration-200 ease-out hover:bg-[color-mix(in_srgb,rgb(var(--card))_82%,transparent)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] backdrop-blur-xl"
+      className={`${idePopupListCardClassName} flex h-56 min-w-[280px] flex-col cursor-pointer transition-all duration-200 ease-out hover:bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.18)] hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))]`}
       style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus as WindowStatus)}` }}
     >
       {/* 卡片内容 */}
@@ -249,7 +253,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
       </div>
 
       {/* 底部按钮栏 - 单行布局 */}
-      <div className="flex flex-shrink-0 items-center justify-between gap-1.5 border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-4 py-2 backdrop-blur-sm">
+      <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 items-center justify-between gap-1.5 px-4 py-2`}>
         {/* 左侧：启动/暂停按钮 */}
         <div>
           {aggregatedStatus === 'paused' && (

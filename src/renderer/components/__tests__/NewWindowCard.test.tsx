@@ -11,7 +11,7 @@ describe('NewWindowCard', () => {
 
   it('renders the label text', () => {
     render(<NewWindowCard onClick={vi.fn()} />);
-    expect(screen.getByText('新建窗口')).toBeInTheDocument();
+    expect(screen.getByText('新建终端')).toBeInTheDocument();
   });
 
   it('has correct aria-label', () => {
@@ -60,26 +60,26 @@ describe('NewWindowCard', () => {
     render(<NewWindowCard onClick={vi.fn()} />);
     const card = screen.getByTestId('new-window-card');
     expect(card).toHaveClass('border-dashed');
-    expect(card).toHaveClass('border-zinc-600');
+    expect(card).toHaveClass('border-[rgb(var(--border))]');
   });
 
-  it('has correct height class matching WindowCard (h-40)', () => {
+  it('has correct height class matching WindowCard (h-56)', () => {
     render(<NewWindowCard onClick={vi.fn()} />);
     const card = screen.getByTestId('new-window-card');
-    expect(card).toHaveClass('h-40');
+    expect(card).toHaveClass('h-56');
   });
 
   it('has hover classes for visual feedback', () => {
     render(<NewWindowCard onClick={vi.fn()} />);
     const card = screen.getByTestId('new-window-card');
-    expect(card).toHaveClass('hover:border-zinc-400');
-    expect(card).toHaveClass('hover:bg-zinc-800');
+    expect(card).toHaveClass('hover:border-[rgb(var(--primary))]');
+    expect(card).toHaveClass('hover:shadow-[0_22px_44px_rgba(0,0,0,0.16)]');
   });
 
   it('has focus ring class for accessibility', () => {
     render(<NewWindowCard onClick={vi.fn()} />);
     const card = screen.getByTestId('new-window-card');
     expect(card).toHaveClass('focus:ring-2');
-    expect(card).toHaveClass('focus:ring-blue-500');
+    expect(card).toHaveClass('focus:ring-[rgb(var(--ring))]');
   });
 });

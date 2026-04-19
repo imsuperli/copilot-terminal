@@ -12,6 +12,7 @@ import {
 import {
   idePopupIconButtonClassName,
   idePopupMicroButtonClassName,
+  idePopupTooltipClassName,
 } from './ui/ide-popup';
 
 interface ProjectLinksProps {
@@ -60,8 +61,7 @@ export const ProjectLinks: React.FC<ProjectLinksProps> = ({
 
   const visibleLinks = links.slice(0, maxDisplay);
   const hiddenLinks = links.slice(maxDisplay);
-  const tooltipClassName =
-    'z-[1100] max-w-xs break-all rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
+  const tooltipClassName = `${idePopupTooltipClassName} max-w-xs break-all`;
 
   // 卡片模式：显示在卡片底部
   if (variant === 'card') {

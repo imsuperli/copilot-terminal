@@ -18,6 +18,13 @@ import {
   ideMenuItemClassName,
   IdeMenuItemContent,
 } from './ui/ide-menu';
+import {
+  idePopupListCardClassName,
+  idePopupListCardFooterClassName,
+  idePopupPillClassName,
+  idePopupTonalButtonClassName,
+  idePopupTooltipClassName,
+} from './ui/ide-popup';
 
 interface WindowCardProps {
   window: Window;
@@ -136,10 +143,8 @@ export const WindowCard = React.memo<WindowCardProps>(({
   // 缓存状态色和标签
   const statusColor = useMemo(() => getStatusColor(aggregatedStatus), [aggregatedStatus]);
   const statusLabel = useMemo(() => t(getStatusLabelKey(aggregatedStatus)), [aggregatedStatus, t]);
-  const tooltipClassName =
-    'rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
-  const cardButtonClassName =
-    'rounded bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] transition-colors hover:bg-[rgb(var(--accent))] backdrop-blur-sm';
+  const tooltipClassName = idePopupTooltipClassName;
+  const cardButtonClassName = `${idePopupTonalButtonClassName} shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]`;
 
   // 缓存格式化的上次运行时间（移除"不到"、"大约"等字样）
   const formattedLastActiveTime = useMemo(() => {
@@ -231,12 +236,12 @@ export const WindowCard = React.memo<WindowCardProps>(({
       onClick={() => onClick?.(window)}
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
-      className="relative flex h-56 min-w-[280px] flex-col overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_72%,transparent)] cursor-pointer transition-all duration-200 ease-out hover:bg-[color-mix(in_srgb,rgb(var(--card))_82%,transparent)] hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))] backdrop-blur-xl"
+      className={`${idePopupListCardClassName} flex h-56 min-w-[280px] flex-col cursor-pointer transition-all duration-200 ease-out hover:bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.18)] hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))]`}
       style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus)}` }}
     >
       {/* 启动中加载遮罩 */}
       {aggregatedStatus === WindowStatus.Restoring && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-[color-mix(in_srgb,rgb(var(--background))_84%,black)] backdrop-blur-sm transition-opacity duration-200">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg bg-[color-mix(in_srgb,rgb(var(--background))_88%,black)] transition-opacity duration-200">
           <Loader2 className="w-12 h-12 text-[rgb(var(--primary))] animate-spin" />
           <div className="text-sm font-medium text-[rgb(var(--foreground))]">{t('windowCard.startingTerminal')}</div>
           <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('windowCard.pleaseWait')}</div>
@@ -257,7 +262,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
               {window.name}
             </h3>
             {paneCount > 1 && (
-              <span className="flex-shrink-0 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-0.5 text-xs text-[rgb(var(--muted-foreground))]">
+              <span className={`${idePopupPillClassName} flex-shrink-0 py-0.5 text-[rgb(var(--muted-foreground))]`}>
                 {t('windowCard.panesCount', { count: paneCount })}
               </span>
             )}
@@ -306,7 +311,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Content
-                className="max-w-md break-all rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-3 py-2 text-sm text-[rgb(var(--foreground))] shadow-xl backdrop-blur"
+                className={`${tooltipClassName} max-w-md break-all px-3 py-2 text-sm`}
                 side="top"
                 sideOffset={5}
               >
@@ -338,7 +343,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       </div>
 
       {/* 底部按钮栏 - 两行布局 */}
-      <div className="flex flex-shrink-0 flex-col gap-1.5 border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-4 py-2 backdrop-blur-sm">
+      <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 flex-col gap-1.5 px-4 py-2`}>
         {/* 第一行：启动/暂停按钮（左侧） + 操作按钮（右侧） */}
         <div className="flex items-center justify-between">
           {/* 左侧：启动/暂停按钮 */}
