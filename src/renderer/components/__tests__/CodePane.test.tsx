@@ -6699,6 +6699,42 @@ describe('CodePane', () => {
     }
   });
 
+  it('saves immediately before the deferred language sync debounce fires', async () => {
+    renderCodePane(createPane());
+
+    await openFileFromTree('index.ts');
+
+    vi.useFakeTimers();
+
+    try {
+      await act(async () => {
+        fakeMonacoState.models.get('/workspace/project/src/index.ts')?.setValue('export const value = 2;\n');
+        vi.advanceTimersByTime(149);
+        await Promise.resolve();
+      });
+
+      expect(window.electronAPI.codePaneDidChangeDocument).not.toHaveBeenCalledWith(expect.objectContaining({
+        filePath: '/workspace/project/src/index.ts',
+        content: 'export const value = 2;\n',
+      }));
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(window.electronAPI.codePaneWriteFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+        content: 'export const value = 2;\n',
+        expectedMtimeMs: 100,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps the file dirty when content changes while a save is in flight', async () => {
     let resolveWrite: ((value: { success: true; data: { mtimeMs: number } }) => void) | null = null;
     vi.mocked(window.electronAPI.codePaneWriteFile).mockImplementationOnce(async () => (

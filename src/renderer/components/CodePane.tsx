@@ -4759,6 +4759,7 @@ type SaveFileOptions = {
   overwrite?: boolean;
   skipQualityPipeline?: boolean;
   skipGitRefresh?: boolean;
+  waitForLanguageSync?: boolean;
 };
 
 type FileTreeViewport = {
@@ -10669,6 +10670,19 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [queueLanguageDocumentSync, syncLanguageDocument]);
 
+  const enqueuePendingLanguageSync = useCallback((filePath: string) => {
+    const timer = documentSyncTimersRef.current.get(filePath);
+    if (!timer) {
+      return;
+    }
+
+    clearTimeout(timer);
+    documentSyncTimersRef.current.delete(filePath);
+    void queueLanguageDocumentSync(filePath, 'change', async () => {
+      await syncLanguageDocument(filePath, 'change');
+    });
+  }, [queueLanguageDocumentSync, syncLanguageDocument]);
+
   const closeLanguageDocument = useCallback(async (filePath: string) => {
     const bridge = languageBridgeRef.current ?? (
       monacoRef.current ? ensureMonacoLanguageBridge(monacoRef.current) : null
@@ -13357,7 +13371,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
 
     let qualityGateStateBeforeWrite: CodePaneSaveQualityState | null = null;
     let didWriteIntermediateFiles = false;
-    if (!options?.skipQualityPipeline && hasSaveQualityPipelineEnabled) {
+    const shouldRunQualityPipeline = !options?.skipQualityPipeline && hasSaveQualityPipelineEnabled;
+    if (shouldRunQualityPipeline) {
       await flushPendingLanguageSync(filePath);
       persistQualityGateState(createSaveQualityState({
         status: 'running',
@@ -13367,7 +13382,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       qualityGateStateBeforeWrite = qualityPipelineResult.qualityState;
       didWriteIntermediateFiles = qualityPipelineResult.wroteToDisk;
     }
-    await flushPendingLanguageSync(filePath);
+    if (shouldRunQualityPipeline || options?.waitForLanguageSync) {
+      await flushPendingLanguageSync(filePath);
+    } else {
+      enqueuePendingLanguageSync(filePath);
+    }
 
     markSaving(filePath, true);
     const saveVersionId = getModelVersionId(model);
@@ -13459,6 +13478,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [
     addLocalHistoryEntry,
     clearBannerForFile,
+    enqueuePendingLanguageSync,
     flushPendingLanguageSync,
     markDirty,
     markSaving,
@@ -14256,6 +14276,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         const didSave = await saveFile(editedFilePath, {
           skipQualityPipeline: true,
           skipGitRefresh: true,
+          waitForLanguageSync: true,
         });
         if (!didSave) {
           didFailToSave = true;
