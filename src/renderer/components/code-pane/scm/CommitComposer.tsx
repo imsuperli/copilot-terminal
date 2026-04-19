@@ -2,6 +2,16 @@ import React, { useState } from 'react';
 import { GitCommitHorizontal, Package, Route, Undo2 } from 'lucide-react';
 import type { CodePaneGitRepositorySummary } from '../../../../shared/types/electron-api';
 import { useI18n } from '../../../i18n';
+import {
+  idePopupCardClassName,
+  idePopupMicroButtonClassName,
+} from '../../ui/ide-popup';
+
+const COMPOSER_FIELD_CLASS_NAME = 'w-full rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))]/75 focus:border-[rgb(var(--ring))]';
+const COMPOSER_ACTION_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('neutral')} px-2 py-1 text-[11px]`;
+const COMPOSER_SUCCESS_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('success')} px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-40`;
+const COMPOSER_WARNING_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('warning')} px-2 py-1 text-[11px]`;
+const COMPOSER_DANGER_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('danger')} px-2 py-1 text-[11px]`;
 
 interface CommitComposerProps {
   summary: CodePaneGitRepositorySummary | null;
@@ -28,7 +38,7 @@ export function CommitComposer({
   const [createBranch, setCreateBranch] = useState(false);
 
   return (
-    <div className="space-y-3 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-2">
+    <div className={`space-y-3 p-2 ${idePopupCardClassName}`}>
       <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {t('codePane.gitComposer')}
       </div>
@@ -40,7 +50,7 @@ export function CommitComposer({
             setCommitMessage(event.target.value);
           }}
           placeholder={t('codePane.gitCommitPlaceholder')}
-          className="h-20 w-full resize-none rounded border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-2 py-2 text-xs text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))]/75 focus:border-[rgb(var(--ring))]"
+          className={`h-20 resize-none py-2 ${COMPOSER_FIELD_CLASS_NAME}`}
         />
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-[rgb(var(--muted-foreground))]">
           <label className="flex items-center gap-1">
@@ -63,7 +73,7 @@ export function CommitComposer({
             });
             setCommitMessage('');
           }}
-          className="flex items-center gap-1 rounded bg-[rgb(var(--success)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--success))] transition-colors hover:bg-[rgb(var(--success)/0.22)] disabled:cursor-not-allowed disabled:opacity-40"
+          className={`flex items-center gap-1 ${COMPOSER_SUCCESS_BUTTON_CLASS_NAME}`}
         >
           <GitCommitHorizontal size={12} />
           {t('codePane.gitCommit')}
@@ -77,7 +87,7 @@ export function CommitComposer({
             setStashMessage(event.target.value);
           }}
           placeholder={t('codePane.gitStashPlaceholder')}
-          className="w-full rounded border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))]/75 focus:border-[rgb(var(--ring))]"
+          className={COMPOSER_FIELD_CLASS_NAME}
         />
         <div className="flex items-center gap-2 text-[11px] text-[rgb(var(--muted-foreground))]">
           <label className="flex items-center gap-1">
@@ -99,7 +109,7 @@ export function CommitComposer({
               });
               setStashMessage('');
             }}
-            className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={`flex items-center gap-1 ${COMPOSER_ACTION_BUTTON_CLASS_NAME}`}
           >
             <Package size={12} />
             {t('codePane.gitStash')}
@@ -114,7 +124,7 @@ export function CommitComposer({
             setBranchName(event.target.value);
           }}
           placeholder={t('codePane.gitCheckoutPlaceholder')}
-          className="w-full rounded border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))]/75 focus:border-[rgb(var(--ring))]"
+          className={COMPOSER_FIELD_CLASS_NAME}
         />
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-[rgb(var(--muted-foreground))]">
           <label className="flex items-center gap-1">
@@ -137,7 +147,7 @@ export function CommitComposer({
               });
               setBranchName('');
             }}
-            className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40"
+            className={`flex items-center gap-1 ${COMPOSER_ACTION_BUTTON_CLASS_NAME} disabled:cursor-not-allowed disabled:opacity-40`}
           >
             <Route size={12} />
             {t('codePane.gitCheckout')}
@@ -152,7 +162,7 @@ export function CommitComposer({
             onClick={() => {
               void onRebaseControl('continue');
             }}
-            className="rounded bg-[rgb(var(--warning)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--warning))] transition-colors hover:bg-[rgb(var(--warning)/0.22)]"
+            className={COMPOSER_WARNING_BUTTON_CLASS_NAME}
           >
             {t('codePane.gitRebaseContinue')}
           </button>
@@ -161,7 +171,7 @@ export function CommitComposer({
             onClick={() => {
               void onRebaseControl('abort');
             }}
-            className="flex items-center gap-1 rounded bg-[rgb(var(--error)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error)/0.22)]"
+            className={`flex items-center gap-1 ${COMPOSER_DANGER_BUTTON_CLASS_NAME}`}
           >
             <Undo2 size={12} />
             {t('codePane.gitRebaseAbort')}

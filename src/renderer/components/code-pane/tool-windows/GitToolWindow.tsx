@@ -31,6 +31,20 @@ import { useI18n } from '../../../i18n';
 import { getPathLeafLabel } from '../../../utils/pathDisplay';
 import { buildGitGraphLayout, type GitGraphLineSegment, type GitGraphRowLayout } from '../../../utils/gitGraphLayout';
 import { GitHunkList } from '../scm/GitHunkList';
+import {
+  IdePopupShell,
+  idePopupBadgeClassName,
+  idePopupBodyClassName,
+  idePopupCardClassName,
+  idePopupHeaderClassName,
+  idePopupHeaderMetaClassName,
+  idePopupIconButtonClassName,
+  idePopupMicroButtonClassName,
+  idePopupScrollAreaClassName,
+  idePopupSectionClassName,
+  idePopupSubtitleClassName,
+  idePopupTitleClassName,
+} from '../../ui/ide-popup';
 
 export type GitToolWindowTab = 'changes' | 'log' | 'rebase';
 type GitChangeSection = 'conflicted' | 'staged' | 'unstaged' | 'untracked';
@@ -178,7 +192,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
                 onClick={() => {
                   void onStagePath(entry.path);
                 }}
-                className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
+                className={GIT_COMPACT_ACTION_BUTTON_CLASS_NAME}
               >
                 {t('codePane.gitStage')}
               </button>
@@ -189,7 +203,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
                 onClick={() => {
                   void onUnstagePath(entry.path);
                 }}
-                className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
+                className={GIT_COMPACT_ACTION_BUTTON_CLASS_NAME}
               >
                 {t('codePane.gitUnstage')}
               </button>
@@ -200,7 +214,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
                 onClick={() => {
                   void onDiscardPath(entry.path, row.section === 'staged');
                 }}
-                className="rounded bg-[rgb(var(--error)/0.14)] px-1.5 py-0.5 text-[10px] text-[rgb(var(--error))] hover:bg-[rgb(var(--error)/0.22)]"
+                className={GIT_DANGER_COMPACT_BUTTON_CLASS_NAME}
               >
                 {t('codePane.gitDiscard')}
               </button>
@@ -213,7 +227,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
             onClick={() => {
               void onOpenFileDiff(entry.path);
             }}
-            className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
+            className={GIT_COMPACT_ACTION_BUTTON_CLASS_NAME}
           >
             {t('codePane.openDiff')}
           </button>
@@ -223,7 +237,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
           onClick={() => {
             void onShowFileHistory(entry.path);
           }}
-          className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
+          className={GIT_COMPACT_ACTION_BUTTON_CLASS_NAME}
         >
           {t('codePane.gitFileHistory')}
         </button>
@@ -232,7 +246,7 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
           onClick={() => {
             void onRevealInExplorer(entry.path);
           }}
-          className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]"
+          className={GIT_COMPACT_ACTION_BUTTON_CLASS_NAME}
         >
           {t('codePane.gitRevealInExplorer')}
         </button>
@@ -269,7 +283,7 @@ const BranchTreeRow = React.memo(function BranchTreeRow({
         {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
         <FolderTree size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
         <span className="min-w-0 flex-1 truncate">{node.label}</span>
-        <span className="rounded bg-[rgb(var(--secondary))] px-1 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
+        <span className={GIT_COUNT_BADGE_COMPACT_CLASS_NAME}>
           {node.branchCount}
         </span>
       </button>
@@ -431,6 +445,20 @@ const GIT_COMMIT_LOG_ROW_HEIGHT = 32;
 const GIT_REBASE_ROW_HEIGHT = 32;
 const GIT_CHANGE_ROW_HEIGHT = 104;
 const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
+const GIT_BODY_CLASS_NAME = `${idePopupBodyClassName} ${idePopupScrollAreaClassName}`;
+const GIT_CARD_CLASS_NAME = idePopupCardClassName;
+const GIT_SECTION_TITLE_CLASS_NAME = 'text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]';
+const GIT_SECTION_HEADER_CLASS_NAME = `${idePopupSectionClassName} px-3 py-2`;
+const GIT_COUNT_BADGE_CLASS_NAME = `rounded border px-1.5 py-0.5 text-[10px] ${idePopupBadgeClassName('zinc')}`;
+const GIT_COUNT_BADGE_COMPACT_CLASS_NAME = `rounded border px-1 py-0.5 text-[10px] ${idePopupBadgeClassName('zinc')}`;
+const GIT_ACTION_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('neutral')} px-2 py-1 text-[11px]`;
+const GIT_COMPACT_ACTION_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('neutral')} px-1.5 py-0.5 text-[10px]`;
+const GIT_DANGER_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('danger')} px-2 py-1 text-[11px]`;
+const GIT_DANGER_COMPACT_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('danger')} px-1.5 py-0.5 text-[10px]`;
+const GIT_WARNING_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('warning')} px-2 py-1 text-[11px]`;
+const GIT_FIELD_CLASS_NAME = 'w-full rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]';
+const GIT_COMPACT_FIELD_CLASS_NAME = 'rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-1.5 py-1 text-[11px] text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]';
+const GIT_SEGMENTED_CONTROL_CLASS_NAME = 'flex rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]';
 
 function getWindowedListSlice<T>({
   items,
@@ -672,14 +700,14 @@ export const GitToolWindow = React.memo(function GitToolWindow({
   }, [onTabChange]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+    <IdePopupShell className="flex h-full min-h-0 flex-col">
+      <div className={idePopupHeaderClassName}>
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex items-center gap-2">
             <GitBranch size={12} className="text-[rgb(var(--primary))]" />
-            {t('codePane.gitWorkbenchTab')}
+            <div className={idePopupHeaderMetaClassName}>{t('codePane.gitWorkbenchTab')}</div>
           </div>
-          <div className="flex rounded bg-[rgb(var(--secondary))] p-0.5">
+          <div className={GIT_SEGMENTED_CONTROL_CLASS_NAME}>
             {([
               ['changes', t('codePane.gitChangesWorkbenchTab')],
               ['log', t('codePane.gitLogTab')],
@@ -702,13 +730,17 @@ export const GitToolWindow = React.memo(function GitToolWindow({
             ))}
           </div>
         </div>
+        <div className="min-w-0">
+          <div className={idePopupTitleClassName}>{selectedBranch?.shortName || selectedBranch?.name || t('codePane.gitWorkbenchTab')}</div>
+          <div className={idePopupSubtitleClassName}>{activeTab === 'changes' ? `${changes.length}` : `${branches.length}`}</div>
+        </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => {
               void onRefresh();
             }}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.refresh')}
           >
             <RefreshCw size={12} />
@@ -716,7 +748,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
           <button
             type="button"
             onClick={onClose}
-            className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={idePopupIconButtonClassName}
             aria-label={t('codePane.bottomPanelClose')}
           >
             <X size={12} />
@@ -747,7 +779,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
             onRevealInExplorer={onRevealInExplorer}
             t={t}
           />
-          <div className="min-h-0 overflow-auto bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] px-3 py-3">
+          <div className={`${GIT_BODY_CLASS_NAME} min-h-0 px-3 py-3`}>
             <GitHunkList
               selectedPath={selectedHunkPath}
               relativePath={selectedHunkRelativePath}
@@ -764,7 +796,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 grid-cols-[300px_minmax(0,1fr)_340px] overflow-hidden">
-          <div className="min-h-0 border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)]">
+          <div className={`${GIT_BODY_CLASS_NAME} min-h-0 border-r border-[rgb(var(--border))]`}>
             <BranchListSection
               currentBranches={currentBranches}
               localBranches={localBranches}
@@ -776,7 +808,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
             />
           </div>
 
-          <div className="min-h-0 border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)]">
+          <div className={`${GIT_BODY_CLASS_NAME} min-h-0 border-r border-[rgb(var(--border))]`}>
             {activeTab === 'log' ? (
               <CommitLogSection
                 commits={commits}
@@ -797,7 +829,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
             )}
           </div>
 
-          <div className="min-h-0 overflow-auto px-3 py-3">
+          <div className={`${GIT_BODY_CLASS_NAME} min-h-0 px-3 py-3`}>
             {activeTab === 'log' ? (
               <GitWorkbenchDetails
                 selectedBranch={selectedBranch}
@@ -831,7 +863,7 @@ export const GitToolWindow = React.memo(function GitToolWindow({
           </div>
         </div>
       )}
-    </div>
+    </IdePopupShell>
   );
 });
 
@@ -908,7 +940,7 @@ const GitChangesSection = React.memo(function GitChangesSection({
           className="flex h-10 items-center justify-between gap-2 px-2 text-[11px] font-medium text-[rgb(var(--muted-foreground))]"
         >
           <span>{getGitSectionLabel(t, item.section)}</span>
-          <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{item.count}</span>
+          <span className={GIT_COUNT_BADGE_CLASS_NAME}>{item.count}</span>
         </div>
       );
     }
@@ -921,7 +953,7 @@ const GitChangesSection = React.memo(function GitChangesSection({
         >
           <Folder size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           <span className="min-w-0 flex-1 truncate">{item.label}</span>
-          <span className="rounded bg-[rgb(var(--background))] px-1 py-0.5 text-[10px]">{item.count}</span>
+          <span className={GIT_COUNT_BADGE_COMPACT_CLASS_NAME}>{item.count}</span>
         </div>
       );
     }
@@ -960,20 +992,20 @@ const GitChangesSection = React.memo(function GitChangesSection({
   ]);
 
   return (
-    <div className="flex min-h-0 flex-col border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+    <div className="flex min-h-0 flex-col border-r border-[rgb(var(--border))]">
+      <div className={`${GIT_SECTION_HEADER_CLASS_NAME} flex items-center justify-between gap-3`}>
+        <div className={`flex items-center gap-2 ${GIT_SECTION_TITLE_CLASS_NAME}`}>
           <FolderTree size={12} />
           {t('codePane.gitChanges')}
         </div>
-        <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
+        <span className={GIT_COUNT_BADGE_CLASS_NAME}>
           {changes.length}
         </span>
       </div>
 
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-auto px-2 py-2"
+        className={`${GIT_BODY_CLASS_NAME} min-h-0 flex-1 px-2 py-2`}
         onScroll={handleScroll}
       >
         {sectionGroups.length > 0 ? (
@@ -1101,18 +1133,18 @@ const BranchListSection = React.memo(function BranchListSection({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
-        <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+      <div className={`${GIT_SECTION_HEADER_CLASS_NAME} flex items-center justify-between gap-3`}>
+        <div className={`flex items-center gap-2 ${GIT_SECTION_TITLE_CLASS_NAME}`}>
           <FolderTree size={12} />
           {t('codePane.gitBranchManager')}
         </div>
-        <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
+        <span className={GIT_COUNT_BADGE_CLASS_NAME}>
           {totalBranches}
         </span>
       </div>
       <div
         ref={scrollRef}
-        className="min-h-0 flex-1 overflow-auto px-2 py-2"
+        className={`${GIT_BODY_CLASS_NAME} min-h-0 flex-1 px-2 py-2`}
         onScroll={handleScroll}
       >
         {isLoading ? (
@@ -1131,7 +1163,7 @@ const BranchListSection = React.memo(function BranchListSection({
                       className="flex h-7 items-center justify-between gap-2 px-2 text-[11px] font-medium text-[rgb(var(--muted-foreground))]"
                     >
                       <span>{item.label}</span>
-                      <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{item.count}</span>
+                      <span className={GIT_COUNT_BADGE_CLASS_NAME}>{item.count}</span>
                     </div>
                   ) : (
                     <BranchTreeRow
@@ -1156,7 +1188,7 @@ const BranchListSection = React.memo(function BranchListSection({
                     className="flex h-7 items-center justify-between gap-2 px-2 text-[11px] font-medium text-[rgb(var(--muted-foreground))]"
                   >
                     <span>{item.label}</span>
-                    <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">{item.count}</span>
+                    <span className={GIT_COUNT_BADGE_CLASS_NAME}>{item.count}</span>
                   </div>
                 ) : (
                   <BranchTreeRow
@@ -1348,7 +1380,7 @@ const CommitLogSection = React.memo(function CommitLogSection({
               onClick={() => {
                 void onCompareSelectedCommits();
               }}
-              className="rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+              className={GIT_ACTION_BUTTON_CLASS_NAME}
             >
               {t('codePane.gitCompareSelectedCommits')}
             </button>
@@ -1440,7 +1472,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
   return (
     <div className="space-y-3">
       {selectedBranch && (
-        <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+        <div className={GIT_CARD_CLASS_NAME}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
@@ -1455,7 +1487,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
               </div>
             </div>
             {selectedBranch.current && (
-              <span className="rounded bg-[rgb(var(--success)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--success))]">
+              <span className={`${idePopupBadgeClassName('emerald')} rounded px-2 py-1 text-[11px]`}>
                 {t('codePane.gitCurrentBranchBadge')}
               </span>
             )}
@@ -1475,7 +1507,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
                     createBranch: false,
                   });
                 }}
-                className="rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                className={GIT_ACTION_BUTTON_CLASS_NAME}
               >
                 {t('codePane.gitCheckout')}
               </button>
@@ -1492,7 +1524,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
                     preferExisting: true,
                   });
                 }}
-                className="rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                className={GIT_ACTION_BUTTON_CLASS_NAME}
               >
                 {t('codePane.gitCreateTrackingBranch')}
               </button>
@@ -1503,7 +1535,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
                 onClick={() => {
                   void onRequestRenameBranch(selectedBranch.name);
                 }}
-                className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+                className={`flex items-center gap-1 ${GIT_ACTION_BUTTON_CLASS_NAME}`}
               >
                 <Pencil size={11} />
                 {t('codePane.gitRenameBranch')}
@@ -1516,7 +1548,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
                   const forceDelete = !selectedBranch.mergedIntoCurrent;
                   void onDeleteBranch(selectedBranch.name, forceDelete);
                 }}
-                className="flex items-center gap-1 rounded bg-[rgb(var(--error)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error)/0.22)]"
+                className={`flex items-center gap-1 ${GIT_DANGER_BUTTON_CLASS_NAME}`}
               >
                 <Trash2 size={11} />
                 {t('codePane.gitDeleteBranch')}
@@ -1527,7 +1559,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
       )}
 
       {selectedCommit ? (
-        <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+        <div className={GIT_CARD_CLASS_NAME}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
@@ -1545,7 +1577,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
               onClick={() => {
                 void onCherryPick(selectedCommit.sha);
               }}
-              className="flex shrink-0 items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+              className={`flex shrink-0 items-center gap-1 ${GIT_ACTION_BUTTON_CLASS_NAME}`}
             >
               <GitCommitHorizontal size={11} />
               {t('codePane.gitCherryPick')}
@@ -1570,13 +1602,13 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
         <div className="text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.gitCommitGraphEmpty')}</div>
       )}
 
-      <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+      <div className={GIT_CARD_CLASS_NAME}>
         <div className="mb-2 flex items-center justify-between gap-2">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {comparedCommits ? t('codePane.gitCompareFiles') : t('codePane.gitCommitFiles')}
           </div>
           {selectedCommitOrder.length > 1 && (
-            <span className="rounded bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
+            <span className={GIT_COUNT_BADGE_CLASS_NAME}>
               {selectedCommitOrder.map((sha) => sha.slice(0, 7)).join(' -> ')}
             </span>
           )}
@@ -1688,7 +1720,7 @@ const RebasePlanRow = React.memo(function RebasePlanRow({
         onChange={(event) => {
           onChangeAction(entryIndex, event.target.value as CodePaneGitRebasePlanEntry['action']);
         }}
-        className="rounded border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-1.5 py-1 text-[11px] text-[rgb(var(--foreground))] outline-none"
+        className={GIT_COMPACT_FIELD_CLASS_NAME}
       >
         {(['pick', 'squash', 'fixup', 'drop'] as const).map((action) => (
           <option key={action} value={action}>
@@ -1707,7 +1739,7 @@ const RebasePlanRow = React.memo(function RebasePlanRow({
           onClick={() => {
             onMoveEntry(entryIndex, -1);
           }}
-          className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+          className={idePopupIconButtonClassName}
           aria-label={t('codePane.moveUp')}
         >
           <ArrowUp size={11} />
@@ -1717,7 +1749,7 @@ const RebasePlanRow = React.memo(function RebasePlanRow({
           onClick={() => {
             onMoveEntry(entryIndex, 1);
           }}
-          className="rounded bg-[rgb(var(--secondary))] p-1 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+          className={idePopupIconButtonClassName}
           aria-label={t('codePane.moveDown')}
         >
           <ArrowDown size={11} />
@@ -1834,7 +1866,7 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
 }) {
   return (
     <div className="space-y-3">
-      <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3">
+      <div className={GIT_CARD_CLASS_NAME}>
         <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           {t('codePane.gitRebasePlanner')}
         </div>
@@ -1844,7 +1876,7 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
           onChange={(event) => {
             onChangeBaseRef(event.target.value);
           }}
-          className="w-full rounded border border-[rgb(var(--border))] bg-[rgb(var(--background))] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none"
+          className={GIT_FIELD_CLASS_NAME}
         >
           {branches.map((branchName) => (
             <option key={branchName} value={branchName}>
@@ -1858,7 +1890,7 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
             onClick={() => {
               void onRefreshRebase();
             }}
-            className="flex items-center gap-1 rounded bg-[rgb(var(--secondary))] px-2 py-1 text-[11px] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+            className={`flex items-center gap-1 ${GIT_ACTION_BUTTON_CLASS_NAME}`}
           >
             <RefreshCw size={11} />
             {t('codePane.refresh')}
@@ -1869,7 +1901,7 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
             onClick={() => {
               void onApplyRebasePlan(baseRef, draftEntries);
             }}
-            className="flex items-center gap-1 rounded bg-[rgb(var(--warning)/0.14)] px-2 py-1 text-[11px] text-[rgb(var(--warning))] transition-colors hover:bg-[rgb(var(--warning)/0.22)] disabled:cursor-not-allowed disabled:opacity-40"
+            className={`flex items-center gap-1 ${GIT_WARNING_BUTTON_CLASS_NAME} disabled:cursor-not-allowed disabled:opacity-40`}
           >
             <RotateCcw size={11} />
             {t('codePane.gitApplyRebasePlan')}
@@ -1877,7 +1909,7 @@ const GitRebaseDetails = React.memo(function GitRebaseDetails({
         </div>
       </div>
 
-      <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
+      <div className={`${GIT_CARD_CLASS_NAME} text-xs text-[rgb(var(--muted-foreground))]`}>
         <div>{t('codePane.gitRebaseCommitCount', { count: entryCount })}</div>
         {hasMergeCommits ? (
           <div className="mt-2 rounded bg-[rgb(var(--warning)/0.10)] px-2 py-1.5 text-[rgb(var(--warning))]">
@@ -2232,7 +2264,7 @@ function getRefClassName(ref: string): string {
     return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
   }
 
-  return 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]';
+  return 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--muted-foreground))]';
 }
 
 function getCommitFileStatusLabel(status: CodePaneGitCommitFileChange['status']): string {
@@ -2266,7 +2298,7 @@ function getCommitFileStatusClassName(status: CodePaneGitCommitFileChange['statu
       return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
     case 'modified':
     default:
-      return 'bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))]';
+      return 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--muted-foreground))]';
   }
 }
 
