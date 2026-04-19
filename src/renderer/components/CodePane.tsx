@@ -396,7 +396,20 @@ type CodeActionMenuExecuteResult = {
 
 type CodeActionMenuControllerHandle = {
   open: () => Promise<void>;
-  close: () => void;
+  close: () => boolean;
+  isOpen: () => boolean;
+};
+
+type SearchEverywhereLoadResult = {
+  files: string[];
+  symbols: CodePaneWorkspaceSymbol[];
+  error: string | null;
+};
+
+type SearchEverywhereControllerHandle = {
+  open: (mode: SearchEverywhereMode) => void;
+  close: () => boolean;
+  isOpen: () => boolean;
 };
 
 type InspectorPanelMode = 'outline' | 'hierarchy';
@@ -1369,6 +1382,419 @@ const SearchEverywhereDialog = React.memo(function SearchEverywhereDialog({
   );
 });
 
+const SearchEverywhereController = React.memo(React.forwardRef<SearchEverywhereControllerHandle, {
+  recentFiles: string[];
+  recentLocations: NavigationHistoryEntry[];
+  rootPath: string;
+  onGetCommandItems: () => SearchEverywhereItem[];
+  onLoadResults: (mode: SearchEverywhereMode, query: string) => Promise<SearchEverywhereLoadResult>;
+  onOpenEditorLocation: (
+    location: FileNavigationLocation,
+    options?: {
+      preserveTabs?: boolean;
+      recordHistory?: boolean;
+      recordRecent?: boolean;
+      clearForward?: boolean;
+    },
+  ) => Promise<void>;
+  onGetDisplayPath: (filePath: string) => string;
+  onGetFileLabel: (filePath: string) => string;
+  t: ReturnType<typeof useI18n>['t'];
+}>(function SearchEverywhereController({
+  recentFiles,
+  recentLocations,
+  rootPath,
+  onGetCommandItems,
+  onLoadResults,
+  onOpenEditorLocation,
+  onGetDisplayPath,
+  onGetFileLabel,
+  t,
+}, ref) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const itemsRef = useRef<SearchEverywhereItem[]>([]);
+  const selectedIndexRef = useRef(0);
+  const requestIdRef = useRef(0);
+  const isOpenRef = useRef(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [mode, setMode] = useState<SearchEverywhereMode>('all');
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const [fileResults, setFileResults] = useState<string[]>([]);
+  const [symbolResults, setSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const close = useCallback(() => {
+    requestIdRef.current += 1;
+    if (!isOpenRef.current) {
+      return false;
+    }
+    isOpenRef.current = false;
+    setIsOpen((currentOpen) => (currentOpen ? false : currentOpen));
+    setQuery((currentQuery) => (currentQuery.length === 0 ? currentQuery : ''));
+    setError((currentError) => (currentError === null ? currentError : null));
+    setFileResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+    setSymbolResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+    setIsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+    setSelectedIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
+    return true;
+  }, []);
+
+  const open = useCallback((nextMode: SearchEverywhereMode) => {
+    isOpenRef.current = true;
+    setMode((currentMode) => (currentMode === nextMode ? currentMode : nextMode));
+    setQuery((currentQuery) => (currentQuery.length === 0 ? currentQuery : ''));
+    setError((currentError) => (currentError === null ? currentError : null));
+    setSelectedIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
+    setIsOpen((currentOpen) => (currentOpen ? currentOpen : true));
+  }, []);
+
+  React.useImperativeHandle(ref, () => ({
+    open,
+    close,
+    isOpen: () => isOpenRef.current,
+  }), [close, open]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const trimmedQuery = deferredQuery.trim();
+    if (!trimmedQuery || mode === 'commands' || mode === 'recent') {
+      requestIdRef.current += 1;
+      setFileResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+      setSymbolResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
+      setError((currentError) => (currentError === null ? currentError : null));
+      setIsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      return undefined;
+    }
+
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    setIsLoading((currentLoading) => (currentLoading ? currentLoading : true));
+    setError((currentError) => (currentError === null ? currentError : null));
+
+    const timer = window.setTimeout(() => {
+      void onLoadResults(mode, trimmedQuery).then((result) => {
+        if (requestIdRef.current !== requestId) {
+          return;
+        }
+
+        setFileResults((currentResults) => (
+          areStringListsEqual(currentResults, result.files) ? currentResults : result.files
+        ));
+        setSymbolResults((currentResults) => (
+          areWorkspaceSymbolListsEqual(currentResults, result.symbols) ? currentResults : result.symbols
+        ));
+        setError((currentError) => (
+          currentError === result.error ? currentError : result.error
+        ));
+        setIsLoading((currentLoading) => (currentLoading ? false : currentLoading));
+      });
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [deferredQuery, isOpen, mode, onLoadResults]);
+
+  const items = useMemo<SearchEverywhereItem[]>(() => {
+    if (!isOpen) {
+      return [];
+    }
+
+    const trimmedQuery = query.trim().toLowerCase();
+    const nextItems: SearchEverywhereItem[] = [];
+    const commandItems = mode === 'recent' ? [] : onGetCommandItems();
+    const matchesQuery = (title: string, meta?: string) => (
+      trimmedQuery.length === 0
+      || title.toLowerCase().includes(trimmedQuery)
+      || meta?.toLowerCase().includes(trimmedQuery)
+    );
+
+    if (mode === 'commands') {
+      for (const item of commandItems) {
+        if (matchesQuery(item.title, item.meta)) {
+          nextItems.push(item);
+        }
+      }
+      return nextItems;
+    }
+
+    if (mode === 'recent') {
+      for (let index = 0; index < recentLocations.length; index += 1) {
+        const location = recentLocations[index]!;
+        if (
+          trimmedQuery.length > 0
+          && !getPathLeafLabel(location.displayPath ?? location.filePath).toLowerCase().includes(trimmedQuery)
+          && !location.filePath.toLowerCase().includes(trimmedQuery)
+        ) {
+          continue;
+        }
+
+        nextItems.push({
+          id: `recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
+          section: t('codePane.recentLocations'),
+          title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
+          subtitle: location.displayPath ?? getRelativePath(rootPath, location.filePath),
+          meta: `${location.lineNumber}:${location.column}`,
+          execute: async () => {
+            await onOpenEditorLocation(location, {
+              preserveTabs: true,
+              recordHistory: true,
+              recordRecent: true,
+              clearForward: true,
+            });
+          },
+        });
+      }
+      for (const filePath of recentFiles) {
+        const displayPath = onGetDisplayPath(filePath);
+        if (
+          trimmedQuery.length > 0
+          && !getPathLeafLabel(displayPath).toLowerCase().includes(trimmedQuery)
+          && !displayPath.toLowerCase().includes(trimmedQuery)
+        ) {
+          continue;
+        }
+
+        nextItems.push({
+          id: `recent-file-${filePath}`,
+          section: t('codePane.recentFiles'),
+          title: onGetFileLabel(filePath),
+          subtitle: getRelativePath(rootPath, displayPath),
+          execute: async () => {
+            await onOpenEditorLocation({
+              filePath,
+              lineNumber: 1,
+              column: 1,
+            }, {
+              preserveTabs: true,
+              recordHistory: true,
+              recordRecent: true,
+              clearForward: true,
+            });
+          },
+        });
+      }
+      return nextItems;
+    }
+
+    for (const item of commandItems) {
+      if (matchesQuery(item.title, item.meta)) {
+        nextItems.push(item);
+      }
+    }
+
+    if (trimmedQuery.length === 0) {
+      for (let index = 0; index < recentLocations.length; index += 1) {
+        const location = recentLocations[index]!;
+        nextItems.push({
+          id: `search-recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
+          section: t('codePane.recentLocations'),
+          title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
+          subtitle: location.displayPath ?? getRelativePath(rootPath, location.filePath),
+          meta: `${location.lineNumber}:${location.column}`,
+          execute: async () => {
+            await onOpenEditorLocation(location, {
+              preserveTabs: true,
+              recordHistory: true,
+              recordRecent: true,
+              clearForward: true,
+            });
+          },
+        });
+      }
+      for (const filePath of recentFiles) {
+        const displayPath = onGetDisplayPath(filePath);
+        nextItems.push({
+          id: `search-recent-file-${filePath}`,
+          section: t('codePane.recentFiles'),
+          title: onGetFileLabel(filePath),
+          subtitle: getRelativePath(rootPath, displayPath),
+          execute: async () => {
+            await onOpenEditorLocation({
+              filePath,
+              lineNumber: 1,
+              column: 1,
+            }, {
+              preserveTabs: true,
+              recordHistory: true,
+              recordRecent: true,
+              clearForward: true,
+            });
+          },
+        });
+      }
+    }
+
+    for (const filePath of fileResults) {
+      nextItems.push({
+        id: `search-file-${filePath}`,
+        section: t('codePane.searchEverywhereFilesSection'),
+        title: getPathLeafLabel(filePath) || filePath,
+        subtitle: getRelativePath(rootPath, filePath),
+        execute: async () => {
+          await onOpenEditorLocation({
+            filePath,
+            lineNumber: 1,
+            column: 1,
+          }, {
+            recordHistory: true,
+            recordRecent: true,
+            clearForward: true,
+          });
+        },
+      });
+    }
+
+    for (const symbol of symbolResults) {
+      nextItems.push({
+        id: `search-symbol-${symbol.filePath}-${symbol.name}-${symbol.range.startLineNumber}-${symbol.range.startColumn}`,
+        section: t('codePane.searchEverywhereSymbolsSection'),
+        title: symbol.name,
+        subtitle: getRelativePath(rootPath, symbol.filePath),
+        meta: `${symbol.range.startLineNumber}:${symbol.range.startColumn}`,
+        execute: async () => {
+          await onOpenEditorLocation({
+            filePath: symbol.filePath,
+            lineNumber: symbol.range.startLineNumber,
+            column: symbol.range.startColumn,
+          }, {
+            preserveTabs: true,
+            recordHistory: true,
+            recordRecent: true,
+            clearForward: true,
+          });
+        },
+      });
+    }
+
+    return nextItems;
+  }, [
+    fileResults,
+    isOpen,
+    mode,
+    onGetCommandItems,
+    onGetDisplayPath,
+    onGetFileLabel,
+    onOpenEditorLocation,
+    query,
+    recentFiles,
+    recentLocations,
+    rootPath,
+    symbolResults,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setSelectedIndex((currentIndex) => (
+      items.length === 0
+        ? 0
+        : Math.min(currentIndex, items.length - 1)
+    ));
+  }, [isOpen, items]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    selectedIndexRef.current = selectedIndex;
+  }, [selectedIndex]);
+
+  const handleModeChange = useCallback((nextMode: SearchEverywhereMode) => {
+    setMode((currentMode) => (currentMode === nextMode ? currentMode : nextMode));
+    setSelectedIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
+  }, []);
+
+  const handleQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextQuery = event.target.value;
+    setQuery((currentQuery) => (
+      currentQuery === nextQuery ? currentQuery : nextQuery
+    ));
+  }, []);
+
+  const handleMoveSelection = useCallback((direction: 1 | -1) => {
+    setSelectedIndex((currentIndex) => (
+      itemsRef.current.length === 0
+        ? 0
+        : direction > 0
+          ? Math.min(currentIndex + 1, itemsRef.current.length - 1)
+          : Math.max(currentIndex - 1, 0)
+    ));
+  }, []);
+
+  const handleHoverIndex = useCallback((index: number) => {
+    setSelectedIndex(index);
+  }, []);
+
+  const executeItem = useCallback((item: SearchEverywhereItem | undefined) => {
+    if (!item) {
+      return;
+    }
+
+    close();
+    void item.execute();
+  }, [close]);
+
+  const handleExecuteItem = useCallback((item: SearchEverywhereItem) => {
+    executeItem(item);
+  }, [executeItem]);
+
+  const handleExecuteSelected = useCallback(() => {
+    executeItem(itemsRef.current[selectedIndexRef.current]);
+  }, [executeItem]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const selectedItem = items[selectedIndex] ?? null;
+  return (
+    <SearchEverywhereDialog
+      inputRef={inputRef}
+      mode={mode}
+      query={query}
+      items={items}
+      selectedIndex={selectedIndex}
+      selectedItem={selectedItem}
+      error={error}
+      isLoading={isLoading}
+      onClose={close}
+      onModeChange={handleModeChange}
+      onQueryChange={handleQueryChange}
+      onMoveSelection={handleMoveSelection}
+      onExecuteSelected={handleExecuteSelected}
+      onHoverIndex={handleHoverIndex}
+      onExecuteItem={handleExecuteItem}
+      t={t}
+    />
+  );
+}));
+
 const CodeActionMenuDialog = React.memo(function CodeActionMenuDialog({
   items,
   selectedIndex,
@@ -1793,14 +2219,20 @@ const CodeActionMenuController = React.memo(React.forwardRef<CodeActionMenuContr
   const requestIdRef = useRef(0);
   const itemsRef = useRef<CodePaneCodeAction[]>([]);
   const selectedIndexRef = useRef(0);
+  const isOpenRef = useRef(false);
 
   const close = useCallback(() => {
     requestIdRef.current += 1;
+    if (!isOpenRef.current) {
+      return false;
+    }
+    isOpenRef.current = false;
     setIsOpen((currentOpen) => (currentOpen ? false : currentOpen));
     setItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
     setError((currentError) => (currentError === null ? currentError : null));
     setIsLoading((currentLoading) => (currentLoading ? false : currentLoading));
     setSelectedIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
+    return true;
   }, []);
 
   const executeAction = useCallback((action: CodePaneCodeAction | undefined) => {
@@ -1824,6 +2256,7 @@ const CodeActionMenuController = React.memo(React.forwardRef<CodeActionMenuContr
   const open = useCallback(async () => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
+    isOpenRef.current = true;
     setIsOpen((currentOpen) => (currentOpen ? currentOpen : true));
     setItems((currentItems) => (currentItems.length === 0 ? currentItems : []));
     setError((currentError) => (currentError === null ? currentError : null));
@@ -1854,6 +2287,7 @@ const CodeActionMenuController = React.memo(React.forwardRef<CodeActionMenuContr
   React.useImperativeHandle(ref, () => ({
     open,
     close,
+    isOpen: () => isOpenRef.current,
   }), [close, open]);
 
   useEffect(() => {
@@ -7562,15 +7996,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [workspaceSymbolResults, setWorkspaceSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
   const [isWorkspaceSymbolSearching, setIsWorkspaceSymbolSearching] = useState(false);
   const [workspaceSymbolError, setWorkspaceSymbolError] = useState<string | null>(null);
-  const [isSearchEverywhereOpen, setIsSearchEverywhereOpen] = useState(false);
-  const [searchEverywhereMode, setSearchEverywhereMode] = useState<SearchEverywhereMode>('all');
-  const [searchEverywhereQuery, setSearchEverywhereQuery] = useState('');
-  const deferredSearchEverywhereQuery = useDeferredValue(searchEverywhereQuery);
-  const [searchEverywhereFileResults, setSearchEverywhereFileResults] = useState<string[]>([]);
-  const [searchEverywhereSymbolResults, setSearchEverywhereSymbolResults] = useState<CodePaneWorkspaceSymbol[]>([]);
-  const [isSearchEverywhereLoading, setIsSearchEverywhereLoading] = useState(false);
-  const [searchEverywhereError, setSearchEverywhereError] = useState<string | null>(null);
-  const [searchEverywhereSelectedIndex, setSearchEverywhereSelectedIndex] = useState(0);
   const [recentFiles, setRecentFiles] = useState<string[]>([]);
   const [recentLocations, setRecentLocations] = useState<NavigationHistoryEntry[]>([]);
   const [navigationAvailability, setNavigationAvailability] = useState({
@@ -7744,9 +8169,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const recentLocationsRef = useRef<NavigationHistoryEntry[]>([]);
   const navigationBackStackRef = useRef<NavigationHistoryEntry[]>([]);
   const navigationForwardStackRef = useRef<NavigationHistoryEntry[]>([]);
-  const searchEverywhereInputRef = useRef<HTMLInputElement | null>(null);
-  const searchEverywhereItemsRef = useRef<SearchEverywhereItem[]>([]);
-  const searchEverywhereSelectedIndexRef = useRef(0);
+  const searchEverywhereControllerRef = useRef<SearchEverywhereControllerHandle | null>(null);
   const navigateBackRef = useRef<() => Promise<void>>(async () => {});
   const navigateForwardRef = useRef<() => Promise<void>>(async () => {});
   const goToImplementationAtCursorRef = useRef<() => Promise<void>>(async () => {});
@@ -16368,8 +16791,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       ));
       setSearchResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
       setContentSearchResults((currentResults) => (currentResults.length === 0 ? currentResults : []));
-      setIsSearchEverywhereOpen((currentOpen) => (currentOpen ? false : currentOpen));
-      setSearchEverywhereQuery((currentQuery) => (currentQuery === '' ? currentQuery : ''));
+      searchEverywhereControllerRef.current?.close();
       codeActionMenuControllerRef.current?.close();
       setBottomPanelMode((currentMode) => (currentMode === null ? currentMode : null));
       setRunTargets((currentTargets) => (currentTargets.length === 0 ? currentTargets : []));
@@ -19185,46 +19607,12 @@ export const CodePane: React.FC<CodePaneProps> = ({
   }, [getCurrentNavigationLocation, handleSidebarModeSelect, openEditorLocation, problems]);
 
   const openSearchEverywhere = useCallback((mode: SearchEverywhereMode) => {
-    setSearchEverywhereMode((currentMode) => (
-      currentMode === mode ? currentMode : mode
-    ));
-    setSearchEverywhereQuery((currentQuery) => (
-      currentQuery.length === 0 ? currentQuery : ''
-    ));
-    setSearchEverywhereError((currentError) => (
-      currentError === null ? currentError : null
-    ));
-    setSearchEverywhereSelectedIndex((currentIndex) => (
-      currentIndex === 0 ? currentIndex : 0
-    ));
-    setIsSearchEverywhereOpen((currentOpen) => (
-      currentOpen ? currentOpen : true
-    ));
+    searchEverywhereControllerRef.current?.open(mode);
   }, []);
 
-  const closeSearchEverywhere = useCallback(() => {
-    setIsSearchEverywhereOpen((currentOpen) => (
-      currentOpen ? false : currentOpen
-    ));
-    setSearchEverywhereQuery((currentQuery) => (
-      currentQuery.length === 0 ? currentQuery : ''
-    ));
-    setSearchEverywhereError((currentError) => (
-      currentError === null ? currentError : null
-    ));
-    setSearchEverywhereFileResults((currentResults) => (
-      currentResults.length === 0 ? currentResults : []
-    ));
-    setSearchEverywhereSymbolResults((currentResults) => (
-      currentResults.length === 0 ? currentResults : []
-    ));
-    setIsSearchEverywhereLoading((currentLoading) => (
-      currentLoading ? false : currentLoading
-    ));
-    setSearchEverywhereSelectedIndex((currentIndex) => (
-      currentIndex === 0 ? currentIndex : 0
-    ));
-  }, []);
+  const closeSearchEverywhere = useCallback(() => (
+    searchEverywhereControllerRef.current?.close() ?? false
+  ), []);
 
   const getSearchEverywhereCommandItems = useCallback((): SearchEverywhereItem[] => ([
     {
@@ -19361,354 +19749,80 @@ export const CodePane: React.FC<CodePaneProps> = ({
     toggleSidebarVisibility,
   ]);
 
-  useEffect(() => {
-    if (!isSearchEverywhereOpen) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      searchEverywhereInputRef.current?.focus();
-      searchEverywhereInputRef.current?.select();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [isSearchEverywhereOpen]);
-
-  useEffect(() => {
-    if (!isSearchEverywhereOpen) {
-      return;
-    }
-
-    const trimmedQuery = deferredSearchEverywhereQuery.trim();
-    if (!trimmedQuery || searchEverywhereMode === 'commands' || searchEverywhereMode === 'recent') {
-      setSearchEverywhereFileResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setSearchEverywhereSymbolResults((currentResults) => (
-        currentResults.length === 0 ? currentResults : []
-      ));
-      setSearchEverywhereError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      setIsSearchEverywhereLoading((currentLoading) => (
-        currentLoading ? false : currentLoading
-      ));
-      return;
-    }
-
-    let cancelled = false;
+  const loadSearchEverywhereResults = useCallback(async (
+    mode: SearchEverywhereMode,
+    trimmedQuery: string,
+  ): Promise<SearchEverywhereLoadResult> => {
     const requestKey = `search-everywhere:${rootPath}`;
     const requestVersion = runtimeStoreRef.current.markLatest(requestKey);
-    const cacheKey = `${requestKey}:${searchEverywhereMode}:${trimmedQuery}`;
+    const cacheKey = `${requestKey}:${mode}:${trimmedQuery}`;
     const cachedResults = runtimeStoreRef.current.getCache<{
       files: string[];
       symbols: CodePaneWorkspaceSymbol[];
     }>(cacheKey, CODE_PANE_SEARCH_CACHE_TTL_MS);
     if (cachedResults) {
       runtimeStoreRef.current.recordRequest(requestKey, 'Search Everywhere', {
-        meta: `${searchEverywhereMode}:${trimmedQuery}`,
+        meta: `${mode}:${trimmedQuery}`,
         fromCache: true,
       });
-      setSearchEverywhereFileResults((currentResults) => (
-        areStringListsEqual(currentResults, cachedResults.files) ? currentResults : cachedResults.files
-      ));
-      setSearchEverywhereSymbolResults((currentResults) => (
-        areWorkspaceSymbolListsEqual(currentResults, cachedResults.symbols) ? currentResults : cachedResults.symbols
-      ));
-      setSearchEverywhereError((currentError) => (
-        currentError === null ? currentError : null
-      ));
-      setIsSearchEverywhereLoading((currentLoading) => (
-        currentLoading ? false : currentLoading
-      ));
-      return;
+      return {
+        files: cachedResults.files,
+        symbols: cachedResults.symbols,
+        error: null,
+      };
     }
 
-    setIsSearchEverywhereLoading((currentLoading) => (
-      currentLoading ? currentLoading : true
-    ));
-    setSearchEverywhereError((currentError) => (
-      currentError === null ? currentError : null
-    ));
+    const [fileResponse, symbolResponse] = await Promise.all([
+      trackRequest(
+        `${requestKey}:files`,
+        'Search Everywhere files',
+        trimmedQuery,
+        async () => await window.electronAPI.codePaneSearchFiles({
+          rootPath,
+          query: trimmedQuery,
+          limit: 40,
+        }),
+      ),
+      trackRequest(
+        `${requestKey}:symbols`,
+        'Search Everywhere symbols',
+        trimmedQuery,
+        async () => await window.electronAPI.codePaneGetWorkspaceSymbols({
+          rootPath,
+          query: trimmedQuery,
+          limit: 40,
+        }),
+      ),
+    ]);
 
-    const timer = window.setTimeout(async () => {
-      const [fileResponse, symbolResponse] = await Promise.all([
-        trackRequest(
-          `${requestKey}:files`,
-          'Search Everywhere files',
-          trimmedQuery,
-          async () => await window.electronAPI.codePaneSearchFiles({
-            rootPath,
-            query: trimmedQuery,
-            limit: 40,
-          }),
-        ),
-        trackRequest(
-          `${requestKey}:symbols`,
-          'Search Everywhere symbols',
-          trimmedQuery,
-          async () => await window.electronAPI.codePaneGetWorkspaceSymbols({
-            rootPath,
-            query: trimmedQuery,
-            limit: 40,
-          }),
-        ),
-      ]);
+    if (!runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
+      return {
+        files: [],
+        symbols: [],
+        error: null,
+      };
+    }
 
-      if (cancelled || !runtimeStoreRef.current.isLatest(requestKey, requestVersion)) {
-        return;
-      }
+    const files = fileResponse.success ? (fileResponse.data ?? []) : [];
+    const symbols = symbolResponse.success ? (symbolResponse.data ?? []) : [];
+    const error = fileResponse.success && symbolResponse.success
+      ? null
+      : fileResponse.error || symbolResponse.error || t('common.retry');
+    if (fileResponse.success && symbolResponse.success) {
+      runtimeStoreRef.current.setCache(cacheKey, {
+        files,
+        symbols,
+      });
+    }
 
-      const nextSearchEverywhereFileResults = fileResponse.success ? (fileResponse.data ?? []) : [];
-      const nextSearchEverywhereSymbolResults = symbolResponse.success ? (symbolResponse.data ?? []) : [];
-      const nextSearchEverywhereError = fileResponse.success && symbolResponse.success
-        ? null
-        : fileResponse.error || symbolResponse.error || t('common.retry');
-      if (fileResponse.success && symbolResponse.success) {
-        runtimeStoreRef.current.setCache(cacheKey, {
-          files: nextSearchEverywhereFileResults,
-          symbols: nextSearchEverywhereSymbolResults,
-        });
-      }
-
-      setSearchEverywhereFileResults((currentResults) => (
-        areStringListsEqual(currentResults, nextSearchEverywhereFileResults)
-          ? currentResults
-          : nextSearchEverywhereFileResults
-      ));
-      setSearchEverywhereSymbolResults((currentResults) => (
-        areWorkspaceSymbolListsEqual(currentResults, nextSearchEverywhereSymbolResults)
-          ? currentResults
-          : nextSearchEverywhereSymbolResults
-      ));
-      setSearchEverywhereError((currentError) => (
-        currentError === nextSearchEverywhereError ? currentError : nextSearchEverywhereError
-      ));
-      setIsSearchEverywhereLoading((currentLoading) => (
-        currentLoading ? false : currentLoading
-      ));
-    }, 180);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
+    return {
+      files,
+      symbols,
+      error,
     };
-  }, [deferredSearchEverywhereQuery, isSearchEverywhereOpen, rootPath, searchEverywhereMode, t, trackRequest]);
-
-  const searchEverywhereItems = useMemo<SearchEverywhereItem[]>(() => {
-    if (!isSearchEverywhereOpen) {
-      return [];
-    }
-
-    const trimmedQuery = searchEverywhereQuery.trim().toLowerCase();
-    const nextItems: SearchEverywhereItem[] = [];
-    const commandItems = searchEverywhereMode === 'recent' ? [] : getSearchEverywhereCommandItems();
-    const matchesQuery = (title: string, meta?: string) => (
-      trimmedQuery.length === 0
-      || title.toLowerCase().includes(trimmedQuery)
-      || meta?.toLowerCase().includes(trimmedQuery)
-    );
-
-    if (searchEverywhereMode === 'commands') {
-      for (const item of commandItems) {
-        if (matchesQuery(item.title, item.meta)) {
-          nextItems.push(item);
-        }
-      }
-      return nextItems;
-    }
-
-    if (searchEverywhereMode === 'recent') {
-      for (let index = 0; index < recentLocations.length; index += 1) {
-        const location = recentLocations[index]!;
-        if (
-          trimmedQuery.length > 0
-          && !getPathLeafLabel(location.displayPath ?? location.filePath).toLowerCase().includes(trimmedQuery)
-          && !location.filePath.toLowerCase().includes(trimmedQuery)
-        ) {
-          continue;
-        }
-
-        nextItems.push({
-          id: `recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
-          section: t('codePane.recentLocations'),
-          title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
-          subtitle: location.displayPath ?? getRelativePath(rootPath, location.filePath),
-          meta: `${location.lineNumber}:${location.column}`,
-          execute: async () => {
-            await openEditorLocation(location, {
-              preserveTabs: true,
-              recordHistory: true,
-              recordRecent: true,
-              clearForward: true,
-            });
-          },
-        });
-      }
-      for (const filePath of recentFiles) {
-        const displayPath = getDisplayPath(filePath);
-        if (
-          trimmedQuery.length > 0
-          && !getPathLeafLabel(displayPath).toLowerCase().includes(trimmedQuery)
-          && !displayPath.toLowerCase().includes(trimmedQuery)
-        ) {
-          continue;
-        }
-
-        nextItems.push({
-          id: `recent-file-${filePath}`,
-          section: t('codePane.recentFiles'),
-          title: getFileLabel(filePath),
-          subtitle: getRelativePath(rootPath, displayPath),
-          execute: async () => {
-            await openEditorLocation({
-              filePath,
-              lineNumber: 1,
-              column: 1,
-            }, {
-              preserveTabs: true,
-              recordHistory: true,
-              recordRecent: true,
-              clearForward: true,
-            });
-          },
-        });
-      }
-      return nextItems;
-    }
-
-    for (const item of commandItems) {
-      if (matchesQuery(item.title, item.meta)) {
-        nextItems.push(item);
-      }
-    }
-
-    if (trimmedQuery.length === 0) {
-      for (let index = 0; index < recentLocations.length; index += 1) {
-        const location = recentLocations[index]!;
-        nextItems.push({
-          id: `search-recent-location-${location.filePath}-${location.lineNumber}-${location.column}-${index}`,
-          section: t('codePane.recentLocations'),
-          title: getPathLeafLabel(location.displayPath ?? location.filePath) || location.filePath,
-          subtitle: location.displayPath ?? getRelativePath(rootPath, location.filePath),
-          meta: `${location.lineNumber}:${location.column}`,
-          execute: async () => {
-            await openEditorLocation(location, {
-              preserveTabs: true,
-              recordHistory: true,
-              recordRecent: true,
-              clearForward: true,
-            });
-          },
-        });
-      }
-      for (const filePath of recentFiles) {
-        const displayPath = getDisplayPath(filePath);
-        nextItems.push({
-          id: `search-recent-file-${filePath}`,
-          section: t('codePane.recentFiles'),
-          title: getFileLabel(filePath),
-          subtitle: getRelativePath(rootPath, displayPath),
-          execute: async () => {
-            await openEditorLocation({
-              filePath,
-              lineNumber: 1,
-              column: 1,
-            }, {
-              preserveTabs: true,
-              recordHistory: true,
-              recordRecent: true,
-              clearForward: true,
-            });
-          },
-        });
-      }
-    }
-
-    for (const filePath of searchEverywhereFileResults) {
-      nextItems.push({
-        id: `search-file-${filePath}`,
-        section: t('codePane.searchEverywhereFilesSection'),
-        title: getPathLeafLabel(filePath) || filePath,
-        subtitle: getRelativePath(rootPath, filePath),
-        execute: async () => {
-          await openEditorLocation({
-            filePath,
-            lineNumber: 1,
-            column: 1,
-          }, {
-            recordHistory: true,
-            recordRecent: true,
-            clearForward: true,
-          });
-        },
-      });
-    }
-
-    for (const symbol of searchEverywhereSymbolResults) {
-      nextItems.push({
-        id: `search-symbol-${symbol.filePath}-${symbol.name}-${symbol.range.startLineNumber}-${symbol.range.startColumn}`,
-        section: t('codePane.searchEverywhereSymbolsSection'),
-        title: symbol.name,
-        subtitle: getRelativePath(rootPath, symbol.filePath),
-        meta: `${symbol.range.startLineNumber}:${symbol.range.startColumn}`,
-        execute: async () => {
-          await openEditorLocation({
-            filePath: symbol.filePath,
-            lineNumber: symbol.range.startLineNumber,
-            column: symbol.range.startColumn,
-          }, {
-            preserveTabs: true,
-            recordHistory: true,
-            recordRecent: true,
-            clearForward: true,
-          });
-        },
-      });
-    }
-
-    return nextItems;
-  }, [
-    activateFile,
-    getDisplayPath,
-    getFileLabel,
-    isSearchEverywhereOpen,
-    openEditorLocation,
-    recentFiles,
-    recentLocations,
-    rootPath,
-    getSearchEverywhereCommandItems,
-    searchEverywhereFileResults,
-    searchEverywhereMode,
-    searchEverywhereQuery,
-    searchEverywhereSymbolResults,
-    t,
-  ]);
-
-  useEffect(() => {
-    if (!isSearchEverywhereOpen) {
-      return;
-    }
-
-    setSearchEverywhereSelectedIndex((currentIndex) => (
-      searchEverywhereItems.length === 0
-        ? 0
-        : Math.min(currentIndex, searchEverywhereItems.length - 1)
-    ));
-  }, [isSearchEverywhereOpen, searchEverywhereItems]);
-
-  useEffect(() => {
-    searchEverywhereItemsRef.current = searchEverywhereItems;
-  }, [searchEverywhereItems]);
-
-  useEffect(() => {
-    searchEverywhereSelectedIndexRef.current = searchEverywhereSelectedIndex;
-  }, [searchEverywhereSelectedIndex]);
+  }, [rootPath, t, trackRequest]);
 
   const { canNavigateBack, canNavigateForward } = navigationAvailability;
-  const selectedSearchEverywhereItem = searchEverywhereItems[searchEverywhereSelectedIndex] ?? null;
   const visibleDebugSessions = debugSessions;
   const debugTargets = useMemo(() => {
     if (bottomPanelMode !== 'debug') {
@@ -19844,13 +19958,15 @@ export const CodePane: React.FC<CodePaneProps> = ({
         : event.ctrlKey && !event.metaKey;
 
       if (event.key === 'Escape') {
-        if (isSearchEverywhereOpen) {
+        if (closeSearchEverywhere()) {
           event.preventDefault();
-          closeSearchEverywhere();
           return;
         }
 
-        codeActionMenuControllerRef.current?.close();
+        if (codeActionMenuControllerRef.current?.close()) {
+          event.preventDefault();
+          return;
+        }
       }
 
       if (hasPrimaryModifier && !event.shiftKey && event.key.toLowerCase() === 'p') {
@@ -19919,7 +20035,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     closeSearchEverywhere,
     isActive,
     isMac,
-    isSearchEverywhereOpen,
     navigateProblem,
     openSearchEverywhere,
     toggleQuickDocumentation,
@@ -21550,47 +21665,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
       currentQuery === nextQuery ? currentQuery : nextQuery
     ));
   }, []);
-
-  const handleSearchEverywhereModeChange = useCallback((mode: SearchEverywhereMode) => {
-    setSearchEverywhereMode((currentMode) => (currentMode === mode ? currentMode : mode));
-    setSearchEverywhereSelectedIndex((currentIndex) => (currentIndex === 0 ? currentIndex : 0));
-  }, []);
-
-  const handleSearchEverywhereQueryChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const nextQuery = event.target.value;
-    setSearchEverywhereQuery((currentQuery) => (
-      currentQuery === nextQuery ? currentQuery : nextQuery
-    ));
-  }, []);
-
-  const handleSearchEverywhereMoveSelection = useCallback((direction: 1 | -1) => {
-    setSearchEverywhereSelectedIndex((currentIndex) => (
-      searchEverywhereItemsRef.current.length === 0
-        ? 0
-        : direction > 0
-          ? Math.min(currentIndex + 1, searchEverywhereItemsRef.current.length - 1)
-          : Math.max(currentIndex - 1, 0)
-    ));
-  }, []);
-
-  const handleSearchEverywhereHoverIndex = useCallback((index: number) => {
-    setSearchEverywhereSelectedIndex(index);
-  }, []);
-
-  const handleSearchEverywhereExecuteItem = useCallback((item: SearchEverywhereItem) => {
-    closeSearchEverywhere();
-    void item.execute();
-  }, [closeSearchEverywhere]);
-
-  const handleSearchEverywhereExecuteSelected = useCallback(() => {
-    const item = searchEverywhereItemsRef.current[searchEverywhereSelectedIndexRef.current];
-    if (!item) {
-      return;
-    }
-
-    closeSearchEverywhere();
-    void item.execute();
-  }, [closeSearchEverywhere]);
 
   const handleToggleFormatOnSave = useCallback(() => {
     persistSavePipelineState({
@@ -23362,26 +23436,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
         </div>
       </div>
 
-      {isSearchEverywhereOpen && (
-        <SearchEverywhereDialog
-          inputRef={searchEverywhereInputRef}
-          mode={searchEverywhereMode}
-          query={searchEverywhereQuery}
-          items={searchEverywhereItems}
-          selectedIndex={searchEverywhereSelectedIndex}
-          selectedItem={selectedSearchEverywhereItem}
-          error={searchEverywhereError}
-          isLoading={isSearchEverywhereLoading}
-          onClose={closeSearchEverywhere}
-          onModeChange={handleSearchEverywhereModeChange}
-          onQueryChange={handleSearchEverywhereQueryChange}
-          onMoveSelection={handleSearchEverywhereMoveSelection}
-          onExecuteSelected={handleSearchEverywhereExecuteSelected}
-          onHoverIndex={handleSearchEverywhereHoverIndex}
-          onExecuteItem={handleSearchEverywhereExecuteItem}
-          t={t}
-        />
-      )}
+      <SearchEverywhereController
+        ref={searchEverywhereControllerRef}
+        recentFiles={recentFiles}
+        recentLocations={recentLocations}
+        rootPath={rootPath}
+        onGetCommandItems={getSearchEverywhereCommandItems}
+        onLoadResults={loadSearchEverywhereResults}
+        onOpenEditorLocation={openEditorLocation}
+        onGetDisplayPath={getDisplayPath}
+        onGetFileLabel={getFileLabel}
+        t={t}
+      />
 
       <CodeActionMenuController
         ref={codeActionMenuControllerRef}
