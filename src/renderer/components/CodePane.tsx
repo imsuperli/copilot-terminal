@@ -257,6 +257,13 @@ type WindowedListSlice<T> = {
   isWindowed: boolean;
 };
 
+type WindowedInlineListSlice<T> = {
+  items: T[];
+  offsetLeft: number;
+  totalWidth: number;
+  isWindowed: boolean;
+};
+
 type ContentSearchGroup = {
   filePath: string;
   matches: CodePaneContentMatch[];
@@ -331,6 +338,9 @@ const CODE_PANE_SEARCH_PANEL_WINDOWING_THRESHOLD = 160;
 const CODE_PANE_PROBLEMS_ROW_HEIGHT = 28;
 const CODE_PANE_PROBLEMS_ROW_OVERSCAN = 10;
 const CODE_PANE_PROBLEMS_WINDOWING_THRESHOLD = 120;
+const CODE_PANE_OPEN_FILE_TAB_WIDTH = 188;
+const CODE_PANE_OPEN_FILE_TAB_OVERSCAN = 4;
+const CODE_PANE_OPEN_FILE_TAB_WINDOWING_THRESHOLD = 24;
 const CODE_PANE_EXTERNAL_CHANGE_ROW_HEIGHT = 66;
 const CODE_PANE_EXTERNAL_CHANGE_ROW_OVERSCAN = 8;
 const CODE_PANE_EXTERNAL_CHANGE_WINDOWING_THRESHOLD = 80;
@@ -6164,6 +6174,46 @@ function getWindowedListSlice<T>({
   };
 }
 
+function getWindowedInlineListSlice<T>({
+  items,
+  scrollLeft,
+  viewportWidth,
+  itemWidth,
+  overscan,
+  threshold,
+}: {
+  items: T[];
+  scrollLeft: number;
+  viewportWidth: number;
+  itemWidth: number;
+  overscan: number;
+  threshold: number;
+}): WindowedInlineListSlice<T> {
+  const totalWidth = items.length * itemWidth;
+
+  if (items.length <= threshold || viewportWidth <= 0) {
+    return {
+      items,
+      offsetLeft: 0,
+      totalWidth,
+      isWindowed: false,
+    };
+  }
+
+  const startIndex = Math.max(0, Math.floor(scrollLeft / itemWidth) - overscan);
+  const endIndex = Math.min(
+    items.length,
+    Math.ceil((scrollLeft + viewportWidth) / itemWidth) + overscan,
+  );
+
+  return {
+    items: items.slice(startIndex, endIndex),
+    offsetLeft: startIndex * itemWidth,
+    totalWidth,
+    isWindowed: true,
+  };
+}
+
 function shouldAutoLoadCompactDirectoryChildren(rootPath: string, directoryPath: string): boolean {
   const relativePath = getRelativePath(rootPath, directoryPath);
   if (!relativePath) {
@@ -8800,6 +8850,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const rootContainerRef = useRef<HTMLDivElement | null>(null);
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const filesSidebarScrollRef = useRef<HTMLDivElement | null>(null);
+  const openFileTabsScrollRef = useRef<HTMLDivElement | null>(null);
   const rootPath = pane.code?.rootPath ?? pane.cwd;
   const cachedExternalLibrarySections = useMemo(
     () => getExternalLibraryCache(rootPath) ?? [],
@@ -8902,6 +8953,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const bottomPanelResizeCleanupRef = useRef<(() => void) | null>(null);
   const pendingBottomPanelResizeRef = useRef<{ height: number; availableHeight: number } | null>(null);
   const bottomPanelResizeAnimationFrameRef = useRef<number | null>(null);
+  const pendingOpenFileTabsViewportRef = useRef<{ scrollLeft: number; viewportWidth: number } | null>(null);
+  const openFileTabsScrollAnimationFrameRef = useRef<number | null>(null);
   const focusedEditorTargetRef = useRef<EditorTarget>('editor');
   const runtimeStoreRef = useRef(new CodePaneRuntimeStore());
   const cursorStoreRef = useRef(new CodePaneCursorStore());
@@ -9075,6 +9128,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const [isSubmittingActionInput, setIsSubmittingActionInput] = useState(false);
   const [actionConfirmDialog, setActionConfirmDialog] = useState<ActionConfirmDialogState | null>(null);
   const [isSubmittingActionConfirm, setIsSubmittingActionConfirm] = useState(false);
+  const [openFileTabsViewport, setOpenFileTabsViewport] = useState({ scrollLeft: 0, viewportWidth: 0 });
   const [commitWindowState, setCommitWindowState] = useState<CommitWindowState | null>(null);
   const commitWindowStateRef = useRef<CommitWindowState | null>(null);
   const [banner, setBanner] = useState<BannerState | null>(null);
@@ -18554,6 +18608,18 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const isRootExpanded = expandedDirectories.has(rootPath);
   const isRootSelected = selectedPath === rootPath;
   const orderedOpenFiles = useMemo(() => sortOpenFilesByPinned(openFiles), [openFiles]);
+  const activeOpenFileTabIndex = useMemo(
+    () => orderedOpenFiles.findIndex((tab) => tab.path === activeFilePath),
+    [activeFilePath, orderedOpenFiles],
+  );
+  const windowedOpenFileTabs = useMemo(() => getWindowedInlineListSlice({
+    items: orderedOpenFiles,
+    scrollLeft: openFileTabsViewport.scrollLeft,
+    viewportWidth: openFileTabsViewport.viewportWidth,
+    itemWidth: CODE_PANE_OPEN_FILE_TAB_WIDTH,
+    overscan: CODE_PANE_OPEN_FILE_TAB_OVERSCAN,
+    threshold: CODE_PANE_OPEN_FILE_TAB_WINDOWING_THRESHOLD,
+  }), [openFileTabsViewport.scrollLeft, openFileTabsViewport.viewportWidth, orderedOpenFiles]);
   const contextMenuContentClassName = ideMenuContentClassName;
   const contextMenuItemClassName = ideMenuItemClassName;
   const contextMenuDangerItemClassName = ideMenuDangerItemClassName;
@@ -18597,6 +18663,84 @@ export const CodePane: React.FC<CodePaneProps> = ({
       }
     });
   }, []);
+
+  const scheduleOpenFileTabsViewportUpdate = useCallback((nextViewport: { scrollLeft: number; viewportWidth: number }) => {
+    pendingOpenFileTabsViewportRef.current = nextViewport;
+    if (openFileTabsScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    openFileTabsScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      openFileTabsScrollAnimationFrameRef.current = null;
+      const pendingViewport = pendingOpenFileTabsViewportRef.current;
+      pendingOpenFileTabsViewportRef.current = null;
+      if (!pendingViewport) {
+        return;
+      }
+
+      setOpenFileTabsViewport((currentViewport) => (
+        currentViewport.scrollLeft === pendingViewport.scrollLeft
+          && currentViewport.viewportWidth === pendingViewport.viewportWidth
+          ? currentViewport
+          : pendingViewport
+      ));
+    });
+  }, []);
+
+  useEffect(() => {
+    const container = openFileTabsScrollRef.current;
+    if (!container) {
+      return undefined;
+    }
+
+    const syncViewport = () => {
+      scheduleOpenFileTabsViewportUpdate({
+        scrollLeft: container.scrollLeft,
+        viewportWidth: container.clientWidth,
+      });
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      if (openFileTabsScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(openFileTabsScrollAnimationFrameRef.current);
+        openFileTabsScrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, [scheduleOpenFileTabsViewportUpdate]);
+
+  useEffect(() => {
+    const container = openFileTabsScrollRef.current;
+    if (!container || activeOpenFileTabIndex < 0) {
+      return;
+    }
+
+    const tabStart = activeOpenFileTabIndex * CODE_PANE_OPEN_FILE_TAB_WIDTH;
+    const tabEnd = tabStart + CODE_PANE_OPEN_FILE_TAB_WIDTH;
+    if (tabStart < container.scrollLeft) {
+      container.scrollLeft = tabStart;
+      scheduleOpenFileTabsViewportUpdate({
+        scrollLeft: container.scrollLeft,
+        viewportWidth: container.clientWidth,
+      });
+      return;
+    }
+
+    const viewportEnd = container.scrollLeft + container.clientWidth;
+    if (tabEnd > viewportEnd) {
+      container.scrollLeft = Math.max(0, tabEnd - container.clientWidth);
+      scheduleOpenFileTabsViewportUpdate({
+        scrollLeft: container.scrollLeft,
+        viewportWidth: container.clientWidth,
+      });
+    }
+  }, [activeOpenFileTabIndex, scheduleOpenFileTabsViewportUpdate]);
 
   const scheduleEditorSplitSizeUpdate = useCallback((nextSize: number) => {
     pendingEditorSplitSizeRef.current = nextSize;
@@ -23694,7 +23838,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     const renderedTabs: React.ReactNode[] = [];
-    for (const tab of orderedOpenFiles) {
+    for (const tab of windowedOpenFileTabs.items) {
       const isTabActive = tab.path === activeFilePath;
       const tabStatus = gitStatusByPathRef.current[tab.path]?.status;
       const externalChangeEntry = externalChangeStateRef.current.entriesByPath.get(tab.path);
@@ -23723,17 +23867,36 @@ export const CodePane: React.FC<CodePaneProps> = ({
         />,
       );
     }
-    return renderedTabs;
+
+    if (!windowedOpenFileTabs.isWindowed) {
+      return renderedTabs;
+    }
+
+    return (
+      <div
+        className="relative flex min-h-[34px] shrink-0 items-stretch"
+        style={{ width: `${windowedOpenFileTabs.totalWidth}px` }}
+      >
+        <div
+          className="absolute top-0 flex h-full items-stretch"
+          style={{
+            left: `${windowedOpenFileTabs.offsetLeft}px`,
+          }}
+        >
+          {renderedTabs}
+        </div>
+      </div>
+    );
   }, [
     activeFilePath,
     activateFile,
     closeFileTab,
     getFileLabel,
     openFileTabDecorationsKey,
-    orderedOpenFiles,
     renderFileContextMenu,
     rootPath,
     t,
+    windowedOpenFileTabs,
   ]);
 
   const renderedFilesSidebarContent = useMemo(() => (
@@ -24213,7 +24376,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
             {renderedSidebar}
 
             <div data-testid="code-pane-editor-region" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-              <div className="flex min-h-[34px] items-stretch overflow-x-auto border-b border-zinc-800 bg-zinc-950/70">
+              <div
+                ref={openFileTabsScrollRef}
+                className="flex min-h-[34px] items-stretch overflow-x-auto overflow-y-hidden border-b border-zinc-800 bg-zinc-950/70"
+                onScroll={(event) => {
+                  scheduleOpenFileTabsViewportUpdate({
+                    scrollLeft: event.currentTarget.scrollLeft,
+                    viewportWidth: event.currentTarget.clientWidth,
+                  });
+                }}
+              >
                 {renderedOpenFileTabs}
               </div>
 
