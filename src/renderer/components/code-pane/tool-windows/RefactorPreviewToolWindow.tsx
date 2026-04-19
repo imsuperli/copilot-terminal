@@ -16,6 +16,57 @@ interface RefactorPreviewToolWindowProps {
   onClose: () => void;
 }
 
+type WindowedListSlice<T> = {
+  items: T[];
+  offsetTop: number;
+  totalHeight: number;
+  isWindowed: boolean;
+};
+
+const REFACTOR_PREVIEW_FILE_ROW_HEIGHT = 74;
+const REFACTOR_PREVIEW_FILE_ROW_OVERSCAN = 8;
+const REFACTOR_PREVIEW_FILE_WINDOWING_THRESHOLD = 80;
+
+function getWindowedListSlice<T>({
+  items,
+  scrollTop,
+  viewportHeight,
+  rowHeight,
+  overscan,
+  threshold,
+}: {
+  items: T[];
+  scrollTop: number;
+  viewportHeight: number;
+  rowHeight: number;
+  overscan: number;
+  threshold: number;
+}): WindowedListSlice<T> {
+  const totalHeight = items.length * rowHeight;
+
+  if (items.length <= threshold || viewportHeight <= 0) {
+    return {
+      items,
+      offsetTop: 0,
+      totalHeight,
+      isWindowed: false,
+    };
+  }
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
+  const endIndex = Math.min(
+    items.length,
+    Math.ceil((scrollTop + viewportHeight) / rowHeight) + overscan,
+  );
+
+  return {
+    items: items.slice(startIndex, endIndex),
+    offsetTop: startIndex * rowHeight,
+    totalHeight,
+    isWindowed: true,
+  };
+}
+
 export function RefactorPreviewToolWindow({
   changeSet,
   selectedChangeId,
@@ -26,9 +77,91 @@ export function RefactorPreviewToolWindow({
   onClose,
 }: RefactorPreviewToolWindowProps) {
   const { t } = useI18n();
+  const listScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [listScrollTop, setListScrollTop] = React.useState(0);
+  const [listViewportHeight, setListViewportHeight] = React.useState(0);
+  const pendingListScrollTopRef = React.useRef<number | null>(null);
+  const listScrollAnimationFrameRef = React.useRef<number | null>(null);
   const selectedChange = changeSet?.files.find((candidate) => candidate.id === selectedChangeId)
     ?? changeSet?.files[0]
     ?? null;
+  const fileChanges = changeSet?.files ?? [];
+  const visibleFileChanges = React.useMemo(() => getWindowedListSlice({
+    items: fileChanges,
+    scrollTop: listScrollTop,
+    viewportHeight: listViewportHeight,
+    rowHeight: REFACTOR_PREVIEW_FILE_ROW_HEIGHT,
+    overscan: REFACTOR_PREVIEW_FILE_ROW_OVERSCAN,
+    threshold: REFACTOR_PREVIEW_FILE_WINDOWING_THRESHOLD,
+  }), [fileChanges, listScrollTop, listViewportHeight]);
+
+  const scheduleListScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingListScrollTopRef.current = nextScrollTop;
+    if (listScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    listScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      listScrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingListScrollTopRef.current;
+      pendingListScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setListScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const container = listScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncViewport = () => {
+      setListViewportHeight(container.clientHeight);
+      setListScrollTop(container.scrollTop);
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      if (listScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(listScrollAnimationFrameRef.current);
+        listScrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  const renderFileChange = React.useCallback((change: CodePanePreviewFileChange) => {
+    const isSelected = selectedChange?.id === change.id;
+    return (
+      <button
+        key={change.id}
+        type="button"
+        onClick={() => {
+          onSelectChange(change.id);
+        }}
+        className={`h-[74px] w-full rounded border px-2 py-2 text-left transition-colors ${
+          isSelected
+            ? 'border-sky-500/30 bg-sky-500/10 text-sky-100'
+            : 'border-transparent bg-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900/70'
+        }`}
+      >
+        <div className="truncate text-xs font-medium">{getLeafLabel(change.filePath)}</div>
+        <div className="mt-1 truncate text-[10px] text-zinc-500">{change.filePath}</div>
+        {change.targetFilePath && (
+          <div className="mt-1 truncate text-[10px] text-zinc-500">{change.targetFilePath}</div>
+        )}
+      </button>
+    );
+  }, [onSelectChange, selectedChange?.id]);
 
   return (
     <div className="flex h-full min-h-0 flex-col border-t border-zinc-800 bg-zinc-950/90">
@@ -109,33 +242,25 @@ export function RefactorPreviewToolWindow({
       )}
 
       <div className="grid min-h-0 flex-1 grid-cols-[260px_minmax(0,1fr)] overflow-hidden">
-        <div className="min-h-0 border-r border-zinc-800 px-2 py-2">
-          {changeSet?.files.length ? (
-            <div className="space-y-1 overflow-auto">
-              {changeSet.files.map((change) => {
-                const isSelected = selectedChange?.id === change.id;
-                return (
-                  <button
-                    key={change.id}
-                    type="button"
-                    onClick={() => {
-                      onSelectChange(change.id);
-                    }}
-                    className={`w-full rounded border px-2 py-2 text-left transition-colors ${
-                      isSelected
-                        ? 'border-sky-500/30 bg-sky-500/10 text-sky-100'
-                        : 'border-transparent bg-transparent text-zinc-300 hover:border-zinc-800 hover:bg-zinc-900/70'
-                    }`}
-                  >
-                    <div className="truncate text-xs font-medium">{getLeafLabel(change.filePath)}</div>
-                    <div className="mt-1 truncate text-[10px] text-zinc-500">{change.filePath}</div>
-                    {change.targetFilePath && (
-                      <div className="mt-1 truncate text-[10px] text-zinc-500">{change.targetFilePath}</div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+        <div
+          ref={listScrollRef}
+          className="min-h-0 overflow-auto border-r border-zinc-800 px-2 py-2"
+          onScroll={(event) => {
+            scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
+          }}
+        >
+          {fileChanges.length ? (
+            visibleFileChanges.isWindowed ? (
+              <div style={{ height: `${visibleFileChanges.totalHeight}px`, position: 'relative' }}>
+                <div className="space-y-1" style={{ transform: `translateY(${visibleFileChanges.offsetTop}px)` }}>
+                  {visibleFileChanges.items.map(renderFileChange)}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {fileChanges.map(renderFileChange)}
+              </div>
+            )
           ) : (
             <div className="flex h-full items-center justify-center text-xs text-zinc-500">
               {t('codePane.refactorPreviewEmpty')}
