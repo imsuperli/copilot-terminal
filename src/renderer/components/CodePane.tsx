@@ -926,7 +926,25 @@ const ExplorerTreeRowButton = React.memo(function ExplorerTreeRowButton({
       )}
     />
   );
-});
+}, (previousProps, nextProps) => (
+  previousProps.isSelected === nextProps.isSelected
+  && previousProps.t === nextProps.t
+  && previousProps.onActivate === nextProps.onActivate
+  && previousProps.onPromote === nextProps.onPromote
+  && previousProps.onToggleDirectory === nextProps.onToggleDirectory
+  && previousProps.renderContextMenu === nextProps.renderContextMenu
+  && previousProps.row.key === nextProps.row.key
+  && previousProps.row.sourcePath === nextProps.row.sourcePath
+  && previousProps.row.resolvedPath === nextProps.row.resolvedPath
+  && previousProps.row.entryType === nextProps.row.entryType
+  && previousProps.row.depth === nextProps.row.depth
+  && previousProps.row.displayName === nextProps.row.displayName
+  && previousProps.row.title === nextProps.row.title
+  && previousProps.row.isExpanded === nextProps.row.isExpanded
+  && previousProps.row.isLoading === nextProps.row.isLoading
+  && previousProps.row.textClassName === nextProps.row.textClassName
+  && previousProps.row.externalChangeType === nextProps.row.externalChangeType
+));
 
 const SearchResultRowButton = React.memo(function SearchResultRowButton({
   filePath,
@@ -8348,6 +8366,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitStatusEntriesRef.current = gitStatusEntries;
     gitStatusByPathRef.current = gitStatusByPath;
   }, [gitStatusByPath, gitStatusEntries]);
+
+  useEffect(() => {
+    externalChangeEntriesRef.current = externalChangeEntries;
+  }, [externalChangeEntries]);
 
   useEffect(() => {
     gitBranchesRef.current = gitBranches;
@@ -18218,7 +18240,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       showPinToggle?: boolean;
     },
   ) => {
-    const statusEntry = options?.allowGitActions === false ? undefined : gitStatusByPath[filePath];
+    const statusEntry = options?.allowGitActions === false ? undefined : gitStatusByPathRef.current[filePath];
     const canGitStage = Boolean(
       statusEntry && (statusEntry.unstaged || statusEntry.status === 'untracked' || statusEntry.status === 'added'),
     );
@@ -18519,7 +18541,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
               />
             </ContextMenu.Item>
           )}
-          {entryType === 'file' && externalChangesByPath.has(filePath) && (
+          {entryType === 'file' && externalChangeStateRef.current.entriesByPath.has(filePath) && (
             <ContextMenu.Item
               className={contextMenuItemClassName}
               onSelect={() => {
@@ -18635,10 +18657,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     copyPath,
     createExplorerDirectory,
     createExplorerFile,
-    gitStatusByPath,
     loadGitHistory,
     movePathWithPreview,
-    externalChangesByPath,
     openExternalChangeDiff,
     openFileInSplit,
     openDiffForFile,
