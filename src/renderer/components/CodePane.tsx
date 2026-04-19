@@ -287,6 +287,12 @@ const CODE_PANE_EXPLORER_WINDOWING_THRESHOLD = 120;
 const CODE_PANE_SEARCH_EVERYWHERE_ROW_HEIGHT = 52;
 const CODE_PANE_SEARCH_EVERYWHERE_ROW_OVERSCAN = 8;
 const CODE_PANE_SEARCH_EVERYWHERE_WINDOWING_THRESHOLD = 80;
+const CODE_PANE_BRANCH_MANAGER_ROW_HEIGHT = 28;
+const CODE_PANE_BRANCH_MANAGER_ROW_OVERSCAN = 10;
+const CODE_PANE_BRANCH_MANAGER_WINDOWING_THRESHOLD = 100;
+const CODE_PANE_PROBLEMS_ROW_HEIGHT = 28;
+const CODE_PANE_PROBLEMS_ROW_OVERSCAN = 10;
+const CODE_PANE_PROBLEMS_WINDOWING_THRESHOLD = 120;
 const CODE_PANE_EXTERNAL_CHANGE_ROW_HEIGHT = 66;
 const CODE_PANE_EXTERNAL_CHANGE_ROW_OVERSCAN = 8;
 const CODE_PANE_EXTERNAL_CHANGE_WINDOWING_THRESHOLD = 80;
@@ -2291,6 +2297,76 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
   onDeleteBranch: (branch: CodePaneGitBranchEntry) => void;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  const listScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [listScrollTop, setListScrollTop] = React.useState(0);
+  const [listViewportHeight, setListViewportHeight] = React.useState(0);
+  const pendingListScrollTopRef = React.useRef<number | null>(null);
+  const listScrollAnimationFrameRef = React.useRef<number | null>(null);
+  const flattenedRows = React.useMemo(() => {
+    const nextRows: Array<{
+      section: BranchManagerVisibleSection;
+      row: BranchManagerVisibleTreeRow;
+    }> = [];
+    for (const section of sections) {
+      for (const row of section.rows) {
+        nextRows.push({ section, row });
+      }
+    }
+    return nextRows;
+  }, [sections]);
+  const visibleRows = React.useMemo(() => getWindowedListSlice({
+    items: flattenedRows,
+    scrollTop: listScrollTop,
+    viewportHeight: listViewportHeight,
+    rowHeight: CODE_PANE_BRANCH_MANAGER_ROW_HEIGHT,
+    overscan: CODE_PANE_BRANCH_MANAGER_ROW_OVERSCAN,
+    threshold: CODE_PANE_BRANCH_MANAGER_WINDOWING_THRESHOLD,
+  }), [flattenedRows, listScrollTop, listViewportHeight]);
+
+  const scheduleListScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingListScrollTopRef.current = nextScrollTop;
+    if (listScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    listScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      listScrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingListScrollTopRef.current;
+      pendingListScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setListScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const container = listScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncViewport = () => {
+      setListViewportHeight(container.clientHeight);
+      setListScrollTop(container.scrollTop);
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      if (listScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(listScrollAnimationFrameRef.current);
+        listScrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
+
   return (
     <div className="absolute left-0 top-full z-[80] mt-1 flex h-[min(72vh,680px)] w-[360px] flex-col overflow-hidden rounded border border-zinc-800 bg-zinc-950 shadow-2xl">
       <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/90 px-2 py-1.5">
@@ -2322,7 +2398,13 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <div
+        ref={listScrollRef}
+        className="min-h-0 flex-1 overflow-y-auto px-2 py-2"
+        onScroll={(event) => {
+          scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
+        }}
+      >
         {quickActions.length > 0 && (
           <div className="mb-3 space-y-0.5 border-b border-zinc-800 pb-2">
             {quickActions.map((action) => {
@@ -2358,38 +2440,62 @@ const BranchManagerPopup = React.memo(function BranchManagerPopup({
             {t('codePane.loading')}
           </div>
         ) : sections.length > 0 ? (
-          <div className="space-y-3">
-            {sections.map((section) => (
-              <div key={section.key}>
-                <div className="mb-1 flex h-6 items-center gap-1.5 px-1 text-xs font-medium text-zinc-400">
-                  <ChevronDown size={12} className="text-zinc-500" />
-                  <span className="min-w-0 flex-1 truncate">{section.label}</span>
-                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                    {section.count}
-                  </span>
-                </div>
-                <div className="space-y-0.5">
-                  {section.rows.map((row) => (
-                    <BranchManagerTreeRow
-                      key={row.key}
-                      node={row.node}
-                      depth={row.depth}
-                      isCollapsed={collapsedNodeKeys.has(row.node.key)}
-                      menuContainer={menuContainer}
-                      contextMenuContentClassName={contextMenuContentClassName}
-                      contextMenuItemClassName={contextMenuItemClassName}
-                      contextMenuDangerItemClassName={contextMenuDangerItemClassName}
-                      onToggleNode={onToggleNode}
-                      onCheckoutBranch={onCheckoutBranch}
-                      onRenameBranch={onRenameBranch}
-                      onDeleteBranch={onDeleteBranch}
-                      t={t}
-                    />
-                  ))}
-                </div>
+          visibleRows.isWindowed ? (
+            <div style={{ height: `${visibleRows.totalHeight}px`, position: 'relative' }}>
+              <div style={{ transform: `translateY(${visibleRows.offsetTop}px)` }}>
+                {visibleRows.items.map(({ row }) => (
+                  <BranchManagerTreeRow
+                    key={row.key}
+                    node={row.node}
+                    depth={row.depth}
+                    isCollapsed={collapsedNodeKeys.has(row.node.key)}
+                    menuContainer={menuContainer}
+                    contextMenuContentClassName={contextMenuContentClassName}
+                    contextMenuItemClassName={contextMenuItemClassName}
+                    contextMenuDangerItemClassName={contextMenuDangerItemClassName}
+                    onToggleNode={onToggleNode}
+                    onCheckoutBranch={onCheckoutBranch}
+                    onRenameBranch={onRenameBranch}
+                    onDeleteBranch={onDeleteBranch}
+                    t={t}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sections.map((section) => (
+                <div key={section.key}>
+                  <div className="mb-1 flex h-6 items-center gap-1.5 px-1 text-xs font-medium text-zinc-400">
+                    <ChevronDown size={12} className="text-zinc-500" />
+                    <span className="min-w-0 flex-1 truncate">{section.label}</span>
+                    <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                      {section.count}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {section.rows.map((row) => (
+                      <BranchManagerTreeRow
+                        key={row.key}
+                        node={row.node}
+                        depth={row.depth}
+                        isCollapsed={collapsedNodeKeys.has(row.node.key)}
+                        menuContainer={menuContainer}
+                        contextMenuContentClassName={contextMenuContentClassName}
+                        contextMenuItemClassName={contextMenuItemClassName}
+                        contextMenuDangerItemClassName={contextMenuDangerItemClassName}
+                        onToggleNode={onToggleNode}
+                        onCheckoutBranch={onCheckoutBranch}
+                        onRenameBranch={onRenameBranch}
+                        onDeleteBranch={onDeleteBranch}
+                        t={t}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <div className="flex h-32 items-center justify-center text-xs text-zinc-500">
             {t('codePane.gitBranchNoResults')}
@@ -3789,6 +3895,84 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
   onOpenFileLocation: (location: FileNavigationLocation) => void | Promise<void>;
   t: ReturnType<typeof useI18n>['t'];
 }) {
+  const listScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [listScrollTop, setListScrollTop] = React.useState(0);
+  const [listViewportHeight, setListViewportHeight] = React.useState(0);
+  const pendingListScrollTopRef = React.useRef<number | null>(null);
+  const listScrollAnimationFrameRef = React.useRef<number | null>(null);
+  const flattenedEntries = React.useMemo(() => {
+    const nextEntries: Array<{
+      filePath: string;
+      relativePath: string;
+      problem: MonacoMarker & { filePath: string };
+      tone: ReturnType<typeof getProblemTone>;
+    }> = [];
+    for (const group of groups) {
+      const relativePath = getRelativePath(rootPath, group.filePath);
+      for (const problem of group.entries) {
+        nextEntries.push({
+          filePath: group.filePath,
+          relativePath,
+          problem,
+          tone: getProblemTone(problem.severity),
+        });
+      }
+    }
+    return nextEntries;
+  }, [groups, rootPath]);
+  const visibleEntries = React.useMemo(() => getWindowedListSlice({
+    items: flattenedEntries,
+    scrollTop: listScrollTop,
+    viewportHeight: listViewportHeight,
+    rowHeight: CODE_PANE_PROBLEMS_ROW_HEIGHT,
+    overscan: CODE_PANE_PROBLEMS_ROW_OVERSCAN,
+    threshold: CODE_PANE_PROBLEMS_WINDOWING_THRESHOLD,
+  }), [flattenedEntries, listScrollTop, listViewportHeight]);
+
+  const scheduleListScrollTopUpdate = React.useCallback((nextScrollTop: number) => {
+    pendingListScrollTopRef.current = nextScrollTop;
+    if (listScrollAnimationFrameRef.current !== null) {
+      return;
+    }
+
+    listScrollAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      listScrollAnimationFrameRef.current = null;
+      const pendingScrollTop = pendingListScrollTopRef.current;
+      pendingListScrollTopRef.current = null;
+      if (pendingScrollTop !== null) {
+        setListScrollTop((currentScrollTop) => (
+          currentScrollTop === pendingScrollTop ? currentScrollTop : pendingScrollTop
+        ));
+      }
+    });
+  }, []);
+
+  React.useEffect(() => {
+    const container = listScrollRef.current;
+    if (!container) {
+      return;
+    }
+
+    const syncViewport = () => {
+      setListViewportHeight(container.clientHeight);
+      setListScrollTop(container.scrollTop);
+    };
+
+    syncViewport();
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewport();
+    });
+    resizeObserver.observe(container);
+    return () => {
+      if (listScrollAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(listScrollAnimationFrameRef.current);
+        listScrollAnimationFrameRef.current = null;
+      }
+      resizeObserver.disconnect();
+    };
+  }, []);
+
   return (
     <>
       <div className="border-b border-zinc-800 px-2 py-2">
@@ -3802,48 +3986,84 @@ const ProblemsSidebarContent = React.memo(function ProblemsSidebarContent({
           <span>{t('codePane.problemInfos', { count: summary.infoCount })}</span>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+      <div
+        ref={listScrollRef}
+        className="min-h-0 flex-1 overflow-auto px-2 py-2"
+        onScroll={(event) => {
+          scheduleListScrollTopUpdate(event.currentTarget.scrollTop);
+        }}
+      >
         {groups.length > 0 ? (
-          <div className="space-y-3">
-            {groups.map((group) => (
-              <div key={group.filePath} className="space-y-1">
-                <div className="flex items-center gap-2 px-1 py-1 text-xs text-zinc-300">
-                  <FileIcon size={13} className="shrink-0 text-zinc-500" />
-                  <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
-                  <span className="truncate text-[10px] text-zinc-500">
-                    {getRelativePath(rootPath, group.filePath)}
-                  </span>
-                </div>
-                {group.entries.map((problem) => {
-                  const tone = getProblemTone(problem.severity);
-                  return (
-                    <button
-                      key={`${group.filePath}:${problem.startLineNumber}:${problem.startColumn}:${problem.message}`}
-                      type="button"
-                      onClick={() => {
-                        void onOpenFileLocation({
-                          filePath: group.filePath,
-                          lineNumber: problem.startLineNumber,
-                          column: problem.startColumn,
-                        });
-                      }}
-                      className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
-                    >
-                      <span className={`mt-0.5 rounded px-1 py-0.5 text-[10px] font-medium uppercase ${tone.className}`}>
-                        {tone.label}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="break-words">{problem.message}</div>
-                        <div className="mt-1 text-[10px] text-zinc-500">
-                          {problem.startLineNumber}:{problem.startColumn}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+          visibleEntries.isWindowed ? (
+            <div style={{ height: `${visibleEntries.totalHeight}px`, position: 'relative' }}>
+              <div style={{ transform: `translateY(${visibleEntries.offsetTop}px)` }}>
+                {visibleEntries.items.map(({ filePath, relativePath, problem, tone }) => (
+                  <button
+                    key={`${filePath}:${problem.startLineNumber}:${problem.startColumn}:${problem.message}`}
+                    type="button"
+                    onClick={() => {
+                      void onOpenFileLocation({
+                        filePath,
+                        lineNumber: problem.startLineNumber,
+                        column: problem.startColumn,
+                      });
+                    }}
+                    className="flex h-7 w-full items-center gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                    title={`${getPathLeafLabel(filePath)} · ${relativePath}`}
+                  >
+                    <span className={`rounded px-1 py-0.5 text-[10px] font-medium uppercase ${tone.className}`}>
+                      {tone.label}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{problem.message}</span>
+                    <span className="shrink-0 text-[10px] text-zinc-500">
+                      {problem.startLineNumber}:{problem.startColumn}
+                    </span>
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {groups.map((group) => (
+                <div key={group.filePath} className="space-y-1">
+                  <div className="flex items-center gap-2 px-1 py-1 text-xs text-zinc-300">
+                    <FileIcon size={13} className="shrink-0 text-zinc-500" />
+                    <span className="min-w-0 flex-1 truncate">{getPathLeafLabel(group.filePath)}</span>
+                    <span className="truncate text-[10px] text-zinc-500">
+                      {getRelativePath(rootPath, group.filePath)}
+                    </span>
+                  </div>
+                  {group.entries.map((problem) => {
+                    const tone = getProblemTone(problem.severity);
+                    return (
+                      <button
+                        key={`${group.filePath}:${problem.startLineNumber}:${problem.startColumn}:${problem.message}`}
+                        type="button"
+                        onClick={() => {
+                          void onOpenFileLocation({
+                            filePath: group.filePath,
+                            lineNumber: problem.startLineNumber,
+                            column: problem.startColumn,
+                          });
+                        }}
+                        className="flex w-full items-start gap-2 rounded px-1 py-1 text-left text-xs text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"
+                      >
+                        <span className={`mt-0.5 rounded px-1 py-0.5 text-[10px] font-medium uppercase ${tone.className}`}>
+                          {tone.label}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="break-words">{problem.message}</div>
+                          <div className="mt-1 text-[10px] text-zinc-500">
+                            {problem.startLineNumber}:{problem.startColumn}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )
         ) : (
           <div className="text-xs text-zinc-500">{t('codePane.noProblems')}</div>
         )}
