@@ -612,7 +612,7 @@ export function SSHSftpDialog({
     <>
       <aside
         data-testid="ssh-sftp-panel"
-        className="relative flex h-full shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/95 backdrop-blur"
+        className="relative flex h-full shrink-0 flex-col border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)] backdrop-blur"
         style={{ width: `${panelWidth}px` }}
       >
         <div
@@ -625,7 +625,7 @@ export function SSHSftpDialog({
           }`}
         />
 
-        <div className="border-b border-zinc-800 px-2 py-1.5">
+        <div className="border-b border-[rgb(var(--border))] px-2 py-1.5">
           <div className="mb-1 flex items-center gap-1">
             {isEditingPath ? (
               <form
@@ -643,14 +643,14 @@ export function SSHSftpDialog({
                       setIsEditingPath(false);
                     }
                   }}
-                  className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none transition-colors focus:border-[rgb(var(--ring))]"
+                  className="min-w-0 flex-1 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))]"
                   placeholder="/srv/app"
                   data-testid="ssh-sftp-path-input"
                 />
                 <button
                   type="submit"
                   aria-label={t('sshSftpDialog.go')}
-                  className="flex h-6 w-6 items-center justify-center rounded border border-zinc-800 bg-zinc-900 text-zinc-200 transition-colors hover:bg-zinc-800"
+                  className="flex h-6 w-6 items-center justify-center rounded border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
                 >
                   <ArrowRight size={13} />
                 </button>
@@ -659,7 +659,7 @@ export function SSHSftpDialog({
                     type="button"
                     aria-label={t('sshSftpDialog.hide')}
                     onClick={() => onOpenChange(false)}
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                   >
                     <X size={11} />
                   </button>
@@ -669,12 +669,12 @@ export function SSHSftpDialog({
               <>
                 <div
                   onDoubleClick={handleStartPathEditing}
-                  className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto rounded border border-zinc-800 bg-zinc-900/70 px-1 py-0.5 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-0 overflow-x-auto rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-1 py-0.5 text-left"
                   data-testid="ssh-sftp-breadcrumbs"
                 >
                   {pathSegments.map((segment, index) => (
                     <React.Fragment key={segment.path}>
-                      {index > 0 && <ChevronRight size={10} className="shrink-0 text-zinc-600" />}
+                      {index > 0 && <ChevronRight size={10} className="shrink-0 text-[rgb(var(--muted-foreground))]" />}
                       <button
                         type="button"
                         onClick={() => {
@@ -687,8 +687,8 @@ export function SSHSftpDialog({
                         disabled={segment.path === listing?.path}
                         className={`shrink-0 rounded px-1 py-0 text-[11px] leading-tight transition-colors ${
                           segment.path === listing?.path
-                            ? 'text-zinc-200'
-                            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100'
+                            ? 'text-[rgb(var(--foreground))]'
+                            : 'text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
                         }`}
                         title={segment.path}
                       >
@@ -701,7 +701,7 @@ export function SSHSftpDialog({
                   type="button"
                   aria-label={t('sshSftpDialog.editPath')}
                   onClick={handleStartPathEditing}
-                  className="flex h-6 w-6 items-center justify-center rounded border border-zinc-800 bg-zinc-900 text-zinc-200 transition-colors hover:bg-zinc-800"
+                  className="flex h-6 w-6 items-center justify-center rounded border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
                 >
                   <Edit2 size={12} />
                 </button>
@@ -710,7 +710,7 @@ export function SSHSftpDialog({
                     type="button"
                     aria-label={t('sshSftpDialog.hide')}
                     onClick={() => onOpenChange(false)}
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                   >
                     <X size={11} />
                   </button>
@@ -765,7 +765,7 @@ export function SSHSftpDialog({
               <input
                 value={directoryName}
                 onChange={(event) => setDirectoryName(event.target.value)}
-                className="min-w-0 flex-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none transition-colors focus:border-[rgb(var(--ring))]"
+                className="min-w-0 flex-1 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))]"
                 placeholder={t('sshSftpDialog.directoryNamePlaceholder')}
               />
               <button
@@ -778,19 +778,19 @@ export function SSHSftpDialog({
             </form>
           )}
 
-          <div className="mt-1.5 flex items-center gap-2 rounded border border-zinc-800 bg-zinc-900 px-2 py-1">
-            <Filter size={12} className="shrink-0 text-zinc-500" />
+          <div className="mt-1.5 flex items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] px-2 py-1">
+            <Filter size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
             <input
               value={filterText}
               onChange={(event) => setFilterText(event.target.value)}
-              className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-500"
+              className="min-w-0 flex-1 bg-transparent text-xs text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
               placeholder={t('sshSftpDialog.filterPlaceholder')}
             />
           </div>
         </div>
 
         {error && (
-          <div className="mx-3 mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="mx-3 mt-3 rounded-md border border-[rgb(var(--error)/0.24)] bg-[rgb(var(--error)/0.10)] px-3 py-2 text-sm text-[rgb(var(--error))]">
             {error}
           </div>
         )}
@@ -806,8 +806,8 @@ export function SSHSftpDialog({
                   notice.tone === 'progress'
                     ? 'border-[rgb(var(--primary))]/30 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]'
                     : notice.tone === 'success'
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
-                      : 'border-zinc-700 bg-zinc-900/95 text-zinc-200'
+                      ? 'border-[rgb(var(--success)/0.28)] bg-[rgb(var(--success)/0.10)] text-[rgb(var(--foreground))]'
+                      : 'border-[rgb(var(--info)/0.28)] bg-[rgb(var(--info)/0.10)] text-[rgb(var(--foreground))]'
                 }`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -815,14 +815,14 @@ export function SSHSftpDialog({
                         {notice.tone === 'progress' ? (
                           <RefreshCw size={14} className="shrink-0 animate-spin" />
                         ) : notice.tone === 'success' ? (
-                          <CheckCircle2 size={14} className="shrink-0" />
+                          <CheckCircle2 size={14} className="shrink-0 text-[rgb(var(--success))]" />
                         ) : (
-                          <Info size={14} className="shrink-0" />
+                          <Info size={14} className="shrink-0 text-[rgb(var(--info))]" />
                         )}
                         <span className="truncate">{notice.message}</span>
                       </div>
                       {notice.detail && (
-                        <div className="mt-1 truncate font-mono text-[11px] text-current/80">
+                        <div className="mt-1 truncate font-mono text-[11px] text-[rgb(var(--muted-foreground))]">
                           {notice.detail}
                         </div>
                       )}
@@ -832,15 +832,15 @@ export function SSHSftpDialog({
                       type="button"
                       aria-label={t('common.close')}
                       onClick={() => setNotice(null)}
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-current/70 transition-colors hover:bg-black/10 hover:text-current"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
                     >
                       <X size={13} />
                     </button>
                   </div>
 
                   {notice.tone === 'progress' && (
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full w-full animate-pulse rounded-full bg-current/70" />
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[rgb(var(--foreground)/0.08)]">
+                      <div className="h-full w-full animate-pulse rounded-full bg-[rgb(var(--primary)/0.70)]" />
                     </div>
                   )}
                 </div>
@@ -869,7 +869,7 @@ export function SSHSftpDialog({
                   className={`group relative flex items-center gap-1.5 rounded border px-1.5 py-px transition-colors ${
                     isSelected
                       ? 'border-[rgb(var(--primary))]/40 bg-[rgb(var(--primary))]/10'
-                      : 'border-transparent hover:border-zinc-800 hover:bg-zinc-900/80'
+                      : 'border-transparent hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))]'
                   }`}
                 >
                   <button
@@ -892,9 +892,9 @@ export function SSHSftpDialog({
                     {isDirectory ? (
                       <Folder size={14} className="shrink-0 text-[rgb(var(--primary))]" />
                     ) : (
-                      <File size={14} className="shrink-0 text-zinc-500" />
+                      <File size={14} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
                     )}
-                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-100">
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-[rgb(var(--foreground))]">
                       {entry.name}
                     </span>
                   </button>
@@ -929,7 +929,7 @@ export function SSHSftpDialog({
                       type="button"
                       aria-label={t('common.delete')}
                       onClick={() => setDeletingEntry(entry)}
-                      className="flex h-5 w-5 items-center justify-center rounded text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200"
+                      className="flex h-5 w-5 items-center justify-center rounded text-[rgb(var(--error))] transition-colors hover:bg-[rgb(var(--error)/0.10)] hover:text-[rgb(var(--error))]"
                     >
                       <Trash2 size={12} />
                     </button>
@@ -942,100 +942,22 @@ export function SSHSftpDialog({
         </div>
       </aside>
 
-      {deletingEntry && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0,0,0,0.6)',
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '16px'
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !isDeleting) {
-              setDeletingEntry(null);
-            }
-          }}
-        >
-          <div
-            style={{
-              background: '#18181b',
-              padding: '24px',
-              borderRadius: '8px',
-              maxWidth: '480px',
-              width: '100%',
-              border: '1px solid #27272a',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'start', gap: '16px' }}>
-              <div style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                  <line x1="12" y1="9" x2="12" y2="13"/>
-                  <line x1="12" y1="17" x2="12.01" y2="17"/>
-                </svg>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ color: '#f4f4f5', marginBottom: '8px', fontSize: '18px', fontWeight: 600 }}>
-                  {t('sshSftpDialog.deleteTitle')}
-                </h3>
-                <p style={{
-                  color: '#a1a1aa',
-                  marginBottom: '24px',
-                  fontSize: '14px',
-                  wordBreak: 'break-all',
-                  overflowWrap: 'break-word'
-                }}>
-                  {t('sshSftpDialog.deleteDescription', { path: deletingEntry.path })}
-                </p>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => setDeletingEntry(null)}
-                    disabled={isDeleting}
-                    style={{
-                      padding: '8px 16px',
-                      background: '#27272a',
-                      color: '#d4d4d8',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: isDeleting ? 'not-allowed' : 'pointer',
-                      fontSize: '14px',
-                      fontWeight: 500,
-                      opacity: isDeleting ? 0.5 : 1
-                    }}
-                  >
-                    {t('common.cancel')}
-                  </button>
-                  <button
-                    onClick={() => void handleDeleteEntry()}
-                    disabled={isDeleting}
-                    style={{
-                      padding: '8px 16px',
-                      background: '#dc2626',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: isDeleting ? 'not-allowed' : 'pointer',
-                      fontSize: '14px',
-                      fontWeight: 500,
-                      opacity: isDeleting ? 0.7 : 1
-                    }}
-                  >
-                    {isDeleting ? t('common.loading') : t('common.delete')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={Boolean(deletingEntry)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !isDeleting) {
+            setDeletingEntry(null);
+          }
+        }}
+        title={t('sshSftpDialog.deleteTitle')}
+        description={deletingEntry ? t('sshSftpDialog.deleteDescription', { path: deletingEntry.path }) : ''}
+        confirmText={isDeleting ? t('common.loading') : t('common.delete')}
+        cancelText={t('common.cancel')}
+        onConfirm={() => {
+          void handleDeleteEntry();
+        }}
+        variant="danger"
+      />
     </>
   );
 }
@@ -1063,7 +985,7 @@ function IconToolbarButton({
         className={`flex h-7 w-7 items-center justify-center rounded border transition-colors ${
           active
             ? 'border-[rgb(var(--primary))]/40 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]'
-            : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100'
+            : 'border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--muted-foreground))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]'
         } disabled:cursor-not-allowed disabled:opacity-50`}
       >
         {icon}
@@ -1100,7 +1022,7 @@ function InlineActionButton({
 
 function PanelEmptyState({ label }: { label: string }) {
   return (
-    <div className="flex h-full items-center justify-center px-4 py-10 text-center text-sm text-zinc-500">
+    <div className="flex h-full items-center justify-center px-4 py-10 text-center text-sm text-[rgb(var(--muted-foreground))]">
       {label}
     </div>
   );

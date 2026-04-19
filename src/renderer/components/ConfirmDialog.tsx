@@ -45,13 +45,13 @@ export function ConfirmDialog({
     switch (variant) {
       case 'danger':
         return {
-          icon: 'text-red-500',
-          button: 'bg-red-600 hover:bg-red-700 text-white',
+          icon: 'text-[rgb(var(--error))]',
+          button: 'bg-[rgb(var(--error))] hover:opacity-90 text-[rgb(var(--foreground))]',
         };
       case 'warning':
         return {
-          icon: 'text-yellow-500',
-          button: 'bg-yellow-600 hover:bg-yellow-700 text-white',
+          icon: 'text-[rgb(var(--warning))]',
+          button: 'bg-[rgb(var(--warning))] hover:opacity-90 text-[rgb(var(--background))]',
         };
       case 'info':
         return {

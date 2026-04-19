@@ -16,13 +16,13 @@ export interface StatusDotProps {
 function getStatusDotColor(status: WindowStatus): string {
   switch (status) {
     case WindowStatus.Error:
-      return 'bg-red-500';
+      return 'bg-[rgb(var(--error))]';
     case WindowStatus.Completed:
-      return 'bg-zinc-500';
+      return 'bg-[rgb(var(--muted-foreground))]';
     case WindowStatus.Restoring:
-      return 'bg-yellow-500';
+      return 'bg-[rgb(var(--warning))]';
     default:
-      return 'bg-zinc-600';
+      return 'bg-[rgb(var(--border))]';
   }
 }
 
@@ -32,13 +32,13 @@ function getStatusDotColor(status: WindowStatus): string {
 function getStatusIconColor(status: WindowStatus): string {
   switch (status) {
     case WindowStatus.Running:
-      return 'text-green-500';
+      return 'text-[rgb(var(--success))]';
     case WindowStatus.WaitingForInput:
       return 'text-[rgb(var(--primary))]';
     case WindowStatus.Paused:
-      return 'text-zinc-500';
+      return 'text-[rgb(var(--muted-foreground))]';
     default:
-      return 'text-zinc-600';
+      return 'text-[rgb(var(--border))]';
   }
 }
 

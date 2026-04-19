@@ -33,6 +33,7 @@ describe('ViewSwitchError', () => {
     const { container } = render(<ViewSwitchError message="切换失败" />);
 
     const errorDiv = container.querySelector('[data-testid="view-switch-error"]');
-    expect(errorDiv).toHaveClass('fixed', 'top-4', 'bg-red-900/90', 'z-[12050]');
+    expect(errorDiv).toHaveClass('fixed', 'top-4', 'z-[12050]');
+    expect(errorDiv).toHaveClass('border-[rgb(var(--error)/0.26)]');
   });
 });

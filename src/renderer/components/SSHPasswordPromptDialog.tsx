@@ -67,13 +67,13 @@ export function SSHPasswordPromptDialog({
         >
           {request.retryMessage && (
             <div
-              className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-3 text-sm text-red-100"
+              className="rounded-lg border border-[rgb(var(--error)/0.24)] bg-[rgb(var(--error)/0.10)] px-3 py-3 text-sm text-[rgb(var(--foreground))]"
               role="alert"
             >
-              <div className="font-medium">
+              <div className="font-medium text-[rgb(var(--error))]">
                 {t('sshPasswordPrompt.retryHint')}
               </div>
-              <div className="mt-1 text-red-100/90">
+              <div className="mt-1 text-[rgb(var(--muted-foreground))]">
                 {request.retryMessage}
               </div>
             </div>

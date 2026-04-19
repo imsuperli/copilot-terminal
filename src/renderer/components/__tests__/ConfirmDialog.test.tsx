@@ -84,4 +84,10 @@ describe('ConfirmDialog', () => {
 
     expect(screen.getByRole('button', { name: '稍后' })).toBeInTheDocument();
   });
+
+  it('uses tokenized danger styles for the confirm action', () => {
+    render(<ConfirmDialog {...defaultProps} />);
+
+    expect(screen.getByRole('button', { name: '确认' })).toHaveClass('bg-[rgb(var(--error))]');
+  });
 });
