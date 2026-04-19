@@ -452,6 +452,7 @@ type InFlightGitSnapshotRefresh = PendingGitSnapshotRefresh & {
 type LoadedDirectoriesRefreshOptions = {
   refreshGitStatus?: boolean;
   refreshExternalLibraries?: boolean;
+  forceGitStatusRefresh?: boolean;
 };
 type PendingLoadedDirectoriesRefresh = {
   refreshGitStatus: boolean;
@@ -9288,11 +9289,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
     });
   }, [refreshGitSnapshotNow, shouldLoadGitGraph]);
 
-  const scheduleGitStatusRefresh = useCallback((options?: { force?: boolean }) => {
+  const scheduleGitStatusRefresh = useCallback((options?: { force?: boolean; forceStatusOnly?: boolean }) => {
     invalidateProjectCache(rootPath, 'git-status');
     void refreshGitSnapshot({
       includeGraph: false,
-      ...(options?.force ? { force: true } : {}),
+      ...(options?.force || options?.forceStatusOnly ? { force: true } : {}),
     });
   }, [refreshGitSnapshot, rootPath]);
 
@@ -13234,6 +13235,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     options?: {
       showLoadingIndicator?: boolean;
       refreshGitStatus?: boolean;
+      forceGitStatusRefresh?: boolean;
     },
   ) => {
     const uniqueDirectoryPathSet = new Set<string>();
@@ -13350,7 +13352,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
 
     if (options?.refreshGitStatus !== false) {
-      scheduleGitStatusRefresh({ force: true });
+      scheduleGitStatusRefresh({
+        force: options?.forceGitStatusRefresh === true,
+        forceStatusOnly: options?.forceGitStatusRefresh !== true,
+      });
     }
   }, [getPersistedExpandedPaths, loadExplorerDirectory, persistCodeState, rootPath, scheduleGitStatusRefresh]);
 
@@ -13369,6 +13374,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const refreshTasks: Array<Promise<unknown>> = [
       refreshDirectoryPaths(directoriesToRefresh, {
         refreshGitStatus: options?.refreshGitStatus,
+        forceGitStatusRefresh: options?.refreshGitStatus !== false,
       }),
     ];
 
