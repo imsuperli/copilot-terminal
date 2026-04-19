@@ -22359,8 +22359,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     }
   }, [
     activeFilePath,
-    activePerformanceTasks,
-    activateFile,
     applyGitRebasePlan,
     areSemanticTokensEnabled,
     bookmarks,
@@ -22387,9 +22385,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     gitRebaseError,
     gitRebasePlan,
     closeBottomPanel,
-    handleCommitWindowDiscardPath,
-    handleCommitWindowOpenChange,
-    handleCommitWindowRefresh,
     handleDebugRefreshWatches,
     handleDebugStepInto,
     handleDebugStepOut,
@@ -22418,7 +22413,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     hasFailedTestSessions,
     hierarchyError,
     hierarchyRootNode,
-    indexStatus,
     isApplyingGitConflict,
     isApplyingRefactorPreview,
     isDebugDetailsLoading,
@@ -22435,10 +22429,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     isTodoLoading,
     languageWorkspaceState,
     loadDocumentSymbols,
-    loadHierarchyRoot,
     loadTodoEntries,
-    openExternalChangeDiff,
-    openHierarchyItem,
     projectContributions,
     projectError,
     refactorPreview,
@@ -22452,7 +22443,6 @@ export const CodePane: React.FC<CodePaneProps> = ({
     runTargets,
     scmEntries,
     selectedGitChangePath,
-    selectedGitChangeRelativePath,
     selectedGitCommitOrder,
     semanticLegend,
   ]);
@@ -22848,6 +22838,21 @@ export const CodePane: React.FC<CodePaneProps> = ({
     viewMode,
   ]);
 
+  const openFileTabDecorationsKey = useMemo(() => {
+    if (orderedOpenFiles.length === 0) {
+      return '';
+    }
+
+    const openFileDecorations: string[] = [];
+    for (const tab of orderedOpenFiles) {
+      const status = gitStatusByPath[tab.path]?.status ?? '';
+      const externalChangeType = externalChangeStateRef.current.entriesByPath.get(tab.path)?.changeType ?? '';
+      const isReadOnly = fileMetaRef.current.get(tab.path)?.readOnly === true ? '1' : '0';
+      openFileDecorations.push(`${tab.path}:${status}:${externalChangeType}:${isReadOnly}`);
+    }
+    return openFileDecorations.join('\u0000');
+  }, [externalChangeEntries, gitStatusByPath, orderedOpenFiles]);
+
   const renderedOpenFileTabs = useMemo(() => {
     if (orderedOpenFiles.length === 0) {
       return (
@@ -22860,8 +22865,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const renderedTabs: React.ReactNode[] = [];
     for (const tab of orderedOpenFiles) {
       const isTabActive = tab.path === activeFilePath;
-      const tabStatus = getEntryStatus(tab.path, 'file');
-      const externalChangeEntry = externalChangesByPath.get(tab.path);
+      const tabStatus = gitStatusByPathRef.current[tab.path]?.status;
+      const externalChangeEntry = externalChangeStateRef.current.entriesByPath.get(tab.path);
       const tabMeta = fileMetaRef.current.get(tab.path);
       const isReadOnlyTab = tabMeta?.readOnly === true;
       const entryTextClassName = tabStatus
@@ -22892,9 +22897,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
     activeFilePath,
     activateFile,
     closeFileTab,
-    externalChangesByPath,
-    getEntryStatus,
     getFileLabel,
+    openFileTabDecorationsKey,
     orderedOpenFiles,
     renderFileContextMenu,
     rootPath,
