@@ -11553,10 +11553,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       return true;
     }
 
-    await flushPendingLanguageSync(filePath);
+    const pendingLanguageChangeSync = flushPendingLanguageSync(filePath);
     let qualityGateStateBeforeWrite: CodePaneSaveQualityState | null = null;
     let didWriteIntermediateFiles = false;
     if (!options?.skipQualityPipeline && hasSaveQualityPipelineEnabled) {
+      await pendingLanguageChangeSync;
       persistQualityGateState(createSaveQualityState({
         status: 'running',
         message: t('codePane.saveQualityRunning'),
