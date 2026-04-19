@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { FileCode2, Plus, Settings } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { useWindowStore } from '../stores/windowStore';
@@ -10,7 +10,6 @@ import { WindowStatus, type Window } from '../types/window';
 import { useI18n } from '../i18n';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { StatusDot } from './StatusDot';
-import { getGroupStatus } from '../../shared/utils/status-utils';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import type { WindowGroup } from '../../shared/types/window-group';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
@@ -37,6 +36,14 @@ type SidebarItem =
   | { kind: 'group'; id: string; status: WindowStatus; group: WindowGroup; archived: boolean }
   | { kind: 'window'; id: string; status: WindowStatus; window: Window; archived: boolean };
 
+type SidebarWindowIndex = {
+  groupWindowIdsByGroupId: Map<string, string[]>;
+  groupStatusById: Map<string, WindowStatus>;
+  windowById: Map<string, Window>;
+  windowKindById: Map<string, NonNullable<Window['kind']>>;
+  windowStatusById: Map<string, WindowStatus>;
+};
+
 const sidebarTooltipClassName =
   'z-[1100] rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur';
 const sidebarIconButtonClassName =
@@ -52,6 +59,37 @@ function isSidebarVisibleStatus(status: WindowStatus): boolean {
     status === WindowStatus.WaitingForInput ||
     status === WindowStatus.Restoring
   );
+}
+
+function getStatusPriority(status: WindowStatus): number {
+  switch (status) {
+    case WindowStatus.Running:
+      return 4;
+    case WindowStatus.WaitingForInput:
+      return 3;
+    case WindowStatus.Restoring:
+    case WindowStatus.Paused:
+      return 2;
+    case WindowStatus.Completed:
+    case WindowStatus.Error:
+    default:
+      return 1;
+  }
+}
+
+function getHighestStatus(statuses: WindowStatus[]): WindowStatus {
+  let highestStatus = WindowStatus.Completed;
+  let highestPriority = 0;
+
+  statuses.forEach((status) => {
+    const priority = getStatusPriority(status);
+    if (priority > highestPriority) {
+      highestStatus = status;
+      highestPriority = priority;
+    }
+  });
+
+  return highestStatus;
 }
 
 /**
@@ -86,6 +124,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [isCreateWindowDialogOpen, setIsCreateWindowDialogOpen] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const isResizingRef = useRef(false);
+  const sidebarWidthRef = useRef(sidebarWidth);
+  if (!isResizingRef.current) {
+    sidebarWidthRef.current = sidebarWidth;
+  }
 
   const activeWindows = useMemo(
     () => getPersistableWindows(windows).filter((window) => !window.archived),
@@ -103,21 +146,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
     () => groups.filter((group) => group.archived),
     [groups],
   );
+  const sidebarWindowIndex = useMemo<SidebarWindowIndex>(() => {
+    const windowById = new Map(windows.map((window) => [window.id, window]));
+    const windowKindById = new Map<string, NonNullable<Window['kind']>>();
+    const windowStatusById = new Map<string, WindowStatus>();
+    const groupWindowIdsByGroupId = new Map<string, string[]>();
+    const groupStatusById = new Map<string, WindowStatus>();
 
-  const activeGroupedWindowIds = useMemo(
-    () => new Set(activeGroups.flatMap((group) => getAllWindowIds(group.layout))),
-    [activeGroups],
-  );
-  const archivedGroupedWindowIds = useMemo(
-    () => new Set(archivedGroups.flatMap((group) => getAllWindowIds(group.layout))),
-    [archivedGroups],
-  );
+    windows.forEach((window) => {
+      windowKindById.set(window.id, getWindowKind(window));
+      windowStatusById.set(window.id, getAggregatedStatus(window.layout));
+    });
+
+    groups.forEach((group) => {
+      const windowIds = getAllWindowIds(group.layout);
+      groupWindowIdsByGroupId.set(group.id, windowIds);
+      groupStatusById.set(group.id, getHighestStatus(
+        windowIds
+          .map((windowId) => windowStatusById.get(windowId))
+          .filter((status): status is WindowStatus => Boolean(status)),
+      ));
+    });
+
+    return {
+      groupWindowIdsByGroupId,
+      groupStatusById,
+      windowById,
+      windowKindById,
+      windowStatusById,
+    };
+  }, [groups, windows]);
+  const activeGroupedWindowIds = useMemo(() => {
+    const ids = new Set<string>();
+    activeGroups.forEach((group) => {
+      sidebarWindowIndex.groupWindowIdsByGroupId.get(group.id)?.forEach((windowId) => ids.add(windowId));
+    });
+    return ids;
+  }, [activeGroups, sidebarWindowIndex.groupWindowIdsByGroupId]);
+  const archivedGroupedWindowIds = useMemo(() => {
+    const ids = new Set<string>();
+    archivedGroups.forEach((group) => {
+      sidebarWindowIndex.groupWindowIdsByGroupId.get(group.id)?.forEach((windowId) => ids.add(windowId));
+    });
+    return ids;
+  }, [archivedGroups, sidebarWindowIndex.groupWindowIdsByGroupId]);
 
   const activeItems = useMemo<SidebarItem[]>(() => {
     const items: SidebarItem[] = [];
 
     for (const group of activeGroups) {
-      const status = getGroupStatus(group, windows);
+      const status = sidebarWindowIndex.groupStatusById.get(group.id) ?? WindowStatus.Completed;
       if (!isSidebarVisibleStatus(status)) {
         continue;
       }
@@ -130,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         continue;
       }
 
-      const status = getAggregatedStatus(w.layout);
+      const status = sidebarWindowIndex.windowStatusById.get(w.id) ?? WindowStatus.Completed;
       if (!isSidebarVisibleStatus(status)) {
         continue;
       }
@@ -139,13 +217,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     return items;
-  }, [activeGroupedWindowIds, activeGroups, activeWindows, windows]);
+  }, [activeGroupedWindowIds, activeGroups, activeWindows, sidebarWindowIndex]);
 
   const archivedItems = useMemo<SidebarItem[]>(() => {
     const items: SidebarItem[] = [];
 
     for (const group of archivedGroups) {
-      const status = getGroupStatus(group, windows);
+      const status = sidebarWindowIndex.groupStatusById.get(group.id) ?? WindowStatus.Completed;
       if (!isSidebarVisibleStatus(status)) {
         continue;
       }
@@ -158,7 +236,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         continue;
       }
 
-      const status = getAggregatedStatus(w.layout);
+      const status = sidebarWindowIndex.windowStatusById.get(w.id) ?? WindowStatus.Completed;
       if (!isSidebarVisibleStatus(status)) {
         continue;
       }
@@ -167,7 +245,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     return items;
-  }, [archivedGroupedWindowIds, archivedGroups, archivedWindows, windows]);
+  }, [archivedGroupedWindowIds, archivedGroups, archivedWindows, sidebarWindowIndex]);
 
   // 按窗口类型分类（和主界面保持一致）
   const { localWindows, sshWindows } = useMemo(() => {
@@ -176,7 +254,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     for (const item of activeItems) {
       if (item.kind === 'window') {
-        const windowKind = getWindowKind(item.window);
+        const windowKind = sidebarWindowIndex.windowKindById.get(item.id) ?? 'local';
         if (windowKind === 'ssh') {
           ssh.push(item);
         } else {
@@ -184,10 +262,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
       } else {
         // 组：根据组内窗口类型分类
-        const windowIds = getAllWindowIds(item.group.layout);
-        const groupWindows = windows.filter(w => windowIds.includes(w.id));
-        const hasLocal = groupWindows.some(w => getWindowKind(w) !== 'ssh');
-        const hasSsh = groupWindows.some(w => getWindowKind(w) === 'ssh');
+        const windowIds = sidebarWindowIndex.groupWindowIdsByGroupId.get(item.id) ?? [];
+        let hasLocal = false;
+        let hasSsh = false;
+
+        windowIds.forEach((windowId) => {
+          if (!sidebarWindowIndex.windowById.has(windowId)) {
+            return;
+          }
+
+          const windowKind = sidebarWindowIndex.windowKindById.get(windowId) ?? 'local';
+          if (windowKind === 'ssh') {
+            hasSsh = true;
+          } else {
+            hasLocal = true;
+          }
+        });
 
         if (hasLocal) {
           local.push(item);
@@ -199,7 +289,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     return { localWindows: local, sshWindows: ssh };
-  }, [activeItems, windows]);
+  }, [activeItems, sidebarWindowIndex]);
 
   const allItems = useMemo(
     () => [...activeItems, ...archivedItems],
@@ -222,28 +312,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return allItems;
   }, [allItems, archivedItems, localWindows, sshWindows, terminalSidebarFilter]);
 
-  // 处理宽度调整
-  useEffect(() => {
-    if (!isResizing) return undefined;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.max(150, Math.min(400, e.clientX));
-      setSidebarWidth(newWidth);
-    };
-
-    const handleMouseUp = () => {
-      setIsResizing(false);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isResizing, setSidebarWidth]);
-
   const handleWindowContextMenu = (windowId: string, e: React.MouseEvent) => {
     e.preventDefault();
     onWindowContextMenu?.(windowId, e);
@@ -253,12 +321,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setIsCreateWindowDialogOpen(true);
   }, []);
 
+  const applySidebarWidthPreview = useCallback((width: number) => {
+    if (!sidebarRef.current) {
+      return;
+    }
+
+    sidebarRef.current.style.width = `${width}px`;
+  }, []);
+
+  const handleResizeMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    const startWidth = sidebarWidthRef.current;
+    const startX = event.clientX;
+    let nextWidth = startWidth;
+
+    isResizingRef.current = true;
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const handleMouseMove = (mouseEvent: MouseEvent) => {
+      nextWidth = Math.max(150, Math.min(400, startWidth + mouseEvent.clientX - startX));
+      sidebarWidthRef.current = nextWidth;
+      applySidebarWidthPreview(nextWidth);
+    };
+
+    const cleanup = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    const handleMouseUp = () => {
+      cleanup();
+      isResizingRef.current = false;
+      setIsResizing(false);
+      setSidebarWidth(nextWidth);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [applySidebarWidthPreview, setSidebarWidth]);
+
   const renderSidebarItem = (item: SidebarItem) => {
     if (item.kind === 'group') {
       return (
         <SidebarGroupItem
           key={item.id}
           group={item.group}
+          status={item.status}
           isActive={item.id === activeGroupId}
           isExpanded={sidebarExpanded}
           onClick={() => onGroupSelect?.(item.id)}
@@ -281,8 +394,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       ref={sidebarRef}
-      className="flex flex-shrink-0 border-r border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--sidebar))_98%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] transition-all duration-250 ease-in-out"
-      style={{ width: sidebarExpanded ? `${sidebarWidth}px` : '32px' }}
+      className={`flex flex-shrink-0 border-r border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--sidebar))_98%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] ${
+        isResizing ? '' : 'transition-all duration-250 ease-in-out'
+      }`}
+      style={{ width: sidebarExpanded ? `${sidebarWidthRef.current}px` : '32px' }}
     >
       {/* 侧边栏内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -468,7 +583,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {sidebarExpanded && (
         <div
           className="w-1 cursor-col-resize bg-transparent transition-colors hover:bg-[rgb(var(--primary))]/60"
-          onMouseDown={() => setIsResizing(true)}
+          onMouseDown={handleResizeMouseDown}
           aria-label="调整侧边栏宽度"
         />
       )}
@@ -491,6 +606,7 @@ Sidebar.displayName = 'Sidebar';
  */
 interface SidebarGroupItemProps {
   group: import('../../shared/types/window-group').WindowGroup;
+  status: WindowStatus;
   isActive: boolean;
   isExpanded: boolean;
   onClick: () => void;
@@ -498,14 +614,13 @@ interface SidebarGroupItemProps {
 
 const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
   group,
+  status,
   isActive,
   isExpanded,
   onClick,
 }) => {
   const { t } = useI18n();
-  const windows = useWindowStore((state) => state.windows);
   const windowCount = getWindowCount(group.layout);
-  const aggregatedStatus = getGroupStatus(group, windows);
   const itemSurfaceClassName = isActive
     ? 'border-[rgb(var(--border))] bg-[rgb(var(--accent))]'
     : sidebarCardSurfaceClassName;
@@ -529,7 +644,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
               <div className="relative">
                 <TerminalTypeLogo variant="group" size="xs" />
                 <span className="absolute -bottom-1 -right-1">
-                  <StatusDot status={aggregatedStatus} size="sm" />
+                  <StatusDot status={status} size="sm" />
                 </span>
               </div>
             </button>
@@ -557,7 +672,7 @@ const SidebarGroupItem: React.FC<SidebarGroupItemProps> = ({
       <div className="relative mt-0.5 flex-shrink-0">
         <TerminalTypeLogo variant="group" size="sm" />
         <span className="absolute -bottom-1 -right-1">
-          <StatusDot status={aggregatedStatus} size="sm" />
+          <StatusDot status={status} size="sm" />
         </span>
       </div>
       <div className="flex-1 min-w-0">
