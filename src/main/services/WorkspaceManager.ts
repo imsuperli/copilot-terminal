@@ -11,6 +11,7 @@ import { PathValidator } from '../utils/pathValidator';
 import { normalizeShellProgram } from '../utils/shell';
 import { getSupportedIDEIds } from '../utils/ideScanner';
 import { isSessionlessPane } from '../../shared/utils/terminalCapabilities';
+import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 
 type PersistedPane = Omit<PaneNode['pane'], 'status' | 'pid'> & {
   status?: PaneNode['pane']['status'];
@@ -933,7 +934,10 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       terminal: {
         useBundledConptyDll: settings?.terminal?.useBundledConptyDll ?? defaults.terminal?.useBundledConptyDll ?? true,
         defaultShellProgram: normalizeShellProgram(settings?.terminal?.defaultShellProgram) ?? defaults.terminal?.defaultShellProgram ?? '',
+        fontFamily: settings?.terminal?.fontFamily ?? defaults.terminal?.fontFamily,
+        fontSize: settings?.terminal?.fontSize ?? defaults.terminal?.fontSize,
       },
+      appearance: normalizeAppearanceSettings(settings?.appearance ?? defaults.appearance),
       tmux: {
         enabled: settings?.tmux?.enabled ?? defaults.tmux?.enabled ?? true,
         autoInjectPath: settings?.tmux?.autoInjectPath ?? defaults.tmux?.autoInjectPath ?? true,
@@ -967,7 +971,9 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
       terminal: {
         useBundledConptyDll: true,
         defaultShellProgram: '',
+        fontSize: 14,
       },
+      appearance: DEFAULT_APPEARANCE_SETTINGS,
       tmux: {
         enabled: true,
         autoInjectPath: true,

@@ -17,6 +17,7 @@ import {
 } from '../utils/terminalLinks';
 import { AppTooltip } from './ui/AppTooltip';
 import { useWindowStore } from '../stores/windowStore';
+import { WORKSPACE_SETTINGS_UPDATED_EVENT } from '../utils/settingsEvents';
 import { setBrowserDropDragActive } from '../utils/browserDropDragState';
 import {
   applyTerminalInputToSSHCwdTracker,
@@ -174,7 +175,10 @@ function readRootCssColor(variableName: string, fallback: string): string {
 
 function getWindowsTerminalTheme() {
   return {
-    background: readRootCssColor('--terminal-background', '#0c0c0c'),
+    background: readRootCssColor(
+      '--terminal-background-effective',
+      readRootCssColor('--terminal-background', '#0c0c0c'),
+    ),
     foreground: readRootCssColor('--terminal-foreground', '#cccccc'),
     cursor: readRootCssColor('--terminal-cursor', '#f2f2f2'),
     cursorAccent: readRootCssColor('--terminal-cursor-accent', '#0c0c0c'),
@@ -728,6 +732,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         }
       }
 
+      if (settings.themeChanged && 'options' in terminal && terminal.options) {
+        terminal.options.theme = getWindowsTerminalTheme();
+      }
+
       // 重新调整大小以应用新的字体设置
       if (fitAddon) {
         requestAnimationFrame(() => {
@@ -740,6 +748,31 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     });
 
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) {
+      return undefined;
+    }
+
+    const handleWorkspaceSettingsUpdated = (event: Event) => {
+      const patch = (event as CustomEvent<{ appearance?: unknown } | undefined>).detail;
+      if (!patch?.appearance || !('options' in terminal) || !terminal.options) {
+        return;
+      }
+
+      terminal.options.theme = getWindowsTerminalTheme();
+      if (terminal.rows > 0 && typeof terminal.refresh === 'function') {
+        terminal.refresh(0, terminal.rows - 1);
+      }
+    };
+
+    window.addEventListener(WORKSPACE_SETTINGS_UPDATED_EVENT, handleWorkspaceSettingsUpdated);
+
+    return () => {
+      window.removeEventListener(WORKSPACE_SETTINGS_UPDATED_EVENT, handleWorkspaceSettingsUpdated);
+    };
   }, []);
 
   // 初始化 xterm.js
@@ -1250,7 +1283,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       }`}
       style={{
         ...activePaneStyle,
-        backgroundColor: 'var(--terminal-background)',
+        backgroundColor: 'color-mix(in srgb, var(--terminal-background) var(--appearance-terminal-opacity-percent, 88%), transparent)',
         filter: isActive || isHovered ? 'brightness(1.0)' : 'brightness(0.85)',
         transition: 'filter 0.2s ease-in-out',
       }}

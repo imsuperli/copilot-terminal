@@ -1589,12 +1589,13 @@ export type ElectronEventHandler<T> = (event: unknown, payload: T) => void;
 export type ElectronSignalHandler = (event: unknown) => void;
 
 export type SettingsPatch =
-  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'tmux' | 'features' | 'customCategories' | 'chat' | 'plugins'>>
+  & Partial<Omit<Settings, 'ides' | 'quickNav' | 'statusLine' | 'terminal' | 'appearance' | 'tmux' | 'features' | 'customCategories' | 'chat' | 'plugins'>>
   & {
     ides?: IDEConfig[];
     quickNav?: QuickNavConfig;
     statusLine?: Partial<StatusLineConfig>;
     terminal?: Partial<TerminalSettings>;
+    appearance?: Partial<Settings['appearance']>;
     tmux?: Partial<TmuxSettings>;
     features?: Partial<FeatureSettings>;
     customCategories?: CustomCategory[];

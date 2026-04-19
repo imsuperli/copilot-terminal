@@ -11,6 +11,7 @@ import { TerminalView } from './components/TerminalView';
 import { GroupView } from './components/GroupView';
 import { ViewSwitchError } from './components/ViewSwitchError';
 import { CleanupOverlay } from './components/CleanupOverlay';
+import { AppearanceBackdrop } from './components/AppearanceBackdrop';
 import { SSHHostKeyPromptDialog } from './components/SSHHostKeyPromptDialog';
 import { SSHPasswordPromptDialog } from './components/SSHPasswordPromptDialog';
 import { CustomTitleBar } from './components/CustomTitleBar';
@@ -24,6 +25,7 @@ import { WindowGroup } from '../shared/types/window-group';
 import { I18nProvider } from './i18n';
 import { SSHCredentialState, SSHProfile } from '../shared/types/ssh';
 import type { SettingsPatch } from '../shared/types/electron-api';
+import type { AppearanceSettings } from '../shared/types/appearance';
 import type {
   ClaudeModelUpdatedPayload,
   ProjectConfigUpdatedPayload,
@@ -51,6 +53,11 @@ import {
   logMountedTerminalObservation,
   markTerminalSwitchVisible,
 } from './utils/perfObservability';
+import {
+  applyAppearanceToDocument,
+  getAppearanceFromSettings,
+} from './utils/appearance';
+import { notifyTerminalSettingsUpdated } from './utils/terminalSettingsEvents';
 import { useShallow } from 'zustand/react/shallow';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
@@ -272,6 +279,7 @@ function AppContent() {
     name: 'Copilot-Terminal',
     version: '1.0.0',
   });
+  const [appearance, setAppearance] = useState<AppearanceSettings>(() => getAppearanceFromSettings());
   const [isStartupMaskVisible, setIsStartupMaskVisible] = useState(true);
   const [isStartupMaskHiding, setIsStartupMaskHiding] = useState(false);
   const sshPasswordPromptResolverRef = useRef<((password: string | null) => void) | null>(null);
@@ -279,6 +287,10 @@ function AppContent() {
   const startupMaskDismissedRef = useRef(false);
   const startupMaskHoldTimerRef = useRef<number | null>(null);
   const startupMaskRemoveTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    applyAppearanceToDocument(appearance);
+  }, [appearance]);
 
   // 获取应用版本信息
   useEffect(() => {
@@ -303,6 +315,7 @@ function AppContent() {
           setCurrentTab(response.data.defaultSidebarTab);
         }
         setSSHEnabled(response.data.features?.sshEnabled ?? true);
+        setAppearance(getAppearanceFromSettings(response.data));
         return;
       }
 
@@ -322,7 +335,23 @@ function AppContent() {
       const patch = (event as CustomEvent<SettingsPatch | undefined>).detail;
       if (typeof patch?.features?.sshEnabled === 'boolean') {
         setSSHEnabled(patch.features.sshEnabled);
-        return;
+      }
+
+      const appearancePatch = patch?.appearance;
+      if (appearancePatch) {
+        setAppearance((currentAppearance) => getAppearanceFromSettings({
+          appearance: {
+            ...currentAppearance,
+            ...appearancePatch,
+            skin: appearancePatch.skin
+              ? {
+                  ...currentAppearance.skin,
+                  ...appearancePatch.skin,
+                }
+              : currentAppearance.skin,
+          },
+        }));
+        notifyTerminalSettingsUpdated({ themeChanged: true });
       }
 
       void loadWorkspaceSettings();
@@ -1093,7 +1122,8 @@ function AppContent() {
   }, [currentView, activeGroupId, activeWindowGitBranch]);
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="relative flex h-screen flex-col overflow-hidden">
+      <AppearanceBackdrop appearance={appearance} />
       {/* 自定义标题栏 */}
       <CustomTitleBar
         title={titleBarTitle}
@@ -1104,7 +1134,7 @@ function AppContent() {
       />
 
       {/* 内容区域 */}
-      <div className="flex-1 overflow-hidden">
+      <div className="relative z-10 flex-1 overflow-hidden">
         {/* 统一视图 - 淡入淡出 */}
         <div
           className="transition-opacity duration-300 h-full"

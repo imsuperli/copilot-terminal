@@ -49,6 +49,11 @@
     --terminal-cursor: #f2f2f2;
     --terminal-cursor-accent: #0c0c0c;
     --terminal-selection: rgba(204, 204, 204, 0.28);
+    --terminal-background-effective: #0c0c0c;
+    --appearance-terminal-opacity: 0.88;
+    --appearance-terminal-opacity-percent: 88%;
+    --appearance-skin-dim: 0.52;
+    --appearance-skin-blur: 0px;
 
     --terminal-black: #0c0c0c;
     --terminal-red: #c50f1f;

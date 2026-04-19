@@ -4,6 +4,7 @@ const TERMINAL_SETTINGS_UPDATED_EVENT = 'terminal-settings-updated';
 export interface TerminalFontSettings {
   fontFamily?: string;
   fontSize?: number;
+  themeChanged?: boolean;
 }
 
 export function notifyTerminalSettingsUpdated(settings: TerminalFontSettings): void {

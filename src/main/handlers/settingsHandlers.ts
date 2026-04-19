@@ -10,6 +10,7 @@ import { IDEConfig } from '../types/workspace';
 import { scanAvailableShellPrograms } from '../utils/shell';
 import type { ChatSettings, LLMProviderConfig } from '../../shared/types/chat';
 import type { Settings, Workspace } from '../types/workspace';
+import { normalizeAppearanceSettings } from '../../shared/utils/appearance';
 
 /**
  * 从 macOS .app bundle 的 Info.plist 中提取 .icns 图标路径
@@ -67,6 +68,19 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           }
         : workspace.settings.terminal;
 
+      const appearanceSettings = settings?.appearance
+        ? normalizeAppearanceSettings({
+            ...workspace.settings.appearance,
+            ...settings.appearance,
+            skin: settings.appearance.skin
+              ? {
+                  ...workspace.settings.appearance?.skin,
+                  ...settings.appearance.skin,
+                }
+              : workspace.settings.appearance?.skin,
+          })
+        : workspace.settings.appearance;
+
       const tmuxSettings = settings?.tmux
         ? {
             ...workspace.settings.tmux,
@@ -112,6 +126,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
           ...workspace.settings,
           ...settings,
           terminal: terminalSettings,
+          appearance: appearanceSettings,
           tmux: tmuxSettings,
           features: featureSettings,
           plugins: pluginSettings,

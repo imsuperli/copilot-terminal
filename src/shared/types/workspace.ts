@@ -5,6 +5,7 @@ import { WindowGroup } from './window-group';
 import { CustomCategory } from './custom-category';
 import type { ChatSettings } from './chat';
 import type { WorkspacePluginSettings } from './plugin';
+import type { AppearanceSettings } from './appearance';
 
 export interface IDEConfig {
   id: string;
@@ -63,6 +64,7 @@ export interface Settings {
   quickNav?: QuickNavConfig;
   statusLine?: StatusLineConfig;
   terminal?: TerminalSettings;
+  appearance?: AppearanceSettings;
   tmux?: TmuxSettings;
   features?: FeatureSettings;
   customCategories?: CustomCategory[];
