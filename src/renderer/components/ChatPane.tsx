@@ -256,6 +256,8 @@ function MessageActionBar({
   onCopy,
   onRollback,
 }: MessageActionBarProps) {
+  const actionButtonClassName =
+    'inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_82%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors duration-150 hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]';
   return (
     <div className="pointer-events-none flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100">
       {onRollback ? (
@@ -265,7 +267,7 @@ function MessageActionBar({
           aria-label={rollbackLabel}
           onMouseDown={preventMouseButtonFocus}
           onClick={onRollback}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-zinc-800/90 bg-zinc-950/75 text-zinc-400 transition-colors duration-150 hover:border-zinc-700 hover:text-zinc-100"
+          className={actionButtonClassName}
         >
           <Undo2 size={13} strokeWidth={1.9} />
         </button>
@@ -276,7 +278,7 @@ function MessageActionBar({
         aria-label={copyLabel}
         onMouseDown={preventMouseButtonFocus}
         onClick={onCopy}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] border border-zinc-800/90 bg-zinc-950/75 text-zinc-400 transition-colors duration-150 hover:border-zinc-700 hover:text-zinc-100"
+        className={actionButtonClassName}
       >
         {copied ? <Check size={13} strokeWidth={2.2} /> : <Copy size={13} strokeWidth={1.9} />}
       </button>
