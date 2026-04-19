@@ -129,6 +129,9 @@ describe('SettingsPanel', () => {
     expect(await screen.findByText('纸页')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '可读性模式' })).toHaveTextContent('高可读');
     expect(screen.getByRole('combobox', { name: '终端透明度' })).toHaveTextContent('94%');
+    expect(screen.getByRole('combobox', { name: '背景遮罩' })).toHaveTextContent('62%');
+    expect(screen.getByRole('combobox', { name: '背景模糊' })).toHaveTextContent('0px');
+    expect(screen.getByRole('combobox', { name: '皮肤动效' })).toHaveTextContent('静态');
     expect(screen.getByRole('switch', { name: '减少动态效果' })).toHaveAttribute('data-state', 'unchecked');
 
     await user.click(screen.getByRole('button', { name: /曜石/ }));
@@ -159,6 +162,39 @@ describe('SettingsPanel', () => {
     expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
       appearance: expect.objectContaining({
         reduceMotion: true,
+      }),
+    });
+
+    await user.click(screen.getByRole('combobox', { name: '背景遮罩' }));
+    await user.click(await screen.findByText('42%'));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      appearance: expect.objectContaining({
+        skin: expect.objectContaining({
+          dim: 0.42,
+        }),
+      }),
+    });
+
+    await user.click(screen.getByRole('combobox', { name: '背景模糊' }));
+    await user.click(await screen.findByText('12px'));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      appearance: expect.objectContaining({
+        skin: expect.objectContaining({
+          blur: 12,
+        }),
+      }),
+    });
+
+    await user.click(screen.getByRole('combobox', { name: '皮肤动效' }));
+    await user.click(await screen.findByRole('option', { name: '缓慢流动' }));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      appearance: expect.objectContaining({
+        skin: expect.objectContaining({
+          motion: 'ambient',
+        }),
       }),
     });
   });

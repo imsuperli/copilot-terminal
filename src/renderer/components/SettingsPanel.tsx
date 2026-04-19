@@ -11,14 +11,14 @@ import { notifyTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { QuickNavItem } from '../../shared/types/quick-nav';
 import { FeatureSettings, IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
 import { KnownHostEntry } from '../../shared/types/ssh';
-import type { AppearanceReadabilityMode, AppearanceSettings, AppearanceThemeId } from '../../shared/types/appearance';
+import type { AppearanceReadabilityMode, AppearanceSettings, AppearanceSkinMotionMode, AppearanceThemeId } from '../../shared/types/appearance';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 import { useI18n } from '../i18n';
 import type { TranslationKey } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
 import { ChatSettingsTab } from './ChatSettingsTab';
 import { PluginCenter } from './settings/PluginCenter';
-import { applyAppearanceToDocument, getAppearanceSkinStyle } from '../utils/appearance';
+import { applyAppearanceToDocument, getAppearanceBackdropDescriptor, getAppearanceSkinStyle } from '../utils/appearance';
 
 interface ShellProgramOption {
   command: string;
@@ -50,6 +50,9 @@ const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
 };
 
 const APPEARANCE_OPACITY_OPTIONS = [0.72, 0.82, 0.88, 0.94];
+const APPEARANCE_SKIN_DIM_OPTIONS = [0.28, 0.42, 0.52, 0.64, 0.76];
+const APPEARANCE_SKIN_BLUR_OPTIONS = [0, 6, 12, 18];
+const APPEARANCE_SKIN_MOTION_MODES: AppearanceSkinMotionMode[] = ['none', 'ambient'];
 
 const APPEARANCE_THEME_PRESETS: Array<{
   id: AppearanceThemeId;
@@ -150,6 +153,32 @@ function isSameSkinPreset(currentSkin: AppearanceSettings['skin'], presetSkin: A
   }
 
   return currentSkin.presetId === presetSkin.presetId && currentSkin.gradient === presetSkin.gradient;
+}
+
+function getNumericOptionsWithCurrent(options: number[], currentValue: number): number[] {
+  if (options.includes(currentValue)) {
+    return options;
+  }
+
+  return [...options, currentValue].sort((left, right) => left - right);
+}
+
+function AppearanceSkinPreview({ appearance }: { appearance: AppearanceSettings }) {
+  const descriptor = getAppearanceBackdropDescriptor(appearance);
+
+  return (
+    <>
+      <div className="absolute inset-0" style={descriptor.baseStyle} />
+      {descriptor.layers.map((layer, index) => (
+        <div
+          key={`${appearance.skin.presetId}:${appearance.skin.kind}:${index}`}
+          className={layer.className}
+          style={layer.style}
+        />
+      ))}
+      <div className="absolute inset-0 bg-black" style={descriptor.dimStyle} />
+    </>
+  );
 }
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) => {
@@ -821,6 +850,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     ? AUTO_SHELL_OPTION_VALUE
     : effectiveSelectedShell;
   const activeSkinPreset = APPEARANCE_SKIN_PRESETS.find((preset) => isSameSkinPreset(appearanceSettings.skin, preset.skin)) ?? APPEARANCE_SKIN_PRESETS[0];
+  const skinDimOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_DIM_OPTIONS, appearanceSettings.skin.dim);
+  const skinBlurOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_BLUR_OPTIONS, appearanceSettings.skin.blur);
   return (
     <Dialog.Root open={open} onOpenChange={handleSettingsOpenChange}>
       <Dialog.Portal>
@@ -1186,10 +1217,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             }`}
                           >
                             <div className="relative h-28 overflow-hidden rounded-[18px] border border-black/10 bg-[rgb(var(--background))]">
-                              <div className="absolute inset-0" style={{ background: preset.preview }} />
-                              <div
-                                className="absolute inset-0 bg-black"
-                                style={{ opacity: String(preset.skin.dim) }}
+                              <AppearanceSkinPreview
+                                appearance={{
+                                  ...appearanceSettings,
+                                  reduceMotion: true,
+                                  skin: preset.skin,
+                                }}
                               />
                               <div
                                 className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/10 px-4 py-3 text-sm shadow-[0_12px_28px_rgba(0,0,0,0.18)]"
@@ -1363,6 +1396,164 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           </Select.Portal>
                         </Select.Root>
                         <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.opacityDescription')}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <label htmlFor="appearance-skin-dim" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
+                          {t('settings.appearance.skinDimLabel')}
+                        </label>
+                        <Select.Root
+                          value={String(appearanceSettings.skin.dim)}
+                          onValueChange={(value) => handleAppearanceSettingsChange({
+                            skin: {
+                              ...appearanceSettings.skin,
+                              dim: Number(value),
+                            },
+                          })}
+                        >
+                          <Select.Trigger
+                            id="appearance-skin-dim"
+                            aria-label={t('settings.appearance.skinDimLabel')}
+                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                          >
+                            <Select.Value />
+                            <Select.Icon>
+                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                            </Select.Icon>
+                          </Select.Trigger>
+
+                          <Select.Portal>
+                            <Select.Content
+                              position="popper"
+                              side="bottom"
+                              align="start"
+                              sideOffset={6}
+                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                            >
+                              <Select.Viewport className="p-1">
+                                {skinDimOptions.map((value) => (
+                                  <Select.Item
+                                    key={value}
+                                    value={String(value)}
+                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                  >
+                                    <Select.ItemText>{t('settings.appearance.skinDimValue', { value: Math.round(value * 100) })}</Select.ItemText>
+                                    <Select.ItemIndicator>
+                                      <Check size={14} />
+                                    </Select.ItemIndicator>
+                                  </Select.Item>
+                                ))}
+                              </Select.Viewport>
+                            </Select.Content>
+                          </Select.Portal>
+                        </Select.Root>
+                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinDimDescription')}</p>
+                      </div>
+
+                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <label htmlFor="appearance-skin-blur" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
+                          {t('settings.appearance.skinBlurLabel')}
+                        </label>
+                        <Select.Root
+                          value={String(appearanceSettings.skin.blur)}
+                          onValueChange={(value) => handleAppearanceSettingsChange({
+                            skin: {
+                              ...appearanceSettings.skin,
+                              blur: Number(value),
+                            },
+                          })}
+                        >
+                          <Select.Trigger
+                            id="appearance-skin-blur"
+                            aria-label={t('settings.appearance.skinBlurLabel')}
+                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                          >
+                            <Select.Value />
+                            <Select.Icon>
+                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                            </Select.Icon>
+                          </Select.Trigger>
+
+                          <Select.Portal>
+                            <Select.Content
+                              position="popper"
+                              side="bottom"
+                              align="start"
+                              sideOffset={6}
+                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                            >
+                              <Select.Viewport className="p-1">
+                                {skinBlurOptions.map((value) => (
+                                  <Select.Item
+                                    key={value}
+                                    value={String(value)}
+                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                  >
+                                    <Select.ItemText>{t('settings.appearance.skinBlurValue', { value })}</Select.ItemText>
+                                    <Select.ItemIndicator>
+                                      <Check size={14} />
+                                    </Select.ItemIndicator>
+                                  </Select.Item>
+                                ))}
+                              </Select.Viewport>
+                            </Select.Content>
+                          </Select.Portal>
+                        </Select.Root>
+                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinBlurDescription')}</p>
+                      </div>
+
+                      <div className="rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] p-5">
+                        <label htmlFor="appearance-skin-motion" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
+                          {t('settings.appearance.skinMotionLabel')}
+                        </label>
+                        <Select.Root
+                          value={appearanceSettings.skin.motion}
+                          onValueChange={(value) => handleAppearanceSettingsChange({
+                            skin: {
+                              ...appearanceSettings.skin,
+                              motion: value as AppearanceSkinMotionMode,
+                            },
+                          })}
+                        >
+                          <Select.Trigger
+                            id="appearance-skin-motion"
+                            aria-label={t('settings.appearance.skinMotionLabel')}
+                            className="flex w-full items-center justify-between rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-4 py-3 text-left text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))] focus:outline-none focus:border-[rgb(var(--ring))]"
+                          >
+                            <Select.Value />
+                            <Select.Icon>
+                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                            </Select.Icon>
+                          </Select.Trigger>
+
+                          <Select.Portal>
+                            <Select.Content
+                              position="popper"
+                              side="bottom"
+                              align="start"
+                              sideOffset={6}
+                              className="z-[10000] w-[var(--radix-select-trigger-width)] overflow-hidden rounded-2xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] shadow-2xl"
+                            >
+                              <Select.Viewport className="p-1">
+                                {APPEARANCE_SKIN_MOTION_MODES.map((mode) => (
+                                  <Select.Item
+                                    key={mode}
+                                    value={mode}
+                                    className="flex cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-[rgb(var(--foreground))] outline-none transition-colors hover:bg-[rgb(var(--accent))]"
+                                  >
+                                    <Select.ItemText>{t(`settings.appearance.skinMotion.${mode}`)}</Select.ItemText>
+                                    <Select.ItemIndicator>
+                                      <Check size={14} />
+                                    </Select.ItemIndicator>
+                                  </Select.Item>
+                                ))}
+                              </Select.Viewport>
+                            </Select.Content>
+                          </Select.Portal>
+                        </Select.Root>
+                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinMotionDescription')}</p>
                       </div>
                     </div>
 
