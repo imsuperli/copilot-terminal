@@ -7,13 +7,13 @@ describe('EmptyState', () => {
   it('should render guidance text', () => {
     render(<EmptyState />);
 
-    expect(screen.getByText('创建你的第一个任务窗口')).toBeInTheDocument();
+    expect(screen.getByText('欢迎使用 Copilot-Terminal')).toBeInTheDocument();
   });
 
   it('should render create window button', () => {
     render(<EmptyState />);
 
-    const button = screen.getByRole('button', { name: '+ 新建窗口' });
+    const button = screen.getByRole('button', { name: /\+\s*新建终端/ });
     expect(button).toBeInTheDocument();
   });
 
@@ -23,7 +23,7 @@ describe('EmptyState', () => {
 
     render(<EmptyState onCreateWindow={handleCreateWindow} />);
 
-    const button = screen.getByRole('button', { name: '+ 新建窗口' });
+    const button = screen.getByRole('button', { name: /\+\s*新建终端/ });
     await user.click(button);
 
     expect(handleCreateWindow).toHaveBeenCalledTimes(1);
@@ -39,14 +39,14 @@ describe('EmptyState', () => {
   it('should render guidance text with correct styling', () => {
     render(<EmptyState />);
 
-    const text = screen.getByText('创建你的第一个任务窗口');
+    const text = screen.getByText('欢迎使用 Copilot-Terminal');
     expect(text).toHaveClass('text-xl', 'text-text-primary', 'mb-6');
   });
 
   it('should render button with primary variant', () => {
     render(<EmptyState />);
 
-    const button = screen.getByRole('button', { name: '+ 新建窗口' });
+    const button = screen.getByRole('button', { name: /\+\s*新建终端/ });
     expect(button).toHaveClass('text-lg', 'px-8', 'py-3');
   });
 
@@ -54,7 +54,7 @@ describe('EmptyState', () => {
     const user = userEvent.setup();
     render(<EmptyState />);
 
-    const button = screen.getByRole('button', { name: '+ 新建窗口' });
+    const button = screen.getByRole('button', { name: /\+\s*新建终端/ });
     
     // Should not throw error
     await user.click(button);

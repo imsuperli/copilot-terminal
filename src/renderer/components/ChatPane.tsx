@@ -23,6 +23,15 @@ import {
 } from '../utils/chatHistory';
 import { AgentTimeline } from './agent/AgentTimeline';
 import { renderMarkdownLike } from './agent/RichText';
+import {
+  idePopupBarePanelClassName,
+  idePopupCardClassName,
+  idePopupEmptyStateClassName,
+  idePopupInputClassName,
+  idePopupSecondaryButtonClassName,
+  idePopupSelectContentClassName,
+  idePopupSubtlePanelClassName,
+} from './ui/ide-popup';
 
 export interface ChatPaneProps {
   windowId: string;
@@ -129,6 +138,7 @@ function ControlSelect({
   children: React.ReactNode;
 }) {
   const hasIcon = Boolean(icon);
+  const selectClassName = `${idePopupInputClassName} h-9 min-w-0 w-full appearance-none rounded-[16px] py-0 pr-8 text-sm sm:w-auto`;
 
   return (
     <label className={`relative inline-flex max-w-full items-center ${minWidthClass}`}>
@@ -143,7 +153,7 @@ function ControlSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        className={`h-9 min-w-0 w-full appearance-none rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/90 pr-8 text-sm text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]/70 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto ${hasIcon ? 'pl-9' : 'pl-3'}`}
+        className={`${selectClassName} ${hasIcon ? 'pl-9' : 'pl-3'} disabled:cursor-not-allowed disabled:opacity-50`}
       >
         {children}
       </select>
@@ -312,7 +322,7 @@ function renderLegacyMessage(
           onCopy={onCopy}
           onRollback={onRollback}
         />
-        <div className="max-w-[78%] rounded-[22px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/95 px-4 py-3 sm:max-w-[68%]">
+        <div className={`${idePopupSubtlePanelClassName} max-w-[78%] rounded-[22px] px-4 py-3 sm:max-w-[68%]`}>
           <div className="space-y-2 text-[15px] leading-6 text-[rgb(var(--foreground))]">
             {renderMarkdownLike(message.content)}
           </div>
@@ -323,7 +333,7 @@ function renderLegacyMessage(
 
   if (message.toolResult) {
     return (
-      <div className="rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/90 px-4 py-3 text-[rgb(var(--foreground))]">
+      <div className={`${idePopupCardClassName} rounded-[20px] px-4 py-3 text-[rgb(var(--foreground))]`}>
         <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-[rgb(var(--foreground))]">
           {message.toolResult.content}
         </pre>
@@ -1496,7 +1506,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
   return (
     <div
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[rgb(var(--background))]"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_92%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_98%,transparent)_100%)]"
       onMouseDown={onActivate}
     >
       <div className="border-b border-[rgb(var(--border))] px-3 py-2">
@@ -1506,7 +1516,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               role="status"
               aria-label={sshSignalTitle}
               title={sshSignalTitle}
-              className="inline-flex h-6 items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-2"
+              className="inline-flex h-6 items-center rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-2"
             >
               <span
                 className={`h-2.5 w-2.5 rounded-full ${sshConnected ? 'bg-[rgb(var(--success))] shadow-[0_0_8px_rgba(22,198,12,0.45)]' : 'bg-[rgb(var(--destructive))] shadow-[0_0_8px_rgba(231,72,86,0.38)]'}`}
@@ -1535,7 +1545,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               {historyMenuOpen ? (
                 <div
                   ref={historyMenuRef}
-                  className="absolute right-0 top-[calc(100%+10px)] z-30 w-[320px] overflow-hidden rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/98 p-2 shadow-[0_30px_60px_-36px_rgba(0,0,0,0.95)]"
+                  className={`absolute right-0 top-[calc(100%+10px)] z-30 w-[320px] overflow-hidden rounded-[20px] p-2 ${idePopupSelectContentClassName}`}
                 >
                   <div className="px-2 pb-2 pt-1 text-[11px] font-medium tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
                     {t('chatPane.history')}
@@ -1551,7 +1561,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                             onClick={() => {
                               void handleRestoreConversation(entry);
                             }}
-                            className={`flex w-full flex-col rounded-[16px] px-3 py-2.5 text-left transition-colors ${isCurrentConversation ? 'bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))]' : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--secondary))]/80'}`}
+                            className={`flex w-full flex-col rounded-[16px] px-3 py-2.5 text-left transition-colors ${isCurrentConversation ? 'bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--foreground))]' : 'text-[rgb(var(--foreground))] hover:bg-[rgb(var(--accent))]'}`}
                           >
                             <span className="truncate text-[13px] font-medium leading-5">
                               {entry.title}
@@ -1607,7 +1617,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       >
         <div className="mx-auto flex min-h-full w-full max-w-[860px] flex-col">
           {!settingsLoaded ? (
-            <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/80 px-5 py-4 text-sm text-[rgb(var(--muted-foreground))]">
+            <div className={`${idePopupCardClassName} rounded-[24px] px-5 py-4 text-sm text-[rgb(var(--muted-foreground))]`}>
               {t('common.loading')}
             </div>
           ) : providers.length === 0 ? (
@@ -1616,7 +1626,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 <Sparkles size={15} />
               </div>
               <div className="max-w-3xl">
-                <div className="inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
+                <div className="inline-flex items-center rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
                   {assistantLabel}
                 </div>
                 <div className="mt-4 text-[15px] leading-7 text-[rgb(var(--foreground))]">{t('chatPane.noProviderTitle')}</div>
@@ -1665,7 +1675,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
           ) : (
             <div className="flex flex-1 items-center justify-center py-10">
               <div className="flex max-w-[520px] flex-col items-center text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))]/85 text-[rgb(var(--foreground))] shadow-[0_18px_45px_-28px_rgba(0,0,0,0.9)]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--foreground))] shadow-[0_18px_45px_-28px_rgba(0,0,0,0.9)]">
                   <Sparkles size={18} />
                 </div>
                 <div className="mt-6 text-[28px] font-semibold tracking-[-0.03em] text-[rgb(var(--foreground))] sm:text-[32px]">
@@ -1688,7 +1698,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
             </div>
           )}
 
-          <div className="rounded-[24px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]/95 p-2.5 shadow-[0_24px_50px_-38px_rgba(0,0,0,0.98)]">
+          <div className={`${idePopupCardClassName} rounded-[24px] p-2.5 shadow-[0_24px_50px_-38px_rgba(0,0,0,0.98)]`}>
             <textarea
               value={composerValue}
               onChange={(event) => setComposerValue(event.target.value)}
@@ -1721,7 +1731,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     onClick={() => {
                       void handleCancelStreaming();
                     }}
-                    className="inline-flex h-9 items-center gap-2 rounded-[16px] border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-4 text-sm font-medium text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                    className={`${idePopupSecondaryButtonClassName} inline-flex h-9 items-center gap-2 rounded-[16px] px-4 text-sm font-medium`}
                   >
                     <Square size={12} />
                     {t('chatPane.cancel')}

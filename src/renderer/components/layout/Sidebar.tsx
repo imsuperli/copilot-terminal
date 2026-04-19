@@ -14,6 +14,11 @@ import { getOwnedEphemeralSSHWindowIds, getPersistableWindows } from '../../util
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
 import { getSidebarCardCounts, getVisibleStandaloneWindows } from '../../utils/cardCollection';
+import {
+  idePopupInputClassName,
+  idePopupSecondaryButtonClassName,
+  idePopupSurfaceClassName,
+} from '../ui/ide-popup';
 
 const LazySettingsPanel = lazy(async () => ({
   default: (await import('../SettingsPanel')).SettingsPanel,
@@ -110,9 +115,9 @@ export function Sidebar({
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
-  const sidebarTooltipClass = 'rounded border border-[rgb(var(--border))] bg-[rgb(var(--card))] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl z-[1100]';
-  const sidebarInputClass = 'rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:outline-none focus:ring-1 focus:ring-[rgb(var(--ring))] focus:border-transparent transition-all';
-  const sidebarInlineInputClass = 'rounded border border-[rgb(var(--border))] bg-[rgb(var(--secondary))] px-1.5 py-0.5 text-sm text-[rgb(var(--foreground))] placeholder:text-[rgb(var(--muted-foreground))] focus:outline-none focus:border-[rgb(var(--ring))]';
+  const sidebarTooltipClass = `${idePopupSurfaceClassName} z-[1100] rounded px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl`;
+  const sidebarInputClass = `${idePopupInputClassName} rounded-md px-2 py-1.5 text-[rgb(var(--foreground))] focus:ring-1 focus:ring-[rgb(var(--ring))] focus:border-transparent`;
+  const sidebarInlineInputClass = `${idePopupInputClassName} rounded px-1.5 py-0.5 text-sm focus:border-[rgb(var(--ring))] focus:ring-0`;
   const sidebarIconButtonClass = 'rounded transition-colors text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]';
 
   // 从 settings 同步分类数据
@@ -784,7 +789,7 @@ export function Sidebar({
             return (
               <button
                 onClick={() => setIsConfirmDialogOpen(true)}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-[rgb(var(--secondary))] px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:bg-red-600 hover:text-white"
+                className="w-full flex items-center justify-center gap-2 rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-4 py-2 text-[rgb(var(--muted-foreground))] transition-colors hover:border-red-500/40 hover:bg-red-600 hover:text-white"
 
               >
                 <Trash2 className="h-4 w-4" />

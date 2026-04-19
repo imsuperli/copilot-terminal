@@ -44,7 +44,7 @@ export function DeleteWindowDialog({
       onOpenChange={onOpenChange}
       title={t('windowDelete.title')}
       description={t('windowDelete.description', { name: windowName })}
-      contentClassName="max-w-[560px] rounded-[20px] border border-[rgb(var(--border))] bg-[rgb(var(--card))]"
+      contentClassName="max-w-[560px] rounded-[20px] border border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_94%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] backdrop-blur-xl"
       bodyClassName="space-y-4"
       showCloseButton
       closeLabel={t('common.close')}

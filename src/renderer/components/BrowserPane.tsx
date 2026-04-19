@@ -8,9 +8,14 @@ import { DEFAULT_BROWSER_URL, normalizeBrowserInput } from '../utils/browserPane
 import { logBrowserDnd } from '../utils/browserDndDebug';
 import { isAllowedBrowserUrl, sanitizeBrowserUrl } from '../../shared/utils/browserUrls';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
+import {
+  idePopupIconButtonClassName,
+  idePopupInputClassName,
+  idePopupSubtlePanelClassName,
+} from './ui/ide-popup';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
-const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-[rgb(var(--background))]';
+const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)]';
 const BLANK_PAGE_THEME_CSS = `
   :root { color-scheme: dark; }
   html, body {
@@ -398,12 +403,12 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   return (
     <div
       className={`
-        relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-[rgb(var(--border))] bg-[rgb(var(--background))]
+        relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_92%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_98%,transparent)_100%)]
       `}
       style={{ opacity: isDragging ? 0.45 : 1 }}
       onMouseDownCapture={handleMouseDownCapture}
     >
-      <div className="flex items-center gap-1 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] px-2 py-1.5">
+      <div className={`flex items-center gap-1 border-b border-[rgb(var(--border))] px-2 py-1.5 ${idePopupSubtlePanelClassName}`}>
         <div
           data-browser-drag-handle="true"
           ref={dragHandleRef ?? undefined}
@@ -471,7 +476,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
         </div>
 
         <form className="min-w-0 flex-1" onSubmit={handleSubmit}>
-          <label className="flex h-7 items-center gap-2 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_82%,transparent)] px-2 text-[rgb(var(--foreground))] focus-within:border-[rgb(var(--ring))]/60">
+          <label className={`${idePopupInputClassName} flex h-7 items-center gap-2 rounded-md px-2 py-0 text-[rgb(var(--foreground))] focus-within:border-[rgb(var(--ring))]/60 focus-within:ring-0`}>
             <Globe size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
             <input
               ref={addressInputRef}
@@ -509,7 +514,7 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
                   event.stopPropagation();
                   onClose();
                 }}
-                className={browserCloseButtonClassName}
+                className={`${browserCloseButtonClassName} ${idePopupIconButtonClassName}`}
               >
                 <X size={13} />
               </button>

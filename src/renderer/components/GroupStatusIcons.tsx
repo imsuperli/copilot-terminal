@@ -8,6 +8,7 @@ import { getAllPanes } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
 import { getStatusLabelKey } from '../utils/statusHelpers';
 import { useI18n } from '../i18n';
+import { idePopupSurfaceClassName } from './ui/ide-popup';
 
 const MAX_ICONS = 5;
 
@@ -67,7 +68,7 @@ export const GroupStatusIcons: React.FC<GroupStatusIconsProps> = React.memo(({
             </Tooltip.Trigger>
             <Tooltip.Portal>
               <Tooltip.Content
-                className="bg-[rgb(var(--card))] text-[rgb(var(--foreground))] px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-[rgb(var(--border))]"
+                className={`${idePopupSurfaceClassName} z-[1100] rounded px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl`}
                 side="top"
                 sideOffset={5}
               >
