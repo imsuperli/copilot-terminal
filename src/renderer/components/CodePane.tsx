@@ -22905,118 +22905,117 @@ export const CodePane: React.FC<CodePaneProps> = ({
     t,
   ]);
 
-  const renderedSidebarContent = useMemo(() => {
-    if (!isSidebarVisible) {
-      return null;
-    }
+  const renderedFilesSidebarContent = useMemo(() => (
+    <FilesSidebarContent
+      scrollRef={filesSidebarScrollRef}
+      searchQuery={searchQuery}
+      isSearching={isSearching}
+      body={renderedFilesSidebarBody}
+      onSearchQueryChange={handleFilesSearchQueryChange}
+      t={t}
+    />
+  ), [
+    handleFilesSearchQueryChange,
+    isSearching,
+    renderedFilesSidebarBody,
+    searchQuery,
+    t,
+  ]);
 
-    if (sidebarMode === 'files') {
-      return (
-        <FilesSidebarContent
-          scrollRef={filesSidebarScrollRef}
-          searchQuery={searchQuery}
-          isSearching={isSearching}
-          body={renderedFilesSidebarBody}
-          onSearchQueryChange={handleFilesSearchQueryChange}
-          t={t}
-        />
-      );
-    }
-
-    if (sidebarMode === 'search') {
-      return (
-        <SearchSidebarContent
-          mode={searchPanelMode}
-          contentQuery={contentSearchQuery}
-          contentGroups={contentSearchGroups}
-          deferredContentQuery={deferredContentSearchQuery}
-          contentError={contentSearchError}
-          isContentSearching={isContentSearching}
-          workspaceSymbolQuery={workspaceSymbolQuery}
-          deferredWorkspaceSymbolQuery={deferredWorkspaceSymbolQuery}
-          workspaceSymbolResults={workspaceSymbolResults}
-          workspaceSymbolError={workspaceSymbolError}
-          isWorkspaceSymbolSearching={isWorkspaceSymbolSearching}
-          usageGroups={usageGroups}
-          usageError={usageError}
-          usagesTargetLabel={usagesTargetLabel}
-          isFindingUsages={isFindingUsages}
-          rootPath={rootPath}
-          onModeChange={handleSearchPanelModeChange}
-          onContentQueryChange={handleContentSearchQueryChange}
-          onWorkspaceSymbolQueryChange={handleWorkspaceSymbolQueryChange}
-          onFindUsages={handleEditorActionFindUsages}
-          onActivateFile={activateFile}
-          onOpenContentMatch={openContentSearchMatch}
-          onOpenFileLocation={openFileLocation}
-          t={t}
-        />
-      );
-    }
-
-    if (sidebarMode === 'scm') {
-      return (
-        <ScmSidebarContent
-          repositorySummary={gitRepositorySummary}
-          branchLabel={gitSummaryBranchLabel}
-          operationLabel={gitOperationLabel}
-          entries={scmEntries}
-          selectedPath={selectedGitChangePath}
-          selectedEntry={selectedScmEntry}
-          selectedRelativePath={selectedGitChangeRelativePath}
-          rootPath={rootPath}
-          gitGraphCount={gitGraph.length}
-          showInlineChanges={!(bottomPanelMode === 'git' && activeGitWorkbenchTab === 'changes')}
-          canCopyBranchName={Boolean(currentGitBranch?.name || gitRepositorySummary?.headSha)}
-          onRefreshStatus={handleScmRefreshStatus}
-          onOpenRepository={handleScmOpenRepository}
-          onCopyBranchName={handleScmCopyBranchName}
-          onStageAll={handleScmStageAll}
-          onStash={handleScmStash}
-          onNewBranch={handleScmNewBranch}
-          onCheckoutRevision={handleScmCheckoutRevision}
-          onRebaseContinue={handleScmRebaseContinue}
-          onRebaseAbort={handleScmRebaseAbort}
-          onOpenCommit={handleScmOpenCommit}
-          onOpenChangesWorkbench={handleScmOpenChangesWorkbench}
-          onOpenGitLog={handleScmOpenGitLog}
-          onSelectEntry={handleScmSelectEntry}
-          onOpenDiff={handleGitOpenFileDiff}
-          onStagePath={handleGitStagePath}
-          onUnstagePath={handleGitUnstagePath}
-          onDiscardPath={handleGitWorkbenchDiscardPath}
-          t={t}
-        />
-      );
-    }
-
-
-    return (
-      <ProblemsSidebarContent
-        groups={problemGroups}
-        summary={problemSummary}
-        rootPath={rootPath}
-        onOpenFileLocation={openFileLocation}
-        t={t}
-      />
-    );
-  }, [
+  const renderedSearchSidebarContent = useMemo(() => (
+    <SearchSidebarContent
+      mode={searchPanelMode}
+      contentQuery={contentSearchQuery}
+      contentGroups={contentSearchGroups}
+      deferredContentQuery={deferredContentSearchQuery}
+      contentError={contentSearchError}
+      isContentSearching={isContentSearching}
+      workspaceSymbolQuery={workspaceSymbolQuery}
+      deferredWorkspaceSymbolQuery={deferredWorkspaceSymbolQuery}
+      workspaceSymbolResults={workspaceSymbolResults}
+      workspaceSymbolError={workspaceSymbolError}
+      isWorkspaceSymbolSearching={isWorkspaceSymbolSearching}
+      usageGroups={usageGroups}
+      usageError={usageError}
+      usagesTargetLabel={usagesTargetLabel}
+      isFindingUsages={isFindingUsages}
+      rootPath={rootPath}
+      onModeChange={handleSearchPanelModeChange}
+      onContentQueryChange={handleContentSearchQueryChange}
+      onWorkspaceSymbolQueryChange={handleWorkspaceSymbolQueryChange}
+      onFindUsages={handleEditorActionFindUsages}
+      onActivateFile={activateFile}
+      onOpenContentMatch={openContentSearchMatch}
+      onOpenFileLocation={openFileLocation}
+      t={t}
+    />
+  ), [
     activateFile,
-    activeGitWorkbenchTab,
-    bottomPanelMode,
     contentSearchError,
     contentSearchGroups,
     contentSearchQuery,
-    currentGitBranch,
     deferredContentSearchQuery,
     deferredWorkspaceSymbolQuery,
+    handleContentSearchQueryChange,
+    handleEditorActionFindUsages,
+    handleSearchPanelModeChange,
+    handleWorkspaceSymbolQueryChange,
+    isContentSearching,
+    isFindingUsages,
+    isWorkspaceSymbolSearching,
+    openContentSearchMatch,
+    openFileLocation,
+    rootPath,
+    searchPanelMode,
+    t,
+    usageError,
+    usageGroups,
+    usagesTargetLabel,
+    workspaceSymbolError,
+    workspaceSymbolQuery,
+    workspaceSymbolResults,
+  ]);
+
+  const renderedScmSidebarContent = useMemo(() => (
+    <ScmSidebarContent
+      repositorySummary={gitRepositorySummary}
+      branchLabel={gitSummaryBranchLabel}
+      operationLabel={gitOperationLabel}
+      entries={scmEntries}
+      selectedPath={selectedGitChangePath}
+      selectedEntry={selectedScmEntry}
+      selectedRelativePath={selectedGitChangeRelativePath}
+      rootPath={rootPath}
+      gitGraphCount={gitGraph.length}
+      showInlineChanges={!(bottomPanelMode === 'git' && activeGitWorkbenchTab === 'changes')}
+      canCopyBranchName={Boolean(currentGitBranch?.name || gitRepositorySummary?.headSha)}
+      onRefreshStatus={handleScmRefreshStatus}
+      onOpenRepository={handleScmOpenRepository}
+      onCopyBranchName={handleScmCopyBranchName}
+      onStageAll={handleScmStageAll}
+      onStash={handleScmStash}
+      onNewBranch={handleScmNewBranch}
+      onCheckoutRevision={handleScmCheckoutRevision}
+      onRebaseContinue={handleScmRebaseContinue}
+      onRebaseAbort={handleScmRebaseAbort}
+      onOpenCommit={handleScmOpenCommit}
+      onOpenChangesWorkbench={handleScmOpenChangesWorkbench}
+      onOpenGitLog={handleScmOpenGitLog}
+      onSelectEntry={handleScmSelectEntry}
+      onOpenDiff={handleGitOpenFileDiff}
+      onStagePath={handleGitStagePath}
+      onUnstagePath={handleGitUnstagePath}
+      onDiscardPath={handleGitWorkbenchDiscardPath}
+      t={t}
+    />
+  ), [
+    activeGitWorkbenchTab,
+    bottomPanelMode,
+    currentGitBranch?.name,
     gitGraph.length,
     gitOperationLabel,
     gitRepositorySummary,
     gitSummaryBranchLabel,
-    handleContentSearchQueryChange,
-    handleEditorActionFindUsages,
-    handleFilesSearchQueryChange,
     handleGitOpenFileDiff,
     handleGitStagePath,
     handleGitUnstagePath,
@@ -23034,35 +23033,55 @@ export const CodePane: React.FC<CodePaneProps> = ({
     handleScmSelectEntry,
     handleScmStageAll,
     handleScmStash,
-    handleSearchPanelModeChange,
-    handleWorkspaceSymbolQueryChange,
-    isContentSearching,
-    isFindingUsages,
-    isSearching,
-    isSidebarVisible,
-    isWorkspaceSymbolSearching,
-    openContentSearchMatch,
-    openFileLocation,
-    problemGroups,
-    problemSummary.errorCount,
-    problemSummary.infoCount,
-    problemSummary.warningCount,
-    renderedFilesSidebarBody,
     rootPath,
     scmEntries,
-    searchPanelMode,
-    searchQuery,
     selectedGitChangePath,
     selectedGitChangeRelativePath,
     selectedScmEntry,
-    sidebarMode,
     t,
-    usageError,
-    usageGroups,
-    usagesTargetLabel,
-    workspaceSymbolError,
-    workspaceSymbolQuery,
-    workspaceSymbolResults,
+  ]);
+
+  const renderedProblemsSidebarContent = useMemo(() => (
+    <ProblemsSidebarContent
+      groups={problemGroups}
+      summary={problemSummary}
+      rootPath={rootPath}
+      onOpenFileLocation={openFileLocation}
+      t={t}
+    />
+  ), [
+    openFileLocation,
+    problemGroups,
+    problemSummary,
+    rootPath,
+    t,
+  ]);
+
+  const renderedSidebarContent = useMemo(() => {
+    if (!isSidebarVisible) {
+      return null;
+    }
+
+    if (sidebarMode === 'files') {
+      return renderedFilesSidebarContent;
+    }
+
+    if (sidebarMode === 'search') {
+      return renderedSearchSidebarContent;
+    }
+
+    if (sidebarMode === 'scm') {
+      return renderedScmSidebarContent;
+    }
+
+    return renderedProblemsSidebarContent;
+  }, [
+    isSidebarVisible,
+    renderedFilesSidebarContent,
+    renderedProblemsSidebarContent,
+    renderedScmSidebarContent,
+    renderedSearchSidebarContent,
+    sidebarMode,
   ]);
 
   const renderedSidebar = useMemo(() => {
