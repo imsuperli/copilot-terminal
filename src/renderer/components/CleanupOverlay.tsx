@@ -67,24 +67,24 @@ export const CleanupOverlay: React.FC = () => {
   const percentage = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center">
-      <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-8 shadow-2xl max-w-md w-full mx-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/72 backdrop-blur-sm">
+      <div className="mx-4 w-full max-w-md rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_92%,transparent)] p-8 shadow-2xl">
         <div className="flex items-center justify-center mb-6">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[rgb(var(--primary))]"></div>
         </div>
 
-        <h2 className="text-xl font-semibold text-center mb-4 text-zinc-100">
+        <h2 className="mb-4 text-center text-xl font-semibold text-[rgb(var(--foreground))]">
           {t('cleanup.title')}
         </h2>
 
         {progress.total > 0 && (
           <>
             <div className="mb-4">
-              <div className="flex justify-between text-sm text-zinc-400 mb-2">
+              <div className="mb-2 flex justify-between text-sm text-[rgb(var(--muted-foreground))]">
                 <span>{t('cleanup.progress')}</span>
                 <span>{progress.current} / {progress.total}</span>
               </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-[rgb(var(--secondary))]">
                 <div
                   className="bg-[rgb(var(--primary))] h-full transition-all duration-200 ease-out"
                   style={{ width: `${smoothProgress}%` }}
@@ -92,14 +92,14 @@ export const CleanupOverlay: React.FC = () => {
               </div>
             </div>
 
-            <p className="text-center text-sm text-zinc-400">
+            <p className="text-center text-sm text-[rgb(var(--muted-foreground))]">
               {t('cleanup.completed', { percentage })}
             </p>
           </>
         )}
 
         {progress.total === 0 && (
-          <p className="text-center text-sm text-zinc-400">
+          <p className="text-center text-sm text-[rgb(var(--muted-foreground))]">
             {t('cleanup.preparing')}
           </p>
         )}

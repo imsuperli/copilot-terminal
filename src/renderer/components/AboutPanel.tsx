@@ -69,17 +69,17 @@ export const AboutPanel: React.FC<AboutPanelProps> = ({
                   className="mb-4 h-20 w-20 rounded-2xl shadow-lg"
                 />
 
-                <div className="mb-1 text-xl font-semibold text-zinc-100">{appName}</div>
-                <div className="mb-6 text-sm text-zinc-400">{t('about.description', { appName })}</div>
+                <div className="mb-1 text-xl font-semibold text-[rgb(var(--foreground))]">{appName}</div>
+                <div className="mb-6 text-sm text-[rgb(var(--muted-foreground))]">{t('about.description', { appName })}</div>
 
-                <div className="w-full space-y-3 rounded-xl border border-zinc-700/80 bg-zinc-950/35 p-4 text-left">
+                <div className="w-full space-y-3 rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] p-4 text-left">
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-zinc-400">{t('about.version')}</span>
-                    <span className="text-sm font-medium text-zinc-100">{version}</span>
+                    <span className="text-sm text-[rgb(var(--muted-foreground))]">{t('about.version')}</span>
+                    <span className="text-sm font-medium text-[rgb(var(--foreground))]">{version}</span>
                   </div>
                   <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm text-zinc-400">{t('about.author')}</span>
-                    <span className="text-sm font-medium text-zinc-100">licheng2</span>
+                    <span className="text-sm text-[rgb(var(--muted-foreground))]">{t('about.author')}</span>
+                    <span className="text-sm font-medium text-[rgb(var(--foreground))]">licheng2</span>
                   </div>
                 </div>
               </div>

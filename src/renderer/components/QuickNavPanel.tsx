@@ -91,12 +91,12 @@ export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) =
             <div className={`flex-1 overflow-y-auto p-5 ${idePopupScrollAreaClassName}`}>
               {loading ? (
                 <div className="flex items-center justify-center py-12">
-                  <div className="text-zinc-500">{t('common.loading')}</div>
+                  <div className="text-[rgb(var(--muted-foreground))]">{t('common.loading')}</div>
                 </div>
               ) : items.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-zinc-500">
+                <div className="flex flex-col items-center justify-center py-12 text-[rgb(var(--muted-foreground))]">
                   <Globe size={48} className="mb-4 opacity-50" />
-                  <p className="text-lg mb-2">{t('quickNav.emptyTitle')}</p>
+                  <p className="mb-2 text-lg text-[rgb(var(--foreground))]">{t('quickNav.emptyTitle')}</p>
                   <p className="text-sm">{t('quickNav.emptyDescription')}</p>
                 </div>
               ) : (
@@ -105,10 +105,10 @@ export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) =
                     <button
                       key={item.id}
                       onClick={() => handleItemClick(item)}
-                      className="group relative flex flex-col items-center gap-3 rounded-[12px] border border-zinc-700/80 bg-zinc-900/45 p-4 text-center transition-all duration-150 hover:border-sky-400/50 hover:bg-zinc-800/90"
+                      className="group relative flex flex-col items-center gap-3 rounded-[12px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_76%,transparent)] p-4 text-center transition-all duration-150 hover:border-[rgb(var(--ring))]/60 hover:bg-[rgb(var(--accent))]"
                       title={item.path}
                     >
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-zinc-700/80 bg-zinc-950/55 transition-colors group-hover:border-sky-400/40 group-hover:bg-sky-500/10">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] transition-colors group-hover:border-[rgb(var(--ring))]/50 group-hover:bg-[rgb(var(--primary))]/10">
                         {item.type === 'url' ? (
                           <Globe size={22} className="text-sky-300" />
                         ) : (
@@ -117,16 +117,16 @@ export const QuickNavPanel: React.FC<QuickNavPanelProps> = ({ open, onClose }) =
                       </div>
 
                       <div className="w-full">
-                        <p className="truncate text-sm font-medium text-zinc-100">
+                        <p className="truncate text-sm font-medium text-[rgb(var(--foreground))]">
                           {item.name}
                         </p>
-                        <p className="mt-1 truncate text-[11px] text-zinc-500">
+                        <p className="mt-1 truncate text-[11px] text-[rgb(var(--muted-foreground))]">
                           {item.path}
                         </p>
                       </div>
 
                       <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <ExternalLink size={14} className="text-zinc-500" />
+                        <ExternalLink size={14} className="text-[rgb(var(--muted-foreground))]" />
                       </div>
                     </button>
                   ))}
