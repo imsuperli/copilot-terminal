@@ -439,10 +439,12 @@ type DefinitionLookupResult = {
 type GitSnapshotRefreshOptions = {
   includeGraph?: boolean;
   force?: boolean;
+  statusOnly?: boolean;
 };
 type PendingGitSnapshotRefresh = {
   includeGraph: boolean;
   force: boolean;
+  statusOnly: boolean;
   resolvers: Array<() => void>;
   rejecters: Array<(error: unknown) => void>;
 };
@@ -9129,6 +9131,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
       shouldLoadGitGraph()
     );
     const forceGraph = options?.force === true && includeGraph;
+    const statusOnly = options?.statusOnly === true;
 
     if (options?.force) {
       invalidateProjectCache(rootPath, forceGraph ? 'git' : 'git-status');
@@ -9138,7 +9141,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
     const cachedSummary = getGitSummaryCache(rootPath);
     const cachedGraph = includeGraph ? getGitGraphCache(rootPath) : null;
     const shouldFetchStatus = options?.force === true || cachedStatusEntries === null;
-    const shouldFetchSummary = options?.force === true || cachedSummary === null;
+    const shouldFetchSummary = !statusOnly && (options?.force === true || cachedSummary === null);
     const shouldFetchGraph = includeGraph && (forceGraph || cachedGraph === null);
 
     if (!shouldFetchStatus && !shouldFetchSummary && !shouldFetchGraph) {
@@ -9212,12 +9215,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const refreshGitSnapshot = useCallback((options?: GitSnapshotRefreshOptions) => {
     const includeGraph = options?.includeGraph ?? shouldLoadGitGraph();
     const force = options?.force === true;
+    const statusOnly = options?.statusOnly === true;
 
     return new Promise<void>((resolve, reject) => {
       const inFlightRefresh = inFlightGitSnapshotRefreshRef.current;
       if (inFlightRefresh) {
         inFlightRefresh.includeGraph = inFlightRefresh.includeGraph || includeGraph;
         inFlightRefresh.force = inFlightRefresh.force || force;
+        inFlightRefresh.statusOnly = inFlightRefresh.statusOnly && statusOnly;
         inFlightRefresh.resolvers.push(resolve);
         inFlightRefresh.rejecters.push(reject);
         return;
@@ -9228,12 +9233,14 @@ export const CodePane: React.FC<CodePaneProps> = ({
       if (pendingRefresh) {
         pendingRefresh.includeGraph = pendingRefresh.includeGraph || includeGraph;
         pendingRefresh.force = pendingRefresh.force || force;
+        pendingRefresh.statusOnly = pendingRefresh.statusOnly && statusOnly;
         pendingRefresh.resolvers.push(resolve);
         pendingRefresh.rejecters.push(reject);
       } else {
         pendingGitSnapshotRefreshRef.current = {
           includeGraph,
           force,
+          statusOnly,
           resolvers: [resolve],
           rejecters: [reject],
         };
@@ -9255,6 +9262,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
         const refreshPromise = refreshGitSnapshotNow({
           includeGraph: refresh.includeGraph,
           force: refresh.force,
+          statusOnly: refresh.statusOnly,
         });
         inFlightGitSnapshotRefreshRef.current = {
           ...refresh,
@@ -9272,6 +9280,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
           void refreshGitSnapshot({
             includeGraph: trailingRefresh.includeGraph,
             force: trailingRefresh.force,
+            statusOnly: trailingRefresh.statusOnly,
           }).then(() => {
             trailingRefresh.resolvers.forEach((currentResolve) => currentResolve());
           }).catch((error) => {
@@ -9292,6 +9301,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
   const scheduleGitStatusRefresh = useCallback((options?: { force?: boolean; forceStatusOnly?: boolean }) => {
     invalidateProjectCache(rootPath, 'git-status');
     void refreshGitSnapshot({
+      statusOnly: options?.forceStatusOnly !== false,
       includeGraph: false,
       ...(options?.force || options?.forceStatusOnly ? { force: true } : {}),
     });

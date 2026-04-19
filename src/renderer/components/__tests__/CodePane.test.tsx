@@ -6373,6 +6373,39 @@ describe('CodePane', () => {
     expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
   });
 
+  it('refreshes watcher git state without reloading repository summary', async () => {
+    renderCodePane(createPane({
+      openFiles: [{ path: '/workspace/project/src/index.ts' }],
+      activeFilePath: '/workspace/project/src/index.ts',
+      selectedPath: '/workspace/project/src/index.ts',
+    }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneReadFile).toHaveBeenCalledWith({
+        rootPath: '/workspace/project',
+        filePath: '/workspace/project/src/index.ts',
+      });
+    });
+
+    vi.mocked(window.electronAPI.codePaneGetGitStatus).mockClear();
+    vi.mocked(window.electronAPI.codePaneGetGitRepositorySummary).mockClear();
+
+    await emitFsChanged({
+      rootPath: '/workspace/project',
+      changes: [
+        {
+          type: 'change',
+          path: '/workspace/project/src/index.ts',
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(window.electronAPI.codePaneGetGitStatus).toHaveBeenCalledTimes(1);
+    });
+    expect(window.electronAPI.codePaneGetGitRepositorySummary).not.toHaveBeenCalled();
+  });
+
   it('tracks external file changes and opens an external diff', async () => {
     renderCodePane(createPane({
       openFiles: [{ path: '/workspace/project/src/index.ts' }],
