@@ -117,15 +117,33 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [resizingIndex, setResizingIndex] = useState<number>(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const childRefs = useRef<Array<HTMLDivElement | null>>([]);
   const sizesRef = useRef<number[]>(sizes);
 
   useEffect(() => {
     sizesRef.current = sizes;
-  }, [sizes]);
+    childRefs.current.forEach((node, index) => {
+      if (node) {
+        node.style.flexGrow = `${sizes[index] ?? (1 / splitNode.children.length)}`;
+      }
+    });
+  }, [sizes, splitNode.children.length]);
 
   useEffect(() => {
+    sizesRef.current = splitNode.sizes;
     setSizes(splitNode.sizes);
   }, [splitNode.sizes]);
+
+  const applySplitSizePreview = useCallback((nextSizes: number[]) => {
+    const leftPane = childRefs.current[resizingIndex];
+    const rightPane = childRefs.current[resizingIndex + 1];
+    if (leftPane) {
+      leftPane.style.flexGrow = `${nextSizes[resizingIndex] ?? 0}`;
+    }
+    if (rightPane) {
+      rightPane.style.flexGrow = `${nextSizes[resizingIndex + 1] ?? 0}`;
+    }
+  }, [resizingIndex]);
 
   const handleMouseDown = (index: number) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -154,11 +172,18 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
       newSizes[resizingIndex + 1] = rightSize;
 
       sizesRef.current = newSizes;
-      setSizes(newSizes);
+      applySplitSizePreview(newSizes);
     };
 
     const handleMouseUp = () => {
-      onSplitResize(groupId, splitPath, sizesRef.current);
+      const nextSizes = sizesRef.current;
+      setSizes((currentSizes) => (
+        currentSizes.length === nextSizes.length
+          && currentSizes.every((currentSize, index) => currentSize === nextSizes[index])
+          ? currentSizes
+          : [...nextSizes]
+      ));
+      onSplitResize(groupId, splitPath, nextSizes);
       setIsResizing(false);
       setResizingIndex(-1);
     };
@@ -170,7 +195,7 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, groupId]);
+  }, [applySplitSizePreview, isResizing, resizingIndex, onSplitResize, splitNode.direction, splitPath, groupId]);
 
   const isHorizontal = splitNode.direction === 'horizontal';
   const dividerActiveClassName = 'bg-[rgb(var(--primary))]';
@@ -184,8 +209,13 @@ const GroupSplitContainer: React.FC<GroupSplitContainerProps> = ({
       {splitNode.children.map((child, index) => (
         <React.Fragment key={child.type === 'window' ? child.id : `split-${index}`}>
           <div
+            ref={(node) => {
+              childRefs.current[index] = node;
+            }}
             style={{
-              [isHorizontal ? 'width' : 'height']: `${(sizes[index] ?? (1 / splitNode.children.length)) * 100}%`,
+              flexBasis: 0,
+              flexGrow: sizes[index] ?? (1 / splitNode.children.length),
+              flexShrink: 1,
             }}
             className="relative h-full min-h-0 min-w-0 overflow-hidden"
           >
