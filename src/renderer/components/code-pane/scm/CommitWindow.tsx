@@ -217,13 +217,13 @@ function getStatusTone(entry: CodePaneGitStatusEntry) {
   switch (entry.status) {
     case 'added':
     case 'untracked':
-      return 'text-emerald-300';
+      return 'text-[rgb(var(--success))]';
     case 'deleted':
-      return 'text-red-300';
+      return 'text-[rgb(var(--error))]';
     case 'renamed':
-      return 'text-sky-300';
+      return 'text-[rgb(var(--info))]';
     default:
-      return 'text-amber-300';
+      return 'text-[rgb(var(--warning))]';
   }
 }
 
@@ -302,10 +302,10 @@ const CommitWindowEntryCard = React.memo(function CommitWindowEntryCard({
     <div
       className={`rounded-[12px] border transition-colors ${
         isActive
-          ? 'border-sky-500/35 bg-sky-500/[0.08] shadow-[inset_0_0_0_1px_rgba(125,211,252,0.12)]'
+          ? 'border-[rgb(var(--ring))]/45 bg-[rgb(var(--primary))]/10 shadow-[inset_0_0_0_1px_rgb(var(--primary)/0.12)]'
           : isChecked
-            ? 'border-emerald-500/25 bg-emerald-500/[0.05] hover:border-emerald-400/35 hover:bg-emerald-500/[0.08]'
-            : 'border-transparent bg-transparent hover:border-zinc-700/60 hover:bg-zinc-900/55'
+            ? 'border-[rgb(var(--success)/0.25)] bg-[rgb(var(--success)/0.06)] hover:border-[rgb(var(--success)/0.35)] hover:bg-[rgb(var(--success)/0.10)]'
+            : 'border-transparent bg-transparent hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))]'
       }`}
     >
       <div className="flex items-start gap-2 px-2.5 py-2.5">
@@ -316,8 +316,8 @@ const CommitWindowEntryCard = React.memo(function CommitWindowEntryCard({
           }}
           className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
             isChecked
-              ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
-              : 'border-zinc-600 bg-zinc-950/80 text-transparent'
+              ? 'border-[rgb(var(--primary))]/70 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]'
+              : 'border-[rgb(var(--border))] bg-[rgb(var(--background))] text-transparent'
           }`}
           aria-label={`${isChecked ? 'unselect' : 'select'} ${entry.path}`}
         >
@@ -331,17 +331,17 @@ const CommitWindowEntryCard = React.memo(function CommitWindowEntryCard({
           className="min-w-0 flex-1 text-left"
         >
           <div className="flex items-center gap-2">
-            <FileIcon size={13} className="shrink-0 text-zinc-500" />
-            <span className={`truncate text-sm ${isActive ? 'text-zinc-50' : getStatusTone(entry)}`}>
+            <FileIcon size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
+            <span className={`truncate text-sm ${isActive ? 'text-[rgb(var(--foreground))]' : getStatusTone(entry)}`}>
               {getPathLeafLabel(entry.path)}
             </span>
             {isChecked && (
-              <span className="shrink-0 rounded-md border border-emerald-500/30 bg-emerald-500/[0.08] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-emerald-200">
+              <span className="shrink-0 rounded-md border border-[rgb(var(--success)/0.30)] bg-[rgb(var(--success)/0.10)] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--success))]">
                 {t('codePane.gitIncludedInCommit')}
               </span>
             )}
           </div>
-          <div className="mt-1 truncate pl-5 text-[11px] text-zinc-500">
+          <div className="mt-1 truncate pl-5 text-[11px] text-[rgb(var(--muted-foreground))]">
             {entry.relativePath}
           </div>
         </button>
@@ -662,7 +662,7 @@ export const CommitWindow = React.memo(function CommitWindow({
           key={item.key}
           className={`${idePopupCardClassName} overflow-hidden px-0 py-0`}
         >
-          <div className="flex h-16 items-center gap-2 border-b border-zinc-800/70 px-3">
+          <div className="flex h-16 items-center gap-2 border-b border-[rgb(var(--border))] px-3">
             <button
               type="button"
               aria-pressed={allGroupEntriesSelected}
@@ -672,8 +672,8 @@ export const CommitWindow = React.memo(function CommitWindow({
               }}
               className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
                 allGroupEntriesSelected || someGroupEntriesSelected
-                  ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
-                  : 'border-zinc-600 bg-zinc-950/80 text-transparent'
+                  ? 'border-[rgb(var(--primary))]/70 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]'
+                  : 'border-[rgb(var(--border))] bg-[rgb(var(--background))] text-transparent'
               }`}
             >
               {allGroupEntriesSelected ? <Check size={11} /> : <Minus size={11} />}
@@ -683,18 +683,18 @@ export const CommitWindow = React.memo(function CommitWindow({
               onClick={() => {
                 toggleCollapsedGroup(group.key);
               }}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-zinc-50"
+              className="flex min-w-0 flex-1 items-center gap-2 text-left transition-colors hover:text-[rgb(var(--foreground))]"
             >
               {isCollapsed ? (
-                <ChevronRight size={13} className="shrink-0 text-zinc-500" />
+                <ChevronRight size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
               ) : (
-                <ChevronDown size={13} className="shrink-0 text-zinc-500" />
+                <ChevronDown size={13} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
               )}
-              <Folder size={13} className="shrink-0 text-amber-300/85" />
-              <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-zinc-100">
+              <Folder size={13} className="shrink-0 text-[rgb(var(--warning))]" />
+              <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-[rgb(var(--foreground))]">
                 {group.label}
               </span>
-              <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/55 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+              <span className="shrink-0 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_68%,transparent)] px-1.5 py-0.5 text-[10px] font-medium text-[rgb(var(--muted-foreground))]">
                 {group.includedCount}/{group.entries.length}
               </span>
             </button>
@@ -749,7 +749,7 @@ export const CommitWindow = React.memo(function CommitWindow({
             <div className={idePopupHeaderClassName}>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <GitCommitHorizontal size={12} className="shrink-0 text-emerald-300" />
+                  <GitCommitHorizontal size={12} className="shrink-0 text-[rgb(var(--success))]" />
                   <div className={idePopupHeaderMetaClassName}>{t('codePane.gitWorkbenchTab')}</div>
                 </div>
                 <Dialog.Title className={`mt-1 ${idePopupTitleClassName}`}>
@@ -785,9 +785,9 @@ export const CommitWindow = React.memo(function CommitWindow({
             </div>
 
             <div className="grid min-h-0 flex-1 grid-cols-[340px_minmax(0,1fr)] overflow-hidden">
-              <div className="flex min-h-0 flex-col border-r border-zinc-800/90 bg-[linear-gradient(180deg,rgba(21,23,28,0.92)_0%,rgba(18,20,24,0.98)_100%)]">
-                <div className="border-b border-zinc-800 px-4 py-3">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+              <div className="flex min-h-0 flex-col border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_82%,transparent)]">
+                <div className="border-b border-[rgb(var(--border))] px-4 py-3">
+                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.gitCommitPlaceholder')}
                   </div>
                   <div className={`${idePopupFieldShellClassName} mt-2 items-start gap-0 px-0 py-0`}>
@@ -797,11 +797,11 @@ export const CommitWindow = React.memo(function CommitWindow({
                         setMessage(event.target.value);
                       }}
                       placeholder={t('codePane.gitCommitPlaceholder')}
-                      className="h-24 w-full resize-none bg-transparent px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-500"
+                      className="h-24 w-full resize-none bg-transparent px-3 py-2.5 text-sm text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))]"
                     />
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3">
-                    <div className="rounded-md border border-zinc-700/70 bg-zinc-950/35 px-2 py-1 text-[11px] text-zinc-400">
+                    <div className="rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_58%,transparent)] px-2 py-1 text-[11px] text-[rgb(var(--muted-foreground))]">
                       {t('codePane.gitChanges')} · {selectedCount}/{entries.length}
                     </div>
                     <button
@@ -817,7 +817,7 @@ export const CommitWindow = React.memo(function CommitWindow({
                     </button>
                   </div>
                   <div className="mt-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] text-zinc-400">
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] text-[rgb(var(--muted-foreground))]">
                       <button
                         type="button"
                         aria-pressed={showIncludedOnly}
@@ -826,8 +826,8 @@ export const CommitWindow = React.memo(function CommitWindow({
                         }}
                         className={`flex h-4 w-4 items-center justify-center rounded border transition-colors ${
                           showIncludedOnly
-                            ? 'border-sky-400/70 bg-sky-500/[0.10] text-sky-200'
-                            : 'border-zinc-600 bg-zinc-950/80 text-transparent'
+                            ? 'border-[rgb(var(--primary))]/70 bg-[rgb(var(--primary))]/10 text-[rgb(var(--primary))]'
+                            : 'border-[rgb(var(--border))] bg-[rgb(var(--background))] text-transparent'
                         }`}
                       >
                         <Check size={11} />
@@ -855,15 +855,15 @@ export const CommitWindow = React.memo(function CommitWindow({
                       </div>
                     )
                   ) : (
-                    <div className="px-2 py-3 text-xs text-zinc-500">{t('codePane.noChanges')}</div>
+                    <div className="px-2 py-3 text-xs text-[rgb(var(--muted-foreground))]">{t('codePane.noChanges')}</div>
                   )}
                 </div>
               </div>
 
-              <div className="min-h-0 overflow-auto bg-[linear-gradient(180deg,rgba(24,26,31,0.94)_0%,rgba(19,21,26,0.98)_100%)] px-4 py-4">
+              <div className="min-h-0 overflow-auto bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] px-4 py-4">
                 <div className={`${idePopupCardClassName} mb-3 flex items-center gap-2 px-3 py-2`}>
-                  <FolderTree size={12} className="text-zinc-500" />
-                  <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500">
+                  <FolderTree size={12} className="text-[rgb(var(--muted-foreground))]" />
+                  <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.gitSelectedFileHunks')}
                   </span>
                 </div>
