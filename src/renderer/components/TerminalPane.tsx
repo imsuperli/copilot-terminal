@@ -47,19 +47,19 @@ export function __resetTerminalPaneReplaySessionCacheForTests(): void {
 function getStatusBorderColor(status: WindowStatus): string {
   switch (status) {
     case WindowStatus.Running:
-      return 'border-t-green-500';
+      return 'border-t-[rgb(var(--success))]';
     case WindowStatus.WaitingForInput:
       return 'border-t-[rgb(var(--primary))]';
     case WindowStatus.Paused:
-      return 'border-t-zinc-600';
+      return 'border-t-[rgb(var(--border))]';
     case WindowStatus.Error:
-      return 'border-t-red-500';
+      return 'border-t-[rgb(var(--error))]';
     case WindowStatus.Completed:
-      return 'border-t-zinc-500';
+      return 'border-t-[rgb(var(--muted-foreground))]';
     case WindowStatus.Restoring:
-      return 'border-t-yellow-500';
+      return 'border-t-[rgb(var(--warning))]';
     default:
-      return 'border-t-zinc-600';
+      return 'border-t-[rgb(var(--border))]';
   }
 }
 
@@ -97,19 +97,19 @@ function getActivePaneStyle(color?: string): React.CSSProperties | undefined {
 function getStatusRingColor(status: WindowStatus): string {
   switch (status) {
     case WindowStatus.Running:
-      return 'ring-green-500';
+      return 'ring-[rgb(var(--success))]';
     case WindowStatus.WaitingForInput:
       return 'ring-[rgb(var(--primary))]';
     case WindowStatus.Paused:
-      return 'ring-zinc-600';
+      return 'ring-[rgb(var(--border))]';
     case WindowStatus.Error:
-      return 'ring-red-500';
+      return 'ring-[rgb(var(--error))]';
     case WindowStatus.Completed:
-      return 'ring-zinc-500';
+      return 'ring-[rgb(var(--muted-foreground))]';
     case WindowStatus.Restoring:
-      return 'ring-yellow-500';
+      return 'ring-[rgb(var(--warning))]';
     default:
-      return 'ring-zinc-600';
+      return 'ring-[rgb(var(--border))]';
   }
 }
 
@@ -1315,7 +1315,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                     e.stopPropagation();
                     onClose?.();
                   }}
-                  className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-red-500/40 hover:bg-red-500/14 hover:text-red-100 shadow-lg"
+                  className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--error)/0.40)] hover:bg-[rgb(var(--error)/0.14)] hover:text-[rgb(var(--foreground))] shadow-lg"
                   aria-label={t('terminalPane.close')}
                 >
                   <X size={14} />
@@ -1338,7 +1338,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                   e.stopPropagation();
                   onClose?.();
                 }}
-                className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-red-500/40 hover:bg-red-500/14 hover:text-red-100 shadow-lg"
+                className="flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--error)/0.40)] hover:bg-[rgb(var(--error)/0.14)] hover:text-[rgb(var(--foreground))] shadow-lg"
                 aria-label={t('terminalPane.close')}
               >
                 <X size={14} />

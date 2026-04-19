@@ -15,17 +15,17 @@ export interface StatusIconWithBadgeProps {
 function getStatusIconColor(status: WindowStatus): string {
   switch (status) {
     case WindowStatus.Running:
-      return 'text-green-500';
+      return 'text-[rgb(var(--success))]';
     case WindowStatus.WaitingForInput:
       return 'text-[rgb(var(--primary))]';
     case WindowStatus.Paused:
       return 'text-[rgb(var(--muted-foreground))]';
     case WindowStatus.Error:
-      return 'text-red-500';
+      return 'text-[rgb(var(--error))]';
     case WindowStatus.Completed:
       return 'text-[rgb(var(--muted-foreground))]';
     case WindowStatus.Restoring:
-      return 'text-yellow-500';
+      return 'text-[rgb(var(--warning))]';
     default:
       return 'text-[rgb(var(--muted-foreground))]';
   }

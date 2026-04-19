@@ -52,7 +52,7 @@ export const SplitLayout: React.FC<SplitLayoutProps> = ({
   // 防御性检查：如果 layout 为 undefined 或 null，返回空
   if (!layout) {
     console.error('[SplitLayout] Layout is undefined or null');
-    return <div className="flex items-center justify-center h-full text-zinc-500">{t('splitLayout.invalid')}</div>;
+    return <div className="flex h-full items-center justify-center text-[rgb(var(--muted-foreground))]">{t('splitLayout.invalid')}</div>;
   }
 
   const totalPaneCount = getPaneCount(layout);
@@ -186,7 +186,7 @@ const SplitContainer: React.FC<SplitContainerProps> = ({
 
   const isHorizontal = splitNode.direction === 'horizontal';
   const dividerActiveClassName = 'bg-[rgb(var(--primary))]';
-  const dividerIdleClassName = 'bg-zinc-600/80 group-hover:bg-[rgb(var(--primary))]/75';
+  const dividerIdleClassName = 'bg-[rgb(var(--border)/0.85)] group-hover:bg-[rgb(var(--primary))]/75';
 
   return (
     <div
