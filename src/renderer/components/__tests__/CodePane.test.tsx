@@ -7782,9 +7782,11 @@ describe('CodePane', () => {
     await waitFor(() => {
       expect(screen.getAllByText('index.ts').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('index.ts', {
-      selector: 'div.min-w-0.truncate.text-center.text-sm.font-semibold.leading-5.text-zinc-100',
-    })).toBeInTheDocument();
+    const outlineTitle = screen.getByText('index.ts', {
+      selector: 'div.min-w-0.truncate.text-center.text-sm.font-semibold.leading-5',
+    });
+    expect(outlineTitle).toBeInTheDocument();
+    expect(outlineTitle).toHaveClass('text-[rgb(var(--foreground))]');
     expect(screen.queryByText('codePane.fileStructureTab')).not.toBeInTheDocument();
     expect(screen.queryByText('codePane.fileStructureCount')).not.toBeInTheDocument();
     expect(screen.getByText('id')).toBeInTheDocument();

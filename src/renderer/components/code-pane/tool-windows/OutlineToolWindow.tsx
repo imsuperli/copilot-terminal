@@ -247,9 +247,9 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
 
   return (
     <IdePopupShell className={panelClassName ?? 'flex h-full min-h-0 flex-col'}>
-      <div className="grid grid-cols-[60px_minmax(0,1fr)_60px] items-center border-b border-zinc-800/90 bg-[linear-gradient(180deg,rgba(46,49,56,0.96)_0%,rgba(35,38,44,0.92)_100%)] px-3 py-2.5">
+      <div className="grid grid-cols-[60px_minmax(0,1fr)_60px] items-center border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_48%,transparent)] px-3 py-2.5">
         <div aria-hidden="true" />
-        <div className="min-w-0 truncate text-center text-sm font-semibold leading-5 text-zinc-100">
+        <div className="min-w-0 truncate text-center text-sm font-semibold leading-5 text-[rgb(var(--foreground))]">
           {fileLabel ?? t('codePane.fileStructureEmpty')}
         </div>
         <div className="flex items-center gap-1">
@@ -272,7 +272,7 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
         </div>
       </div>
 
-      <div className="border-b border-zinc-800/80 bg-zinc-950/30 px-3 py-2">
+      <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           <FilterToggle
             active={filters.inherited}
@@ -300,12 +300,12 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
         }}
       >
         {isLoading ? (
-          <div className="flex items-center gap-2 px-2 py-4 text-xs text-zinc-400">
+          <div className="flex items-center gap-2 px-2 py-4 text-xs text-[rgb(var(--muted-foreground))]">
             <Loader2 size={12} className="animate-spin" />
             {t('codePane.fileStructureLoading')}
           </div>
         ) : error ? (
-          <div className="px-2 py-4 text-xs text-red-300">{error}</div>
+          <div className="px-2 py-4 text-xs text-[rgb(var(--error))]">{error}</div>
         ) : visibleRows.length > 0 ? (
           visibleRowSlice.isWindowed ? (
             <div style={{ height: `${visibleRowSlice.totalHeight}px`, position: 'relative' }}>
@@ -345,7 +345,7 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
             </div>
           )
         ) : (
-          <div className="mx-2 rounded-lg border border-dashed border-zinc-700/80 bg-zinc-950/35 px-3 py-4 text-xs text-zinc-500">
+          <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_40%,transparent)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.fileStructureEmpty')}
           </div>
         )}
@@ -371,15 +371,15 @@ const FilterToggle = React.memo(function FilterToggle({
       aria-label={label}
       className={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11px] transition-colors ${
         active
-          ? 'border-sky-500/70 bg-transparent text-sky-200'
-          : 'border-zinc-700/80 bg-transparent text-zinc-300 hover:border-zinc-500 hover:text-zinc-100'
+          ? 'border-[rgb(var(--primary))]/70 bg-transparent text-[rgb(var(--primary))]'
+          : 'border-[rgb(var(--border))] bg-transparent text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--ring))] hover:text-[rgb(var(--foreground))]'
       }`}
     >
       <span
         className={`flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border ${
           active
-            ? 'border-sky-500/80 text-sky-300'
-            : 'border-zinc-600 text-transparent'
+            ? 'border-[rgb(var(--primary))]/80 text-[rgb(var(--primary))]'
+            : 'border-[rgb(var(--border))] text-transparent'
         }`}
         aria-hidden="true"
       >
@@ -427,7 +427,7 @@ const OutlineNodeRow = React.memo(function OutlineNodeRow({
           onClick={() => {
             onToggleExpanded(node.id);
           }}
-          className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-zinc-500 transition-colors hover:bg-zinc-800/70 hover:text-zinc-200"
+          className="flex h-6 w-5 shrink-0 items-center justify-center rounded text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
           aria-label={isExpanded ? 'Collapse' : 'Expand'}
         >
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -456,10 +456,10 @@ const OutlineNodeRow = React.memo(function OutlineNodeRow({
           <div className="min-w-0 flex-1">
             <div className="truncate text-[12px] leading-5 text-inherit">{node.symbol.name}</div>
             {node.symbol.detail ? (
-              <div className="truncate text-[10px] leading-4 text-zinc-500">{node.symbol.detail}</div>
+              <div className="truncate text-[10px] leading-4 text-[rgb(var(--muted-foreground))]">{node.symbol.detail}</div>
             ) : null}
           </div>
-          <span className="shrink-0 rounded-md border border-zinc-700/80 bg-zinc-950/45 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+          <span className="shrink-0 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {kind.label}
           </span>
         </div>
