@@ -55,6 +55,25 @@ type GitChangeWorkbenchSectionGroup = {
   directoryGroups: GitChangeWorkbenchDirectoryGroup[];
 };
 
+type GitChangeVisibleItem =
+  | {
+      key: string;
+      kind: 'section';
+      section: GitChangeSection;
+      count: number;
+    }
+  | {
+      key: string;
+      kind: 'directory';
+      label: string;
+      count: number;
+    }
+  | {
+      key: string;
+      kind: 'change';
+      row: GitChangeWorkbenchRow;
+    };
+
 const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
   row,
   isSelected,
@@ -222,93 +241,6 @@ const GitChangeEntryCard = React.memo(function GitChangeEntryCard({
   );
 });
 
-const GitChangeDirectoryGroup = React.memo(function GitChangeDirectoryGroup({
-  directoryGroup,
-  selectedChangePath,
-  getRelativePath,
-  onSelectChange,
-  onStagePath,
-  onUnstagePath,
-  onDiscardPath,
-  onOpenFileDiff,
-  onOpenConflictResolver,
-  onResolveConflict,
-  onShowFileHistory,
-  onRevealInExplorer,
-  t,
-}: {
-  directoryGroup: GitChangeWorkbenchDirectoryGroup;
-  selectedChangePath: string | null;
-  getRelativePath: (filePath: string) => string;
-  onSelectChange: (entry: CodePaneGitStatusEntry) => void | Promise<void>;
-  onStagePath: (filePath: string) => void | Promise<void>;
-  onUnstagePath: (filePath: string) => void | Promise<void>;
-  onDiscardPath: (filePath: string, restoreStaged: boolean) => void | Promise<void>;
-  onOpenFileDiff: (filePath: string) => void | Promise<void>;
-  onOpenConflictResolver: (filePath: string) => void | Promise<void>;
-  onResolveConflict: (filePath: string, resolution: 'ours' | 'theirs') => void | Promise<void>;
-  onShowFileHistory: (filePath: string) => void | Promise<void>;
-  onRevealInExplorer: (filePath: string) => void | Promise<void>;
-  t: ReturnType<typeof useI18n>['t'];
-}) {
-  return (
-    <div className="rounded border border-zinc-800/80 bg-zinc-900/35 p-1.5">
-      <div className="mb-1 flex items-center gap-2 px-1.5 py-1 text-[11px] text-zinc-500">
-        <Folder size={12} className="shrink-0 text-zinc-500" />
-        <span className="min-w-0 flex-1 truncate">{directoryGroup.label}</span>
-        <span className="rounded bg-zinc-950/80 px-1 py-0.5 text-[10px]">{directoryGroup.rows.length}</span>
-      </div>
-      <div className="space-y-1">
-        {directoryGroup.rows.map((row) => (
-          <GitChangeEntryCard
-            key={row.key}
-            row={row}
-            isSelected={selectedChangePath === row.entry.path}
-            getRelativePath={getRelativePath}
-            onSelectChange={onSelectChange}
-            onStagePath={onStagePath}
-            onUnstagePath={onUnstagePath}
-            onDiscardPath={onDiscardPath}
-            onOpenFileDiff={onOpenFileDiff}
-            onOpenConflictResolver={onOpenConflictResolver}
-            onResolveConflict={onResolveConflict}
-            onShowFileHistory={onShowFileHistory}
-            onRevealInExplorer={onRevealInExplorer}
-            t={t}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}, (previousProps, nextProps) => {
-  if (previousProps.directoryGroup !== nextProps.directoryGroup) {
-    return false;
-  }
-  if (previousProps.getRelativePath !== nextProps.getRelativePath
-    || previousProps.onSelectChange !== nextProps.onSelectChange
-    || previousProps.onStagePath !== nextProps.onStagePath
-    || previousProps.onUnstagePath !== nextProps.onUnstagePath
-    || previousProps.onDiscardPath !== nextProps.onDiscardPath
-    || previousProps.onOpenFileDiff !== nextProps.onOpenFileDiff
-    || previousProps.onOpenConflictResolver !== nextProps.onOpenConflictResolver
-    || previousProps.onResolveConflict !== nextProps.onResolveConflict
-    || previousProps.onShowFileHistory !== nextProps.onShowFileHistory
-    || previousProps.onRevealInExplorer !== nextProps.onRevealInExplorer
-    || previousProps.t !== nextProps.t) {
-    return false;
-  }
-
-  const previousSelectedPath = previousProps.selectedChangePath;
-  const nextSelectedPath = nextProps.selectedChangePath;
-  if (previousSelectedPath === nextSelectedPath) {
-    return true;
-  }
-
-  const previousHasSelected = directoryGroupContainsPath(previousProps.directoryGroup, previousSelectedPath);
-  const nextHasSelected = directoryGroupContainsPath(nextProps.directoryGroup, nextSelectedPath);
-  return !previousHasSelected && !nextHasSelected;
-});
-
 const BranchTreeRow = React.memo(function BranchTreeRow({
   node,
   depth,
@@ -368,14 +300,6 @@ const BranchTreeRow = React.memo(function BranchTreeRow({
     </button>
   );
 });
-
-function directoryGroupContainsPath(directoryGroup: GitChangeWorkbenchDirectoryGroup, filePath: string | null): boolean {
-  if (!filePath) {
-    return false;
-  }
-
-  return directoryGroup.rows.some((row) => row.entry.path === filePath);
-}
 
 interface GitToolWindowProps {
   activeTab?: GitToolWindowTab;
@@ -505,6 +429,7 @@ const GIT_FIXED_LIST_WINDOWING_THRESHOLD = 120;
 const GIT_BRANCH_LIST_ROW_HEIGHT = 28;
 const GIT_COMMIT_LOG_ROW_HEIGHT = 32;
 const GIT_REBASE_ROW_HEIGHT = 32;
+const GIT_CHANGE_ROW_HEIGHT = 104;
 const GIT_CHANGE_SECTION_ORDER: GitChangeSection[] = ['conflicted', 'staged', 'unstaged', 'untracked'];
 
 function getWindowedListSlice<T>({
@@ -943,6 +868,96 @@ const GitChangesSection = React.memo(function GitChangesSection({
     () => buildGitChangeWorkbenchGroups(changes, getRelativePath),
     [changes, getRelativePath],
   );
+  const visibleItems = useMemo<GitChangeVisibleItem[]>(() => {
+    const nextItems: GitChangeVisibleItem[] = [];
+    for (const sectionGroup of sectionGroups) {
+      nextItems.push({
+        key: `section:${sectionGroup.section}`,
+        kind: 'section',
+        section: sectionGroup.section,
+        count: sectionGroup.count,
+      });
+      for (const directoryGroup of sectionGroup.directoryGroups) {
+        nextItems.push({
+          key: `directory:${sectionGroup.section}:${directoryGroup.key}`,
+          kind: 'directory',
+          label: directoryGroup.label,
+          count: directoryGroup.rows.length,
+        });
+        for (const row of directoryGroup.rows) {
+          nextItems.push({
+            key: row.key,
+            kind: 'change',
+            row,
+          });
+        }
+      }
+    }
+    return nextItems;
+  }, [sectionGroups]);
+  const { scrollRef, slice: visibleItemSlice, handleScroll } = useFixedWindowedList(
+    visibleItems,
+    GIT_CHANGE_ROW_HEIGHT,
+  );
+
+  const renderVisibleItem = useCallback((item: GitChangeVisibleItem) => {
+    if (item.kind === 'section') {
+      return (
+        <div
+          key={item.key}
+          className="flex h-10 items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500"
+        >
+          <span>{getGitSectionLabel(t, item.section)}</span>
+          <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{item.count}</span>
+        </div>
+      );
+    }
+
+    if (item.kind === 'directory') {
+      return (
+        <div
+          key={item.key}
+          className="flex h-9 items-center gap-2 rounded border border-zinc-800/80 bg-zinc-900/35 px-2 text-[11px] text-zinc-500"
+        >
+          <Folder size={12} className="shrink-0 text-zinc-500" />
+          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+          <span className="rounded bg-zinc-950/80 px-1 py-0.5 text-[10px]">{item.count}</span>
+        </div>
+      );
+    }
+
+    return (
+      <GitChangeEntryCard
+        key={item.key}
+        row={item.row}
+        isSelected={selectedChangePath === item.row.entry.path}
+        getRelativePath={getRelativePath}
+        onSelectChange={onSelectChange}
+        onStagePath={onStagePath}
+        onUnstagePath={onUnstagePath}
+        onDiscardPath={onDiscardPath}
+        onOpenFileDiff={onOpenFileDiff}
+        onOpenConflictResolver={onOpenConflictResolver}
+        onResolveConflict={onResolveConflict}
+        onShowFileHistory={onShowFileHistory}
+        onRevealInExplorer={onRevealInExplorer}
+        t={t}
+      />
+    );
+  }, [
+    getRelativePath,
+    onDiscardPath,
+    onOpenConflictResolver,
+    onOpenFileDiff,
+    onResolveConflict,
+    onRevealInExplorer,
+    onSelectChange,
+    onShowFileHistory,
+    onStagePath,
+    onUnstagePath,
+    selectedChangePath,
+    t,
+  ]);
 
   return (
     <div className="flex min-h-0 flex-col border-r border-zinc-800 bg-zinc-950/70">
@@ -956,38 +971,23 @@ const GitChangesSection = React.memo(function GitChangesSection({
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+      <div
+        ref={scrollRef}
+        className="min-h-0 flex-1 overflow-auto px-2 py-2"
+        onScroll={handleScroll}
+      >
         {sectionGroups.length > 0 ? (
-          <div className="space-y-3">
-            {sectionGroups.map((sectionGroup) => (
-              <div key={sectionGroup.section} className="space-y-1">
-                <div className="flex items-center justify-between gap-2 px-2 text-[11px] font-medium text-zinc-500">
-                  <span>{getGitSectionLabel(t, sectionGroup.section)}</span>
-                  <span className="rounded bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-500">{sectionGroup.count}</span>
-                </div>
-                <div className="space-y-2">
-                  {sectionGroup.directoryGroups.map((directoryGroup) => (
-                    <GitChangeDirectoryGroup
-                      key={`${sectionGroup.section}:${directoryGroup.key}`}
-                      directoryGroup={directoryGroup}
-                      selectedChangePath={selectedChangePath}
-                      getRelativePath={getRelativePath}
-                      onSelectChange={onSelectChange}
-                      onStagePath={onStagePath}
-                      onUnstagePath={onUnstagePath}
-                      onDiscardPath={onDiscardPath}
-                      onOpenFileDiff={onOpenFileDiff}
-                      onOpenConflictResolver={onOpenConflictResolver}
-                      onResolveConflict={onResolveConflict}
-                      onShowFileHistory={onShowFileHistory}
-                      onRevealInExplorer={onRevealInExplorer}
-                      t={t}
-                    />
-                  ))}
-                </div>
+          visibleItemSlice.isWindowed ? (
+            <div style={{ height: `${visibleItemSlice.totalHeight}px`, position: 'relative' }}>
+              <div className="space-y-2" style={{ transform: `translateY(${visibleItemSlice.offsetTop}px)` }}>
+                {visibleItemSlice.items.map(renderVisibleItem)}
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {visibleItems.map(renderVisibleItem)}
+            </div>
+          )
         ) : (
           <div className="flex h-full items-center justify-center text-xs text-zinc-500">
             {t('codePane.noChanges')}
