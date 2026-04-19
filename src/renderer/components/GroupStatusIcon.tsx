@@ -80,7 +80,7 @@ export const GroupStatusIcon: React.FC<GroupStatusIconProps> = ({ group, windows
         </Tooltip.Trigger>
         <Tooltip.Portal>
           <Tooltip.Content
-            className="bg-zinc-800 text-zinc-100 px-2 py-1 rounded text-xs z-[1100] shadow-xl border border-zinc-700 whitespace-pre-line"
+            className="z-[1100] whitespace-pre-line rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_94%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))] shadow-xl backdrop-blur"
             side="right"
             sideOffset={5}
           >

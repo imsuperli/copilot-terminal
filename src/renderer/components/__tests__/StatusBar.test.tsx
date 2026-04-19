@@ -155,7 +155,7 @@ describe('StatusBar', () => {
 
     expect(container.querySelectorAll('.text-green-500').length).toBeGreaterThan(0);
     expect(container.querySelector('[class~="text-[rgb(var(--primary))]"]')).not.toBeNull();
-    expect(container.querySelectorAll('.text-gray-500').length).toBeGreaterThan(0);
+    expect(container.querySelector('[class~="text-[rgb(var(--muted-foreground))]"]')).not.toBeNull();
   });
 
   it('updates the aria label when store windows change', () => {

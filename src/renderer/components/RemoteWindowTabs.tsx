@@ -80,12 +80,12 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                 className={isFloating
                   ? `group relative flex h-7 min-w-[108px] max-w-[164px] items-stretch rounded-full border transition-colors ${
                     window.isActive
-                      ? 'border-[rgb(var(--primary))]/45 bg-zinc-800/80 shadow-[0_10px_26px_rgba(0,0,0,0.26)]'
-                      : 'border-zinc-800/75 bg-zinc-950/40 hover:border-zinc-700 hover:bg-zinc-900/80'
+                      ? 'border-[rgb(var(--primary))]/45 bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] shadow-[0_10px_26px_rgba(0,0,0,0.26)]'
+                      : 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_66%,transparent)] hover:border-[rgb(var(--ring))]/45 hover:bg-[rgb(var(--accent))]'
                   }`
                   : `group relative flex h-full min-w-[108px] max-w-[164px] items-stretch ${
                     index > 0 ? '-ml-px' : ''
-                  } border-x border-zinc-700/80`
+                  } border-x border-[rgb(var(--border))]`
                 }
               >
                 <AppTooltip
@@ -98,8 +98,8 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                     onClick={() => onWindowSelect(window.id)}
                     className={`relative z-[1] flex h-full w-full min-w-0 items-center pl-3 pr-8 text-left focus:outline-none transition-colors ${
                       window.isActive
-                        ? 'text-zinc-50'
-                        : 'text-zinc-400 hover:text-zinc-100'
+                        ? 'text-[rgb(var(--foreground))]'
+                        : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
                     }`}
                   >
                     <div className="min-w-0 flex-1">
@@ -125,7 +125,7 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                     event.stopPropagation();
                     onWindowClose(window.id);
                   }}
-                  className="absolute right-1.5 top-1.5 z-[2] flex h-4 w-4 items-center justify-center text-[12px] font-medium leading-none text-zinc-500 opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:text-zinc-100"
+                  className="absolute right-1.5 top-1.5 z-[2] flex h-4 w-4 items-center justify-center text-[12px] font-medium leading-none text-[rgb(var(--muted-foreground))] opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:text-[rgb(var(--foreground))]"
                 >
                   <span aria-hidden="true">&times;</span>
                 </button>
