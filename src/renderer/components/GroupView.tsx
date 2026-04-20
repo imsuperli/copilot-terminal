@@ -1,13 +1,14 @@
 ﻿import React, { Suspense, lazy, useCallback, useState, useEffect, useMemo } from 'react';
-import { FolderOpen, Play, Square, Archive } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
+import { Play, Square, Archive } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { GroupSplitLayout } from './GroupSplitLayout';
 import { Sidebar } from './Sidebar';
 import { WindowGroup } from '../../shared/types/window-group';
-import { Window, WindowStatus } from '../types/window';
-import { getAllWindowIds, getWindowCount } from '../utils/groupLayoutHelpers';
-import { getAggregatedStatus, getAllPanes } from '../utils/layoutHelpers';
+import { Pane, Window, WindowStatus } from '../types/window';
+import { getAllWindowIds } from '../utils/groupLayoutHelpers';
+import { getAggregatedStatusFromPanes, getAllPanes } from '../utils/layoutHelpers';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
@@ -21,6 +22,10 @@ const LazyQuickSwitcher = lazy(async () => ({
 const LazySettingsPanel = lazy(async () => ({
   default: (await import('./SettingsPanel')).SettingsPanel,
 }));
+
+function getPausedPanes(panes: Pane[]): Pane[] {
+  return panes.filter((pane) => pane.status === WindowStatus.Paused);
+}
 
 export interface GroupViewProps {
   group: WindowGroup;
@@ -47,7 +52,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [hasMountedSettingsPanel, setHasMountedSettingsPanel] = useState(false);
 
-  const windows = useWindowStore((state) => state.windows);
   const setActiveWindowInGroup = useWindowStore((state) => state.setActiveWindowInGroup);
   const archiveGroup = useWindowStore((state) => state.archiveGroup);
   const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
@@ -55,24 +59,76 @@ export const GroupView: React.FC<GroupViewProps> = ({
   const rearrangeWindowInGroupLayout = useWindowStore((state) => state.rearrangeWindowInGroupLayout);
   const findGroupByWindowId = useWindowStore((state) => state.findGroupByWindowId);
 
-  const groupWindowIdSet = useMemo(
-    () => new Set(getAllWindowIds(group.layout)),
+  const groupWindowIds = useMemo(
+    () => getAllWindowIds(group.layout),
     [group.layout],
   );
-  const groupWindows = useMemo(
-    () => windows.filter((window) => groupWindowIdSet.has(window.id)),
-    [groupWindowIdSet, windows],
+  const groupWindowIdSet = useMemo(
+    () => new Set(groupWindowIds),
+    [groupWindowIds],
   );
-  const windowCount = getWindowCount(group.layout);
+  const groupWindows = useWindowStore(useShallow(
+    (state) => state.windows.filter((window) => groupWindowIdSet.has(window.id)),
+  ));
+  const groupWindowRuntime = useMemo(() => {
+    const windowById = new Map<string, Window>();
+    const pausedPanesByWindowId = new Map<string, Pane[]>();
+    const statusByWindowId = new Map<string, WindowStatus>();
+    let hasRunning = false;
+    let hasWaitingForInput = false;
+    let hasPaused = false;
+
+    for (const terminalWindow of groupWindows) {
+      windowById.set(terminalWindow.id, terminalWindow);
+
+      const panes = getAllPanes(terminalWindow.layout);
+      const status = getAggregatedStatusFromPanes(panes);
+      statusByWindowId.set(terminalWindow.id, status);
+
+      const pausedPanes = getPausedPanes(panes);
+      if (pausedPanes.length > 0) {
+        pausedPanesByWindowId.set(terminalWindow.id, pausedPanes);
+      }
+
+      hasRunning ||= status === WindowStatus.Running;
+      hasWaitingForInput ||= status === WindowStatus.WaitingForInput;
+      hasPaused ||= status === WindowStatus.Paused;
+    }
+
+    const aggregatedStatus = hasRunning
+      ? WindowStatus.Running
+      : hasWaitingForInput
+        ? WindowStatus.WaitingForInput
+        : hasPaused
+          ? WindowStatus.Paused
+          : WindowStatus.Paused;
+
+    return {
+      windowById,
+      pausedPanesByWindowId,
+      statusByWindowId,
+      aggregatedStatus,
+    };
+  }, [groupWindows]);
+  const groupAggregatedStatus = groupWindowRuntime.aggregatedStatus;
+  const groupPausedPanesByWindowId = groupWindowRuntime.pausedPanesByWindowId;
+  const groupStatusByWindowId = groupWindowRuntime.statusByWindowId;
+  const groupWindowById = groupWindowRuntime.windowById;
+
+  const startPausedPanesForWindow = useCallback(
+    async (targetWindow: Window, pausedPanes: Pane[]) => {
+      if (pausedPanes.length > 0) {
+        await startWindowPanes(targetWindow, useWindowStore.getState().updatePane, pausedPanes);
+      }
+    },
+    [],
+  );
 
   // 自动启动组内所有暂停的窗口
   useEffect(() => {
     const autoStartWindows = async () => {
       for (const win of groupWindows) {
-        const pausedPanes = getAllPanes(win.layout).filter((pane) => pane.status === WindowStatus.Paused);
-        if (pausedPanes.length > 0) {
-          await startWindowPanes(win, useWindowStore.getState().updatePane, pausedPanes);
-        }
+        await startPausedPanesForWindow(win, groupPausedPanesByWindowId.get(win.id) ?? []);
       }
     };
 
@@ -81,16 +137,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
       autoStartWindows();
     }
   }, [group.id, isActive]); // 保持原来的依赖项，避免无限循环
-
-  // 计算组的聚合状态
-  const groupAggregatedStatus = useMemo(() => {
-    const statuses = groupWindows.map(w => getAggregatedStatus(w.layout));
-
-    if (statuses.includes(WindowStatus.Running)) return WindowStatus.Running;
-    if (statuses.includes(WindowStatus.WaitingForInput)) return WindowStatus.WaitingForInput;
-    if (statuses.includes(WindowStatus.Paused)) return WindowStatus.Paused;
-    return WindowStatus.Paused;
-  }, [groupWindows, group.id]);
 
   // 快捷键
   useKeyboardShortcuts({
@@ -137,14 +183,13 @@ export const GroupView: React.FC<GroupViewProps> = ({
     (windowId: string) => {
       setQuickSwitcherOpen(false);
       // 检查窗口是否在当前组内
-      const windowIds = getAllWindowIds(group.layout);
-      if (windowIds.includes(windowId)) {
+      if (groupWindowIdSet.has(windowId)) {
         setActiveWindowInGroup(group.id, windowId);
       } else {
         onWindowSwitch(windowId);
       }
     },
-    [group.id, group.layout, setActiveWindowInGroup, onWindowSwitch]
+    [group.id, groupWindowIdSet, setActiveWindowInGroup, onWindowSwitch]
   );
 
   // 处理快速切换器选择窗口组
@@ -173,8 +218,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
       if (!targetWindowId || dragWindowId === targetWindowId) return;
 
       // 检查拖拽的窗口是否已经在当前组中
-      const windowIdsInGroup = getAllWindowIds(group.layout);
-      const isInternalDrag = windowIdsInGroup.includes(dragWindowId);
+      const isInternalDrag = groupWindowIdSet.has(dragWindowId);
 
       if (isInternalDrag) {
         // 组内拖拽：使用原子操作重新排列窗口（避免中间状态触发解散）
@@ -203,20 +247,17 @@ export const GroupView: React.FC<GroupViewProps> = ({
         // 自动启动拖入窗口的所有暂停窗格
         const dragWin = useWindowStore.getState().getWindowById(dragWindowId);
         if (dragWin) {
-          const pausedPanes = getAllPanes(dragWin.layout).filter((pane) => pane.status === WindowStatus.Paused);
-          if (pausedPanes.length > 0) {
-            await startWindowPanes(dragWin, useWindowStore.getState().updatePane, pausedPanes);
-          }
+          await startPausedPanesForWindow(dragWin, getPausedPanes(getAllPanes(dragWin.layout)));
         }
       }
     },
-    [group.id, group.layout, findGroupByWindowId, addWindowToGroupLayout, removeWindowFromGroupLayout, rearrangeWindowInGroupLayout]
+    [addWindowToGroupLayout, findGroupByWindowId, group.id, groupWindowIdSet, rearrangeWindowInGroupLayout, removeWindowFromGroupLayout, startPausedPanesForWindow]
   );
 
   // 从组中移除窗口（保持运行）
   const handleRemoveFromGroup = useCallback(async (windowId: string) => {
     // 获取移除前的窗口列表
-    const windowIdsBeforeRemove = getAllWindowIds(group.layout);
+    const windowIdsBeforeRemove = groupWindowIds;
 
     // 移除窗口
     removeWindowFromGroupLayout(group.id, windowId);
@@ -237,13 +278,13 @@ export const GroupView: React.FC<GroupViewProps> = ({
         }
       }
     }, 0);
-  }, [group.id, group.layout, removeWindowFromGroupLayout, onWindowSwitch, onReturn]);
+  }, [group.id, groupWindowIds, removeWindowFromGroupLayout, onWindowSwitch, onReturn]);
 
   // 停止窗口并从组中移除
   const handleStopAndRemoveFromGroup = useCallback(async (windowId: string) => {
     // 获取移除前的窗口列表
-    const windowIdsBeforeRemove = getAllWindowIds(group.layout);
-    const targetWindow = windows.find((window) => window.id === windowId) ?? null;
+    const windowIdsBeforeRemove = groupWindowIds;
+    const targetWindow = groupWindowById.get(windowId) ?? null;
 
     try {
       if (targetWindow && isEphemeralSSHCloneWindow(targetWindow)) {
@@ -277,23 +318,20 @@ export const GroupView: React.FC<GroupViewProps> = ({
         }
       }
     }, 0);
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, group.id, group.layout, onReturn, onWindowSwitch, removeWindowFromGroupLayout, windows]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, group.id, groupWindowById, groupWindowIds, onReturn, onWindowSwitch, removeWindowFromGroupLayout]);
 
   // 批量启动组内所有窗口
   const handleStartAll = useCallback(async () => {
     for (const win of groupWindows) {
-      const pausedPanes = getAllPanes(win.layout).filter((pane) => pane.status === WindowStatus.Paused);
-      if (pausedPanes.length > 0) {
-        await startWindowPanes(win, useWindowStore.getState().updatePane, pausedPanes);
-      }
+      await startPausedPanesForWindow(win, groupPausedPanesByWindowId.get(win.id) ?? []);
     }
-  }, [groupWindows]);
+  }, [groupPausedPanesByWindowId, groupWindows, startPausedPanesForWindow]);
 
   // 批量暂停组内所有窗口
   const handlePauseAll = useCallback(async () => {
     const { pauseWindowState } = useWindowStore.getState();
     for (const win of groupWindows) {
-      const status = getAggregatedStatus(win.layout);
+      const status = groupStatusByWindowId.get(win.id) ?? WindowStatus.Paused;
       if (status === WindowStatus.Running || status === WindowStatus.WaitingForInput) {
         try {
           if (isEphemeralSSHCloneWindow(win as Window)) {
@@ -308,7 +346,24 @@ export const GroupView: React.FC<GroupViewProps> = ({
         }
       }
     }
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, groupWindows]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, groupStatusByWindowId, groupWindows]);
+
+  const handleSidebarWindowSelect = useCallback((windowId: string) => {
+    if (groupWindowIdSet.has(windowId)) {
+      setActiveWindowInGroup(group.id, windowId);
+    } else {
+      onWindowSwitch(windowId);
+    }
+  }, [group.id, groupWindowIdSet, onWindowSwitch, setActiveWindowInGroup]);
+
+  const handleSidebarGroupSelect = useCallback((groupId: string) => {
+    onGroupSwitch?.(groupId);
+  }, [onGroupSwitch]);
+
+  const handleSettingsClick = useCallback(() => {
+    setHasMountedSettingsPanel(true);
+    setIsSettingsPanelOpen(true);
+  }, []);
 
   // 状态颜色
   const statusColor = groupAggregatedStatus === WindowStatus.Running
@@ -325,22 +380,9 @@ export const GroupView: React.FC<GroupViewProps> = ({
       <Sidebar
         activeWindowId={group.activeWindowId}
         activeGroupId={group.id}
-        onWindowSelect={(windowId) => {
-          const windowIds = getAllWindowIds(group.layout);
-          if (windowIds.includes(windowId)) {
-            setActiveWindowInGroup(group.id, windowId);
-          } else {
-            onWindowSwitch(windowId);
-          }
-        }}
-        onGroupSelect={(groupId) => {
-          // 切换到其他组（包括当前组，用于刷新）
-          onGroupSwitch?.(groupId);
-        }}
-        onSettingsClick={() => {
-          setHasMountedSettingsPanel(true);
-          setIsSettingsPanelOpen(true);
-        }}
+        onWindowSelect={handleSidebarWindowSelect}
+        onGroupSelect={handleSidebarGroupSelect}
+        onSettingsClick={handleSettingsClick}
       />
 
       {/* 主内容区 */}

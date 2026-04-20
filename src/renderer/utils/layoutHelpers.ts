@@ -605,8 +605,10 @@ export function getAggregatedStatus(layout: LayoutNode): WindowStatus {
     return WindowStatus.Paused;
   }
 
-  const panes = getAllPanes(layout);
+  return getAggregatedStatusFromPanes(getAllPanes(layout));
+}
 
+export function getAggregatedStatusFromPanes(panes: Pane[]): WindowStatus {
   // 如果有任何窗格在运行，则窗口状态为运行中
   if (panes.some(p => p.status === WindowStatus.Running)) {
     return WindowStatus.Running;
