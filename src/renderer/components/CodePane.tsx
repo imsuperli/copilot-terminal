@@ -381,6 +381,18 @@ const CODE_PANE_COMPACT_PACKAGE_SOURCE_ROOTS = [
   ['src', 'main', 'scala'],
   ['src', 'test', 'scala'],
 ] as const;
+type GitStatusDerivedSnapshot = {
+  directoryStatusByPathByRoot: Map<string, Record<string, CodePaneGitStatusEntry['status']>>;
+  entriesByPath: Record<string, CodePaneGitStatusEntry>;
+  key: string;
+};
+
+const emptyGitStatusDerivedSnapshot: GitStatusDerivedSnapshot = {
+  directoryStatusByPathByRoot: new Map(),
+  entriesByPath: {},
+  key: '',
+};
+const gitStatusDerivedSnapshotCache = new WeakMap<CodePaneGitStatusEntry[], GitStatusDerivedSnapshot>();
 const CODE_PANE_DEFAULT_EXCEPTION_BREAKPOINTS: CodePaneExceptionBreakpoint[] = [{
   id: 'all',
   label: 'All Exceptions',
@@ -6131,6 +6143,12 @@ function collectGitDirectoryStatuses(
   rootPath: string,
   entries: CodePaneGitStatusEntry[],
 ): Record<string, CodePaneGitStatusEntry['status']> {
+  const snapshot = getGitStatusDerivedSnapshot(entries);
+  const cachedDirectoryStatusByPath = snapshot.directoryStatusByPathByRoot.get(rootPath);
+  if (cachedDirectoryStatusByPath) {
+    return cachedDirectoryStatusByPath;
+  }
+
   const directoryStatusByPath: Record<string, CodePaneGitStatusEntry['status']> = {};
 
   for (const entry of entries) {
@@ -6154,6 +6172,7 @@ function collectGitDirectoryStatuses(
     }
   }
 
+  snapshot.directoryStatusByPathByRoot.set(rootPath, directoryStatusByPath);
   return directoryStatusByPath;
 }
 
@@ -7268,24 +7287,45 @@ function isRefactorCodeAction(action: CodePaneCodeAction): boolean {
     || normalizedTitle.includes('move');
 }
 
+function getGitStatusEntryKey(entry: CodePaneGitStatusEntry): string {
+  return `${entry.path}:${entry.status}:${entry.staged ? 1 : 0}:${entry.unstaged ? 1 : 0}:${entry.conflicted ? 1 : 0}:${entry.section}:${entry.originalPath ?? ''}`;
+}
+
+function getGitStatusDerivedSnapshot(entries: CodePaneGitStatusEntry[]): GitStatusDerivedSnapshot {
+  const cachedSnapshot = gitStatusDerivedSnapshotCache.get(entries);
+  if (cachedSnapshot) {
+    return cachedSnapshot;
+  }
+
+  if (entries.length === 0) {
+    gitStatusDerivedSnapshotCache.set(entries, emptyGitStatusDerivedSnapshot);
+    return emptyGitStatusDerivedSnapshot;
+  }
+
+  const entriesByPath: Record<string, CodePaneGitStatusEntry> = {};
+  const keyParts: string[] = [];
+  for (const entry of entries) {
+    entriesByPath[entry.path] = entry;
+    keyParts.push(getGitStatusEntryKey(entry));
+  }
+
+  const snapshot: GitStatusDerivedSnapshot = {
+    directoryStatusByPathByRoot: new Map(),
+    entriesByPath,
+    key: keyParts.join('\u0000'),
+  };
+  gitStatusDerivedSnapshotCache.set(entries, snapshot);
+  return snapshot;
+}
+
 function mapGitStatusEntriesByPath(
   entries: CodePaneGitStatusEntry[],
 ): Record<string, CodePaneGitStatusEntry> {
-  const entriesByPath: Record<string, CodePaneGitStatusEntry> = {};
-  for (const entry of entries) {
-    entriesByPath[entry.path] = entry;
-  }
-  return entriesByPath;
+  return getGitStatusDerivedSnapshot(entries).entriesByPath;
 }
 
 function getGitStatusEntriesKey(entries: CodePaneGitStatusEntry[]): string {
-  if (entries.length === 0) {
-    return '';
-  }
-
-  return entries
-    .map((entry) => `${entry.path}:${entry.status}:${entry.staged ? 1 : 0}:${entry.unstaged ? 1 : 0}:${entry.conflicted ? 1 : 0}:${entry.section}:${entry.originalPath ?? ''}`)
-    .join('\u0000');
+  return getGitStatusDerivedSnapshot(entries).key;
 }
 
 function areGitStatusEntriesEqual(
