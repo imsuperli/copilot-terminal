@@ -1,18 +1,17 @@
 import React, { useMemo, useCallback } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { FolderOpen, Trash2, Play, Square, Loader2, Archive, ArchiveRestore, ExternalLink, Edit2, ChevronDown } from 'lucide-react';
-import { Window, WindowStatus } from '../types/window';
+import { FolderOpen, Trash2, Play, Square, Loader2, Archive, ArchiveRestore, Edit2, ChevronDown } from 'lucide-react';
+import { Pane, Window, WindowStatus } from '../types/window';
 import { getStatusColor, getStatusLabelKey, getStatusColorValue } from '../utils/statusHelpers';
-import { getAllPanes, getAggregatedStatus, getPaneCount } from '../utils/layoutHelpers';
+import { getAggregatedStatusFromPanes, getAllPanes } from '../utils/layoutHelpers';
 import { StatusDot } from './StatusDot';
 import { IDEIcon } from './icons/IDEIcons';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { useIDESettings } from '../hooks/useIDESettings';
 import { ProjectLinks } from './ProjectLinks';
 import { formatRelativeTime, useI18n } from '../i18n';
-import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
-import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
+import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import {
   ideMenuContentClassName,
   ideMenuItemClassName,
@@ -87,6 +86,35 @@ function truncatePath(path: string): string {
   }
 }
 
+function getWindowKindFromPanes(window: Window, panes: Pane[]): NonNullable<Window['kind']> {
+  if (window.kind) {
+    return window.kind;
+  }
+
+  const backends = new Set<string>();
+  for (const pane of panes) {
+    if (isTerminalPane(pane)) {
+      backends.add(getPaneBackend(pane));
+    }
+  }
+
+  if (backends.size === 0) {
+    return 'local';
+  }
+
+  if (backends.size === 1) {
+    return backends.has('ssh') ? 'ssh' : 'local';
+  }
+
+  return 'mixed';
+}
+
+function findActiveTerminalPane(panes: Pane[], activePaneId: string): Pane | null {
+  return panes.find((pane) => pane.id === activePaneId && isTerminalPane(pane))
+    ?? panes.find((pane) => isTerminalPane(pane))
+    ?? null;
+}
+
 /**
  * WindowCard 组件
  * 显示单个窗口的关键信息和状态
@@ -106,24 +134,31 @@ export const WindowCard = React.memo<WindowCardProps>(({
   const { enabledIDEs } = useIDESettings();
   const { language, t } = useI18n();
 
-  // 获取窗口的聚合状态和窗格信息
-  const aggregatedStatus = useMemo(() => getAggregatedStatus(window.layout), [window.layout]);
-  const paneCount = useMemo(() => getPaneCount(window.layout), [window.layout]);
-  const panes = useMemo(() => getAllPanes(window.layout), [window.layout]);
-  const windowKind = useMemo(() => getWindowKind(window), [window]);
-  const activeTerminalPane = useMemo(
-    () => getCurrentWindowTerminalPane(window),
-    [window]
-  );
+  const {
+    activeTerminalPane,
+    aggregatedStatus,
+    paneCount,
+    panes,
+    windowKind,
+    workingDirectory,
+  } = useMemo(() => {
+    const nextPanes = getAllPanes(window.layout);
+    const nextActiveTerminalPane = findActiveTerminalPane(nextPanes, window.activePaneId);
+    const nextWorkingDirectory = nextActiveTerminalPane?.cwd || '';
 
-  // 获取第一个窗格的工作目录作为显示
-  const workingDirectory = useMemo(() => {
-    const cwd = getCurrentWindowWorkingDirectory(window);
-    if (process.env.NODE_ENV === 'development' && !cwd) {
-      console.warn(`[WindowCard] Window "${window.name}" (${window.id}) has no cwd. Panes:`, panes);
+    if (process.env.NODE_ENV === 'development' && !nextWorkingDirectory) {
+      console.warn(`[WindowCard] Window "${window.name}" (${window.id}) has no cwd. Panes:`, nextPanes);
     }
-    return cwd;
-  }, [panes, window]);
+
+    return {
+      activeTerminalPane: nextActiveTerminalPane,
+      aggregatedStatus: getAggregatedStatusFromPanes(nextPanes),
+      paneCount: nextPanes.length,
+      panes: nextPanes,
+      windowKind: getWindowKindFromPanes(window, nextPanes),
+      workingDirectory: nextWorkingDirectory,
+    };
+  }, [window]);
 
   // 检查是否有项目链接
   const hasProjectLinks = useMemo(
