@@ -18,21 +18,18 @@ import type { TranslationKey } from '../i18n';
 import { AppLanguage } from '../../shared/i18n';
 import { ChatSettingsTab } from './ChatSettingsTab';
 import { PluginCenter } from './settings/PluginCenter';
+import { CompactSettingRow, CompactSettingsSection } from './settings/CompactSettings';
 import { applyAppearanceToDocument, getAppearanceBackdropDescriptor, getAppearanceSkinStyle } from '../utils/appearance';
 import {
   idePopupActionButtonClassName,
-  idePopupBarePanelClassName,
   idePopupEmptyStateClassName,
   idePopupIconButtonClassName,
   idePopupInputClassName,
-  idePopupPanelClassName,
   idePopupSecondaryButtonClassName,
   idePopupSelectContentClassName,
   idePopupSelectItemClassName,
   idePopupSelectTriggerClassName,
-  idePopupSubtlePanelClassName,
   idePopupSurfaceClassName,
-  idePopupSwitchThumbClassName,
 } from './ui/ide-popup';
 
 interface ShellProgramOption {
@@ -871,29 +868,30 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const activeSkinPreset = APPEARANCE_SKIN_PRESETS.find((preset) => isSameSkinPreset(appearanceSettings.skin, preset.skin)) ?? APPEARANCE_SKIN_PRESETS[0];
   const skinDimOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_DIM_OPTIONS, appearanceSettings.skin.dim);
   const skinBlurOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_BLUR_OPTIONS, appearanceSettings.skin.blur);
-  const settingsPanelSectionClassName = idePopupPanelClassName;
   const settingsPanelSelectContentClassName = `z-[10000] ${idePopupSelectContentClassName}`;
   const settingsPanelSelectTriggerClassName = idePopupSelectTriggerClassName;
   const settingsPanelSelectItemClassName = idePopupSelectItemClassName;
   const settingsPanelInputClassName = idePopupInputClassName;
-  const settingsPanelSubtlePanelClassName = idePopupSubtlePanelClassName;
-  const settingsPanelBarePanelClassName = idePopupBarePanelClassName;
+  const settingsPanelCompactSelectTriggerClassName = `${idePopupSelectTriggerClassName} !h-9 !rounded-lg !px-3 !py-0`;
   const settingsPanelEmptyStateClassName = `${idePopupEmptyStateClassName} px-6 py-16 text-center`;
   const settingsPanelSecondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-11 rounded-2xl px-4`;
   const settingsPanelPrimaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-11 rounded-2xl px-4`;
-  const settingsPanelSwitchThumbClassName = idePopupSwitchThumbClassName;
+  const settingsPanelCompactSecondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-9 rounded-lg px-3 text-sm`;
+  const settingsPanelCompactPrimaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-9 min-w-0 rounded-lg px-3 text-sm`;
+  const settingsPanelCompactSwitchRootClassName = 'relative h-6 w-10 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70';
+  const settingsPanelCompactSwitchThumbClassName = 'block h-5 w-5 translate-x-0.5 rounded-full bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)] shadow-sm transition-transform data-[state=checked]:translate-x-[18px]';
   const settingsPanelSmallIconButtonClassName = `${idePopupIconButtonClassName} h-10 w-10 rounded-2xl`;
   const settingsPanelBadgeClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]';
-  const settingsPanelInfoCardClassName = `${idePopupPanelClassName} p-5 transition-colors hover:border-[rgb(var(--primary))]`;
-  const settingsPanelSegmentedListClassName = 'inline-flex rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] p-1';
-  const settingsPanelSegmentedTriggerClassName = 'rounded-xl px-4 py-2 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]';
+  const settingsPanelInfoCardClassName = 'rounded-[14px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] p-3 transition-colors hover:border-[rgb(var(--primary))]';
+  const settingsPanelSegmentedListClassName = 'inline-flex rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] p-0.5';
+  const settingsPanelSegmentedTriggerClassName = 'rounded-md px-3 py-1.5 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] data-[state=active]:bg-[rgb(var(--accent))] data-[state=active]:text-[rgb(var(--primary))]';
   const settingsPanelPresetCardClassName = (selected: boolean) => joinClassNames(
-    'rounded-[22px] border p-4 text-left transition-all',
+    'rounded-[14px] border p-3 text-left transition-all',
     selected
       ? 'border-[rgb(var(--primary))] bg-[rgb(var(--accent))]'
       : 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]',
   );
-  const settingsPanelPreviewSurfaceClassName = 'relative h-28 overflow-hidden rounded-[18px] border border-black/10 bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]';
+  const settingsPanelPreviewSurfaceClassName = 'relative h-20 overflow-hidden rounded-xl border border-black/10 bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]';
   const settingsPanelSidebarIconClassName = joinClassNames(
     'flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-xl text-[rgb(var(--muted-foreground))] transition-colors',
     'bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] group-data-[state=active]:bg-[color-mix(in_srgb,rgb(var(--card))_82%,transparent)] group-data-[state=active]:text-[rgb(var(--primary))]',
@@ -905,12 +903,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         <Dialog.Content className={`fixed left-1/2 top-1/2 z-[9999] flex h-[72vh] w-[94vw] max-h-[720px] max-w-6xl -translate-x-1/2 -translate-y-1/2 flex-col animate-scale-in ${idePopupSurfaceClassName}`} >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(var(--primary),0.16),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(var(--accent),0.18),_transparent_32%)]" />
 
-          <div className="relative flex items-center justify-between border-b border-[rgb(var(--border))] px-8 py-4">
+          <div className="relative flex items-center justify-between border-b border-[rgb(var(--border))] px-6 py-3">
             <div>
-              <Dialog.Title className="text-2xl font-semibold text-[rgb(var(--foreground))]">
+              <Dialog.Title className="text-lg font-semibold text-[rgb(var(--foreground))]">
                 {t('settings.title')}
               </Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-[rgb(var(--muted-foreground))]">
+              <Dialog.Description className="sr-only">
                 {t('settings.panelDescription')}
               </Dialog.Description>
             </div>
@@ -943,24 +941,74 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
             </aside>
 
             <div className="flex-1 overflow-hidden bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)]">
-              <Tabs.Content value="general" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
-                <div className="mx-auto max-w-3xl space-y-6">
-                  <section className={settingsPanelSectionClassName}>
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                        <Languages size={22} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="mb-5">
-                          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.general.languageTitle')}</h3>
-                          <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.languageDescription')}</p>
-                        </div>
+              <Tabs.Content value="general" className="h-full overflow-y-auto px-6 py-6 data-[state=inactive]:hidden">
+                <div className="mx-auto max-w-4xl space-y-4">
+                  <CompactSettingsSection
+                    title={t('settings.tab.general')}
+                    help={t('settings.general.pageDescription')}
+                    icon={<Languages size={15} />}
+                  >
+                    <CompactSettingRow
+                      label={t('settings.general.languageTitle')}
+                      help={t('settings.general.languageDescription')}
+                    >
+                      <Select.Root value={language} onValueChange={handleLanguageChange}>
+                        <Select.Trigger
+                          aria-label={t('settings.general.languageTitle')}
+                          className={`max-w-[360px] ${settingsPanelCompactSelectTriggerClassName}`}
+                        >
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
 
-                        <Select.Root value={language} onValueChange={handleLanguageChange}>
-                          <Select.Trigger className={settingsPanelSelectTriggerClassName}>
-                            <Select.Value />
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
+                          >
+                            <Select.Viewport className="p-1">
+                              <Select.Item value="zh-CN" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.language.zhCN')}</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="en-US" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>{t('settings.language.enUS')}</Select.ItemText>
+                              </Select.Item>
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
+
+                    <CompactSettingRow
+                      label={t('settings.general.defaultShellLabel')}
+                      htmlFor="default-shell-program"
+                      help={(
+                        <>
+                          <div>{t('settings.general.defaultShellDescription')}</div>
+                          <div className="mt-2">{t('settings.general.defaultShellHint')}</div>
+                        </>
+                      )}
+                    >
+                      <div className="flex w-full max-w-[560px] flex-col gap-2 sm:flex-row">
+                        <Select.Root
+                          value={selectedShellValue}
+                          onValueChange={(value) => handleTerminalSettingsChange({
+                            defaultShellProgram: value === AUTO_SHELL_OPTION_VALUE ? '' : value,
+                          })}
+                        >
+                          <Select.Trigger
+                            id="default-shell-program"
+                            aria-label={t('settings.general.defaultShellLabel')}
+                            className={settingsPanelCompactSelectTriggerClassName}
+                          >
+                            <Select.Value placeholder={t('settings.general.defaultShellPlaceholder')} />
                             <Select.Icon>
-                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
+                              <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
                             </Select.Icon>
                           </Select.Trigger>
 
@@ -973,228 +1021,155 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                               className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                             >
                               <Select.Viewport className="p-1">
-                                <Select.Item value="zh-CN" className={settingsPanelSelectItemClassName}>
-                                  <Select.ItemText>{t('settings.language.zhCN')}</Select.ItemText>
+                                <Select.Item value={AUTO_SHELL_OPTION_VALUE} className={settingsPanelSelectItemClassName}>
+                                  <Select.ItemText>
+                                    {autoShellTarget
+                                      ? t('settings.general.defaultShellAutoOption', { shell: autoShellTarget })
+                                      : t('settings.general.defaultShellAutoFallback')}
+                                  </Select.ItemText>
+                                  <Select.ItemIndicator>
+                                    <Check size={14} />
+                                  </Select.ItemIndicator>
                                 </Select.Item>
-                                <Select.Item value="en-US" className={settingsPanelSelectItemClassName}>
-                                  <Select.ItemText>{t('settings.language.enUS')}</Select.ItemText>
-                                </Select.Item>
+                                {filteredShellOptions.map((shell) => (
+                                  <Select.Item
+                                    key={shell.path}
+                                    value={shell.path}
+                                    className={settingsPanelSelectItemClassName}
+                                  >
+                                    <Select.ItemText>
+                                      {shell.path}
+                                    </Select.ItemText>
+                                    <Select.ItemIndicator>
+                                      <Check size={14} />
+                                    </Select.ItemIndicator>
+                                  </Select.Item>
+                                ))}
                               </Select.Viewport>
                             </Select.Content>
                           </Select.Portal>
                         </Select.Root>
+
+                        <button
+                          type="button"
+                          onClick={handleSelectCustomShell}
+                          className={settingsPanelCompactSecondaryButtonClassName}
+                        >
+                          {t('settings.general.defaultShellCustomButton')}
+                        </button>
                       </div>
-                    </div>
-                  </section>
+                    </CompactSettingRow>
 
-                  <section className={settingsPanelSectionClassName}>
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                        <Command size={22} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="mb-5">
-                          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.general.defaultShellTitle')}</h3>
-                          <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.defaultShellDescription')}</p>
-                        </div>
+                    <CompactSettingRow
+                      label={t('settings.general.fontFamilyLabel')}
+                      htmlFor="terminal-font-family"
+                      help={t('settings.general.terminalFontDescription')}
+                    >
+                      <Select.Root
+                        value={terminalSettings.fontFamily || 'default'}
+                        onValueChange={(value) => handleTerminalSettingsChange({
+                          fontFamily: value === 'default' ? '' : value,
+                        })}
+                      >
+                        <Select.Trigger
+                          id="terminal-font-family"
+                          aria-label={t('settings.general.fontFamilyLabel')}
+                          className={`max-w-[360px] ${settingsPanelCompactSelectTriggerClassName}`}
+                        >
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
 
-                        <label htmlFor="default-shell-program" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
-                          {t('settings.general.defaultShellLabel')}
-                        </label>
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start">
-                          <div className="flex-1">
-                            <Select.Root
-                              value={selectedShellValue}
-                              onValueChange={(value) => handleTerminalSettingsChange({
-                                defaultShellProgram: value === AUTO_SHELL_OPTION_VALUE ? '' : value,
-                              })}
-                            >
-                              <Select.Trigger
-                                id="default-shell-program"
-                                className={settingsPanelSelectTriggerClassName}
-                              >
-                                <Select.Value placeholder={t('settings.general.defaultShellPlaceholder')} />
-                                <Select.Icon>
-                                  <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
-                                </Select.Icon>
-                              </Select.Trigger>
-
-                              <Select.Portal>
-                                <Select.Content
-                                  position="popper"
-                                  side="bottom"
-                                  align="start"
-                                  sideOffset={6}
-                                  className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
-                                >
-                                  <Select.Viewport className="p-1">
-                                    <Select.Item value={AUTO_SHELL_OPTION_VALUE} className={settingsPanelSelectItemClassName}>
-                                      <Select.ItemText>
-                                        {autoShellTarget
-                                          ? t('settings.general.defaultShellAutoOption', { shell: autoShellTarget })
-                                          : t('settings.general.defaultShellAutoFallback')}
-                                      </Select.ItemText>
-                                      <Select.ItemIndicator>
-                                        <Check size={14} />
-                                      </Select.ItemIndicator>
-                                    </Select.Item>
-                                    {filteredShellOptions.map((shell) => (
-                                      <Select.Item
-                                        key={shell.path}
-                                        value={shell.path}
-                                        className={settingsPanelSelectItemClassName}
-                                      >
-                                        <Select.ItemText>
-                                          {shell.path}
-                                        </Select.ItemText>
-                                        <Select.ItemIndicator>
-                                          <Check size={14} />
-                                        </Select.ItemIndicator>
-                                      </Select.Item>
-                                    ))}
-                                  </Select.Viewport>
-                                </Select.Content>
-                              </Select.Portal>
-                            </Select.Root>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={handleSelectCustomShell}
-                            className={`${settingsPanelSecondaryButtonClassName} md:mt-[30px]`} 
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                           >
-                            {t('settings.general.defaultShellCustomButton')}
-                          </button>
-                        </div>
-                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.general.defaultShellHint')}</p>
-                      </div>
-                    </div>
-                  </section>
+                            <Select.Viewport className="p-1">
+                              <Select.Item value="default" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>默认</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="JetBrains Mono" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>JetBrains Mono</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="Fira Code" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>Fira Code</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="Cascadia Code" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>Cascadia Code</Select.ItemText>
+                              </Select.Item>
+                              <Select.Item value="Consolas" className={settingsPanelSelectItemClassName}>
+                                <Select.ItemText>Consolas</Select.ItemText>
+                              </Select.Item>
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
 
-                  <section className={settingsPanelSectionClassName}>
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                        <Monitor size={22} />
-                      </div>
-                      <div className="flex-1">
-                        <div className="mb-5">
-                          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.general.terminalFontTitle')}</h3>
-                          <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.terminalFontDescription')}</p>
-                        </div>
+                    <CompactSettingRow
+                      label={t('settings.general.fontSizeLabel')}
+                      htmlFor="terminal-font-size"
+                      help={t('settings.general.terminalFontDescription')}
+                    >
+                      <Select.Root
+                        value={String(terminalSettings.fontSize)}
+                        onValueChange={(value) => handleTerminalSettingsChange({
+                          fontSize: Number(value),
+                        })}
+                      >
+                        <Select.Trigger
+                          id="terminal-font-size"
+                          aria-label={t('settings.general.fontSizeLabel')}
+                          className={`max-w-[180px] ${settingsPanelCompactSelectTriggerClassName}`}
+                        >
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
 
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div>
-                            <label htmlFor="terminal-font-family" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
-                              {t('settings.general.fontFamilyLabel')}
-                            </label>
-                            <Select.Root
-                              value={terminalSettings.fontFamily || 'default'}
-                              onValueChange={(value) => handleTerminalSettingsChange({
-                                fontFamily: value === 'default' ? '' : value,
-                              })}
-                            >
-                              <Select.Trigger
-                                id="terminal-font-family"
-                                className={settingsPanelSelectTriggerClassName}
-                              >
-                                <Select.Value />
-                                <Select.Icon>
-                                  <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
-                                </Select.Icon>
-                              </Select.Trigger>
-
-                              <Select.Portal>
-                                <Select.Content
-                                  position="popper"
-                                  side="bottom"
-                                  align="start"
-                                  sideOffset={6}
-                                  className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
+                          >
+                            <Select.Viewport className="p-1">
+                              {[12, 13, 14, 15, 16, 18, 20].map((size) => (
+                                <Select.Item
+                                  key={size}
+                                  value={String(size)}
+                                  className={settingsPanelSelectItemClassName}
                                 >
-                                  <Select.Viewport className="p-1">
-                                    <Select.Item value="default" className={settingsPanelSelectItemClassName}>
-                                      <Select.ItemText>默认</Select.ItemText>
-                                    </Select.Item>
-                                    <Select.Item value="JetBrains Mono" className={settingsPanelSelectItemClassName}>
-                                      <Select.ItemText>JetBrains Mono</Select.ItemText>
-                                    </Select.Item>
-                                    <Select.Item value="Fira Code" className={settingsPanelSelectItemClassName}>
-                                      <Select.ItemText>Fira Code</Select.ItemText>
-                                    </Select.Item>
-                                    <Select.Item value="Cascadia Code" className={settingsPanelSelectItemClassName}>
-                                      <Select.ItemText>Cascadia Code</Select.ItemText>
-                                    </Select.Item>
-                                    <Select.Item value="Consolas" className={settingsPanelSelectItemClassName}>
-                                      <Select.ItemText>Consolas</Select.ItemText>
-                                    </Select.Item>
-                                  </Select.Viewport>
-                                </Select.Content>
-                              </Select.Portal>
-                            </Select.Root>
-                          </div>
-
-                          <div>
-                            <label htmlFor="terminal-font-size" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
-                              {t('settings.general.fontSizeLabel')}
-                            </label>
-                            <Select.Root
-                              value={String(terminalSettings.fontSize)}
-                              onValueChange={(value) => handleTerminalSettingsChange({
-                                fontSize: Number(value),
-                              })}
-                            >
-                              <Select.Trigger
-                                id="terminal-font-size"
-                                className={settingsPanelSelectTriggerClassName}
-                              >
-                                <Select.Value />
-                                <Select.Icon>
-                                  <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
-                                </Select.Icon>
-                              </Select.Trigger>
-
-                              <Select.Portal>
-                                <Select.Content
-                                  position="popper"
-                                  side="bottom"
-                                  align="start"
-                                  sideOffset={6}
-                                  className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
-                                >
-                                  <Select.Viewport className="p-1">
-                                    {[12, 13, 14, 15, 16, 18, 20].map((size) => (
-                                      <Select.Item
-                                        key={size}
-                                        value={String(size)}
-                                        className={settingsPanelSelectItemClassName}
-                                      >
-                                        <Select.ItemText>{size}</Select.ItemText>
-                                      </Select.Item>
-                                    ))}
-                                  </Select.Viewport>
-                                </Select.Content>
-                              </Select.Portal>
-                            </Select.Root>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
+                                  <Select.ItemText>{size}</Select.ItemText>
+                                </Select.Item>
+                              ))}
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
+                  </CompactSettingsSection>
                 </div>
               </Tabs.Content>
 
-              <Tabs.Content value="appearance" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
-                <div className="mx-auto max-w-5xl space-y-6">
-                  <section className={settingsPanelSectionClassName}>
-                    <div className="mb-6 flex items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                        <Palette size={22} />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.themeTitle')}</h3>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.themeDescription')}</p>
-                      </div>
-                    </div>
+              <Tabs.Content value="appearance" className="h-full overflow-y-auto px-6 py-6 data-[state=inactive]:hidden">
+                <div className="mx-auto max-w-5xl space-y-4">
+                  <CompactSettingsSection
+                    title={t('settings.appearance.themeTitle')}
+                    help={t('settings.appearance.themeDescription')}
+                    icon={<Palette size={15} />}
+                    contentClassName="p-4"
+                    divided={false}
+                  >
 
                     <div className="grid gap-4 md:grid-cols-3">
                       {APPEARANCE_THEME_PRESETS.map((preset) => {
@@ -1208,20 +1183,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             className={settingsPanelPresetCardClassName(selected)}
                           >
                             <div
-                              className="h-24 rounded-[18px] border border-black/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                              className="h-16 rounded-xl border border-black/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                               style={{ background: preset.preview }}
                             />
-                            <div className="mt-4 flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-semibold text-[rgb(var(--foreground))]">
-                                  {t(`settings.appearance.theme.${preset.id}`)}
-                                </div>
-                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
-                                  {t(`settings.appearance.theme.${preset.id}Description`)}
-                                </div>
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                              <div className="min-w-0 text-sm font-semibold text-[rgb(var(--foreground))]">
+                                {t(`settings.appearance.theme.${preset.id}`)}
                               </div>
                               {selected && (
-                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
+                                <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
                                   <Check size={14} />
                                 </span>
                               )}
@@ -1230,18 +1200,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         );
                       })}
                     </div>
-                  </section>
+                  </CompactSettingsSection>
 
-                  <section className={settingsPanelSectionClassName}>
-                    <div className="mb-6 flex items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                        <Wallpaper size={22} />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.skinTitle')}</h3>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinDescription')}</p>
-                      </div>
-                    </div>
+                  <CompactSettingsSection
+                    title={t('settings.appearance.skinTitle')}
+                    help={t('settings.appearance.skinDescription')}
+                    icon={<Wallpaper size={15} />}
+                    contentClassName="p-4"
+                    divided={false}
+                  >
 
                     <div className="grid gap-4 md:grid-cols-2">
                       {APPEARANCE_SKIN_PRESETS.map((preset) => {
@@ -1263,7 +1230,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                 }}
                               />
                               <div
-                                className="absolute inset-x-4 bottom-4 rounded-2xl border border-white/10 px-4 py-3 text-sm shadow-[0_12px_28px_rgba(0,0,0,0.18)]"
+                                className="absolute inset-x-3 bottom-3 rounded-xl border border-white/10 px-3 py-2 text-xs shadow-[0_12px_28px_rgba(0,0,0,0.18)]"
                                 style={{
                                   ...getAppearanceSkinStyle({
                                     ...appearanceSettings,
@@ -1275,16 +1242,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                 }}
                               >
                                 <div className="font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.previewTitle')}</div>
-                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.appearance.previewSubtitle')}</div>
                               </div>
                             </div>
-                            <div className="mt-4 flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t(preset.labelKey)}</div>
-                                <div className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t(preset.descriptionKey)}</div>
+                            <div className="mt-3 flex items-center justify-between gap-3">
+                              <div className="min-w-0 text-sm font-semibold text-[rgb(var(--foreground))]">
+                                {t(preset.labelKey)}
                               </div>
                               {selected && (
-                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
+                                <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
                                   <Check size={14} />
                                 </span>
                               )}
@@ -1294,23 +1259,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                       })}
                     </div>
 
-                    <div className={`mt-4 ${settingsPanelSubtlePanelClassName}`}>
-                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                        <div className="min-w-0">
-                          <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.customImageTitle')}</h4>
-                          <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.customImageDescription')}</p>
-                          {appearanceSettings.skin.kind === 'image' && appearanceSettings.skin.imagePath && (
-                            <p className="mt-2 truncate text-xs text-[rgb(var(--muted-foreground))]">
-                              {appearanceSettings.skin.imagePath}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
+                    <div className="mt-4 overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_54%,transparent)]">
+                      <CompactSettingRow
+                        label={t('settings.appearance.customImageTitle')}
+                        help={(
+                          <>
+                            <div>{t('settings.appearance.customImageDescription')}</div>
+                            {appearanceSettings.skin.kind === 'image' && appearanceSettings.skin.imagePath && (
+                              <div className="mt-2 break-all font-mono">{appearanceSettings.skin.imagePath}</div>
+                            )}
+                          </>
+                        )}
+                      >
+                        <div className="flex flex-wrap justify-end gap-2">
                           <button
                             type="button"
                             onClick={handleSelectAppearanceImage}
-                            className={settingsPanelSecondaryButtonClassName}
+                            className={settingsPanelCompactSecondaryButtonClassName}
                           >
                             {t('settings.appearance.customImageButton')}
                           </button>
@@ -1318,350 +1283,340 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             <button
                               type="button"
                               onClick={() => handleAppearanceSettingsChange({ skin: APPEARANCE_SKIN_PRESETS[1].skin })}
-                              className={settingsPanelSecondaryButtonClassName}
+                              className={settingsPanelCompactSecondaryButtonClassName}
                             >
                               {t('settings.appearance.customImageReset')}
                             </button>
                           )}
                         </div>
-                      </div>
+                      </CompactSettingRow>
                     </div>
-                  </section>
+                  </CompactSettingsSection>
 
-                  <section className={settingsPanelSectionClassName}>
-                    <div className="mb-6 flex items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                        <SunMoon size={22} />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.readabilityTitle')}</h3>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.readabilityDescription')}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 lg:grid-cols-[1.3fr_0.9fr]">
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <label htmlFor="appearance-readability" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
-                          {t('settings.appearance.readabilityLabel')}
-                        </label>
-                        <Select.Root
-                          value={appearanceSettings.readabilityMode}
-                          onValueChange={(value) => handleAppearanceSettingsChange({ readabilityMode: value as AppearanceReadabilityMode })}
+                  <CompactSettingsSection
+                    title={t('settings.appearance.readabilityTitle')}
+                    help={t('settings.appearance.readabilityDescription')}
+                    icon={<SunMoon size={15} />}
+                  >
+                    <CompactSettingRow
+                      label={t('settings.appearance.readabilityLabel')}
+                      htmlFor="appearance-readability"
+                      help={t(`settings.appearance.readability.${appearanceSettings.readabilityMode}Description`)}
+                    >
+                      <Select.Root
+                        value={appearanceSettings.readabilityMode}
+                        onValueChange={(value) => handleAppearanceSettingsChange({ readabilityMode: value as AppearanceReadabilityMode })}
+                      >
+                        <Select.Trigger
+                          id="appearance-readability"
+                          aria-label={t('settings.appearance.readabilityLabel')}
+                          className={`max-w-[320px] ${settingsPanelCompactSelectTriggerClassName}`}
                         >
-                          <Select.Trigger
-                            id="appearance-readability"
-                            aria-label={t('settings.appearance.readabilityLabel')}
-                            className={settingsPanelSelectTriggerClassName}
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
+
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                           >
-                            <Select.Value />
-                            <Select.Icon>
-                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
-                            </Select.Icon>
-                          </Select.Trigger>
+                            <Select.Viewport className="p-1">
+                              {APPEARANCE_READABILITY_MODES.map((mode) => (
+                                <Select.Item
+                                  key={mode}
+                                  value={mode}
+                                  className={settingsPanelSelectItemClassName}
+                                >
+                                  <Select.ItemText>{t(`settings.appearance.readability.${mode}`)}</Select.ItemText>
+                                  <Select.ItemIndicator>
+                                    <Check size={14} />
+                                  </Select.ItemIndicator>
+                                </Select.Item>
+                              ))}
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
 
-                          <Select.Portal>
-                            <Select.Content
-                              position="popper"
-                              side="bottom"
-                              align="start"
-                              sideOffset={6}
-                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
-                            >
-                              <Select.Viewport className="p-1">
-                                {APPEARANCE_READABILITY_MODES.map((mode) => (
-                                  <Select.Item
-                                    key={mode}
-                                    value={mode}
-                                    className={settingsPanelSelectItemClassName}
-                                  >
-                                    <Select.ItemText>{t(`settings.appearance.readability.${mode}`)}</Select.ItemText>
-                                    <Select.ItemIndicator>
-                                      <Check size={14} />
-                                    </Select.ItemIndicator>
-                                  </Select.Item>
-                                ))}
-                              </Select.Viewport>
-                            </Select.Content>
-                          </Select.Portal>
-                        </Select.Root>
-                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">
-                          {t(`settings.appearance.readability.${appearanceSettings.readabilityMode}Description`)}
-                        </p>
-                      </div>
-
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <label htmlFor="appearance-terminal-opacity" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
-                          {t('settings.appearance.opacityLabel')}
-                        </label>
-                        <Select.Root
-                          value={String(appearanceSettings.terminalOpacity)}
-                          onValueChange={(value) => handleAppearanceSettingsChange({ terminalOpacity: Number(value) })}
+                    <CompactSettingRow
+                      label={t('settings.appearance.opacityLabel')}
+                      htmlFor="appearance-terminal-opacity"
+                      help={t('settings.appearance.opacityDescription')}
+                    >
+                      <Select.Root
+                        value={String(appearanceSettings.terminalOpacity)}
+                        onValueChange={(value) => handleAppearanceSettingsChange({ terminalOpacity: Number(value) })}
+                      >
+                        <Select.Trigger
+                          id="appearance-terminal-opacity"
+                          aria-label={t('settings.appearance.opacityLabel')}
+                          className={`max-w-[180px] ${settingsPanelCompactSelectTriggerClassName}`}
                         >
-                          <Select.Trigger
-                            id="appearance-terminal-opacity"
-                            aria-label={t('settings.appearance.opacityLabel')}
-                            className={settingsPanelSelectTriggerClassName}
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
+
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                           >
-                            <Select.Value />
-                            <Select.Icon>
-                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
-                            </Select.Icon>
-                          </Select.Trigger>
+                            <Select.Viewport className="p-1">
+                              {APPEARANCE_OPACITY_OPTIONS.map((value) => (
+                                <Select.Item
+                                  key={value}
+                                  value={String(value)}
+                                  className={settingsPanelSelectItemClassName}
+                                >
+                                  <Select.ItemText>{t('settings.appearance.opacityValue', { value: Math.round(value * 100) })}</Select.ItemText>
+                                  <Select.ItemIndicator>
+                                    <Check size={14} />
+                                  </Select.ItemIndicator>
+                                </Select.Item>
+                              ))}
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
 
-                          <Select.Portal>
-                            <Select.Content
-                              position="popper"
-                              side="bottom"
-                              align="start"
-                              sideOffset={6}
-                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
-                            >
-                              <Select.Viewport className="p-1">
-                                {APPEARANCE_OPACITY_OPTIONS.map((value) => (
-                                  <Select.Item
-                                    key={value}
-                                    value={String(value)}
-                                    className={settingsPanelSelectItemClassName}
-                                  >
-                                    <Select.ItemText>{t('settings.appearance.opacityValue', { value: Math.round(value * 100) })}</Select.ItemText>
-                                    <Select.ItemIndicator>
-                                      <Check size={14} />
-                                    </Select.ItemIndicator>
-                                  </Select.Item>
-                                ))}
-                              </Select.Viewport>
-                            </Select.Content>
-                          </Select.Portal>
-                        </Select.Root>
-                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.opacityDescription')}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <label htmlFor="appearance-skin-dim" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
-                          {t('settings.appearance.skinDimLabel')}
-                        </label>
-                        <Select.Root
-                          value={String(appearanceSettings.skin.dim)}
-                          onValueChange={(value) => handleAppearanceSettingsChange({
-                            skin: {
-                              ...appearanceSettings.skin,
-                              dim: Number(value),
-                            },
-                          })}
+                    <CompactSettingRow
+                      label={t('settings.appearance.skinDimLabel')}
+                      htmlFor="appearance-skin-dim"
+                      help={t('settings.appearance.skinDimDescription')}
+                    >
+                      <Select.Root
+                        value={String(appearanceSettings.skin.dim)}
+                        onValueChange={(value) => handleAppearanceSettingsChange({
+                          skin: {
+                            ...appearanceSettings.skin,
+                            dim: Number(value),
+                          },
+                        })}
+                      >
+                        <Select.Trigger
+                          id="appearance-skin-dim"
+                          aria-label={t('settings.appearance.skinDimLabel')}
+                          className={`max-w-[180px] ${settingsPanelCompactSelectTriggerClassName}`}
                         >
-                          <Select.Trigger
-                            id="appearance-skin-dim"
-                            aria-label={t('settings.appearance.skinDimLabel')}
-                            className={settingsPanelSelectTriggerClassName}
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
+
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                           >
-                            <Select.Value />
-                            <Select.Icon>
-                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
-                            </Select.Icon>
-                          </Select.Trigger>
+                            <Select.Viewport className="p-1">
+                              {skinDimOptions.map((value) => (
+                                <Select.Item
+                                  key={value}
+                                  value={String(value)}
+                                  className={settingsPanelSelectItemClassName}
+                                >
+                                  <Select.ItemText>{t('settings.appearance.skinDimValue', { value: Math.round(value * 100) })}</Select.ItemText>
+                                  <Select.ItemIndicator>
+                                    <Check size={14} />
+                                  </Select.ItemIndicator>
+                                </Select.Item>
+                              ))}
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
 
-                          <Select.Portal>
-                            <Select.Content
-                              position="popper"
-                              side="bottom"
-                              align="start"
-                              sideOffset={6}
-                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
-                            >
-                              <Select.Viewport className="p-1">
-                                {skinDimOptions.map((value) => (
-                                  <Select.Item
-                                    key={value}
-                                    value={String(value)}
-                                    className={settingsPanelSelectItemClassName}
-                                  >
-                                    <Select.ItemText>{t('settings.appearance.skinDimValue', { value: Math.round(value * 100) })}</Select.ItemText>
-                                    <Select.ItemIndicator>
-                                      <Check size={14} />
-                                    </Select.ItemIndicator>
-                                  </Select.Item>
-                                ))}
-                              </Select.Viewport>
-                            </Select.Content>
-                          </Select.Portal>
-                        </Select.Root>
-                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinDimDescription')}</p>
-                      </div>
-
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <label htmlFor="appearance-skin-blur" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
-                          {t('settings.appearance.skinBlurLabel')}
-                        </label>
-                        <Select.Root
-                          value={String(appearanceSettings.skin.blur)}
-                          onValueChange={(value) => handleAppearanceSettingsChange({
-                            skin: {
-                              ...appearanceSettings.skin,
-                              blur: Number(value),
-                            },
-                          })}
+                    <CompactSettingRow
+                      label={t('settings.appearance.skinBlurLabel')}
+                      htmlFor="appearance-skin-blur"
+                      help={t('settings.appearance.skinBlurDescription')}
+                    >
+                      <Select.Root
+                        value={String(appearanceSettings.skin.blur)}
+                        onValueChange={(value) => handleAppearanceSettingsChange({
+                          skin: {
+                            ...appearanceSettings.skin,
+                            blur: Number(value),
+                          },
+                        })}
+                      >
+                        <Select.Trigger
+                          id="appearance-skin-blur"
+                          aria-label={t('settings.appearance.skinBlurLabel')}
+                          className={`max-w-[180px] ${settingsPanelCompactSelectTriggerClassName}`}
                         >
-                          <Select.Trigger
-                            id="appearance-skin-blur"
-                            aria-label={t('settings.appearance.skinBlurLabel')}
-                            className={settingsPanelSelectTriggerClassName}
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
+
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                           >
-                            <Select.Value />
-                            <Select.Icon>
-                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
-                            </Select.Icon>
-                          </Select.Trigger>
+                            <Select.Viewport className="p-1">
+                              {skinBlurOptions.map((value) => (
+                                <Select.Item
+                                  key={value}
+                                  value={String(value)}
+                                  className={settingsPanelSelectItemClassName}
+                                >
+                                  <Select.ItemText>{t('settings.appearance.skinBlurValue', { value })}</Select.ItemText>
+                                  <Select.ItemIndicator>
+                                    <Check size={14} />
+                                  </Select.ItemIndicator>
+                                </Select.Item>
+                              ))}
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
 
-                          <Select.Portal>
-                            <Select.Content
-                              position="popper"
-                              side="bottom"
-                              align="start"
-                              sideOffset={6}
-                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
-                            >
-                              <Select.Viewport className="p-1">
-                                {skinBlurOptions.map((value) => (
-                                  <Select.Item
-                                    key={value}
-                                    value={String(value)}
-                                    className={settingsPanelSelectItemClassName}
-                                  >
-                                    <Select.ItemText>{t('settings.appearance.skinBlurValue', { value })}</Select.ItemText>
-                                    <Select.ItemIndicator>
-                                      <Check size={14} />
-                                    </Select.ItemIndicator>
-                                  </Select.Item>
-                                ))}
-                              </Select.Viewport>
-                            </Select.Content>
-                          </Select.Portal>
-                        </Select.Root>
-                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinBlurDescription')}</p>
-                      </div>
-
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <label htmlFor="appearance-skin-motion" className="mb-2 block text-sm font-medium text-[rgb(var(--foreground))]">
-                          {t('settings.appearance.skinMotionLabel')}
-                        </label>
-                        <Select.Root
-                          value={appearanceSettings.skin.motion}
-                          onValueChange={(value) => handleAppearanceSettingsChange({
-                            skin: {
-                              ...appearanceSettings.skin,
-                              motion: value as AppearanceSkinMotionMode,
-                            },
-                          })}
+                    <CompactSettingRow
+                      label={t('settings.appearance.skinMotionLabel')}
+                      htmlFor="appearance-skin-motion"
+                      help={t('settings.appearance.skinMotionDescription')}
+                    >
+                      <Select.Root
+                        value={appearanceSettings.skin.motion}
+                        onValueChange={(value) => handleAppearanceSettingsChange({
+                          skin: {
+                            ...appearanceSettings.skin,
+                            motion: value as AppearanceSkinMotionMode,
+                          },
+                        })}
+                      >
+                        <Select.Trigger
+                          id="appearance-skin-motion"
+                          aria-label={t('settings.appearance.skinMotionLabel')}
+                          className={`max-w-[220px] ${settingsPanelCompactSelectTriggerClassName}`}
                         >
-                          <Select.Trigger
-                            id="appearance-skin-motion"
-                            aria-label={t('settings.appearance.skinMotionLabel')}
-                            className={settingsPanelSelectTriggerClassName}
+                          <Select.Value />
+                          <Select.Icon>
+                            <ChevronDown size={15} className="text-[rgb(var(--muted-foreground))]" />
+                          </Select.Icon>
+                        </Select.Trigger>
+
+                        <Select.Portal>
+                          <Select.Content
+                            position="popper"
+                            side="bottom"
+                            align="start"
+                            sideOffset={6}
+                            className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                           >
-                            <Select.Value />
-                            <Select.Icon>
-                              <ChevronDown size={16} className="text-[rgb(var(--muted-foreground))]" />
-                            </Select.Icon>
-                          </Select.Trigger>
+                            <Select.Viewport className="p-1">
+                              {APPEARANCE_SKIN_MOTION_MODES.map((mode) => (
+                                <Select.Item
+                                  key={mode}
+                                  value={mode}
+                                  className={settingsPanelSelectItemClassName}
+                                >
+                                  <Select.ItemText>{t(`settings.appearance.skinMotion.${mode}`)}</Select.ItemText>
+                                  <Select.ItemIndicator>
+                                    <Check size={14} />
+                                  </Select.ItemIndicator>
+                                </Select.Item>
+                              ))}
+                            </Select.Viewport>
+                          </Select.Content>
+                        </Select.Portal>
+                      </Select.Root>
+                    </CompactSettingRow>
 
-                          <Select.Portal>
-                            <Select.Content
-                              position="popper"
-                              side="bottom"
-                              align="start"
-                              sideOffset={6}
-                              className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
-                            >
-                              <Select.Viewport className="p-1">
-                                {APPEARANCE_SKIN_MOTION_MODES.map((mode) => (
-                                  <Select.Item
-                                    key={mode}
-                                    value={mode}
-                                    className={settingsPanelSelectItemClassName}
-                                  >
-                                    <Select.ItemText>{t(`settings.appearance.skinMotion.${mode}`)}</Select.ItemText>
-                                    <Select.ItemIndicator>
-                                      <Check size={14} />
-                                    </Select.ItemIndicator>
-                                  </Select.Item>
-                                ))}
-                              </Select.Viewport>
-                            </Select.Content>
-                          </Select.Portal>
-                        </Select.Root>
-                        <p className="mt-2 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.skinMotionDescription')}</p>
-                      </div>
-                    </div>
-
-                    <div className={`mt-4 ${settingsPanelSubtlePanelClassName}`}>
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.appearance.reduceMotionTitle')}</h4>
-                          <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.appearance.reduceMotionDescription')}</p>
-                        </div>
-                        <Switch.Root
-                          checked={appearanceSettings.reduceMotion}
-                          onCheckedChange={(checked) => handleAppearanceSettingsChange({ reduceMotion: checked })}
-                          aria-label={t('settings.appearance.reduceMotionTitle')}
-                          className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
-                        >
-                          <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
-                        </Switch.Root>
-                      </div>
-                    </div>
-                  </section>
+                    <CompactSettingRow
+                      label={t('settings.appearance.reduceMotionTitle')}
+                      help={t('settings.appearance.reduceMotionDescription')}
+                    >
+                      <Switch.Root
+                        checked={appearanceSettings.reduceMotion}
+                        onCheckedChange={(checked) => handleAppearanceSettingsChange({ reduceMotion: checked })}
+                        aria-label={t('settings.appearance.reduceMotionTitle')}
+                        className={settingsPanelCompactSwitchRootClassName}
+                      >
+                        <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
+                      </Switch.Root>
+                    </CompactSettingRow>
+                  </CompactSettingsSection>
                 </div>
               </Tabs.Content>
 
-              <Tabs.Content value="quicknav" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
-                <div className="mx-auto max-w-5xl space-y-6">
-                  <Tabs.Root value={quickNavTab} onValueChange={(value) => setQuickNavTab(value as QuickNavSubTab)} className="space-y-6">
-                    <Tabs.List className={settingsPanelSegmentedListClassName}>
-                      <Tabs.Trigger
-                        value="ide"
-                        className={settingsPanelSegmentedTriggerClassName}
-                      >
-                        {t('settings.quickNav.ideTab')}
-                      </Tabs.Trigger>
-                      <Tabs.Trigger
-                        value="custom"
-                        className={settingsPanelSegmentedTriggerClassName}
-                      >
-                        {t('settings.quickNav.customTab')}
-                      </Tabs.Trigger>
-                    </Tabs.List>
+              <Tabs.Content value="quicknav" className="h-full overflow-y-auto px-6 py-6 data-[state=inactive]:hidden">
+                <div className="mx-auto max-w-5xl space-y-4">
+                  <Tabs.Root value={quickNavTab} onValueChange={(value) => setQuickNavTab(value as QuickNavSubTab)} className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <Tabs.List className={settingsPanelSegmentedListClassName}>
+                        <Tabs.Trigger
+                          value="ide"
+                          className={settingsPanelSegmentedTriggerClassName}
+                        >
+                          {t('settings.quickNav.ideTab')}
+                        </Tabs.Trigger>
+                        <Tabs.Trigger
+                          value="custom"
+                          className={settingsPanelSegmentedTriggerClassName}
+                        >
+                          {t('settings.quickNav.customTab')}
+                        </Tabs.Trigger>
+                      </Tabs.List>
+                    </div>
 
                     <Tabs.Content value="ide" className="space-y-4 data-[state=inactive]:hidden">
-                      <div className={idePopupPanelClassName}>
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                          <div>
-                            <p className="max-w-2xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.quickNav.ideDescription')}</p>
+                      <CompactSettingsSection
+                        title={t('settings.quickNav.ideTab')}
+                        help={t('settings.quickNav.ideDescription')}
+                        icon={<Monitor size={15} />}
+                        actions={(
+                          <>
                             {scanMessage && (
-                              <p className="mt-3 text-sm text-[rgb(var(--muted-foreground))]">{scanMessage}</p>
+                              <span className="max-w-[320px] truncate text-xs text-[rgb(var(--muted-foreground))]" title={scanMessage}>
+                                {scanMessage}
+                              </span>
                             )}
-                          </div>
-
-                          <div className="flex flex-wrap gap-3">
                             <button
                               onClick={handleScanAll}
                               disabled={scanning}
-                              className={settingsPanelPrimaryButtonClassName}
+                              className={settingsPanelCompactPrimaryButtonClassName}
                             >
-                              <Search size={16} />
+                              <Search size={15} />
                               {scanning ? t('common.loading') : t('settings.ide.scan')}
                             </button>
                             <button
                               onClick={handleAddIDE}
-                              className={settingsPanelSecondaryButtonClassName}
+                              className={settingsPanelCompactSecondaryButtonClassName}
                             >
-                              <Plus size={16} />
+                              <Plus size={15} />
                               {t('settings.ide.addCustom')}
                             </button>
-                          </div>
-                        </div>
-                      </div>
+                          </>
+                        )}
+                        contentClassName="p-4"
+                        divided={false}
+                      >
 
                       {ides.length === 0 ? (
                         <div className={settingsPanelEmptyStateClassName}>
@@ -1670,25 +1625,25 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.ide.emptyDescription')}</p>
                         </div>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           {ides.map((ide) => (
                             <div
                               key={ide.id}
                               className={settingsPanelInfoCardClassName}
                             >
-                              <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-                                <div className="flex min-w-0 flex-1 items-center gap-4">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                                <div className="flex min-w-0 flex-1 items-center gap-3">
                                   <button
                                     type="button"
                                     onClick={() => handleSelectIDEIcon(ide.id)}
-                                    className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] transition-colors hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--accent))]"
+                                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] transition-colors hover:border-[rgb(var(--primary))] hover:bg-[rgb(var(--accent))]"
                                     title="点击自定义 IDE Logo"
                                   >
-                                    <IDEIcon icon={ide.icon || ''} size={30} className="text-[rgb(var(--foreground))]" />
+                                    <IDEIcon icon={ide.icon || ''} size={24} className="text-[rgb(var(--foreground))]" />
                                   </button>
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{ide.name}</h3>
+                                      <h3 className="text-sm font-semibold text-[rgb(var(--foreground))]">{ide.name}</h3>
                                       {ide.detected && ide.path && (
                                         <span className="rounded-full border border-[rgba(168,170,88,0.20)] bg-[rgba(168,170,88,0.10)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--primary))]">
                                           {t('settings.ide.found')}
@@ -1705,7 +1660,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                         </span>
                                       )}
                                     </div>
-                                    <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.ide.commandPrefix', { command: ide.command })}</p>
+                                    <p className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.ide.commandPrefix', { command: ide.command })}</p>
                                     {(ide.installPath || ide.path) && (
                                       <p className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]" title={ide.installPath || ide.path}>
                                         {ide.installPath || ide.path}
@@ -1718,9 +1673,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                                   <Switch.Root
                                     checked={ide.enabled}
                                     onCheckedChange={(checked) => handleToggleIDE(ide.id, checked)}
-                                    className="relative h-7 w-12 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
+                                    className={settingsPanelCompactSwitchRootClassName}
                                   >
-                                    <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
+                                    <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
                                   </Switch.Root>
                                   <button
                                     onClick={() => {
@@ -1745,24 +1700,26 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           ))}
                         </div>
                       )}
+                      </CompactSettingsSection>
                     </Tabs.Content>
 
                     <Tabs.Content value="custom" className="space-y-4 data-[state=inactive]:hidden">
-                      <div className={idePopupPanelClassName}>
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                          <div>
-                            <p className="max-w-2xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.quickNav.customDescription')}</p>
-                          </div>
-
+                      <CompactSettingsSection
+                        title={t('settings.quickNav.customTab')}
+                        help={t('settings.quickNav.customDescription')}
+                        icon={<Compass size={15} />}
+                        actions={(
                           <button
                             onClick={handleAddNavItem}
-                            className={settingsPanelPrimaryButtonClassName}
+                            className={settingsPanelCompactPrimaryButtonClassName}
                           >
-                            <Plus size={16} />
+                            <Plus size={15} />
                             {t('settings.quickNav.add')}
                           </button>
-                        </div>
-                      </div>
+                        )}
+                        contentClassName="p-4"
+                        divided={false}
+                      >
 
                       {quickNavItems.length === 0 ? (
                         <div className={settingsPanelEmptyStateClassName}>
@@ -1771,29 +1728,29 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.quickNav.emptyDescription')}</p>
                         </div>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           {quickNavItems.map((item) => (
                             <div
                               key={item.id}
                               className={settingsPanelInfoCardClassName}
                             >
-                              <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                                <div className="flex min-w-0 flex-1 items-center gap-4">
-                                  <div className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border ${
+                              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                                <div className="flex min-w-0 flex-1 items-center gap-3">
+                                  <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border ${
                                     item.type === 'url'
                                       ? 'border-[rgb(var(--border))] bg-[rgb(var(--accent))] text-[rgb(var(--primary))]'
                                       : 'border-[rgb(var(--border))] bg-[rgb(var(--accent))] text-[rgb(var(--primary))]'
                                   }`}>
-                                    {item.type === 'url' ? <Globe size={22} /> : <Folder size={22} />}
+                                    {item.type === 'url' ? <Globe size={18} /> : <Folder size={18} />}
                                   </div>
                                   <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                      <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{item.name}</h3>
+                                      <h3 className="text-sm font-semibold text-[rgb(var(--foreground))]">{item.name}</h3>
                                       <span className={settingsPanelBadgeClassName}>
                                         {item.type === 'url' ? t('common.url') : t('common.folder')}
                                       </span>
                                     </div>
-                                    <p className="mt-2 truncate text-sm text-[rgb(var(--muted-foreground))]" title={item.path}>
+                                    <p className="mt-1 truncate text-xs text-[rgb(var(--muted-foreground))]" title={item.path}>
                                       {item.path}
                                     </p>
                                   </div>
@@ -1820,6 +1777,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           ))}
                         </div>
                       )}
+                      </CompactSettingsSection>
                     </Tabs.Content>
                   </Tabs.Root>
                 </div>
@@ -1839,231 +1797,186 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                 <ChatSettingsTab />
               </Tabs.Content>
 
-              <Tabs.Content value="advanced" className="h-full overflow-y-auto px-8 py-8 data-[state=inactive]:hidden">
-                <div className="mx-auto max-w-5xl space-y-6">
-                  <section className={idePopupPanelClassName}>
-                    <div className="mb-5 flex items-start gap-4">
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                        <Globe size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.advanced.sshSection')}</h3>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.advanced.sshDescription')}</p>
-                      </div>
-                    </div>
+              <Tabs.Content value="advanced" className="h-full overflow-y-auto px-6 py-6 data-[state=inactive]:hidden">
+                <div className="mx-auto max-w-5xl space-y-4">
+                  <CompactSettingsSection
+                    title={t('settings.advanced.sshSection')}
+                    help={t('settings.advanced.sshDescription')}
+                    icon={<Globe size={15} />}
+                  >
+                    <CompactSettingRow
+                      label={t('settings.ssh.enableTitle')}
+                      help={t('settings.ssh.enableDescription')}
+                    >
+                      <Switch.Root
+                        checked={featureSettings.sshEnabled}
+                        onCheckedChange={(checked) => handleFeatureSettingsChange({ sshEnabled: checked })}
+                        aria-label={t('settings.ssh.enableTitle')}
+                        className={settingsPanelCompactSwitchRootClassName}
+                      >
+                        <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
+                      </Switch.Root>
+                    </CompactSettingRow>
 
-                    <div className="space-y-4">
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.ssh.enableTitle')}</h4>
-                            <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.ssh.enableDescription')}</p>
-                          </div>
-
-                          <Switch.Root
-                            checked={featureSettings.sshEnabled}
-                            onCheckedChange={(checked) => handleFeatureSettingsChange({ sshEnabled: checked })}
-                            aria-label={t('settings.ssh.enableTitle')}
-                            className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
-                          >
-                            <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
-                          </Switch.Root>
-                        </div>
-                      </div>
-
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                          <div>
-                            <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.ssh.knownHostsTitle')}</h4>
-                            <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.ssh.knownHostsDescription')}</p>
-                            {knownHostsError && (
-                              <p className="mt-3 text-sm text-[rgb(var(--foreground))]">{knownHostsError}</p>
-                            )}
-                          </div>
-
-                          {knownHostsLoading && (
-                            <div className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
-                              {t('common.loading')}
-                            </div>
-                          )}
+                    <div className="px-4 py-3">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <h4 className="truncate text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.ssh.knownHostsTitle')}</h4>
+                          <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_64%,transparent)] px-2 py-0.5 text-[11px] text-[rgb(var(--muted-foreground))]">
+                            {knownHosts.length}
+                          </span>
                         </div>
 
-                        <div className="mt-5">
-                          {knownHosts.length === 0 ? (
-                            <div className={`${idePopupEmptyStateClassName} px-5 py-10 text-center`} >
-                              <Globe size={32} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
-                              <p className="mt-4 text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.ssh.emptyTitle')}</p>
-                              <p className="mt-2 text-sm text-[rgb(var(--muted-foreground))]">{t('settings.ssh.emptyDescription')}</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {knownHosts.map((entry) => {
-                                const entryTarget = `${entry.host}:${entry.port}`;
-                                const isRemoving = removingKnownHostId === entry.id;
+                        {knownHostsLoading && (
+                          <div className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-3 py-1 text-xs font-medium text-[rgb(var(--muted-foreground))]">
+                            {t('common.loading')}
+                          </div>
+                        )}
+                      </div>
 
-                                return (
-                                  <div
-                                    key={entry.id}
-                                    className={settingsPanelBarePanelClassName}
-                                  >
-                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                      <div className="min-w-0">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                          <h5 className="text-sm font-semibold text-[rgb(var(--foreground))]">{entryTarget}</h5>
-                                          <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
-                                            {entry.algorithm}
-                                          </span>
-                                        </div>
-                                        <p className="mt-3 break-all font-mono text-xs text-[rgb(var(--foreground))]">
-                                          {t('settings.ssh.fingerprint')}: {entry.digest}
-                                        </p>
-                                        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted-foreground))]">
-                                          <span>{t('settings.ssh.addedAt')}: {formatKnownHostTimestamp(entry.createdAt)}</span>
-                                          <span>{t('settings.ssh.updatedAt')}: {formatKnownHostTimestamp(entry.updatedAt)}</span>
-                                        </div>
-                                      </div>
+                      {knownHostsError && (
+                        <p className="mb-3 text-sm text-[rgb(var(--foreground))]">{knownHostsError}</p>
+                      )}
 
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveKnownHost(entry.id)}
-                                        disabled={isRemoving}
-                                        aria-label={t('settings.ssh.removeKnownHostAria', { host: entry.host, port: entry.port })}
-                                        className="inline-flex h-10 items-center justify-center rounded-2xl border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] px-4 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-70"
-                                      >
-                                        {isRemoving ? t('common.loading') : t('settings.ssh.removeKnownHost')}
-                                      </button>
+                      {knownHosts.length === 0 ? (
+                        <div className={`${idePopupEmptyStateClassName} px-5 py-8 text-center`} >
+                          <Globe size={28} className="mx-auto text-[rgb(var(--muted-foreground))] opacity-50" />
+                          <p className="mt-3 text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.ssh.emptyTitle')}</p>
+                          <p className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">{t('settings.ssh.emptyDescription')}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {knownHosts.map((entry) => {
+                            const entryTarget = `${entry.host}:${entry.port}`;
+                            const isRemoving = removingKnownHostId === entry.id;
+
+                            return (
+                              <div
+                                key={entry.id}
+                                className="rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_86%,transparent)] px-3 py-2.5"
+                              >
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h5 className="text-sm font-semibold text-[rgb(var(--foreground))]">{entryTarget}</h5>
+                                      <span className="rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]">
+                                        {entry.algorithm}
+                                      </span>
+                                    </div>
+                                    <p className="mt-2 break-all font-mono text-xs text-[rgb(var(--foreground))]">
+                                      {t('settings.ssh.fingerprint')}: {entry.digest}
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted-foreground))]">
+                                      <span>{t('settings.ssh.addedAt')}: {formatKnownHostTimestamp(entry.createdAt)}</span>
+                                      <span>{t('settings.ssh.updatedAt')}: {formatKnownHostTimestamp(entry.updatedAt)}</span>
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveKnownHost(entry.id)}
+                                    disabled={isRemoving}
+                                    aria-label={t('settings.ssh.removeKnownHostAria', { host: entry.host, port: entry.port })}
+                                    className="inline-flex h-9 items-center justify-center rounded-lg border border-[rgba(255,92,92,0.14)] bg-[rgba(255,92,92,0.08)] px-3 text-sm font-medium text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgba(255,92,92,0.34)] hover:bg-[rgba(255,92,92,0.14)] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-70"
+                                  >
+                                    {isRemoving ? t('common.loading') : t('settings.ssh.removeKnownHost')}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      </div>
+                      )}
                     </div>
-                  </section>
+                  </CompactSettingsSection>
 
-                  <section className={idePopupPanelClassName}>
+                  <CompactSettingsSection
+                    title={t('settings.advanced.generalSection')}
+                    help={t('settings.advanced.generalDescription')}
+                    icon={<Wrench size={15} />}
+                  >
                     {isWindows ? (
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                          <div className="flex items-start gap-4">
-                            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                              <Wrench size={20} />
-                            </div>
-                            <div>
-                              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.general.bundledConptyTitle')}</h4>
-                              <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.general.bundledConptyDescription')}</p>
-                            </div>
-                          </div>
-
-                          <Switch.Root
-                            checked={terminalSettings.useBundledConptyDll}
-                            onCheckedChange={(checked) => handleTerminalSettingsChange({ useBundledConptyDll: checked })}
-                            className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
-                          >
-                            <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
-                          </Switch.Root>
-                        </div>
-                      </div>
+                      <CompactSettingRow
+                        label={t('settings.general.bundledConptyTitle')}
+                        help={t('settings.general.bundledConptyDescription')}
+                      >
+                        <Switch.Root
+                          checked={terminalSettings.useBundledConptyDll}
+                          onCheckedChange={(checked) => handleTerminalSettingsChange({ useBundledConptyDll: checked })}
+                          aria-label={t('settings.general.bundledConptyTitle')}
+                          className={settingsPanelCompactSwitchRootClassName}
+                        >
+                          <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
+                        </Switch.Root>
+                      </CompactSettingRow>
                     ) : (
-                      <div className={`${idePopupEmptyStateClassName} p-5`}>
-                        <div className="flex items-start gap-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--muted-foreground))]">
-                            <Monitor size={20} />
-                          </div>
-                          <div>
-                            <div className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.advanced.windowsOnlyTitle')}</div>
-                            <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.advanced.windowsOnlyDescription')}</p>
-                          </div>
-                        </div>
+                      <div className={`${idePopupEmptyStateClassName} m-4 p-4`}>
+                        <div className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.advanced.windowsOnlyTitle')}</div>
+                        <p className="mt-1 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.advanced.windowsOnlyDescription')}</p>
                       </div>
                     )}
-                  </section>
+                  </CompactSettingsSection>
 
-                  <section className={idePopupPanelClassName}>
-                    <div className="mb-5 flex items-start gap-4">
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[rgb(var(--accent))] text-[rgb(var(--primary))]">
-                        <Command size={20} />
-                      </div>
-                      <div>
-                        <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.advanced.tmuxSection')}</h3>
-                        <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.advanced.tmuxDescription')}</p>
-                      </div>
-                    </div>
+                  <CompactSettingsSection
+                    title={t('settings.advanced.tmuxSection')}
+                    help={t('settings.advanced.tmuxDescription')}
+                    icon={<Command size={15} />}
+                  >
+                    <CompactSettingRow
+                      label={t('settings.tmux.enableTitle')}
+                      help={t('settings.tmux.enableDescription')}
+                    >
+                      <Switch.Root
+                        checked={tmuxSettings.enabled}
+                        onCheckedChange={(checked) => handleTmuxSettingsChange({ enabled: checked })}
+                        aria-label={t('settings.tmux.enableTitle')}
+                        className={settingsPanelCompactSwitchRootClassName}
+                      >
+                        <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
+                      </Switch.Root>
+                    </CompactSettingRow>
 
-                    <div className="space-y-4">
-                      <div className={settingsPanelSubtlePanelClassName}>
-                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                          <div className="flex items-start gap-4">
-                            <div>
-                              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.tmux.enableTitle')}</h4>
-                              <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.enableDescription')}</p>
-                            </div>
-                          </div>
-
-                          <Switch.Root
-                            checked={tmuxSettings.enabled}
-                            onCheckedChange={(checked) => handleTmuxSettingsChange({ enabled: checked })}
-                            className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
-                          >
-                            <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
-                          </Switch.Root>
-                        </div>
-                      </div>
-
-                      <div className={`rounded-[24px] border border-[rgba(168,170,88,0.24)] bg-[rgba(168,170,88,0.10)] p-5 ${!tmuxSettings.enabled ? 'opacity-50' : ''}`}>
-                        <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
-                            <Check size={14} />
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-[rgb(var(--primary))]">{t('settings.tmux.agentTeamsEnvTitle')}</div>
-                            <div className="mt-1 text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.agentTeamsEnvDescription')}</div>
-                            <code className="mt-3 inline-flex rounded-xl border border-[rgba(var(--primary),0.24)] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-3 py-1.5 text-xs text-[rgb(var(--foreground))]">
-                              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-                            </code>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className={`grid gap-4 lg:grid-cols-2 ${!tmuxSettings.enabled ? 'opacity-50' : ''}`}>
-                        <div className={settingsPanelSubtlePanelClassName}>
-                          <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.tmux.autoInjectPathTitle')}</h4>
-                              <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.autoInjectPathDescription')}</p>
-                            </div>
-                            <Switch.Root
-                              checked={tmuxSettings.autoInjectPath}
-                              disabled={!tmuxSettings.enabled}
-                              onCheckedChange={(checked) => handleTmuxSettingsChange({ autoInjectPath: checked })}
-                              className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
-                            >
-                              <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
-                            </Switch.Root>
-                          </div>
-                        </div>
-
-                        <div className={settingsPanelSubtlePanelClassName}>
-                          <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.tmux.enableForAllPanesTitle')}</h4>
-                              <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.tmux.enableForAllPanesDescription')}</p>
-                            </div>
-                            <Switch.Root
-                              checked={tmuxSettings.enableForAllPanes}
-                              disabled={!tmuxSettings.enabled}
-                              onCheckedChange={(checked) => handleTmuxSettingsChange({ enableForAllPanes: checked })}
-                              className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))] disabled:cursor-not-allowed disabled:opacity-70"
-                            >
-                              <Switch.Thumb className={settingsPanelSwitchThumbClassName} />
-                            </Switch.Root>
-                          </div>
-                        </div>
+                    <div className={`px-4 py-3 ${!tmuxSettings.enabled ? 'opacity-50' : ''}`}>
+                      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[rgba(168,170,88,0.24)] bg-[rgba(168,170,88,0.10)] px-3 py-2">
+                        <div className="text-sm font-medium text-[rgb(var(--primary))]">{t('settings.tmux.agentTeamsEnvTitle')}</div>
+                        <code className="rounded-lg border border-[rgba(var(--primary),0.24)] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-2 py-1 text-xs text-[rgb(var(--foreground))]">
+                          CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+                        </code>
                       </div>
                     </div>
-                  </section>
+
+                    <CompactSettingRow
+                      label={t('settings.tmux.autoInjectPathTitle')}
+                      help={t('settings.tmux.autoInjectPathDescription')}
+                      disabled={!tmuxSettings.enabled}
+                    >
+                      <Switch.Root
+                        checked={tmuxSettings.autoInjectPath}
+                        disabled={!tmuxSettings.enabled}
+                        onCheckedChange={(checked) => handleTmuxSettingsChange({ autoInjectPath: checked })}
+                        aria-label={t('settings.tmux.autoInjectPathTitle')}
+                        className={settingsPanelCompactSwitchRootClassName}
+                      >
+                        <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
+                      </Switch.Root>
+                    </CompactSettingRow>
+
+                    <CompactSettingRow
+                      label={t('settings.tmux.enableForAllPanesTitle')}
+                      help={t('settings.tmux.enableForAllPanesDescription')}
+                      disabled={!tmuxSettings.enabled}
+                    >
+                      <Switch.Root
+                        checked={tmuxSettings.enableForAllPanes}
+                        disabled={!tmuxSettings.enabled}
+                        onCheckedChange={(checked) => handleTmuxSettingsChange({ enableForAllPanes: checked })}
+                        aria-label={t('settings.tmux.enableForAllPanesTitle')}
+                        className={settingsPanelCompactSwitchRootClassName}
+                      >
+                        <Switch.Thumb className={settingsPanelCompactSwitchThumbClassName} />
+                      </Switch.Root>
+                    </CompactSettingRow>
+                  </CompactSettingsSection>
                 </div>
               </Tabs.Content>
             </div>

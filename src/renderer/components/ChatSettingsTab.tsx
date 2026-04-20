@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Switch from '@radix-ui/react-switch';
+import { Bot, SlidersHorizontal } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   ChatSettings,
@@ -15,11 +16,9 @@ import {
   idePopupBarePanelClassName,
   idePopupEmptyStateClassName,
   idePopupInputClassName,
-  idePopupPanelClassName,
   idePopupSecondaryButtonClassName,
-  idePopupSubtlePanelClassName,
-  idePopupSwitchThumbClassName,
 } from './ui/ide-popup';
+import { CompactSettingRow, CompactSettingsSection } from './settings/CompactSettings';
 
 interface ProviderFormState {
   id?: string;
@@ -135,14 +134,14 @@ export const ChatSettingsTab: React.FC = () => {
     () => providers.find((provider) => provider.id === chatSettings.activeProviderId) ?? null,
     [chatSettings.activeProviderId, providers],
   );
-  const sectionClassName = idePopupPanelClassName;
-  const subtlePanelClassName = idePopupSubtlePanelClassName;
   const barePanelClassName = idePopupBarePanelClassName;
-  const inputClassName = idePopupInputClassName;
-  const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-9 rounded-2xl px-4`;
-  const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-11 rounded-2xl px-4`;
-  const emptyStateClassName = `${idePopupEmptyStateClassName} px-5 py-10 text-center`;
+  const inputClassName = `${idePopupInputClassName} !rounded-lg !px-3 !py-2`;
+  const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-9 rounded-lg px-3`;
+  const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-9 min-w-0 rounded-lg px-3`;
+  const emptyStateClassName = `${idePopupEmptyStateClassName} px-5 py-8 text-center`;
   const mutedBadgeClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]';
+  const compactSwitchRootClassName = 'relative h-6 w-10 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]';
+  const compactSwitchThumbClassName = 'block h-5 w-5 translate-x-0.5 rounded-full bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)] shadow-sm transition-transform data-[state=checked]:translate-x-[18px]';
 
   const handleAddProvider = useCallback(() => {
     setEditingProviderId('new');
@@ -255,40 +254,40 @@ export const ChatSettingsTab: React.FC = () => {
   }, [chatSettings, persistChatSettings]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <section className={sectionClassName}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.providersTitle')}</h3>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.providersDescription')}</p>
-          </div>
-
+    <div className="mx-auto max-w-5xl space-y-4">
+      <CompactSettingsSection
+        title={t('settings.chat.providersTitle')}
+        help={t('settings.chat.providersDescription')}
+        icon={<Bot size={15} />}
+        actions={(
           <button
             type="button"
             onClick={handleAddProvider}
-            className="inline-flex h-11 items-center justify-center rounded-2xl bg-[rgb(var(--primary))] px-4 text-sm font-medium text-[rgb(var(--primary-foreground))] transition-opacity hover:opacity-90"
+            className={primaryButtonClassName}
           >
             {t('settings.chat.addProvider')}
           </button>
-        </div>
-
-        <div className="mt-6 space-y-3">
+        )}
+        contentClassName="p-4"
+        divided={false}
+      >
+        <div className="space-y-3">
           {loading ? (
-            <div className={`${subtlePanelClassName} px-4 py-3 text-sm text-[rgb(var(--muted-foreground))]`}>
+            <div className="rounded-xl border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_62%,transparent)] px-4 py-3 text-sm text-[rgb(var(--muted-foreground))]">
               {t('common.loading')}
             </div>
           ) : providers.length === 0 ? (
             <div className={emptyStateClassName}>
               <div className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.noProvidersTitle')}</div>
-              <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.noProvidersDescription')}</p>
+              <p className="mt-1 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.noProvidersDescription')}</p>
             </div>
           ) : (
             providers.map((provider) => (
               <div
                 key={provider.id}
-                className={subtlePanelClassName}
+                className="rounded-[14px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_62%,transparent)] px-3 py-2.5"
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h4 className="text-sm font-semibold text-[rgb(var(--foreground))]">{provider.name}</h4>
@@ -303,12 +302,10 @@ export const ChatSettingsTab: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <p className="mt-3 text-xs text-[rgb(var(--muted-foreground))]">
-                      {t('settings.chat.defaultModelSummary', { model: provider.defaultModel })}
-                    </p>
-                    <p className="mt-1 text-xs text-[rgb(var(--muted-foreground))]">
-                      {t('settings.chat.modelsSummary', { count: provider.models.length })}
-                    </p>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted-foreground))]">
+                      <span>{t('settings.chat.defaultModelSummary', { model: provider.defaultModel })}</span>
+                      <span>{t('settings.chat.modelsSummary', { count: provider.models.length })}</span>
+                    </div>
                     {provider.baseUrl && (
                       <p className="mt-1 break-all font-mono text-xs text-[rgb(var(--foreground))]">
                         {provider.baseUrl}
@@ -341,9 +338,9 @@ export const ChatSettingsTab: React.FC = () => {
         </div>
 
         {editingProviderId && (
-          <div className={`mt-6 ${barePanelClassName} p-5`}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h4 className="text-base font-semibold text-[rgb(var(--foreground))]">
+          <div className={`mt-4 overflow-hidden ${barePanelClassName} !p-0`}>
+            <div className="flex min-h-[42px] flex-wrap items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-4 py-2">
+              <h4 className="text-sm font-semibold text-[rgb(var(--foreground))]">
                 {editingProviderId === 'new'
                   ? t('settings.chat.addProviderTitle')
                   : t('settings.chat.editProviderTitle')}
@@ -362,91 +359,93 @@ export const ChatSettingsTab: React.FC = () => {
               </button>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.providerNameLabel')}</span>
+            <div className="divide-y divide-[rgb(var(--border))]">
+              <CompactSettingRow label={t('settings.chat.providerNameLabel')}>
                 <input
                   value={providerForm.name}
                   onChange={(event) => handleProviderFieldChange('name', event.target.value)}
                   placeholder={t('settings.chat.providerNamePlaceholder')}
-                  className={inputClassName}
+                  className={`max-w-[520px] ${inputClassName}`}
                 />
-              </label>
+              </CompactSettingRow>
 
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.providerTypeLabel')}</span>
+              <CompactSettingRow label={t('settings.chat.providerTypeLabel')}>
                 <select
                   value={providerForm.type}
                   onChange={(event) => handleProviderFieldChange('type', event.target.value as LLMProviderType)}
-                  className={inputClassName}
+                  className={`max-w-[320px] ${inputClassName}`}
                 >
                   <option value="anthropic">{t('settings.chat.providerTypeAnthropic')}</option>
                   <option value="openai-compatible">{t('settings.chat.providerTypeOpenAICompatible')}</option>
                 </select>
-              </label>
+              </CompactSettingRow>
 
-              <label className="flex flex-col gap-2 md:col-span-2">
-                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.baseUrlLabel')}</span>
+              <CompactSettingRow label={t('settings.chat.baseUrlLabel')} disabled={providerForm.type !== 'openai-compatible'}>
                 <input
                   value={providerForm.baseUrl}
                   onChange={(event) => handleProviderFieldChange('baseUrl', event.target.value)}
                   placeholder={t('settings.chat.baseUrlPlaceholder')}
                   disabled={providerForm.type !== 'openai-compatible'}
-                  className={`${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+                  className={`max-w-[520px] ${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
                 />
-              </label>
+              </CompactSettingRow>
 
-              <label className="flex flex-col gap-2 md:col-span-2">
-                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.apiKeyLabel')}</span>
+              <CompactSettingRow label={t('settings.chat.apiKeyLabel')}>
                 <input
                   value={providerForm.apiKey}
                   onChange={(event) => handleProviderFieldChange('apiKey', event.target.value)}
                   placeholder={t('settings.chat.apiKeyPlaceholder')}
-                  className={inputClassName}
+                  className={`max-w-[520px] ${inputClassName}`}
                 />
-              </label>
+              </CompactSettingRow>
 
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.protocolLabel')}</span>
+              <CompactSettingRow
+                label={t('settings.chat.protocolLabel')}
+                help={t('settings.chat.protocolHint')}
+                disabled={providerForm.type !== 'openai-compatible'}
+              >
                 <select
                   value={providerForm.wireApi}
                   onChange={(event) => handleProviderFieldChange('wireApi', event.target.value as LLMProviderWireApi)}
                   disabled={providerForm.type !== 'openai-compatible'}
-                  className={`${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+                  className={`max-w-[320px] ${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   <option value="chat-completions">{t('settings.chat.protocolChatCompletions')}</option>
                   <option value="responses">{t('settings.chat.protocolResponses')}</option>
                 </select>
-                <span className="text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.chat.protocolHint')}</span>
-              </label>
+              </CompactSettingRow>
 
-              <label className="flex flex-col gap-2 md:col-span-2">
-                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.modelsLabel')}</span>
+              <CompactSettingRow
+                label={t('settings.chat.modelsLabel')}
+                help={t('settings.chat.modelsHint')}
+                controlClassName="items-stretch"
+              >
                 <textarea
                   value={providerForm.modelsText}
                   onChange={(event) => handleProviderFieldChange('modelsText', event.target.value)}
                   placeholder={t('settings.chat.modelsPlaceholder')}
-                  className={`min-h-[120px] ${inputClassName} leading-6`}
+                  className={`min-h-[96px] max-w-[520px] ${inputClassName} leading-6`}
                 />
-                <span className="text-xs leading-5 text-[rgb(var(--muted-foreground))]">{t('settings.chat.modelsHint')}</span>
-              </label>
+              </CompactSettingRow>
 
-              <label className="flex flex-col gap-2 md:col-span-2">
-                <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.defaultModelLabel')}</span>
+              <CompactSettingRow
+                label={t('settings.chat.defaultModelLabel')}
+                help={t('settings.chat.defaultModelPlaceholder')}
+              >
                 <input
                   value={providerForm.defaultModel}
                   onChange={(event) => handleProviderFieldChange('defaultModel', event.target.value)}
                   placeholder={t('settings.chat.defaultModelPlaceholder')}
-                  className={inputClassName}
+                  className={`max-w-[520px] ${inputClassName}`}
                 />
-              </label>
+              </CompactSettingRow>
             </div>
 
             {formError && (
-              <p className="mt-4 text-sm text-[rgb(var(--error))]">{formError}</p>
+              <p className="px-4 pt-3 text-sm text-[rgb(var(--error))]">{formError}</p>
             )}
 
-            <div className="mt-5 flex justify-end">
+            <div className="flex justify-end px-4 py-3">
               <button
                 type="button"
                 onClick={() => {
@@ -459,18 +458,20 @@ export const ChatSettingsTab: React.FC = () => {
             </div>
           </div>
         )}
-      </section>
+      </CompactSettingsSection>
 
-      <section className={sectionClassName}>
-        <div>
-          <h3 className="text-base font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.defaultsTitle')}</h3>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.defaultsDescription')}</p>
-        </div>
-
-        <div className="mt-6 space-y-4">
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.activeProviderLabel')}</span>
+      <CompactSettingsSection
+        title={t('settings.chat.defaultsTitle')}
+        help={t('settings.chat.defaultsDescription')}
+        icon={<SlidersHorizontal size={15} />}
+      >
+          <CompactSettingRow
+            label={t('settings.chat.activeProviderLabel')}
+            htmlFor="chat-active-provider"
+          >
             <select
+              id="chat-active-provider"
+              aria-label={t('settings.chat.activeProviderLabel')}
               value={chatSettings.activeProviderId ?? ''}
               onChange={(event) => {
                 void persistChatSettings({
@@ -485,15 +486,12 @@ export const ChatSettingsTab: React.FC = () => {
                 <option key={provider.id} value={provider.id}>{provider.name}</option>
               ))}
             </select>
-          </label>
+          </CompactSettingRow>
 
-          <div className={subtlePanelClassName}>
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h4 className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.commandSecurityTitle')}</h4>
-                <p className="mt-2 text-sm leading-6 text-[rgb(var(--muted-foreground))]">{t('settings.chat.commandSecurityDescription')}</p>
-              </div>
-
+          <CompactSettingRow
+            label={t('settings.chat.commandSecurityTitle')}
+            help={t('settings.chat.commandSecurityDescription')}
+          >
               <Switch.Root
                 checked={chatSettings.enableCommandSecurity ?? true}
                 onCheckedChange={(checked) => {
@@ -503,15 +501,17 @@ export const ChatSettingsTab: React.FC = () => {
                   });
                 }}
                 aria-label={t('settings.chat.commandSecurityTitle')}
-                className="relative h-7 w-12 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]"
+                className={compactSwitchRootClassName}
               >
-                <Switch.Thumb className={idePopupSwitchThumbClassName} />
+                <Switch.Thumb className={compactSwitchThumbClassName} />
               </Switch.Root>
-            </div>
-          </div>
+          </CompactSettingRow>
 
-          <label className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-[rgb(var(--foreground))]">{t('settings.chat.systemPromptLabel')}</span>
+          <CompactSettingRow
+            label={t('settings.chat.systemPromptLabel')}
+            help={t('settings.chat.systemPromptPlaceholder')}
+            controlClassName="items-stretch"
+          >
             <textarea
               value={chatSettings.defaultSystemPrompt ?? ''}
               onChange={(event) => {
@@ -522,11 +522,10 @@ export const ChatSettingsTab: React.FC = () => {
               }}
               onBlur={handleSystemPromptBlur}
               placeholder={t('settings.chat.systemPromptPlaceholder')}
-              className={`min-h-[160px] ${inputClassName} leading-6`}
+              className={`min-h-[120px] max-w-[680px] ${inputClassName} leading-6`}
             />
-          </label>
-        </div>
-      </section>
+          </CompactSettingRow>
+      </CompactSettingsSection>
     </div>
   );
 };
