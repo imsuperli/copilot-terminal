@@ -19,8 +19,8 @@ export function Toolbar({
   isDialogOpen = false,
   onDialogChange,
 }: ToolbarProps) {
-  const windows = useWindowStore((state) => state.windows);
-  const showNewWindowButton = windows.length > 0;
+  const windowCount = useWindowStore((state) => state.windows.length);
+  const showNewWindowButton = windowCount > 0;
 
   return (
     <>
