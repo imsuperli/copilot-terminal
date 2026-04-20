@@ -36,7 +36,7 @@ import type {
   TmuxWindowSyncedPayload,
 } from '../shared/types/electron-api';
 import './api/ptyDataBus';
-import { getAggregatedStatus, getAllPanes } from './utils/layoutHelpers';
+import { getAllPanes } from './utils/layoutHelpers';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from './utils/settingsEvents';
 import {
   authNeedsPassword,
@@ -101,14 +101,55 @@ function resolveSSHProfileEntryCommand(profile: SSHProfile): string {
   return profile.remoteCommand || '';
 }
 
-function selectMountedWindowRecordKeys(state: { windows: Window[] }) {
-  return state.windows.map((window) => `${window.id}:${getAggregatedStatus(window.layout)}`);
+function getAggregatedStatusFromFlags(flags: {
+  hasCompleted: boolean;
+  hasError: boolean;
+  hasPaused: boolean;
+  hasRestoring: boolean;
+  hasRunning: boolean;
+  hasWaiting: boolean;
+  paneCount: number;
+}): WindowStatus {
+  if (flags.hasRunning) return WindowStatus.Running;
+  if (flags.hasRestoring) return WindowStatus.Restoring;
+  if (flags.hasWaiting) return WindowStatus.WaitingForInput;
+  if (flags.hasError) return WindowStatus.Error;
+  if (flags.paneCount > 0 && flags.hasCompleted && !flags.hasPaused) return WindowStatus.Completed;
+  if (flags.paneCount === 0 || flags.hasPaused) return WindowStatus.Paused;
+  return WindowStatus.Paused;
 }
 
-function selectMountedWindowTerminalPaneCountKeys(state: { windows: Window[] }) {
-  return state.windows.map((window) => (
-    `${window.id}:${getAllPanes(window.layout).filter((pane) => pane.kind !== 'browser').length}`
-  ));
+function selectMountedWindowLifecycleRecordKeys(state: { windows: Window[] }): string[] {
+  return state.windows.map((window) => {
+    const panes = getAllPanes(window.layout);
+    let terminalPaneCount = 0;
+    const flags = {
+      hasCompleted: false,
+      hasError: false,
+      hasPaused: false,
+      hasRestoring: false,
+      hasRunning: false,
+      hasWaiting: false,
+      paneCount: panes.length,
+    };
+
+    for (const pane of panes) {
+      if (pane.kind !== 'browser') {
+        terminalPaneCount += 1;
+      }
+
+      flags.hasRunning ||= pane.status === WindowStatus.Running;
+      flags.hasRestoring ||= pane.status === WindowStatus.Restoring;
+      flags.hasWaiting ||= pane.status === WindowStatus.WaitingForInput;
+      flags.hasError ||= pane.status === WindowStatus.Error;
+      flags.hasCompleted ||= pane.status === WindowStatus.Completed;
+      flags.hasPaused ||= pane.status === WindowStatus.Paused;
+    }
+
+    const status = getAggregatedStatusFromFlags(flags);
+
+    return `${window.id}:${status}:${terminalPaneCount}`;
+  });
 }
 
 const MountedTerminalSurface = React.memo(({
@@ -240,8 +281,22 @@ function AppContent() {
   const storeActiveWindowId = useWindowStore((state) => state.activeWindowId);
   const activeGroupId = useWindowStore((state) => state.activeGroupId);
   const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
-  const mountedWindowRecordKeys = useWindowStore(useShallow(selectMountedWindowRecordKeys));
-  const mountedWindowTerminalPaneCountKeys = useWindowStore(useShallow(selectMountedWindowTerminalPaneCountKeys));
+  const mountedWindowLifecycleRecordKeys = useWindowStore(useShallow(selectMountedWindowLifecycleRecordKeys));
+  const mountedWindowRecordKeys = useMemo(
+    () => mountedWindowLifecycleRecordKeys.map((recordKey) => {
+      const lastSeparatorIndex = recordKey.lastIndexOf(':');
+      return recordKey.slice(0, lastSeparatorIndex);
+    }),
+    [mountedWindowLifecycleRecordKeys],
+  );
+  const mountedWindowTerminalPaneCountKeys = useMemo(
+    () => mountedWindowLifecycleRecordKeys.map((recordKey) => {
+      const firstSeparatorIndex = recordKey.indexOf(':');
+      const lastSeparatorIndex = recordKey.lastIndexOf(':');
+      return `${recordKey.slice(0, firstSeparatorIndex)}${recordKey.slice(lastSeparatorIndex)}`;
+    }),
+    [mountedWindowLifecycleRecordKeys],
+  );
   const activeWindowTitle = useWindowStore((state) => (
     storeActiveWindowId
       ? state.windows.find((window) => window.id === storeActiveWindowId)?.name ?? ''
@@ -634,11 +689,13 @@ function AppContent() {
 
   useEffect(() => {
     const statusByWindowId = new Map(
-      mountedWindowRecordKeys.map((recordKey) => {
-        const separatorIndex = recordKey.lastIndexOf(':');
-        const windowId = recordKey.slice(0, separatorIndex);
-        const status = recordKey.slice(separatorIndex + 1) as WindowStatus;
-        return [windowId, status] as const;
+      mountedWindowLifecycleRecordKeys.map((recordKey) => {
+        const firstSeparatorIndex = recordKey.indexOf(':');
+        const lastSeparatorIndex = recordKey.lastIndexOf(':');
+        return [
+          recordKey.slice(0, firstSeparatorIndex),
+          recordKey.slice(firstSeparatorIndex + 1, lastSeparatorIndex) as WindowStatus,
+        ] as const;
       }),
     );
     setMountedTerminalWindowIds((previousIds) => {
@@ -657,7 +714,7 @@ function AppContent() {
 
       return nextIds.length === previousIds.length ? previousIds : nextIds;
     });
-  }, [activeWindowId, mountedWindowRecordKeys]);
+  }, [activeWindowId, mountedWindowLifecycleRecordKeys]);
 
   // 订阅主进程推送的窗格状态变化事件
   useEffect(() => {
