@@ -301,10 +301,12 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const terminalContainerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const outputBufferRef = useRef('');
+  const outputChunksRef = useRef<string[]>([]);
+  const outputBufferSizeRef = useRef(0);
   const outputFlushFrameRef = useRef<number | null>(null);
   const resizeFrameRef = useRef<number | null>(null);
   const lastContainerSizeRef = useRef({ width: 0, height: 0 });
+  const lastSyncedTerminalSizeRef = useRef({ cols: 0, rows: 0 });
   const isActiveRef = useRef(isActive); // 使用 ref 跟踪 isActive 状态
   const onActivateRef = useRef(onActivate);
   const suppressNativePasteUntilRef = useRef(0); // 短时间屏蔽原生 paste，避免与手动 Ctrl+V 粘贴重复
@@ -343,6 +345,21 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   // 是否显示 pane header（当有 title 或 agentName 时显示）
   const showPaneHeader = !!(pane.title || pane.agentName);
   const showCloseButton = Boolean(onClose && isHovered);
+
+  const syncPtySize = useCallback((terminal: Terminal, options?: { force?: boolean }) => {
+    if (!window.electronAPI) {
+      return;
+    }
+
+    const { cols, rows } = terminal;
+    const lastSize = lastSyncedTerminalSizeRef.current;
+    if (!options?.force && lastSize.cols === cols && lastSize.rows === rows) {
+      return;
+    }
+
+    lastSyncedTerminalSizeRef.current = { cols, rows };
+    window.electronAPI.ptyResize(windowId, pane.id, cols, rows);
+  }, [pane.id, windowId]);
 
   useEffect(() => {
     sshCwdTrackerRef.current = createSSHCwdTrackerState(pane.cwd);
@@ -588,14 +605,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       if (width > 0 && height > 0) {
         lastContainerSizeRef.current = { width, height };
         fitAddon.fit();
-
-        if (window.electronAPI) {
-          const { cols, rows } = terminal;
-          window.electronAPI.ptyResize(windowId, pane.id, cols, rows);
-        }
+        syncPtySize(terminal, { force: true });
       }
     });
-  }, [windowId, pane.id]);
+  }, [syncPtySize]);
 
   // 监听窗格状态变化：从 Paused 恢复时重置尺寸缓存，强制下次 resize
   useEffect(() => {
@@ -619,7 +632,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         cancelAnimationFrame(outputFlushFrameRef.current);
         outputFlushFrameRef.current = null;
       }
-      outputBufferRef.current = '';
+      outputChunksRef.current = [];
+      outputBufferSizeRef.current = 0;
       terminalRef.current?.reset();
     }
 
@@ -854,8 +868,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     const flushOutput = () => {
       outputFlushFrameRef.current = null;
 
-      const pending = outputBufferRef.current;
-      if (!pending || !terminalRef.current) {
+      if (outputBufferSizeRef.current === 0 || !terminalRef.current) {
         return;
       }
 
@@ -864,7 +877,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         return;
       }
 
-      outputBufferRef.current = '';
+      const pending = outputChunksRef.current.length === 1
+        ? outputChunksRef.current[0]
+        : outputChunksRef.current.join('');
+      outputChunksRef.current = [];
+      outputBufferSizeRef.current = 0;
       terminalRef.current.write(pending);
     };
 
@@ -874,7 +891,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         outputFlushFrameRef.current = null;
       }
 
-      outputBufferRef.current = '';
+      outputChunksRef.current = [];
+      outputBufferSizeRef.current = 0;
     };
 
     const queueOutput = (data: string) => {
@@ -882,7 +900,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       // 限制缓冲区大小，避免极端情况下的内存泄漏
       const MAX_BUFFER_SIZE = 100000; // 100KB
-      if (outputBufferRef.current.length + data.length > MAX_BUFFER_SIZE) {
+      if (outputBufferSizeRef.current + data.length > MAX_BUFFER_SIZE) {
         // 强制刷新缓冲区
         if (outputFlushFrameRef.current !== null) {
           cancelAnimationFrame(outputFlushFrameRef.current);
@@ -891,7 +909,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
         flushOutput();
       }
 
-      outputBufferRef.current += data;
+      outputChunksRef.current.push(data);
+      outputBufferSizeRef.current += data.length;
       if (outputFlushFrameRef.current !== null) {
         return;
       }
@@ -1026,11 +1045,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
       lastContainerSizeRef.current = { width, height };
       currentFitAddon.fit();
-
-      if (window.electronAPI) {
-        const { cols, rows } = currentTerminal;
-        window.electronAPI.ptyResize(windowId, pane.id, cols, rows);
-      }
+      syncPtySize(currentTerminal);
     };
 
     const scheduleResize = () => {
@@ -1227,7 +1242,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       terminalRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [windowId, pane.id, openExternalUrl, handleTerminalLinkHover, handleTerminalLinkLeave]); // 依赖均已 useCallback 包裹，保持终端实例生命周期稳定
+  }, [windowId, pane.id, openExternalUrl, handleTerminalLinkHover, handleTerminalLinkLeave, syncPtySize]); // 依赖均已 useCallback 包裹，保持终端实例生命周期稳定
 
   useEffect(() => {
     const previousSession = lastSessionRef.current;
