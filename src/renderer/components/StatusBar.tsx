@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Activity, Keyboard, Pause } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { useI18n } from '../i18n';
@@ -47,20 +47,20 @@ export const StatusBar = React.memo(function StatusBar({
     [statusCounts, t]
   );
 
-  const handleClick = (tab: StatusFilterTab) => {
+  const handleClick = useCallback((tab: StatusFilterTab) => {
     // 再次点击取消筛选，回到活跃终端
     onTabChange?.(currentTab === tab ? 'active' : tab);
-  };
+  }, [currentTab, onTabChange]);
 
   const pausedToneClassName = 'text-[rgb(var(--muted-foreground))]';
   const pausedActiveClassName =
     'bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] border-[rgb(var(--border))]';
   const idleButtonClassName = `border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_76%,transparent)] hover:bg-[rgb(var(--accent))]`;
-  const items: { tab: StatusFilterTab; icon: typeof Activity; colorClass: string; activeClass: string; label: string; count: number }[] = [
+  const items = useMemo<{ tab: StatusFilterTab; icon: typeof Activity; colorClass: string; activeClass: string; label: string; count: number }[]>(() => [
     { tab: 'status:running', icon: Activity, colorClass: 'text-green-500', activeClass: 'bg-green-500/10 border-green-500/50', label: t('status.running'), count: statusCounts.running },
     { tab: 'status:waiting', icon: Keyboard, colorClass: 'text-[rgb(var(--primary))]', activeClass: 'bg-[rgb(var(--primary))]/10 border-[rgb(var(--primary))]/40', label: t('status.waitingInput'), count: statusCounts.waiting },
     { tab: 'status:paused', icon: Pause, colorClass: pausedToneClassName, activeClass: pausedActiveClassName, label: t('status.paused'), count: statusCounts.paused },
-  ];
+  ], [pausedActiveClassName, pausedToneClassName, statusCounts.paused, statusCounts.running, statusCounts.waiting, t]);
 
   return (
     <div

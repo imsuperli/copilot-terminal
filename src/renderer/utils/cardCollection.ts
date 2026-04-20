@@ -16,6 +16,7 @@ type CardCollectionContext = {
   persistableWindows: Window[];
   sshEnabled: boolean;
   sshProfileIds: Set<string>;
+  windowsById: Map<string, Window>;
 };
 
 function createCardCollectionContext(
@@ -23,11 +24,14 @@ function createCardCollectionContext(
   groups: WindowGroup[],
   options: CardCollectionOptions = {},
 ): CardCollectionContext {
+  const persistableWindows = getPersistableWindows(windows);
+
   return {
     groupedWindowIds: new Set(groups.flatMap((group) => getAllWindowIds(group.layout))),
-    persistableWindows: getPersistableWindows(windows),
+    persistableWindows,
     sshEnabled: options.sshEnabled ?? false,
     sshProfileIds: new Set((options.sshProfiles ?? []).map((profile) => profile.id)),
+    windowsById: new Map(persistableWindows.map((window) => [window.id, window])),
   };
 }
 
@@ -60,10 +64,36 @@ function groupMatchesWindow(
   group: WindowGroup,
   matcher: (window: Window) => boolean,
 ): boolean {
-  const groupWindowIds = new Set(getAllWindowIds(group.layout));
-  return context.persistableWindows.some((window) => (
-    groupWindowIds.has(window.id) && matcher(window)
-  ));
+  return getAllWindowIds(group.layout).some((windowId) => {
+    const window = context.windowsById.get(windowId);
+    return Boolean(window && matcher(window));
+  });
+}
+
+function getWindowStatusFlags(window: Window): {
+  running: boolean;
+  waiting: boolean;
+  paused: boolean;
+} {
+  let running = false;
+  let waiting = false;
+  let paused = false;
+
+  for (const pane of getAllPanes(window.layout)) {
+    running ||= pane.status === WindowStatus.Running;
+    waiting ||= pane.status === WindowStatus.WaitingForInput;
+    paused ||= pane.status === WindowStatus.Paused;
+
+    if (running && waiting && paused) {
+      break;
+    }
+  }
+
+  return {
+    running,
+    waiting,
+    paused,
+  };
 }
 
 export function getVisibleStandaloneWindows(
@@ -112,24 +142,61 @@ export function getStatusCardCounts(
 ) {
   const context = createCardCollectionContext(windows, groups, options);
   const activeVisibleWindows = getVisibleStandaloneWindowsFromContext(context).filter((window) => !window.archived);
+  const statusFlagsByWindowId = new Map<string, ReturnType<typeof getWindowStatusFlags>>();
 
-  const countMatches = (targetStatus: WindowStatus) => {
-    const standaloneWindowCount = activeVisibleWindows.filter((window) => (
-      getAllPanes(window.layout).some((pane) => pane.status === targetStatus)
-    )).length;
-    const groupCount = groups.filter((group) => (
-      !group.archived
-      && groupMatchesWindow(context, group, (window) => (
-        getAllPanes(window.layout).some((pane) => pane.status === targetStatus)
-      ))
-    )).length;
+  const getStatusFlags = (window: Window) => {
+    const cachedFlags = statusFlagsByWindowId.get(window.id);
+    if (cachedFlags) {
+      return cachedFlags;
+    }
 
-    return standaloneWindowCount + groupCount;
+    const flags = getWindowStatusFlags(window);
+    statusFlagsByWindowId.set(window.id, flags);
+    return flags;
   };
 
-  return {
-    running: countMatches(WindowStatus.Running),
-    waiting: countMatches(WindowStatus.WaitingForInput),
-    paused: countMatches(WindowStatus.Paused),
+  const counts = {
+    running: 0,
+    waiting: 0,
+    paused: 0,
   };
+
+  for (const window of activeVisibleWindows) {
+    const flags = getStatusFlags(window);
+    if (flags.running) counts.running += 1;
+    if (flags.waiting) counts.waiting += 1;
+    if (flags.paused) counts.paused += 1;
+  }
+
+  for (const group of groups) {
+    if (group.archived) {
+      continue;
+    }
+
+    let hasRunning = false;
+    let hasWaiting = false;
+    let hasPaused = false;
+
+    for (const windowId of getAllWindowIds(group.layout)) {
+      const window = context.windowsById.get(windowId);
+      if (!window) {
+        continue;
+      }
+
+      const flags = getStatusFlags(window);
+      hasRunning ||= flags.running;
+      hasWaiting ||= flags.waiting;
+      hasPaused ||= flags.paused;
+
+      if (hasRunning && hasWaiting && hasPaused) {
+        break;
+      }
+    }
+
+    if (hasRunning) counts.running += 1;
+    if (hasWaiting) counts.waiting += 1;
+    if (hasPaused) counts.paused += 1;
+  }
+
+  return counts;
 }
