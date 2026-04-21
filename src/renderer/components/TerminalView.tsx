@@ -20,7 +20,6 @@ import type { BrowserDropDragItem, BrowserToolDragItem, PaneDropResult, WindowCa
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
 import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
-import { StatusDot } from './StatusDot';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import { SSHSessionStatusBar } from './SSHSessionStatusBar';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
@@ -362,10 +361,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [embedded, isStandaloneSshWindow],
   );
   const showFloatingChrome = isActive;
-  const showToolbarWindowIdentity = useMemo(
-    () => Boolean(showFloatingChrome && activePane && isSessionlessPane(activePane) && !showRemoteWindowTabs),
-    [activePane, showFloatingChrome, showRemoteWindowTabs],
-  );
   const canSplitActivePane = useMemo(
     () => Boolean(activePane && !isChatPane(activePane) && !isCodePane(activePane)),
     [activePane],
@@ -1227,25 +1222,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           const floatingDividerClass = 'h-4 w-px bg-[rgb(var(--border))]';
           return (
             <>
-        {showToolbarWindowIdentity && (
-          <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
-            <div
-              data-testid="toolbar-window-identity"
-              className={`${floatingChromeClass} flex h-8 min-w-0 shrink-0 items-center gap-2 px-2.5`}
-            >
-              <div className="relative shrink-0">
-                <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
-                <span className="absolute -bottom-1 -right-1">
-                  <StatusDot status={aggregatedStatus} size="sm" />
-                </span>
-              </div>
-              <span className="max-w-[180px] truncate text-xs font-medium text-[rgb(var(--foreground))]">
-                {terminalWindow.name}
-              </span>
-            </div>
-          </div>
-        )}
-
         {showFloatingChrome && showRemoteWindowTabs && (
           <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
             <div className={`${floatingChromeClass} max-w-full`}>
@@ -1280,9 +1256,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             >
               <div className="relative flex h-6 w-6 shrink-0 items-center justify-center">
                 <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
-                <span className="absolute -bottom-1 -right-1">
-                  <StatusDot status={aggregatedStatus} size="sm" />
-                </span>
               </div>
 
               {/* 鍙充晶鎸夐挳缁?*/}

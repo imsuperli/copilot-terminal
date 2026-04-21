@@ -532,7 +532,7 @@ describe('TerminalView', () => {
     expect(screen.queryByRole('button', { name: 'terminalView.splitCode' })).not.toBeInTheDocument();
   });
 
-  it('shows the window identity logo when the active pane is a browser pane', () => {
+  it('does not render the window identity pill when the active pane is a browser pane', () => {
     render(
       <TerminalView
         window={createBrowserOnlyWindow('local')}
@@ -542,7 +542,7 @@ describe('TerminalView', () => {
       />
     );
 
-    expect(screen.getByTestId('toolbar-window-identity')).toBeInTheDocument();
+    expect(screen.queryByTestId('toolbar-window-identity')).not.toBeInTheDocument();
   });
 
   it('keeps the sidebar code pane action disabled when no local project root is available', () => {
