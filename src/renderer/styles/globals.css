@@ -146,7 +146,7 @@
 
 .terminal-remote-tab-strip {
   gap: 0;
-  padding: 4px 6px 0;
+  padding: 0 6px;
   background: rgb(var(--titlebar));
 }
 
@@ -165,7 +165,7 @@
 }
 
 .terminal-remote-tab-active {
-  background: linear-gradient(180deg, rgba(73, 73, 73, 0.98) 0%, rgba(61, 61, 61, 0.99) 100%);
+  background: linear-gradient(180deg, rgba(36, 36, 36, 0.98) 0%, rgba(28, 28, 28, 0.99) 100%);
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
 }
