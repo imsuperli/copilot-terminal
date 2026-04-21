@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalView } from '../TerminalView';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from '../CustomTitleBar';
@@ -41,7 +42,26 @@ vi.mock('../SettingsPanel', () => ({
 }));
 
 vi.mock('../RemoteWindowTabs', () => ({
-  RemoteWindowTabs: () => <div data-testid="remote-window-tabs" />,
+  RemoteWindowTabs: ({
+    windows = [],
+    onWindowSelect,
+  }: {
+    windows?: Window[];
+    onWindowSelect?: (windowId: string) => void;
+  }) => (
+    <div data-testid="remote-window-tabs">
+      {windows.map((window) => (
+        <button
+          key={window.id}
+          type="button"
+          aria-label={window.name}
+          onClick={() => onWindowSelect?.(window.id)}
+        >
+          {window.name}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock('../SplitLayout', () => ({
@@ -399,8 +419,11 @@ describe('TerminalView', () => {
     document.body.innerHTML = `<div id="${CUSTOM_TITLEBAR_ACTIONS_SLOT_ID}"></div>`;
     useWindowStore.setState({
       windows: [],
+      groups: [],
       activeWindowId: null,
+      activeGroupId: null,
       mruList: [],
+      groupMruList: [],
       sidebarExpanded: false,
       sidebarWidth: 200,
     });
@@ -517,6 +540,75 @@ describe('TerminalView', () => {
 
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
     expect(screen.getByTestId('split-layout')).toBeInTheDocument();
+  });
+
+  it('keeps remote tabs visible for embedded ssh windows even when inactive', () => {
+    render(
+      <TerminalView
+        window={createSshWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive={false}
+        embedded
+        groupId="group-1"
+      />
+    );
+
+    expect(screen.getByTestId('terminal-remote-tabs-header')).toBeInTheDocument();
+    expect(screen.getByTestId('remote-window-tabs')).toBeInTheDocument();
+  });
+
+  it('switches the active window inside a group when an embedded ssh remote tab is selected', async () => {
+    const user = userEvent.setup();
+    const ownerWindow = createSshWindow();
+    const clonedWindow: Window = {
+      ...createSshWindow(),
+      id: 'win-ssh-2',
+      name: 'SSH Window Clone',
+      ephemeral: true,
+      sshTabOwnerWindowId: ownerWindow.id,
+    };
+    const onWindowSwitch = vi.fn();
+    const now = new Date().toISOString();
+    const group = {
+      id: 'group-1',
+      name: 'SSH Group',
+      activeWindowId: ownerWindow.id,
+      createdAt: now,
+      lastActiveAt: now,
+      layout: {
+        type: 'split' as const,
+        direction: 'horizontal' as const,
+        sizes: [0.5, 0.5],
+        children: [
+          { type: 'window' as const, id: ownerWindow.id },
+          { type: 'window' as const, id: clonedWindow.id },
+        ],
+      },
+    };
+
+    useWindowStore.setState({
+      windows: [ownerWindow, clonedWindow],
+      groups: [group],
+      activeGroupId: group.id,
+    });
+
+    render(
+      <TerminalView
+        window={ownerWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={onWindowSwitch}
+        isActive={false}
+        embedded
+        groupId="group-1"
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'SSH Window Clone' }));
+
+    expect(useWindowStore.getState().groups[0]?.activeWindowId).toBe(clonedWindow.id);
+    expect(useWindowStore.getState().activeGroupId).toBe(group.id);
+    expect(onWindowSwitch).not.toHaveBeenCalled();
   });
 
   it('renders ssh-specific toolbar actions for ssh panes', () => {

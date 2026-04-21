@@ -359,8 +359,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [windowKind],
   );
   const showRemoteWindowTabs = useMemo(
-    () => !embedded && isStandaloneSshWindow,
-    [embedded, isStandaloneSshWindow],
+    () => isStandaloneSshWindow,
+    [isStandaloneSshWindow],
   );
   const showFloatingChrome = isActive;
   const canSplitActivePane = useMemo(
@@ -926,6 +926,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     });
   }, [activeTerminalPane, activePaneCapabilities, terminalWindow.id]);
 
+  const handleRemoteWindowSelect = useCallback((windowId: string) => {
+    if (embedded && groupId) {
+      useWindowStore.getState().setActiveWindowInGroup(groupId, windowId);
+      return;
+    }
+
+    onWindowSwitch(windowId);
+  }, [embedded, groupId, onWindowSwitch]);
+
   const handleCloneRemoteWindow = useCallback(async (windowId: string) => {
     if (embedded) {
       return;
@@ -964,11 +973,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
       const startedWindow = applyWindowStartResult(clonedWindowDraft, result);
       addWindow(startedWindow);
-      onWindowSwitch(startedWindow.id);
+      handleRemoteWindowSelect(startedWindow.id);
     } catch (error) {
       console.error('Failed to clone session into a new window:', error);
     }
-  }, [addWindow, embedded, onWindowSwitch]);
+  }, [addWindow, embedded, handleRemoteWindowSelect]);
 
   const handleCloseRemoteWindow = useCallback(async (windowId: string) => {
     if (embedded) {
@@ -1001,7 +1010,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
     try {
       if (nextWindowId) {
-        onWindowSwitch(nextWindowId);
+        handleRemoteWindowSelect(nextWindowId);
       }
 
       await destroyRemoteWindows(closingWindowIds);
@@ -1012,7 +1021,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error('Failed to close remote window:', error);
     }
-  }, [destroyRemoteWindows, embedded, onReturn, onWindowSwitch, terminalWindow.id]);
+  }, [destroyRemoteWindows, embedded, handleRemoteWindowSelect, onReturn, terminalWindow.id]);
 
   const handleOpenSSHSftp = useCallback(() => {
     if (!activeTerminalPane || !activePaneCapabilities?.canOpenSFTP) {
@@ -1515,22 +1524,23 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       {/* 主内容区 */}
       <div className="relative min-w-0 flex-1 flex flex-col overflow-hidden">
         {titleBarActions}
-        {showFloatingChrome && showRemoteWindowTabs && (
-          <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
-            <div className="pointer-events-auto max-w-full rounded-full border border-[rgb(var(--border))]/85 bg-[color-mix(in_srgb,rgb(var(--card))_88%,transparent)] shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-              <FloatingRemoteWindowTabs
-                activeWindowId={terminalWindow.id}
-                cloneLabel={t('terminalView.cloneSshTerminal')}
-                closeLabel={t('common.close')}
-                onWindowSelect={onWindowSwitch}
-                onWindowClone={(windowId) => {
-                  void handleCloneRemoteWindow(windowId);
-                }}
-                onWindowClose={(windowId) => {
-                  void handleCloseRemoteWindow(windowId);
-                }}
-              />
-            </div>
+        {showRemoteWindowTabs && (
+          <div
+            data-testid="terminal-remote-tabs-header"
+            className="shrink-0 border-b border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_72%,transparent)] px-3 py-2"
+          >
+            <FloatingRemoteWindowTabs
+              activeWindowId={terminalWindow.id}
+              cloneLabel={t('terminalView.cloneSshTerminal')}
+              closeLabel={t('common.close')}
+              onWindowSelect={handleRemoteWindowSelect}
+              onWindowClone={(windowId) => {
+                void handleCloneRemoteWindow(windowId);
+              }}
+              onWindowClose={(windowId) => {
+                void handleCloseRemoteWindow(windowId);
+              }}
+            />
           </div>
         )}
         {/* 缁堢甯冨眬鍖哄煙 */}

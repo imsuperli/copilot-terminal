@@ -444,6 +444,22 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByRole('button', { name: 'Prod SSH C' })).not.toBeInTheDocument();
   });
 
+  it('renders remote tabs in a fixed window header instead of an overlay', () => {
+    render(
+      <TerminalView
+        window={createSSHWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    const remoteTabsHeader = screen.getByTestId('terminal-remote-tabs-header');
+    expect(remoteTabsHeader).toHaveClass('px-3');
+    expect(remoteTabsHeader.closest('.absolute')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
+  });
+
   it('opens the ssh sftp dialog from the toolbar', async () => {
     const user = userEvent.setup();
 

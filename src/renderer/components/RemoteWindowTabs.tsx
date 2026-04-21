@@ -71,17 +71,17 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
   }
 
   return (
-    <div className={isFloating ? 'flex h-8 min-w-0 items-center' : 'flex h-full min-w-0 self-stretch items-stretch'}>
+    <div className={isFloating ? 'flex h-auto min-w-0 items-center' : 'flex h-full min-w-0 self-stretch items-stretch'}>
       <div className={isFloating ? 'flex h-full min-w-0 items-center gap-1 overflow-x-auto px-1' : 'flex h-full min-w-0 self-stretch items-stretch overflow-x-auto'}>
         {remoteWindows.map((window, index) => (
           <ContextMenu.Root key={window.id}>
             <ContextMenu.Trigger asChild>
               <div
                 className={isFloating
-                  ? `group relative flex h-7 min-w-[108px] max-w-[164px] items-stretch rounded-full border transition-colors ${
+                  ? `group relative flex h-8 min-w-[120px] max-w-[200px] items-stretch rounded-lg border transition-colors ${
                     window.isActive
-                      ? 'border-[rgb(var(--primary))]/45 bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] shadow-[0_10px_26px_rgba(0,0,0,0.26)]'
-                      : 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_66%,transparent)] hover:border-[rgb(var(--ring))]/45 hover:bg-[rgb(var(--accent))]'
+                      ? 'border-[rgb(var(--primary))]/40 bg-[color-mix(in_srgb,rgb(var(--secondary))_86%,transparent)]'
+                      : 'border-[rgb(var(--border))]/80 bg-[color-mix(in_srgb,rgb(var(--background))_38%,transparent)] hover:border-[rgb(var(--ring))]/45 hover:bg-[rgb(var(--accent))]'
                   }`
                   : `group relative flex h-full min-w-[108px] max-w-[164px] items-stretch ${
                     index > 0 ? '-ml-px' : ''
