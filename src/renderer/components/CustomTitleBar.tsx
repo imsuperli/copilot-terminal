@@ -3,6 +3,8 @@ import { Minus, Square, X, Maximize2, Home } from 'lucide-react';
 import { resolveRendererAssetUrl } from '../utils/assetUrl';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 
+export const CUSTOM_TITLEBAR_ACTIONS_SLOT_ID = 'custom-titlebar-actions-slot';
+
 interface CustomTitleBarProps {
   title?: string;
   gitBranch?: string;
@@ -98,6 +100,14 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
             )}
           </div>
         )}
+
+        <div className="ml-auto flex items-center justify-end" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+          <div
+            id={CUSTOM_TITLEBAR_ACTIONS_SLOT_ID}
+            data-testid="custom-titlebar-actions-slot"
+            className="flex max-w-[min(48vw,720px)] items-center justify-end overflow-hidden"
+          />
+        </div>
       </div>
     );
   }
@@ -137,6 +147,11 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
 
       {/* 右侧：窗口控制按钮 */}
       <div className="flex items-center h-full" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <div
+          id={CUSTOM_TITLEBAR_ACTIONS_SLOT_ID}
+          data-testid="custom-titlebar-actions-slot"
+          className="mr-1 flex max-w-[min(52vw,720px)] items-center justify-end overflow-hidden"
+        />
         <button type="button" tabIndex={-1} onMouseDown={preventMouseButtonFocus} onClick={handleMinimize} className="h-full px-4 hover:bg-[rgb(var(--titlebar-hover))] transition-colors flex items-center justify-center" aria-label="Minimize">
           <Minus size={14} className="text-[rgb(var(--titlebar-muted))]" />
         </button>

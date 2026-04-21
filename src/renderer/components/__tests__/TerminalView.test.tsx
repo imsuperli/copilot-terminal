@@ -2,6 +2,7 @@ import React from 'react';
 import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalView } from '../TerminalView';
+import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from '../CustomTitleBar';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
 import { getAllPanes } from '../../utils/layoutHelpers';
@@ -395,6 +396,7 @@ function createTerminalWithCodePaneWindow(): Window {
 describe('TerminalView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    document.body.innerHTML = `<div id="${CUSTOM_TITLEBAR_ACTIONS_SLOT_ID}"></div>`;
     useWindowStore.setState({
       windows: [],
       activeWindowId: null,

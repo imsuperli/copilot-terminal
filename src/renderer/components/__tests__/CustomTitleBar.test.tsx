@@ -48,6 +48,15 @@ describe('CustomTitleBar', () => {
     expect(window.electronAPI.windowMaximize).not.toHaveBeenCalled();
   });
 
+  it('renders the title bar actions slot before window controls', () => {
+    const { container } = render(<CustomTitleBar title="Workspace" />);
+
+    const slot = screen.getByTestId('custom-titlebar-actions-slot');
+    expect(slot).toBeInTheDocument();
+    expect(slot.nextElementSibling).toHaveAttribute('aria-label', 'Minimize');
+    expect(container.querySelector('#custom-titlebar-actions-slot')).toBe(slot);
+  });
+
   it('prevents mouse focus on title bar buttons', () => {
     const { container } = render(
       <CustomTitleBar

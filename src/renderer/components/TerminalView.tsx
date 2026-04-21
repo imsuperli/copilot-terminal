@@ -1,4 +1,5 @@
 ﻿import React, { Suspense, lazy, useCallback, useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { useShallow } from 'zustand/react/shallow';
@@ -19,6 +20,7 @@ import { DragItemTypes, DropZone } from './dnd';
 import type { BrowserDropDragItem, BrowserToolDragItem, PaneDropResult, WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
+import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import { SSHSessionStatusBar } from './SSHSessionStatusBar';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
@@ -369,6 +371,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [sshSftpOpen, setSSHSftpOpen] = useState(false);
   const [sshMetricsOpen, setSSHMetricsOpen] = useState(false);
   const [isFloatingActionsExpanded, setIsFloatingActionsExpanded] = useState(false);
+  const [titleBarActionsSlot, setTitleBarActionsSlot] = useState<HTMLElement | null>(null);
   const floatingActionsCollapseTimerRef = useRef<number | null>(null);
 
   const clearFloatingActionsCollapseTimer = useCallback(() => {
@@ -407,6 +410,26 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     clearFloatingActionsCollapseTimer();
     setIsFloatingActionsExpanded(false);
   }, [clearFloatingActionsCollapseTimer, showFloatingChrome]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const syncSlot = () => {
+      const nextSlot = document.getElementById(CUSTOM_TITLEBAR_ACTIONS_SLOT_ID);
+      setTitleBarActionsSlot((currentSlot) => (
+        currentSlot === nextSlot ? currentSlot : nextSlot
+      ));
+    };
+
+    syncSlot();
+    window.addEventListener('resize', syncSlot);
+
+    return () => {
+      window.removeEventListener('resize', syncSlot);
+    };
+  }, []);
 
   // Store
   const addWindow = useWindowStore((state) => state.addWindow);
@@ -1182,79 +1205,34 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     [terminalWindow.id, terminalWindow.name, findGroupByWindowId, addGroup, setActiveGroup, addWindowToGroupLayout, removeWindowFromGroupLayout]
   );
 
-  return (
-    <div className="flex h-full w-full min-w-0 overflow-hidden bg-transparent text-[rgb(var(--foreground))]">
-      {/* 渚ц竟鏍?*/}
-      {!embedded && (
-        <Sidebar
-          activeWindowId={sidebarActiveWindowId}
-          onWindowSelect={onWindowSwitch}
-          onGroupSelect={onGroupSwitch}
-          onSettingsClick={() => {
-            setHasMountedSettingsPanel(true);
-            setIsSettingsPanelOpen(true);
-          }}
-          onOpenCodePane={handleOpenCodePane}
-          showOpenCodePaneAction={!isSshOnlyWindow || hasCodePaneInWindow}
-          canOpenCodePane={hasCodePaneInWindow || Boolean(codePaneRootPath)}
-          isCodePaneActive={Boolean(activePane && isCodePane(activePane))}
-          sshEnabled={sshEnabled}
-          sshProfiles={sshProfiles}
-          onSSHProfileSaved={onSSHProfileSaved}
-        />
-      )}
+  const titleBarActions = useMemo(() => {
+    if (!showFloatingChrome || !titleBarActionsSlot) {
+      return null;
+    }
 
-      {/* 主内容区 */}
-      <div className="relative min-w-0 flex-1 flex flex-col overflow-hidden">
-        {/*
-          Keep these controls on shared appearance tokens so theme/skin changes don't
-          leave the top chrome visually detached from the rest of the app.
-        */}
-        {(() => {
-          const floatingChromeClass = 'pointer-events-auto rounded-full border border-[rgb(var(--border))]/85 bg-[color-mix(in_srgb,rgb(var(--card))_88%,transparent)] shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl';
-          const floatingIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--foreground))]`;
-          const floatingMutedIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]`;
-          const floatingDividerClass = 'h-4 w-px bg-[rgb(var(--border))]';
-          return (
-            <>
-        {showFloatingChrome && showRemoteWindowTabs && (
-          <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
-            <div className={`${floatingChromeClass} max-w-full`}>
-              <FloatingRemoteWindowTabs
-                activeWindowId={terminalWindow.id}
-                cloneLabel={t('terminalView.cloneSshTerminal')}
-                closeLabel={t('common.close')}
-                onWindowSelect={onWindowSwitch}
-                onWindowClone={(windowId) => {
-                  void handleCloneRemoteWindow(windowId);
-                }}
-                onWindowClose={(windowId) => {
-                  void handleCloseRemoteWindow(windowId);
-                }}
-              />
-            </div>
-          </div>
-        )}
+    const floatingChromeClass = 'pointer-events-auto rounded-full border border-[rgb(var(--border))]/85 bg-[color-mix(in_srgb,rgb(var(--card))_88%,transparent)] shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl';
+    const floatingIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--foreground))]`;
+    const floatingMutedIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]`;
+    const floatingDividerClass = 'h-4 w-px bg-[rgb(var(--border))]';
 
-        {showFloatingChrome && (
+    return createPortal(
+      <div
+        data-testid="terminal-floating-actions"
+        className="pointer-events-auto flex max-w-full justify-end pr-1"
+      >
+        <div
+          aria-expanded={isFloatingActionsExpanded}
+          className={`flex h-8 items-center overflow-hidden px-1.5 transition-all duration-150 ease-out ${
+            isFloatingActionsExpanded ? 'max-w-full' : 'max-w-0 border-transparent bg-transparent shadow-none'
+          } ${floatingChromeClass}`}
+          onPointerEnter={expandFloatingActions}
+          onPointerLeave={scheduleFloatingActionsCollapse}
+        >
           <div
-            data-testid="terminal-floating-actions"
-            className="pointer-events-none absolute right-12 top-3 z-50 flex max-w-[calc(100%-60px)] justify-end"
+            className={`flex min-w-max shrink-0 items-center gap-2 transition-opacity duration-150 ${
+              isFloatingActionsExpanded ? 'opacity-100' : 'opacity-0'
+            }`}
           >
-            <div
-              aria-expanded={isFloatingActionsExpanded}
-              className={`flex h-8 items-center overflow-hidden px-1.5 transition-all duration-150 ease-out ${
-                isFloatingActionsExpanded ? 'max-w-full' : 'max-w-0 border-transparent bg-transparent shadow-none'
-              } ${floatingChromeClass}`}
-              onPointerEnter={expandFloatingActions}
-              onPointerLeave={scheduleFloatingActionsCollapse}
-            >
-              <div
-                className={`flex min-w-max shrink-0 items-center gap-2 transition-opacity duration-150 ${
-                  isFloatingActionsExpanded ? 'opacity-100' : 'opacity-0'
-                }`}
-              >
-            {/* 椤圭洰閾炬帴 */}
             {terminalWindow.projectConfig && terminalWindow.projectConfig.links.length > 0 && (
               <>
                 <ProjectLinks
@@ -1262,12 +1240,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                   variant="toolbar"
                   maxDisplay={6}
                 />
-                {/* 鍒嗛殧绾?*/}
                 <div className={floatingDividerClass} />
               </>
             )}
 
-            {/* 鍔ㄦ€佹覆鏌撳惎鐢ㄧ殑 IDE 鍥炬爣 */}
             {visibleIDEs.map((ide) => (
               <AppTooltip
                 key={ide.id}
@@ -1287,7 +1263,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </AppTooltip>
             ))}
 
-            {/* 褰掓。鎸夐挳 */}
             {!isEphemeralRemoteTab && (
               <AppTooltip content={t('terminalView.archive')} placement="toolbar-trailing">
                 <button
@@ -1303,7 +1278,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </AppTooltip>
             )}
 
-            {/* 鎵撳紑鏂囦欢澶规寜閽?*/}
             {activePaneCapabilities?.canOpenLocalFolder && (
               <AppTooltip content={t('terminalView.openFolder')} placement="toolbar-trailing">
                 <button
@@ -1374,7 +1348,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </AppTooltip>
             )}
 
-            {/* 宸﹀彸鎷嗗垎鎸夐挳 */}
             <AppTooltip content={t('terminalView.splitHorizontal')} placement="toolbar-trailing">
               <button
                 type="button"
@@ -1389,7 +1362,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </button>
             </AppTooltip>
 
-            {/* 涓婁笅鎷嗗垎鎸夐挳 */}
             <AppTooltip content={t('terminalView.splitVertical')} placement="toolbar-trailing">
               <button
                 type="button"
@@ -1432,8 +1404,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </AppTooltip>
             )}
 
-            {/* 鏆傚仠鎸夐挳 - 浠呭湪杩愯鎴栫瓑寰呰緭鍏ユ椂鏄剧ず */}
-            {/* 嵌入模式（组内）：移除和停止并移除按钮 */}
             {embedded && groupId && (
               <>
                 <AppTooltip
@@ -1479,7 +1449,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </>
             )}
 
-            {/* 停止按钮 - 仅在非嵌入模式且运行中时显示 */}
             {!embedded && isWindowRunning && (
               <AppTooltip content={t('terminalView.stop')} placement="toolbar-trailing">
                 <button
@@ -1495,7 +1464,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </AppTooltip>
             )}
 
-            {/* 重启/启动按钮 - 非嵌入模式下始终显示 */}
             {!embedded && !isEphemeralRemoteTab && (
               <AppTooltip
                 content={isWindowRunning ? t('terminalView.restart') : t('terminalView.start')}
@@ -1515,13 +1483,93 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
                 </button>
               </AppTooltip>
             )}
-              </div>
+          </div>
+        </div>
+      </div>,
+      titleBarActionsSlot,
+    );
+  }, [
+    activePaneCapabilities?.canManagePortForwards,
+    activePaneCapabilities?.canOpenLocalFolder,
+    activePaneCapabilities?.canOpenSFTP,
+    browserToolButtonRef,
+    canSplitActivePane,
+    embedded,
+    expandFloatingActions,
+    groupId,
+    handleArchiveWindow,
+    handleOpenFolder,
+    handleOpenInIDE,
+    handleOpenSSHPortForwards,
+    handleOpenSSHSftp,
+    handlePauseWindow,
+    handleRestartWindow,
+    handleSplitBrowserPane,
+    handleSplitChatPane,
+    handleSplitPane,
+    handleStartWindow,
+    hasChatPaneInWindow,
+    isEphemeralRemoteTab,
+    isFloatingActionsExpanded,
+    isDraggingBrowserTool,
+    isWindowRunning,
+    onRemoveFromGroup,
+    onStopAndRemoveFromGroup,
+    preventMouseButtonFocus,
+    scheduleFloatingActionsCollapse,
+    showFloatingChrome,
+    sshMetricsOpen,
+    sshSftpOpen,
+    t,
+    terminalWindow.id,
+    terminalWindow.projectConfig,
+    titleBarActionsSlot,
+    visibleIDEs,
+  ]);
+
+  return (
+    <div className="flex h-full w-full min-w-0 overflow-hidden bg-transparent text-[rgb(var(--foreground))]">
+      {/* 渚ц竟鏍?*/}
+      {!embedded && (
+        <Sidebar
+          activeWindowId={sidebarActiveWindowId}
+          onWindowSelect={onWindowSwitch}
+          onGroupSelect={onGroupSwitch}
+          onSettingsClick={() => {
+            setHasMountedSettingsPanel(true);
+            setIsSettingsPanelOpen(true);
+          }}
+          onOpenCodePane={handleOpenCodePane}
+          showOpenCodePaneAction={!isSshOnlyWindow || hasCodePaneInWindow}
+          canOpenCodePane={hasCodePaneInWindow || Boolean(codePaneRootPath)}
+          isCodePaneActive={Boolean(activePane && isCodePane(activePane))}
+          sshEnabled={sshEnabled}
+          sshProfiles={sshProfiles}
+          onSSHProfileSaved={onSSHProfileSaved}
+        />
+      )}
+
+      {/* 主内容区 */}
+      <div className="relative min-w-0 flex-1 flex flex-col overflow-hidden">
+        {titleBarActions}
+        {showFloatingChrome && showRemoteWindowTabs && (
+          <div className="pointer-events-none absolute left-3 top-3 z-40 max-w-[calc(100%-96px)]">
+            <div className="pointer-events-auto max-w-full rounded-full border border-[rgb(var(--border))]/85 bg-[color-mix(in_srgb,rgb(var(--card))_88%,transparent)] shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+              <FloatingRemoteWindowTabs
+                activeWindowId={terminalWindow.id}
+                cloneLabel={t('terminalView.cloneSshTerminal')}
+                closeLabel={t('common.close')}
+                onWindowSelect={onWindowSwitch}
+                onWindowClone={(windowId) => {
+                  void handleCloneRemoteWindow(windowId);
+                }}
+                onWindowClose={(windowId) => {
+                  void handleCloseRemoteWindow(windowId);
+                }}
+              />
             </div>
           </div>
         )}
-            </>
-          );
-        })()}
         {/* 缁堢甯冨眬鍖哄煙 */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {sshSftpOpen && activePaneCapabilities?.canOpenSFTP && (

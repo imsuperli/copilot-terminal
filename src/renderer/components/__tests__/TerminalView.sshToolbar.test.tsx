@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TerminalView } from '../TerminalView';
+import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from '../CustomTitleBar';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
 
@@ -301,6 +302,7 @@ function createSSHWindowWithBrowserSibling(options: {
 describe('TerminalView SSH toolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    document.body.innerHTML = `<div id="${CUSTOM_TITLEBAR_ACTIONS_SLOT_ID}"></div>`;
     useWindowStore.setState({
       windows: [createSSHWindow()],
       activeWindowId: 'win-ssh-1',
