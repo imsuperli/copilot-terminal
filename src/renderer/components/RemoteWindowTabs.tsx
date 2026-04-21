@@ -135,7 +135,7 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                     >
                       <span aria-hidden="true">&times;</span>
                     </button>
-                    {!window.isActive && index < remoteWindows.length - 1 && (
+                    {!window.isActive && !remoteWindows[index + 1]?.isActive && index < remoteWindows.length - 1 && (
                       <span
                         aria-hidden="true"
                         className="pointer-events-none absolute right-0 top-1/2 h-3 -translate-y-1/2 border-r border-white/18"

@@ -165,7 +165,7 @@
 }
 
 .terminal-remote-tab-active {
-  background: linear-gradient(180deg, rgba(36, 36, 36, 0.98) 0%, rgba(28, 28, 28, 0.99) 100%);
+  background: #000000;
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
 }
