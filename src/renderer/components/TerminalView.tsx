@@ -21,6 +21,7 @@ import type { BrowserDropDragItem, BrowserToolDragItem, PaneDropResult, WindowCa
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import { SSHSessionStatusBar } from './SSHSessionStatusBar';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
@@ -353,6 +354,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id,
     [terminalWindow],
   );
+  const toolbarWindowLogoVariant = useMemo(
+    () => windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local',
+    [windowKind],
+  );
   const showRemoteWindowTabs = useMemo(
     () => !embedded && isStandaloneSshWindow,
     [embedded, isStandaloneSshWindow],
@@ -370,46 +375,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [sshPortForwardTarget, setSSHPortForwardTarget] = useState<{ windowId: string; paneId: string } | null>(null);
   const [sshSftpOpen, setSSHSftpOpen] = useState(false);
   const [sshMetricsOpen, setSSHMetricsOpen] = useState(false);
-  const [isFloatingActionsExpanded, setIsFloatingActionsExpanded] = useState(false);
   const [titleBarActionsSlot, setTitleBarActionsSlot] = useState<HTMLElement | null>(null);
-  const floatingActionsCollapseTimerRef = useRef<number | null>(null);
-
-  const clearFloatingActionsCollapseTimer = useCallback(() => {
-    if (floatingActionsCollapseTimerRef.current === null) {
-      return;
-    }
-
-    window.clearTimeout(floatingActionsCollapseTimerRef.current);
-    floatingActionsCollapseTimerRef.current = null;
-  }, []);
-
-  const expandFloatingActions = useCallback(() => {
-    clearFloatingActionsCollapseTimer();
-    setIsFloatingActionsExpanded(true);
-  }, [clearFloatingActionsCollapseTimer]);
-
-  const scheduleFloatingActionsCollapse = useCallback(() => {
-    clearFloatingActionsCollapseTimer();
-    floatingActionsCollapseTimerRef.current = window.setTimeout(() => {
-      floatingActionsCollapseTimerRef.current = null;
-      setIsFloatingActionsExpanded(false);
-    }, 180);
-  }, [clearFloatingActionsCollapseTimer]);
-
-  useEffect(() => (
-    () => {
-      clearFloatingActionsCollapseTimer();
-    }
-  ), [clearFloatingActionsCollapseTimer]);
-
-  useEffect(() => {
-    if (showFloatingChrome) {
-      return;
-    }
-
-    clearFloatingActionsCollapseTimer();
-    setIsFloatingActionsExpanded(false);
-  }, [clearFloatingActionsCollapseTimer, showFloatingChrome]);
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -1210,7 +1176,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return null;
     }
 
-    const floatingChromeClass = 'pointer-events-auto rounded-full border border-[rgb(var(--border))]/85 bg-[color-mix(in_srgb,rgb(var(--card))_88%,transparent)] shadow-[0_16px_34px_rgba(0,0,0,0.22)] backdrop-blur-xl';
+    const floatingChromeClass = 'pointer-events-auto flex h-8 items-center gap-2 px-1.5';
     const floatingIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--foreground))]`;
     const floatingMutedIconButtonClass = `${idePopupIconButtonClassName} h-6 w-6 border-transparent bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]`;
     const floatingDividerClass = 'h-4 w-px bg-[rgb(var(--border))]';
@@ -1221,18 +1187,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         className="pointer-events-auto flex max-w-full justify-end pr-1"
       >
         <div
-          aria-expanded={isFloatingActionsExpanded}
-          className={`flex h-8 items-center overflow-hidden px-1.5 transition-all duration-150 ease-out ${
-            isFloatingActionsExpanded ? 'max-w-full' : 'max-w-0 border-transparent bg-transparent shadow-none'
-          } ${floatingChromeClass}`}
-          onPointerEnter={expandFloatingActions}
-          onPointerLeave={scheduleFloatingActionsCollapse}
+          aria-expanded="true"
+          className={floatingChromeClass}
         >
-          <div
-            className={`flex min-w-max shrink-0 items-center gap-2 transition-opacity duration-150 ${
-              isFloatingActionsExpanded ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center">
+            <TerminalTypeLogo
+              variant={toolbarWindowLogoVariant}
+              size="xs"
+              className="border-transparent bg-transparent text-[rgb(var(--titlebar-foreground))]"
+            />
+          </div>
+          <div className="flex min-w-max shrink-0 items-center gap-2">
             {terminalWindow.projectConfig && terminalWindow.projectConfig.links.length > 0 && (
               <>
                 <ProjectLinks
@@ -1495,7 +1460,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     browserToolButtonRef,
     canSplitActivePane,
     embedded,
-    expandFloatingActions,
     groupId,
     handleArchiveWindow,
     handleOpenFolder,
@@ -1510,19 +1474,18 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     handleStartWindow,
     hasChatPaneInWindow,
     isEphemeralRemoteTab,
-    isFloatingActionsExpanded,
     isDraggingBrowserTool,
     isWindowRunning,
     onRemoveFromGroup,
     onStopAndRemoveFromGroup,
     preventMouseButtonFocus,
-    scheduleFloatingActionsCollapse,
     showFloatingChrome,
     sshMetricsOpen,
     sshSftpOpen,
     t,
     terminalWindow.id,
     terminalWindow.projectConfig,
+    toolbarWindowLogoVariant,
     titleBarActionsSlot,
     visibleIDEs,
   ]);

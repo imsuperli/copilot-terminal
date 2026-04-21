@@ -431,7 +431,7 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'terminalView.restart' })).toBeInTheDocument();
   });
 
-  it('keeps floating actions expanded while the pointer stays over the toolbar', async () => {
+  it('renders floating actions expanded by default in the title bar', () => {
     render(
       <TerminalView
         window={createLocalWindow()}
@@ -442,22 +442,10 @@ describe('TerminalView', () => {
     );
 
     const floatingActions = screen.getByTestId('terminal-floating-actions').firstElementChild as HTMLElement;
-    expect(floatingActions).toHaveAttribute('aria-expanded', 'false');
-
-    fireEvent.pointerEnter(floatingActions);
     expect(floatingActions).toHaveAttribute('aria-expanded', 'true');
-
-    fireEvent.pointerLeave(floatingActions);
-    expect(floatingActions).toHaveAttribute('aria-expanded', 'true');
-
-    await act(async () => {
-      await new Promise((resolve) => window.setTimeout(resolve, 220));
-    });
-
-    expect(floatingActions).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('does not render the terminal logo inside floating actions', () => {
+  it('renders a plain terminal logo inside floating actions without chrome', () => {
     render(
       <TerminalView
         window={createLocalWindow()}
@@ -467,7 +455,10 @@ describe('TerminalView', () => {
       />
     );
 
-    expect(screen.getByTestId('terminal-floating-actions').querySelector('[data-terminal-type-logo]')).toBeNull();
+    const logo = screen.getByTestId('terminal-floating-actions').querySelector('[data-terminal-type-logo]');
+    expect(logo).toBeTruthy();
+    expect(logo).toHaveClass('border-transparent');
+    expect(logo).toHaveClass('bg-transparent');
   });
 
   it('does not mount remote tabs for local terminal windows', () => {
