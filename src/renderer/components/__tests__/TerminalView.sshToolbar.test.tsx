@@ -458,7 +458,9 @@ describe('TerminalView SSH toolbar', () => {
     expect(remoteTabsHeader).toHaveClass('bg-[rgb(var(--titlebar))]');
     expect(remoteTabsHeader).toHaveClass('px-2');
     expect(remoteTabsHeader.closest('.absolute')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
+    const remoteTabButton = screen.getByRole('button', { name: 'Prod SSH' });
+    expect(remoteTabButton).toBeInTheDocument();
+    expect(remoteTabButton.parentElement).toHaveClass('terminal-remote-tab');
   });
 
   it('opens the ssh sftp dialog from the toolbar', async () => {

@@ -22,7 +22,7 @@ interface RemoteWindowTabsProps {
   onWindowSelect: (windowId: string) => void;
   onWindowClone: (windowId: string) => void;
   onWindowClose: (windowId: string) => void;
-  variant?: 'toolbar' | 'floating';
+  variant?: 'toolbar' | 'floating' | 'windowHeader';
 }
 
 interface RemoteWindowTabItem {
@@ -44,6 +44,7 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
   variant = 'toolbar',
 }) => {
   const isFloating = variant === 'floating';
+  const isWindowHeader = variant === 'windowHeader';
   const remoteWindows = useMemo<RemoteWindowTabItem[]>(() => {
     const candidates = getStandaloneSSHWindowsForTarget(windows, activeWindowId);
 
@@ -105,7 +106,7 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                         {window.primaryText}
                       </div>
                     </div>
-                    {!isFloating && (
+                    {isWindowHeader && (
                       <span className="ml-3 flex h-4 w-4 shrink-0 items-center justify-center text-[13px] leading-none text-inherit opacity-80 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                         <span aria-hidden="true">&times;</span>
                       </span>
@@ -120,7 +121,7 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                     }`}
                   />
                 )}
-                {!isFloating && (
+                {isWindowHeader && (
                   <>
                     <button
                       type="button"

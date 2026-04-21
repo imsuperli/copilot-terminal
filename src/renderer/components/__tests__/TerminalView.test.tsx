@@ -45,11 +45,13 @@ vi.mock('../RemoteWindowTabs', () => ({
   RemoteWindowTabs: ({
     windows = [],
     onWindowSelect,
+    variant,
   }: {
     windows?: Window[];
     onWindowSelect?: (windowId: string) => void;
+    variant?: string;
   }) => (
-    <div data-testid="remote-window-tabs">
+    <div data-testid="remote-window-tabs" data-variant={variant}>
       {windows.map((window) => (
         <button
           key={window.id}
@@ -555,7 +557,7 @@ describe('TerminalView', () => {
     );
 
     expect(screen.getByTestId('terminal-remote-tabs-header')).toBeInTheDocument();
-    expect(screen.getByTestId('remote-window-tabs')).toBeInTheDocument();
+    expect(screen.getByTestId('remote-window-tabs')).toHaveAttribute('data-variant', 'windowHeader');
   });
 
   it('switches the active window inside a group when an embedded ssh remote tab is selected', async () => {

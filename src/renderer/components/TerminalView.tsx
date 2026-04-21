@@ -125,7 +125,7 @@ function SplitChatIcon() {
   return <MessageSquare size={15} strokeWidth={1.8} />;
 }
 
-interface FloatingRemoteWindowTabsProps {
+interface TerminalRemoteWindowTabsProps {
   activeWindowId: string;
   cloneLabel: string;
   closeLabel: string;
@@ -134,14 +134,14 @@ interface FloatingRemoteWindowTabsProps {
   onWindowClose: (windowId: string) => void;
 }
 
-const FloatingRemoteWindowTabs = React.memo(({
+const TerminalRemoteWindowTabs = React.memo(({
   activeWindowId,
   cloneLabel,
   closeLabel,
   onWindowSelect,
   onWindowClone,
   onWindowClose,
-}: FloatingRemoteWindowTabsProps) => {
+}: TerminalRemoteWindowTabsProps) => {
   const windows = useWindowStore(useShallow((state) => (
     getStandaloneSSHWindowsForTarget(state.windows, activeWindowId)
   )));
@@ -155,12 +155,12 @@ const FloatingRemoteWindowTabs = React.memo(({
       onWindowSelect={onWindowSelect}
       onWindowClone={onWindowClone}
       onWindowClose={onWindowClose}
-      variant="floating"
+      variant="windowHeader"
     />
   );
 });
 
-FloatingRemoteWindowTabs.displayName = 'FloatingRemoteWindowTabs';
+TerminalRemoteWindowTabs.displayName = 'TerminalRemoteWindowTabs';
 
 function isArchiveSwitchCandidate(window: Window): boolean {
   const status = getAggregatedStatus(window.layout);
@@ -1529,7 +1529,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             data-testid="terminal-remote-tabs-header"
             className="shrink-0 border-b border-[rgb(var(--titlebar-border))] bg-[rgb(var(--titlebar))] px-2"
           >
-            <FloatingRemoteWindowTabs
+            <TerminalRemoteWindowTabs
               activeWindowId={terminalWindow.id}
               cloneLabel={t('terminalView.cloneSshTerminal')}
               closeLabel={t('common.close')}
