@@ -184,7 +184,7 @@ describe('TerminalPane resize on resume', () => {
     });
   });
 
-  it('swaps the tmux header status icon with the close button on hover', () => {
+  it('shows the tmux close button only on hover', () => {
     const onClose = vi.fn();
     const { container } = render(
       <TerminalPane
@@ -205,12 +205,10 @@ describe('TerminalPane resize on resume', () => {
       />
     );
 
-    expect(container.querySelector('svg.lucide-activity')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '关闭窗格' })).not.toBeInTheDocument();
 
     fireEvent.mouseEnter(container.firstElementChild as HTMLElement);
 
-    expect(container.querySelector('svg.lucide-activity')).not.toBeInTheDocument();
     const closeButton = screen.getByRole('button', { name: '关闭窗格' });
     expect(closeButton).toBeInTheDocument();
     expect(closeButton).not.toHaveClass('absolute');

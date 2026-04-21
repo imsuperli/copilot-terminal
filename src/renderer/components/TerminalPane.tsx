@@ -3,7 +3,6 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '../utils/xtermAddonFit';
 import { GripVertical, X } from 'lucide-react';
 import { Pane, WindowStatus } from '../types/window';
-import { StatusDot } from './StatusDot';
 import { useI18n } from '../i18n';
 import { subscribeToPanePtyData } from '../api/ptyDataBus';
 import type { PtyDataPayload, PtyHistorySnapshot } from '../../shared/types/electron-api';
@@ -1322,8 +1321,8 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
               {pane.title || pane.agentName}
             </span>
           </div>
-          <div className="flex items-center justify-center w-6 h-6 flex-shrink-0">
-            {showCloseButton ? (
+          <div className="flex min-h-6 min-w-6 items-center justify-center">
+            {showCloseButton && (
               <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
                 <button
                   onClick={(e) => {
@@ -1336,17 +1335,15 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                   <X size={14} />
                 </button>
               </AppTooltip>
-            ) : (
-              <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
             )}
           </div>
         </div>
       )}
 
-      {/* 无 header 时，右上角在状态图标与关闭按钮之间切换 */}
+      {/* 无 header 时，仅在 hover 时显示关闭按钮 */}
       {!showPaneHeader && (
         <div className="absolute top-1 right-1 z-20">
-          {showCloseButton ? (
+          {showCloseButton && (
             <AppTooltip content={t('terminalPane.close')} placement="pane-corner">
               <button
                 onClick={(e) => {
@@ -1359,8 +1356,6 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
                 <X size={14} />
               </button>
             </AppTooltip>
-          ) : (
-            <StatusDot status={pane.status} size="sm" title={t('terminalPane.status')} />
           )}
         </div>
       )}

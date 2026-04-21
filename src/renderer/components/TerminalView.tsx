@@ -1,4 +1,4 @@
-﻿import React, { Suspense, lazy, useCallback, useState, useEffect, useMemo } from 'react';
+﻿import React, { Suspense, lazy, useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import { useShallow } from 'zustand/react/shallow';
@@ -378,6 +378,45 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const [sshPortForwardTarget, setSSHPortForwardTarget] = useState<{ windowId: string; paneId: string } | null>(null);
   const [sshSftpOpen, setSSHSftpOpen] = useState(false);
   const [sshMetricsOpen, setSSHMetricsOpen] = useState(false);
+  const [isFloatingActionsExpanded, setIsFloatingActionsExpanded] = useState(false);
+  const floatingActionsCollapseTimerRef = useRef<number | null>(null);
+
+  const clearFloatingActionsCollapseTimer = useCallback(() => {
+    if (floatingActionsCollapseTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(floatingActionsCollapseTimerRef.current);
+    floatingActionsCollapseTimerRef.current = null;
+  }, []);
+
+  const expandFloatingActions = useCallback(() => {
+    clearFloatingActionsCollapseTimer();
+    setIsFloatingActionsExpanded(true);
+  }, [clearFloatingActionsCollapseTimer]);
+
+  const scheduleFloatingActionsCollapse = useCallback(() => {
+    clearFloatingActionsCollapseTimer();
+    floatingActionsCollapseTimerRef.current = window.setTimeout(() => {
+      floatingActionsCollapseTimerRef.current = null;
+      setIsFloatingActionsExpanded(false);
+    }, 180);
+  }, [clearFloatingActionsCollapseTimer]);
+
+  useEffect(() => (
+    () => {
+      clearFloatingActionsCollapseTimer();
+    }
+  ), [clearFloatingActionsCollapseTimer]);
+
+  useEffect(() => {
+    if (showFloatingChrome) {
+      return;
+    }
+
+    clearFloatingActionsCollapseTimer();
+    setIsFloatingActionsExpanded(false);
+  }, [clearFloatingActionsCollapseTimer, showFloatingChrome]);
 
   // Store
   const addWindow = useWindowStore((state) => state.addWindow);
@@ -1231,7 +1270,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             data-testid="terminal-floating-actions"
             className="pointer-events-none absolute right-3 top-3 z-50 flex max-w-[calc(100%-24px)] justify-end"
           >
-            <div className={`group/terminal-actions flex h-8 max-w-9 items-center gap-2 overflow-hidden px-1.5 transition-colors duration-150 ease-out hover:max-w-full focus-within:max-w-full ${floatingChromeClass}`}>
+            <div
+              aria-expanded={isFloatingActionsExpanded}
+              className={`flex h-8 items-center gap-2 overflow-hidden px-1.5 transition-all duration-150 ease-out ${
+                isFloatingActionsExpanded ? 'max-w-full' : 'max-w-9'
+              } ${floatingChromeClass}`}
+              onPointerEnter={expandFloatingActions}
+              onPointerLeave={scheduleFloatingActionsCollapse}
+            >
               <div className="relative flex h-6 w-6 shrink-0 items-center justify-center">
                 <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
                 <span className="absolute -bottom-1 -right-1">
@@ -1240,7 +1286,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
               </div>
 
               {/* 鍙充晶鎸夐挳缁?*/}
-              <div className="flex min-w-max shrink-0 items-center gap-2 opacity-0 transition-opacity duration-150 group-hover/terminal-actions:opacity-100 group-focus-within/terminal-actions:opacity-100">
+              <div
+                className={`flex min-w-max shrink-0 items-center gap-2 transition-opacity duration-150 ${
+                  isFloatingActionsExpanded ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
             {/* 椤圭洰閾炬帴 */}
             {terminalWindow.projectConfig && terminalWindow.projectConfig.links.length > 0 && (
               <>

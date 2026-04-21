@@ -429,6 +429,32 @@ describe('TerminalView', () => {
     expect(screen.getByRole('button', { name: 'terminalView.restart' })).toBeInTheDocument();
   });
 
+  it('keeps floating actions expanded while the pointer stays over the toolbar', async () => {
+    render(
+      <TerminalView
+        window={createLocalWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    const floatingActions = screen.getByTestId('terminal-floating-actions').firstElementChild as HTMLElement;
+    expect(floatingActions).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.pointerEnter(floatingActions);
+    expect(floatingActions).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.pointerLeave(floatingActions);
+    expect(floatingActions).toHaveAttribute('aria-expanded', 'true');
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
+    });
+
+    expect(floatingActions).toHaveAttribute('aria-expanded', 'false');
+  });
+
   it('does not mount remote tabs for local terminal windows', () => {
     render(
       <TerminalView
