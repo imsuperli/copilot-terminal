@@ -21,7 +21,6 @@ import type { BrowserDropDragItem, BrowserToolDragItem, PaneDropResult, WindowCa
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
-import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import { SSHSessionStatusBar } from './SSHSessionStatusBar';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
@@ -353,10 +352,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const sidebarActiveWindowId = useMemo(
     () => getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id,
     [terminalWindow],
-  );
-  const toolbarWindowLogoVariant = useMemo(
-    () => windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local',
-    [windowKind],
   );
   const showRemoteWindowTabs = useMemo(
     () => isStandaloneSshWindow,
@@ -1199,13 +1194,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           aria-expanded="true"
           className={floatingChromeClass}
         >
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center">
-            <TerminalTypeLogo
-              variant={toolbarWindowLogoVariant}
-              size="xs"
-              className="border-transparent bg-transparent text-[rgb(var(--titlebar-foreground))]"
-            />
-          </div>
           <div className="flex min-w-max shrink-0 items-center gap-2">
             {terminalWindow.projectConfig && terminalWindow.projectConfig.links.length > 0 && (
               <>
@@ -1494,7 +1482,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     t,
     terminalWindow.id,
     terminalWindow.projectConfig,
-    toolbarWindowLogoVariant,
     titleBarActionsSlot,
     visibleIDEs,
   ]);

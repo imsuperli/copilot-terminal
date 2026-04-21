@@ -470,7 +470,7 @@ describe('TerminalView', () => {
     expect(floatingActions).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('renders a plain terminal logo inside floating actions without chrome', () => {
+  it('does not render a non-interactive terminal logo inside floating actions', () => {
     render(
       <TerminalView
         window={createLocalWindow()}
@@ -481,9 +481,7 @@ describe('TerminalView', () => {
     );
 
     const logo = screen.getByTestId('terminal-floating-actions').querySelector('[data-terminal-type-logo]');
-    expect(logo).toBeTruthy();
-    expect(logo).toHaveClass('border-transparent');
-    expect(logo).toHaveClass('bg-transparent');
+    expect(logo).toBeNull();
   });
 
   it('does not mount remote tabs for local terminal windows', () => {
