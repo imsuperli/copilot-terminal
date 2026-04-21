@@ -1527,7 +1527,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         {showRemoteWindowTabs && (
           <div
             data-testid="terminal-remote-tabs-header"
-            className="shrink-0 border-b border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_72%,transparent)] px-3"
+            className="shrink-0 border-b border-[rgb(var(--titlebar-border))] bg-[rgb(var(--titlebar))] px-2"
           >
             <FloatingRemoteWindowTabs
               activeWindowId={terminalWindow.id}

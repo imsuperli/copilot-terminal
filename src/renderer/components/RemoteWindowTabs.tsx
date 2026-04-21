@@ -7,6 +7,7 @@ import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
 import { isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { getPathLeafLabel } from '../utils/pathDisplay';
 import { AppTooltip } from './ui/AppTooltip';
+import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import {
   ideMenuContentClassName,
   ideMenuDangerItemClassName,
@@ -71,8 +72,8 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
   }
 
   return (
-    <div className={isFloating ? 'flex h-auto min-w-0 items-center' : 'flex h-full min-w-0 self-stretch items-stretch'}>
-      <div className={isFloating ? 'flex h-full min-w-0 items-center gap-1 overflow-x-auto px-1' : 'flex h-full min-w-0 self-stretch items-stretch overflow-x-auto'}>
+    <div className={isFloating ? 'flex h-auto min-w-0 items-center' : 'flex h-[34px] min-w-0 items-stretch'}>
+      <div className={isFloating ? 'flex h-full min-w-0 items-center gap-1 overflow-x-auto px-1' : 'flex h-full min-w-0 items-stretch gap-1 overflow-x-auto py-[3px]'}>
         {remoteWindows.map((window, index) => (
           <ContextMenu.Root key={window.id}>
             <ContextMenu.Trigger asChild>
@@ -83,11 +84,21 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                       ? 'border-[rgb(var(--primary))]/40 bg-[color-mix(in_srgb,rgb(var(--secondary))_86%,transparent)]'
                       : 'border-[rgb(var(--border))]/80 bg-[color-mix(in_srgb,rgb(var(--background))_38%,transparent)] hover:border-[rgb(var(--ring))]/45 hover:bg-[rgb(var(--accent))]'
                   }`
-                  : `group relative flex h-full min-w-[108px] max-w-[164px] items-stretch ${
-                    index > 0 ? '-ml-px' : ''
-                  } border-x border-[rgb(var(--border))]`
+                  : `group relative flex h-full min-w-[124px] max-w-[224px] items-stretch overflow-hidden rounded-t-[10px] border border-b-0 ${
+                    window.isActive
+                      ? 'border-white/12 bg-[linear-gradient(180deg,rgba(86,86,86,0.96)_0%,rgba(61,61,61,0.98)_100%)] shadow-[0_1px_0_rgba(255,255,255,0.06)_inset]'
+                      : 'border-white/8 bg-[linear-gradient(180deg,rgba(54,54,54,0.96)_0%,rgba(39,39,39,0.98)_100%)] text-[rgb(var(--titlebar-muted))] hover:border-white/12 hover:bg-[linear-gradient(180deg,rgba(64,64,64,0.96)_0%,rgba(46,46,46,0.98)_100%)]'
+                  }`
                 }
               >
+                {!isFloating && (
+                  <div
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] ${
+                      window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'
+                    }`}
+                  />
+                )}
                 <AppTooltip
                   content={window.tooltipText}
                   delayDuration={250}
@@ -96,27 +107,40 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                     type="button"
                     aria-label={window.name}
                     onClick={() => onWindowSelect(window.id)}
-                    className={`relative z-[1] flex h-full w-full min-w-0 items-center pl-3 pr-8 text-left focus:outline-none transition-colors ${
+                    className={`relative z-[1] flex h-full w-full min-w-0 items-center gap-2.5 pl-2.5 pr-8 text-left focus:outline-none transition-colors ${
                       window.isActive
-                        ? 'text-[rgb(var(--foreground))]'
-                        : 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
+                        ? 'text-[rgb(var(--titlebar-foreground))]'
+                        : 'text-[rgb(var(--titlebar-muted))] hover:text-[rgb(var(--titlebar-foreground))]'
                     }`}
                   >
+                    {!isFloating && (
+                      <TerminalTypeLogo
+                        variant="ssh"
+                        size="xs"
+                        className={`h-4 w-4 rounded-[4px] border-white/10 bg-[linear-gradient(180deg,rgba(70,70,70,0.92)_0%,rgba(42,42,42,0.96)_100%)] ${
+                          window.isActive
+                            ? 'text-[rgb(var(--titlebar-foreground))]'
+                            : 'text-[rgb(var(--titlebar-muted))]'
+                        }`}
+                      />
+                    )}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-mono text-[12px] font-medium tracking-[0.01em]">
+                      <div className={`truncate text-[12px] font-medium leading-none tracking-[0.01em] ${
+                        isFloating ? 'font-mono' : ''
+                      }`}>
                         {window.primaryText}
                       </div>
                     </div>
                   </button>
                 </AppTooltip>
-                <div
-                  aria-hidden="true"
-                  className={`pointer-events-none absolute transition-colors ${
-                    isFloating
-                      ? `bottom-1 left-3 h-1 w-1 rounded-full ${window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'}`
-                      : `bottom-0 left-0 right-0 h-0.5 ${window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'}`
-                  }`}
-                />
+                {isFloating && (
+                  <div
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute transition-colors ${
+                      `bottom-1 left-3 h-1 w-1 rounded-full ${window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'}`
+                    }`}
+                  />
+                )}
                 <button
                   type="button"
                   aria-label={`${closeLabel} ${window.primaryText}`}
@@ -125,7 +149,11 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                     event.stopPropagation();
                     onWindowClose(window.id);
                   }}
-                  className="absolute right-1.5 top-1.5 z-[2] flex h-4 w-4 items-center justify-center text-[12px] font-medium leading-none text-[rgb(var(--muted-foreground))] opacity-0 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 hover:text-[rgb(var(--foreground))]"
+                  className={`absolute right-1.5 top-1/2 z-[2] flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-sm text-[11px] font-medium leading-none opacity-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 ${
+                    isFloating
+                      ? 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
+                      : 'text-[rgb(var(--titlebar-muted))] hover:bg-white/10 hover:text-[rgb(var(--titlebar-foreground))]'
+                  }`}
                 >
                   <span aria-hidden="true">&times;</span>
                 </button>

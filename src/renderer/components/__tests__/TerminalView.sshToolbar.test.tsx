@@ -455,7 +455,8 @@ describe('TerminalView SSH toolbar', () => {
     );
 
     const remoteTabsHeader = screen.getByTestId('terminal-remote-tabs-header');
-    expect(remoteTabsHeader).toHaveClass('px-3');
+    expect(remoteTabsHeader).toHaveClass('bg-[rgb(var(--titlebar))]');
+    expect(remoteTabsHeader).toHaveClass('px-2');
     expect(remoteTabsHeader.closest('.absolute')).toBeNull();
     expect(screen.getByRole('button', { name: 'Prod SSH' })).toBeInTheDocument();
   });
