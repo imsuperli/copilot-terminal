@@ -19,7 +19,6 @@ import { DragItemTypes, DropZone } from './dnd';
 import type { BrowserDropDragItem, BrowserToolDragItem, PaneDropResult, WindowCardDragItem, DropResult } from './dnd';
 import { createGroup } from '../utils/groupLayoutHelpers';
 import { AppTooltip } from './ui/AppTooltip';
-import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { SSHPortForwardDialog } from './SSHPortForwardDialog';
 import { SSHSessionStatusBar } from './SSHSessionStatusBar';
 import type { SSHCredentialState, SSHProfile } from '../../shared/types/ssh';
@@ -351,10 +350,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const sidebarActiveWindowId = useMemo(
     () => getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id,
     [terminalWindow],
-  );
-  const toolbarWindowLogoVariant = useMemo(
-    () => windowKind === 'mixed' ? 'mixed' : windowKind === 'ssh' ? 'ssh' : 'local',
-    [windowKind],
   );
   const showRemoteWindowTabs = useMemo(
     () => !embedded && isStandaloneSshWindow,
@@ -1244,21 +1239,16 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         {showFloatingChrome && (
           <div
             data-testid="terminal-floating-actions"
-            className="pointer-events-none absolute right-3 top-3 z-50 flex max-w-[calc(100%-24px)] justify-end"
+            className="pointer-events-none absolute right-12 top-3 z-50 flex max-w-[calc(100%-60px)] justify-end"
           >
             <div
               aria-expanded={isFloatingActionsExpanded}
-              className={`flex h-8 items-center gap-2 overflow-hidden px-1.5 transition-all duration-150 ease-out ${
-                isFloatingActionsExpanded ? 'max-w-full' : 'max-w-9'
+              className={`flex h-8 items-center overflow-hidden px-1.5 transition-all duration-150 ease-out ${
+                isFloatingActionsExpanded ? 'max-w-full' : 'max-w-0 border-transparent bg-transparent shadow-none'
               } ${floatingChromeClass}`}
               onPointerEnter={expandFloatingActions}
               onPointerLeave={scheduleFloatingActionsCollapse}
             >
-              <div className="relative flex h-6 w-6 shrink-0 items-center justify-center">
-                <TerminalTypeLogo variant={toolbarWindowLogoVariant} size="xs" />
-              </div>
-
-              {/* 鍙充晶鎸夐挳缁?*/}
               <div
                 className={`flex min-w-max shrink-0 items-center gap-2 transition-opacity duration-150 ${
                   isFloatingActionsExpanded ? 'opacity-100' : 'opacity-0'

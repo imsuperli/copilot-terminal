@@ -455,6 +455,19 @@ describe('TerminalView', () => {
     expect(floatingActions).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('does not render the terminal logo inside floating actions', () => {
+    render(
+      <TerminalView
+        window={createLocalWindow()}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    expect(screen.getByTestId('terminal-floating-actions').querySelector('[data-terminal-type-logo]')).toBeNull();
+  });
+
   it('does not mount remote tabs for local terminal windows', () => {
     render(
       <TerminalView
