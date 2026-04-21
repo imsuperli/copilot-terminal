@@ -7,13 +7,13 @@ import { getStandaloneSSHWindowsForTarget } from '../utils/sshWindowBindings';
 import { isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { getPathLeafLabel } from '../utils/pathDisplay';
 import { AppTooltip } from './ui/AppTooltip';
-import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import {
   ideMenuContentClassName,
   ideMenuDangerItemClassName,
   ideMenuItemClassName,
   IdeMenuItemContent,
 } from './ui/ide-menu';
+import { resolveRendererAssetUrl } from '../utils/assetUrl';
 
 interface RemoteWindowTabsProps {
   windows: Window[];
@@ -45,6 +45,7 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
   variant = 'toolbar',
 }) => {
   const isFloating = variant === 'floating';
+  const appLogoSrc = resolveRendererAssetUrl('resources/icon.png');
   const remoteWindows = useMemo<RemoteWindowTabItem[]>(() => {
     const candidates = getStandaloneSSHWindowsForTarget(windows, activeWindowId);
 
@@ -73,8 +74,8 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
 
   return (
     <div className={isFloating ? 'flex h-auto min-w-0 items-center' : 'flex h-[34px] min-w-0 items-stretch'}>
-      <div className={isFloating ? 'flex h-full min-w-0 items-center gap-1 overflow-x-auto px-1' : 'flex h-full min-w-0 items-stretch gap-1 overflow-x-auto py-[3px]'}>
-        {remoteWindows.map((window, index) => (
+      <div className={isFloating ? 'flex h-full min-w-0 items-center gap-1 overflow-x-auto px-1' : 'terminal-remote-tab-strip flex h-full min-w-0 items-stretch overflow-x-auto'}>
+        {remoteWindows.map((window) => (
           <ContextMenu.Root key={window.id}>
             <ContextMenu.Trigger asChild>
               <div
@@ -84,19 +85,13 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                       ? 'border-[rgb(var(--primary))]/40 bg-[color-mix(in_srgb,rgb(var(--secondary))_86%,transparent)]'
                       : 'border-[rgb(var(--border))]/80 bg-[color-mix(in_srgb,rgb(var(--background))_38%,transparent)] hover:border-[rgb(var(--ring))]/45 hover:bg-[rgb(var(--accent))]'
                   }`
-                  : `group relative flex h-full min-w-[124px] max-w-[224px] items-stretch overflow-hidden rounded-t-[10px] border border-b-0 ${
-                    window.isActive
-                      ? 'border-white/12 bg-[linear-gradient(180deg,rgba(86,86,86,0.96)_0%,rgba(61,61,61,0.98)_100%)] shadow-[0_1px_0_rgba(255,255,255,0.06)_inset]'
-                      : 'border-white/8 bg-[linear-gradient(180deg,rgba(54,54,54,0.96)_0%,rgba(39,39,39,0.98)_100%)] text-[rgb(var(--titlebar-muted))] hover:border-white/12 hover:bg-[linear-gradient(180deg,rgba(64,64,64,0.96)_0%,rgba(46,46,46,0.98)_100%)]'
-                  }`
+                  : `terminal-remote-tab group ${window.isActive ? 'terminal-remote-tab-active' : 'terminal-remote-tab-inactive'}`
                 }
               >
                 {!isFloating && (
                   <div
                     aria-hidden="true"
-                    className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] ${
-                      window.isActive ? 'bg-[rgb(var(--primary))]' : 'bg-transparent'
-                    }`}
+                    className={`terminal-remote-tab-accent ${window.isActive ? 'terminal-remote-tab-accent-active' : ''}`}
                   />
                 )}
                 <AppTooltip
@@ -107,22 +102,22 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                     type="button"
                     aria-label={window.name}
                     onClick={() => onWindowSelect(window.id)}
-                    className={`relative z-[1] flex h-full w-full min-w-0 items-center gap-2.5 pl-2.5 pr-8 text-left focus:outline-none transition-colors ${
+                    className={`relative z-[1] flex h-full w-full min-w-0 items-center gap-2 px-3 pr-8 text-left focus:outline-none transition-colors ${
                       window.isActive
                         ? 'text-[rgb(var(--titlebar-foreground))]'
                         : 'text-[rgb(var(--titlebar-muted))] hover:text-[rgb(var(--titlebar-foreground))]'
                     }`}
                   >
                     {!isFloating && (
-                      <TerminalTypeLogo
-                        variant="ssh"
-                        size="xs"
-                        className={`h-4 w-4 rounded-[4px] border-white/10 bg-[linear-gradient(180deg,rgba(70,70,70,0.92)_0%,rgba(42,42,42,0.96)_100%)] ${
-                          window.isActive
-                            ? 'text-[rgb(var(--titlebar-foreground))]'
-                            : 'text-[rgb(var(--titlebar-muted))]'
-                        }`}
-                      />
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-[3px] bg-[#0f1116] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]">
+                        <img
+                          src={appLogoSrc}
+                          alt=""
+                          aria-hidden="true"
+                          className="h-full w-full object-cover"
+                          draggable={false}
+                        />
+                      </span>
                     )}
                     <div className="min-w-0 flex-1">
                       <div className={`truncate text-[12px] font-medium leading-none tracking-[0.01em] ${
@@ -152,7 +147,7 @@ const RemoteWindowTabsComponent: React.FC<RemoteWindowTabsProps> = ({
                   className={`absolute right-1.5 top-1/2 z-[2] flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-sm text-[11px] font-medium leading-none opacity-0 transition-all duration-150 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 ${
                     isFloating
                       ? 'text-[rgb(var(--muted-foreground))] hover:text-[rgb(var(--foreground))]'
-                      : 'text-[rgb(var(--titlebar-muted))] hover:bg-white/10 hover:text-[rgb(var(--titlebar-foreground))]'
+                      : 'text-[#cfcfcf] hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   <span aria-hidden="true">&times;</span>
