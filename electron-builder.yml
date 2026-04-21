@@ -9,12 +9,14 @@ files:
   - resources/**/*
   - package.json
   - node_modules/**/*
+  - '!node_modules/node-pty/build'
+  - '!node_modules/node-pty/build/**/*'
 afterPack: ./scripts/after-pack.js
 asarUnpack:
   - dist/statusline/**/*
   - resources/bin/**/*
   - node_modules/node-pty/**/*
-npmRebuild: true
+npmRebuild: false
 win:
   icon: resources/icon.png
   artifactName: ${productName}-Setup-${version}-win-${arch}.${ext}

@@ -180,10 +180,12 @@ npm run pack
 npm run dist
 ```
 
-On Windows machines without Visual Studio C++ build tools, you can use:
+`npm run dist` now reuses the bundled `node-pty` prebuilds by default, so it does not require Visual Studio C++ build tools just to rebuild `node-pty`.
+
+If you explicitly need to rebuild native modules on the current machine, use:
 
 ```bash
-npm run dist:no-rebuild
+npm run dist:rebuild
 ```
 
 ## Usage

@@ -178,10 +178,12 @@ npm run pack
 npm run dist
 ```
 
-如果是在没有安装 Visual Studio C++ Build Tools 的 Windows 机器上本地打包，可以改用：
+现在默认的 `npm run dist` 就会直接复用 `node-pty` 自带的预构建产物，不再要求为了 `node-pty` 额外安装 Visual Studio C++ Build Tools。
+
+如果你确实需要在当前机器上强制重编译原生依赖，可以改用：
 
 ```bash
-npm run dist:no-rebuild
+npm run dist:rebuild
 ```
 
 ## 使用说明
