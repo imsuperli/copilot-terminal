@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Copy, History, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
+import { Check, ChevronDown, Copy, History, MessageSquarePlus, SendHorizonal, Sparkles, Square, Undo2, X } from 'lucide-react';
 import type { AgentTaskSnapshot } from '../../shared/types/agent';
 import type { AgentTimelineEvent } from '../../shared/types/agentTimeline';
 import type { ChatMessage, ChatSettings, ChatSshContext, LLMProviderConfig } from '../../shared/types/chat';
@@ -10,7 +10,6 @@ import { useWindowStore } from '../stores/windowStore';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { getPaneBackend, isTerminalPane } from '../../shared/utils/terminalCapabilities';
 import { WORKSPACE_SETTINGS_UPDATED_EVENT } from '../utils/settingsEvents';
-import { ChatNewConversationIcon } from './icons/ChatNewConversationIcon';
 import { selectPreferredChatLinkedPaneId } from '../utils/chatPane';
 import {
   buildChatConversationTitle,
@@ -1606,7 +1605,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               disabled={isBusy}
               className={chatHeaderIconButtonClassName}
             >
-              <ChatNewConversationIcon size={CHAT_HEADER_ICON_SIZE} />
+              <MessageSquarePlus size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
             </button>
 
             {onClose && (
