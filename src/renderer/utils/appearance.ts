@@ -298,15 +298,15 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   rootStyle.setProperty('--appearance-terminal-opacity-percent', `${Math.round(appearance.terminalOpacity * 100)}%`);
   rootStyle.setProperty(
     '--terminal-background-effective',
-    `rgba(var(--terminal-background-rgb, 12, 12, 12), var(--appearance-terminal-opacity, 0.88))`,
+    `rgba(var(--terminal-background-rgb, 12, 12, 12), var(--appearance-terminal-opacity, 0.62))`,
   );
   const paneOpacity = resolvePaneOpacity(appearance);
-  const paneStrongOpacity = clampOpacity(paneOpacity + 0.08, 0.62, 0.94);
-  const paneChromeOpacity = clampOpacity(paneOpacity - 0.08, 0.48, 0.88);
+  const paneStrongOpacity = clampOpacity(paneOpacity + 0.08, 0.42, 0.8);
+  const paneChromeOpacity = clampOpacity(paneOpacity - 0.08, 0.24, 0.68);
   const cardTopOpacity = resolveCardOpacity(appearance);
-  const cardBottomOpacity = clampOpacity(cardTopOpacity + 0.12, 0.52, 0.9);
-  const cardHoverTopOpacity = clampOpacity(cardTopOpacity + 0.08, 0.56, 0.92);
-  const cardHoverBottomOpacity = clampOpacity(cardTopOpacity + 0.18, 0.62, 0.96);
+  const cardBottomOpacity = clampOpacity(cardTopOpacity + 0.12, 0.32, 0.78);
+  const cardHoverTopOpacity = clampOpacity(cardTopOpacity + 0.08, 0.28, 0.82);
+  const cardHoverBottomOpacity = clampOpacity(cardTopOpacity + 0.18, 0.36, 0.88);
   rootStyle.setProperty('--appearance-pane-background', rgbaWithTerminalBackground(paneOpacity));
   rootStyle.setProperty('--appearance-pane-background-strong', rgbaWithTerminalBackground(paneStrongOpacity));
   rootStyle.setProperty('--appearance-pane-chrome-background', rgbaWithTerminalBackground(paneChromeOpacity));
@@ -473,29 +473,29 @@ function resolveSkinDim(appearance: AppearanceSettings): number {
 }
 
 function resolvePaneOpacity(appearance: AppearanceSettings): number {
-  const baseOpacity = 0.56 + (appearance.terminalOpacity * 0.28);
+  const baseOpacity = 0.16 + (appearance.terminalOpacity * 0.32);
   if (appearance.readabilityMode === 'readability') {
-    return clampOpacity(baseOpacity + 0.08, 0.62, 0.94);
+    return clampOpacity(baseOpacity + 0.1, 0.28, 0.82);
   }
 
   if (appearance.readabilityMode === 'immersive') {
-    return clampOpacity(baseOpacity - 0.1, 0.52, 0.84);
+    return clampOpacity(baseOpacity - 0.08, 0.12, 0.6);
   }
 
-  return clampOpacity(baseOpacity, 0.56, 0.9);
+  return clampOpacity(baseOpacity, 0.18, 0.72);
 }
 
 function resolveCardOpacity(appearance: AppearanceSettings): number {
-  const baseOpacity = 0.42 + (appearance.terminalOpacity * 0.24);
+  const baseOpacity = 0.1 + (appearance.terminalOpacity * 0.24);
   if (appearance.readabilityMode === 'readability') {
-    return clampOpacity(baseOpacity + 0.06, 0.5, 0.82);
+    return clampOpacity(baseOpacity + 0.08, 0.18, 0.72);
   }
 
   if (appearance.readabilityMode === 'immersive') {
-    return clampOpacity(baseOpacity - 0.08, 0.38, 0.74);
+    return clampOpacity(baseOpacity - 0.06, 0.06, 0.52);
   }
 
-  return clampOpacity(baseOpacity, 0.42, 0.78);
+  return clampOpacity(baseOpacity, 0.08, 0.64);
 }
 
 function clampOpacity(value: number, min: number, max: number): number {

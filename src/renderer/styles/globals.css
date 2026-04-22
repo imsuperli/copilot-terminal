@@ -50,20 +50,20 @@
     --terminal-cursor: #f2f2f2;
     --terminal-cursor-accent: #0c0c0c;
     --terminal-selection: rgba(204, 204, 204, 0.28);
-    --terminal-background-effective: #0c0c0c;
-    --appearance-terminal-opacity: 0.88;
-    --appearance-terminal-opacity-percent: 88%;
+    --terminal-background-effective: rgba(var(--terminal-background-rgb), 0.62);
+    --appearance-terminal-opacity: 0.62;
+    --appearance-terminal-opacity-percent: 62%;
     --appearance-skin-dim: 0.52;
     --appearance-skin-blur: 0px;
     --appearance-skin-motion-duration: 0s;
     --appearance-skin-motion-opacity: 0;
-    --appearance-pane-background: rgba(var(--terminal-background-rgb), 0.8);
-    --appearance-pane-background-strong: rgba(var(--terminal-background-rgb), 0.88);
-    --appearance-pane-chrome-background: rgba(var(--terminal-background-rgb), 0.72);
-    --appearance-card-surface-top: rgba(var(--terminal-background-rgb), 0.58);
-    --appearance-card-surface-bottom: rgba(var(--terminal-background-rgb), 0.72);
-    --appearance-card-hover-surface-top: rgba(var(--terminal-background-rgb), 0.66);
-    --appearance-card-hover-surface-bottom: rgba(var(--terminal-background-rgb), 0.8);
+    --appearance-pane-background: rgba(var(--terminal-background-rgb), 0.36);
+    --appearance-pane-background-strong: rgba(var(--terminal-background-rgb), 0.46);
+    --appearance-pane-chrome-background: rgba(var(--terminal-background-rgb), 0.28);
+    --appearance-card-surface-top: rgba(var(--terminal-background-rgb), 0.2);
+    --appearance-card-surface-bottom: rgba(var(--terminal-background-rgb), 0.34);
+    --appearance-card-hover-surface-top: rgba(var(--terminal-background-rgb), 0.28);
+    --appearance-card-hover-surface-bottom: rgba(var(--terminal-background-rgb), 0.42);
 
     --terminal-black: #0c0c0c;
     --terminal-red: #c50f1f;
@@ -132,6 +132,36 @@
 /* Keep Radix popper portals above pane chrome and Monaco overlays. */
 [data-radix-popper-content-wrapper] {
   z-index: 10000 !important;
+}
+
+/* Let the global skin show through Monaco instead of Monaco repainting an opaque workbench. */
+.monaco-editor,
+.monaco-diff-editor,
+.monaco-editor-background,
+.monaco-component.multiDiffEditor,
+.monaco-component.multiDiffEditor > div,
+.monaco-component.multiDiffEditor .multiDiffEntry,
+.monaco-component.multiDiffEditor .multiDiffEntry .editorParent,
+.monaco-component.multiDiffEditor .multiDiffEntry .editorContainer,
+.monaco-editor .overflow-guard,
+.monaco-editor .monaco-scrollable-element,
+.monaco-editor .lines-content,
+.monaco-editor .margin,
+.monaco-editor .margin-view-overlays,
+.monaco-editor .glyph-margin,
+.monaco-editor .minimap,
+.monaco-editor .scroll-decoration,
+.monaco-editor .lines-decorations,
+.monaco-editor .view-overlays,
+.monaco-editor .view-lines,
+.monaco-editor .view-line {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+.monaco-component.multiDiffEditor .multiDiffEntry .header,
+.monaco-component.multiDiffEditor .multiDiffEntry .header .header-content {
+  background: var(--appearance-pane-chrome-background) !important;
 }
 
 @keyframes appearance-skin-drift {

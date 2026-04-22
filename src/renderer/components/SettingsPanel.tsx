@@ -61,7 +61,7 @@ const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
   sshEnabled: true,
 };
 
-const APPEARANCE_OPACITY_OPTIONS = [0.72, 0.82, 0.88, 0.94];
+const APPEARANCE_OPACITY_OPTIONS = [0.28, 0.42, 0.62, 0.82];
 const APPEARANCE_SKIN_DIM_OPTIONS = [0.28, 0.42, 0.52, 0.64, 0.76];
 const APPEARANCE_SKIN_BLUR_OPTIONS = [0, 6, 12, 18];
 const APPEARANCE_SKIN_MOTION_MODES: AppearanceSkinMotionMode[] = ['none', 'ambient'];
@@ -853,6 +853,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const activeSkinPreset = APPEARANCE_SKIN_PRESETS.find((preset) => isSameSkinPreset(appearanceSettings.skin, preset.skin)) ?? APPEARANCE_SKIN_PRESETS[0];
   const skinDimOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_DIM_OPTIONS, appearanceSettings.skin.dim);
   const skinBlurOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_BLUR_OPTIONS, appearanceSettings.skin.blur);
+  const appearanceOpacityOptions = getNumericOptionsWithCurrent(APPEARANCE_OPACITY_OPTIONS, appearanceSettings.terminalOpacity);
   const settingsPanelSelectContentClassName = `z-[10000] ${idePopupSelectContentClassName}`;
   const settingsPanelSelectTriggerClassName = idePopupSelectTriggerClassName;
   const settingsPanelSelectItemClassName = idePopupSelectItemClassName;
@@ -1320,7 +1321,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                             className={`w-[var(--radix-select-trigger-width)] ${settingsPanelSelectContentClassName}`}
                           >
                             <Select.Viewport className="p-1">
-                              {APPEARANCE_OPACITY_OPTIONS.map((value) => (
+                              {appearanceOpacityOptions.map((value) => (
                                 <Select.Item
                                   key={value}
                                   value={String(value)}

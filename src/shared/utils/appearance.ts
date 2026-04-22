@@ -17,7 +17,7 @@ export const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
     blur: 0,
     motion: 'none',
   },
-  terminalOpacity: 0.88,
+  terminalOpacity: 0.62,
   readabilityMode: 'balanced',
   reduceMotion: true,
 };
@@ -89,7 +89,7 @@ export function normalizeAppearanceSettings(value: Partial<AppearanceSettings> |
 
   return {
     skin: normalizeSkin(skin),
-    terminalOpacity: normalizeNumber(value?.terminalOpacity, defaults.terminalOpacity, 0.52, 1),
+    terminalOpacity: normalizeNumber(value?.terminalOpacity, defaults.terminalOpacity, 0.28, 1),
     readabilityMode: normalizeReadabilityMode(value?.readabilityMode),
     reduceMotion: value?.reduceMotion ?? defaults.reduceMotion,
   };

@@ -1227,7 +1227,8 @@ const ActivityRail = React.memo(function ActivityRail({
   return (
     <div
       data-testid="code-pane-activity-rail"
-      className="flex h-full w-12 shrink-0 flex-col border-r border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_88%,transparent)]"
+      className="flex h-full w-12 shrink-0 flex-col border-r border-[rgb(var(--border))]"
+      style={CODE_PANE_CHROME_SURFACE_STYLE}
     >
       <div className="flex flex-col items-center gap-1 px-1 py-2">
         {sidebarTabs.map((tab) => (
@@ -7073,7 +7074,7 @@ const ExternalChangesToolWindow = React.memo(function ExternalChangesToolWindow(
   }), [entries, listScrollTop, listViewportHeight]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_90%,transparent)]">
+    <div className="flex h-full min-h-0 flex-col border-t border-[rgb(var(--border))]" style={CODE_PANE_ROOT_SURFACE_STYLE}>
       <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
           <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">

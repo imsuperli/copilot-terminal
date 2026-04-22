@@ -1295,7 +1295,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       }`}
       style={{
         ...activePaneStyle,
-        backgroundColor: 'var(--terminal-background-effective)',
+        backgroundColor: 'var(--appearance-pane-background)',
         backdropFilter: 'blur(8px)',
         filter: isActive || isHovered ? 'brightness(1.0)' : 'brightness(0.85)',
         transition: 'filter 0.2s ease-in-out',
@@ -1306,7 +1306,10 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     >
       {/* Pane Header - 显示 tmux 元数据（title, agentName） */}
       {showPaneHeader && (
-        <div className="flex items-center justify-between border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-2 py-1">
+        <div
+          className="flex items-center justify-between border-b border-[rgb(var(--border))] px-2 py-1"
+          style={{ backgroundColor: 'var(--appearance-pane-chrome-background)' }}
+        >
           <div className="flex items-center gap-2 min-w-0">
             {/* Agent 颜色指示器 */}
             {pane.agentColor && (

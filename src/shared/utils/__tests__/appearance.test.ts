@@ -21,7 +21,7 @@ describe('appearance settings', () => {
     });
 
     expect(normalized.readabilityMode).toBe(DEFAULT_APPEARANCE_SETTINGS.readabilityMode);
-    expect(normalized.terminalOpacity).toBe(0.52);
+    expect(normalized.terminalOpacity).toBe(0.28);
     expect(normalized.skin.kind).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.kind);
     expect(normalized.skin.presetId).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.presetId);
     expect(normalized.skin.gradient).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.gradient);
