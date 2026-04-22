@@ -6,7 +6,10 @@ describe('renderer appearance utilities', () => {
   it('applies app and terminal theme tokens to the document root', () => {
     applyAppearanceToDocument({
       ...DEFAULT_APPEARANCE_SETTINGS,
-      themeId: 'aurora',
+      skin: {
+        ...DEFAULT_APPEARANCE_SETTINGS.skin,
+        presetId: 'aurora',
+      },
       terminalOpacity: 0.75,
     });
 
@@ -14,7 +17,7 @@ describe('renderer appearance utilities', () => {
     expect(style.getPropertyValue('--background')).toBe('6 15 18');
     expect(style.getPropertyValue('--terminal-background')).toBe('#061114');
     expect(style.getPropertyValue('--appearance-terminal-opacity-percent')).toBe('75%');
-    expect(style.getPropertyValue('--terminal-background-effective')).toContain('var(--terminal-background)');
+    expect(style.getPropertyValue('--terminal-background-effective')).toContain('rgba(var(--terminal-background-rgb');
     expect(style.getPropertyValue('--appearance-skin-motion-duration')).toBe('0s');
     expect(style.getPropertyValue('--appearance-skin-motion-opacity')).toBe('0');
   });
@@ -30,7 +33,7 @@ describe('renderer appearance utilities', () => {
       },
     });
 
-    expect(style.backgroundImage).toBe('url("C:/Wallpapers/skin.png")');
+    expect(style.backgroundImage).toBe('url("app-image:///C%3A/Wallpapers/skin.png")');
     expect(style.backgroundSize).toBe('cover');
   });
 

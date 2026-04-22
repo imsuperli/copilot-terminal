@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Settings } from '../../shared/types/workspace';
 import type { AppearanceSettings, AppearanceSkinPresetId } from '../../shared/types/appearance';
+import { normalizeImagePath, toAppImageUrl } from '../../shared/utils/appImage';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 
 interface AppearanceBackdropLayer {
@@ -321,23 +322,12 @@ export function getAppearanceBackdropDescriptor(appearance: AppearanceSettings):
 }
 
 /**
- * 将本地文件路径转换为可在 CSS url() 中使用的 URL
- * 新版本使用 app-image:// 协议，旧版本存储的原始路径也做兼容处理
+ * 将本地文件路径转换为可在 CSS url() 中使用的稳定 URL。
+ * 会把旧版本遗留的 app-image:// / file:// 路径先解码回本地路径，再重新编码。
  */
 function toImageUrl(filePath: string): string {
-  // 已经是 URL 格式（app-image://, file://, http://, https://），直接返回
-  if (
-    filePath.startsWith('app-image://') ||
-    filePath.startsWith('file://') ||
-    filePath.startsWith('http://') ||
-    filePath.startsWith('https://')
-  ) {
-    return filePath;
-  }
-
-  // 旧版本存储的原始路径，转换为 app-image:// 协议
-  const normalized = filePath.replace(/\\/g, '/');
-  return normalized.startsWith('/') ? `app-image://${normalized}` : `app-image:///${normalized}`;
+  const normalizedPath = normalizeImagePath(filePath);
+  return normalizedPath ? toAppImageUrl(normalizedPath) : filePath;
 }
 
 function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {

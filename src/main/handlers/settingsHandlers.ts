@@ -21,6 +21,7 @@ import type {
 import type { Settings, Workspace } from '../types/workspace';
 import { normalizeAppearanceSettings } from '../../shared/utils/appearance';
 import { inferOpenAICompatibleWireApi } from '../../shared/utils/chatProvider';
+import { normalizeImagePath } from '../../shared/utils/appImage';
 
 const PROVIDER_VALIDATION_PROMPT = 'Reply with exactly: pong';
 const PROVIDER_VALIDATION_TIMEOUT_MS = 15000;
@@ -292,12 +293,13 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
         return successResponse(iconPath);
       }
 
-      if (!existsSync(iconPath)) {
+      const normalizedIconPath = normalizeImagePath(iconPath);
+      if (!normalizedIconPath || !existsSync(normalizedIconPath)) {
         throw new Error(`Icon file not found: ${iconPath}`);
       }
 
-      const iconStat = statSync(iconPath);
-      const isMacAppBundle = process.platform === 'darwin' && iconStat.isDirectory() && iconPath.endsWith('.app');
+      const iconStat = statSync(normalizedIconPath);
+      const isMacAppBundle = process.platform === 'darwin' && iconStat.isDirectory() && normalizedIconPath.endsWith('.app');
 
       if (iconStat.isDirectory() && !isMacAppBundle) {
         throw new Error(`Refusing to resolve IDE icon from directory path: ${iconPath}`);
@@ -305,7 +307,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
 
       // macOS .app bundle：从 Info.plist 提取 .icns 文件，用 sips 转 PNG
       if (isMacAppBundle) {
-        const icnsPath = resolveIcnsFromAppBundle(iconPath);
+        const icnsPath = resolveIcnsFromAppBundle(normalizedIconPath);
         if (icnsPath) {
           const hash = icnsPath.replace(/[^a-zA-Z0-9]/g, '_');
           const pngPath = join(tmpdir(), `ide-icon-${hash}.png`);
@@ -317,21 +319,21 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
         }
       }
 
-      if (isImageFile(iconPath)) {
-        const ext = iconPath.split('.').pop()?.toLowerCase();
+      if (isImageFile(normalizedIconPath)) {
+        const ext = normalizedIconPath.split('.').pop()?.toLowerCase();
 
         // macOS .icns 格式：用 sips 转换为 PNG
         if (ext === 'icns') {
-          const hash = iconPath.replace(/[^a-zA-Z0-9]/g, '_');
+          const hash = normalizedIconPath.replace(/[^a-zA-Z0-9]/g, '_');
           const pngPath = join(tmpdir(), `ide-icon-${hash}.png`);
           if (!existsSync(pngPath)) {
-            execSync(`sips -s format png "${iconPath}" --out "${pngPath}" --resampleWidth 256`, { stdio: 'ignore' });
+            execSync(`sips -s format png "${normalizedIconPath}" --out "${pngPath}" --resampleWidth 256`, { stdio: 'ignore' });
           }
           const pngData = readFileSync(pngPath);
           return successResponse(`data:image/png;base64,${pngData.toString('base64')}`);
         }
 
-        const iconData = readFileSync(iconPath);
+        const iconData = readFileSync(normalizedIconPath);
         const base64Data = iconData.toString('base64');
 
         let mimeType = 'image/png';
@@ -346,7 +348,7 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
         return successResponse(`data:${mimeType};base64,${base64Data}`);
       }
 
-      const nativeIcon = await app.getFileIcon(iconPath, { size: 'large' });
+      const nativeIcon = await app.getFileIcon(normalizedIconPath, { size: 'large' });
       if (!nativeIcon.isEmpty()) {
         return successResponse(nativeIcon.toDataURL());
       }

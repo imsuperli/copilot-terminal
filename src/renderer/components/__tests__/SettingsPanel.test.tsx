@@ -126,7 +126,7 @@ describe('SettingsPanel', () => {
 
     await user.click(screen.getByRole('tab', { name: '外观' }));
 
-    expect(await screen.findByText('纸页')).toBeInTheDocument();
+    expect(await screen.findByText('暖纸质感')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '可读性模式' })).toHaveTextContent('高可读');
     expect(screen.getByRole('combobox', { name: '终端透明度' })).toHaveTextContent('94%');
     expect(screen.getByRole('combobox', { name: '背景遮罩' })).toHaveTextContent('62%');
@@ -138,10 +138,13 @@ describe('SettingsPanel', () => {
 
     expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
       appearance: expect.objectContaining({
-        themeId: 'obsidian',
         readabilityMode: 'readability',
         terminalOpacity: 0.94,
         reduceMotion: false,
+        skin: expect.objectContaining({
+          presetId: 'obsidian',
+          kind: 'gradient',
+        }),
       }),
     });
 

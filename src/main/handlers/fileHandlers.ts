@@ -6,6 +6,7 @@ import { HandlerContext } from './HandlerContext';
 import { PathValidator } from '../utils/pathValidator';
 import { successResponse, errorResponse } from './HandlerResponse';
 import { getOpenInIDEArgs } from '../utils/ideScanner';
+import { normalizeImagePath } from '../../shared/utils/appImage';
 
 export function registerFileHandlers(ctx: HandlerContext) {
   const { mainWindow, getCurrentWorkspace } = ctx;
@@ -98,12 +99,13 @@ export function registerFileHandlers(ctx: HandlerContext) {
         ],
       };
 
-      if (defaultPath && existsSync(defaultPath)) {
+      const normalizedDefaultPath = normalizeImagePath(defaultPath);
+      if (normalizedDefaultPath && existsSync(normalizedDefaultPath)) {
         try {
-          const stat = statSync(defaultPath);
-          dialogOptions.defaultPath = stat.isDirectory() ? defaultPath : dirname(defaultPath);
+          const stat = statSync(normalizedDefaultPath);
+          dialogOptions.defaultPath = stat.isDirectory() ? normalizedDefaultPath : dirname(normalizedDefaultPath);
         } catch {
-          dialogOptions.defaultPath = dirname(defaultPath);
+          dialogOptions.defaultPath = dirname(normalizedDefaultPath);
         }
       }
 
@@ -113,12 +115,7 @@ export function registerFileHandlers(ctx: HandlerContext) {
         return successResponse(null);
       }
 
-      // 将本地文件路径转换为 app-image:// 协议 URL
-      const filePath = result.filePaths[0];
-      const normalizedPath = filePath.replace(/\\/g, '/');
-      const imageUrl = `app-image://${normalizedPath}`;
-
-      return successResponse(imageUrl);
+      return successResponse(result.filePaths[0]);
     } catch (error) {
       return errorResponse(error);
     }

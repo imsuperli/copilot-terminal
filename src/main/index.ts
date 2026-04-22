@@ -45,6 +45,7 @@ import { LayoutNode, Pane } from '../shared/types/window';
 import { createPtyDataForwarder } from './utils/ptyDataForwarder';
 import { isTerminalPane } from '../shared/utils/terminalCapabilities';
 import { isAllowedBrowserUrl } from '../shared/utils/browserUrls';
+import { normalizeImagePath, toFileUrl } from '../shared/utils/appImage';
 
 const APP_DISPLAY_NAME = 'Copilot-Terminal';
 const USER_DATA_DIR_NAME = 'copilot-terminal';
@@ -448,15 +449,12 @@ protocol.registerSchemesAsPrivileged([
 app.whenReady().then(async () => {
   // 注册 app-image:// 协议处理器
   protocol.handle('app-image', (request) => {
-    // 从 URL 中提取文件路径：app-image://path/to/file -> /path/to/file (Unix) 或 C:/path/to/file (Windows)
-    const url = request.url.slice('app-image://'.length);
-    // URL 解码
-    const filePath = decodeURIComponent(url);
-    // 转换为正确的 file:// URL
-    // Windows 路径：C:/... -> file:///C:/...
-    // Unix 路径：/... -> file:///...
-    const fileUrl = filePath.startsWith('/') ? `file://${filePath}` : `file:///${filePath}`;
-    // 返回文件内容
+    const filePath = normalizeImagePath(request.url);
+    if (!filePath) {
+      return new Response('Image path is missing', { status: 404 });
+    }
+
+    const fileUrl = toFileUrl(filePath);
     return net.fetch(fileUrl);
   });
 

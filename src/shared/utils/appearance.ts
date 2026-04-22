@@ -6,6 +6,7 @@ import type {
   AppearanceSkinPresetId,
   AppearanceSkinSettings,
 } from '../types/appearance';
+import { normalizeImagePath } from './appImage';
 
 export const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   skin: {
@@ -62,9 +63,7 @@ function normalizeSkin(value: Partial<AppearanceSkinSettings> | undefined): Appe
     gradient: typeof value?.gradient === 'string' && value.gradient.trim()
       ? value.gradient
       : defaults.gradient,
-    imagePath: typeof value?.imagePath === 'string' && value.imagePath.trim()
-      ? value.imagePath
-      : undefined,
+    imagePath: normalizeImagePath(value?.imagePath),
     dim: normalizeNumber(value?.dim, defaults.dim, 0, 0.92),
     blur: normalizeNumber(value?.blur, defaults.blur, 0, 24),
     motion: normalizeSkinMotionMode(value?.motion),
