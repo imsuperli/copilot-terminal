@@ -321,6 +321,12 @@ export function getAppearanceBackdropDescriptor(appearance: AppearanceSettings):
 }
 
 function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {
+  console.log('getBackdropBaseStyle called with:', {
+    kind: appearance.skin.kind,
+    imagePath: appearance.skin.imagePath,
+    presetId: appearance.skin.presetId,
+  });
+
   if (appearance.skin.kind === 'none') {
     return {
       background: `rgb(var(--background))`,
@@ -328,13 +334,15 @@ function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {
   }
 
   if (appearance.skin.kind === 'image' && appearance.skin.imagePath) {
-    return {
+    const style = {
       backgroundImage: `url("${escapeCssUrl(appearance.skin.imagePath)}")`,
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
       backgroundSize: 'cover',
       filter: appearance.skin.blur > 0 ? `blur(${appearance.skin.blur}px) scale(1.02)` : undefined,
     };
+    console.log('Returning image style:', style);
+    return style;
   }
 
   return {

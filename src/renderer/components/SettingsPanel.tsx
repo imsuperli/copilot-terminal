@@ -660,19 +660,24 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     try {
       const response = await window.electronAPI.selectImageFile(appearanceSettings.skin.imagePath);
       if (!response?.success || !response.data) {
+        console.log('Image selection cancelled or failed:', response);
         return;
       }
 
+      console.log('Selected image path:', response.data);
+      const newSkin = {
+        presetId: 'custom' as const,
+        kind: 'image' as const,
+        imagePath: response.data,
+        gradient: appearanceSettings.skin.gradient,
+        dim: Math.max(appearanceSettings.skin.dim, 0.42),
+        blur: 0,
+        motion: 'none' as const,
+      };
+      console.log('New skin settings:', newSkin);
+
       await handleAppearanceSettingsChange({
-        skin: {
-          presetId: 'custom',
-          kind: 'image',
-          imagePath: response.data,
-          gradient: appearanceSettings.skin.gradient,
-          dim: Math.max(appearanceSettings.skin.dim, 0.42),
-          blur: 0,
-          motion: 'none',
-        },
+        skin: newSkin,
       });
     } catch (error) {
       console.error('Failed to select appearance image:', error);
