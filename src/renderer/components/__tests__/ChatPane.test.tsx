@@ -504,7 +504,6 @@ describe('ChatPane', () => {
     const root = await screen.findByTestId('chat-pane-root');
     expect(root).toHaveStyle({
       backgroundColor: 'var(--appearance-pane-background)',
-      backdropFilter: 'blur(10px)',
     });
   });
 

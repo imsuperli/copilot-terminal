@@ -1716,7 +1716,6 @@ describe('CodePane', () => {
     const root = await screen.findByTestId('code-pane-root');
     expect(root).toHaveStyle({
       backgroundColor: 'var(--appearance-pane-background-strong)',
-      backdropFilter: 'blur(10px)',
     });
 
     expect(hoisted.ensureMonacoEnvironmentMock).toHaveBeenCalled();

@@ -388,7 +388,10 @@ export const GroupView: React.FC<GroupViewProps> = ({
       {/* 主内容区 */}
       <div className="flex flex-1 flex-col overflow-hidden bg-transparent">
         {/* 顶部工具栏 */}
-        <div className="flex h-8 flex-shrink-0 items-center gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] px-3">
+        <div
+          className="flex h-8 flex-shrink-0 items-center gap-2 border-b border-[rgb(var(--border))] px-3"
+          style={{ backgroundColor: 'var(--appearance-pane-chrome-background)', backdropFilter: 'blur(10px)' }}
+        >
           <div className="flex-1" />
 
           {/* 批量操作按钮 */}

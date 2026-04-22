@@ -266,7 +266,6 @@ type WindowedInlineListSlice<T> = {
 
 const CODE_PANE_ROOT_SURFACE_STYLE: React.CSSProperties = {
   backgroundColor: 'var(--appearance-pane-background-strong)',
-  backdropFilter: 'blur(10px)',
 };
 
 const CODE_PANE_CHROME_SURFACE_STYLE: React.CSSProperties = {

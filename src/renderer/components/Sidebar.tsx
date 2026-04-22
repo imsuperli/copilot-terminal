@@ -51,7 +51,7 @@ const sidebarIconButtonClassName =
 const sidebarActionButtonBaseClassName =
   'h-10 w-full items-center gap-2 border-b border-[rgb(var(--border))] transition-colors duration-200';
 const sidebarCardSurfaceClassName =
-  'border border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] hover:bg-[rgb(var(--accent))]';
+  'border border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,var(--appearance-pane-chrome-background)_100%,transparent)] hover:bg-[rgb(var(--accent))]';
 
 function isSidebarVisibleStatus(status: WindowStatus): boolean {
   return (
@@ -394,10 +394,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <div
       ref={sidebarRef}
-      className={`flex flex-shrink-0 border-r border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--sidebar))_98%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] ${
+      className={`flex flex-shrink-0 border-r border-[rgb(var(--border))] ${
         isResizing ? '' : 'transition-all duration-250 ease-in-out'
       }`}
-      style={{ width: sidebarExpanded ? `${sidebarWidthRef.current}px` : '32px' }}
+      style={{
+        width: sidebarExpanded ? `${sidebarWidthRef.current}px` : '32px',
+        backgroundColor: 'var(--appearance-pane-chrome-background)',
+        backdropFilter: 'blur(10px)',
+      }}
     >
       {/* 侧边栏内容 */}
       <div className="flex-1 flex flex-col overflow-hidden">

@@ -57,13 +57,13 @@
     --appearance-skin-blur: 0px;
     --appearance-skin-motion-duration: 0s;
     --appearance-skin-motion-opacity: 0;
-    --appearance-pane-background: rgba(var(--terminal-background-rgb), 0.36);
-    --appearance-pane-background-strong: rgba(var(--terminal-background-rgb), 0.46);
-    --appearance-pane-chrome-background: rgba(var(--terminal-background-rgb), 0.28);
-    --appearance-card-surface-top: rgba(var(--terminal-background-rgb), 0.2);
-    --appearance-card-surface-bottom: rgba(var(--terminal-background-rgb), 0.34);
-    --appearance-card-hover-surface-top: rgba(var(--terminal-background-rgb), 0.28);
-    --appearance-card-hover-surface-bottom: rgba(var(--terminal-background-rgb), 0.42);
+    --appearance-pane-background: rgba(var(--terminal-background-rgb), 0);
+    --appearance-pane-background-strong: rgba(var(--terminal-background-rgb), 0);
+    --appearance-pane-chrome-background: rgba(var(--terminal-background-rgb), 0.18);
+    --appearance-card-surface-top: rgba(var(--terminal-background-rgb), 0.14);
+    --appearance-card-surface-bottom: rgba(var(--terminal-background-rgb), 0.24);
+    --appearance-card-hover-surface-top: rgba(var(--terminal-background-rgb), 0.2);
+    --appearance-card-hover-surface-bottom: rgba(var(--terminal-background-rgb), 0.3);
 
     --terminal-black: #0c0c0c;
     --terminal-red: #c50f1f;

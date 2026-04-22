@@ -1524,7 +1524,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
       style={{
         backgroundColor: 'var(--appearance-pane-background)',
-        backdropFilter: 'blur(10px)',
       }}
       onMouseDown={onActivate}
     >
