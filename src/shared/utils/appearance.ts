@@ -76,15 +76,15 @@ export function normalizeAppearanceSettings(value: Partial<AppearanceSettings> |
 
   // 向后兼容：如果有旧的 themeId，将其映射到新的 presetId
   const legacyThemeId = (value as any)?.themeId;
-  let skin = value?.skin;
+  let skin: Partial<AppearanceSkinSettings> | undefined = value?.skin;
 
   if (legacyThemeId && !skin?.presetId) {
     // 旧版本使用 themeId，需要迁移
     if (legacyThemeId === 'obsidian' || legacyThemeId === 'aurora' || legacyThemeId === 'paper') {
       skin = {
         ...(skin || {}),
-        presetId: legacyThemeId,
-      } as Partial<AppearanceSkinSettings>;
+        presetId: legacyThemeId as AppearanceSkinPresetId,
+      };
     }
   }
 
