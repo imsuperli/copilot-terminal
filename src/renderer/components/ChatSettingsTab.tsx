@@ -594,6 +594,8 @@ export const ChatSettingsTab: React.FC = () => {
         contentClassName="max-w-3xl"
         showCloseButton
         closeLabel={t('common.close')}
+        overlayStyle={{ zIndex: 10020 }}
+        contentStyle={{ zIndex: 10021 }}
       >
         <div className="space-y-4">
           <div className="overflow-hidden rounded-[14px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)]">

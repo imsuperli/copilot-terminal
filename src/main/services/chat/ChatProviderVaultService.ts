@@ -43,12 +43,14 @@ export class ChatProviderVaultService {
     storageMode: SSHVaultStorageMode;
     entries: PersistedChatProviderSecretEntry[];
   } | null;
+  private writeQueue: Promise<void>;
 
   constructor(options: ChatProviderVaultServiceOptions = {}) {
     this.filePath = resolveSSHDataFilePath(DEFAULT_VAULT_FILE_NAME, options.filePath);
     this.secureStorage = options.secureStorage ?? createDefaultSSHSecureStorage();
     this.now = options.now ?? (() => new Date().toISOString());
     this.cache = null;
+    this.writeQueue = Promise.resolve();
   }
 
   async getApiKey(providerId: string): Promise<string | null> {
@@ -66,33 +68,39 @@ export class ChatProviderVaultService {
   async setApiKey(providerId: string, apiKey: string): Promise<void> {
     const normalizedProviderId = requireNonEmptyString(providerId, 'Chat provider id');
     const normalizedApiKey = requireNonEmptyString(apiKey, 'Chat provider apiKey');
-    const data = await this.readData();
-    const nextEntry: PersistedChatProviderSecretEntry = {
-      providerId: normalizedProviderId,
-      secret: this.secureStorage.encryptString(normalizedApiKey),
-      updatedAt: this.now(),
-    };
-    const index = data.entries.findIndex((item) => item.providerId === normalizedProviderId);
 
-    if (index >= 0) {
-      data.entries[index] = nextEntry;
-    } else {
-      data.entries.push(nextEntry);
-    }
+    await this.enqueueWrite(async () => {
+      const data = await this.readData();
+      const nextEntry: PersistedChatProviderSecretEntry = {
+        providerId: normalizedProviderId,
+        secret: this.secureStorage.encryptString(normalizedApiKey),
+        updatedAt: this.now(),
+      };
+      const index = data.entries.findIndex((item) => item.providerId === normalizedProviderId);
 
-    await this.writeData(data.entries);
+      if (index >= 0) {
+        data.entries[index] = nextEntry;
+      } else {
+        data.entries.push(nextEntry);
+      }
+
+      await this.writeData(data.entries);
+    });
   }
 
   async remove(providerId: string): Promise<void> {
     const normalizedProviderId = requireNonEmptyString(providerId, 'Chat provider id');
-    const data = await this.readData();
-    const nextEntries = data.entries.filter((entry) => entry.providerId !== normalizedProviderId);
 
-    if (nextEntries.length === data.entries.length) {
-      return;
-    }
+    await this.enqueueWrite(async () => {
+      const data = await this.readData();
+      const nextEntries = data.entries.filter((entry) => entry.providerId !== normalizedProviderId);
 
-    await this.writeData(nextEntries);
+      if (nextEntries.length === data.entries.length) {
+        return;
+      }
+
+      await this.writeData(nextEntries);
+    });
   }
 
   async hydrateProviders(providers: readonly LLMProviderConfig[]): Promise<LLMProviderConfig[]> {
@@ -183,6 +191,22 @@ export class ChatProviderVaultService {
     }
 
     return createSecureStorageForMode(storageMode).decryptString(secret);
+  }
+
+  private async enqueueWrite(operation: () => Promise<void>): Promise<void> {
+    const previousOperation = this.writeQueue;
+    let releaseWriteLock: () => void = () => {};
+    this.writeQueue = new Promise<void>((resolve) => {
+      releaseWriteLock = resolve;
+    });
+
+    await previousOperation.catch(() => {});
+
+    try {
+      await operation();
+    } finally {
+      releaseWriteLock();
+    }
   }
 
   private async getFileSignature(): Promise<string | null> {

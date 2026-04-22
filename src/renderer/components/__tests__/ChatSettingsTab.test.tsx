@@ -211,6 +211,35 @@ describe('ChatSettingsTab', () => {
     expect(await screen.findByText('请先完成自动探测，再保存 Provider。')).toBeInTheDocument();
   });
 
+  it('renders the provider dialog above the settings panel layer', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '添加 Provider' }));
+
+    const providerNameInput = screen.getByLabelText('Provider 名称');
+    const dialog = providerNameInput.closest('[role="dialog"]');
+
+    expect(dialog).not.toBeNull();
+    expect(dialog).toHaveStyle({ zIndex: '10021' });
+  });
+
   it('rejects an invalid base url during detection', async () => {
     const user = userEvent.setup();
     vi.mocked(window.electronAPI.getSettings).mockResolvedValue({

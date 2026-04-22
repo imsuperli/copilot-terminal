@@ -83,6 +83,31 @@ describe('ChatProviderVaultService', () => {
     expect(await fs.pathExists(filePath)).toBe(false);
   });
 
+  it('serializes concurrent provider API key writes without losing entries', async () => {
+    const vault = new ChatProviderVaultService({
+      filePath,
+      secureStorage: new MockSecureStorage(),
+      now: () => '2026-04-12T00:00:00.000Z',
+    });
+
+    await Promise.all([
+      vault.setApiKey('provider-1', 'sk-ant-test-1'),
+      vault.setApiKey('provider-2', 'sk-ant-test-2'),
+      vault.setApiKey('provider-3', 'sk-ant-test-3'),
+    ]);
+
+    expect(await vault.getApiKey('provider-1')).toBe('sk-ant-test-1');
+    expect(await vault.getApiKey('provider-2')).toBe('sk-ant-test-2');
+    expect(await vault.getApiKey('provider-3')).toBe('sk-ant-test-3');
+
+    const persisted = await fs.readJson(filePath);
+    expect(persisted.entries.map((entry: { providerId: string }) => entry.providerId).sort()).toEqual([
+      'provider-1',
+      'provider-2',
+      'provider-3',
+    ]);
+  });
+
   it('reads plain-text fallback secrets after switching storage modes', async () => {
     const fallbackVault = new ChatProviderVaultService({
       filePath,

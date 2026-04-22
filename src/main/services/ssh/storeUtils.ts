@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { randomUUID } from 'crypto';
 
 interface JsonReadOptions {
   privateFile?: boolean;
@@ -41,14 +42,22 @@ export async function writeJsonFileAtomic(
   payload: unknown,
   options?: { privateFile?: boolean },
 ): Promise<void> {
-  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
 
   await fs.ensureDir(path.dirname(filePath));
-  await fs.writeJson(tempPath, payload, { spaces: 2 });
-  await fs.rename(tempPath, filePath);
+  try {
+    await fs.writeJson(tempPath, payload, { spaces: 2 });
+    if (options?.privateFile) {
+      await ensurePrivateFilePermissions(tempPath);
+    }
+    await fs.rename(tempPath, filePath);
 
-  if (options?.privateFile) {
-    await ensurePrivateFilePermissions(filePath);
+    if (options?.privateFile) {
+      await ensurePrivateFilePermissions(filePath);
+    }
+  } catch (error) {
+    await fs.remove(tempPath).catch(() => {});
+    throw error;
   }
 }
 
