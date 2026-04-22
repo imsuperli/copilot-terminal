@@ -664,7 +664,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         return;
       }
 
-      console.log('Selected image path:', response.data);
       const newSkin = {
         presetId: 'custom' as const,
         kind: 'image' as const,
@@ -674,8 +673,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         blur: 0,
         motion: 'none' as const,
       };
-      console.log('New skin settings:', newSkin);
-
       await handleAppearanceSettingsChange({
         skin: newSkin,
       });

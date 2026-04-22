@@ -320,13 +320,24 @@ export function getAppearanceBackdropDescriptor(appearance: AppearanceSettings):
   };
 }
 
-function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {
-  console.log('getBackdropBaseStyle called with:', {
-    kind: appearance.skin.kind,
-    imagePath: appearance.skin.imagePath,
-    presetId: appearance.skin.presetId,
-  });
+/**
+ * 将本地文件路径转换为 file:// URL
+ */
+function toFileUrl(filePath: string): string {
+  // 已经是 URL 格式，直接返回
+  if (filePath.startsWith('file://') || filePath.startsWith('http://') || filePath.startsWith('https://')) {
+    return filePath;
+  }
 
+  // 将反斜杠转换为正斜杠（Windows 路径）
+  const normalized = filePath.replace(/\\/g, '/');
+
+  // Windows 绝对路径：C:/... -> file:///C:/...
+  // Unix 绝对路径：/... -> file:///...
+  return normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`;
+}
+
+function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {
   if (appearance.skin.kind === 'none') {
     return {
       background: `rgb(var(--background))`,
@@ -334,15 +345,13 @@ function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {
   }
 
   if (appearance.skin.kind === 'image' && appearance.skin.imagePath) {
-    const style = {
-      backgroundImage: `url("${escapeCssUrl(appearance.skin.imagePath)}")`,
+    return {
+      backgroundImage: `url("${escapeCssUrl(toFileUrl(appearance.skin.imagePath))}")`,
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
       backgroundSize: 'cover',
       filter: appearance.skin.blur > 0 ? `blur(${appearance.skin.blur}px) scale(1.02)` : undefined,
     };
-    console.log('Returning image style:', style);
-    return style;
   }
 
   return {
