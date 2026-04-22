@@ -138,7 +138,7 @@ function ControlSelect({
   children: React.ReactNode;
 }) {
   const hasIcon = Boolean(icon);
-  const selectClassName = `${idePopupInputClassName} h-9 min-w-0 w-full appearance-none rounded-[16px] py-0 pr-8 text-sm sm:w-auto`;
+  const selectClassName = `${idePopupInputClassName} h-9 min-w-0 w-full appearance-none rounded-[16px] py-2 pr-8 text-sm sm:w-auto`;
 
   return (
     <label className={`relative inline-flex max-w-full items-center ${minWidthClass}`}>

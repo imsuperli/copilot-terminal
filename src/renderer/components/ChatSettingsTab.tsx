@@ -191,7 +191,7 @@ export const ChatSettingsTab: React.FC = () => {
       return;
     }
 
-    if (providerForm.type === 'openai-compatible' && !isValidHttpUrl(baseUrl)) {
+    if (baseUrl && !isValidHttpUrl(baseUrl)) {
       setFormError(t('settings.chat.baseUrlInvalidError'));
       return;
     }
@@ -210,9 +210,7 @@ export const ChatSettingsTab: React.FC = () => {
       id: providerId,
       type: providerForm.type,
       name: providerName,
-      baseUrl: providerForm.type === 'openai-compatible' && baseUrl
-        ? baseUrl
-        : undefined,
+      baseUrl: baseUrl || undefined,
       wireApi: providerForm.type === 'openai-compatible'
         ? providerForm.wireApi
         : undefined,
@@ -380,13 +378,17 @@ export const ChatSettingsTab: React.FC = () => {
                 </select>
               </CompactSettingRow>
 
-              <CompactSettingRow label={t('settings.chat.baseUrlLabel')} disabled={providerForm.type !== 'openai-compatible'}>
+              <CompactSettingRow
+                label={t('settings.chat.baseUrlLabel')}
+                help={providerForm.type === 'anthropic' ? t('settings.chat.baseUrlAnthropicHint') : undefined}
+              >
                 <input
                   value={providerForm.baseUrl}
                   onChange={(event) => handleProviderFieldChange('baseUrl', event.target.value)}
-                  placeholder={t('settings.chat.baseUrlPlaceholder')}
-                  disabled={providerForm.type !== 'openai-compatible'}
-                  className={`max-w-[520px] ${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+                  placeholder={providerForm.type === 'anthropic'
+                    ? 'https://api.anthropic.com (默认)'
+                    : t('settings.chat.baseUrlPlaceholder')}
+                  className={`max-w-[520px] ${inputClassName}`}
                 />
               </CompactSettingRow>
 

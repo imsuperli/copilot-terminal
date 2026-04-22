@@ -772,6 +772,8 @@ export class ChatService {
     const client = new OpenAI({
       apiKey: provider.apiKey,
       baseURL: provider.baseUrl || undefined,
+      timeout: 120000, // 120 秒超时
+      maxRetries: 2, // 最多重试 2 次
     });
 
     const systemPrompt = buildSystemPrompt(request);
@@ -974,6 +976,8 @@ export class ChatService {
     const client = new OpenAI({
       apiKey: provider.apiKey,
       baseURL: provider.baseUrl || undefined,
+      timeout: 120000, // 120 秒超时
+      maxRetries: 2, // 最多重试 2 次
     });
 
     const systemPrompt = buildSystemPrompt(request);
