@@ -7,6 +7,21 @@ import { I18nProvider } from '../../i18n';
 describe('ChatSettingsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(window.electronAPI.updateSettings).mockImplementation(async (settings: any) => ({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: settings.chat,
+      } as any,
+    }));
+    vi.mocked(window.electronAPI.validateChatProvider).mockResolvedValue({
+      success: true,
+      data: {
+        resolvedType: 'anthropic',
+        model: 'claude-sonnet-4-5',
+      },
+    });
   });
 
   it('adds a provider and persists the chat settings payload', async () => {
@@ -118,6 +133,15 @@ describe('ChatSettingsTab', () => {
         },
       } as any,
     });
+    vi.mocked(window.electronAPI.validateChatProvider).mockResolvedValue({
+      success: true,
+      data: {
+        resolvedType: 'openai-compatible',
+        resolvedWireApi: 'responses',
+        normalizedBaseUrl: 'https://api.example.com/codex',
+        model: 'gpt-5.4',
+      },
+    });
 
     render(
       <I18nProvider>
@@ -130,14 +154,17 @@ describe('ChatSettingsTab', () => {
     await user.selectOptions(screen.getByLabelText('Provider 类型'), 'openai-compatible');
     await user.type(screen.getByLabelText('API Key'), 'sk-test');
     await user.type(screen.getByLabelText('Base URL'), 'https://api.example.com/codex');
-    const protocolSelect = screen.getByText('协议类型').closest('label')?.querySelector('select');
-    expect(protocolSelect).not.toBeNull();
-    await user.selectOptions(protocolSelect as HTMLSelectElement, 'responses');
     await user.type(screen.getByPlaceholderText(/claude-sonnet-4-5/), 'gpt-5.4');
     await user.type(screen.getByPlaceholderText('留空时默认使用模型列表中的第一项'), 'gpt-5.4');
     await user.click(screen.getByRole('button', { name: '保存' }));
 
     await waitFor(() => {
+      expect(window.electronAPI.validateChatProvider).toHaveBeenCalledWith({
+        type: 'openai-compatible',
+        baseUrl: 'https://api.example.com/codex',
+        apiKey: 'sk-test',
+        model: 'gpt-5.4',
+      });
       expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
         chat: {
           providers: [
@@ -149,6 +176,120 @@ describe('ChatSettingsTab', () => {
               apiKey: 'sk-test',
               models: ['gpt-5.4'],
               defaultModel: 'gpt-5.4',
+            }),
+          ],
+          activeProviderId: expect.any(String),
+          defaultSystemPrompt: '',
+          enableCommandSecurity: true,
+        },
+      });
+    });
+  });
+
+  it('auto-detects the responses wire API for codex-style base urls', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.validateChatProvider).mockResolvedValue({
+      success: true,
+      data: {
+        resolvedType: 'openai-compatible',
+        resolvedWireApi: 'responses',
+        normalizedBaseUrl: 'https://api.example.com/api/codex/backend-api/codex',
+        model: 'gpt-5.4',
+      },
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '添加 Provider' }));
+    await user.type(screen.getByLabelText('Provider 名称'), 'Codex CLI');
+    await user.selectOptions(screen.getByLabelText('Provider 类型'), 'openai-compatible');
+    await user.type(screen.getByLabelText('API Key'), 'sk-test');
+    await user.type(screen.getByLabelText('Base URL'), 'https://api.example.com/api/codex/backend-api/codex');
+    expect(screen.getByLabelText('协议类型')).toHaveValue('responses');
+    await user.type(screen.getByPlaceholderText(/claude-sonnet-4-5/), 'gpt-5.4');
+    await user.type(screen.getByPlaceholderText('留空时默认使用模型列表中的第一项'), 'gpt-5.4');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+        chat: {
+          providers: [
+            expect.objectContaining({
+              name: 'Codex CLI',
+              type: 'openai-compatible',
+              baseUrl: 'https://api.example.com/api/codex/backend-api/codex',
+              wireApi: 'responses',
+            }),
+          ],
+          activeProviderId: expect.any(String),
+          defaultSystemPrompt: '',
+          enableCommandSecurity: true,
+        },
+      });
+    });
+  });
+
+  it('auto-detects provider type and protocol before saving', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.validateChatProvider).mockResolvedValue({
+      success: true,
+      data: {
+        resolvedType: 'openai-compatible',
+        resolvedWireApi: 'responses',
+        normalizedBaseUrl: 'https://relay.example.com/codex',
+        model: 'gpt-5.4',
+      },
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '添加 Provider' }));
+    await user.type(screen.getByLabelText('Provider 名称'), 'Internal Relay');
+    await user.type(screen.getByLabelText('Base URL'), 'https://relay.example.com/codex');
+    await user.type(screen.getByLabelText('API Key'), 'sk-test');
+    await user.type(screen.getByPlaceholderText(/claude-sonnet-4-5/), 'gpt-5.4');
+    await user.type(screen.getByPlaceholderText('留空时默认使用模型列表中的第一项'), 'gpt-5.4');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.updateSettings).toHaveBeenCalledWith({
+        chat: {
+          providers: [
+            expect.objectContaining({
+              name: 'Internal Relay',
+              type: 'openai-compatible',
+              baseUrl: 'https://relay.example.com/codex',
+              wireApi: 'responses',
             }),
           ],
           activeProviderId: expect.any(String),
@@ -248,6 +389,78 @@ describe('ChatSettingsTab', () => {
 
     expect(window.electronAPI.updateSettings).not.toHaveBeenCalled();
     expect(await screen.findByText('API Key 不能以 http:// 或 https:// 开头。')).toBeInTheDocument();
+  });
+
+  it('blocks saving when provider validation fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.validateChatProvider).mockResolvedValue({
+      success: false,
+      error: '自动探测失败',
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '添加 Provider' }));
+    await user.type(screen.getByLabelText('Provider 名称'), 'Broken Relay');
+    await user.type(screen.getByLabelText('API Key'), 'sk-test');
+    await user.type(screen.getByPlaceholderText(/claude-sonnet-4-5/), 'claude-sonnet-4-5');
+    await user.type(screen.getByPlaceholderText('留空时默认使用模型列表中的第一项'), 'claude-sonnet-4-5');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(window.electronAPI.updateSettings).not.toHaveBeenCalled();
+    expect(await screen.findByText('自动探测失败')).toBeInTheDocument();
+    expect(screen.getByText('暂无 Chat Provider')).toBeInTheDocument();
+  });
+
+  it('keeps the form open when persistence fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.updateSettings).mockResolvedValue({
+      success: false,
+      error: 'persist failed',
+    });
+
+    render(
+      <I18nProvider>
+        <ChatSettingsTab />
+      </I18nProvider>,
+    );
+
+    await user.click(await screen.findByRole('button', { name: '添加 Provider' }));
+    await user.type(screen.getByLabelText('Provider 名称'), 'Claude API');
+    await user.type(screen.getByLabelText('API Key'), 'sk-ant-test');
+    await user.type(screen.getByPlaceholderText(/claude-sonnet-4-5/), 'claude-sonnet-4-5');
+    await user.type(screen.getByPlaceholderText('留空时默认使用模型列表中的第一项'), 'claude-sonnet-4-5');
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(await screen.findByText('persist failed')).toBeInTheDocument();
+    expect(screen.getByLabelText('Provider 名称')).toHaveValue('Claude API');
+    expect(screen.getByText('暂无 Chat Provider')).toBeInTheDocument();
   });
 
   it('does not re-add a deleted model when the previous default model was removed', async () => {

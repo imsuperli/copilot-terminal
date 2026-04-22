@@ -1640,7 +1640,9 @@ describe('ChatPane', () => {
     expect(input).toHaveClass('min-h-[72px]');
     expect(input).not.toHaveClass('min-h-[108px]');
     expect(selector).toHaveClass('h-9');
+    expect(selector).toHaveClass('py-0');
     expect(selector).toHaveClass('pl-3');
+    expect(selector).toHaveClass('leading-5');
     expect(selector).not.toHaveClass('pl-9');
     expect(selector.closest('label')).toHaveClass('sm:w-fit');
     expect(selector.closest('label')).toHaveClass('sm:max-w-[220px]');

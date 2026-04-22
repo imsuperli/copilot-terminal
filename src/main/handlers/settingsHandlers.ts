@@ -1,5 +1,7 @@
+import Anthropic from '@anthropic-ai/sdk';
 import { app, ipcMain } from 'electron';
 import { readFileSync, existsSync, statSync } from 'fs';
+import OpenAI from 'openai';
 import { execSync } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -8,9 +10,24 @@ import { successResponse, errorResponse } from './HandlerResponse';
 import { scanInstalledIDEsAsync, scanSpecificIDE, getSupportedIDENames, isImageFile } from '../utils/ideScanner';
 import { IDEConfig } from '../types/workspace';
 import { scanAvailableShellPrograms } from '../utils/shell';
-import type { ChatSettings, LLMProviderConfig } from '../../shared/types/chat';
+import type {
+  ChatProviderValidationRequest,
+  ChatProviderValidationResult,
+  ChatSettings,
+  LLMProviderConfig,
+  LLMProviderWireApi,
+} from '../../shared/types/chat';
 import type { Settings, Workspace } from '../types/workspace';
 import { normalizeAppearanceSettings } from '../../shared/utils/appearance';
+import { inferOpenAICompatibleWireApi } from '../../shared/utils/chatProvider';
+
+const PROVIDER_VALIDATION_PROMPT = 'Reply with exactly: pong';
+const PROVIDER_VALIDATION_TIMEOUT_MS = 15000;
+
+interface ProviderValidationAttempt {
+  label: string;
+  run: () => Promise<ChatProviderValidationResult>;
+}
 
 /**
  * 从 macOS .app bundle 的 Info.plist 中提取 .icns 图标路径
@@ -138,6 +155,14 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
       setCurrentWorkspace(updatedWorkspace);
 
       return successResponse(await hydrateSettingsForResponse(ctx, updatedWorkspace.settings));
+    } catch (error) {
+      return errorResponse(error);
+    }
+  });
+
+  ipcMain.handle('validate-chat-provider', async (_event, payload: ChatProviderValidationRequest) => {
+    try {
+      return successResponse(await validateChatProviderConfig(payload));
     } catch (error) {
       return errorResponse(error);
     }
@@ -324,6 +349,284 @@ export function registerSettingsHandlers(ctx: HandlerContext) {
       return errorResponse(error);
     }
   });
+}
+
+function normalizeBaseUrl(baseUrl?: string): string | undefined {
+  const normalized = baseUrl?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function formatProviderValidationError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.replace(/\s+/g, ' ').trim();
+}
+
+function buildOpenAIWireApiProbeOrder(baseUrl?: string): LLMProviderWireApi[] {
+  const inferredWireApi = inferOpenAICompatibleWireApi(baseUrl);
+  if (inferredWireApi === 'responses') {
+    return ['responses', 'chat-completions'];
+  }
+
+  return ['chat-completions', 'responses'];
+}
+
+async function validateChatProviderConfig(
+  payload: ChatProviderValidationRequest,
+): Promise<ChatProviderValidationResult> {
+  const apiKey = payload.apiKey.trim();
+  const model = payload.model.trim();
+  const normalizedBaseUrl = normalizeBaseUrl(payload.baseUrl);
+  const attempts: ProviderValidationAttempt[] = [];
+
+  if (!apiKey) {
+    throw new Error('API Key 不能为空。');
+  }
+
+  if (!model) {
+    throw new Error('至少需要填写一条模型名，才能自动验证当前配置。');
+  }
+
+  if (payload.type === 'openai-compatible' && !normalizedBaseUrl) {
+    throw new Error('OpenAI-Compatible Provider 必须填写 Base URL。');
+  }
+
+  const addAnthropicAttempt = () => {
+    attempts.push({
+      label: normalizedBaseUrl ? 'Anthropic' : 'Anthropic 默认端点',
+      run: () => probeAnthropicProvider(apiKey, model, normalizedBaseUrl),
+    });
+  };
+
+  const addOpenAIAttempts = () => {
+    if (!normalizedBaseUrl) {
+      return;
+    }
+
+    for (const wireApi of buildOpenAIWireApiProbeOrder(normalizedBaseUrl)) {
+      attempts.push({
+        label: wireApi === 'responses' ? 'Responses API' : 'Chat Completions',
+        run: () => probeOpenAICompatibleProvider(apiKey, model, normalizedBaseUrl, wireApi),
+      });
+    }
+  };
+
+  if (payload.type === 'anthropic') {
+    addAnthropicAttempt();
+    addOpenAIAttempts();
+  } else {
+    addOpenAIAttempts();
+    if (normalizedBaseUrl) {
+      addAnthropicAttempt();
+    }
+  }
+
+  const failureReasons: string[] = [];
+
+  for (const attempt of attempts) {
+    try {
+      return await attempt.run();
+    } catch (error) {
+      failureReasons.push(`${attempt.label}: ${formatProviderValidationError(error)}`);
+    }
+  }
+
+  const endpointSummary = normalizedBaseUrl
+    ? `Base URL: ${normalizedBaseUrl}`
+    : '当前未填写 Base URL';
+
+  throw new Error(`自动探测失败，保存已取消。${endpointSummary}。${failureReasons.join('；')}`);
+}
+
+async function probeAnthropicProvider(
+  apiKey: string,
+  model: string,
+  baseUrl?: string,
+): Promise<ChatProviderValidationResult> {
+  const client = new Anthropic({
+    apiKey,
+    baseURL: baseUrl,
+  });
+
+  const response = await client.messages.create({
+    model,
+    max_tokens: 16,
+    messages: [
+      {
+        role: 'user',
+        content: PROVIDER_VALIDATION_PROMPT,
+      },
+    ],
+  }, { signal: AbortSignal.timeout(PROVIDER_VALIDATION_TIMEOUT_MS) });
+
+  const text = extractAnthropicValidationText(response);
+  if (!text) {
+    throw new Error('Anthropic 接口返回成功，但没有任何文本内容。');
+  }
+
+  return {
+    resolvedType: 'anthropic',
+    normalizedBaseUrl: baseUrl,
+    model,
+  };
+}
+
+async function probeOpenAICompatibleProvider(
+  apiKey: string,
+  model: string,
+  baseUrl: string,
+  wireApi: LLMProviderWireApi,
+): Promise<ChatProviderValidationResult> {
+  const client = new OpenAI({
+    apiKey,
+    baseURL: baseUrl,
+    timeout: PROVIDER_VALIDATION_TIMEOUT_MS,
+    maxRetries: 0,
+  });
+
+  const signal = AbortSignal.timeout(PROVIDER_VALIDATION_TIMEOUT_MS);
+
+  if (wireApi === 'responses') {
+    const response = await client.responses.create({
+      model,
+      input: PROVIDER_VALIDATION_PROMPT,
+      stream: false,
+    }, { signal });
+
+    const text = extractResponsesValidationText(response);
+    if (!text) {
+      throw new Error('Responses API 返回成功，但没有任何文本内容。');
+    }
+  } else {
+    const response = await client.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: 'user',
+          content: PROVIDER_VALIDATION_PROMPT,
+        },
+      ],
+      max_tokens: 16,
+      stream: false,
+    }, { signal });
+
+    const text = extractChatCompletionsValidationText(response);
+    if (!text) {
+      throw new Error('Chat Completions 返回成功，但没有任何文本内容。');
+    }
+  }
+
+  return {
+    resolvedType: 'openai-compatible',
+    resolvedWireApi: wireApi,
+    normalizedBaseUrl: baseUrl,
+    model,
+  };
+}
+
+function extractAnthropicValidationText(response: Anthropic.Message): string {
+  return response.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('')
+    .trim();
+}
+
+function extractResponsesValidationText(response: unknown): string {
+  if (!response || typeof response !== 'object') {
+    return '';
+  }
+
+  const candidate = response as {
+    output_text?: unknown;
+    output?: unknown;
+  };
+
+  if (typeof candidate.output_text === 'string' && candidate.output_text.trim()) {
+    return candidate.output_text.trim();
+  }
+
+  if (!Array.isArray(candidate.output)) {
+    return '';
+  }
+
+  const textParts: string[] = [];
+
+  for (const outputItem of candidate.output) {
+    if (!outputItem || typeof outputItem !== 'object') {
+      continue;
+    }
+
+    const item = outputItem as {
+      content?: unknown;
+    };
+
+    if (!Array.isArray(item.content)) {
+      continue;
+    }
+
+    for (const contentItem of item.content) {
+      if (!contentItem || typeof contentItem !== 'object') {
+        continue;
+      }
+
+      const text = (contentItem as { text?: unknown }).text;
+      if (typeof text === 'string' && text.trim()) {
+        textParts.push(text.trim());
+      }
+    }
+  }
+
+  return textParts.join('\n').trim();
+}
+
+function extractChatCompletionsValidationText(response: unknown): string {
+  if (!response || typeof response !== 'object') {
+    return '';
+  }
+
+  const choices = (response as { choices?: unknown }).choices;
+  if (!Array.isArray(choices) || choices.length === 0) {
+    return '';
+  }
+
+  const firstChoice = choices[0];
+  if (!firstChoice || typeof firstChoice !== 'object') {
+    return '';
+  }
+
+  const content = (firstChoice as {
+    message?: {
+      content?: unknown;
+    };
+  }).message?.content;
+
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  const textParts: string[] = [];
+
+  for (const part of content) {
+    if (typeof part === 'string' && part.trim()) {
+      textParts.push(part.trim());
+      continue;
+    }
+
+    if (!part || typeof part !== 'object') {
+      continue;
+    }
+
+    const text = (part as { text?: unknown }).text;
+    if (typeof text === 'string' && text.trim()) {
+      textParts.push(text.trim());
+    }
+  }
+
+  return textParts.join('\n').trim();
 }
 
 async function ensureWorkspaceLoaded(ctx: HandlerContext): Promise<Workspace> {

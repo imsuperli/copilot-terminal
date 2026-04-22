@@ -27,7 +27,6 @@ import {
   idePopupBarePanelClassName,
   idePopupCardClassName,
   idePopupEmptyStateClassName,
-  idePopupInputClassName,
   idePopupSecondaryButtonClassName,
   idePopupSelectContentClassName,
   idePopupSubtlePanelClassName,
@@ -138,7 +137,14 @@ function ControlSelect({
   children: React.ReactNode;
 }) {
   const hasIcon = Boolean(icon);
-  const selectClassName = `${idePopupInputClassName} h-9 min-w-0 w-full appearance-none rounded-[16px] py-2 pr-8 text-sm sm:w-auto`;
+  const selectClassName = [
+    'h-9 min-w-0 w-full appearance-none rounded-[16px] border border-[rgb(var(--border))]',
+    'bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)]',
+    'py-0 pr-8 text-sm leading-5 text-[rgb(var(--foreground))] outline-none',
+    'shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-[border-color,box-shadow,background-color]',
+    'hover:bg-[rgb(var(--accent))] focus:border-[rgb(var(--ring))] focus:ring-2 focus:ring-[rgb(var(--ring))]/20',
+    'sm:w-auto',
+  ].join(' ');
 
   return (
     <label className={`relative inline-flex max-w-full items-center ${minWidthClass}`}>

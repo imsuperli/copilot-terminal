@@ -21,5 +21,10 @@ export function resolveLLMProviderWireApi(
     return null;
   }
 
-  return provider.wireApi ?? inferOpenAICompatibleWireApi(provider.baseUrl) ?? 'chat-completions';
+  const inferredWireApi = inferOpenAICompatibleWireApi(provider.baseUrl);
+  if (inferredWireApi === 'responses') {
+    return inferredWireApi;
+  }
+
+  return provider.wireApi ?? 'chat-completions';
 }

@@ -8,7 +8,10 @@ import type {
   LLMProviderType,
   LLMProviderWireApi,
 } from '../../shared/types/chat';
-import { resolveLLMProviderWireApi } from '../../shared/utils/chatProvider';
+import {
+  inferOpenAICompatibleWireApi,
+  resolveLLMProviderWireApi,
+} from '../../shared/utils/chatProvider';
 import { useI18n } from '../i18n';
 import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
 import {
@@ -94,6 +97,8 @@ export const ChatSettingsTab: React.FC = () => {
   const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
   const [providerForm, setProviderForm] = useState<ProviderFormState>(() => createEmptyProviderForm());
   const [formError, setFormError] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [isSavingProvider, setIsSavingProvider] = useState(false);
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -102,6 +107,7 @@ export const ChatSettingsTab: React.FC = () => {
       const response = await window.electronAPI.getSettings();
       if (response.success && response.data) {
         setChatSettings(normalizeChatSettings(response.data.chat));
+        setSettingsError(null);
       }
     } catch (error) {
       console.error('Failed to load chat settings:', error);
@@ -115,19 +121,23 @@ export const ChatSettingsTab: React.FC = () => {
   }, [loadSettings]);
 
   const persistChatSettings = useCallback(async (nextSettings: ChatSettings) => {
-    setChatSettings(nextSettings);
+    const response = await window.electronAPI.updateSettings({
+      chat: nextSettings,
+    });
 
-    try {
-      await window.electronAPI.updateSettings({
-        chat: nextSettings,
-      });
-      notifyWorkspaceSettingsUpdated({
-        chat: nextSettings,
-      });
-    } catch (error) {
-      console.error('Failed to update chat settings:', error);
+    if (!response?.success || !response.data) {
+      throw new Error(response?.error ?? t('settings.chat.saveFailedError'));
     }
-  }, []);
+
+    const persistedChatSettings = normalizeChatSettings(response.data.chat);
+    setChatSettings(persistedChatSettings);
+    setSettingsError(null);
+    notifyWorkspaceSettingsUpdated({
+      chat: persistedChatSettings,
+    });
+
+    return persistedChatSettings;
+  }, [t]);
 
   const providers = chatSettings.providers;
   const activeProvider = useMemo(
@@ -165,12 +175,18 @@ export const ChatSettingsTab: React.FC = () => {
         : chatSettings.activeProviderId,
     };
 
-    await persistChatSettings(nextSettings);
+    try {
+      await persistChatSettings(nextSettings);
 
-    if (editingProviderId === providerId) {
-      setEditingProviderId(null);
-      setProviderForm(createEmptyProviderForm());
-      setFormError(null);
+      if (editingProviderId === providerId) {
+        setEditingProviderId(null);
+        setProviderForm(createEmptyProviderForm());
+        setFormError(null);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to delete chat provider:', error);
+      setSettingsError(message);
     }
   }, [chatSettings, editingProviderId, persistChatSettings, providers]);
 
@@ -205,54 +221,126 @@ export const ChatSettingsTab: React.FC = () => {
       ? requestedDefaultModel
       : models[0];
 
-    const providerId = providerForm.id ?? uuidv4();
-    const nextProvider: LLMProviderConfig = {
-      id: providerId,
-      type: providerForm.type,
-      name: providerName,
-      baseUrl: baseUrl || undefined,
-      wireApi: providerForm.type === 'openai-compatible'
-        ? providerForm.wireApi
-        : undefined,
-      apiKey,
-      models,
-      defaultModel,
-    };
-
-    const existingIndex = providers.findIndex((provider) => provider.id === providerId);
-    const nextProviders = existingIndex >= 0
-      ? providers.map((provider, index) => index === existingIndex ? nextProvider : provider)
-      : [...providers, nextProvider];
-
-    const nextSettings: ChatSettings = {
-      ...chatSettings,
-      providers: nextProviders,
-      activeProviderId: chatSettings.activeProviderId ?? nextProvider.id,
-    };
-
-    await persistChatSettings(nextSettings);
-    setEditingProviderId(null);
-    setProviderForm(createEmptyProviderForm());
+    setIsSavingProvider(true);
     setFormError(null);
+    setSettingsError(null);
+
+    try {
+      const validationResponse = await window.electronAPI.validateChatProvider({
+        type: providerForm.type,
+        baseUrl: baseUrl || undefined,
+        apiKey,
+        model: defaultModel,
+      });
+
+      if (!validationResponse?.success || !validationResponse.data) {
+        throw new Error(validationResponse?.error ?? t('settings.chat.validationFailedError'));
+      }
+
+      const resolvedType = validationResponse.data.resolvedType;
+      const resolvedBaseUrl = validationResponse.data.normalizedBaseUrl;
+      const resolvedWireApi = resolvedType === 'openai-compatible'
+        ? (
+            validationResponse.data.resolvedWireApi
+            ?? resolveLLMProviderWireApi({
+              type: resolvedType,
+              baseUrl: resolvedBaseUrl,
+              wireApi: providerForm.wireApi,
+            })
+          )
+        : undefined;
+
+      setProviderForm((current) => ({
+        ...current,
+        type: resolvedType,
+        baseUrl: resolvedBaseUrl ?? '',
+        wireApi: resolvedWireApi ?? current.wireApi,
+      }));
+
+      const providerId = providerForm.id ?? uuidv4();
+      const nextProvider: LLMProviderConfig = {
+        id: providerId,
+        type: resolvedType,
+        name: providerName,
+        baseUrl: resolvedBaseUrl,
+        wireApi: resolvedWireApi ?? undefined,
+        apiKey,
+        models,
+        defaultModel,
+      };
+
+      const existingIndex = providers.findIndex((provider) => provider.id === providerId);
+      const nextProviders = existingIndex >= 0
+        ? providers.map((provider, index) => index === existingIndex ? nextProvider : provider)
+        : [...providers, nextProvider];
+
+      const nextSettings: ChatSettings = {
+        ...chatSettings,
+        providers: nextProviders,
+        activeProviderId: chatSettings.activeProviderId ?? nextProvider.id,
+      };
+
+      await persistChatSettings(nextSettings);
+      setEditingProviderId(null);
+      setProviderForm(createEmptyProviderForm());
+      setFormError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to save chat provider:', error);
+      setFormError(message);
+    } finally {
+      setIsSavingProvider(false);
+    }
   }, [chatSettings, persistChatSettings, providerForm, providers, t]);
 
   const handleProviderFieldChange = useCallback(<K extends keyof ProviderFormState>(field: K, value: ProviderFormState[K]) => {
-    setProviderForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setProviderForm((current) => {
+      const next = {
+        ...current,
+        [field]: value,
+      };
+
+      if (field === 'baseUrl' && current.type === 'openai-compatible') {
+        return {
+          ...next,
+          wireApi: inferOpenAICompatibleWireApi(String(value)) ?? current.wireApi,
+        };
+      }
+
+      if (field === 'type' && value === 'openai-compatible') {
+        return {
+          ...next,
+          wireApi: inferOpenAICompatibleWireApi(current.baseUrl) ?? current.wireApi,
+        };
+      }
+
+      return next;
+    });
     setFormError(null);
+    setSettingsError(null);
   }, []);
 
   const handleSystemPromptBlur = useCallback(async (event: React.FocusEvent<HTMLTextAreaElement>) => {
-    await persistChatSettings({
-      ...chatSettings,
-      defaultSystemPrompt: event.target.value,
-    });
+    try {
+      await persistChatSettings({
+        ...chatSettings,
+        defaultSystemPrompt: event.target.value,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to update default system prompt:', error);
+      setSettingsError(message);
+    }
   }, [chatSettings, persistChatSettings]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
+      {settingsError && (
+        <div className="rounded-xl border border-[rgb(var(--error)/0.2)] bg-[rgb(var(--error)/0.08)] px-4 py-3 text-sm text-[rgb(var(--error))]">
+          {settingsError}
+        </div>
+      )}
+
       <CompactSettingsSection
         title={t('settings.chat.providersTitle')}
         help={t('settings.chat.providersDescription')}
@@ -303,6 +391,13 @@ export const ChatSettingsTab: React.FC = () => {
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[rgb(var(--muted-foreground))]">
                       <span>{t('settings.chat.defaultModelSummary', { model: provider.defaultModel })}</span>
                       <span>{t('settings.chat.modelsSummary', { count: provider.models.length })}</span>
+                      {provider.type === 'openai-compatible' && (
+                        <span>
+                          {resolveLLMProviderWireApi(provider) === 'responses'
+                            ? t('settings.chat.protocolResponses')
+                            : t('settings.chat.protocolChatCompletions')}
+                        </span>
+                      )}
                     </div>
                     {provider.baseUrl && (
                       <p className="mt-1 break-all font-mono text-xs text-[rgb(var(--foreground))]">
@@ -347,19 +442,28 @@ export const ChatSettingsTab: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  if (isSavingProvider) {
+                    return;
+                  }
+
                   setEditingProviderId(null);
                   setProviderForm(createEmptyProviderForm());
                   setFormError(null);
                 }}
-                className="text-sm text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))]"
+                disabled={isSavingProvider}
+                className="text-sm text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {t('common.cancel')}
               </button>
             </div>
 
             <div className="divide-y divide-[rgb(var(--border))]">
-              <CompactSettingRow label={t('settings.chat.providerNameLabel')}>
+              <CompactSettingRow
+                label={t('settings.chat.providerNameLabel')}
+                htmlFor="chat-provider-name"
+              >
                 <input
+                  id="chat-provider-name"
                   value={providerForm.name}
                   onChange={(event) => handleProviderFieldChange('name', event.target.value)}
                   placeholder={t('settings.chat.providerNamePlaceholder')}
@@ -367,8 +471,12 @@ export const ChatSettingsTab: React.FC = () => {
                 />
               </CompactSettingRow>
 
-              <CompactSettingRow label={t('settings.chat.providerTypeLabel')}>
+              <CompactSettingRow
+                label={t('settings.chat.providerTypeLabel')}
+                htmlFor="chat-provider-type"
+              >
                 <select
+                  id="chat-provider-type"
                   value={providerForm.type}
                   onChange={(event) => handleProviderFieldChange('type', event.target.value as LLMProviderType)}
                   className={`max-w-[320px] ${inputClassName}`}
@@ -381,8 +489,10 @@ export const ChatSettingsTab: React.FC = () => {
               <CompactSettingRow
                 label={t('settings.chat.baseUrlLabel')}
                 help={providerForm.type === 'anthropic' ? t('settings.chat.baseUrlAnthropicHint') : undefined}
+                htmlFor="chat-provider-base-url"
               >
                 <input
+                  id="chat-provider-base-url"
                   value={providerForm.baseUrl}
                   onChange={(event) => handleProviderFieldChange('baseUrl', event.target.value)}
                   placeholder={providerForm.type === 'anthropic'
@@ -392,8 +502,12 @@ export const ChatSettingsTab: React.FC = () => {
                 />
               </CompactSettingRow>
 
-              <CompactSettingRow label={t('settings.chat.apiKeyLabel')}>
+              <CompactSettingRow
+                label={t('settings.chat.apiKeyLabel')}
+                htmlFor="chat-provider-api-key"
+              >
                 <input
+                  id="chat-provider-api-key"
                   value={providerForm.apiKey}
                   onChange={(event) => handleProviderFieldChange('apiKey', event.target.value)}
                   placeholder={t('settings.chat.apiKeyPlaceholder')}
@@ -401,28 +515,33 @@ export const ChatSettingsTab: React.FC = () => {
                 />
               </CompactSettingRow>
 
-              <CompactSettingRow
-                label={t('settings.chat.protocolLabel')}
-                help={t('settings.chat.protocolHint')}
-                disabled={providerForm.type !== 'openai-compatible'}
-              >
-                <select
-                  value={providerForm.wireApi}
-                  onChange={(event) => handleProviderFieldChange('wireApi', event.target.value as LLMProviderWireApi)}
-                  disabled={providerForm.type !== 'openai-compatible'}
-                  className={`max-w-[320px] ${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+              {providerForm.type === 'openai-compatible' && (
+                <CompactSettingRow
+                  label={t('settings.chat.protocolLabel')}
+                  help={t('settings.chat.protocolAutoHint')}
+                  disabled
+                  htmlFor="chat-provider-wire-api"
                 >
-                  <option value="chat-completions">{t('settings.chat.protocolChatCompletions')}</option>
-                  <option value="responses">{t('settings.chat.protocolResponses')}</option>
-                </select>
-              </CompactSettingRow>
+                  <select
+                    id="chat-provider-wire-api"
+                    value={providerForm.wireApi}
+                    disabled
+                    className={`max-w-[320px] ${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    <option value="chat-completions">{t('settings.chat.protocolChatCompletions')}</option>
+                    <option value="responses">{t('settings.chat.protocolResponses')}</option>
+                  </select>
+                </CompactSettingRow>
+              )}
 
               <CompactSettingRow
                 label={t('settings.chat.modelsLabel')}
                 help={t('settings.chat.modelsHint')}
+                htmlFor="chat-provider-models"
                 controlClassName="items-stretch"
               >
                 <textarea
+                  id="chat-provider-models"
                   value={providerForm.modelsText}
                   onChange={(event) => handleProviderFieldChange('modelsText', event.target.value)}
                   placeholder={t('settings.chat.modelsPlaceholder')}
@@ -433,8 +552,10 @@ export const ChatSettingsTab: React.FC = () => {
               <CompactSettingRow
                 label={t('settings.chat.defaultModelLabel')}
                 help={t('settings.chat.defaultModelPlaceholder')}
+                htmlFor="chat-provider-default-model"
               >
                 <input
+                  id="chat-provider-default-model"
                   value={providerForm.defaultModel}
                   onChange={(event) => handleProviderFieldChange('defaultModel', event.target.value)}
                   placeholder={t('settings.chat.defaultModelPlaceholder')}
@@ -453,9 +574,10 @@ export const ChatSettingsTab: React.FC = () => {
                 onClick={() => {
                   void handleSaveProvider();
                 }}
+                disabled={isSavingProvider}
                 className={primaryButtonClassName}
               >
-                {t('common.save')}
+                {isSavingProvider ? t('common.validating') : t('common.save')}
               </button>
             </div>
           </div>
@@ -479,6 +601,10 @@ export const ChatSettingsTab: React.FC = () => {
                 void persistChatSettings({
                   ...chatSettings,
                   activeProviderId: event.target.value || undefined,
+                }).catch((error) => {
+                  const message = error instanceof Error ? error.message : String(error);
+                  console.error('Failed to update active chat provider:', error);
+                  setSettingsError(message);
                 });
               }}
               className={inputClassName}
@@ -500,6 +626,10 @@ export const ChatSettingsTab: React.FC = () => {
                   void persistChatSettings({
                     ...chatSettings,
                     enableCommandSecurity: checked,
+                  }).catch((error) => {
+                    const message = error instanceof Error ? error.message : String(error);
+                    console.error('Failed to update chat command security setting:', error);
+                    setSettingsError(message);
                   });
                 }}
                 aria-label={t('settings.chat.commandSecurityTitle')}

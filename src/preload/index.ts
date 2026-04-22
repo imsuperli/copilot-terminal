@@ -69,6 +69,7 @@ const electronAPI: ElectronAPI = {
   // Settings
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings: unknown) => ipcRenderer.invoke('update-settings', settings),
+  validateChatProvider: (config: unknown) => ipcRenderer.invoke('validate-chat-provider', config),
   getAvailableShells: () => ipcRenderer.invoke('get-available-shells'),
   scanIDEs: () => ipcRenderer.invoke('scan-ides'),
   scanSpecificIDE: (ideName: string) => ipcRenderer.invoke('scan-specific-ide', ideName),

@@ -34,6 +34,20 @@ export interface ChatSettings {
   enableCommandSecurity?: boolean;
 }
 
+export interface ChatProviderValidationRequest {
+  type: LLMProviderType;
+  baseUrl?: string;
+  apiKey: string;
+  model: string;
+}
+
+export interface ChatProviderValidationResult {
+  resolvedType: LLMProviderType;
+  resolvedWireApi?: LLMProviderWireApi;
+  normalizedBaseUrl?: string;
+  model: string;
+}
+
 // ─── Tool 定义 ────────────────────────────────────────────────────────────────
 
 export type ToolName =

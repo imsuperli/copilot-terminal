@@ -25,6 +25,8 @@ import type {
   ChatExecuteToolRequest,
   ToolResult,
   ChatSettings,
+  ChatProviderValidationRequest,
+  ChatProviderValidationResult,
 } from './chat';
 import {
   ActiveSSHPortForward,
@@ -1647,6 +1649,7 @@ export interface ElectronAPI {
 
   getSettings: () => Promise<IpcResponse<Settings>>;
   updateSettings: (settings: SettingsPatch) => Promise<IpcResponse<Settings>>;
+  validateChatProvider: (config: ChatProviderValidationRequest) => Promise<IpcResponse<ChatProviderValidationResult>>;
   getAvailableShells: () => Promise<IpcResponse<ShellProgramOption[]>>;
   scanIDEs: () => Promise<IpcResponse<IDEConfig[]>>;
   scanSpecificIDE: (ideName: string) => Promise<IpcResponse<string | null>>;
