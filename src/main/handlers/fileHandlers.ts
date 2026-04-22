@@ -113,7 +113,12 @@ export function registerFileHandlers(ctx: HandlerContext) {
         return successResponse(null);
       }
 
-      return successResponse(result.filePaths[0]);
+      // 将本地文件路径转换为 app-image:// 协议 URL
+      const filePath = result.filePaths[0];
+      const normalizedPath = filePath.replace(/\\/g, '/');
+      const imageUrl = `app-image://${normalizedPath}`;
+
+      return successResponse(imageUrl);
     } catch (error) {
       return errorResponse(error);
     }

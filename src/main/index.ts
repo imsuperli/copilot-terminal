@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, protocol, net } from 'electron';
 import path from 'path';
 import { ProcessManager } from './services/ProcessManager';
 import { StatusPoller } from './services/StatusPoller';
@@ -431,7 +431,31 @@ function createWindow() {
   });
 }
 
+// 注册自定义协议用于加载本地图片
+// 必须在 app.ready 之前调用
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'app-image',
+    privileges: {
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: false,
+      corsEnabled: false,
+    },
+  },
+]);
+
 app.whenReady().then(async () => {
+  // 注册 app-image:// 协议处理器
+  protocol.handle('app-image', (request) => {
+    // 从 URL 中提取文件路径：app-image://path/to/file -> /path/to/file (Unix) 或 C:/path/to/file (Windows)
+    const url = request.url.slice('app-image://'.length);
+    // URL 解码
+    const filePath = decodeURIComponent(url);
+    // 返回文件内容
+    return net.fetch(`file://${filePath}`);
+  });
+
   registerBrowserWebviewGuards();
 
   // 强制使用暗色主题（包括标题栏）

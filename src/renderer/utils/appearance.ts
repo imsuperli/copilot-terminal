@@ -321,20 +321,23 @@ export function getAppearanceBackdropDescriptor(appearance: AppearanceSettings):
 }
 
 /**
- * 将本地文件路径转换为 file:// URL
+ * 将本地文件路径转换为可在 CSS url() 中使用的 URL
+ * 新版本使用 app-image:// 协议，旧版本存储的原始路径也做兼容处理
  */
-function toFileUrl(filePath: string): string {
-  // 已经是 URL 格式，直接返回
-  if (filePath.startsWith('file://') || filePath.startsWith('http://') || filePath.startsWith('https://')) {
+function toImageUrl(filePath: string): string {
+  // 已经是 URL 格式（app-image://, file://, http://, https://），直接返回
+  if (
+    filePath.startsWith('app-image://') ||
+    filePath.startsWith('file://') ||
+    filePath.startsWith('http://') ||
+    filePath.startsWith('https://')
+  ) {
     return filePath;
   }
 
-  // 将反斜杠转换为正斜杠（Windows 路径）
+  // 旧版本存储的原始路径，转换为 app-image:// 协议
   const normalized = filePath.replace(/\\/g, '/');
-
-  // Windows 绝对路径：C:/... -> file:///C:/...
-  // Unix 绝对路径：/... -> file:///...
-  return normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`;
+  return normalized.startsWith('/') ? `app-image://${normalized}` : `app-image:///${normalized}`;
 }
 
 function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {
@@ -346,7 +349,7 @@ function getBackdropBaseStyle(appearance: AppearanceSettings): CSSProperties {
 
   if (appearance.skin.kind === 'image' && appearance.skin.imagePath) {
     return {
-      backgroundImage: `url("${escapeCssUrl(toFileUrl(appearance.skin.imagePath))}")`,
+      backgroundImage: `url("${escapeCssUrl(toImageUrl(appearance.skin.imagePath))}")`,
       backgroundPosition: 'center',
       backgroundRepeat: 'no-repeat',
       backgroundSize: 'cover',
