@@ -45,6 +45,7 @@
     --titlebar-hover: 58 58 58; /* #3A3A3A */
 
     --terminal-background: #0c0c0c;
+    --terminal-background-rgb: 12, 12, 12;
     --terminal-foreground: #cccccc;
     --terminal-cursor: #f2f2f2;
     --terminal-cursor-accent: #0c0c0c;
@@ -56,6 +57,13 @@
     --appearance-skin-blur: 0px;
     --appearance-skin-motion-duration: 0s;
     --appearance-skin-motion-opacity: 0;
+    --appearance-pane-background: rgba(var(--terminal-background-rgb), 0.8);
+    --appearance-pane-background-strong: rgba(var(--terminal-background-rgb), 0.88);
+    --appearance-pane-chrome-background: rgba(var(--terminal-background-rgb), 0.72);
+    --appearance-card-surface-top: rgba(var(--terminal-background-rgb), 0.58);
+    --appearance-card-surface-bottom: rgba(var(--terminal-background-rgb), 0.72);
+    --appearance-card-hover-surface-top: rgba(var(--terminal-background-rgb), 0.66);
+    --appearance-card-hover-surface-bottom: rgba(var(--terminal-background-rgb), 0.8);
 
     --terminal-black: #0c0c0c;
     --terminal-red: #c50f1f;

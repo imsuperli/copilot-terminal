@@ -1520,10 +1520,21 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
 
   return (
     <div
-      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_92%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_98%,transparent)_100%)]"
+      data-testid="chat-pane-root"
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+      style={{
+        backgroundColor: 'var(--appearance-pane-background)',
+        backdropFilter: 'blur(10px)',
+      }}
       onMouseDown={onActivate}
     >
-      <div className="border-b border-[rgb(var(--border))] px-3 py-2">
+      <div
+        className="border-b border-[rgb(var(--border))] px-3 py-2"
+        style={{
+          backgroundColor: 'var(--appearance-pane-chrome-background)',
+          backdropFilter: 'blur(10px)',
+        }}
+      >
         <div className="mx-auto flex w-full max-w-[860px] items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-2.5">
             <div

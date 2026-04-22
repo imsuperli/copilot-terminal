@@ -85,8 +85,8 @@ export async function ensureMonacoEnvironment(): Promise<MonacoModule> {
           { token: 'attribute.value', foreground: 'A7F3D0' },
         ],
         colors: {
-          'editor.background': '#09090b',
-          'editorGutter.background': '#09090b',
+          'editor.background': '#00000000',
+          'editorGutter.background': '#00000000',
           'editor.foreground': '#e4e4e7',
           'editorLineNumber.dimmedForeground': '#3f3f46',
           'editorLineNumber.foreground': '#52525b',
@@ -117,6 +117,7 @@ export async function ensureMonacoEnvironment(): Promise<MonacoModule> {
           'editorError.foreground': '#f87171',
           'editorHint.foreground': '#22c55e',
           'editorOverviewRuler.border': '#00000000',
+          'minimap.background': '#00000000',
           'editorHoverWidget.background': '#111114',
           'editorHoverWidget.border': '#27272a',
           'editorSuggestWidget.background': '#111114',

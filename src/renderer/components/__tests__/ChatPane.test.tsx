@@ -424,6 +424,90 @@ describe('ChatPane', () => {
     expect(screen.getAllByText('completed').length).toBeGreaterThan(0);
   });
 
+  it('uses a translucent root surface so the appearance backdrop can show through', async () => {
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [],
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.onAgentTaskState).mockImplementation(() => {});
+    vi.mocked(window.electronAPI.offAgentTaskState).mockImplementation(() => {});
+    vi.mocked(window.electronAPI.onAgentTaskError).mockImplementation(() => {});
+    vi.mocked(window.electronAPI.offAgentTaskError).mockImplementation(() => {});
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [0.5, 0.5],
+            children: [
+              {
+                type: 'pane',
+                id: 'terminal-pane-1',
+                pane: {
+                  id: 'terminal-pane-1',
+                  cwd: '/workspace/demo',
+                  command: 'bash',
+                  status: WindowStatus.Running,
+                  pid: 101,
+                  backend: 'local',
+                },
+              },
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat' as const,
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    const root = await screen.findByTestId('chat-pane-root');
+    expect(root).toHaveStyle({
+      backgroundColor: 'var(--appearance-pane-background)',
+      backdropFilter: 'blur(10px)',
+    });
+  });
+
   it('shows optimistic thinking immediately even when the pane prop has not been refreshed yet', async () => {
     const user = userEvent.setup();
 

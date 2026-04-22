@@ -264,6 +264,20 @@ type WindowedInlineListSlice<T> = {
   isWindowed: boolean;
 };
 
+const CODE_PANE_ROOT_SURFACE_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--appearance-pane-background-strong)',
+  backdropFilter: 'blur(10px)',
+};
+
+const CODE_PANE_CHROME_SURFACE_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--appearance-pane-chrome-background)',
+  backdropFilter: 'blur(10px)',
+};
+
+const CODE_PANE_EDITOR_SURFACE_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--appearance-pane-background)',
+};
+
 type ContentSearchGroup = {
   filePath: string;
   matches: CodePaneContentMatch[];
@@ -23950,7 +23964,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
   ]);
 
   const renderedStatusBar = useMemo(() => (
-    <div className="flex h-[30px] items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/80 px-3 text-[11px] text-zinc-500">
+    <div
+      className="flex h-[30px] items-center justify-between gap-3 border-t border-[rgb(var(--border))] px-3 text-[11px] text-zinc-500"
+      style={CODE_PANE_CHROME_SURFACE_STYLE}
+    >
       <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
         <span className="truncate">{activeFileStatusLabel}</span>
       </div>
@@ -24254,8 +24271,11 @@ export const CodePane: React.FC<CodePaneProps> = ({
       <>
         <aside
           ref={sidebarElementRef}
-          className="flex h-full shrink-0 flex-col border-r border-zinc-800 bg-zinc-950/70"
-          style={{ width: `${sidebarWidth}px` }}
+          className="flex h-full shrink-0 flex-col border-r border-[rgb(var(--border))]"
+          style={{
+            ...CODE_PANE_CHROME_SURFACE_STYLE,
+            width: `${sidebarWidth}px`,
+          }}
         >
           {renderedSidebarContent}
         </aside>
@@ -24265,7 +24285,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
           data-testid="code-pane-sidebar-resize-handle"
           onMouseDown={startSidebarResize}
           onDoubleClick={resetSidebarWidth}
-          className={`flex h-full w-3 shrink-0 cursor-col-resize items-center justify-center bg-zinc-950/60 transition-colors ${isSidebarResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+          className={`flex h-full w-3 shrink-0 cursor-col-resize items-center justify-center transition-colors ${isSidebarResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+          style={CODE_PANE_CHROME_SURFACE_STYLE}
         >
           <GripVertical size={12} />
         </div>
@@ -24333,7 +24354,9 @@ export const CodePane: React.FC<CodePaneProps> = ({
       </style>
       <div
         ref={rootContainerRef}
-        className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-zinc-950"
+        data-testid="code-pane-root"
+        className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+        style={CODE_PANE_ROOT_SURFACE_STYLE}
         onMouseDown={(event) => {
           if (event.button !== 0) {
             return;
@@ -24567,7 +24590,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
             <div data-testid="code-pane-editor-region" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <div
                 ref={openFileTabsScrollRef}
-                className="flex min-h-[34px] items-stretch overflow-x-auto overflow-y-hidden border-b border-zinc-800 bg-zinc-950/70"
+                className="flex min-h-[34px] items-stretch overflow-x-auto overflow-y-hidden border-b border-[rgb(var(--border))]"
+                style={CODE_PANE_CHROME_SURFACE_STYLE}
                 onScroll={(event) => {
                   scheduleOpenFileTabsViewportUpdate({
                     scrollLeft: event.currentTarget.scrollLeft,
@@ -24578,7 +24602,7 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 {renderedOpenFileTabs}
               </div>
 
-              <div className="relative min-h-0 flex-1 overflow-hidden bg-zinc-950">
+              <div className="relative min-h-0 flex-1 overflow-hidden" style={CODE_PANE_EDITOR_SURFACE_STYLE}>
                 {isQuickDocumentationOpen && (
                   <QuickDocumentationPanel
                     title={t('codePane.quickDocumentation')}
@@ -24672,12 +24696,16 @@ export const CodePane: React.FC<CodePaneProps> = ({
                           aria-orientation="vertical"
                           data-testid="code-pane-editor-split-resize-handle"
                           onMouseDown={startEditorSplitResize}
-                          className={`flex h-full w-3 shrink-0 cursor-col-resize items-center justify-center border-l border-r border-zinc-800 bg-zinc-950/60 transition-colors ${isEditorSplitResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+                          className={`flex h-full w-3 shrink-0 cursor-col-resize items-center justify-center border-l border-r border-[rgb(var(--border))] transition-colors ${isEditorSplitResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+                          style={CODE_PANE_CHROME_SURFACE_STYLE}
                         >
                           <GripVertical size={12} />
                         </div>
-                        <div className="flex min-w-0 flex-1 flex-col border-l border-zinc-800/70">
-                          <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-2 py-1 text-[11px] text-zinc-400">
+                        <div className="flex min-w-0 flex-1 flex-col border-l border-[rgb(var(--border))]/70">
+                          <div
+                            className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-2 py-1 text-[11px] text-zinc-400"
+                            style={CODE_PANE_CHROME_SURFACE_STYLE}
+                          >
                             <span className="truncate">
                               {secondaryFilePath ? getRelativePath(rootPath, getDisplayPath(secondaryFilePath)) : t('codePane.editorSplitEmpty')}
                             </span>
@@ -24706,7 +24734,10 @@ export const CodePane: React.FC<CodePaneProps> = ({
                       />
                     )}
                     {isBootstrapping && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/80 text-xs text-zinc-500">
+                      <div
+                        className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500"
+                        style={CODE_PANE_ROOT_SURFACE_STYLE}
+                      >
                         {t('codePane.loading')}
                       </div>
                     )}
@@ -24730,7 +24761,8 @@ export const CodePane: React.FC<CodePaneProps> = ({
                 data-testid="code-pane-bottom-panel-resize-handle"
                 onMouseDown={startBottomPanelResize}
                 onDoubleClick={resetBottomPanelHeight}
-                className={`flex h-3 shrink-0 cursor-row-resize items-center justify-center border-t border-zinc-800 bg-zinc-950/60 transition-colors ${isBottomPanelResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+                className={`flex h-3 shrink-0 cursor-row-resize items-center justify-center border-t border-[rgb(var(--border))] transition-colors ${isBottomPanelResizing ? 'text-zinc-100' : 'text-zinc-600 hover:text-zinc-300'}`}
+                style={CODE_PANE_CHROME_SURFACE_STYLE}
               >
                 <GripHorizontal size={12} />
               </div>

@@ -18,7 +18,7 @@ import {
   IdeMenuItemContent,
 } from './ui/ide-menu';
 import {
-  idePopupListCardClassName,
+  idePopupInteractiveListCardClassName,
   idePopupListCardFooterClassName,
   idePopupPillClassName,
   idePopupTonalButtonClassName,
@@ -271,7 +271,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       onClick={() => onClick?.(window)}
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
-      className={`${idePopupListCardClassName} flex h-56 min-w-[280px] flex-col cursor-pointer transition-all duration-200 ease-out hover:bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_88%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_96%,transparent)_100%)] hover:shadow-[0_24px_48px_rgba(0,0,0,0.18)] hover:scale-[1.02] active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))]`}
+      className={`${idePopupInteractiveListCardClassName} flex h-56 min-w-[280px] flex-col`}
       style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus)}` }}
     >
       {/* 启动中加载遮罩 */}

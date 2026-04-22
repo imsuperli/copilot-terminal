@@ -53,6 +53,14 @@ describe('WindowCard', () => {
     expect(screen.getByTestId('working-directory')).toHaveTextContent('/home/user/project');
   });
 
+  it('uses the shared translucent interactive card surface', () => {
+    render(<WindowCard window={createWindow()} />);
+
+    const card = screen.getByRole('button', { name: /Test Window/ });
+    expect(card.className).toContain('bg-[linear-gradient(180deg,var(--appearance-card-surface-top)_0%,var(--appearance-card-surface-bottom)_100%)]');
+    expect(card.className).toContain('hover:bg-[linear-gradient(180deg,var(--appearance-card-hover-surface-top)_0%,var(--appearance-card-hover-surface-bottom)_100%)]');
+  });
+
   it('renders pane count badge for multi-pane windows', () => {
     const multiPaneWindow = createWindow({
       activePaneId: 'pane-1',

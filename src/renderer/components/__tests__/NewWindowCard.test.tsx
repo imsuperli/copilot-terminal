@@ -74,6 +74,7 @@ describe('NewWindowCard', () => {
     const card = screen.getByTestId('new-window-card');
     expect(card).toHaveClass('hover:border-[rgb(var(--primary))]');
     expect(card).toHaveClass('hover:shadow-[0_22px_44px_rgba(0,0,0,0.16)]');
+    expect(card.className).toContain('hover:bg-[linear-gradient(180deg,var(--appearance-card-hover-surface-top)_0%,var(--appearance-card-hover-surface-bottom)_100%)]');
   });
 
   it('has focus ring class for accessibility', () => {

@@ -300,6 +300,20 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
     '--terminal-background-effective',
     `rgba(var(--terminal-background-rgb, 12, 12, 12), var(--appearance-terminal-opacity, 0.88))`,
   );
+  const paneOpacity = resolvePaneOpacity(appearance);
+  const paneStrongOpacity = clampOpacity(paneOpacity + 0.08, 0.62, 0.94);
+  const paneChromeOpacity = clampOpacity(paneOpacity - 0.08, 0.48, 0.88);
+  const cardTopOpacity = resolveCardOpacity(appearance);
+  const cardBottomOpacity = clampOpacity(cardTopOpacity + 0.12, 0.52, 0.9);
+  const cardHoverTopOpacity = clampOpacity(cardTopOpacity + 0.08, 0.56, 0.92);
+  const cardHoverBottomOpacity = clampOpacity(cardTopOpacity + 0.18, 0.62, 0.96);
+  rootStyle.setProperty('--appearance-pane-background', rgbaWithTerminalBackground(paneOpacity));
+  rootStyle.setProperty('--appearance-pane-background-strong', rgbaWithTerminalBackground(paneStrongOpacity));
+  rootStyle.setProperty('--appearance-pane-chrome-background', rgbaWithTerminalBackground(paneChromeOpacity));
+  rootStyle.setProperty('--appearance-card-surface-top', rgbaWithTerminalBackground(cardTopOpacity));
+  rootStyle.setProperty('--appearance-card-surface-bottom', rgbaWithTerminalBackground(cardBottomOpacity));
+  rootStyle.setProperty('--appearance-card-hover-surface-top', rgbaWithTerminalBackground(cardHoverTopOpacity));
+  rootStyle.setProperty('--appearance-card-hover-surface-bottom', rgbaWithTerminalBackground(cardHoverBottomOpacity));
   rootStyle.setProperty('--appearance-skin-dim', String(resolveSkinDim(appearance)));
   rootStyle.setProperty('--appearance-skin-blur', `${appearance.skin.blur}px`);
   rootStyle.setProperty('--appearance-skin-motion-duration', appearance.reduceMotion ? '0s' : '18s');
@@ -456,6 +470,40 @@ function resolveSkinDim(appearance: AppearanceSettings): number {
   }
 
   return appearance.skin.dim;
+}
+
+function resolvePaneOpacity(appearance: AppearanceSettings): number {
+  const baseOpacity = 0.56 + (appearance.terminalOpacity * 0.28);
+  if (appearance.readabilityMode === 'readability') {
+    return clampOpacity(baseOpacity + 0.08, 0.62, 0.94);
+  }
+
+  if (appearance.readabilityMode === 'immersive') {
+    return clampOpacity(baseOpacity - 0.1, 0.52, 0.84);
+  }
+
+  return clampOpacity(baseOpacity, 0.56, 0.9);
+}
+
+function resolveCardOpacity(appearance: AppearanceSettings): number {
+  const baseOpacity = 0.42 + (appearance.terminalOpacity * 0.24);
+  if (appearance.readabilityMode === 'readability') {
+    return clampOpacity(baseOpacity + 0.06, 0.5, 0.82);
+  }
+
+  if (appearance.readabilityMode === 'immersive') {
+    return clampOpacity(baseOpacity - 0.08, 0.38, 0.74);
+  }
+
+  return clampOpacity(baseOpacity, 0.42, 0.78);
+}
+
+function clampOpacity(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function rgbaWithTerminalBackground(alpha: number): string {
+  return `rgba(var(--terminal-background-rgb, 12, 12, 12), ${alpha.toFixed(3)})`;
 }
 
 function escapeCssUrl(value: string): string {

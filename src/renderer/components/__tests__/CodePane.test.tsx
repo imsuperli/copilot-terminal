@@ -403,6 +403,8 @@ const fakeMonaco = {
         },
       };
     }),
+    defineTheme: vi.fn(),
+    setTheme: vi.fn(),
   },
 };
 
@@ -1706,6 +1708,18 @@ describe('CodePane', () => {
 
     expect(await screen.findByText('Java: Resolving classpath')).toBeInTheDocument();
     expect(window.electronAPI.codePaneGetLanguageWorkspaceState).not.toHaveBeenCalled();
+  });
+
+  it('uses translucent chrome and transparent Monaco editor surfaces for the appearance backdrop', async () => {
+    renderCodePane(createPane());
+
+    const root = await screen.findByTestId('code-pane-root');
+    expect(root).toHaveStyle({
+      backgroundColor: 'var(--appearance-pane-background-strong)',
+      backdropFilter: 'blur(10px)',
+    });
+
+    expect(hoisted.ensureMonacoEnvironmentMock).toHaveBeenCalled();
   });
 
   it('toggles the workbench sidebar from the activity rail and persists the selected view', async () => {
@@ -8462,7 +8476,7 @@ describe('CodePane', () => {
 
     await user.click(await screen.findByRole('button', { name: 'codePane.performanceTab' }));
 
-    expect(await screen.findByText('codePane.performanceRequests')).toBeInTheDocument();
+    expect(await screen.findAllByText('codePane.performanceRequests')).toHaveLength(2);
     expect(await screen.findByText('File search')).toBeInTheDocument();
   });
 

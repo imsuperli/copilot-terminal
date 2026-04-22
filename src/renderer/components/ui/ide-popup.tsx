@@ -62,14 +62,23 @@ export const idePopupTooltipClassName = joinClassNames(
 
 export const idePopupListCardClassName = joinClassNames(
   'relative overflow-hidden rounded-xl border border-[rgb(var(--border))]',
-  'bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_72%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_82%,transparent)_100%)]',
+  'bg-[linear-gradient(180deg,var(--appearance-card-surface-top)_0%,var(--appearance-card-surface-bottom)_100%)]',
   'shadow-[0_18px_38px_rgba(0,0,0,0.14)]',
-  'backdrop-blur-[12px]',
+  'backdrop-blur-[16px]',
 );
 
 export const idePopupListCardFooterClassName = joinClassNames(
   'border-t border-[rgb(var(--border))]',
-  'bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)_0%,color-mix(in_srgb,rgb(var(--secondary))_62%,transparent)_100%)]',
+  'bg-[linear-gradient(180deg,var(--appearance-card-surface-bottom)_0%,var(--appearance-pane-chrome-background)_100%)]',
+);
+
+export const idePopupInteractiveListCardClassName = joinClassNames(
+  idePopupListCardClassName,
+  'cursor-pointer transition-all duration-200 ease-out',
+  'hover:bg-[linear-gradient(180deg,var(--appearance-card-hover-surface-top)_0%,var(--appearance-card-hover-surface-bottom)_100%)]',
+  'hover:shadow-[0_24px_48px_rgba(0,0,0,0.18)] hover:scale-[1.02]',
+  'active:scale-[0.98] active:bg-[rgb(var(--accent))]/30 active:shadow-inner',
+  'outline-none focus:outline-none focus:ring-0 focus:border-[rgb(var(--border))]',
 );
 
 export const idePopupAccentCardClassName = joinClassNames(
