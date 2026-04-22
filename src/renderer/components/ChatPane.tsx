@@ -753,9 +753,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
   }, [linkedPane, windowId]);
   const hasExecutableLinkedSsh = hasExecutableSshBinding(linkedPane);
   const providers = settings.providers;
-  const selectedProviderId = agentState?.providerId ?? chatState.activeProviderId ?? settings.activeProviderId ?? providers[0]?.id ?? '';
+  const selectedProviderId = chatState.activeProviderId ?? agentState?.providerId ?? settings.activeProviderId ?? providers[0]?.id ?? '';
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? null;
-  const selectedModel = agentState?.model ?? chatState.activeModel ?? selectedProvider?.defaultModel ?? selectedProvider?.models[0] ?? '';
+  const selectedModel = chatState.activeModel ?? agentState?.model ?? selectedProvider?.defaultModel ?? selectedProvider?.models[0] ?? '';
   const selectedProviderModelValue = selectedProvider && selectedModel
     ? encodeProviderModelSelection(selectedProvider.id, selectedModel)
     : '';

@@ -1481,6 +1481,150 @@ describe('ChatPane', () => {
     expect((input as HTMLTextAreaElement).value).toBe('');
   });
 
+  it('uses the newly selected model for the next turn in the same conversation', async () => {
+    const user = userEvent.setup();
+    const listeners = createListenerMap();
+
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5', 'claude-opus-4-1'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+    vi.mocked(window.electronAPI.agentSend).mockResolvedValue({
+      success: true,
+      data: {
+        taskId: 'task-1',
+        status: 'running',
+      },
+    });
+    vi.mocked(window.electronAPI.agentGetTask).mockResolvedValue({
+      success: true,
+      data: null,
+    });
+    vi.mocked(window.electronAPI.onAgentTaskState).mockImplementation((callback) => {
+      listeners.state.add(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+    });
+    vi.mocked(window.electronAPI.offAgentTaskState).mockImplementation((callback) => {
+      listeners.state.delete(callback as (event: unknown, payload: AgentTaskStatePayload) => void);
+    });
+    vi.mocked(window.electronAPI.onAgentTaskError).mockImplementation((callback) => {
+      listeners.error.add(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
+    });
+    vi.mocked(window.electronAPI.offAgentTaskError).mockImplementation((callback) => {
+      listeners.error.delete(callback as (event: unknown, payload: { paneId: string; error: string }) => void);
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    await user.type(await screen.findByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '先用默认模型');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentSend).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        providerId: 'provider-1',
+        model: 'claude-sonnet-4-5',
+      }));
+    });
+
+    await act(async () => {
+      listeners.state.forEach((listener) => listener({}, {
+        paneId: 'chat-pane-1',
+        task: createAgentSnapshot({
+          status: 'completed',
+          model: 'claude-sonnet-4-5',
+          messages: [
+            {
+              id: 'user-1',
+              role: 'user',
+              content: '先用默认模型',
+              timestamp: new Date().toISOString(),
+            },
+            {
+              id: 'assistant-1',
+              role: 'assistant',
+              content: '默认模型已响应',
+              timestamp: new Date().toISOString(),
+              model: 'claude-sonnet-4-5',
+            },
+          ],
+        }),
+      }));
+    });
+
+    const selector = await screen.findByRole('combobox', { name: 'Provider / 模型' });
+    await user.selectOptions(selector, '["provider-1","claude-opus-4-1"]');
+    expect(selector).toHaveValue('["provider-1","claude-opus-4-1"]');
+
+    await user.clear(screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'));
+    await user.type(screen.getByPlaceholderText('输入消息，Enter 发送，Shift+Enter 换行'), '第二轮切模型');
+    await user.click(screen.getByRole('button', { name: '发送' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.agentSend).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        providerId: 'provider-1',
+        model: 'claude-opus-4-1',
+      }));
+    });
+  });
+
   it('renders header actions as icon-only controls', async () => {
     vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
       success: true,
