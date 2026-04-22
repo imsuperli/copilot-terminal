@@ -143,7 +143,7 @@ describe('SettingsPanel', () => {
         reduceMotion: false,
         skin: expect.objectContaining({
           presetId: 'obsidian',
-          kind: 'gradient',
+          kind: 'none',
         }),
       }),
     });
@@ -154,7 +154,7 @@ describe('SettingsPanel', () => {
       appearance: expect.objectContaining({
         skin: expect.objectContaining({
           presetId: 'aurora',
-          kind: 'gradient',
+          kind: 'none',
           gradient: expect.stringContaining('#041417'),
         }),
       }),
@@ -204,6 +204,24 @@ describe('SettingsPanel', () => {
 
   it('supports selecting a custom image skin', async () => {
     const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        appearance: {
+          skin: {
+            presetId: 'aurora',
+            kind: 'gradient',
+            gradient: 'radial-gradient(circle at 22% 18%, rgba(78, 244, 207, 0.22), transparent 28%), radial-gradient(circle at 78% 16%, rgba(103, 164, 255, 0.16), transparent 30%), linear-gradient(140deg, #041417 0%, #0b2c31 54%, #07191d 100%)',
+            dim: 0.28,
+            blur: 0,
+            motion: 'ambient',
+          },
+        },
+      } as any,
+    });
     vi.mocked(window.electronAPI.selectImageFile).mockResolvedValue({
       success: true,
       data: 'C:\\Wallpapers\\nebula.png',
@@ -222,9 +240,95 @@ describe('SettingsPanel', () => {
     expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
       appearance: expect.objectContaining({
         skin: expect.objectContaining({
-          presetId: 'custom',
+          presetId: 'aurora',
           kind: 'image',
           imagePath: 'C:\\Wallpapers\\nebula.png',
+        }),
+      }),
+    });
+  });
+
+  it('keeps the selected image path when switching skin presets', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        appearance: {
+          skin: {
+            presetId: 'midnight',
+            kind: 'image',
+            imagePath: 'C:\\Wallpapers\\nebula.png',
+            gradient: 'radial-gradient(circle at 15% 12%, rgba(57, 114, 255, 0.30), transparent 28%), radial-gradient(circle at 82% 18%, rgba(245, 158, 11, 0.18), transparent 24%), linear-gradient(135deg, #05070a 0%, #111317 48%, #060607 100%)',
+            dim: 0.16,
+            blur: 0,
+            motion: 'none',
+          },
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: '外观' }));
+    await user.click(await screen.findByRole('button', { name: /冷雾极光/ }));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      appearance: expect.objectContaining({
+        skin: expect.objectContaining({
+          presetId: 'aurora',
+          kind: 'image',
+          imagePath: 'C:\\Wallpapers\\nebula.png',
+          gradient: expect.stringContaining('#041417'),
+        }),
+      }),
+    });
+  });
+
+  it('restores the active preset without clearing the preset selection metadata unexpectedly', async () => {
+    const user = userEvent.setup();
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        quickNav: { items: [] },
+        appearance: {
+          skin: {
+            presetId: 'paper',
+            kind: 'image',
+            imagePath: 'C:\\Wallpapers\\paper.png',
+            gradient: 'radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.42), transparent 24%), radial-gradient(circle at 84% 20%, rgba(184, 137, 71, 0.14), transparent 26%), linear-gradient(135deg, #efe4d1 0%, #dac9ae 48%, #f6eee2 100%)',
+            dim: 0.16,
+            blur: 0,
+            motion: 'none',
+          },
+        },
+      } as any,
+    });
+
+    render(
+      <I18nProvider>
+        <SettingsPanel open={true} onClose={() => {}} />
+      </I18nProvider>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: '外观' }));
+    await user.click(await screen.findByRole('button', { name: '恢复预设' }));
+
+    expect(window.electronAPI.updateSettings).toHaveBeenLastCalledWith({
+      appearance: expect.objectContaining({
+        skin: expect.objectContaining({
+          presetId: 'paper',
+          kind: 'gradient',
+          imagePath: 'C:\\Wallpapers\\paper.png',
+          gradient: expect.stringContaining('#efe4d1'),
         }),
       }),
     });

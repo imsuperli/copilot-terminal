@@ -150,6 +150,28 @@ function isSameSkinPreset(currentSkin: AppearanceSettings['skin'], presetSkin: A
   return currentSkin.presetId === presetSkin.presetId && currentSkin.gradient === presetSkin.gradient;
 }
 
+function getDefaultSkinPreset() {
+  return APPEARANCE_SKIN_PRESETS.find((preset) => preset.id === DEFAULT_APPEARANCE_SETTINGS.skin.presetId)
+    ?? APPEARANCE_SKIN_PRESETS[0];
+}
+
+function getActiveSkinPreset(currentSkin: AppearanceSettings['skin']) {
+  const presetById = APPEARANCE_SKIN_PRESETS.find((preset) => preset.id === currentSkin.presetId);
+  if (presetById) {
+    return presetById;
+  }
+
+  const presetByGradient = APPEARANCE_SKIN_PRESETS.find((preset) => isSameSkinPreset({
+    ...currentSkin,
+    kind: 'gradient',
+  }, preset.skin));
+  if (presetByGradient) {
+    return presetByGradient;
+  }
+
+  return getDefaultSkinPreset();
+}
+
 function getNumericOptionsWithCurrent(options: number[], currentValue: number): number[] {
   if (options.includes(currentValue)) {
     return options;
@@ -665,7 +687,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       }
 
       const newSkin = {
-        presetId: 'custom' as const,
         kind: 'image' as const,
         imagePath: response.data,
         gradient: appearanceSettings.skin.gradient,
@@ -679,6 +700,31 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
     } catch (error) {
       console.error('Failed to select appearance image:', error);
     }
+  };
+
+  const handleAppearancePresetChange = async (preset: typeof APPEARANCE_SKIN_PRESETS[number]) => {
+    await handleAppearanceSettingsChange({
+      skin: {
+        ...appearanceSettings.skin,
+        presetId: preset.skin.presetId,
+        gradient: preset.skin.gradient,
+      },
+    });
+  };
+
+  const handleResetAppearanceImage = async () => {
+    const activePreset = getActiveSkinPreset(appearanceSettings.skin);
+
+    await handleAppearanceSettingsChange({
+      skin: {
+        ...appearanceSettings.skin,
+        kind: activePreset.skin.kind,
+        gradient: activePreset.skin.gradient,
+        dim: activePreset.skin.dim,
+        blur: activePreset.skin.blur,
+        motion: activePreset.skin.motion,
+      },
+    });
   };
 
   const handleSelectCustomShell = async () => {
@@ -850,7 +896,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
   const selectedShellValue = !effectiveSelectedShell || effectiveSelectedShell === autoShellTarget
     ? AUTO_SHELL_OPTION_VALUE
     : effectiveSelectedShell;
-  const activeSkinPreset = APPEARANCE_SKIN_PRESETS.find((preset) => isSameSkinPreset(appearanceSettings.skin, preset.skin)) ?? APPEARANCE_SKIN_PRESETS[0];
+  const activeSkinPreset = getActiveSkinPreset(appearanceSettings.skin);
   const skinDimOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_DIM_OPTIONS, appearanceSettings.skin.dim);
   const skinBlurOptions = getNumericOptionsWithCurrent(APPEARANCE_SKIN_BLUR_OPTIONS, appearanceSettings.skin.blur);
   const appearanceOpacityOptions = getNumericOptionsWithCurrent(APPEARANCE_OPACITY_OPTIONS, appearanceSettings.terminalOpacity);
@@ -1165,7 +1211,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           <button
                             key={preset.id}
                             type="button"
-                            onClick={() => handleAppearanceSettingsChange({ skin: preset.skin })}
+                            aria-pressed={selected}
+                            onClick={() => {
+                              void handleAppearancePresetChange(preset);
+                            }}
                             className={settingsPanelPresetCardClassName(selected)}
                           >
                             <div className={settingsPanelPreviewSurfaceClassName}>
@@ -1212,7 +1261,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                         help={(
                           <>
                             <div>{t('settings.appearance.customImageDescription')}</div>
-                            {appearanceSettings.skin.kind === 'image' && appearanceSettings.skin.imagePath && (
+                            {appearanceSettings.skin.imagePath && (
                               <div className="mt-2 break-all font-mono">{appearanceSettings.skin.imagePath}</div>
                             )}
                           </>
@@ -1229,7 +1278,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
                           {appearanceSettings.skin.kind === 'image' && (
                             <button
                               type="button"
-                              onClick={() => handleAppearanceSettingsChange({ skin: APPEARANCE_SKIN_PRESETS[1].skin })}
+                              onClick={() => {
+                                void handleResetAppearanceImage();
+                              }}
                               className={settingsPanelCompactSecondaryButtonClassName}
                             >
                               {t('settings.appearance.customImageReset')}
