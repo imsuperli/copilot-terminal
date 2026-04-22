@@ -6,13 +6,17 @@ import type { Workspace } from '../../types/workspace';
 const {
   mockIpcHandle,
   mockAnthropicMessagesCreate,
+  mockAnthropicModelsList,
   mockOpenAIResponsesCreate,
   mockOpenAIChatCompletionsCreate,
+  mockOpenAIModelsList,
 } = vi.hoisted(() => ({
   mockIpcHandle: vi.fn(),
   mockAnthropicMessagesCreate: vi.fn(),
+  mockAnthropicModelsList: vi.fn(),
   mockOpenAIResponsesCreate: vi.fn(),
   mockOpenAIChatCompletionsCreate: vi.fn(),
+  mockOpenAIModelsList: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -29,11 +33,19 @@ vi.mock('@anthropic-ai/sdk', () => ({
     messages = {
       create: mockAnthropicMessagesCreate,
     };
+
+    models = {
+      list: mockAnthropicModelsList,
+    };
   },
 }));
 
 vi.mock('openai', () => ({
   default: class MockOpenAI {
+    models = {
+      list: mockOpenAIModelsList,
+    };
+
     responses = {
       create: mockOpenAIResponsesCreate,
     };
@@ -100,8 +112,10 @@ describe('registerSettingsHandlers', () => {
   beforeEach(() => {
     mockIpcHandle.mockReset();
     mockAnthropicMessagesCreate.mockReset();
+    mockAnthropicModelsList.mockReset();
     mockOpenAIResponsesCreate.mockReset();
     mockOpenAIChatCompletionsCreate.mockReset();
+    mockOpenAIModelsList.mockReset();
   });
 
   it('loads workspace settings lazily when current workspace has not been initialized yet', async () => {
@@ -207,7 +221,103 @@ describe('registerSettingsHandlers', () => {
     });
   });
 
-  it('auto-detects responses endpoints for codex-style gateways', async () => {
+  it('auto-detects responses endpoints for codex-style gateways even when model listing is unavailable', async () => {
+    mockOpenAIModelsList.mockRejectedValue(new Error('Settlement blocked'));
+
+    const workspace = createWorkspace();
+    let currentWorkspace: Workspace | null = workspace;
+    const ctx = {
+      mainWindow: null,
+      processManager: null,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      currentWorkspace,
+      getCurrentWorkspace: () => currentWorkspace,
+      setCurrentWorkspace: vi.fn((nextWorkspace: Workspace | null) => {
+        currentWorkspace = nextWorkspace;
+      }),
+    } as unknown as HandlerContext;
+
+    registerSettingsHandlers(ctx);
+    const validateHandler = getRegisteredHandler('validate-chat-provider');
+
+    const response = await validateHandler({}, {
+      baseUrl: 'https://api.example.com/api/codex/backend-api/codex',
+      apiKey: 'sk-test',
+    });
+
+    expect(mockOpenAIModelsList).toHaveBeenCalledTimes(1);
+    expect(mockOpenAIResponsesCreate).not.toHaveBeenCalled();
+    expect(mockOpenAIChatCompletionsCreate).not.toHaveBeenCalled();
+    expect(mockAnthropicMessagesCreate).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      success: true,
+      data: {
+        resolvedType: 'openai-compatible',
+        resolvedWireApi: 'responses',
+        normalizedBaseUrl: 'https://api.example.com/api/codex/backend-api/codex',
+        detectedModels: [],
+        modelListSupported: false,
+        modelListError: 'Settlement blocked',
+      },
+    });
+  });
+
+  it('falls back to anthropic when an endpoint is an Anthropic relay', async () => {
+    mockOpenAIModelsList.mockRejectedValue(new Error('Not an OpenAI models endpoint'));
+    mockAnthropicModelsList.mockResolvedValue({
+      data: [
+        {
+          id: 'claude-sonnet-4-5',
+        },
+      ],
+    });
+
+    const workspace = createWorkspace();
+    let currentWorkspace: Workspace | null = workspace;
+    const ctx = {
+      mainWindow: null,
+      processManager: null,
+      statusPoller: null,
+      viewSwitcher: null,
+      workspaceManager: null,
+      autoSaveManager: null,
+      ptySubscriptionManager: null,
+      gitBranchWatcher: null,
+      currentWorkspace,
+      getCurrentWorkspace: () => currentWorkspace,
+      setCurrentWorkspace: vi.fn((nextWorkspace: Workspace | null) => {
+        currentWorkspace = nextWorkspace;
+      }),
+    } as unknown as HandlerContext;
+
+    registerSettingsHandlers(ctx);
+    const validateHandler = getRegisteredHandler('validate-chat-provider');
+
+    const response = await validateHandler({}, {
+      baseUrl: 'https://relay.example.com',
+      apiKey: 'sk-ant-test',
+    });
+
+    expect(mockOpenAIModelsList).toHaveBeenCalledTimes(2);
+    expect(mockAnthropicModelsList).toHaveBeenCalledTimes(1);
+    expect(response).toEqual({
+      success: true,
+      data: {
+        resolvedType: 'anthropic',
+        normalizedBaseUrl: 'https://relay.example.com',
+        detectedModels: ['claude-sonnet-4-5'],
+        modelListSupported: true,
+      },
+    });
+  });
+
+  it('validates the selected model after detection and keeps model list errors as warnings', async () => {
+    mockOpenAIModelsList.mockRejectedValue(new Error('Settlement blocked'));
     mockOpenAIResponsesCreate.mockResolvedValue({
       output_text: 'pong',
       output: [],
@@ -249,8 +359,6 @@ describe('registerSettingsHandlers', () => {
       }),
       expect.any(Object),
     );
-    expect(mockOpenAIChatCompletionsCreate).not.toHaveBeenCalled();
-    expect(mockAnthropicMessagesCreate).not.toHaveBeenCalled();
     expect(response).toEqual({
       success: true,
       data: {
@@ -258,59 +366,9 @@ describe('registerSettingsHandlers', () => {
         resolvedWireApi: 'responses',
         normalizedBaseUrl: 'https://api.example.com/api/codex/backend-api/codex',
         model: 'gpt-5.4',
-      },
-    });
-  });
-
-  it('falls back to anthropic when the selected provider type is wrong', async () => {
-    mockOpenAIResponsesCreate.mockRejectedValue(new Error('Not a Responses API endpoint'));
-    mockOpenAIChatCompletionsCreate.mockRejectedValue(new Error('Not a Chat Completions endpoint'));
-    mockAnthropicMessagesCreate.mockResolvedValue({
-      content: [
-        {
-          type: 'text',
-          text: 'pong',
-        },
-      ],
-    });
-
-    const workspace = createWorkspace();
-    let currentWorkspace: Workspace | null = workspace;
-    const ctx = {
-      mainWindow: null,
-      processManager: null,
-      statusPoller: null,
-      viewSwitcher: null,
-      workspaceManager: null,
-      autoSaveManager: null,
-      ptySubscriptionManager: null,
-      gitBranchWatcher: null,
-      currentWorkspace,
-      getCurrentWorkspace: () => currentWorkspace,
-      setCurrentWorkspace: vi.fn((nextWorkspace: Workspace | null) => {
-        currentWorkspace = nextWorkspace;
-      }),
-    } as unknown as HandlerContext;
-
-    registerSettingsHandlers(ctx);
-    const validateHandler = getRegisteredHandler('validate-chat-provider');
-
-    const response = await validateHandler({}, {
-      type: 'openai-compatible',
-      baseUrl: 'https://relay.example.com',
-      apiKey: 'sk-ant-test',
-      model: 'claude-sonnet-4-5',
-    });
-
-    expect(mockOpenAIResponsesCreate).toHaveBeenCalledTimes(1);
-    expect(mockOpenAIChatCompletionsCreate).toHaveBeenCalledTimes(1);
-    expect(mockAnthropicMessagesCreate).toHaveBeenCalledTimes(1);
-    expect(response).toEqual({
-      success: true,
-      data: {
-        resolvedType: 'anthropic',
-        normalizedBaseUrl: 'https://relay.example.com',
-        model: 'claude-sonnet-4-5',
+        detectedModels: [],
+        modelListSupported: false,
+        modelListError: 'Settlement blocked',
       },
     });
   });

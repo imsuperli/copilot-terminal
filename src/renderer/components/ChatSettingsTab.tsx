@@ -3,35 +3,37 @@ import * as Switch from '@radix-ui/react-switch';
 import { Bot, SlidersHorizontal } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import type {
+  ChatProviderValidationResult,
   ChatSettings,
   LLMProviderConfig,
-  LLMProviderType,
-  LLMProviderWireApi,
 } from '../../shared/types/chat';
-import {
-  inferOpenAICompatibleWireApi,
-  resolveLLMProviderWireApi,
-} from '../../shared/utils/chatProvider';
+import { resolveLLMProviderWireApi } from '../../shared/utils/chatProvider';
 import { useI18n } from '../i18n';
 import { notifyWorkspaceSettingsUpdated } from '../utils/settingsEvents';
 import {
   idePopupActionButtonClassName,
-  idePopupBarePanelClassName,
   idePopupEmptyStateClassName,
   idePopupInputClassName,
   idePopupSecondaryButtonClassName,
 } from './ui/ide-popup';
+import { Dialog } from './ui/Dialog';
 import { CompactSettingRow, CompactSettingsSection } from './settings/CompactSettings';
 
-interface ProviderFormState {
+interface ProviderDialogFormState {
   id?: string;
   name: string;
-  type: LLMProviderType;
   baseUrl: string;
-  wireApi: LLMProviderWireApi;
   apiKey: string;
-  modelsText: string;
+  selectedModels: string[];
+  manualModelsText: string;
   defaultModel: string;
+}
+
+interface ProviderDetectionState {
+  isDetecting: boolean;
+  hasAttempted: boolean;
+  result: ChatProviderValidationResult | null;
+  error: string | null;
 }
 
 function normalizeChatSettings(settings: ChatSettings | undefined): ChatSettings {
@@ -43,28 +45,35 @@ function normalizeChatSettings(settings: ChatSettings | undefined): ChatSettings
   };
 }
 
-function createEmptyProviderForm(): ProviderFormState {
+function createEmptyProviderForm(): ProviderDialogFormState {
   return {
     name: '',
-    type: 'anthropic',
     baseUrl: '',
-    wireApi: 'chat-completions',
     apiKey: '',
-    modelsText: '',
+    selectedModels: [],
+    manualModelsText: '',
     defaultModel: '',
   };
 }
 
-function createProviderForm(provider: LLMProviderConfig): ProviderFormState {
+function createProviderForm(provider: LLMProviderConfig): ProviderDialogFormState {
   return {
     id: provider.id,
     name: provider.name,
-    type: provider.type,
     baseUrl: provider.baseUrl ?? '',
-    wireApi: resolveLLMProviderWireApi(provider) ?? 'chat-completions',
     apiKey: provider.apiKey,
-    modelsText: provider.models.join('\n'),
+    selectedModels: provider.models,
+    manualModelsText: provider.models.join('\n'),
     defaultModel: provider.defaultModel,
+  };
+}
+
+function createEmptyDetectionState(): ProviderDetectionState {
+  return {
+    isDetecting: false,
+    hasAttempted: false,
+    result: null,
+    error: null,
   };
 }
 
@@ -94,11 +103,30 @@ export const ChatSettingsTab: React.FC = () => {
   const { t } = useI18n();
   const [chatSettings, setChatSettings] = useState<ChatSettings>(() => normalizeChatSettings(undefined));
   const [loading, setLoading] = useState(true);
-  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
-  const [providerForm, setProviderForm] = useState<ProviderFormState>(() => createEmptyProviderForm());
-  const [formError, setFormError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [providerForm, setProviderForm] = useState<ProviderDialogFormState>(() => createEmptyProviderForm());
+  const [providerDetection, setProviderDetection] = useState<ProviderDetectionState>(() => createEmptyDetectionState());
+  const [formError, setFormError] = useState<string | null>(null);
   const [isSavingProvider, setIsSavingProvider] = useState(false);
+
+  const providers = chatSettings.providers;
+  const activeProvider = useMemo(
+    () => providers.find((provider) => provider.id === chatSettings.activeProviderId) ?? null,
+    [chatSettings.activeProviderId, providers],
+  );
+
+  const inputClassName = `${idePopupInputClassName} !rounded-lg !px-3 !py-2`;
+  const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-9 rounded-lg px-3`;
+  const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-9 min-w-0 rounded-lg px-3`;
+  const emptyStateClassName = `${idePopupEmptyStateClassName} px-5 py-8 text-center`;
+  const mutedBadgeClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]';
+  const compactSwitchRootClassName = 'relative h-6 w-10 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]';
+  const compactSwitchThumbClassName = 'block h-5 w-5 translate-x-0.5 rounded-full bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)] shadow-sm transition-transform data-[state=checked]:translate-x-[18px]';
+  const detectedModels = providerDetection.result?.detectedModels ?? [];
+  const hasDetectedModels = detectedModels.length > 0;
+  const manualModels = parseModels(providerForm.manualModelsText);
+  const resolvedModels = hasDetectedModels ? providerForm.selectedModels : manualModels;
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -139,30 +167,31 @@ export const ChatSettingsTab: React.FC = () => {
     return persistedChatSettings;
   }, [t]);
 
-  const providers = chatSettings.providers;
-  const activeProvider = useMemo(
-    () => providers.find((provider) => provider.id === chatSettings.activeProviderId) ?? null,
-    [chatSettings.activeProviderId, providers],
-  );
-  const barePanelClassName = idePopupBarePanelClassName;
-  const inputClassName = `${idePopupInputClassName} !rounded-lg !px-3 !py-2`;
-  const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} h-9 rounded-lg px-3`;
-  const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} h-9 min-w-0 rounded-lg px-3`;
-  const emptyStateClassName = `${idePopupEmptyStateClassName} px-5 py-8 text-center`;
-  const mutedBadgeClassName = 'rounded-full border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-2 py-0.5 text-[11px] font-medium text-[rgb(var(--muted-foreground))]';
-  const compactSwitchRootClassName = 'relative h-6 w-10 flex-shrink-0 rounded-full bg-[rgb(var(--muted))] transition-colors data-[state=checked]:bg-[rgb(var(--primary))]';
-  const compactSwitchThumbClassName = 'block h-5 w-5 translate-x-0.5 rounded-full bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)] shadow-sm transition-transform data-[state=checked]:translate-x-[18px]';
+  const closeProviderDialog = useCallback(() => {
+    if (isSavingProvider || providerDetection.isDetecting) {
+      return;
+    }
+
+    setDialogOpen(false);
+    setProviderForm(createEmptyProviderForm());
+    setProviderDetection(createEmptyDetectionState());
+    setFormError(null);
+  }, [isSavingProvider, providerDetection.isDetecting]);
 
   const handleAddProvider = useCallback(() => {
-    setEditingProviderId('new');
+    setDialogOpen(true);
     setProviderForm(createEmptyProviderForm());
+    setProviderDetection(createEmptyDetectionState());
     setFormError(null);
+    setSettingsError(null);
   }, []);
 
   const handleEditProvider = useCallback((provider: LLMProviderConfig) => {
-    setEditingProviderId(provider.id);
+    setDialogOpen(true);
     setProviderForm(createProviderForm(provider));
+    setProviderDetection(createEmptyDetectionState());
     setFormError(null);
+    setSettingsError(null);
   }, []);
 
   const handleDeleteProvider = useCallback(async (providerId: string) => {
@@ -177,46 +206,188 @@ export const ChatSettingsTab: React.FC = () => {
 
     try {
       await persistChatSettings(nextSettings);
-
-      if (editingProviderId === providerId) {
-        setEditingProviderId(null);
-        setProviderForm(createEmptyProviderForm());
-        setFormError(null);
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('Failed to delete chat provider:', error);
       setSettingsError(message);
     }
-  }, [chatSettings, editingProviderId, persistChatSettings, providers]);
+  }, [chatSettings, persistChatSettings, providers]);
 
-  const handleSaveProvider = useCallback(async () => {
-    const models = parseModels(providerForm.modelsText);
-    const baseUrl = providerForm.baseUrl.trim();
+  const validateProviderForm = useCallback((requireName: boolean) => {
     const providerName = providerForm.name.trim();
+    const baseUrl = providerForm.baseUrl.trim();
     const apiKey = providerForm.apiKey.trim();
-    const requestedDefaultModel = providerForm.defaultModel.trim();
 
-    if (!providerName || !apiKey || models.length === 0) {
-      setFormError(t('settings.chat.formValidationError'));
-      return;
+    if (requireName && !providerName) {
+      return t('settings.chat.providerNameRequiredError');
     }
 
-    if (providerForm.type === 'openai-compatible' && !baseUrl) {
-      setFormError(t('settings.chat.baseUrlRequiredError'));
-      return;
+    if (!apiKey) {
+      return t('settings.chat.apiKeyRequiredError');
     }
 
     if (baseUrl && !isValidHttpUrl(baseUrl)) {
-      setFormError(t('settings.chat.baseUrlInvalidError'));
-      return;
+      return t('settings.chat.baseUrlInvalidError');
     }
 
     if (isHttpUrl(apiKey)) {
-      setFormError(t('settings.chat.apiKeyInvalidError'));
+      return t('settings.chat.apiKeyInvalidError');
+    }
+
+    return null;
+  }, [providerForm.apiKey, providerForm.baseUrl, providerForm.name, t]);
+
+  const handleProviderFieldChange = useCallback(<K extends keyof ProviderDialogFormState>(
+    field: K,
+    value: ProviderDialogFormState[K],
+  ) => {
+    setProviderForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
+    if (field === 'baseUrl' || field === 'apiKey') {
+      setProviderDetection(createEmptyDetectionState());
+    }
+
+    setFormError(null);
+    setSettingsError(null);
+  }, []);
+
+  const handleManualModelsChange = useCallback((value: string) => {
+    setProviderForm((current) => {
+      const nextModels = parseModels(value);
+      const requestedDefaultModel = current.defaultModel.trim();
+
+      return {
+        ...current,
+        manualModelsText: value,
+        defaultModel: requestedDefaultModel && nextModels.includes(requestedDefaultModel)
+          ? requestedDefaultModel
+          : nextModels[0] ?? '',
+      };
+    });
+    setFormError(null);
+  }, []);
+
+  const handleToggleDetectedModel = useCallback((model: string, checked: boolean) => {
+    setProviderForm((current) => {
+      const nextSelectedModels = checked
+        ? Array.from(new Set([...current.selectedModels, model]))
+        : current.selectedModels.filter((candidate) => candidate !== model);
+      const requestedDefaultModel = current.defaultModel.trim();
+
+      return {
+        ...current,
+        selectedModels: nextSelectedModels,
+        defaultModel: requestedDefaultModel && nextSelectedModels.includes(requestedDefaultModel)
+          ? requestedDefaultModel
+          : nextSelectedModels[0] ?? '',
+      };
+    });
+    setFormError(null);
+  }, []);
+
+  const handleDetectProvider = useCallback(async () => {
+    const validationError = validateProviderForm(false);
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
 
+    setProviderDetection({
+      isDetecting: true,
+      hasAttempted: true,
+      result: null,
+      error: null,
+    });
+    setFormError(null);
+    setSettingsError(null);
+
+    try {
+      const response = await window.electronAPI.validateChatProvider({
+        baseUrl: providerForm.baseUrl.trim() || undefined,
+        apiKey: providerForm.apiKey.trim(),
+      });
+
+      if (!response?.success || !response.data) {
+        throw new Error(response?.error ?? t('settings.chat.validationFailedError'));
+      }
+
+      const detection = response.data;
+      setProviderForm((current) => {
+        if (detection.detectedModels.length === 0) {
+          const currentManualModels = parseModels(current.manualModelsText);
+          const requestedDefaultModel = current.defaultModel.trim();
+
+          return {
+            ...current,
+            baseUrl: detection.normalizedBaseUrl ?? current.baseUrl.trim(),
+            defaultModel: requestedDefaultModel && currentManualModels.includes(requestedDefaultModel)
+              ? requestedDefaultModel
+              : currentManualModels[0] ?? '',
+          };
+        }
+
+        const detectedModelSet = new Set(detection.detectedModels);
+        const preservedModels = current.selectedModels.filter((model) => detectedModelSet.has(model));
+        const nextSelectedModels = preservedModels.length > 0
+          ? preservedModels
+          : detection.detectedModels;
+        const requestedDefaultModel = current.defaultModel.trim();
+
+        return {
+          ...current,
+          baseUrl: detection.normalizedBaseUrl ?? current.baseUrl.trim(),
+          selectedModels: nextSelectedModels,
+          defaultModel: requestedDefaultModel && nextSelectedModels.includes(requestedDefaultModel)
+            ? requestedDefaultModel
+            : nextSelectedModels[0] ?? '',
+        };
+      });
+      setProviderDetection({
+        isDetecting: false,
+        hasAttempted: true,
+        result: detection,
+        error: null,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to detect chat provider:', error);
+      setProviderDetection({
+        isDetecting: false,
+        hasAttempted: true,
+        result: null,
+        error: message,
+      });
+      setFormError(message);
+    }
+  }, [providerForm.apiKey, providerForm.baseUrl, t, validateProviderForm]);
+
+  const handleSaveProvider = useCallback(async () => {
+    const validationError = validateProviderForm(true);
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
+    if (!providerDetection.result) {
+      setFormError(t('settings.chat.detectRequiredError'));
+      return;
+    }
+
+    const providerName = providerForm.name.trim();
+    const apiKey = providerForm.apiKey.trim();
+    const models = hasDetectedModels
+      ? providerForm.selectedModels
+      : parseModels(providerForm.manualModelsText);
+
+    if (models.length === 0) {
+      setFormError(t('settings.chat.modelsRequiredError'));
+      return;
+    }
+
+    const requestedDefaultModel = providerForm.defaultModel.trim();
     const defaultModel = requestedDefaultModel && models.includes(requestedDefaultModel)
       ? requestedDefaultModel
       : models[0];
@@ -227,8 +398,8 @@ export const ChatSettingsTab: React.FC = () => {
 
     try {
       const validationResponse = await window.electronAPI.validateChatProvider({
-        type: providerForm.type,
-        baseUrl: baseUrl || undefined,
+        type: providerDetection.result.resolvedType,
+        baseUrl: (providerDetection.result.normalizedBaseUrl ?? providerForm.baseUrl.trim()) || undefined,
         apiKey,
         model: defaultModel,
       });
@@ -245,17 +416,10 @@ export const ChatSettingsTab: React.FC = () => {
             ?? resolveLLMProviderWireApi({
               type: resolvedType,
               baseUrl: resolvedBaseUrl,
-              wireApi: providerForm.wireApi,
+              wireApi: providerDetection.result.resolvedWireApi,
             })
           )
         : undefined;
-
-      setProviderForm((current) => ({
-        ...current,
-        type: resolvedType,
-        baseUrl: resolvedBaseUrl ?? '',
-        wireApi: resolvedWireApi ?? current.wireApi,
-      }));
 
       const providerId = providerForm.id ?? uuidv4();
       const nextProvider: LLMProviderConfig = {
@@ -281,9 +445,7 @@ export const ChatSettingsTab: React.FC = () => {
       };
 
       await persistChatSettings(nextSettings);
-      setEditingProviderId(null);
-      setProviderForm(createEmptyProviderForm());
-      setFormError(null);
+      closeProviderDialog();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('Failed to save chat provider:', error);
@@ -291,34 +453,23 @@ export const ChatSettingsTab: React.FC = () => {
     } finally {
       setIsSavingProvider(false);
     }
-  }, [chatSettings, persistChatSettings, providerForm, providers, t]);
-
-  const handleProviderFieldChange = useCallback(<K extends keyof ProviderFormState>(field: K, value: ProviderFormState[K]) => {
-    setProviderForm((current) => {
-      const next = {
-        ...current,
-        [field]: value,
-      };
-
-      if (field === 'baseUrl' && current.type === 'openai-compatible') {
-        return {
-          ...next,
-          wireApi: inferOpenAICompatibleWireApi(String(value)) ?? current.wireApi,
-        };
-      }
-
-      if (field === 'type' && value === 'openai-compatible') {
-        return {
-          ...next,
-          wireApi: inferOpenAICompatibleWireApi(current.baseUrl) ?? current.wireApi,
-        };
-      }
-
-      return next;
-    });
-    setFormError(null);
-    setSettingsError(null);
-  }, []);
+  }, [
+    chatSettings,
+    closeProviderDialog,
+    hasDetectedModels,
+    persistChatSettings,
+    providerDetection.result,
+    providerForm.apiKey,
+    providerForm.baseUrl,
+    providerForm.defaultModel,
+    providerForm.id,
+    providerForm.manualModelsText,
+    providerForm.name,
+    providerForm.selectedModels,
+    providers,
+    t,
+    validateProviderForm,
+  ]);
 
   const handleSystemPromptBlur = useCallback(async (event: React.FocusEvent<HTMLTextAreaElement>) => {
     try {
@@ -429,234 +580,299 @@ export const ChatSettingsTab: React.FC = () => {
             ))
           )}
         </div>
-
-        {editingProviderId && (
-          <div className={`mt-4 overflow-hidden ${barePanelClassName} !p-0`}>
-            <div className="flex min-h-[42px] flex-wrap items-center justify-between gap-3 border-b border-[rgb(var(--border))] px-4 py-2">
-              <h4 className="text-sm font-semibold text-[rgb(var(--foreground))]">
-                {editingProviderId === 'new'
-                  ? t('settings.chat.addProviderTitle')
-                  : t('settings.chat.editProviderTitle')}
-              </h4>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (isSavingProvider) {
-                    return;
-                  }
-
-                  setEditingProviderId(null);
-                  setProviderForm(createEmptyProviderForm());
-                  setFormError(null);
-                }}
-                disabled={isSavingProvider}
-                className="text-sm text-[rgb(var(--muted-foreground))] transition-colors hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {t('common.cancel')}
-              </button>
-            </div>
-
-            <div className="divide-y divide-[rgb(var(--border))]">
-              <CompactSettingRow
-                label={t('settings.chat.providerNameLabel')}
-                htmlFor="chat-provider-name"
-              >
-                <input
-                  id="chat-provider-name"
-                  value={providerForm.name}
-                  onChange={(event) => handleProviderFieldChange('name', event.target.value)}
-                  placeholder={t('settings.chat.providerNamePlaceholder')}
-                  className={`max-w-[520px] ${inputClassName}`}
-                />
-              </CompactSettingRow>
-
-              <CompactSettingRow
-                label={t('settings.chat.providerTypeLabel')}
-                htmlFor="chat-provider-type"
-              >
-                <select
-                  id="chat-provider-type"
-                  value={providerForm.type}
-                  onChange={(event) => handleProviderFieldChange('type', event.target.value as LLMProviderType)}
-                  className={`max-w-[320px] ${inputClassName}`}
-                >
-                  <option value="anthropic">{t('settings.chat.providerTypeAnthropic')}</option>
-                  <option value="openai-compatible">{t('settings.chat.providerTypeOpenAICompatible')}</option>
-                </select>
-              </CompactSettingRow>
-
-              <CompactSettingRow
-                label={t('settings.chat.baseUrlLabel')}
-                help={providerForm.type === 'anthropic' ? t('settings.chat.baseUrlAnthropicHint') : undefined}
-                htmlFor="chat-provider-base-url"
-              >
-                <input
-                  id="chat-provider-base-url"
-                  value={providerForm.baseUrl}
-                  onChange={(event) => handleProviderFieldChange('baseUrl', event.target.value)}
-                  placeholder={providerForm.type === 'anthropic'
-                    ? 'https://api.anthropic.com (默认)'
-                    : t('settings.chat.baseUrlPlaceholder')}
-                  className={`max-w-[520px] ${inputClassName}`}
-                />
-              </CompactSettingRow>
-
-              <CompactSettingRow
-                label={t('settings.chat.apiKeyLabel')}
-                htmlFor="chat-provider-api-key"
-              >
-                <input
-                  id="chat-provider-api-key"
-                  value={providerForm.apiKey}
-                  onChange={(event) => handleProviderFieldChange('apiKey', event.target.value)}
-                  placeholder={t('settings.chat.apiKeyPlaceholder')}
-                  className={`max-w-[520px] ${inputClassName}`}
-                />
-              </CompactSettingRow>
-
-              {providerForm.type === 'openai-compatible' && (
-                <CompactSettingRow
-                  label={t('settings.chat.protocolLabel')}
-                  help={t('settings.chat.protocolAutoHint')}
-                  disabled
-                  htmlFor="chat-provider-wire-api"
-                >
-                  <select
-                    id="chat-provider-wire-api"
-                    value={providerForm.wireApi}
-                    disabled
-                    className={`max-w-[320px] ${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
-                  >
-                    <option value="chat-completions">{t('settings.chat.protocolChatCompletions')}</option>
-                    <option value="responses">{t('settings.chat.protocolResponses')}</option>
-                  </select>
-                </CompactSettingRow>
-              )}
-
-              <CompactSettingRow
-                label={t('settings.chat.modelsLabel')}
-                help={t('settings.chat.modelsHint')}
-                htmlFor="chat-provider-models"
-                controlClassName="items-stretch"
-              >
-                <textarea
-                  id="chat-provider-models"
-                  value={providerForm.modelsText}
-                  onChange={(event) => handleProviderFieldChange('modelsText', event.target.value)}
-                  placeholder={t('settings.chat.modelsPlaceholder')}
-                  className={`min-h-[96px] max-w-[520px] ${inputClassName} leading-6`}
-                />
-              </CompactSettingRow>
-
-              <CompactSettingRow
-                label={t('settings.chat.defaultModelLabel')}
-                help={t('settings.chat.defaultModelPlaceholder')}
-                htmlFor="chat-provider-default-model"
-              >
-                <input
-                  id="chat-provider-default-model"
-                  value={providerForm.defaultModel}
-                  onChange={(event) => handleProviderFieldChange('defaultModel', event.target.value)}
-                  placeholder={t('settings.chat.defaultModelPlaceholder')}
-                  className={`max-w-[520px] ${inputClassName}`}
-                />
-              </CompactSettingRow>
-            </div>
-
-            {formError && (
-              <p className="px-4 pt-3 text-sm text-[rgb(var(--error))]">{formError}</p>
-            )}
-
-            <div className="flex justify-end px-4 py-3">
-              <button
-                type="button"
-                onClick={() => {
-                  void handleSaveProvider();
-                }}
-                disabled={isSavingProvider}
-                className={primaryButtonClassName}
-              >
-                {isSavingProvider ? t('common.validating') : t('common.save')}
-              </button>
-            </div>
-          </div>
-        )}
       </CompactSettingsSection>
+
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeProviderDialog();
+          }
+        }}
+        title={providerForm.id ? t('settings.chat.editProviderTitle') : t('settings.chat.addProviderTitle')}
+        description={t('settings.chat.providerDialogDescription')}
+        contentClassName="max-w-3xl"
+        showCloseButton
+        closeLabel={t('common.close')}
+      >
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-[14px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)]">
+            <CompactSettingRow
+              label={t('settings.chat.providerNameLabel')}
+              htmlFor="chat-provider-name"
+            >
+              <input
+                id="chat-provider-name"
+                value={providerForm.name}
+                onChange={(event) => handleProviderFieldChange('name', event.target.value)}
+                placeholder={t('settings.chat.providerNamePlaceholder')}
+                className={`max-w-[520px] ${inputClassName}`}
+              />
+            </CompactSettingRow>
+
+            <CompactSettingRow
+              label={t('settings.chat.baseUrlLabel')}
+              help={t('settings.chat.baseUrlAutoHint')}
+              htmlFor="chat-provider-base-url"
+            >
+              <input
+                id="chat-provider-base-url"
+                value={providerForm.baseUrl}
+                onChange={(event) => handleProviderFieldChange('baseUrl', event.target.value)}
+                placeholder={t('settings.chat.baseUrlPlaceholder')}
+                className={`max-w-[520px] ${inputClassName}`}
+              />
+            </CompactSettingRow>
+
+            <CompactSettingRow
+              label={t('settings.chat.apiKeyLabel')}
+              htmlFor="chat-provider-api-key"
+            >
+              <input
+                id="chat-provider-api-key"
+                value={providerForm.apiKey}
+                onChange={(event) => handleProviderFieldChange('apiKey', event.target.value)}
+                placeholder={t('settings.chat.apiKeyPlaceholder')}
+                className={`max-w-[520px] ${inputClassName}`}
+              />
+            </CompactSettingRow>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                void handleDetectProvider();
+              }}
+              disabled={providerDetection.isDetecting || isSavingProvider}
+              className={secondaryButtonClassName}
+            >
+              {providerDetection.isDetecting ? t('settings.chat.detectingProvider') : t('settings.chat.detectProvider')}
+            </button>
+          </div>
+
+          {providerDetection.result && (
+            <div className="space-y-4">
+              <div className="rounded-[14px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_78%,transparent)] px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-[rgb(var(--foreground))]">{t('settings.chat.detectedSummaryTitle')}</span>
+                  <span className={mutedBadgeClassName}>
+                    {providerDetection.result.resolvedType === 'anthropic'
+                      ? t('settings.chat.providerTypeAnthropic')
+                      : t('settings.chat.providerTypeOpenAICompatible')}
+                  </span>
+                  {providerDetection.result.resolvedType === 'openai-compatible' && providerDetection.result.resolvedWireApi && (
+                    <span className={mutedBadgeClassName}>
+                      {providerDetection.result.resolvedWireApi === 'responses'
+                        ? t('settings.chat.protocolResponses')
+                        : t('settings.chat.protocolChatCompletions')}
+                    </span>
+                  )}
+                </div>
+                {providerDetection.result.normalizedBaseUrl && (
+                  <p className="mt-2 break-all font-mono text-xs text-[rgb(var(--muted-foreground))]">
+                    {providerDetection.result.normalizedBaseUrl}
+                  </p>
+                )}
+              </div>
+
+              {hasDetectedModels ? (
+                <div className="overflow-hidden rounded-[14px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)]">
+                  <CompactSettingRow
+                    label={t('settings.chat.detectedModelsLabel')}
+                    help={t('settings.chat.detectedModelsHint')}
+                    controlClassName="items-stretch"
+                  >
+                    <div className="w-full max-w-[520px] space-y-3">
+                      <div className="max-h-[240px] overflow-auto rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--background))]/40 p-2">
+                        <div className="space-y-1.5">
+                          {detectedModels.map((model) => {
+                            const checked = providerForm.selectedModels.includes(model);
+
+                            return (
+                              <label
+                                key={model}
+                                className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm text-[rgb(var(--foreground))] transition-colors hover:bg-[rgb(var(--accent))]"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) => handleToggleDetectedModel(model, event.target.checked)}
+                                  className="h-4 w-4 rounded border-[rgb(var(--border))]"
+                                />
+                                <span className="min-w-0 break-all">{model}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <select
+                        aria-label={t('settings.chat.defaultModelLabel')}
+                        value={providerForm.defaultModel}
+                        onChange={(event) => handleProviderFieldChange('defaultModel', event.target.value)}
+                        className={`w-full ${inputClassName}`}
+                      >
+                        {resolvedModels.length === 0 ? (
+                          <option value="">{t('settings.chat.defaultModelPlaceholder')}</option>
+                        ) : (
+                          resolvedModels.map((model) => (
+                            <option key={model} value={model}>{model}</option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                  </CompactSettingRow>
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-[14px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)]">
+                  {providerDetection.result.modelListError && (
+                    <div className="border-b border-[rgb(var(--border))] px-4 py-3 text-sm leading-6 text-[rgb(var(--muted-foreground))]">
+                      {t('settings.chat.modelListUnavailable', { error: providerDetection.result.modelListError })}
+                    </div>
+                  )}
+
+                  <CompactSettingRow
+                    label={t('settings.chat.manualModelsFallbackLabel')}
+                    help={t('settings.chat.manualModelsFallbackHint')}
+                    htmlFor="chat-provider-models"
+                    controlClassName="items-stretch"
+                  >
+                    <textarea
+                      id="chat-provider-models"
+                      value={providerForm.manualModelsText}
+                      onChange={(event) => handleManualModelsChange(event.target.value)}
+                      placeholder={t('settings.chat.modelsPlaceholder')}
+                      className={`min-h-[108px] max-w-[520px] ${inputClassName} leading-6`}
+                    />
+                  </CompactSettingRow>
+
+                  <CompactSettingRow
+                    label={t('settings.chat.defaultModelLabel')}
+                    help={t('settings.chat.defaultModelPlaceholder')}
+                    htmlFor="chat-provider-default-model"
+                  >
+                    <input
+                      id="chat-provider-default-model"
+                      value={providerForm.defaultModel}
+                      onChange={(event) => handleProviderFieldChange('defaultModel', event.target.value)}
+                      placeholder={t('settings.chat.defaultModelPlaceholder')}
+                      className={`max-w-[520px] ${inputClassName}`}
+                    />
+                  </CompactSettingRow>
+                </div>
+              )}
+            </div>
+          )}
+
+          {providerDetection.hasAttempted && providerDetection.error && (
+            <div className="rounded-xl border border-[rgb(var(--error)/0.2)] bg-[rgb(var(--error)/0.08)] px-4 py-3 text-sm text-[rgb(var(--error))]">
+              {providerDetection.error}
+            </div>
+          )}
+
+          {formError && !providerDetection.error && (
+            <div className="rounded-xl border border-[rgb(var(--error)/0.2)] bg-[rgb(var(--error)/0.08)] px-4 py-3 text-sm text-[rgb(var(--error))]">
+              {formError}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={closeProviderDialog}
+              disabled={isSavingProvider || providerDetection.isDetecting}
+              className={secondaryButtonClassName}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleSaveProvider();
+              }}
+              disabled={isSavingProvider || providerDetection.isDetecting}
+              className={primaryButtonClassName}
+            >
+              {isSavingProvider ? t('common.validating') : t('common.save')}
+            </button>
+          </div>
+        </div>
+      </Dialog>
 
       <CompactSettingsSection
         title={t('settings.chat.defaultsTitle')}
         help={t('settings.chat.defaultsDescription')}
         icon={<SlidersHorizontal size={15} />}
       >
-          <CompactSettingRow
-            label={t('settings.chat.activeProviderLabel')}
-            htmlFor="chat-active-provider"
+        <CompactSettingRow
+          label={t('settings.chat.activeProviderLabel')}
+          htmlFor="chat-active-provider"
+        >
+          <select
+            id="chat-active-provider"
+            aria-label={t('settings.chat.activeProviderLabel')}
+            value={chatSettings.activeProviderId ?? ''}
+            onChange={(event) => {
+              void persistChatSettings({
+                ...chatSettings,
+                activeProviderId: event.target.value || undefined,
+              }).catch((error) => {
+                const message = error instanceof Error ? error.message : String(error);
+                console.error('Failed to update active chat provider:', error);
+                setSettingsError(message);
+              });
+            }}
+            className={inputClassName}
           >
-            <select
-              id="chat-active-provider"
-              aria-label={t('settings.chat.activeProviderLabel')}
-              value={chatSettings.activeProviderId ?? ''}
-              onChange={(event) => {
-                void persistChatSettings({
-                  ...chatSettings,
-                  activeProviderId: event.target.value || undefined,
-                }).catch((error) => {
-                  const message = error instanceof Error ? error.message : String(error);
-                  console.error('Failed to update active chat provider:', error);
-                  setSettingsError(message);
-                });
-              }}
-              className={inputClassName}
-            >
-              <option value="">{t('settings.chat.activeProviderPlaceholder')}</option>
-              {providers.map((provider) => (
-                <option key={provider.id} value={provider.id}>{provider.name}</option>
-              ))}
-            </select>
-          </CompactSettingRow>
+            <option value="">{t('settings.chat.activeProviderPlaceholder')}</option>
+            {providers.map((provider) => (
+              <option key={provider.id} value={provider.id}>{provider.name}</option>
+            ))}
+          </select>
+        </CompactSettingRow>
 
-          <CompactSettingRow
-            label={t('settings.chat.commandSecurityTitle')}
-            help={t('settings.chat.commandSecurityDescription')}
+        <CompactSettingRow
+          label={t('settings.chat.commandSecurityTitle')}
+          help={t('settings.chat.commandSecurityDescription')}
+        >
+          <Switch.Root
+            checked={chatSettings.enableCommandSecurity ?? true}
+            onCheckedChange={(checked) => {
+              void persistChatSettings({
+                ...chatSettings,
+                enableCommandSecurity: checked,
+              }).catch((error) => {
+                const message = error instanceof Error ? error.message : String(error);
+                console.error('Failed to update chat command security setting:', error);
+                setSettingsError(message);
+              });
+            }}
+            aria-label={t('settings.chat.commandSecurityTitle')}
+            className={compactSwitchRootClassName}
           >
-              <Switch.Root
-                checked={chatSettings.enableCommandSecurity ?? true}
-                onCheckedChange={(checked) => {
-                  void persistChatSettings({
-                    ...chatSettings,
-                    enableCommandSecurity: checked,
-                  }).catch((error) => {
-                    const message = error instanceof Error ? error.message : String(error);
-                    console.error('Failed to update chat command security setting:', error);
-                    setSettingsError(message);
-                  });
-                }}
-                aria-label={t('settings.chat.commandSecurityTitle')}
-                className={compactSwitchRootClassName}
-              >
-                <Switch.Thumb className={compactSwitchThumbClassName} />
-              </Switch.Root>
-          </CompactSettingRow>
+            <Switch.Thumb className={compactSwitchThumbClassName} />
+          </Switch.Root>
+        </CompactSettingRow>
 
-          <CompactSettingRow
-            label={t('settings.chat.systemPromptLabel')}
-            help={t('settings.chat.systemPromptPlaceholder')}
-            controlClassName="items-stretch"
-          >
-            <textarea
-              value={chatSettings.defaultSystemPrompt ?? ''}
-              onChange={(event) => {
-                setChatSettings((current) => ({
-                  ...current,
-                  defaultSystemPrompt: event.target.value,
-                }));
-              }}
-              onBlur={handleSystemPromptBlur}
-              placeholder={t('settings.chat.systemPromptPlaceholder')}
-              className={`min-h-[120px] max-w-[680px] ${inputClassName} leading-6`}
-            />
-          </CompactSettingRow>
+        <CompactSettingRow
+          label={t('settings.chat.systemPromptLabel')}
+          help={t('settings.chat.systemPromptPlaceholder')}
+          controlClassName="items-stretch"
+        >
+          <textarea
+            value={chatSettings.defaultSystemPrompt ?? ''}
+            onChange={(event) => {
+              setChatSettings((current) => ({
+                ...current,
+                defaultSystemPrompt: event.target.value,
+              }));
+            }}
+            onBlur={handleSystemPromptBlur}
+            placeholder={t('settings.chat.systemPromptPlaceholder')}
+            className={`min-h-[120px] max-w-[680px] ${inputClassName} leading-6`}
+          />
+        </CompactSettingRow>
       </CompactSettingsSection>
     </div>
   );

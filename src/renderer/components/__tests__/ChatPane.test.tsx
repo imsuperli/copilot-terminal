@@ -1789,8 +1789,8 @@ describe('ChatPane', () => {
     expect(selector).toHaveClass('leading-5');
     expect(selector).not.toHaveClass('pl-9');
     expect(selector.closest('label')).toHaveClass('sm:w-fit');
-    expect(selector.closest('label')).toHaveClass('sm:max-w-[220px]');
-    expect(selector.closest('label')).not.toHaveClass('sm:min-w-[180px]');
+    expect(selector.closest('label')).toHaveClass('sm:min-w-[220px]');
+    expect(selector.closest('label')).toHaveClass('sm:max-w-[280px]');
   });
 
   it('renders reasoning and command output blocks from the structured agent timeline', async () => {

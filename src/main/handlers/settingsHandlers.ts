@@ -15,6 +15,7 @@ import type {
   ChatProviderValidationResult,
   ChatSettings,
   LLMProviderConfig,
+  LLMProviderType,
   LLMProviderWireApi,
 } from '../../shared/types/chat';
 import type { Settings, Workspace } from '../types/workspace';
@@ -27,6 +28,12 @@ const PROVIDER_VALIDATION_TIMEOUT_MS = 15000;
 interface ProviderValidationAttempt {
   label: string;
   run: () => Promise<ChatProviderValidationResult>;
+}
+
+interface DetectedProviderDetails {
+  resolvedType: LLMProviderType;
+  resolvedWireApi?: LLMProviderWireApi;
+  normalizedBaseUrl?: string;
 }
 
 /**
@@ -374,16 +381,12 @@ async function validateChatProviderConfig(
   payload: ChatProviderValidationRequest,
 ): Promise<ChatProviderValidationResult> {
   const apiKey = payload.apiKey.trim();
-  const model = payload.model.trim();
+  const model = payload.model?.trim();
   const normalizedBaseUrl = normalizeBaseUrl(payload.baseUrl);
   const attempts: ProviderValidationAttempt[] = [];
 
   if (!apiKey) {
     throw new Error('API Key 不能为空。');
-  }
-
-  if (!model) {
-    throw new Error('至少需要填写一条模型名，才能自动验证当前配置。');
   }
 
   if (payload.type === 'openai-compatible' && !normalizedBaseUrl) {
@@ -402,10 +405,19 @@ async function validateChatProviderConfig(
       return;
     }
 
+    const allowModelListFallback = payload.type === 'openai-compatible'
+      || inferOpenAICompatibleWireApi(normalizedBaseUrl) !== null;
+
     for (const wireApi of buildOpenAIWireApiProbeOrder(normalizedBaseUrl)) {
       attempts.push({
         label: wireApi === 'responses' ? 'Responses API' : 'Chat Completions',
-        run: () => probeOpenAICompatibleProvider(apiKey, model, normalizedBaseUrl, wireApi),
+        run: () => probeOpenAICompatibleProvider(
+          apiKey,
+          model,
+          normalizedBaseUrl,
+          wireApi,
+          allowModelListFallback,
+        ),
       });
     }
   };
@@ -413,9 +425,16 @@ async function validateChatProviderConfig(
   if (payload.type === 'anthropic') {
     addAnthropicAttempt();
     addOpenAIAttempts();
-  } else {
+  } else if (payload.type === 'openai-compatible') {
     addOpenAIAttempts();
     if (normalizedBaseUrl) {
+      addAnthropicAttempt();
+    }
+  } else {
+    if (normalizedBaseUrl) {
+      addOpenAIAttempts();
+      addAnthropicAttempt();
+    } else {
       addAnthropicAttempt();
     }
   }
@@ -424,7 +443,26 @@ async function validateChatProviderConfig(
 
   for (const attempt of attempts) {
     try {
-      return await attempt.run();
+      const detection = await attempt.run();
+      const modelDiscovery = model
+        ? await discoverProviderModels(apiKey, detection)
+        : {
+            detectedModels: detection.detectedModels,
+            modelListSupported: detection.modelListSupported,
+            modelListError: detection.modelListError,
+          };
+
+      if (model) {
+        await verifyProviderModel(apiKey, detection, model);
+      }
+
+      return {
+        ...detection,
+        model,
+        detectedModels: modelDiscovery.detectedModels,
+        modelListSupported: modelDiscovery.modelListSupported,
+        modelListError: modelDiscovery.modelListError,
+      };
     } catch (error) {
       failureReasons.push(`${attempt.label}: ${formatProviderValidationError(error)}`);
     }
@@ -439,9 +477,123 @@ async function validateChatProviderConfig(
 
 async function probeAnthropicProvider(
   apiKey: string,
-  model: string,
+  model: string | undefined,
   baseUrl?: string,
 ): Promise<ChatProviderValidationResult> {
+  if (model) {
+    await runAnthropicValidationRequest(apiKey, model, baseUrl);
+
+    return {
+      resolvedType: 'anthropic',
+      normalizedBaseUrl: baseUrl,
+      detectedModels: [],
+      modelListSupported: false,
+    };
+  }
+
+  const detectedModels = await listAnthropicModels(apiKey, baseUrl);
+
+  return {
+    resolvedType: 'anthropic',
+    normalizedBaseUrl: baseUrl,
+    detectedModels,
+    modelListSupported: true,
+  };
+}
+
+async function probeOpenAICompatibleProvider(
+  apiKey: string,
+  model: string | undefined,
+  baseUrl: string,
+  wireApi: LLMProviderWireApi,
+  allowModelListFallback: boolean,
+): Promise<ChatProviderValidationResult> {
+  if (model) {
+    await runOpenAIValidationRequest(apiKey, model, baseUrl, wireApi);
+
+    return {
+      resolvedType: 'openai-compatible',
+      resolvedWireApi: wireApi,
+      normalizedBaseUrl: baseUrl,
+      detectedModels: [],
+      modelListSupported: false,
+    };
+  }
+
+  try {
+    const detectedModels = await listOpenAICompatibleModels(apiKey, baseUrl);
+
+    return {
+      resolvedType: 'openai-compatible',
+      resolvedWireApi: wireApi,
+      normalizedBaseUrl: baseUrl,
+      detectedModels,
+      modelListSupported: true,
+    };
+  } catch (error) {
+    if (!allowModelListFallback) {
+      throw error;
+    }
+
+    return {
+      resolvedType: 'openai-compatible',
+      resolvedWireApi: wireApi,
+      normalizedBaseUrl: baseUrl,
+      detectedModels: [],
+      modelListSupported: false,
+      modelListError: formatProviderValidationError(error),
+    };
+  }
+}
+
+async function discoverProviderModels(
+  apiKey: string,
+  detection: DetectedProviderDetails,
+): Promise<Pick<ChatProviderValidationResult, 'detectedModels' | 'modelListSupported' | 'modelListError'>> {
+  try {
+    const detectedModels = detection.resolvedType === 'anthropic'
+      ? await listAnthropicModels(apiKey, detection.normalizedBaseUrl)
+      : await listOpenAICompatibleModels(apiKey, detection.normalizedBaseUrl);
+
+    return {
+      detectedModels,
+      modelListSupported: true,
+    };
+  } catch (error) {
+    return {
+      detectedModels: [],
+      modelListSupported: false,
+      modelListError: formatProviderValidationError(error),
+    };
+  }
+}
+
+async function verifyProviderModel(
+  apiKey: string,
+  detection: DetectedProviderDetails,
+  model: string,
+): Promise<void> {
+  if (!model) {
+    throw new Error('至少需要填写一条模型名，才能自动验证当前配置。');
+  }
+
+  if (detection.resolvedType === 'anthropic') {
+    await runAnthropicValidationRequest(apiKey, model, detection.normalizedBaseUrl);
+    return;
+  }
+
+  if (!detection.normalizedBaseUrl || !detection.resolvedWireApi) {
+    throw new Error('OpenAI-Compatible Provider 缺少可验证的 Base URL 或协议。');
+  }
+
+  await runOpenAIValidationRequest(apiKey, model, detection.normalizedBaseUrl, detection.resolvedWireApi);
+}
+
+async function runAnthropicValidationRequest(
+  apiKey: string,
+  model: string,
+  baseUrl?: string,
+): Promise<void> {
   const client = new Anthropic({
     apiKey,
     baseURL: baseUrl,
@@ -462,20 +614,14 @@ async function probeAnthropicProvider(
   if (!text) {
     throw new Error('Anthropic 接口返回成功，但没有任何文本内容。');
   }
-
-  return {
-    resolvedType: 'anthropic',
-    normalizedBaseUrl: baseUrl,
-    model,
-  };
 }
 
-async function probeOpenAICompatibleProvider(
+async function runOpenAIValidationRequest(
   apiKey: string,
   model: string,
   baseUrl: string,
   wireApi: LLMProviderWireApi,
-): Promise<ChatProviderValidationResult> {
+): Promise<void> {
   const client = new OpenAI({
     apiKey,
     baseURL: baseUrl,
@@ -496,31 +642,58 @@ async function probeOpenAICompatibleProvider(
     if (!text) {
       throw new Error('Responses API 返回成功，但没有任何文本内容。');
     }
-  } else {
-    const response = await client.chat.completions.create({
-      model,
-      messages: [
-        {
-          role: 'user',
-          content: PROVIDER_VALIDATION_PROMPT,
-        },
-      ],
-      max_tokens: 16,
-      stream: false,
-    }, { signal });
 
-    const text = extractChatCompletionsValidationText(response);
-    if (!text) {
-      throw new Error('Chat Completions 返回成功，但没有任何文本内容。');
-    }
+    return;
   }
 
-  return {
-    resolvedType: 'openai-compatible',
-    resolvedWireApi: wireApi,
-    normalizedBaseUrl: baseUrl,
+  const response = await client.chat.completions.create({
     model,
-  };
+    messages: [
+      {
+        role: 'user',
+        content: PROVIDER_VALIDATION_PROMPT,
+      },
+    ],
+    max_tokens: 16,
+    stream: false,
+  }, { signal });
+
+  const text = extractChatCompletionsValidationText(response);
+  if (!text) {
+    throw new Error('Chat Completions 返回成功，但没有任何文本内容。');
+  }
+}
+
+async function listAnthropicModels(apiKey: string, baseUrl?: string): Promise<string[]> {
+  const client = new Anthropic({
+    apiKey,
+    baseURL: baseUrl,
+  });
+
+  const response = await client.models.list({}, {
+    signal: AbortSignal.timeout(PROVIDER_VALIDATION_TIMEOUT_MS),
+  });
+
+  return Array.from(new Set(response.data.map((model) => model.id).filter(Boolean)));
+}
+
+async function listOpenAICompatibleModels(apiKey: string, baseUrl?: string): Promise<string[]> {
+  if (!baseUrl) {
+    return [];
+  }
+
+  const client = new OpenAI({
+    apiKey,
+    baseURL: baseUrl,
+    timeout: PROVIDER_VALIDATION_TIMEOUT_MS,
+    maxRetries: 0,
+  });
+
+  const response = await client.models.list({
+    signal: AbortSignal.timeout(PROVIDER_VALIDATION_TIMEOUT_MS),
+  });
+
+  return Array.from(new Set(response.data.map((model) => model.id).filter(Boolean)));
 }
 
 function extractAnthropicValidationText(response: Anthropic.Message): string {

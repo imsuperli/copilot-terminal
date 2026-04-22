@@ -282,7 +282,15 @@ Object.defineProperty(window, 'electronAPI', {
     offViewChanged: vi.fn(),
     getSettings: vi.fn().mockResolvedValue({ success: true, data: { language: 'zh-CN', ides: [], quickNav: { items: [] }, terminal: { useBundledConptyDll: false, defaultShellProgram: '' }, features: { sshEnabled: true }, chat: { providers: [], enableCommandSecurity: true } } }),
     updateSettings: vi.fn().mockResolvedValue({ success: true, data: {} }),
-    validateChatProvider: vi.fn().mockResolvedValue({ success: true, data: { resolvedType: 'anthropic', model: 'claude-sonnet-4-5' } }),
+    validateChatProvider: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        resolvedType: 'anthropic',
+        model: 'claude-sonnet-4-5',
+        detectedModels: ['claude-sonnet-4-5'],
+        modelListSupported: true,
+      },
+    }),
     getAvailableShells: vi.fn().mockResolvedValue({ success: true, data: [
       { command: 'pwsh.exe', path: 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', isDefault: true },
       { command: 'powershell.exe', path: 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', isDefault: false },

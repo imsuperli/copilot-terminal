@@ -1715,13 +1715,14 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               className="max-h-[168px] min-h-[72px] w-full resize-none bg-transparent px-2 py-1.5 text-[14px] leading-6 text-[rgb(var(--foreground))] outline-none placeholder:text-[rgb(var(--muted-foreground))] disabled:cursor-not-allowed disabled:opacity-60"
             />
 
-            <div className="mt-2.5 flex flex-wrap items-center justify-end gap-2">
+            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 flex-1 items-center justify-start">
                 <ControlSelect
                   ariaLabel={t('chatPane.providerModelLabel')}
                   value={selectedProviderModelValue}
                   onChange={handleProviderModelChange}
                   disabled={!providers.length}
-                  minWidthClass="w-full sm:w-fit sm:max-w-[220px]"
+                  minWidthClass="w-full sm:w-fit sm:min-w-[220px] sm:max-w-[280px]"
                 >
                   <option value="">{t('chatPane.providerModelPlaceholder')}</option>
                   {providerModelOptions.map((option) => (
@@ -1730,7 +1731,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     </option>
                   ))}
                 </ControlSelect>
+              </div>
 
+              <div className="flex items-center justify-end">
                 {isBusy ? (
                   <button
                     type="button"
@@ -1755,6 +1758,7 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                     {t('chatPane.send')}
                   </button>
                 )}
+              </div>
             </div>
           </div>
         </div>

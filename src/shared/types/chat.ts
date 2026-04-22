@@ -35,17 +35,20 @@ export interface ChatSettings {
 }
 
 export interface ChatProviderValidationRequest {
-  type: LLMProviderType;
+  type?: LLMProviderType;
   baseUrl?: string;
   apiKey: string;
-  model: string;
+  model?: string;
 }
 
 export interface ChatProviderValidationResult {
   resolvedType: LLMProviderType;
   resolvedWireApi?: LLMProviderWireApi;
   normalizedBaseUrl?: string;
-  model: string;
+  model?: string;
+  detectedModels: string[];
+  modelListSupported: boolean;
+  modelListError?: string;
 }
 
 // ─── Tool 定义 ────────────────────────────────────────────────────────────────
