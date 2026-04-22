@@ -553,7 +553,7 @@ export function AgentTimeline({
           const copyLabel = isCopied ? copiedMessageLabel : copyMessageLabel;
 
           return (
-            <div className="group flex items-start justify-end gap-2">
+            <div className="group flex items-center justify-end gap-2">
               <MessageActionBar
                 copied={isCopied}
                 copyLabel={copyLabel}

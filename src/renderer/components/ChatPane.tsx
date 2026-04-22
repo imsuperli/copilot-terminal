@@ -55,6 +55,15 @@ interface MessageActionBarProps {
   onRollback?: () => void;
 }
 
+const chatHeaderIconButtonClassName = [
+  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+  'text-[rgb(var(--muted-foreground))] leading-none transition-colors duration-200',
+  'hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]',
+  'disabled:cursor-not-allowed disabled:opacity-45',
+].join(' ');
+
+const CHAT_HEADER_ICON_SIZE = 18;
+
 function normalizeChatSettings(settings: ChatSettings | undefined): ChatSettings {
   return {
     providers: settings?.providers ?? [],
@@ -320,7 +329,7 @@ function renderLegacyMessage(
 ) {
   if (message.role === 'user' && !message.toolResult) {
     return (
-      <div className="group flex items-start justify-end gap-2">
+      <div className="group flex items-center justify-end gap-2">
         <MessageActionBar
           copied={copied}
           copyLabel={copyLabel}
@@ -1543,9 +1552,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 aria-label={t('chatPane.history')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={() => setHistoryMenuOpen((open) => !open)}
-                className="inline-flex shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] leading-none transition-colors duration-200 hover:text-[rgb(var(--foreground))]"
+                className={chatHeaderIconButtonClassName}
               >
-                <History size={18} strokeWidth={1.9} />
+                <History size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
               </button>
 
               {historyMenuOpen ? (
@@ -1595,9 +1604,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
               onMouseDown={preventMouseButtonFocus}
               onClick={handleNewConversation}
               disabled={isBusy}
-              className="inline-flex shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] leading-none transition-colors duration-200 hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-45"
+              className={chatHeaderIconButtonClassName}
             >
-              <ChatNewConversationIcon size={20} />
+              <ChatNewConversationIcon size={CHAT_HEADER_ICON_SIZE} />
             </button>
 
             {onClose && (
@@ -1607,9 +1616,9 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
                 aria-label={t('common.close')}
                 onMouseDown={preventMouseButtonFocus}
                 onClick={onClose}
-                className="inline-flex shrink-0 items-center justify-center text-[rgb(var(--muted-foreground))] leading-none transition-colors duration-200 hover:text-[rgb(var(--foreground))]"
+                className={chatHeaderIconButtonClassName}
               >
-                <X size={18} strokeWidth={1.9} />
+                <X size={CHAT_HEADER_ICON_SIZE} strokeWidth={1.9} />
               </button>
             )}
           </div>

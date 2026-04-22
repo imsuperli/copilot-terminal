@@ -1481,6 +1481,84 @@ describe('ChatPane', () => {
     expect((input as HTMLTextAreaElement).value).toBe('');
   });
 
+  it('uses consistent sizing for header icon buttons', async () => {
+    vi.mocked(window.electronAPI.getSettings).mockResolvedValue({
+      success: true,
+      data: {
+        language: 'zh-CN',
+        ides: [],
+        chat: {
+          providers: [
+            {
+              id: 'provider-1',
+              type: 'anthropic',
+              name: 'Claude API',
+              apiKey: 'sk-ant-test',
+              models: ['claude-sonnet-4-5'],
+              defaultModel: 'claude-sonnet-4-5',
+            },
+          ],
+          activeProviderId: 'provider-1',
+          enableCommandSecurity: true,
+        },
+      } as any,
+    });
+
+    useWindowStore.setState({
+      windows: [
+        {
+          id: 'win-1',
+          name: 'Chat Window',
+          activePaneId: 'chat-pane-1',
+          createdAt: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
+          layout: {
+            type: 'split',
+            direction: 'horizontal',
+            sizes: [1],
+            children: [
+              {
+                type: 'pane',
+                id: 'chat-pane-1',
+                pane: {
+                  id: 'chat-pane-1',
+                  cwd: '',
+                  command: '',
+                  kind: 'chat',
+                  status: WindowStatus.Paused,
+                  pid: null,
+                  chat: {
+                    messages: [],
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+      activeWindowId: 'win-1',
+      mruList: ['win-1'],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <I18nProvider>
+        <ChatPaneHarness />
+      </I18nProvider>,
+    );
+
+    const historyButton = await screen.findByRole('button', { name: '对话历史' });
+    const newConversationButton = screen.getByRole('button', { name: '新建对话' });
+
+    expect(historyButton).toHaveClass('h-8', 'w-8', 'items-center', 'justify-center');
+    expect(newConversationButton).toHaveClass('h-8', 'w-8', 'items-center', 'justify-center');
+    expect(historyButton.querySelector('svg')).toHaveAttribute('width', '18');
+    expect(historyButton.querySelector('svg')).toHaveAttribute('height', '18');
+    expect(newConversationButton.querySelector('svg')).toHaveAttribute('width', '18');
+    expect(newConversationButton.querySelector('svg')).toHaveAttribute('height', '18');
+  });
+
   it('uses the newly selected model for the next turn in the same conversation', async () => {
     const user = userEvent.setup();
     const listeners = createListenerMap();
@@ -2341,7 +2419,14 @@ describe('ChatPane', () => {
       </I18nProvider>,
     );
 
-    await user.click(await screen.findByRole('button', { name: '复制内容' }));
+    const copyButton = await screen.findByRole('button', { name: '复制内容' });
+    const messageRow = copyButton.closest('.group');
+
+    expect(messageRow).not.toBeNull();
+    expect(messageRow).toHaveClass('items-center');
+    expect(messageRow).not.toHaveClass('items-start');
+
+    await user.click(copyButton);
 
     expect(await screen.findByRole('button', { name: '已复制' })).toBeInTheDocument();
   });

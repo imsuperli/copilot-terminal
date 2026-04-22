@@ -259,6 +259,39 @@ describe('AgentTimeline', () => {
     expect(screen.getByText('新的回复')).toBeInTheDocument();
   });
 
+  it('vertically centers action buttons beside user message bubbles', () => {
+    render(
+      <AgentTimeline
+        task={createTaskSnapshot({
+          timeline: [
+            {
+              id: 'user-1',
+              taskId: 'task-1',
+              paneId: 'pane-1',
+              timestamp: '2026-04-12T00:00:01.000Z',
+              kind: 'user-message',
+              status: 'completed',
+              content: '帮我看下磁盘使用情况',
+            },
+          ],
+        })}
+        assistantLabel="codex"
+        copyMessageLabel="复制内容"
+        onApprove={() => {}}
+        onReject={() => {}}
+        onSubmitInteraction={() => {}}
+        onCancelInteraction={() => {}}
+      />,
+    );
+
+    const copyButton = screen.getByRole('button', { name: '复制内容' });
+    const messageRow = copyButton.closest('.group');
+
+    expect(messageRow).not.toBeNull();
+    expect(messageRow).toHaveClass('items-center');
+    expect(messageRow).not.toHaveClass('items-start');
+  });
+
   it('pins a single thinking indicator to the bottom while a task is running', () => {
     render(
       <AgentTimeline

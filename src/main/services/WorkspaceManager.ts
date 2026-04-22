@@ -125,10 +125,6 @@ export class WorkspaceManagerImpl implements IWorkspaceManager {
         await fs.writeJson(this.workspacePath, workspaceToSave, { spaces: 2 });
       }
 
-      console.log(
-        `[WorkspaceManager] Saved workspace version=${workspaceToSave.version} windows=${workspaceToSave.windows.length}`,
-      );
-
       // 创建备份
       await this.backupWorkspace();
     } catch (error) {
