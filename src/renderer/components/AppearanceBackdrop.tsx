@@ -13,6 +13,7 @@ export const AppearanceBackdrop = React.memo(({ appearance }: AppearanceBackdrop
     <div
       aria-hidden="true"
       className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-[rgb(var(--background))]"
+      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
     >
       <div className="absolute inset-0" style={descriptor.baseStyle} />
       {descriptor.layers.map((layer, index) => (

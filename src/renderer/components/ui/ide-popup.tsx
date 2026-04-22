@@ -62,8 +62,9 @@ export const idePopupTooltipClassName = joinClassNames(
 
 export const idePopupListCardClassName = joinClassNames(
   'relative overflow-hidden rounded-xl border border-[rgb(var(--border))]',
-  'bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_84%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_94%,transparent)_100%)]',
+  'bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--card))_72%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_82%,transparent)_100%)]',
   'shadow-[0_18px_38px_rgba(0,0,0,0.14)]',
+  'backdrop-blur-[12px]',
 );
 
 export const idePopupListCardFooterClassName = joinClassNames(

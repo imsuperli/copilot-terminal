@@ -66,24 +66,7 @@ const APPEARANCE_SKIN_DIM_OPTIONS = [0.28, 0.42, 0.52, 0.64, 0.76];
 const APPEARANCE_SKIN_BLUR_OPTIONS = [0, 6, 12, 18];
 const APPEARANCE_SKIN_MOTION_MODES: AppearanceSkinMotionMode[] = ['none', 'ambient'];
 
-const APPEARANCE_THEME_PRESETS: Array<{
-  id: AppearanceThemeId;
-  preview: string;
-}> = [
-  {
-    id: 'obsidian',
-    preview: 'linear-gradient(135deg, #0b0d11 0%, #1b1f27 58%, #090b0e 100%)',
-  },
-  {
-    id: 'aurora',
-    preview: 'linear-gradient(135deg, #05151a 0%, #0d3940 52%, #082228 100%)',
-  },
-  {
-    id: 'paper',
-    preview: 'linear-gradient(135deg, #f4ecde 0%, #e2d8c3 58%, #f7f1e8 100%)',
-  },
-];
-
+// 皮肤预设 - 每个预设包含UI颜色方案和默认背景
 const APPEARANCE_SKIN_PRESETS: Array<{
   id: string;
   labelKey: TranslationKey;
@@ -92,14 +75,14 @@ const APPEARANCE_SKIN_PRESETS: Array<{
   skin: AppearanceSettings['skin'];
 }> = [
   {
-    id: 'none',
-    labelKey: 'settings.appearance.skin.none',
-    descriptionKey: 'settings.appearance.skin.noneDescription',
-    preview: 'linear-gradient(135deg, rgba(120, 120, 120, 0.16) 0%, rgba(120, 120, 120, 0.04) 100%)',
+    id: 'obsidian',
+    labelKey: 'settings.appearance.skin.obsidian',
+    descriptionKey: 'settings.appearance.skin.obsidianDescription',
+    preview: 'linear-gradient(135deg, #0b0d11 0%, #1b1f27 58%, #090b0e 100%)',
     skin: {
-      presetId: 'none',
-      kind: 'none',
-      gradient: DEFAULT_APPEARANCE_SETTINGS.skin.gradient,
+      presetId: 'obsidian',
+      kind: 'gradient',
+      gradient: 'linear-gradient(135deg, #0b0d11 0%, #1b1f27 58%, #090b0e 100%)',
       dim: 0.62,
       blur: 0,
       motion: 'none',
@@ -1163,45 +1146,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
 
               <Tabs.Content value="appearance" className="h-full overflow-y-auto px-6 py-6 data-[state=inactive]:hidden">
                 <div className="mx-auto max-w-5xl space-y-4">
-                  <CompactSettingsSection
-                    title={t('settings.appearance.themeTitle')}
-                    help={t('settings.appearance.themeDescription')}
-                    icon={<Palette size={15} />}
-                    contentClassName="p-4"
-                    divided={false}
-                  >
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                      {APPEARANCE_THEME_PRESETS.map((preset) => {
-                        const selected = appearanceSettings.themeId === preset.id;
-
-                        return (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => handleAppearanceSettingsChange({ themeId: preset.id })}
-                            className={settingsPanelPresetCardClassName(selected)}
-                          >
-                            <div
-                              className="h-16 rounded-xl border border-black/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                              style={{ background: preset.preview }}
-                            />
-                            <div className="mt-3 flex items-center justify-between gap-3">
-                              <div className="min-w-0 text-sm font-semibold text-[rgb(var(--foreground))]">
-                                {t(`settings.appearance.theme.${preset.id}`)}
-                              </div>
-                              {selected && (
-                                <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[rgb(var(--primary))] text-[rgb(var(--primary-foreground))]">
-                                  <Check size={14} />
-                                </span>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </CompactSettingsSection>
-
                   <CompactSettingsSection
                     title={t('settings.appearance.skinTitle')}
                     help={t('settings.appearance.skinDescription')}

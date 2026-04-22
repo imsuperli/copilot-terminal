@@ -360,7 +360,13 @@ export function Sidebar({
 
   return (
     <>
-      <aside className="w-64 h-full bg-[rgb(var(--sidebar))] border-r border-[rgb(var(--border))] flex flex-col">
+      <aside
+        className="w-64 h-full border-r border-[rgb(var(--border))] flex flex-col"
+        style={{
+          background: 'rgba(var(--sidebar), 0.85)',
+          backdropFilter: 'blur(12px)',
+        }}
+      >
         {/* 顶部间距，与右侧卡片对齐 */}
         <div className="h-4" />
 

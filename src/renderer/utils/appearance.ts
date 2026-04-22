@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import type { Settings } from '../../shared/types/workspace';
-import type { AppearanceSettings, AppearanceThemeId } from '../../shared/types/appearance';
+import type { AppearanceSettings, AppearanceSkinPresetId } from '../../shared/types/appearance';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 
 interface AppearanceBackdropLayer {
@@ -14,12 +14,13 @@ interface AppearanceBackdropDescriptor {
   dimStyle: CSSProperties;
 }
 
-interface AppearanceThemeDefinition {
+interface AppearancePresetDefinition {
   app: Record<string, string>;
   terminal: Record<string, string>;
 }
 
-const APPEARANCE_THEME_DEFINITIONS: Record<AppearanceThemeId, AppearanceThemeDefinition> = {
+// 皮肤预设定义 - 每个预设包含UI颜色方案和终端颜色
+const APPEARANCE_PRESET_DEFINITIONS: Record<AppearanceSkinPresetId, AppearancePresetDefinition> = {
   obsidian: {
     app: {
       background: '7 8 10',
@@ -60,7 +61,180 @@ const APPEARANCE_THEME_DEFINITIONS: Record<AppearanceThemeId, AppearanceThemeDef
       brightWhite: '#ffffff',
     },
   },
+  midnight: {
+    app: {
+      background: '5 7 10',
+      foreground: '242 242 242',
+      card: '17 19 23',
+      secondary: '23 25 31',
+      muted: '33 36 43',
+      mutedForeground: '161 161 170',
+      accent: '41 43 52',
+      border: '53 56 67',
+      primary: '114 137 218',
+      primaryForeground: '5 7 10',
+      sidebar: '11 13 17',
+      titlebar: '27 30 37',
+      titlebarForeground: '236 236 236',
+    },
+    terminal: {
+      background: '#05070a',
+      foreground: '#d7d7d7',
+      cursor: '#7289da',
+      cursorAccent: '#05070a',
+      selection: 'rgba(114, 137, 218, 0.28)',
+      black: '#05070a',
+      red: '#ff6b8b',
+      green: '#5ff0a6',
+      yellow: '#f4d88a',
+      blue: '#7289da',
+      magenta: '#d99cff',
+      cyan: '#65d6e8',
+      white: '#d7d7d7',
+      brightBlack: '#7a7f8c',
+      brightRed: '#ff8fa7',
+      brightGreen: '#86ffc4',
+      brightYellow: '#fff09b',
+      brightBlue: '#8fa3ff',
+      brightMagenta: '#eabaff',
+      brightCyan: '#8ceaf4',
+      brightWhite: '#ffffff',
+    },
+  },
+      cyan: '#65d6e8',
+      white: '#d7d7d7',
+      brightBlack: '#7a7f8c',
+      brightRed: '#ff7c87',
+      brightGreen: '#72f093',
+      brightYellow: '#f4e08b',
+      brightBlue: '#8fbeff',
+      brightMagenta: '#e7a2ff',
+      brightCyan: '#8ceaf4',
+      brightWhite: '#ffffff',
+    },
+  },
   aurora: {
+    app: {
+      background: '6 15 18',
+      foreground: '232 255 250',
+      card: '12 28 32',
+      secondary: '16 38 42',
+      muted: '25 54 58',
+      mutedForeground: '151 196 190',
+      accent: '28 72 76',
+      border: '43 92 96',
+      primary: '94 234 212',
+      primaryForeground: '4 18 20',
+      sidebar: '7 22 25',
+      titlebar: '10 34 38',
+      titlebarForeground: '226 255 250',
+    },
+    terminal: {
+      background: '#061114',
+      foreground: '#d7fff8',
+      cursor: '#9ffced',
+      cursorAccent: '#061114',
+      selection: 'rgba(94, 234, 212, 0.30)',
+      black: '#061114',
+      red: '#ff6b8b',
+      green: '#5ff0a6',
+      yellow: '#e9d26a',
+      blue: '#71b7ff',
+      magenta: '#d99cff',
+      cyan: '#5eead4',
+      white: '#d7fff8',
+      brightBlack: '#6e9292',
+      brightRed: '#ff8fa7',
+      brightGreen: '#86ffc4',
+      brightYellow: '#fff09b',
+      brightBlue: '#9ccdff',
+      brightMagenta: '#eabaff',
+      brightCyan: '#96fff0',
+      brightWhite: '#ffffff',
+    },
+  },
+  paper: {
+    app: {
+      background: '235 229 216',
+      foreground: '37 33 28',
+      card: '245 240 230',
+      secondary: '232 224 211',
+      muted: '218 208 193',
+      mutedForeground: '94 83 70',
+      accent: '211 196 174',
+      border: '188 173 150',
+      primary: '133 91 43',
+      primaryForeground: '252 248 241',
+      sidebar: '226 217 202',
+      titlebar: '213 200 181',
+      titlebarForeground: '37 33 28',
+    },
+    terminal: {
+      background: '#f3eadc',
+      foreground: '#2d2923',
+      cursor: '#5f3f1e',
+      cursorAccent: '#f3eadc',
+      selection: 'rgba(133, 91, 43, 0.24)',
+      black: '#2d2923',
+      red: '#b24535',
+      green: '#4f7f3a',
+      yellow: '#9c6f20',
+      blue: '#3f6f99',
+      magenta: '#8a5a8f',
+      cyan: '#3f7d75',
+      white: '#ded3c3',
+      brightBlack: '#776c5f',
+      brightRed: '#cf604f',
+      brightGreen: '#669a4d',
+      brightYellow: '#b9852b',
+      brightBlue: '#5a88b5',
+      brightMagenta: '#a871ad',
+      brightCyan: '#589a90',
+      brightWhite: '#fff8ec',
+    },
+  },
+  custom: {
+    // custom 使用 obsidian 作为默认颜色方案
+    app: {
+      background: '7 8 10',
+      foreground: '242 242 242',
+      card: '18 19 23',
+      secondary: '24 25 30',
+      muted: '34 35 42',
+      mutedForeground: '161 161 170',
+      accent: '42 44 52',
+      border: '54 56 66',
+      primary: '168 170 88',
+      primaryForeground: '7 8 10',
+      sidebar: '12 13 16',
+      titlebar: '28 30 36',
+      titlebarForeground: '236 236 236',
+    },
+    terminal: {
+      background: '#08090c',
+      foreground: '#d7d7d7',
+      cursor: '#f2f2f2',
+      cursorAccent: '#08090c',
+      selection: 'rgba(215, 215, 215, 0.28)',
+      black: '#08090c',
+      red: '#ff5f6d',
+      green: '#4fd66e',
+      yellow: '#e4c85f',
+      blue: '#6aa7ff',
+      magenta: '#d981ff',
+      cyan: '#65d6e8',
+      white: '#d7d7d7',
+      brightBlack: '#7a7f8c',
+      brightRed: '#ff7c87',
+      brightGreen: '#72f093',
+      brightYellow: '#f4e08b',
+      brightBlue: '#8fbeff',
+      brightMagenta: '#e7a2ff',
+      brightCyan: '#8ceaf4',
+      brightWhite: '#ffffff',
+    },
+  },
+};
     app: {
       background: '6 15 18',
       foreground: '232 255 250',
@@ -176,39 +350,46 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   }
 
   const rootStyle = document.documentElement.style;
-  const theme = APPEARANCE_THEME_DEFINITIONS[appearance.themeId] ?? APPEARANCE_THEME_DEFINITIONS.obsidian;
+  const preset = APPEARANCE_PRESET_DEFINITIONS[appearance.skin.presetId] ?? APPEARANCE_PRESET_DEFINITIONS.midnight;
 
-  rootStyle.setProperty('--background', theme.app.background);
-  rootStyle.setProperty('--foreground', theme.app.foreground);
-  rootStyle.setProperty('--card', theme.app.card);
-  rootStyle.setProperty('--card-foreground', theme.app.foreground);
-  rootStyle.setProperty('--secondary', theme.app.secondary);
-  rootStyle.setProperty('--secondary-foreground', theme.app.foreground);
-  rootStyle.setProperty('--muted', theme.app.muted);
-  rootStyle.setProperty('--muted-foreground', theme.app.mutedForeground);
-  rootStyle.setProperty('--accent', theme.app.accent);
-  rootStyle.setProperty('--accent-foreground', theme.app.foreground);
-  rootStyle.setProperty('--border', theme.app.border);
-  rootStyle.setProperty('--input', theme.app.border);
-  rootStyle.setProperty('--ring', theme.app.primary);
-  rootStyle.setProperty('--primary', theme.app.primary);
-  rootStyle.setProperty('--primary-foreground', theme.app.primaryForeground);
-  rootStyle.setProperty('--sidebar', theme.app.sidebar);
-  rootStyle.setProperty('--sidebar-foreground', theme.app.foreground);
-  rootStyle.setProperty('--titlebar', theme.app.titlebar);
-  rootStyle.setProperty('--titlebar-foreground', theme.app.titlebarForeground);
-  rootStyle.setProperty('--titlebar-border', theme.app.border);
-  rootStyle.setProperty('--titlebar-hover', theme.app.accent);
+  rootStyle.setProperty('--background', preset.app.background);
+  rootStyle.setProperty('--foreground', preset.app.foreground);
+  rootStyle.setProperty('--card', preset.app.card);
+  rootStyle.setProperty('--card-foreground', preset.app.foreground);
+  rootStyle.setProperty('--secondary', preset.app.secondary);
+  rootStyle.setProperty('--secondary-foreground', preset.app.foreground);
+  rootStyle.setProperty('--muted', preset.app.muted);
+  rootStyle.setProperty('--muted-foreground', preset.app.mutedForeground);
+  rootStyle.setProperty('--accent', preset.app.accent);
+  rootStyle.setProperty('--accent-foreground', preset.app.foreground);
+  rootStyle.setProperty('--border', preset.app.border);
+  rootStyle.setProperty('--input', preset.app.border);
+  rootStyle.setProperty('--ring', preset.app.primary);
+  rootStyle.setProperty('--primary', preset.app.primary);
+  rootStyle.setProperty('--primary-foreground', preset.app.primaryForeground);
+  rootStyle.setProperty('--sidebar', preset.app.sidebar);
+  rootStyle.setProperty('--sidebar-foreground', preset.app.foreground);
+  rootStyle.setProperty('--titlebar', preset.app.titlebar);
+  rootStyle.setProperty('--titlebar-foreground', preset.app.titlebarForeground);
+  rootStyle.setProperty('--titlebar-border', preset.app.border);
+  rootStyle.setProperty('--titlebar-hover', preset.app.accent);
 
   Object.entries(TERMINAL_TOKEN_MAP).forEach(([key, token]) => {
-    rootStyle.setProperty(token, theme.terminal[key]);
+    rootStyle.setProperty(token, preset.terminal[key]);
   });
+
+  // 将终端背景颜色转换为 RGB 值（用于 rgba）
+  const terminalBgColor = preset.terminal.background;
+  const terminalBgRgb = hexToRgb(terminalBgColor);
+  if (terminalBgRgb) {
+    rootStyle.setProperty('--terminal-background-rgb', `${terminalBgRgb.r}, ${terminalBgRgb.g}, ${terminalBgRgb.b}`);
+  }
 
   rootStyle.setProperty('--appearance-terminal-opacity', String(appearance.terminalOpacity));
   rootStyle.setProperty('--appearance-terminal-opacity-percent', `${Math.round(appearance.terminalOpacity * 100)}%`);
   rootStyle.setProperty(
     '--terminal-background-effective',
-    `color-mix(in srgb, var(--terminal-background) var(--appearance-terminal-opacity-percent, 88%), transparent)`,
+    `rgba(var(--terminal-background-rgb, 12, 12, 12), var(--appearance-terminal-opacity, 0.88))`,
   );
   rootStyle.setProperty('--appearance-skin-dim', String(resolveSkinDim(appearance)));
   rootStyle.setProperty('--appearance-skin-blur', `${appearance.skin.blur}px`);
@@ -361,4 +542,15 @@ function resolveSkinDim(appearance: AppearanceSettings): number {
 
 function escapeCssUrl(value: string): string {
   return value.replace(/\\/g, '/').replace(/"/g, '\\"');
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result
+    ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16),
+      }
+    : null;
 }

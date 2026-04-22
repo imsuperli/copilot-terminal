@@ -65,8 +65,12 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
   if (isMac) {
     return (
       <div
-        className="h-9 flex items-center border-b px-3 select-none relative flex-shrink-0 bg-[rgb(var(--titlebar))] border-[rgb(var(--titlebar-border))]"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        className="h-9 flex items-center border-b px-3 select-none relative flex-shrink-0 border-[rgb(var(--titlebar-border))]"
+        style={{
+          WebkitAppRegion: 'drag',
+          background: 'rgba(var(--titlebar), 0.75)',
+          backdropFilter: 'blur(12px)',
+        } as React.CSSProperties}
       >
         {/* 左侧：窗口控制 + logo + 应用名 */}
         <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
@@ -115,8 +119,12 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
   // Windows/Linux: 左侧 logo，中间标题，右侧最小化/最大化/关闭
   return (
     <div
-      className="h-8 flex items-center justify-between border-b select-none relative flex-shrink-0 bg-[rgb(var(--titlebar))] border-[rgb(var(--titlebar-border))]"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      className="h-8 flex items-center justify-between border-b select-none relative flex-shrink-0 border-[rgb(var(--titlebar-border))]"
+      style={{
+        WebkitAppRegion: 'drag',
+        background: 'rgba(var(--titlebar), 0.75)',
+        backdropFilter: 'blur(12px)',
+      } as React.CSSProperties}
       onDoubleClick={handleDoubleClick}
     >
       {/* 左侧：logo + 应用名 */}

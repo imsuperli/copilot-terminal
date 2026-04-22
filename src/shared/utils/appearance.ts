@@ -5,11 +5,9 @@ import type {
   AppearanceSkinKind,
   AppearanceSkinPresetId,
   AppearanceSkinSettings,
-  AppearanceThemeId,
 } from '../types/appearance';
 
 export const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
-  themeId: 'obsidian',
   skin: {
     presetId: 'midnight',
     kind: 'gradient',
@@ -23,16 +21,12 @@ export const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
   reduceMotion: true,
 };
 
-function normalizeThemeId(value: unknown): AppearanceThemeId {
-  return value === 'aurora' || value === 'paper' || value === 'obsidian' ? value : DEFAULT_APPEARANCE_SETTINGS.themeId;
-}
-
 function normalizeSkinKind(value: unknown): AppearanceSkinKind {
   return value === 'none' || value === 'image' || value === 'gradient' ? value : DEFAULT_APPEARANCE_SETTINGS.skin.kind;
 }
 
 function normalizeSkinPresetId(value: unknown): AppearanceSkinPresetId {
-  return value === 'none'
+  return value === 'obsidian'
     || value === 'midnight'
     || value === 'aurora'
     || value === 'paper'
@@ -80,9 +74,22 @@ function normalizeSkin(value: Partial<AppearanceSkinSettings> | undefined): Appe
 export function normalizeAppearanceSettings(value: Partial<AppearanceSettings> | undefined): AppearanceSettings {
   const defaults = DEFAULT_APPEARANCE_SETTINGS;
 
+  // 向后兼容：如果有旧的 themeId，将其映射到新的 presetId
+  const legacyThemeId = (value as any)?.themeId;
+  let skin = value?.skin;
+
+  if (legacyThemeId && !skin?.presetId) {
+    // 旧版本使用 themeId，需要迁移
+    if (legacyThemeId === 'obsidian' || legacyThemeId === 'aurora' || legacyThemeId === 'paper') {
+      skin = {
+        ...skin,
+        presetId: legacyThemeId,
+      };
+    }
+  }
+
   return {
-    themeId: normalizeThemeId(value?.themeId),
-    skin: normalizeSkin(value?.skin),
+    skin: normalizeSkin(skin),
     terminalOpacity: normalizeNumber(value?.terminalOpacity, defaults.terminalOpacity, 0.52, 1),
     readabilityMode: normalizeReadabilityMode(value?.readabilityMode),
     reduceMotion: value?.reduceMotion ?? defaults.reduceMotion,
