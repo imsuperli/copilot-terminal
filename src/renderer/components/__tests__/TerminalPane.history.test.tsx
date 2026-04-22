@@ -134,6 +134,31 @@ describe('TerminalPane history replay', () => {
     }
   });
 
+  it('lets the global appearance skin show through the xterm background', async () => {
+    render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(terminalInstances).toHaveLength(1);
+    });
+
+    expect(terminalInstances[0].options.allowTransparency).toBe(true);
+    expect((terminalInstances[0].options.theme as { background?: string }).background).toBe('transparent');
+  });
+
   it('replays history on mount and subscribes without buffered replay', async () => {
     render(
       <TerminalPane

@@ -174,10 +174,7 @@ function readRootCssColor(variableName: string, fallback: string): string {
 
 function getWindowsTerminalTheme() {
   return {
-    background: readRootCssColor(
-      '--terminal-background-effective',
-      readRootCssColor('--terminal-background', '#0c0c0c'),
-    ),
+    background: 'transparent',
     foreground: readRootCssColor('--terminal-foreground', '#cccccc'),
     cursor: readRootCssColor('--terminal-cursor', '#f2f2f2'),
     cursorAccent: readRootCssColor('--terminal-cursor-accent', '#0c0c0c'),
@@ -800,6 +797,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       cols: 80,
       rows: 30,
       theme: getWindowsTerminalTheme(),
+      allowTransparency: true,
       fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: 14,
       lineHeight: 1.2,

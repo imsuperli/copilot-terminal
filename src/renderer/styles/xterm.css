@@ -6,12 +6,14 @@
   padding: 0 !important;
   overflow: hidden !important;
   max-width: 100% !important;
+  background: transparent !important;
 }
 
 .xterm .xterm-viewport {
   overflow-y: auto;
   overflow-x: hidden !important;
   max-width: 100% !important;
+  background: transparent !important;
 }
 
 /* Keep FitAddon measurements accurate and prevent content overflow */
@@ -19,6 +21,11 @@
   padding: 0 !important;
   overflow: hidden !important;
   max-width: 100% !important;
+  background: transparent !important;
+}
+
+.xterm .xterm-screen canvas {
+  background: transparent !important;
 }
 
 /* Avoid horizontal scrolling caused by IME/input quirks */
