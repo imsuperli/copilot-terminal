@@ -27,7 +27,7 @@ export function BlameGutter({
   const { t } = useI18n();
 
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--secondary))_92%,transparent)_0%,color-mix(in_srgb,rgb(var(--card))_94%,transparent)_100%)] px-3 py-2 backdrop-blur">
+    <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[linear-gradient(180deg,var(--appearance-pane-chrome-background)_0%,var(--appearance-card-surface-top)_100%)] px-3 py-2 backdrop-blur-[8px]">
       <div className="min-w-0">
         <div className={idePopupHeaderMetaClassName}>
           {t('codePane.gitBlame')}

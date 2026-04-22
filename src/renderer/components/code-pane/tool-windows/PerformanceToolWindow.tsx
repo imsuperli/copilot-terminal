@@ -93,12 +93,12 @@ export function PerformanceToolWindow({
 
       <div className="grid min-h-0 flex-1 md:grid-cols-[300px_minmax(0,1fr)]">
         <section className="flex min-h-0 flex-col border-r border-[rgb(var(--border))]">
-          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.performanceTasks')}
           </header>
           <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 space-y-3 overflow-auto px-3 py-3`}>
             {indexStatus && (
-              <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
+              <div className="rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
                 <div className="font-medium text-[rgb(var(--foreground))]">{t('codePane.performanceIndexing')}</div>
                 <div className="mt-1 text-[11px] text-[rgb(var(--muted-foreground))]">
                   {indexStatus.state === 'building'
@@ -115,7 +115,7 @@ export function PerformanceToolWindow({
             )}
 
             {languageWorkspaceState && (
-              <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
+              <div className="rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
                 <div className="font-medium text-[rgb(var(--foreground))]">{t('codePane.performanceLanguageImport')}</div>
                 <div className="mt-1 text-[11px] text-[rgb(var(--muted-foreground))]">
                   {languageWorkspaceState.progressText ?? languageWorkspaceState.message ?? languageWorkspaceState.phase}
@@ -126,7 +126,7 @@ export function PerformanceToolWindow({
             {activeTasks.length > 0 ? (
               <div className="space-y-2">
                 {activeTasks.map((task) => (
-                  <div key={task.id} className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
+                  <div key={task.id} className="rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
                     <div className="flex items-center gap-2">
                       {task.status === 'running' ? (
                         <Loader2 size={12} className="animate-spin text-[rgb(var(--info))]" />
@@ -148,7 +148,7 @@ export function PerformanceToolWindow({
         </section>
 
         <section className="flex min-h-0 flex-col">
-          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.performanceRequests')}
           </header>
           <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
@@ -159,7 +159,7 @@ export function PerformanceToolWindow({
                 </div>
                 <div className="space-y-2">
                   {runningRequests.map((request) => (
-                    <div key={request.id} className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
+                    <div key={request.id} className="rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
                       <div className="flex items-center gap-2">
                         <Loader2 size={12} className="animate-spin text-[rgb(var(--info))]" />
                         <div className="font-medium text-[rgb(var(--foreground))]">{request.label}</div>
@@ -176,7 +176,7 @@ export function PerformanceToolWindow({
             {recentRequests.length > 0 ? (
               <div className="space-y-2">
                 {recentRequests.map((request) => (
-                  <div key={request.id} className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
+                  <div key={request.id} className="rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] p-3 text-xs text-[rgb(var(--muted-foreground))]">
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium text-[rgb(var(--foreground))]">{request.label}</div>

@@ -219,7 +219,7 @@ export function RefactorPreviewToolWindow({
       )}
 
       {changeSet?.stats && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_32%,transparent)] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
           <span className={`rounded px-2 py-1 ${idePopupBadgeClassName('zinc')}`}>
             {t('codePane.refactorPreviewStatsFiles', { count: changeSet.stats.fileCount })}
           </span>
@@ -320,7 +320,7 @@ function PreviewPane({
 }) {
   return (
     <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
         <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">{title}</div>
         {change && (
           <div className={`flex items-center gap-1 text-[10px] ${tone}`}>

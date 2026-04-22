@@ -15,7 +15,7 @@ import {
 } from './ui/ide-popup';
 
 const BROWSER_PARTITION = 'persist:copilot-terminal-browser';
-const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-[color-mix(in_srgb,rgb(var(--background))_92%,transparent)]';
+const BROWSER_WEBVIEW_CLASSNAME = 'min-h-0 min-w-0 flex-1 bg-[var(--appearance-pane-background)]';
 const BLANK_PAGE_THEME_CSS = `
   :root { color-scheme: dark; }
   html, body {
@@ -398,13 +398,11 @@ export const BrowserPane: React.FC<BrowserPaneProps> = ({
   const browserToolbarButtonClassName =
     'flex h-6 w-6 items-center justify-center rounded-md border border-transparent text-[rgb(var(--muted-foreground))] transition-colors hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))] disabled:cursor-not-allowed disabled:opacity-40';
   const browserCloseButtonClassName =
-    'flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-red-500/40 hover:bg-red-500/14 hover:text-red-100';
+    'flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))] transition-colors hover:border-red-500/40 hover:bg-red-500/14 hover:text-red-100';
 
   return (
     <div
-      className={`
-        relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-[rgb(var(--border))] bg-[linear-gradient(180deg,color-mix(in_srgb,rgb(var(--background))_92%,transparent)_0%,color-mix(in_srgb,rgb(var(--background))_98%,transparent)_100%)]
-      `}
+      className={`relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border border-[rgb(var(--border))] bg-[linear-gradient(180deg,var(--appearance-pane-background-strong)_0%,var(--appearance-pane-background)_100%)] backdrop-blur-[10px]`}
       style={{ opacity: isDragging ? 0.45 : 1 }}
       onMouseDownCapture={handleMouseDownCapture}
     >

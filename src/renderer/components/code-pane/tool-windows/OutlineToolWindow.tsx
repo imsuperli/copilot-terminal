@@ -247,7 +247,7 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
 
   return (
     <IdePopupShell className={panelClassName ?? 'flex h-full min-h-0 flex-col'}>
-      <div className="grid grid-cols-[60px_minmax(0,1fr)_60px] items-center border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_48%,transparent)] px-3 py-2.5">
+      <div className="grid grid-cols-[60px_minmax(0,1fr)_60px] items-center border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2.5">
         <div aria-hidden="true" />
         <div className="min-w-0 truncate text-center text-sm font-semibold leading-5 text-[rgb(var(--foreground))]">
           {fileLabel ?? t('codePane.fileStructureEmpty')}
@@ -272,7 +272,7 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
         </div>
       </div>
 
-      <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] px-3 py-2">
+      <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
           <FilterToggle
             active={filters.inherited}
@@ -345,7 +345,7 @@ export const OutlineToolWindow = React.memo(function OutlineToolWindow({
             </div>
           )
         ) : (
-          <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_40%,transparent)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
+          <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.fileStructureEmpty')}
           </div>
         )}
@@ -459,7 +459,7 @@ const OutlineNodeRow = React.memo(function OutlineNodeRow({
               <div className="truncate text-[10px] leading-4 text-[rgb(var(--muted-foreground))]">{node.symbol.detail}</div>
             ) : null}
           </div>
-          <span className="shrink-0 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <span className="shrink-0 rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {kind.label}
           </span>
         </div>

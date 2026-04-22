@@ -187,7 +187,7 @@ const RunTargetCard = React.memo(function RunTargetCard({
   const supportsCustomization = Boolean(target.customization);
 
   return (
-    <div className="min-w-[320px] max-w-[360px] rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] px-3 py-2">
+    <div className="min-w-[320px] max-w-[360px] rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="truncate text-xs font-medium text-[rgb(var(--foreground))]">{target.label}</div>
@@ -359,7 +359,7 @@ export const RunToolWindow = React.memo(function RunToolWindow({
         </div>
       </div>
 
-      <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_32%,transparent)] px-3 py-2">
+      <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
         <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
           {t('codePane.runTargets')}
         </div>
@@ -398,7 +398,7 @@ export const RunToolWindow = React.memo(function RunToolWindow({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex w-64 shrink-0 flex-col border-r border-[rgb(var(--border))]">
-          <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.runSessions')}
           </div>
           <div
@@ -439,7 +439,7 @@ export const RunToolWindow = React.memo(function RunToolWindow({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2">
+          <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
             <div className="min-w-0">
               <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.runConsole')}
@@ -501,7 +501,7 @@ const LabeledInput = React.memo(function LabeledInput({
         onChange={(event) => {
           onChange(event.target.value);
         }}
-        className="w-full rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5 text-[11px] text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))]"
+        className="w-full rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-2 py-1.5 text-[11px] text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))] focus:border-[rgb(var(--ring))]"
       />
     </label>
   );
@@ -553,12 +553,12 @@ function getSessionTone(state: CodePaneRunSession['state']): { label: string; cl
     case 'stopped':
       return {
         label: 'STOP',
-        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
     default:
       return {
         label: 'RUN',
-        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
   }
 }

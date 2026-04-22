@@ -112,7 +112,7 @@ export const ProjectToolWindow = React.memo(function ProjectToolWindow({
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="flex w-64 shrink-0 flex-col border-r border-[rgb(var(--border))]">
-              <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+              <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.runSessions')}
               </div>
               <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-2 py-2`}>
@@ -134,7 +134,7 @@ export const ProjectToolWindow = React.memo(function ProjectToolWindow({
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2">
+              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.runConsole')}
@@ -250,7 +250,7 @@ const ProjectContributionCard = React.memo(function ProjectContributionCard({
           <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
             Workspace State
           </div>
-          <div className="rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] px-2 py-2">
+          <div className="rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-2 py-2">
             <div className="flex items-center gap-2">
               {workspaceStateTone.showSpinner ? (
                 <Loader2 size={12} className="animate-spin text-[rgb(var(--warning))]" />
@@ -333,7 +333,7 @@ const ProjectContributionCard = React.memo(function ProjectContributionCard({
           <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
             {section.title}
           </div>
-          <div className="rounded bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] px-2 py-2">
+          <div className="rounded bg-[var(--appearance-pane-background)] px-2 py-2">
             {section.items.length > 0 ? (
               <div className="space-y-1">
                 {section.items.map((item) => (
@@ -357,7 +357,7 @@ const ProjectContributionCard = React.memo(function ProjectContributionCard({
           <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-[rgb(var(--muted-foreground))]">
             {card.title}
           </div>
-          <div className="space-y-1 rounded bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] px-2 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
+          <div className="space-y-1 rounded bg-[var(--appearance-pane-background)] px-2 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
             {card.lines.map((line, index) => (
               <div key={`${card.id}-${index}`} className="break-words">
                 {line}
@@ -489,7 +489,7 @@ const ProjectSessionRow = React.memo(function ProjectSessionRow({
       }}
       className={`w-full rounded border px-2 py-2 text-left transition-colors ${
         isSelected
-          ? 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--foreground))]'
+          ? 'border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--foreground))]'
           : 'border-transparent bg-transparent text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--border))] hover:bg-[rgb(var(--accent))]'
       }`}
     >
@@ -609,7 +609,7 @@ function getProjectCommandTone(kind: 'run' | 'refresh' | 'configure' | 'repair' 
       return {
         badgeLabel: 'Run',
         badgeClassName: 'bg-[rgb(var(--success)/0.14)] text-[rgb(var(--success))]',
-        buttonClassName: 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_72%,transparent)] text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]',
+        buttonClassName: 'border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]',
         icon: 'run',
       };
   }
@@ -731,12 +731,12 @@ function getSessionTone(state: CodePaneRunSession['state']): { label: string; cl
     case 'stopped':
       return {
         label: 'STOP',
-        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
     default:
       return {
         label: state,
-        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
   }
 }

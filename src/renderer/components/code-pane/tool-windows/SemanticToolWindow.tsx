@@ -123,7 +123,7 @@ export function SemanticToolWindow({
               ))}
             </div>
           ) : (
-            <div className="rounded border border-dashed border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_40%,transparent)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
+            <div className="rounded border border-dashed border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
               {t('codePane.semanticTokensEmpty')}
             </div>
           )}

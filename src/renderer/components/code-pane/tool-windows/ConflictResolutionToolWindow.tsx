@@ -103,13 +103,13 @@ export function ConflictResolutionToolWindow({
         </div>
       ) : conflict ? (
         <>
-          <div className="flex items-center gap-2 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_32%,transparent)] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
+          <div className="flex items-center gap-2 border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
             <button
               type="button"
               onClick={() => {
                 replaceMergedContent(conflict.baseContent);
               }}
-              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseBase')}
@@ -119,7 +119,7 @@ export function ConflictResolutionToolWindow({
               onClick={() => {
                 replaceMergedContent(conflict.oursContent);
               }}
-              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseOurs')}
@@ -129,7 +129,7 @@ export function ConflictResolutionToolWindow({
               onClick={() => {
                 replaceMergedContent(conflict.theirsContent);
               }}
-              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
+              className="flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-2 py-1 text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))]"
             >
               <Copy size={11} />
               {t('codePane.gitUseTheirs')}
@@ -170,7 +170,7 @@ function ConflictPane({
 }) {
   return (
     <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''} ${borderTop ? 'border-t border-[rgb(var(--border))]' : ''}`}>
-      <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+      <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {title}
       </div>
       <div className={`${idePopupBodyClassName} ${idePopupScrollAreaClassName} min-h-0 flex-1 overflow-auto px-3 py-3`}>
@@ -197,7 +197,7 @@ function MergedConflictPane({
 }) {
   return (
     <div className={`flex min-h-0 flex-col ${borderLeft ? 'border-l border-[rgb(var(--border))]' : ''} ${borderTop ? 'border-t border-[rgb(var(--border))]' : ''}`}>
-      <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+      <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
         {title}
       </div>
       <div className="min-h-0 flex-1 p-3">
@@ -206,7 +206,7 @@ function MergedConflictPane({
           onChange={(event) => {
             onChange(event.target.value);
           }}
-          className="h-full w-full resize-none rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] p-3 font-mono text-[11px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
+          className="h-full w-full resize-none rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] p-3 font-mono text-[11px] leading-5 text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]"
           spellCheck={false}
         />
       </div>

@@ -227,7 +227,7 @@ const TestTreeRow = React.memo(function TestTreeRow({
         )}
         <FileCode2 size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-        <span className="rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-1 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
+        <span className="rounded bg-[var(--appearance-pane-chrome-background)] px-1 py-0.5 text-[10px] text-[rgb(var(--muted-foreground))]">
           {item.kind}
         </span>
       </button>
@@ -333,7 +333,7 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
               void onRerunFailed();
             }}
             disabled={!hasFailedSessions}
-            className="rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2.5 py-1.5 text-[11px] font-medium text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-2.5 py-1.5 text-[11px] font-medium text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('codePane.rerunFailedTests')}
           </button>
@@ -358,7 +358,7 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex w-[320px] shrink-0 flex-col border-r border-[rgb(var(--border))]">
-          <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.testTree')}
           </div>
           <div
@@ -408,7 +408,7 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="flex w-64 shrink-0 flex-col border-r border-[rgb(var(--border))]">
-              <div className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+              <div className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 {t('codePane.runSessions')}
               </div>
               <div
@@ -449,7 +449,7 @@ export const TestsToolWindow = React.memo(function TestsToolWindow({
             </div>
 
             <div className="flex min-w-0 flex-1 flex-col">
-              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2">
+              <div className="flex items-center justify-between gap-3 border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2">
                 <div className="min-w-0">
                   <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                     {t('codePane.runConsole')}
@@ -528,12 +528,12 @@ function getSessionTone(state: CodePaneRunSession['state']): { label: string; cl
     case 'stopped':
       return {
         label: 'STOP',
-        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
     default:
       return {
         label: state,
-        className: 'bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] text-[rgb(var(--muted-foreground))]',
+        className: 'bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]',
       };
   }
 }

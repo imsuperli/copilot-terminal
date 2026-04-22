@@ -242,7 +242,7 @@ const LocalHistoryRow = React.memo(function LocalHistoryRow({
   restoreLabel: string;
 }) {
   return (
-    <div className="h-[94px] rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_58%,transparent)] p-2">
+    <div className="h-[94px] rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] p-2">
       <button
         type="button"
         onClick={() => onOpenHistoryEntry(entry)}
@@ -261,7 +261,7 @@ const LocalHistoryRow = React.memo(function LocalHistoryRow({
         <button
           type="button"
           onClick={() => onRestoreHistoryEntry(entry)}
-          className="inline-flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_74%,transparent)] px-2 py-1 text-[10px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
+          className="inline-flex items-center gap-1 rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-2 py-1 text-[10px] text-[rgb(var(--foreground))] transition-colors hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]"
         >
           <RotateCcw size={10} />
           {restoreLabel}
@@ -339,7 +339,7 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
 
       <div className="grid min-h-0 flex-1 gap-0 md:grid-cols-3">
         <section className="flex min-h-0 flex-col border-r border-[rgb(var(--border))]">
-          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.bookmarksTitle')}
           </header>
           <div
@@ -382,7 +382,7 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
         </section>
 
         <section className="flex min-h-0 flex-col border-r border-[rgb(var(--border))]">
-          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.todoTitle')}
           </header>
           <div
@@ -432,7 +432,7 @@ export const WorkspaceToolWindow = React.memo(function WorkspaceToolWindow({
         </section>
 
         <section className="flex min-h-0 flex-col">
-          <header className="border-b border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_24%,transparent)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+          <header className="border-b border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
             {t('codePane.localHistoryTitle')}
           </header>
           <div

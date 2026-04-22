@@ -456,9 +456,9 @@ const GIT_COMPACT_ACTION_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('ne
 const GIT_DANGER_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('danger')} px-2 py-1 text-[11px]`;
 const GIT_DANGER_COMPACT_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('danger')} px-1.5 py-0.5 text-[10px]`;
 const GIT_WARNING_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('warning')} px-2 py-1 text-[11px]`;
-const GIT_FIELD_CLASS_NAME = 'w-full rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]';
-const GIT_COMPACT_FIELD_CLASS_NAME = 'rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-1.5 py-1 text-[11px] text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]';
-const GIT_SEGMENTED_CONTROL_CLASS_NAME = 'flex rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]';
+const GIT_FIELD_CLASS_NAME = 'w-full rounded-[10px] border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]';
+const GIT_COMPACT_FIELD_CLASS_NAME = 'rounded-[10px] border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-1.5 py-1 text-[11px] text-[rgb(var(--foreground))] outline-none transition-colors focus:border-[rgb(var(--ring))]';
+const GIT_SEGMENTED_CONTROL_CLASS_NAME = 'flex rounded-[10px] border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] p-0.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]';
 
 function getWindowedListSlice<T>({
   items,
@@ -949,7 +949,7 @@ const GitChangesSection = React.memo(function GitChangesSection({
       return (
         <div
           key={item.key}
-          className="flex h-9 items-center gap-2 rounded border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_42%,transparent)] px-2 text-[11px] text-[rgb(var(--muted-foreground))]"
+          className="flex h-9 items-center gap-2 rounded border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-2 text-[11px] text-[rgb(var(--muted-foreground))]"
         >
           <Folder size={12} className="shrink-0 text-[rgb(var(--muted-foreground))]" />
           <span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -1300,7 +1300,7 @@ const CommitLogRow = React.memo(function CommitLogRow({
           ? 'bg-[rgb(var(--info)/0.14)] text-[rgb(var(--foreground))]'
           : isCompared
             ? 'bg-[rgb(var(--warning)/0.10)] text-[rgb(var(--foreground))]'
-            : 'text-[rgb(var(--muted-foreground))] hover:bg-[color-mix(in_srgb,rgb(var(--secondary))_76%,transparent)] hover:text-[rgb(var(--foreground))]'
+            : 'text-[rgb(var(--muted-foreground))] hover:bg-[var(--appearance-pane-chrome-background)] hover:text-[rgb(var(--foreground))]'
       }`}
       style={{ gridTemplateColumns }}
     >
@@ -1373,7 +1373,7 @@ const CommitLogSection = React.memo(function CommitLogSection({
           <span>{t('codePane.gitDate')}</span>
         </div>
         {selectedCommitOrder.length > 1 && (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded bg-[color-mix(in_srgb,rgb(var(--secondary))_70%,transparent)] px-2 py-1.5 text-[11px] text-[rgb(var(--muted-foreground))]">
+          <div className="mt-2 flex items-center justify-between gap-2 rounded bg-[var(--appearance-pane-chrome-background)] px-2 py-1.5 text-[11px] text-[rgb(var(--muted-foreground))]">
             <span>{t('codePane.gitCompareSelectionCount', { count: selectedCommitOrder.length })}</span>
             <button
               type="button"
@@ -1493,7 +1493,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
             )}
           </div>
           {selectedBranch.subject && (
-            <div className="mt-3 rounded bg-[color-mix(in_srgb,rgb(var(--background))_68%,transparent)] px-2 py-1.5 text-xs text-[rgb(var(--muted-foreground))]">
+            <div className="mt-3 rounded bg-[var(--appearance-pane-background)] px-2 py-1.5 text-xs text-[rgb(var(--muted-foreground))]">
               {selectedBranch.subject}
             </div>
           )}
@@ -1593,7 +1593,7 @@ const GitWorkbenchDetails = React.memo(function GitWorkbenchDetails({
             </div>
           )}
           {selectedCommitDetails?.body && (
-            <div className="mt-3 whitespace-pre-wrap rounded bg-[color-mix(in_srgb,rgb(var(--background))_74%,transparent)] px-2 py-2 text-xs text-[rgb(var(--muted-foreground))]">
+            <div className="mt-3 whitespace-pre-wrap rounded bg-[var(--appearance-pane-background)] px-2 py-2 text-xs text-[rgb(var(--muted-foreground))]">
               {selectedCommitDetails.body}
             </div>
           )}
@@ -1676,7 +1676,7 @@ const CommitFileList = React.memo(function CommitFileList({
               rightLabel: (comparedCommits?.targetCommitSha ?? selectedCommitDetails?.commitSha)?.slice(0, 7),
             });
           }}
-          className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[color-mix(in_srgb,rgb(var(--background))_78%,transparent)] hover:text-[rgb(var(--foreground))]"
+          className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-xs text-[rgb(var(--muted-foreground))] transition-colors hover:bg-[var(--appearance-pane-background)] hover:text-[rgb(var(--foreground))]"
         >
           <span className={`mt-0.5 shrink-0 rounded px-1 py-0.5 text-[10px] ${getCommitFileStatusClassName(file.status)}`}>
             {getCommitFileStatusLabel(file.status)}
@@ -1713,7 +1713,7 @@ const RebasePlanRow = React.memo(function RebasePlanRow({
 }) {
   return (
     <div
-      className="grid h-8 grid-cols-[92px_minmax(0,1fr)_72px_72px] items-center gap-2 rounded px-2 text-xs text-[rgb(var(--muted-foreground))] hover:bg-[color-mix(in_srgb,rgb(var(--secondary))_70%,transparent)]"
+      className="grid h-8 grid-cols-[92px_minmax(0,1fr)_72px_72px] items-center gap-2 rounded px-2 text-xs text-[rgb(var(--muted-foreground))] hover:bg-[var(--appearance-pane-chrome-background)]"
     >
       <select
         value={entry.action}
@@ -2264,7 +2264,7 @@ function getRefClassName(ref: string): string {
     return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
   }
 
-  return 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--muted-foreground))]';
+  return 'border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]';
 }
 
 function getCommitFileStatusLabel(status: CodePaneGitCommitFileChange['status']): string {
@@ -2298,7 +2298,7 @@ function getCommitFileStatusClassName(status: CodePaneGitCommitFileChange['statu
       return 'bg-[rgb(var(--warning)/0.14)] text-[rgb(var(--warning))]';
     case 'modified':
     default:
-      return 'border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_72%,transparent)] text-[rgb(var(--muted-foreground))]';
+      return 'border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] text-[rgb(var(--muted-foreground))]';
   }
 }
 

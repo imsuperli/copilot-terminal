@@ -7,7 +7,7 @@ import {
   idePopupMicroButtonClassName,
 } from '../../ui/ide-popup';
 
-const COMPOSER_FIELD_CLASS_NAME = 'w-full rounded-[10px] border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_76%,transparent)] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))]/75 focus:border-[rgb(var(--ring))]';
+const COMPOSER_FIELD_CLASS_NAME = 'w-full rounded-[10px] border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-2 py-1.5 text-xs text-[rgb(var(--foreground))] outline-none transition-colors placeholder:text-[rgb(var(--muted-foreground))]/75 focus:border-[rgb(var(--ring))]';
 const COMPOSER_ACTION_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('neutral')} px-2 py-1 text-[11px]`;
 const COMPOSER_SUCCESS_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('success')} px-2 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-40`;
 const COMPOSER_WARNING_BUTTON_CLASS_NAME = `${idePopupMicroButtonClassName('warning')} px-2 py-1 text-[11px]`;

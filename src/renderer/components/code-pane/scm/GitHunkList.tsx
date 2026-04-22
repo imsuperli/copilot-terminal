@@ -41,7 +41,7 @@ const GitHunkRows = React.memo(function GitHunkRows({
 }) {
   if (hunks.length === 0) {
     return (
-      <div className="rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_58%,transparent)] px-2.5 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
+      <div className="rounded-lg border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-2.5 py-2 text-[11px] text-[rgb(var(--muted-foreground))]">
         {staged ? t('codePane.gitNoStagedHunks') : t('codePane.gitNoUnstagedHunks')}
       </div>
     );
@@ -54,7 +54,7 @@ const GitHunkRows = React.memo(function GitHunkRows({
         const hiddenLineCount = Math.max(0, hunk.lines.length - visibleLines.length);
 
         return (
-          <div key={hunk.id} className="overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_58%,transparent)]">
+          <div key={hunk.id} className="overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)]">
             <div className="flex items-center justify-between gap-2 border-b border-[rgb(var(--border))] px-2.5 py-1.5">
               <div className="min-w-0 flex-1 truncate font-mono text-[10px] text-[rgb(var(--muted-foreground))]">
                 {hunk.header}
@@ -149,12 +149,12 @@ export const GitHunkList = React.memo(function GitHunkList({
       </div>
 
       {!selectedPath ? (
-        <div className="rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_58%,transparent)] px-2.5 py-2 text-xs text-[rgb(var(--muted-foreground))]">
+        <div className="rounded-lg border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-2.5 py-2 text-xs text-[rgb(var(--muted-foreground))]">
           {t('codePane.gitSelectChangedFileForHunks')}
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="min-w-0 rounded-lg border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--background))_54%,transparent)] px-2.5 py-2">
+          <div className="min-w-0 rounded-lg border border-[rgb(var(--border))] bg-[var(--appearance-pane-background)] px-2.5 py-2">
             <div className="truncate text-xs font-medium text-[rgb(var(--foreground))]">{getPathLeafLabel(selectedPath)}</div>
             {relativePath && (
               <div className="truncate text-[10px] text-[rgb(var(--muted-foreground))]">{relativePath}</div>

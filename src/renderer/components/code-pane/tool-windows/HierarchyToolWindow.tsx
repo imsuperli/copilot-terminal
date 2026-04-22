@@ -155,14 +155,14 @@ export const HierarchyToolWindow = React.memo(function HierarchyToolWindow({
                   />
                 ))
               ) : (
-                <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_40%,transparent)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
+                <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
                   {t('codePane.hierarchyEmpty')}
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_40%,transparent)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
+          <div className="mx-2 rounded-lg border border-dashed border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-3 py-4 text-xs text-[rgb(var(--muted-foreground))]">
             {t('codePane.hierarchyEmpty')}
           </div>
         )}
@@ -244,7 +244,7 @@ const HierarchyNodeRow = React.memo(function HierarchyNodeRow({
                 {node.item.relationRanges.length}
               </span>
             ) : (
-              <span className="shrink-0 rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_56%,transparent)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
+              <span className="shrink-0 rounded-md border border-[rgb(var(--border))] bg-[var(--appearance-pane-chrome-background)] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-[rgb(var(--muted-foreground))]">
                 hierarchy
               </span>
             )}
