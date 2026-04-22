@@ -62,7 +62,7 @@ const DEFAULT_FEATURE_SETTINGS: FeatureSettings = {
 };
 
 const APPEARANCE_OPACITY_OPTIONS = [0.28, 0.42, 0.62, 0.82];
-const APPEARANCE_SKIN_DIM_OPTIONS = [0.28, 0.42, 0.52, 0.64, 0.76];
+const APPEARANCE_SKIN_DIM_OPTIONS = [0.08, 0.16, 0.28, 0.42, 0.56];
 const APPEARANCE_SKIN_BLUR_OPTIONS = [0, 6, 12, 18];
 const APPEARANCE_SKIN_MOTION_MODES: AppearanceSkinMotionMode[] = ['none', 'ambient'];
 
@@ -83,7 +83,7 @@ const APPEARANCE_SKIN_PRESETS: Array<{
       presetId: 'obsidian',
       kind: 'gradient',
       gradient: 'linear-gradient(135deg, #0b0d11 0%, #1b1f27 58%, #090b0e 100%)',
-      dim: 0.62,
+      dim: 0.42,
       blur: 0,
       motion: 'none',
     },
@@ -97,7 +97,7 @@ const APPEARANCE_SKIN_PRESETS: Array<{
       presetId: 'midnight',
       kind: 'gradient',
       gradient: 'radial-gradient(circle at 15% 12%, rgba(57, 114, 255, 0.30), transparent 28%), radial-gradient(circle at 82% 18%, rgba(245, 158, 11, 0.18), transparent 24%), linear-gradient(135deg, #05070a 0%, #111317 48%, #060607 100%)',
-      dim: 0.52,
+      dim: 0.36,
       blur: 0,
       motion: 'ambient',
     },
@@ -111,7 +111,7 @@ const APPEARANCE_SKIN_PRESETS: Array<{
       presetId: 'aurora',
       kind: 'gradient',
       gradient: 'radial-gradient(circle at 22% 18%, rgba(78, 244, 207, 0.22), transparent 28%), radial-gradient(circle at 78% 16%, rgba(103, 164, 255, 0.16), transparent 30%), linear-gradient(140deg, #041417 0%, #0b2c31 54%, #07191d 100%)',
-      dim: 0.44,
+      dim: 0.28,
       blur: 0,
       motion: 'ambient',
     },
@@ -669,7 +669,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
         kind: 'image' as const,
         imagePath: response.data,
         gradient: appearanceSettings.skin.gradient,
-        dim: Math.max(appearanceSettings.skin.dim, 0.42),
+        dim: Math.min(appearanceSettings.skin.dim, 0.16),
         blur: 0,
         motion: 'none' as const,
       };

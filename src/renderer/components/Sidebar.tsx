@@ -400,7 +400,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       style={{
         width: sidebarExpanded ? `${sidebarWidthRef.current}px` : '32px',
         backgroundColor: 'var(--appearance-pane-chrome-background)',
-        backdropFilter: 'blur(10px)',
       }}
     >
       {/* 侧边栏内容 */}

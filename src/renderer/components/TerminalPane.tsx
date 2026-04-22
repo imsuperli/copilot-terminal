@@ -1296,7 +1296,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       style={{
         ...activePaneStyle,
         backgroundColor: 'var(--appearance-pane-background)',
-        filter: isActive || isHovered ? 'brightness(1.0)' : 'brightness(0.85)',
+        filter: isActive || isHovered ? 'brightness(1.0)' : 'brightness(0.98)',
         transition: 'filter 0.2s ease-in-out',
       }}
       onClick={handleClick}

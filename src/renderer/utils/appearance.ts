@@ -301,8 +301,8 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
     `rgba(var(--terminal-background-rgb, 12, 12, 12), var(--appearance-terminal-opacity, 0.62))`,
   );
   const paneOpacity = resolvePaneOpacity(appearance);
-  const paneStrongOpacity = clampOpacity(paneOpacity + 0.08, 0.42, 0.8);
-  const paneChromeOpacity = clampOpacity(paneOpacity - 0.08, 0.24, 0.68);
+  const paneStrongOpacity = resolvePaneStrongOpacity(appearance, paneOpacity);
+  const paneChromeOpacity = resolvePaneChromeOpacity(appearance);
   const cardTopOpacity = resolveCardOpacity(appearance);
   const cardBottomOpacity = clampOpacity(cardTopOpacity + 0.12, 0.32, 0.78);
   const cardHoverTopOpacity = clampOpacity(cardTopOpacity + 0.08, 0.28, 0.82);
@@ -461,28 +461,69 @@ function buildAppearanceBackdropLayers(appearance: AppearanceSettings): Appearan
 }
 
 function resolveSkinDim(appearance: AppearanceSettings): number {
+  const isImageSkin = hasImageBackdrop(appearance);
+  const baseDim = isImageSkin
+    ? clampOpacity(appearance.skin.dim - 0.24, 0.08, 0.68)
+    : appearance.skin.dim;
+
   if (appearance.readabilityMode === 'readability') {
-    return Math.min(0.92, appearance.skin.dim + 0.18);
+    return clampOpacity(baseDim + (isImageSkin ? 0.08 : 0.18), 0.08, 0.92);
   }
 
   if (appearance.readabilityMode === 'immersive') {
-    return Math.max(0.18, appearance.skin.dim - 0.18);
+    return clampOpacity(baseDim - (isImageSkin ? 0.08 : 0.18), 0.04, 0.72);
   }
 
-  return appearance.skin.dim;
+  return clampOpacity(baseDim, isImageSkin ? 0.08 : 0.18, 0.82);
 }
 
 function resolvePaneOpacity(appearance: AppearanceSettings): number {
-  const baseOpacity = 0.16 + (appearance.terminalOpacity * 0.32);
+  if (hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.08;
+    }
+
+    return 0;
+  }
+
+  const baseOpacity = 0.04 + (appearance.terminalOpacity * 0.10);
   if (appearance.readabilityMode === 'readability') {
-    return clampOpacity(baseOpacity + 0.1, 0.28, 0.82);
+    return clampOpacity(baseOpacity + 0.08, 0.08, 0.28);
   }
 
   if (appearance.readabilityMode === 'immersive') {
-    return clampOpacity(baseOpacity - 0.08, 0.12, 0.6);
+    return clampOpacity(baseOpacity - 0.04, 0, 0.18);
   }
 
-  return clampOpacity(baseOpacity, 0.18, 0.72);
+  return clampOpacity(baseOpacity, 0.02, 0.22);
+}
+
+function resolvePaneStrongOpacity(appearance: AppearanceSettings, paneOpacity: number): number {
+  if (hasImageBackdrop(appearance)) {
+    if (appearance.readabilityMode === 'readability') {
+      return 0.08;
+    }
+
+    return 0;
+  }
+
+  return clampOpacity(paneOpacity + 0.05, 0.08, 0.3);
+}
+
+function resolvePaneChromeOpacity(appearance: AppearanceSettings): number {
+  const isImageSkin = hasImageBackdrop(appearance);
+  const baseOpacity = isImageSkin ? 0.10 : 0.14;
+  const scaledOpacity = baseOpacity + ((appearance.terminalOpacity - 0.62) * (isImageSkin ? 0.08 : 0.12));
+
+  if (appearance.readabilityMode === 'readability') {
+    return clampOpacity(scaledOpacity + 0.08, isImageSkin ? 0.14 : 0.18, 0.38);
+  }
+
+  if (appearance.readabilityMode === 'immersive') {
+    return clampOpacity(scaledOpacity - 0.04, isImageSkin ? 0.06 : 0.08, 0.28);
+  }
+
+  return clampOpacity(scaledOpacity, isImageSkin ? 0.08 : 0.12, 0.32);
 }
 
 function resolveCardOpacity(appearance: AppearanceSettings): number {
@@ -504,6 +545,10 @@ function clampOpacity(value: number, min: number, max: number): number {
 
 function rgbaWithTerminalBackground(alpha: number): string {
   return `rgba(var(--terminal-background-rgb, 12, 12, 12), ${alpha.toFixed(3)})`;
+}
+
+function hasImageBackdrop(appearance: AppearanceSettings): boolean {
+  return appearance.skin.kind === 'image' && Boolean(appearance.skin.imagePath);
 }
 
 function escapeCssUrl(value: string): string {

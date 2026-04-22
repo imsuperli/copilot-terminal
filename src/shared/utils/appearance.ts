@@ -13,7 +13,7 @@ export const DEFAULT_APPEARANCE_SETTINGS: AppearanceSettings = {
     presetId: 'midnight',
     kind: 'gradient',
     gradient: 'radial-gradient(circle at 15% 12%, rgba(57, 114, 255, 0.30), transparent 28%), radial-gradient(circle at 82% 18%, rgba(245, 158, 11, 0.18), transparent 24%), linear-gradient(135deg, #05070a 0%, #111317 48%, #060607 100%)',
-    dim: 0.52,
+    dim: 0.36,
     blur: 0,
     motion: 'none',
   },

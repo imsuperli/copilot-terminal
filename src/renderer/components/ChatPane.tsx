@@ -1531,7 +1531,6 @@ export const ChatPane: React.FC<ChatPaneProps> = ({
         className="border-b border-[rgb(var(--border))] px-3 py-2"
         style={{
           backgroundColor: 'var(--appearance-pane-chrome-background)',
-          backdropFilter: 'blur(10px)',
         }}
       >
         <div className="mx-auto flex w-full max-w-[860px] items-center justify-between gap-3">

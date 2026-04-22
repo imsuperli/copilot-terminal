@@ -390,7 +390,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
         {/* 顶部工具栏 */}
         <div
           className="flex h-8 flex-shrink-0 items-center gap-2 border-b border-[rgb(var(--border))] px-3"
-          style={{ backgroundColor: 'var(--appearance-pane-chrome-background)', backdropFilter: 'blur(10px)' }}
+          style={{ backgroundColor: 'var(--appearance-pane-chrome-background)' }}
         >
           <div className="flex-1" />
 

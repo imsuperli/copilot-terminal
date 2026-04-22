@@ -270,7 +270,6 @@ const CODE_PANE_ROOT_SURFACE_STYLE: React.CSSProperties = {
 
 const CODE_PANE_CHROME_SURFACE_STYLE: React.CSSProperties = {
   backgroundColor: 'var(--appearance-pane-chrome-background)',
-  backdropFilter: 'blur(10px)',
 };
 
 const CODE_PANE_EDITOR_SURFACE_STYLE: React.CSSProperties = {
