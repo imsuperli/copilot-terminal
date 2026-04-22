@@ -452,8 +452,12 @@ app.whenReady().then(async () => {
     const url = request.url.slice('app-image://'.length);
     // URL 解码
     const filePath = decodeURIComponent(url);
+    // 转换为正确的 file:// URL
+    // Windows 路径：C:/... -> file:///C:/...
+    // Unix 路径：/... -> file:///...
+    const fileUrl = filePath.startsWith('/') ? `file://${filePath}` : `file:///${filePath}`;
     // 返回文件内容
-    return net.fetch(`file://${filePath}`);
+    return net.fetch(fileUrl);
   });
 
   registerBrowserWebviewGuards();
