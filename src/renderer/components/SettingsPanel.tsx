@@ -11,7 +11,7 @@ import { notifyTerminalSettingsUpdated } from '../utils/terminalSettingsEvents';
 import { QuickNavItem } from '../../shared/types/quick-nav';
 import { FeatureSettings, IDEConfig, StatusLineConfig } from '../../shared/types/workspace';
 import { KnownHostEntry } from '../../shared/types/ssh';
-import type { AppearanceReadabilityMode, AppearanceSettings, AppearanceSkinMotionMode, AppearanceThemeId } from '../../shared/types/appearance';
+import type { AppearanceReadabilityMode, AppearanceSettings, AppearanceSkinMotionMode } from '../../shared/types/appearance';
 import { DEFAULT_APPEARANCE_SETTINGS, normalizeAppearanceSettings } from '../../shared/utils/appearance';
 import { useI18n } from '../i18n';
 import type { TranslationKey } from '../i18n';

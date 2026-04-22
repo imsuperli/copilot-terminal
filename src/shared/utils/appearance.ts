@@ -82,9 +82,9 @@ export function normalizeAppearanceSettings(value: Partial<AppearanceSettings> |
     // 旧版本使用 themeId，需要迁移
     if (legacyThemeId === 'obsidian' || legacyThemeId === 'aurora' || legacyThemeId === 'paper') {
       skin = {
-        ...skin,
+        ...(skin || {}),
         presetId: legacyThemeId,
-      };
+      } as Partial<AppearanceSkinSettings>;
     }
   }
 

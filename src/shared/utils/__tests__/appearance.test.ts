@@ -8,7 +8,6 @@ describe('appearance settings', () => {
 
   it('clamps numeric values and falls back from unknown enum values', () => {
     const normalized = normalizeAppearanceSettings({
-      themeId: 'unknown' as never,
       terminalOpacity: 0.1,
       readabilityMode: 'invalid' as never,
       skin: {
@@ -21,7 +20,6 @@ describe('appearance settings', () => {
       },
     });
 
-    expect(normalized.themeId).toBe(DEFAULT_APPEARANCE_SETTINGS.themeId);
     expect(normalized.readabilityMode).toBe(DEFAULT_APPEARANCE_SETTINGS.readabilityMode);
     expect(normalized.terminalOpacity).toBe(0.52);
     expect(normalized.skin.kind).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.kind);
@@ -30,5 +28,24 @@ describe('appearance settings', () => {
     expect(normalized.skin.dim).toBe(0.92);
     expect(normalized.skin.blur).toBe(0);
     expect(normalized.skin.motion).toBe(DEFAULT_APPEARANCE_SETTINGS.skin.motion);
+  });
+
+  it('migrates legacy themeId to skin.presetId', () => {
+    const normalized = normalizeAppearanceSettings({
+      themeId: 'aurora',
+    } as any);
+
+    expect(normalized.skin.presetId).toBe('aurora');
+  });
+
+  it('preserves existing skin.presetId when legacy themeId is present', () => {
+    const normalized = normalizeAppearanceSettings({
+      themeId: 'aurora',
+      skin: {
+        presetId: 'midnight',
+      },
+    } as any);
+
+    expect(normalized.skin.presetId).toBe('midnight');
   });
 });
