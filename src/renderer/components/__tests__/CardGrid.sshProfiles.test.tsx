@@ -217,7 +217,7 @@ describe('CardGrid SSH profile cards', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' })).toHaveStyle({
-      borderTop: `2px solid ${getStatusColorValue(WindowStatus.Paused)}`,
+      borderTop: `1px solid ${getStatusColorValue(WindowStatus.Paused)}`,
     });
   });
 
@@ -240,7 +240,7 @@ describe('CardGrid SSH profile cards', () => {
     });
 
     expect(screen.queryByText('Hidden runtime window')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '停止' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '销毁' })).toBeInTheDocument();
     expect(screen.queryByText('运行中')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' }));
@@ -374,7 +374,7 @@ describe('CardGrid SSH profile cards', () => {
     expect(await screen.findByRole('button', { name: '取消归档' })).toBeInTheDocument();
   });
 
-  it('stops a bound SSH runtime window by destroying its ephemeral clones and pausing the root window', async () => {
+  it('stops a bound SSH runtime window by destroying both the root window and its ephemeral clones', async () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();
     const runtimeWindow = createStandaloneSSHWindow(profile);
@@ -391,18 +391,16 @@ describe('CardGrid SSH profile cards', () => {
       sshProfiles: [profile],
     });
 
-    await user.click(screen.getByRole('button', { name: '停止' }));
+    await user.click(screen.getByRole('button', { name: '销毁' }));
 
     await waitFor(() => {
       expect(closeWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
       expect(deleteWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
+      expect(deleteWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
       expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(false);
-      expect(useWindowStore.getState().windows.some((window) => window.id === runtimeWindow.id)).toBe(true);
+      expect(useWindowStore.getState().windows.some((window) => window.id === runtimeWindow.id)).toBe(false);
     });
-
-    const remainingWindow = useWindowStore.getState().windows.find((window) => window.id === runtimeWindow.id);
-    expect(remainingWindow?.ephemeral).not.toBe(true);
   });
 
   it('deletes a bound SSH card by removing both the runtime window and the SSH profile', async () => {
@@ -520,7 +518,7 @@ describe('CardGrid SSH profile cards', () => {
     });
 
     expect(screen.getByRole('button', { name: 'Prod Bastion root@10.0.0.21:22' })).toHaveStyle({
-      borderTop: `2px solid ${getStatusColorValue(WindowStatus.Paused)}`,
+      borderTop: `1px solid ${getStatusColorValue(WindowStatus.Paused)}`,
     });
   });
 });

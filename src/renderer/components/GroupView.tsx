@@ -291,12 +291,10 @@ export const GroupView: React.FC<GroupViewProps> = ({
         await destroyWindowIds([windowId]);
       } else {
         await destroyOwnedEphemeralWindows(windowId);
-        await window.electronAPI.closeWindow(windowId);
-        const { pauseWindowState } = useWindowStore.getState();
-        pauseWindowState(windowId);
+        await destroyWindowIds([windowId]);
       }
     } catch (error) {
-      console.error('Failed to stop window:', error);
+      console.error('Failed to destroy window:', error);
     }
 
     // 移除窗口

@@ -128,10 +128,10 @@ export const CardGrid = React.memo<CardGridProps>(({
   const windows = useWindowStore((state) => state.windows);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
-  const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
   const archiveWindow = useWindowStore((state) => state.archiveWindow);
   const unarchiveWindow = useWindowStore((state) => state.unarchiveWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
+  const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
 
   // 组相关的 store 方法
   const groups = useWindowStore((state) => state.groups);
@@ -591,14 +591,11 @@ export const CardGrid = React.memo<CardGridProps>(({
 
       await destroyOwnedEphemeralWindows(win.id);
 
-      // 关闭窗口（终止所有 PTY 进程）
-      await window.electronAPI.closeWindow(win.id);
-
-      pauseWindowState(win.id);
+      await destroyWindowIds([win.id]);
     } catch (error) {
-      console.error('Failed to pause window:', error);
+      console.error('Failed to destroy window:', error);
     }
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, pauseWindowState]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds]);
 
   const handleArchiveWindow = useCallback(async (win: Window) => {
     try {

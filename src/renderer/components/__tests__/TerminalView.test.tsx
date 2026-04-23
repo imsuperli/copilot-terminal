@@ -1040,4 +1040,119 @@ describe('TerminalView', () => {
       vi.useRealTimers();
     }
   });
+
+  it('deletes the current window when stop is clicked and switches to the next runnable window', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const currentWindow = createLocalWindow(WindowStatus.Running);
+      const pausedWindow: Window = {
+        ...createLocalWindow(WindowStatus.Paused),
+        id: 'win-local-2',
+        name: 'Paused Window',
+        layout: {
+          type: 'pane',
+          id: 'pane-local-2',
+          pane: {
+            id: 'pane-local-2',
+            cwd: '/workspace/paused',
+            command: 'bash',
+            status: WindowStatus.Paused,
+            pid: null,
+          },
+        },
+        activePaneId: 'pane-local-2',
+      };
+      const runningWindow: Window = {
+        ...createLocalWindow(WindowStatus.WaitingForInput),
+        id: 'win-local-3',
+        name: 'Waiting Window',
+        layout: {
+          type: 'pane',
+          id: 'pane-local-3',
+          pane: {
+            id: 'pane-local-3',
+            cwd: '/workspace/waiting',
+            command: 'bash',
+            status: WindowStatus.WaitingForInput,
+            pid: 303,
+          },
+        },
+        activePaneId: 'pane-local-3',
+      };
+      const onReturn = vi.fn();
+      const onWindowSwitch = vi.fn();
+
+      useWindowStore.setState({
+        windows: [currentWindow, pausedWindow, runningWindow],
+        activeWindowId: currentWindow.id,
+        mruList: [currentWindow.id, pausedWindow.id, runningWindow.id],
+        sidebarExpanded: false,
+        sidebarWidth: 200,
+      });
+
+      render(
+        <TerminalView
+          window={currentWindow}
+          onReturn={onReturn}
+          onWindowSwitch={onWindowSwitch}
+          isActive
+        />
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'terminalView.stop' }));
+        await vi.advanceTimersByTimeAsync(100);
+      });
+
+      expect(onWindowSwitch).toHaveBeenCalledWith(runningWindow.id);
+      expect(onWindowSwitch).not.toHaveBeenCalledWith(pausedWindow.id);
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(currentWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(currentWindow.id);
+      expect(useWindowStore.getState().windows.find((window) => window.id === currentWindow.id)).toBeUndefined();
+      expect(onReturn).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('restarts a running window without deleting its record', async () => {
+    const currentWindow = createLocalWindow(WindowStatus.Running);
+
+    vi.mocked(window.electronAPI.startWindow).mockResolvedValueOnce({
+      success: true,
+      data: {
+        pid: 404,
+        sessionId: 'session-404',
+        status: WindowStatus.WaitingForInput,
+      },
+    });
+
+    useWindowStore.setState({
+      windows: [currentWindow],
+      activeWindowId: currentWindow.id,
+      mruList: [currentWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={currentWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'terminalView.restart' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(currentWindow.id);
+      expect(window.electronAPI.startWindow).toHaveBeenCalled();
+    });
+
+    expect(window.electronAPI.deleteWindow).not.toHaveBeenCalledWith(currentWindow.id);
+    expect(useWindowStore.getState().windows.find((window) => window.id === currentWindow.id)).toBeDefined();
+  });
 });

@@ -30,7 +30,6 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
   const windows = useWindowStore((state) => state.windows);
   const updatePane = useWindowStore((state) => state.updatePane);
   const updateWindow = useWindowStore((state) => state.updateWindow);
-  const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
   const unarchiveWindow = useWindowStore((state) => state.unarchiveWindow);
   const { runWithWindowDirectory, dialogState } = useWindowDirectoryGuard();
   const { requestDeleteWindow, dialogState: deleteDialogState } = useDeleteWindowDialog();
@@ -103,14 +102,11 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
 
       await destroyOwnedEphemeralWindows(win.id);
 
-      // 关闭窗口（终止所有 PTY 进程）
-      await window.electronAPI.closeWindow(win.id);
-
-      pauseWindowState(win.id);
+      await destroyWindowIds([win.id]);
     } catch (error) {
-      console.error('Failed to pause window:', error);
+      console.error('Failed to destroy window:', error);
     }
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, pauseWindowState]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds]);
 
   const handleUnarchiveWindow = useCallback((win: Window) => {
     unarchiveWindow(win.id);

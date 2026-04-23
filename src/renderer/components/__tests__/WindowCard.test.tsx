@@ -190,7 +190,7 @@ describe('WindowCard', () => {
     const user = userEvent.setup();
     render(<WindowCard window={createWindow()} onClick={onClick} onPause={onPause} />);
 
-    await user.click(screen.getByRole('button', { name: '停止' }));
+    await user.click(screen.getByRole('button', { name: '销毁' }));
 
     expect(onPause).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();

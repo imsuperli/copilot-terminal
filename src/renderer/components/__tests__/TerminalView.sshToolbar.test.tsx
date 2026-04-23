@@ -104,8 +104,10 @@ vi.mock('../../i18n', () => ({
           return '归档';
         case 'common.close':
           return '关闭';
+        case 'common.destroy':
+          return '销毁';
         case 'terminalView.stop':
-          return '停止';
+          return '销毁';
         case 'terminalView.restart':
           return '重启';
         case 'terminalView.start':
@@ -659,7 +661,7 @@ describe('TerminalView SSH toolbar', () => {
     );
 
     await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: 'Prod SSH B' }) });
-    await user.click(screen.getAllByText('关闭')[0]);
+    await user.click(screen.getAllByText('销毁')[0]);
 
     expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
@@ -708,7 +710,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByRole('button', { name: '归档' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '重启' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '停止' }));
+    await user.click(screen.getByRole('button', { name: '销毁' }));
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
@@ -717,6 +719,74 @@ describe('TerminalView SSH toolbar', () => {
 
     expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
     expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
+  });
+
+  it('deletes a non-ephemeral ssh window when stopped and returns when no runnable window remains', async () => {
+    const user = userEvent.setup({ delay: null });
+    const onReturn = vi.fn();
+    const activeWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      remoteCwd: '/srv/app',
+    });
+    const pausedWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Paused SSH',
+      remoteCwd: '/srv/paused',
+    });
+    pausedWindow.layout = {
+      type: 'pane',
+      id: 'pane-ssh-2',
+      pane: {
+        id: 'pane-ssh-2',
+        cwd: '/srv/paused',
+        command: '',
+        status: WindowStatus.Paused,
+        pid: null,
+        backend: 'ssh',
+        ssh: {
+          profileId: 'profile-2',
+          host: '10.0.0.22',
+          port: 22,
+          user: 'root',
+          authType: 'password',
+          remoteCwd: '/srv/paused',
+          reuseSession: true,
+        },
+      },
+    };
+
+    useWindowStore.setState({
+      windows: [activeWindow, pausedWindow],
+      activeWindowId: activeWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
+
+    render(
+      <TerminalView
+        window={activeWindow}
+        onReturn={onReturn}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '销毁' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-1');
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-1');
+    });
+
+    expect(onReturn).toHaveBeenCalledTimes(1);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-2']);
   });
 
   it('destroys an ephemeral ssh clone tab when its only pane exits', async () => {
