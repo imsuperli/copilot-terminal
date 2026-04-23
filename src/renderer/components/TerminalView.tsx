@@ -65,6 +65,7 @@ import {
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
+import { destroyWindowProcessAndRecord } from '../utils/windowDestruction';
 import { idePopupIconButtonClassName } from './ui/ide-popup';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
@@ -403,7 +404,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const updateSplitSizes = useWindowStore((state) => state.updateSplitSizes);
   const archiveWindow = useWindowStore((state) => state.archiveWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
-  const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
   const addGroup = useWindowStore((state) => state.addGroup);
   const setActiveGroup = useWindowStore((state) => state.setActiveGroup);
   const findGroupByWindowId = useWindowStore((state) => state.findGroupByWindowId);
@@ -413,16 +413,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const destroyRemoteWindows = useCallback(
     async (windowIds: string[]) => {
       for (const windowId of windowIds) {
-        const closeResponse = await window.electronAPI.closeWindow(windowId);
-        if (closeResponse && !closeResponse.success) {
-          throw new Error(closeResponse.error || `Failed to close remote window ${windowId}`);
-        }
-
-        const deleteResponse = await window.electronAPI.deleteWindow(windowId);
-        if (deleteResponse && !deleteResponse.success) {
-          throw new Error(deleteResponse.error || `Failed to delete remote window ${windowId}`);
-        }
-
+        await destroyWindowProcessAndRecord(windowId);
         removeWindow(windowId);
       }
     },
@@ -530,6 +521,58 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
   }, [destroyRemoteWindows, onReturn, onWindowSwitch, terminalWindow.id]);
 
+  const handleDeleteWindow = useCallback(async () => {
+    if (isEphemeralRemoteTab) {
+      await destroyCurrentEphemeralRemoteWindow();
+      return;
+    }
+
+    try {
+      const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
+        useWindowStore.getState().windows,
+        terminalWindow.id,
+      );
+      if (ownedEphemeralWindowIds.length > 0) {
+        await destroyRemoteWindows(ownedEphemeralWindowIds);
+      }
+
+      const { windows } = useWindowStore.getState();
+      const activeWindows = getPersistableWindows(windows).filter((window) => (
+        !window.archived
+        && window.id !== terminalWindow.id
+        && isArchiveSwitchCandidate(window)
+      ));
+
+      let targetWindow = activeWindows.find((window) => {
+        const windowPanes = getAllPanes(window.layout);
+        return windowPanes.some((pane) => pane.status === WindowStatus.WaitingForInput);
+      });
+
+      if (!targetWindow && activeWindows.length > 0) {
+        targetWindow = activeWindows[0];
+      }
+
+      if (targetWindow) {
+        onWindowSwitch(targetWindow.id);
+
+        setTimeout(async () => {
+          try {
+            await destroyWindowProcessAndRecord(terminalWindow.id);
+            removeWindow(terminalWindow.id);
+          } catch (error) {
+            console.error('Failed to close and delete window:', error);
+          }
+        }, 100);
+      } else {
+        await destroyWindowProcessAndRecord(terminalWindow.id);
+        removeWindow(terminalWindow.id);
+        onReturn();
+      }
+    } catch (error) {
+      console.error('Failed to delete window:', error);
+    }
+  }, [destroyCurrentEphemeralRemoteWindow, destroyRemoteWindows, isEphemeralRemoteTab, onReturn, onWindowSwitch, removeWindow, terminalWindow.id]);
+
   // 处理窗格进程退出
   const handlePaneExit = useCallback(
     (paneId: string) => {
@@ -546,30 +589,9 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             console.error('Failed to destroy ephemeral remote window after pane exit:', error);
           });
         } else {
-          // 单窗口：停止进程 + 暂停窗口 + 返回主界面
-          const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
-            useWindowStore.getState().windows,
-            terminalWindow.id,
-          );
-
-          const closeCurrentWindow = async () => {
-            if (ownedEphemeralWindowIds.length > 0) {
-              await destroyRemoteWindows(ownedEphemeralWindowIds);
-            }
-
-            if (window.electronAPI) {
-              await window.electronAPI.closeWindow(terminalWindow.id);
-            }
-            pauseWindowState(terminalWindow.id);
-          };
-
-          void closeCurrentWindow().catch((error) => {
-            console.error('Failed to close window after pane exit:', error);
+          void handleDeleteWindow().catch((error) => {
+            console.error('Failed to destroy window after pane exit:', error);
           });
-
-          if (window.electronAPI) {
-            window.electronAPI.switchToUnifiedView().catch(console.error);
-          }
         }
       } else {
         // 多窗格：复用关闭窗格逻辑
@@ -584,9 +606,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       onStopAndRemoveFromGroup,
       isEphemeralRemoteTab,
       destroyCurrentEphemeralRemoteWindow,
-      pauseWindowState,
+      handleDeleteWindow,
       closePaneInWindow,
-      destroyRemoteWindows,
     ]
   );
 
@@ -907,60 +928,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const handleStartWindow = useCallback(async () => {
     await startWindowPanes(terminalWindow, updatePane);
   }, [terminalWindow, updatePane]);
-
-  const handleDeleteWindow = useCallback(async () => {
-    if (isEphemeralRemoteTab) {
-      await destroyCurrentEphemeralRemoteWindow();
-      return;
-    }
-
-    try {
-      const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
-        useWindowStore.getState().windows,
-        terminalWindow.id,
-      );
-      if (ownedEphemeralWindowIds.length > 0) {
-        await destroyRemoteWindows(ownedEphemeralWindowIds);
-      }
-
-      const { windows } = useWindowStore.getState();
-      const activeWindows = getPersistableWindows(windows).filter((window) => (
-        !window.archived
-        && window.id !== terminalWindow.id
-        && isArchiveSwitchCandidate(window)
-      ));
-
-      let targetWindow = activeWindows.find((window) => {
-        const windowPanes = getAllPanes(window.layout);
-        return windowPanes.some((pane) => pane.status === WindowStatus.WaitingForInput);
-      });
-
-      if (!targetWindow && activeWindows.length > 0) {
-        targetWindow = activeWindows[0];
-      }
-
-      if (targetWindow) {
-        onWindowSwitch(targetWindow.id);
-
-        setTimeout(async () => {
-          try {
-            await window.electronAPI.closeWindow(terminalWindow.id);
-            await window.electronAPI.deleteWindow(terminalWindow.id);
-            removeWindow(terminalWindow.id);
-          } catch (error) {
-            console.error('Failed to close and delete window:', error);
-          }
-        }, 100);
-      } else {
-        await window.electronAPI.closeWindow(terminalWindow.id);
-        await window.electronAPI.deleteWindow(terminalWindow.id);
-        removeWindow(terminalWindow.id);
-        onReturn();
-      }
-    } catch (error) {
-      console.error('Failed to delete window:', error);
-    }
-  }, [destroyCurrentEphemeralRemoteWindow, destroyRemoteWindows, isEphemeralRemoteTab, onReturn, onWindowSwitch, removeWindow, terminalWindow.id]);
 
   const handleOpenSSHPortForwards = useCallback(() => {
     if (!activeTerminalPane || !activePaneCapabilities?.canManagePortForwards) {

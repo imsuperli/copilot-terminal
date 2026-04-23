@@ -1155,4 +1155,39 @@ describe('TerminalView', () => {
     expect(window.electronAPI.deleteWindow).not.toHaveBeenCalledWith(currentWindow.id);
     expect(useWindowStore.getState().windows.find((window) => window.id === currentWindow.id)).toBeDefined();
   });
+
+  it('does not remove the window record when destroy IPC fails', async () => {
+    const currentWindow = createLocalWindow(WindowStatus.Running);
+
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({
+      success: false,
+      error: 'delete failed',
+    });
+
+    useWindowStore.setState({
+      windows: [currentWindow],
+      activeWindowId: currentWindow.id,
+      mruList: [currentWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(
+      <TerminalView
+        window={currentWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'terminalView.stop' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(currentWindow.id);
+    });
+
+    expect(useWindowStore.getState().windows.find((window) => window.id === currentWindow.id)).toBeDefined();
+  });
 });

@@ -35,6 +35,7 @@ import {
 import { getSSHProfileReferencingWindows } from '../utils/sshWindowDeletion';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getPaneBackend, isSessionlessPane } from '../../shared/utils/terminalCapabilities';
 import { startWindowPanes } from '../utils/paneSessionActions';
+import { destroyWindowProcessAndRecord } from '../utils/windowDestruction';
 
 // 统一的卡片项类型
 type CardItem =
@@ -569,8 +570,7 @@ export const CardGrid = React.memo<CardGridProps>(({
 
   const destroyWindowIds = useCallback(async (windowIds: string[]) => {
     for (const windowId of windowIds) {
-      await window.electronAPI.closeWindow(windowId);
-      await window.electronAPI.deleteWindow(windowId);
+      await destroyWindowProcessAndRecord(windowId);
       removeWindow(windowId);
     }
   }, [removeWindow]);

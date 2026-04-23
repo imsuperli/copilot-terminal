@@ -14,6 +14,7 @@ import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import type { SSHProfile } from '../../shared/types/ssh';
 import { getOwnedEphemeralSSHWindowIds, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
+import { destroyWindowProcessAndRecord } from '../utils/windowDestruction';
 
 const LazyQuickSwitcher = lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -165,8 +166,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
     const { removeWindow } = useWindowStore.getState();
 
     for (const windowId of windowIds) {
-      await window.electronAPI.closeWindow(windowId);
-      await window.electronAPI.deleteWindow(windowId);
+      await destroyWindowProcessAndRecord(windowId);
       removeWindow(windowId);
     }
   }, []);
@@ -280,7 +280,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
     }, 0);
   }, [group.id, groupWindowIds, removeWindowFromGroupLayout, onWindowSwitch, onReturn]);
 
-  // 停止窗口并从组中移除
+  // 销毁窗口并从组中移除
   const handleStopAndRemoveFromGroup = useCallback(async (windowId: string) => {
     // 获取移除前的窗口列表
     const windowIdsBeforeRemove = groupWindowIds;
@@ -296,9 +296,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
     } catch (error) {
       console.error('Failed to destroy window:', error);
     }
-
-    // 移除窗口
-    removeWindowFromGroupLayout(group.id, windowId);
 
     // 检查分组是否被解散（窗口数 < 2）
     setTimeout(() => {
@@ -316,7 +313,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
         }
       }
     }, 0);
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, group.id, groupWindowById, groupWindowIds, onReturn, onWindowSwitch, removeWindowFromGroupLayout]);
+  }, [destroyOwnedEphemeralWindows, destroyWindowIds, group.id, groupWindowById, groupWindowIds, onReturn, onWindowSwitch]);
 
   // 批量启动组内所有窗口
   const handleStartAll = useCallback(async () => {

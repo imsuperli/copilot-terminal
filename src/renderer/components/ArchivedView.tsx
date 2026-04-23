@@ -15,6 +15,7 @@ import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import { getOwnedEphemeralSSHWindowIds, getPersistableWindows, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
+import { destroyWindowProcessAndRecord } from '../utils/windowDestruction';
 
 interface ArchivedViewProps {
   onEnterTerminal?: (window: Window) => void;
@@ -80,8 +81,7 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
 
   const destroyWindowIds = useCallback(async (windowIds: string[]) => {
     for (const windowId of windowIds) {
-      await window.electronAPI.closeWindow(windowId);
-      await window.electronAPI.deleteWindow(windowId);
+      await destroyWindowProcessAndRecord(windowId);
       useWindowStore.getState().removeWindow(windowId);
     }
   }, []);

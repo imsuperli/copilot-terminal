@@ -337,9 +337,10 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByText('Prod SSH')).not.toBeInTheDocument();
   });
 
-  it('treats the last terminal pane exit as a window pause even when browser siblings exist', async () => {
+  it('destroys the window when the last terminal pane exits even when browser siblings exist', async () => {
     const user = userEvent.setup();
     const localWindow = createLocalWindowWithBrowserSibling();
+    const onReturn = vi.fn();
 
     useWindowStore.setState({
       windows: [localWindow],
@@ -352,7 +353,7 @@ describe('TerminalView SSH toolbar', () => {
     render(
       <TerminalView
         window={localWindow}
-        onReturn={vi.fn()}
+        onReturn={onReturn}
         onWindowSwitch={vi.fn()}
         isActive
       />,
@@ -362,8 +363,11 @@ describe('TerminalView SSH toolbar', () => {
 
     await waitFor(() => {
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(localWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(localWindow.id);
     });
     expect(window.electronAPI.closePane).not.toHaveBeenCalled();
+    expect(onReturn).toHaveBeenCalledTimes(1);
+    expect(useWindowStore.getState().windows.some((window) => window.id === localWindow.id)).toBe(false);
   });
 
   it('does not render a duplicate identity block when a browser pane is active inside an ssh window', () => {
