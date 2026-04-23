@@ -1,4 +1,5 @@
 ﻿import React, { Suspense, lazy, useCallback, useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { Play, Square, Archive } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
@@ -8,13 +9,15 @@ import { Sidebar } from './Sidebar';
 import { WindowGroup } from '../../shared/types/window-group';
 import { Pane, Window, WindowStatus } from '../types/window';
 import { getAllWindowIds } from '../utils/groupLayoutHelpers';
-import { getAggregatedStatusFromPanes, getAllPanes } from '../utils/layoutHelpers';
+import { getAllPanes } from '../utils/layoutHelpers';
 import type { WindowCardDragItem, DropResult } from './dnd';
 import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import type { SSHProfile } from '../../shared/types/ssh';
 import { getOwnedEphemeralSSHWindowIds, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 import { destroyWindowProcessAndRecord } from '../utils/windowDestruction';
+import { preventMouseButtonFocus } from '../utils/buttonFocus';
+import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
 
 const LazyQuickSwitcher = lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -52,6 +55,27 @@ export const GroupView: React.FC<GroupViewProps> = ({
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false);
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false);
   const [hasMountedSettingsPanel, setHasMountedSettingsPanel] = useState(false);
+  const [titleBarActionsSlot, setTitleBarActionsSlot] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const syncSlot = () => {
+      const nextSlot = document.getElementById(CUSTOM_TITLEBAR_ACTIONS_SLOT_ID);
+      setTitleBarActionsSlot((currentSlot) => (
+        currentSlot === nextSlot ? currentSlot : nextSlot
+      ));
+    };
+
+    syncSlot();
+    window.addEventListener('resize', syncSlot);
+
+    return () => {
+      window.removeEventListener('resize', syncSlot);
+    };
+  }, []);
 
   const setActiveWindowInGroup = useWindowStore((state) => state.setActiveWindowInGroup);
   const archiveGroup = useWindowStore((state) => state.archiveGroup);
@@ -74,44 +98,22 @@ export const GroupView: React.FC<GroupViewProps> = ({
   const groupWindowRuntime = useMemo(() => {
     const windowById = new Map<string, Window>();
     const pausedPanesByWindowId = new Map<string, Pane[]>();
-    const statusByWindowId = new Map<string, WindowStatus>();
-    let hasRunning = false;
-    let hasWaitingForInput = false;
-    let hasPaused = false;
 
     for (const terminalWindow of groupWindows) {
       windowById.set(terminalWindow.id, terminalWindow);
 
       const panes = getAllPanes(terminalWindow.layout);
-      const status = getAggregatedStatusFromPanes(panes);
-      statusByWindowId.set(terminalWindow.id, status);
-
       const pausedPanes = getPausedPanes(panes);
       if (pausedPanes.length > 0) {
         pausedPanesByWindowId.set(terminalWindow.id, pausedPanes);
       }
-
-      hasRunning ||= status === WindowStatus.Running;
-      hasWaitingForInput ||= status === WindowStatus.WaitingForInput;
-      hasPaused ||= status === WindowStatus.Paused;
     }
-
-    const aggregatedStatus = hasRunning
-      ? WindowStatus.Running
-      : hasWaitingForInput
-        ? WindowStatus.WaitingForInput
-        : hasPaused
-          ? WindowStatus.Paused
-          : WindowStatus.Paused;
 
     return {
       windowById,
       pausedPanesByWindowId,
-      statusByWindowId,
-      aggregatedStatus,
     };
   }, [groupWindows]);
-  const groupAggregatedStatus = groupWindowRuntime.aggregatedStatus;
   const groupPausedPanesByWindowId = groupWindowRuntime.pausedPanesByWindowId;
   const groupWindowById = groupWindowRuntime.windowById;
 
@@ -361,14 +363,71 @@ export const GroupView: React.FC<GroupViewProps> = ({
     setIsSettingsPanelOpen(true);
   }, []);
 
-  // 状态颜色
-  const statusColor = groupAggregatedStatus === WindowStatus.Running
-    ? 'bg-green-500'
-    : groupAggregatedStatus === WindowStatus.WaitingForInput
-      ? 'bg-[rgb(var(--primary))]'
-      : 'bg-[rgb(var(--muted-foreground))]';
   const toolbarButtonBaseClassName =
     'flex h-6 w-6 items-center justify-center rounded-md border border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--secondary))_78%,transparent)] transition-colors';
+  const titleBarActions = useMemo(() => {
+    if (!isActive || !titleBarActionsSlot) {
+      return null;
+    }
+
+    return createPortal(
+      <div
+        data-testid="group-titlebar-actions"
+        className="pointer-events-auto flex h-8 items-center justify-end gap-1 px-1.5"
+      >
+        <AppTooltip content="启动全部" placement="toolbar-trailing">
+          <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={preventMouseButtonFocus}
+            onClick={handleStartAll}
+            aria-label="启动全部"
+            className={`${toolbarButtonBaseClassName} text-emerald-400 hover:border-emerald-400/45 hover:bg-emerald-500/[0.12] hover:text-emerald-300`}
+          >
+            <Play size={14} fill="currentColor" />
+          </button>
+        </AppTooltip>
+
+        <AppTooltip
+          content="销毁全部"
+          delayDuration={200}
+          placement="toolbar-trailing"
+        >
+          <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={preventMouseButtonFocus}
+            onClick={handleDestroyAll}
+            aria-label="销毁全部"
+            className={`${toolbarButtonBaseClassName} cursor-pointer text-red-400 hover:border-red-400/45 hover:bg-red-500/[0.12] hover:text-red-300`}
+          >
+            <Square size={14} fill="currentColor" />
+          </button>
+        </AppTooltip>
+
+        <AppTooltip content="归档组" placement="toolbar-trailing">
+          <button
+            type="button"
+            tabIndex={-1}
+            onMouseDown={preventMouseButtonFocus}
+            onClick={handleArchiveGroup}
+            aria-label="归档组"
+            className={`${toolbarButtonBaseClassName} text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]`}
+          >
+            <Archive size={14} />
+          </button>
+        </AppTooltip>
+      </div>,
+      titleBarActionsSlot,
+    );
+  }, [
+    handleArchiveGroup,
+    handleDestroyAll,
+    handleStartAll,
+    isActive,
+    titleBarActionsSlot,
+    toolbarButtonBaseClassName,
+  ]);
 
   return (
     <div className="flex h-full bg-transparent">
@@ -383,53 +442,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
 
       {/* 主内容区 */}
       <div className="flex flex-1 flex-col overflow-hidden bg-transparent">
-        {/* 顶部工具栏 */}
-        <div
-          className="flex h-8 flex-shrink-0 items-center gap-2 border-b border-[rgb(var(--border))] px-3"
-          style={{ backgroundColor: 'var(--appearance-pane-chrome-background)' }}
-        >
-          <div className="flex-1" />
-
-          {/* 批量操作按钮 */}
-          <div className="flex items-center gap-1">
-            {/* 启动全部 */}
-            <AppTooltip content="启动全部" placement="toolbar-trailing">
-              <button
-                onClick={handleStartAll}
-                aria-label="启动全部"
-                className={`${toolbarButtonBaseClassName} text-emerald-400 hover:border-emerald-400/45 hover:bg-emerald-500/[0.12] hover:text-emerald-300`}
-              >
-                <Play size={14} fill="currentColor" />
-              </button>
-            </AppTooltip>
-
-            {/* 销毁全部 */}
-            <AppTooltip
-              content="销毁全部"
-              delayDuration={200}
-              placement="toolbar-trailing"
-            >
-              <button
-                onClick={handleDestroyAll}
-                aria-label="销毁全部"
-                className={`${toolbarButtonBaseClassName} cursor-pointer text-red-400 hover:border-red-400/45 hover:bg-red-500/[0.12] hover:text-red-300`}
-              >
-                <Square size={14} fill="currentColor" />
-              </button>
-            </AppTooltip>
-
-            {/* 归档组 */}
-            <AppTooltip content="归档组" placement="toolbar-trailing">
-              <button
-                onClick={handleArchiveGroup}
-                aria-label="归档组"
-                className={`${toolbarButtonBaseClassName} text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]`}
-              >
-                <Archive size={14} />
-              </button>
-            </AppTooltip>
-          </div>
-        </div>
+        {titleBarActions}
 
         {/* 组布局区域 */}
         <div className="flex-1 overflow-hidden">

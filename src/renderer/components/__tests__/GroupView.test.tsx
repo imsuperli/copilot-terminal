@@ -6,6 +6,7 @@ import { GroupView } from '../GroupView';
 import { useWindowStore } from '../../stores/windowStore';
 import { Window, WindowStatus } from '../../types/window';
 import { WindowGroup } from '../../../shared/types/window-group';
+import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from '../CustomTitleBar';
 
 vi.mock('../Sidebar', () => ({
   Sidebar: () => <div data-testid="sidebar" />,
@@ -70,6 +71,7 @@ function createGroup(windowIds: string[]): WindowGroup {
 describe('GroupView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    document.body.innerHTML = `<div id="${CUSTOM_TITLEBAR_ACTIONS_SLOT_ID}"></div>`;
     useWindowStore.setState({
       windows: [],
       groups: [],
