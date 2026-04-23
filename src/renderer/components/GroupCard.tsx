@@ -201,7 +201,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
       onKeyDown={handleKeyDown}
       aria-label={`组: ${group.name}, ${windowCount} 个窗口`}
       className={`${idePopupInteractiveListCardClassName} flex h-56 min-w-[280px] flex-col`}
-      style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus)}` }}
+      style={{ borderTop: `1px solid ${getStatusColorValue(aggregatedStatus)}` }}
     >
       {/* 卡片内容 */}
       <div className="flex-1 p-4 space-y-2 flex flex-col min-h-0">

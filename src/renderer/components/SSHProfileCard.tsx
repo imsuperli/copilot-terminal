@@ -149,7 +149,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
       onKeyDown={handleKeyDown}
       aria-label={`${profile.name} ${targetLabel}`}
       className={`${idePopupInteractiveListCardClassName} flex h-56 min-w-[280px] flex-col`}
-      style={{ borderTop: `2px solid ${topBorderColor}` }}
+      style={{ borderTop: `1px solid ${topBorderColor}` }}
     >
       {isConnecting && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-[color-mix(in_srgb,rgb(var(--background))_88%,black)] text-sm font-medium text-[rgb(var(--foreground))]">

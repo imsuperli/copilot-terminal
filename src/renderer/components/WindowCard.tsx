@@ -272,7 +272,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
       onKeyDown={handleKeyDown}
       aria-label={ariaLabel}
       className={`${idePopupInteractiveListCardClassName} flex h-56 min-w-[280px] flex-col`}
-      style={{ borderTop: `2px solid ${getStatusColorValue(aggregatedStatus)}` }}
+      style={{ borderTop: `1px solid ${getStatusColorValue(aggregatedStatus)}` }}
     >
       {/* 启动中加载遮罩 */}
       {aggregatedStatus === WindowStatus.Restoring && (
