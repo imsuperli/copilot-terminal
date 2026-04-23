@@ -113,7 +113,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
   }, [groupWindows]);
   const groupAggregatedStatus = groupWindowRuntime.aggregatedStatus;
   const groupPausedPanesByWindowId = groupWindowRuntime.pausedPanesByWindowId;
-  const groupStatusByWindowId = groupWindowRuntime.statusByWindowId;
   const groupWindowById = groupWindowRuntime.windowById;
 
   const startPausedPanesForWindow = useCallback(
@@ -322,26 +321,28 @@ export const GroupView: React.FC<GroupViewProps> = ({
     }
   }, [groupPausedPanesByWindowId, groupWindows, startPausedPanesForWindow]);
 
-  // 批量暂停组内所有窗口
-  const handlePauseAll = useCallback(async () => {
-    const { pauseWindowState } = useWindowStore.getState();
-    for (const win of groupWindows) {
-      const status = groupStatusByWindowId.get(win.id) ?? WindowStatus.Paused;
-      if (status === WindowStatus.Running || status === WindowStatus.WaitingForInput) {
-        try {
-          if (isEphemeralSSHCloneWindow(win as Window)) {
-            await destroyWindowIds([win.id]);
-          } else {
-            await destroyOwnedEphemeralWindows(win.id);
-            await window.electronAPI.closeWindow(win.id);
-            pauseWindowState(win.id);
-          }
-        } catch (error) {
-          console.error(`Failed to pause window ${win.id}:`, error);
-        }
+  // 批量销毁组内所有窗口
+  const handleDestroyAll = useCallback(async () => {
+    const allWindows = useWindowStore.getState().windows;
+    const windowsById = new Map(allWindows.map((win) => [win.id, win]));
+    const windowIdsToDestroy = new Set<string>();
+
+    for (const windowId of groupWindowIds) {
+      windowIdsToDestroy.add(windowId);
+      const win = windowsById.get(windowId);
+      if (win && !isEphemeralSSHCloneWindow(win)) {
+        getOwnedEphemeralSSHWindowIds(allWindows, windowId)
+          .forEach((ownedWindowId) => windowIdsToDestroy.add(ownedWindowId));
       }
     }
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, groupStatusByWindowId, groupWindows]);
+
+    try {
+      await destroyWindowIds([...windowIdsToDestroy]);
+      onReturn();
+    } catch (error) {
+      console.error('Failed to destroy all windows in group:', error);
+    }
+  }, [destroyWindowIds, groupWindowIds, onReturn]);
 
   const handleSidebarWindowSelect = useCallback((windowId: string) => {
     if (groupWindowIdSet.has(windowId)) {
@@ -395,28 +396,23 @@ export const GroupView: React.FC<GroupViewProps> = ({
             <AppTooltip content="启动全部" placement="toolbar-trailing">
               <button
                 onClick={handleStartAll}
+                aria-label="启动全部"
                 className={`${toolbarButtonBaseClassName} text-emerald-400 hover:border-emerald-400/45 hover:bg-emerald-500/[0.12] hover:text-emerald-300`}
               >
                 <Play size={14} fill="currentColor" />
               </button>
             </AppTooltip>
 
-            {/* 暂停全部 - 始终显示，根据状态改变颜色和禁用状态 */}
+            {/* 销毁全部 */}
             <AppTooltip
-              content={groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
-                ? '暂停全部'
-                : '窗口未运行'}
+              content="销毁全部"
               delayDuration={200}
               placement="toolbar-trailing"
             >
               <button
-                onClick={handlePauseAll}
-                disabled={groupAggregatedStatus !== WindowStatus.Running && groupAggregatedStatus !== WindowStatus.WaitingForInput}
-                className={`${toolbarButtonBaseClassName} ${
-                  groupAggregatedStatus === WindowStatus.Running || groupAggregatedStatus === WindowStatus.WaitingForInput
-                    ? 'cursor-pointer text-red-400 hover:border-red-400/45 hover:bg-red-500/[0.12] hover:text-red-300'
-                    : 'cursor-not-allowed text-[rgb(var(--muted-foreground))] opacity-50'
-                }`}
+                onClick={handleDestroyAll}
+                aria-label="销毁全部"
+                className={`${toolbarButtonBaseClassName} cursor-pointer text-red-400 hover:border-red-400/45 hover:bg-red-500/[0.12] hover:text-red-300`}
               >
                 <Square size={14} fill="currentColor" />
               </button>
@@ -426,6 +422,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
             <AppTooltip content="归档组" placement="toolbar-trailing">
               <button
                 onClick={handleArchiveGroup}
+                aria-label="归档组"
                 className={`${toolbarButtonBaseClassName} text-[rgb(var(--muted-foreground))] hover:border-[rgb(var(--ring))] hover:bg-[rgb(var(--accent))] hover:text-[rgb(var(--foreground))]`}
               >
                 <Archive size={14} />
