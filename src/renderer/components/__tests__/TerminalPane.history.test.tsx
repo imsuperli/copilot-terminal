@@ -6,7 +6,7 @@ import { subscribeToPanePtyData } from '../../api/ptyDataBus';
 import { useWindowStore } from '../../stores/windowStore';
 import type { PtyDataPayload } from '../../../shared/types/electron-api';
 
-const { terminalInstances, ptyCallbacks, terminalDataCallbacks } = vi.hoisted(() => ({
+const { terminalInstances, ptyCallbacks, terminalDataCallbacks, requestAnimationFrameMock, cancelAnimationFrameMock } = vi.hoisted(() => ({
   terminalInstances: [] as Array<{
     loadAddon: ReturnType<typeof vi.fn>;
     registerLinkProvider: ReturnType<typeof vi.fn>;
@@ -27,6 +27,11 @@ const { terminalInstances, ptyCallbacks, terminalDataCallbacks } = vi.hoisted(()
   }>,
   ptyCallbacks: [] as Array<(payload: PtyDataPayload) => void>,
   terminalDataCallbacks: [] as Array<(data: string) => void>,
+  requestAnimationFrameMock: vi.fn((callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  }),
+  cancelAnimationFrameMock: vi.fn(),
 }));
 
 vi.mock('@xterm/xterm', () => ({
@@ -111,11 +116,10 @@ describe('TerminalPane history replay', () => {
     vi.mocked(window.electronAPI.getPtyHistory).mockReset();
     vi.mocked(window.electronAPI.ptyWrite).mockReset();
     vi.mocked(window.electronAPI.ptyResize).mockReset();
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    });
-    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    requestAnimationFrameMock.mockClear();
+    cancelAnimationFrameMock.mockClear();
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrameMock);
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrameMock);
     vi.mocked(window.electronAPI.ptyWrite).mockResolvedValue(undefined);
     vi.mocked(window.electronAPI.ptyResize).mockResolvedValue(undefined);
     vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
@@ -190,6 +194,51 @@ describe('TerminalPane history replay', () => {
     await waitFor(() => {
       expect(terminalInstances[0]?.write.mock.calls[0]?.[0]).toBe('history-1history-2');
     });
+  });
+
+  it('writes a small live chunk immediately after idle instead of waiting for the next animation frame', async () => {
+    vi.mocked(window.electronAPI.getPtyHistory).mockResolvedValue({
+      success: true,
+      data: { chunks: [], lastSeq: 0 },
+    });
+
+    render(
+      <TerminalPane
+        windowId="win-1"
+        pane={{
+          id: 'pane-1',
+          cwd: 'D:\\tmp',
+          command: 'pwsh.exe',
+          status: WindowStatus.Running,
+          pid: 1234,
+        }}
+        isActive
+        isWindowActive
+        onActivate={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(subscribeToPanePtyData).toHaveBeenCalledWith(
+        'win-1',
+        'pane-1',
+        expect.any(Function),
+        { replayBuffered: false },
+      );
+    });
+
+    requestAnimationFrameMock.mockClear();
+    terminalInstances[0].write.mockClear();
+
+    ptyCallbacks[0]({
+      windowId: 'win-1',
+      paneId: 'pane-1',
+      data: 'a',
+      seq: 1,
+    });
+
+    expect(terminalInstances[0].write).toHaveBeenCalledWith('a');
+    expect(requestAnimationFrameMock).not.toHaveBeenCalled();
   });
 
   it('tracks ssh cwd updates as runtime-only without triggering auto-save', async () => {

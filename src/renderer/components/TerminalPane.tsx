@@ -27,6 +27,16 @@ import {
 import '../styles/xterm.css';
 
 const completedReplaySessions = new Set<string>();
+const DIRECT_LIVE_OUTPUT_MAX_CHARS = 256;
+const DIRECT_LIVE_OUTPUT_IDLE_MS = 12;
+
+function nowMs(): number {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now();
+  }
+
+  return Date.now();
+}
 
 function getReplaySessionKey(windowId: string, paneId: string, pid: number | null | undefined): string | null {
   if (pid === null || pid === undefined) {
@@ -300,6 +310,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
   const outputChunksRef = useRef<string[]>([]);
   const outputBufferSizeRef = useRef(0);
   const outputFlushFrameRef = useRef<number | null>(null);
+  const lastLiveOutputQueuedAtRef = useRef(Number.NEGATIVE_INFINITY);
   const resizeFrameRef = useRef<number | null>(null);
   const lastContainerSizeRef = useRef({ width: 0, height: 0 });
   const lastSyncedTerminalSizeRef = useRef({ cols: 0, rows: 0 });
@@ -617,6 +628,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       bufferedLiveDataRef.current = [];
       lastAppliedSeqRef.current = 0;
       suppressPtyWriteRef.current = false;
+      lastLiveOutputQueuedAtRef.current = Number.NEGATIVE_INFINITY;
       hasCompletedReplayForCurrentSessionRef.current = false;
       const sessionKey = replaySessionKeyRef.current;
       if (sessionKey) {
@@ -894,6 +906,23 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
 
     const queueOutput = (data: string) => {
       if (!data) return;
+
+      const currentTerminal = terminalRef.current;
+      const now = nowMs();
+      const wasIdle = now - lastLiveOutputQueuedAtRef.current > DIRECT_LIVE_OUTPUT_IDLE_MS;
+      lastLiveOutputQueuedAtRef.current = now;
+
+      if (
+        currentTerminal
+        && outputFlushFrameRef.current === null
+        && outputBufferSizeRef.current === 0
+        && !imeCompositionStateRef.current.isComposing
+        && data.length <= DIRECT_LIVE_OUTPUT_MAX_CHARS
+        && wasIdle
+      ) {
+        currentTerminal.write(data);
+        return;
+      }
 
       // 限制缓冲区大小，避免极端情况下的内存泄漏
       const MAX_BUFFER_SIZE = 100000; // 100KB
@@ -1213,6 +1242,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       bufferedLiveDataRef.current = [];
       lastAppliedSeqRef.current = 0;
       suppressPtyWriteRef.current = false;
+      lastLiveOutputQueuedAtRef.current = Number.NEGATIVE_INFINITY;
       hasCompletedReplayForCurrentSessionRef.current = false;
       disposeImeFix();
       dataDisposable.dispose();

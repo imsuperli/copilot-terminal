@@ -421,8 +421,12 @@ const electronAPI: ElectronAPI = {
   },
 
   // PTY I/O
-  ptyWrite: (windowId: string, paneId: string | undefined, data: string, metadata?: PtyWriteMetadata) =>
-    ipcRenderer.invoke('pty-write', { windowId, paneId, data, metadata }),
+  ptyWrite: (windowId: string, paneId: string | undefined, data: string, metadata?: PtyWriteMetadata) => {
+    // PTY input is on the keystroke hot path. Use fire-and-forget IPC to avoid
+    // paying a request/response round trip for every character.
+    ipcRenderer.send('pty-write', { windowId, paneId, data, metadata });
+    return Promise.resolve({ success: true as const });
+  },
   ptyResize: (windowId: string, paneId: string | undefined, cols: number, rows: number) =>
     ipcRenderer.invoke('pty-resize', { windowId, paneId, cols, rows }),
   getPtyHistory: (paneId: string) =>

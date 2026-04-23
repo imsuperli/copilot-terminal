@@ -6,9 +6,14 @@ const { mockIpcHandle } = vi.hoisted(() => ({
   mockIpcHandle: vi.fn(),
 }));
 
+const { mockIpcOn } = vi.hoisted(() => ({
+  mockIpcOn: vi.fn(),
+}));
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: mockIpcHandle,
+    on: mockIpcOn,
   },
 }));
 
@@ -21,6 +26,7 @@ function getRegisteredHandler(channel: string) {
 describe('registerPtyHandlers', () => {
   beforeEach(() => {
     mockIpcHandle.mockReset();
+    mockIpcOn.mockReset();
   });
 
   it('returns pane PTY history from ProcessManager', async () => {

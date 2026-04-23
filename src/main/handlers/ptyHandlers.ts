@@ -98,6 +98,9 @@ export function registerPtyHandlers(ctx: HandlerContext) {
   };
 
   // PTY 数据写入（用户输入 → PTY 进程）
+  ipcMain.on('pty-write', (_event, payload) => {
+    void handlePtyWrite(payload);
+  });
   ipcMain.handle('pty-write', async (_event, payload) => handlePtyWrite(payload));
 
   // PTY resize
