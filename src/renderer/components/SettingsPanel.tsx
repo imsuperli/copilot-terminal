@@ -687,6 +687,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ open, onClose }) =
       }
 
       const newSkin = {
+        presetId: appearanceSettings.skin.presetId,
         kind: 'image' as const,
         imagePath: response.data,
         gradient: appearanceSettings.skin.gradient,
