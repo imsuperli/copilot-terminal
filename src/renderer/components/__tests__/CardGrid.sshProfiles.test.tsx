@@ -357,7 +357,7 @@ describe('CardGrid SSH profile cards', () => {
       expect(deleteWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
       expect(useWindowStore.getState().windows[0]?.archived).toBe(true);
-      expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(false);
+      expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(true);
     });
 
     rerender(
@@ -398,8 +398,8 @@ describe('CardGrid SSH profile cards', () => {
       expect(deleteWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
       expect(deleteWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
-      expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(false);
-      expect(useWindowStore.getState().windows.some((window) => window.id === runtimeWindow.id)).toBe(false);
+      expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(true);
+      expect(useWindowStore.getState().windows.some((window) => window.id === runtimeWindow.id)).toBe(true);
     });
   });
 

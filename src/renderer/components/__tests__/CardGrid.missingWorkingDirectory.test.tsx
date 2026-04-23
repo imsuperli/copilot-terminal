@@ -106,23 +106,23 @@ describe('CardGrid missing working directory guard', () => {
     });
   });
 
-  it('deletes the window when user chooses delete', async () => {
+  it('keeps the window when user cancels from the missing-directory dialog', async () => {
     const user = userEvent.setup();
     const handleEnterTerminal = vi.fn();
 
     useWindowStore.getState().addWindow(makeWindow());
     vi.mocked(window.electronAPI.validatePath).mockResolvedValueOnce({ success: true, data: false });
-    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
 
     renderCardGrid({ onEnterTerminal: handleEnterTerminal });
 
     await user.click(screen.getByRole('button', { name: /Test Window/ }));
-    await user.click(await screen.findByRole('button', { name: '删除该窗口' }));
+    await user.click(await screen.findByRole('button', { name: '取消' }));
 
     await waitFor(() => {
-      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-1');
-      expect(useWindowStore.getState().windows).toHaveLength(0);
+      expect(screen.queryByText('工作目录不存在')).not.toBeInTheDocument();
     });
+    expect(window.electronAPI.deleteWindow).not.toHaveBeenCalledWith('win-1');
+    expect(useWindowStore.getState().windows).toHaveLength(1);
     expect(handleEnterTerminal).not.toHaveBeenCalled();
   });
 

@@ -36,7 +36,6 @@ function isValidPathResult(value: unknown): boolean {
 
 export function useWindowDirectoryGuard() {
   const { t } = useI18n();
-  const removeWindow = useWindowStore((state) => state.removeWindow);
   const [pendingDirectory, setPendingDirectory] = useState<PendingWindowDirectory | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
@@ -107,31 +106,14 @@ export function useWindowDirectoryGuard() {
     }
   }, [pendingDirectory, t]);
 
-  const handleDeleteWindow = useCallback(async () => {
-    if (!pendingDirectory) {
+  const handleCancel = useCallback(() => {
+    if (isProcessing) {
       return;
     }
 
-    setIsProcessing(true);
+    setPendingDirectory(null);
     setError('');
-
-    try {
-      const response = asIpcResponse(
-        await window.electronAPI.deleteWindow(pendingDirectory.window.id)
-      );
-
-      if (response && !response.success) {
-        throw new Error(response.error || t('windowDirectory.deleteFailed'));
-      }
-
-      removeWindow(pendingDirectory.window.id);
-      setPendingDirectory(null);
-    } catch (deleteError) {
-      setError((deleteError as Error).message || t('windowDirectory.deleteFailed'));
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [pendingDirectory, removeWindow, t]);
+  }, [isProcessing]);
 
   return {
     runWithWindowDirectory,
@@ -143,7 +125,7 @@ export function useWindowDirectoryGuard() {
       isProcessing,
       onOpenChange: handleOpenChange,
       onCreateDirectory: handleCreateDirectory,
-      onDeleteWindow: handleDeleteWindow,
+      onCancel: handleCancel,
     },
   };
 }

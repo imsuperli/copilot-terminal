@@ -1041,7 +1041,7 @@ describe('TerminalView', () => {
     }
   });
 
-  it('deletes the current window when stop is clicked and switches to the next runnable window', async () => {
+  it('destroys the current window resources without removing its record when stop is clicked', async () => {
     vi.useFakeTimers();
 
     try {
@@ -1109,7 +1109,10 @@ describe('TerminalView', () => {
       expect(onWindowSwitch).not.toHaveBeenCalledWith(pausedWindow.id);
       expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(currentWindow.id);
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(currentWindow.id);
-      expect(useWindowStore.getState().windows.find((window) => window.id === currentWindow.id)).toBeUndefined();
+      const destroyedWindow = useWindowStore.getState().windows.find((window) => window.id === currentWindow.id);
+      expect(destroyedWindow).toBeDefined();
+      expect(destroyedWindow?.layout.type === 'pane' && destroyedWindow.layout.pane.status).toBe(WindowStatus.Paused);
+      expect(destroyedWindow?.layout.type === 'pane' && destroyedWindow.layout.pane.pid).toBeNull();
       expect(onReturn).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();

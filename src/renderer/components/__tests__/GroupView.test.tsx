@@ -82,7 +82,7 @@ describe('GroupView', () => {
     });
   });
 
-  it('destroys every window in the group when destroy all is clicked', async () => {
+  it('destroys every window resource in the group without removing window cards', async () => {
     const user = userEvent.setup();
     const onReturn = vi.fn();
     const runningWindow = createWindow('win-a', WindowStatus.Running);
@@ -113,8 +113,10 @@ describe('GroupView', () => {
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(waitingWindow.id);
     });
 
-    expect(useWindowStore.getState().windows).toEqual([]);
-    expect(useWindowStore.getState().groups).toEqual([]);
+    const windows = useWindowStore.getState().windows;
+    expect(windows.map((window) => window.id)).toEqual([runningWindow.id, waitingWindow.id]);
+    expect(windows.every((window) => window.layout.type === 'pane' && window.layout.pane.status === WindowStatus.Paused)).toBe(true);
+    expect(useWindowStore.getState().groups).toEqual([group]);
     expect(onReturn).toHaveBeenCalledTimes(1);
   });
 });

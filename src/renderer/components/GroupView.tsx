@@ -15,7 +15,7 @@ import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import type { SSHProfile } from '../../shared/types/ssh';
 import { getOwnedEphemeralSSHWindowIds, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
-import { destroyWindowProcessAndRecord } from '../utils/windowDestruction';
+import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
 
@@ -164,11 +164,8 @@ export const GroupView: React.FC<GroupViewProps> = ({
   );
 
   const destroyWindowIds = useCallback(async (windowIds: string[]) => {
-    const { removeWindow } = useWindowStore.getState();
-
     for (const windowId of windowIds) {
-      await destroyWindowProcessAndRecord(windowId);
-      removeWindow(windowId);
+      await destroyWindowResourcesKeepRecord(windowId);
     }
   }, []);
 

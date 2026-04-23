@@ -14,6 +14,7 @@ import { getOwnedEphemeralSSHWindowIds, getPersistableWindows } from '../../util
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
 import { getSidebarCardCounts, getVisibleStandaloneWindows } from '../../utils/cardCollection';
+import { destroyWindowResourcesKeepRecord } from '../../utils/windowDestruction';
 import {
   idePopupInputClassName,
   idePopupSecondaryButtonClassName,
@@ -68,7 +69,6 @@ export function Sidebar({
   const windows = useWindowStore((state) => state.windows);
   const groups = useWindowStore((state) => state.groups);
   const addWindow = useWindowStore((state) => state.addWindow);
-  const removeWindow = useWindowStore((state) => state.removeWindow);
   const customCategories = useWindowStore((state) => state.customCategories);
   const syncCustomCategories = useWindowStore((state) => state.syncCustomCategories);
   const addCustomCategory = useWindowStore((state) => state.addCustomCategory);
@@ -226,9 +226,7 @@ export function Sidebar({
           continue;
         }
 
-        await window.electronAPI.closeWindow(win.id);
-        await window.electronAPI.deleteWindow(win.id);
-        removeWindow(win.id);
+        await destroyWindowResourcesKeepRecord(win.id);
       }
     } catch (error) {
       console.error('Failed to clear active windows:', error);
@@ -251,9 +249,7 @@ export function Sidebar({
           continue;
         }
 
-        await window.electronAPI.closeWindow(win.id);
-        await window.electronAPI.deleteWindow(win.id);
-        removeWindow(win.id);
+        await destroyWindowResourcesKeepRecord(win.id);
       }
     } catch (error) {
       console.error('Failed to clear archived windows:', error);
@@ -276,9 +272,7 @@ export function Sidebar({
           continue;
         }
 
-        await window.electronAPI.closeWindow(win.id);
-        await window.electronAPI.deleteWindow(win.id);
-        removeWindow(win.id);
+        await destroyWindowResourcesKeepRecord(win.id);
       }
     } catch (error) {
       console.error('Failed to clear all windows:', error);
@@ -301,9 +295,7 @@ export function Sidebar({
           continue;
         }
 
-        await window.electronAPI.closeWindow(win.id);
-        await window.electronAPI.deleteWindow(win.id);
-        removeWindow(win.id);
+        await destroyWindowResourcesKeepRecord(win.id);
       }
     } catch (error) {
       console.error('Failed to clear local windows:', error);
@@ -326,9 +318,7 @@ export function Sidebar({
           continue;
         }
 
-        await window.electronAPI.closeWindow(win.id);
-        await window.electronAPI.deleteWindow(win.id);
-        removeWindow(win.id);
+        await destroyWindowResourcesKeepRecord(win.id);
       }
     } catch (error) {
       console.error('Failed to clear SSH windows:', error);

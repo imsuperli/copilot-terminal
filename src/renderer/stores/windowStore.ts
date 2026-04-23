@@ -908,7 +908,7 @@ export const useWindowStore = create<WindowStore>()(
 
         const panes = getAllPanes(window.layout);
         const needsPauseUpdate = panes.some((pane) => (
-          pane.status !== WindowStatus.Paused || pane.pid !== null
+          pane.status !== WindowStatus.Paused || pane.pid !== null || pane.sessionId !== undefined
         ));
 
         if (!needsPauseUpdate) {
@@ -920,6 +920,7 @@ export const useWindowStore = create<WindowStore>()(
           window.layout = updatePaneInLayout(window.layout, pane.id, {
             status: WindowStatus.Paused,
             pid: null,
+            sessionId: undefined,
           });
         }
       });

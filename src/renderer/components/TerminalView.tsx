@@ -65,7 +65,7 @@ import {
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
-import { destroyWindowProcessAndRecord } from '../utils/windowDestruction';
+import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 import { idePopupIconButtonClassName } from './ui/ide-popup';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
@@ -395,7 +395,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // Store
   const addWindow = useWindowStore((state) => state.addWindow);
-  const removeWindow = useWindowStore((state) => state.removeWindow);
   const splitPaneInWindow = useWindowStore((state) => state.splitPaneInWindow);
   const placePaneInWindow = useWindowStore((state) => state.placePaneInWindow);
   const movePaneInWindow = useWindowStore((state) => state.movePaneInWindow);
@@ -413,11 +412,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
   const destroyRemoteWindows = useCallback(
     async (windowIds: string[]) => {
       for (const windowId of windowIds) {
-        await destroyWindowProcessAndRecord(windowId);
-        removeWindow(windowId);
+        await destroyWindowResourcesKeepRecord(windowId);
       }
     },
-    [removeWindow],
+    [],
   );
 
   // 纭繚绐楀彛婵€娲绘椂锛屾縺娲荤涓€涓獥鏍?
@@ -557,21 +555,19 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
         setTimeout(async () => {
           try {
-            await destroyWindowProcessAndRecord(terminalWindow.id);
-            removeWindow(terminalWindow.id);
+            await destroyWindowResourcesKeepRecord(terminalWindow.id);
           } catch (error) {
             console.error('Failed to close and delete window:', error);
           }
         }, 100);
       } else {
-        await destroyWindowProcessAndRecord(terminalWindow.id);
-        removeWindow(terminalWindow.id);
+        await destroyWindowResourcesKeepRecord(terminalWindow.id);
         onReturn();
       }
     } catch (error) {
       console.error('Failed to delete window:', error);
     }
-  }, [destroyCurrentEphemeralRemoteWindow, destroyRemoteWindows, isEphemeralRemoteTab, onReturn, onWindowSwitch, removeWindow, terminalWindow.id]);
+  }, [destroyCurrentEphemeralRemoteWindow, destroyRemoteWindows, isEphemeralRemoteTab, onReturn, onWindowSwitch, terminalWindow.id]);
 
   // 处理窗格进程退出
   const handlePaneExit = useCallback(

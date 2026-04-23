@@ -4,6 +4,7 @@ import { Dialog } from './ui/Dialog';
 import { useI18n } from '../i18n';
 import {
   idePopupActionButtonClassName,
+  idePopupSecondaryButtonClassName,
   idePopupSubtlePanelClassName,
 } from './ui/ide-popup';
 
@@ -15,7 +16,7 @@ interface MissingWorkingDirectoryDialogProps {
   isProcessing?: boolean;
   onOpenChange: (open: boolean) => void;
   onCreateDirectory: () => void;
-  onDeleteWindow: () => void;
+  onCancel: () => void;
 }
 
 export function MissingWorkingDirectoryDialog({
@@ -26,11 +27,11 @@ export function MissingWorkingDirectoryDialog({
   isProcessing = false,
   onOpenChange,
   onCreateDirectory,
-  onDeleteWindow,
+  onCancel,
 }: MissingWorkingDirectoryDialogProps) {
   const { t } = useI18n();
   const primaryButtonClassName = `${idePopupActionButtonClassName('primary')} rounded-lg px-4 py-2 text-sm font-medium`;
-  const dangerButtonClassName = `${idePopupActionButtonClassName('danger')} rounded-lg px-4 py-2 text-sm font-medium`;
+  const secondaryButtonClassName = `${idePopupSecondaryButtonClassName} rounded-lg px-4 py-2 text-sm font-medium`;
 
   return (
     <Dialog
@@ -70,10 +71,10 @@ export function MissingWorkingDirectoryDialog({
           <button
             type="button"
             disabled={isProcessing}
-            onClick={onDeleteWindow}
-            className={`${dangerButtonClassName} disabled:cursor-not-allowed disabled:opacity-60`}
+            onClick={onCancel}
+            className={`${secondaryButtonClassName} disabled:cursor-not-allowed disabled:opacity-60`}
           >
-            {t('windowDirectory.deleteWindow')}
+            {t('common.cancel')}
           </button>
         </div>
       </div>

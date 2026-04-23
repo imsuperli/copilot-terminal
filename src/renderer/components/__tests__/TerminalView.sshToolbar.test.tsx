@@ -367,7 +367,7 @@ describe('TerminalView SSH toolbar', () => {
     });
     expect(window.electronAPI.closePane).not.toHaveBeenCalled();
     expect(onReturn).toHaveBeenCalledTimes(1);
-    expect(useWindowStore.getState().windows.some((window) => window.id === localWindow.id)).toBe(false);
+    expect(useWindowStore.getState().windows.some((window) => window.id === localWindow.id)).toBe(true);
   });
 
   it('does not render a duplicate identity block when a browser pane is active inside an ssh window', () => {
@@ -670,7 +670,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1', 'win-ssh-2']);
   });
 
   it('destroys an ephemeral ssh clone tab when stopped and hides archive and restart actions', async () => {
@@ -722,10 +722,10 @@ describe('TerminalView SSH toolbar', () => {
     });
 
     expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1', 'win-ssh-2']);
   });
 
-  it('deletes a non-ephemeral ssh window when stopped and returns when no runnable window remains', async () => {
+  it('keeps a non-ephemeral ssh window record when stopped and returns when no runnable window remains', async () => {
     const user = userEvent.setup({ delay: null });
     const onReturn = vi.fn();
     const activeWindow = createSSHWindow({
@@ -790,7 +790,7 @@ describe('TerminalView SSH toolbar', () => {
     });
 
     expect(onReturn).toHaveBeenCalledTimes(1);
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-2']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1', 'win-ssh-2']);
   });
 
   it('destroys an ephemeral ssh clone tab when its only pane exits', async () => {
@@ -842,7 +842,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(window.electronAPI.switchToUnifiedView).not.toHaveBeenCalled();
     expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
     expect(onReturn).not.toHaveBeenCalled();
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1', 'win-ssh-2']);
   });
 
   it('does not leave a placeholder window behind when cloning fails', async () => {
