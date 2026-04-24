@@ -68,8 +68,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
         className="h-9 flex items-center px-3 select-none relative flex-shrink-0"
         style={{
           WebkitAppRegion: 'drag',
-          background: 'rgba(var(--titlebar), 0.75)',
-          backdropFilter: 'blur(12px)',
+          background: 'rgb(var(--titlebar))',
         } as React.CSSProperties}
       >
         {/* 左侧：窗口控制 + logo + 应用名 */}
@@ -122,8 +121,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
       className="h-8 flex items-center justify-between select-none relative flex-shrink-0"
       style={{
         WebkitAppRegion: 'drag',
-        background: 'rgba(var(--titlebar), 0.75)',
-        backdropFilter: 'blur(12px)',
+        background: 'rgb(var(--titlebar))',
       } as React.CSSProperties}
       onDoubleClick={handleDoubleClick}
     >
