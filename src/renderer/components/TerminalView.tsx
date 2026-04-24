@@ -395,6 +395,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
 
   // Store
   const addWindow = useWindowStore((state) => state.addWindow);
+  const removeWindow = useWindowStore((state) => state.removeWindow);
   const splitPaneInWindow = useWindowStore((state) => state.splitPaneInWindow);
   const placePaneInWindow = useWindowStore((state) => state.placePaneInWindow);
   const movePaneInWindow = useWindowStore((state) => state.movePaneInWindow);
@@ -416,6 +417,15 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       }
     },
     [],
+  );
+  const deleteRemoteWindows = useCallback(
+    async (windowIds: string[]) => {
+      for (const windowId of windowIds) {
+        await destroyWindowResourcesKeepRecord(windowId);
+        removeWindow(windowId);
+      }
+    },
+    [removeWindow],
   );
 
   // 纭繚绐楀彛婵€娲绘椂锛屾縺娲荤涓€涓獥鏍?
@@ -1023,7 +1033,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         handleRemoteWindowSelect(nextWindowId);
       }
 
-      await destroyRemoteWindows(closingWindowIds);
+      await deleteRemoteWindows(closingWindowIds);
 
       if (!nextWindowId && currentWindowWillClose) {
         onReturn();
@@ -1031,7 +1041,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     } catch (error) {
       console.error('Failed to close remote window:', error);
     }
-  }, [destroyRemoteWindows, embedded, handleRemoteWindowSelect, onReturn, terminalWindow.id]);
+  }, [deleteRemoteWindows, embedded, handleRemoteWindowSelect, onReturn, terminalWindow.id]);
 
   const handleOpenSSHSftp = useCallback(() => {
     if (!activeTerminalPane || !activePaneCapabilities?.canOpenSFTP) {

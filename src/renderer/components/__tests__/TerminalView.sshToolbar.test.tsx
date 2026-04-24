@@ -670,7 +670,57 @@ describe('TerminalView SSH toolbar', () => {
     expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
     expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1', 'win-ssh-2']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
+  });
+
+  it('closes the active remote tab from the tab close button and removes that tab window', async () => {
+    const user = userEvent.setup();
+    const onWindowSwitch = vi.fn();
+    const ownerWindow = createSSHWindow({
+      id: 'win-ssh-1',
+      paneId: 'pane-ssh-1',
+      name: 'Prod SSH A',
+      remoteCwd: '/srv/app',
+    });
+    const activeWindow = createSSHWindow({
+      id: 'win-ssh-2',
+      paneId: 'pane-ssh-2',
+      name: 'Prod SSH B',
+      remoteCwd: '/srv/worker',
+      ephemeral: true,
+      sshTabOwnerWindowId: 'win-ssh-1',
+    });
+
+    useWindowStore.setState({
+      windows: [ownerWindow, activeWindow],
+      activeWindowId: activeWindow.id,
+      mruList: [],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    vi.mocked(window.electronAPI.closeWindow).mockResolvedValueOnce({ success: true });
+    vi.mocked(window.electronAPI.deleteWindow).mockResolvedValueOnce({ success: true });
+
+    render(
+      <TerminalView
+        window={activeWindow}
+        onReturn={vi.fn()}
+        onWindowSwitch={onWindowSwitch}
+        isActive
+      />,
+    );
+
+    await user.hover(screen.getByRole('button', { name: 'Prod SSH B' }));
+    await user.click(screen.getByRole('button', { name: '销毁 worker' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith('win-ssh-2');
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith('win-ssh-2');
+    });
+
+    expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
   it('destroys an ephemeral ssh clone tab when stopped and hides archive and restart actions', async () => {
