@@ -68,7 +68,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
         className="h-9 flex items-center border-b px-3 select-none relative flex-shrink-0 border-[rgb(var(--titlebar-border))]"
         style={{
           WebkitAppRegion: 'drag',
-          background: 'rgba(var(--titlebar), 0.75)',
+          background: 'color-mix(in srgb, rgba(var(--titlebar), 0.75) 70%, white 30%)',
           backdropFilter: 'blur(12px)',
         } as React.CSSProperties}
       >
