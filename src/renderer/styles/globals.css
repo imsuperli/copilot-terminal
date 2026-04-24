@@ -203,7 +203,7 @@
 }
 
 .terminal-remote-tab-active {
-  background: #000000;
+  background: rgb(var(--background));
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
 }
@@ -213,7 +213,7 @@
 }
 
 .terminal-remote-tab-inactive:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgb(var(--accent));
   border-top-left-radius: 8px;
   border-top-right-radius: 8px;
 }
