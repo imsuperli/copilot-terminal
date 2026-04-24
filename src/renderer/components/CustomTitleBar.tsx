@@ -65,7 +65,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
   if (isMac) {
     return (
       <div
-        className="h-9 flex items-center border-b px-3 select-none relative flex-shrink-0 border-[rgb(var(--titlebar-border))]"
+        className="h-9 flex items-center px-3 select-none relative flex-shrink-0"
         style={{
           WebkitAppRegion: 'drag',
           background: 'rgba(var(--titlebar), 0.75)',
@@ -119,7 +119,7 @@ export const CustomTitleBar: React.FC<CustomTitleBarProps> = ({
   // Windows/Linux: 左侧 logo，中间标题，右侧最小化/最大化/关闭
   return (
     <div
-      className="h-8 flex items-center justify-between border-b select-none relative flex-shrink-0 border-[rgb(var(--titlebar-border))]"
+      className="h-8 flex items-center justify-between select-none relative flex-shrink-0"
       style={{
         WebkitAppRegion: 'drag',
         background: 'rgba(var(--titlebar), 0.75)',

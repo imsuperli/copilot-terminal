@@ -35,7 +35,7 @@ const APPEARANCE_PRESET_DEFINITIONS: Record<AppearanceSkinPresetId, AppearancePr
       primary: '168 170 88',
       primaryForeground: '7 8 10',
       sidebar: '12 13 16',
-      titlebar: '28 30 36',
+      titlebar: '46 46 46',
       titlebarForeground: '236 236 236',
     },
     terminal: {
