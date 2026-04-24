@@ -485,6 +485,57 @@ describe('CardGrid SSH profile cards', () => {
     expect(within(dialog).getByRole('button', { name: '删除 SSH 卡片' })).toBeDisabled();
   });
 
+  it('does not block deleting an SSH card when the only sibling reference is archived', async () => {
+    const user = userEvent.setup();
+    const profile = createSSHProfile();
+    const runtimeWindow = createStandaloneSSHWindow(profile);
+    const archivedSiblingWindow = {
+      ...createStandaloneSSHWindow(profile, {
+        id: 'ssh-window-2',
+        name: 'Archived sibling window',
+        activePaneId: 'ssh-pane-2',
+        lastActiveAt: '2026-03-22T10:04:00.000Z',
+        layout: {
+          type: 'pane',
+          id: 'layout-ssh-pane-2',
+          pane: {
+            id: 'ssh-pane-2',
+            cwd: '/srv/app-2',
+            command: '/bin/zsh',
+            status: WindowStatus.Completed,
+            pid: null,
+            backend: 'ssh',
+            ssh: {
+              profileId: profile.id,
+              host: profile.host,
+              port: profile.port,
+              user: profile.user,
+              authType: profile.auth,
+              remoteCwd: '/srv/app-2',
+              reuseSession: true,
+            },
+          },
+        },
+      }),
+      archived: true,
+    };
+
+    useWindowStore.setState({
+      windows: [runtimeWindow, archivedSiblingWindow],
+    });
+
+    renderCardGrid({
+      sshEnabled: true,
+      sshProfiles: [profile],
+    });
+
+    await user.click(screen.getByRole('button', { name: '删除 SSH 卡片' }));
+
+    expect(screen.queryByText('当前还有 1 个其他窗口在使用这条 SSH 配置，暂时不能删除该卡片。请先处理这些窗口。')).not.toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: '删除 SSH 卡片' })).toBeEnabled();
+  });
+
   it('uses the paused status color for bound SSH cards', () => {
     const profile = createSSHProfile();
     const runtimeWindow = createStandaloneSSHWindow(profile, {

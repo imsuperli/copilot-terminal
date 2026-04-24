@@ -1,6 +1,6 @@
 import { Window } from '../types/window';
 import { getAllPanes } from './layoutHelpers';
-import { getSSHSessionFamilyWindows, getStandaloneSSHProfileId, isEphemeralSSHCloneWindow } from './sshWindowBindings';
+import { getStandaloneSSHProfileId, isEphemeralSSHCloneWindow } from './sshWindowBindings';
 
 export interface SSHCredentialCleanupAvailability {
   profileId: string | null;
@@ -57,9 +57,7 @@ export function getSSHCredentialCleanupAvailability(
     };
   }
 
-  const excludedWindowIds = targetWindow.ephemeral
-    ? [targetWindow.id]
-    : getSSHSessionFamilyWindows(windows, targetWindow.id, { includeArchived: true }).map((window) => window.id);
+  const excludedWindowIds = [targetWindow.id];
   const blockingWindowCount = getSSHProfileReferencingWindows(windows, profileId, {
     excludeWindowIds: excludedWindowIds,
     includeArchived: false,

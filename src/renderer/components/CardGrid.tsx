@@ -512,6 +512,8 @@ export const CardGrid = React.memo<CardGridProps>(({
     const boundWindowId = standaloneSSHWindowsByProfile[sshDeleteTarget.id]?.id;
     return getSSHProfileReferencingWindows(windows, sshDeleteTarget.id, {
       excludeWindowIds: boundWindowId ? [boundWindowId] : [],
+      includeArchived: false,
+      includeEphemeral: false,
     }).length;
   }, [sshDeleteTarget, standaloneSSHWindowsByProfile, windows]);
 
