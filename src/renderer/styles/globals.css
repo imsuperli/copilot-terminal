@@ -185,7 +185,8 @@
 .terminal-remote-tab-strip {
   gap: 0;
   padding: 0 6px;
-  background: rgb(var(--titlebar));
+  background: rgba(var(--titlebar), 0.75);
+  backdrop-filter: blur(12px);
 }
 
 .terminal-remote-tab {
