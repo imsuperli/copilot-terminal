@@ -69,7 +69,7 @@ function getWindowPriority(window: Window, status: WindowStatus): number {
       return 1;
     case WindowStatus.Running:
       return 2;
-    case WindowStatus.Paused:
+    case WindowStatus.Completed:
       return 3;
     default:
       return 3;

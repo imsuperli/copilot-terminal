@@ -248,7 +248,7 @@ describe('windowStore auto-save gating', () => {
     );
   });
 
-  it('collapses tmux agent panes and auto-saves the new single-pane layout on pause', () => {
+  it('collapses tmux agent panes and auto-saves the new single-pane layout when clearing a destroyed session', () => {
     const terminalWindow = createSinglePaneWindow('Agent Team', 'D:\\repo', 'pwsh.exe');
     const leaderPaneId = terminalWindow.activePaneId;
 
@@ -321,7 +321,7 @@ describe('windowStore auto-save gating', () => {
       sidebarWidth: 200,
     });
 
-    useWindowStore.getState().pauseWindowState(terminalWindow.id);
+    useWindowStore.getState().clearWindowRuntimeSession(terminalWindow.id);
     __flushWindowStoreAutoSaveForTests();
 
     const storedWindow = useWindowStore.getState().windows[0];
@@ -331,7 +331,7 @@ describe('windowStore auto-save gating', () => {
       id: leaderPaneId,
       pane: {
         id: leaderPaneId,
-        status: WindowStatus.Paused,
+        status: WindowStatus.Completed,
         pid: null,
       },
     });
@@ -345,7 +345,7 @@ describe('windowStore auto-save gating', () => {
     expect(window.electronAPI.triggerAutoSave).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps manual split layouts intact when pausing a non-tmux multi-pane window', () => {
+  it('keeps manual split layouts intact when clearing a non-tmux multi-pane session', () => {
     const terminalWindow = createSinglePaneWindow('Manual Split', 'D:\\repo', 'pwsh.exe');
     const leaderPaneId = terminalWindow.activePaneId;
     const teammatePaneId = 'pane-teammate';
@@ -389,7 +389,7 @@ describe('windowStore auto-save gating', () => {
       sidebarWidth: 200,
     });
 
-    useWindowStore.getState().pauseWindowState(terminalWindow.id);
+    useWindowStore.getState().clearWindowRuntimeSession(terminalWindow.id);
 
     const storedWindow = useWindowStore.getState().windows[0];
     expect(storedWindow.layout.type).toBe('split');
@@ -397,8 +397,8 @@ describe('windowStore auto-save gating', () => {
     expect(getAllPanes(storedWindow.layout)).toHaveLength(2);
     expect(getAllPanes(storedWindow.layout)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: leaderPaneId, status: WindowStatus.Paused, pid: null }),
-        expect.objectContaining({ id: teammatePaneId, status: WindowStatus.Paused, pid: null }),
+        expect.objectContaining({ id: leaderPaneId, status: WindowStatus.Completed, pid: null }),
+        expect.objectContaining({ id: teammatePaneId, status: WindowStatus.Completed, pid: null }),
       ]),
     );
     expect(window.electronAPI.triggerAutoSave).not.toHaveBeenCalled();

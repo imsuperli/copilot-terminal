@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closePane, collapseTmuxAgentPanesForPause, getLayoutDepth, movePane, updateSplitSizes } from '../layoutHelpers';
+import { closePane, collapseTmuxAgentPanesForDestroyedSession, getLayoutDepth, movePane, updateSplitSizes } from '../layoutHelpers';
 import { LayoutNode, Pane, WindowStatus } from '../../types/window';
 
 function createPane(id: string, overrides: Partial<Pane> = {}): Pane {
@@ -238,8 +238,8 @@ describe('layoutHelpers.updateSplitSizes', () => {
   });
 });
 
-describe('layoutHelpers.collapseTmuxAgentPanesForPause', () => {
-  it('collapses tmux auto-created panes back to a single paused pane', () => {
+describe('layoutHelpers.collapseTmuxAgentPanesForDestroyedSession', () => {
+  it('collapses tmux auto-created panes back to a single inactive pane', () => {
     const layout: LayoutNode = {
       type: 'split',
       direction: 'horizontal',
@@ -280,7 +280,7 @@ describe('layoutHelpers.collapseTmuxAgentPanesForPause', () => {
       ],
     };
 
-    const collapsed = collapseTmuxAgentPanesForPause(layout);
+    const collapsed = collapseTmuxAgentPanesForDestroyedSession(layout);
 
     expect(collapsed).not.toBeNull();
     expect(collapsed?.activePaneId).toBe('leader');
@@ -291,7 +291,7 @@ describe('layoutHelpers.collapseTmuxAgentPanesForPause', () => {
         id: 'leader',
         cwd: 'C:/workspace',
         command: 'pwsh.exe',
-        status: WindowStatus.Paused,
+        status: WindowStatus.Completed,
         pid: null,
       },
     });
@@ -318,7 +318,7 @@ describe('layoutHelpers.collapseTmuxAgentPanesForPause', () => {
       ],
     };
 
-    expect(collapseTmuxAgentPanesForPause(layout)).toBeNull();
+    expect(collapseTmuxAgentPanesForDestroyedSession(layout)).toBeNull();
   });
 
   it('collapses only the tmux subtree and preserves browser siblings', () => {
@@ -351,13 +351,13 @@ describe('layoutHelpers.collapseTmuxAgentPanesForPause', () => {
           kind: 'browser',
           command: '',
           cwd: '',
-          status: WindowStatus.Paused,
+          status: WindowStatus.Completed,
           browser: { url: 'https://example.com' },
         }),
       ],
     };
 
-    const collapsed = collapseTmuxAgentPanesForPause(layout, 'agent-a');
+    const collapsed = collapseTmuxAgentPanesForDestroyedSession(layout, 'agent-a');
 
     expect(collapsed).not.toBeNull();
     if (!collapsed || collapsed.layout.type !== 'split') {
@@ -378,7 +378,7 @@ describe('layoutHelpers.collapseTmuxAgentPanesForPause', () => {
       id: 'leader',
       pane: {
         id: 'leader',
-        status: WindowStatus.Paused,
+        status: WindowStatus.Completed,
         pid: null,
       },
     });

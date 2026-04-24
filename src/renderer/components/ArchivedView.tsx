@@ -14,7 +14,7 @@ import { Window, WindowStatus } from '../types/window';
 import { useI18n } from '../i18n';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
 import { startWindowPanes } from '../utils/paneSessionActions';
-import { getOwnedEphemeralSSHWindowIds, getPersistableWindows, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
+import { getPersistableWindows, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 
 interface ArchivedViewProps {
@@ -85,27 +85,13 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
     }
   }, []);
 
-  const destroyOwnedEphemeralWindows = useCallback(async (windowId: string) => {
-    const ownedWindowIds = getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, windowId);
-    if (ownedWindowIds.length > 0) {
-      await destroyWindowIds(ownedWindowIds);
-    }
-  }, [destroyWindowIds]);
-
-  const handlePauseWindow = useCallback(async (win: Window) => {
+  const handleDestroyWindowSession = useCallback(async (win: Window) => {
     try {
-      if (isEphemeralSSHCloneWindow(win)) {
-        await destroyWindowIds([win.id]);
-        return;
-      }
-
-      await destroyOwnedEphemeralWindows(win.id);
-
       await destroyWindowIds([win.id]);
     } catch (error) {
       console.error('Failed to destroy window:', error);
     }
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds]);
+  }, [destroyWindowIds]);
 
   const handleUnarchiveWindow = useCallback((win: Window) => {
     unarchiveWindow(win.id);
@@ -229,7 +215,7 @@ export const ArchivedView = React.memo<ArchivedViewProps>(({ onEnterTerminal, se
                   onOpenFolder={handleOpenFolder}
                   onDelete={handleDeleteWindow}
                   onStart={handleStartWindow}
-                  onPause={handlePauseWindow}
+                  onDestroySession={handleDestroyWindowSession}
                   onUnarchive={handleUnarchiveWindow}
                   onOpenInIDE={handleOpenInIDE}
                   onEdit={handleEditWindow}

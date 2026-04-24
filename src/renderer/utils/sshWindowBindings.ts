@@ -80,18 +80,18 @@ export function getStandaloneSSHWindowsForTarget(
   targetWindowId: string,
 ): Window[] {
   const targetWindow = windows.find((window) => window.id === targetWindowId);
-  const ownerWindowId = targetWindow ? getSSHSessionOwnerWindowId(targetWindow) : null;
+  const targetKey = targetWindow ? getStandaloneSSHTargetKey(targetWindow) : null;
 
   return windows.filter((window) => {
     if (window.archived || getWindowKind(window) !== 'ssh') {
       return false;
     }
 
-    if (!ownerWindowId) {
+    if (!targetKey) {
       return false;
     }
 
-    return getSSHSessionOwnerWindowId(window) === ownerWindowId;
+    return getStandaloneSSHTargetKey(window) === targetKey;
   });
 }
 
@@ -103,7 +103,7 @@ export function buildStandaloneSSHWindowMap(
   const nextMap: Record<string, Window> = {};
 
   for (const window of windows) {
-    if (window.archived || isEphemeralSSHCloneWindow(window)) {
+    if (window.archived || window.ephemeral) {
       continue;
     }
 
@@ -133,7 +133,7 @@ export function buildStandaloneSSHWindowMap(
 }
 
 export function isEphemeralSSHCloneWindow(window: Window): boolean {
-  return Boolean(window.ephemeral && window.sshTabOwnerWindowId);
+  return Boolean(window.ephemeral);
 }
 
 export function getSSHSessionOwnerWindowId(window: Window): string | null {
@@ -141,18 +141,16 @@ export function getSSHSessionOwnerWindowId(window: Window): string | null {
     return null;
   }
 
-  return window.sshTabOwnerWindowId ?? window.id;
+  return window.id;
 }
 
 export function getOwnedEphemeralSSHWindows(
   windows: Window[],
   ownerWindowId: string,
 ): Window[] {
-  return windows.filter((window) => (
-    !window.archived
-    && isEphemeralSSHCloneWindow(window)
-    && window.sshTabOwnerWindowId === ownerWindowId
-  ));
+  void windows;
+  void ownerWindowId;
+  return [];
 }
 
 export function getOwnedEphemeralSSHWindowIds(
@@ -170,17 +168,17 @@ export function getSSHSessionFamilyWindows(
   },
 ): Window[] {
   const targetWindow = windows.find((window) => window.id === targetWindowId);
-  const ownerWindowId = targetWindow ? getSSHSessionOwnerWindowId(targetWindow) : null;
+  const targetKey = targetWindow ? getStandaloneSSHTargetKey(targetWindow) : null;
   const includeArchived = options?.includeArchived ?? false;
 
-  if (!ownerWindowId) {
+  if (!targetKey) {
     return [];
   }
 
   return windows.filter((window) => (
     (includeArchived || !window.archived)
     && getWindowKind(window) === 'ssh'
-    && getSSHSessionOwnerWindowId(window) === ownerWindowId
+    && getStandaloneSSHTargetKey(window) === targetKey
   ));
 }
 

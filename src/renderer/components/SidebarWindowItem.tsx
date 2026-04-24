@@ -8,6 +8,7 @@ import { TerminalTypeLogo } from './icons/TerminalTypeLogo';
 import { StatusDot } from './StatusDot';
 import { getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 
 interface SidebarWindowItemProps {
   window: Window;
@@ -32,12 +33,14 @@ function getWindowBackgroundColor(status: WindowStatus, isActive: boolean): stri
       return 'border-[rgb(var(--success)/0.25)] bg-[rgb(var(--success)/0.08)] hover:bg-[rgb(var(--success)/0.14)]';
     case WindowStatus.WaitingForInput:
       return 'border-[rgb(var(--primary))]/25 bg-[rgb(var(--primary))]/10 hover:bg-[rgb(var(--primary))]/16';
-    case WindowStatus.Paused:
+    case WindowStatus.Completed:
       return 'border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] hover:bg-[rgb(var(--accent))]';
     case WindowStatus.Error:
       return 'border-[rgb(var(--error)/0.25)] bg-[rgb(var(--error)/0.08)] hover:bg-[rgb(var(--error)/0.14)]';
     default:
-      return 'border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] hover:bg-[rgb(var(--accent))]';
+      return isInactiveTerminalPaneStatus(status)
+        ? 'border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] hover:bg-[rgb(var(--accent))]'
+        : 'border-[rgb(var(--border))]/70 bg-[color-mix(in_srgb,rgb(var(--card))_74%,transparent)] hover:bg-[rgb(var(--accent))]';
   }
 }
 

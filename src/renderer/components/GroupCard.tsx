@@ -23,7 +23,7 @@ interface GroupCardProps {
   onClick?: (group: WindowGroup) => void;
   onDelete?: (groupId: string) => void;
   onStartAll?: (group: WindowGroup) => void;
-  onPauseAll?: (group: WindowGroup) => void;
+  onDestroyAllSessions?: (group: WindowGroup) => void;
   onArchive?: (group: WindowGroup) => void;
   onUnarchive?: (group: WindowGroup) => void;
   onEdit?: (group: WindowGroup) => void;
@@ -50,12 +50,12 @@ function getWindowStatusFromPanes(panes: Pane[]): WindowStatus {
     return WindowStatus.Completed;
   }
 
-  return WindowStatus.Paused;
+  return WindowStatus.Completed;
 }
 
 function getGroupStatusFromWindowStatuses(statuses: WindowStatus[]): WindowStatus {
   if (statuses.length === 0) {
-    return WindowStatus.Paused;
+    return WindowStatus.Completed;
   }
 
   if (statuses.some((status) => status === WindowStatus.Running)) {
@@ -78,7 +78,7 @@ function getGroupStatusFromWindowStatuses(statuses: WindowStatus[]): WindowStatu
     return WindowStatus.Completed;
   }
 
-  return WindowStatus.Paused;
+  return WindowStatus.Completed;
 }
 
 /**
@@ -88,7 +88,7 @@ function getGroupStatusFromWindowStatuses(statuses: WindowStatus[]): WindowStatu
  * TODO: 等待任务 #1、#2、#3 完成后实现以下功能：
  * - 显示组内窗口数量（文件夹图标 + 数字徽章）
  * - 显示组的聚合状态（基于组内所有窗口的状态）
- * - 支持批量操作（启动/暂停所有窗口）
+ * - 支持批量操作（启动/销毁所有窗口）
  * - 显示组的创建时间和最后活跃时间
  */
 export const GroupCard = React.memo<GroupCardProps>(({
@@ -97,7 +97,7 @@ export const GroupCard = React.memo<GroupCardProps>(({
   onClick,
   onDelete,
   onStartAll,
-  onPauseAll,
+  onDestroyAllSessions,
   onArchive,
   onUnarchive,
   onEdit
@@ -299,9 +299,9 @@ export const GroupCard = React.memo<GroupCardProps>(({
 
       {/* 底部按钮栏 - 单行布局 */}
       <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 items-center justify-between gap-1.5 px-4 py-2`}>
-        {/* 左侧：启动/暂停按钮 */}
+        {/* 左侧：启动/销毁按钮 */}
         <div>
-          {aggregatedStatus === 'paused' && (
+          {aggregatedStatus === 'completed' && (
             <button
               onClick={(e) => handleButtonClick(e, () => onStartAll?.(group))}
               className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--primary))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--ring))] font-semibold whitespace-nowrap`}
@@ -312,11 +312,11 @@ export const GroupCard = React.memo<GroupCardProps>(({
           )}
           {(aggregatedStatus === 'running' || aggregatedStatus === 'waiting') && (
             <button
-              onClick={(e) => handleButtonClick(e, () => onPauseAll?.(group))}
+              onClick={(e) => handleButtonClick(e, () => onDestroyAllSessions?.(group))}
               className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap`}
             >
               <Square size={14} fill="currentColor" />
-              <span>全部暂停</span>
+              <span>全部销毁</span>
             </button>
           )}
         </div>

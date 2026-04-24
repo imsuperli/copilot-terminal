@@ -86,7 +86,7 @@ describe('useWindowSwitcher', () => {
 
     await waitFor(() => {
       expect(useWindowStore.getState().getPaneById('window-1', 'pane-1')).toMatchObject({
-        status: WindowStatus.Paused,
+        status: WindowStatus.Error,
       });
     });
   });

@@ -68,9 +68,9 @@ function getStatusPriority(status: WindowStatus): number {
     case WindowStatus.WaitingForInput:
       return 3;
     case WindowStatus.Restoring:
-    case WindowStatus.Paused:
       return 2;
     case WindowStatus.Completed:
+      return 2;
     case WindowStatus.Error:
     default:
       return 1;

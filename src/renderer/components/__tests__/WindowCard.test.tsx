@@ -186,13 +186,13 @@ describe('WindowCard', () => {
 
   it('renders stop action for running windows and triggers it without bubbling', async () => {
     const onClick = vi.fn();
-    const onPause = vi.fn();
+    const onDestroySession = vi.fn();
     const user = userEvent.setup();
-    render(<WindowCard window={createWindow()} onClick={onClick} onPause={onPause} />);
+    render(<WindowCard window={createWindow()} onClick={onClick} onDestroySession={onDestroySession} />);
 
     await user.click(screen.getByRole('button', { name: '销毁' }));
 
-    expect(onPause).toHaveBeenCalledTimes(1);
+    expect(onDestroySession).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();
   });
 

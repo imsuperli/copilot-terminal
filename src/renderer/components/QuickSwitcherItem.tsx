@@ -10,6 +10,7 @@ import { useIDESettings } from '../hooks/useIDESettings';
 import { formatRelativeTime, useI18n, TranslationParams, TranslationKey } from '../i18n';
 import { canPaneOpenInIDE, canPaneOpenLocalFolder, getWindowKind } from '../../shared/utils/terminalCapabilities';
 import { getCurrentWindowTerminalPane, getCurrentWindowWorkingDirectory } from '../utils/windowWorkingDirectory';
+import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 import {
   idePopupIconButtonClassName,
 } from './ui/ide-popup';
@@ -36,12 +37,12 @@ function getStatusLabel(status: WindowStatus, t: (key: TranslationKey, params?: 
       return t('status.running');
     case WindowStatus.WaitingForInput:
       return t('status.waitingInput');
-    case WindowStatus.Paused:
-      return t('status.paused');
+    case WindowStatus.Completed:
+      return t('status.notStarted');
     case WindowStatus.Restoring:
       return t('status.restoring');
     default:
-      return t('common.unknown');
+      return isInactiveTerminalPaneStatus(status) ? t('status.notStarted') : t('common.unknown');
   }
 }
 
@@ -53,10 +54,10 @@ function getSelectedBorderColor(status: WindowStatus, archived: boolean): string
       return 'border-emerald-500/70';
     case WindowStatus.WaitingForInput:
       return 'border-[rgb(var(--primary))]/75';
-    case WindowStatus.Paused:
+    case WindowStatus.Completed:
       return 'border-[rgb(var(--border))]';
     default:
-      return 'border-[rgb(var(--border))]';
+      return isInactiveTerminalPaneStatus(status) ? 'border-[rgb(var(--border))]' : 'border-[rgb(var(--border))]';
   }
 }
 

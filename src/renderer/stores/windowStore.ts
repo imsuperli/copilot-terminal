@@ -11,7 +11,7 @@ import {
   updateSplitSizes as updateSplitSizesInLayout,
   getAllPanes,
   findPaneNode,
-  collapseTmuxAgentPanesForPause,
+  collapseTmuxAgentPanesForDestroyedSession,
 } from '../utils/layoutHelpers';
 import {
   getAllWindowIds,
@@ -21,6 +21,7 @@ import {
   getWindowCount,
 } from '../utils/groupLayoutHelpers';
 import { getPersistableWindows } from '../utils/sshWindowBindings';
+import { isLegacyPausedStatus } from '../utils/windowLifecycle';
 import { updateSettingsCategories } from './categoryHelpers';
 
 // 全局标志：是否启用自动保存
@@ -510,7 +511,7 @@ interface WindowStore {
   // Pane 相关
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
   updatePaneRuntime: (windowId: string, paneId: string, updates: Partial<Pane>) => void;
-  pauseWindowState: (windowId: string) => void;
+  clearWindowRuntimeSession: (windowId: string) => void;
   splitPaneInWindow: (
     windowId: string,
     targetPaneId: string,
@@ -886,9 +887,9 @@ export const useWindowStore = create<WindowStore>()(
       });
     },
 
-    pauseWindowState: (windowId) => {
+    clearWindowRuntimeSession: (windowId) => {
       let didChange = false;
-      let shouldAutoSave = false;
+      let shouldPersistChange = false;
 
       set((state) => {
         const window = state.windows.find(w => w.id === windowId);
@@ -896,38 +897,51 @@ export const useWindowStore = create<WindowStore>()(
           return;
         }
 
-        const collapsed = collapseTmuxAgentPanesForPause(window.layout, window.activePaneId);
-        if (collapsed) {
-          window.layout = collapsed.layout;
-          window.activePaneId = collapsed.activePaneId;
-          window.lastActiveAt = new Date().toISOString();
-          didChange = true;
-          shouldAutoSave = true;
-          return;
+        const collapsedLayout = collapseTmuxAgentPanesForDestroyedSession(window.layout, window.activePaneId);
+        if (collapsedLayout) {
+          window.layout = collapsedLayout.layout;
+          window.activePaneId = collapsedLayout.activePaneId;
+          shouldPersistChange = true;
         }
 
         const panes = getAllPanes(window.layout);
-        const needsPauseUpdate = panes.some((pane) => (
-          pane.status !== WindowStatus.Paused || pane.pid !== null || pane.sessionId !== undefined
+        const needsSessionCleanup = panes.some((pane) => (
+          pane.status !== WindowStatus.Completed
+          || pane.pid !== null
+          || pane.sessionId !== undefined
+          || pane.lastOutput !== undefined
+          || pane.tmuxScopeId !== undefined
+          || isLegacyPausedStatus(pane.status)
         ));
 
-        if (!needsPauseUpdate) {
+        if (!needsSessionCleanup || panes.length === 0) {
+          if (!shouldPersistChange) {
+            return;
+          }
+
+          didChange = true;
+          window.lastActiveAt = new Date().toISOString();
           return;
         }
 
         didChange = true;
         for (const pane of panes) {
           window.layout = updatePaneInLayout(window.layout, pane.id, {
-            status: WindowStatus.Paused,
+            status: WindowStatus.Completed,
             pid: null,
             sessionId: undefined,
+            lastOutput: undefined,
+            tmuxScopeId: undefined,
           });
         }
+        window.lastActiveAt = new Date().toISOString();
       });
 
-      if (didChange && shouldAutoSave) {
-        const { windows, groups } = get();
-        triggerAutoSave(windows, groups);
+      if (didChange) {
+        if (shouldPersistChange) {
+          const { windows, groups } = get();
+          triggerAutoSave(windows, groups);
+        }
       }
     },
 

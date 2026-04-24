@@ -10,11 +10,11 @@ import { CustomCategory } from '../../../shared/types/custom-category';
 import { SSHCredentialState, SSHProfile } from '../../../shared/types/ssh';
 import { useWindowStore } from '../../stores/windowStore';
 import { useI18n } from '../../i18n';
-import { getOwnedEphemeralSSHWindowIds, getPersistableWindows } from '../../utils/sshWindowBindings';
+import { getPersistableWindows } from '../../utils/sshWindowBindings';
 import { TerminalTypeLogo } from '../icons/TerminalTypeLogo';
 import { getWindowKind } from '../../../shared/utils/terminalCapabilities';
-import { getSidebarCardCounts, getVisibleStandaloneWindows } from '../../utils/cardCollection';
-import { destroyWindowResourcesKeepRecord } from '../../utils/windowDestruction';
+import { getSidebarCardCounts } from '../../utils/cardCollection';
+import { destroyWindowResourcesAndRemoveRecord } from '../../utils/windowDestruction';
 import {
   idePopupInputClassName,
   idePopupSecondaryButtonClassName,
@@ -78,15 +78,9 @@ export function Sidebar({
 
   const activeWindows = persistableWindows.filter(w => !w.archived);
   const archivedWindows = persistableWindows.filter(w => w.archived);
-  const visibleStandaloneWindows = useMemo(
-    () => getVisibleStandaloneWindows(windows, groups, { sshEnabled, sshProfiles }),
-    [groups, sshEnabled, sshProfiles, windows],
-  );
-  const activeVisibleWindows = visibleStandaloneWindows.filter((window) => !window.archived);
-
   const localActiveWindows = activeWindows.filter(w => getWindowKind(w) !== 'ssh');
   const sshActiveWindows = sshEnabled
-    ? activeVisibleWindows.filter(w => getWindowKind(w) === 'ssh')
+    ? activeWindows.filter((window) => getWindowKind(window) === 'ssh')
     : [];
   const counts = useMemo(
     () => getSidebarCardCounts(windows, groups, { sshEnabled, sshProfiles }),
@@ -210,24 +204,22 @@ export function Sidebar({
     }
   };
 
+  const removeWindowRecords = async (windowIds: string[]) => {
+    const uniqueWindowIds = Array.from(new Set(windowIds));
+
+    for (const windowId of uniqueWindowIds) {
+      const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
+      if (!win || win.ephemeral) {
+        continue;
+      }
+
+      await destroyWindowResourcesAndRemoveRecord(win.id);
+    }
+  };
+
   const handleClearActiveWindows = async () => {
     try {
-      const windowIdsToClear = new Set<string>();
-      for (const win of activeWindows) {
-        windowIdsToClear.add(win.id);
-        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
-          windowIdsToClear.add(windowId);
-        });
-      }
-
-      for (const windowId of windowIdsToClear) {
-        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
-        if (!win) {
-          continue;
-        }
-
-        await destroyWindowResourcesKeepRecord(win.id);
-      }
+      await removeWindowRecords(activeWindows.map((window) => window.id));
     } catch (error) {
       console.error('Failed to clear active windows:', error);
     }
@@ -235,22 +227,7 @@ export function Sidebar({
 
   const handleClearArchivedWindows = async () => {
     try {
-      const windowIdsToClear = new Set<string>();
-      for (const win of archivedWindows) {
-        windowIdsToClear.add(win.id);
-        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
-          windowIdsToClear.add(windowId);
-        });
-      }
-
-      for (const windowId of windowIdsToClear) {
-        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
-        if (!win) {
-          continue;
-        }
-
-        await destroyWindowResourcesKeepRecord(win.id);
-      }
+      await removeWindowRecords(archivedWindows.map((window) => window.id));
     } catch (error) {
       console.error('Failed to clear archived windows:', error);
     }
@@ -258,22 +235,7 @@ export function Sidebar({
 
   const handleClearAllWindows = async () => {
     try {
-      const windowIdsToClear = new Set<string>();
-      for (const win of windows) {
-        windowIdsToClear.add(win.id);
-        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
-          windowIdsToClear.add(windowId);
-        });
-      }
-
-      for (const windowId of windowIdsToClear) {
-        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
-        if (!win) {
-          continue;
-        }
-
-        await destroyWindowResourcesKeepRecord(win.id);
-      }
+      await removeWindowRecords(persistableWindows.map((window) => window.id));
     } catch (error) {
       console.error('Failed to clear all windows:', error);
     }
@@ -281,22 +243,7 @@ export function Sidebar({
 
   const handleClearLocalWindows = async () => {
     try {
-      const windowIdsToClear = new Set<string>();
-      for (const win of localActiveWindows) {
-        windowIdsToClear.add(win.id);
-        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
-          windowIdsToClear.add(windowId);
-        });
-      }
-
-      for (const windowId of windowIdsToClear) {
-        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
-        if (!win) {
-          continue;
-        }
-
-        await destroyWindowResourcesKeepRecord(win.id);
-      }
+      await removeWindowRecords(localActiveWindows.map((window) => window.id));
     } catch (error) {
       console.error('Failed to clear local windows:', error);
     }
@@ -304,22 +251,7 @@ export function Sidebar({
 
   const handleClearSSHWindows = async () => {
     try {
-      const windowIdsToClear = new Set<string>();
-      for (const win of sshActiveWindows) {
-        windowIdsToClear.add(win.id);
-        getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, win.id).forEach((windowId) => {
-          windowIdsToClear.add(windowId);
-        });
-      }
-
-      for (const windowId of windowIdsToClear) {
-        const win = useWindowStore.getState().windows.find((window) => window.id === windowId);
-        if (!win) {
-          continue;
-        }
-
-        await destroyWindowResourcesKeepRecord(win.id);
-      }
+      await removeWindowRecords(sshActiveWindows.map((window) => window.id));
     } catch (error) {
       console.error('Failed to clear SSH windows:', error);
     }
@@ -332,7 +264,7 @@ export function Sidebar({
     } else if (currentTab === 'archived') {
       return { handler: handleClearArchivedWindows, count: archivedWindows.length };
     } else if (currentTab === 'all') {
-      return { handler: handleClearAllWindows, count: windows.length };
+      return { handler: handleClearAllWindows, count: persistableWindows.length };
     } else if (currentTab === 'local') {
       return { handler: handleClearLocalWindows, count: localActiveWindows.length };
     } else if (currentTab === 'ssh') {
@@ -764,22 +696,16 @@ export function Sidebar({
             if (!handler || count === 0) return null;
 
             let buttonText = '';
-            let titleText = '';
             if (currentTab === 'active') {
               buttonText = t('sidebar.clearActiveWindows');
-              titleText = t('sidebar.confirmClearActiveTitle');
             } else if (currentTab === 'archived') {
               buttonText = t('sidebar.clearArchivedWindows');
-              titleText = t('sidebar.confirmClearArchivedTitle');
             } else if (currentTab === 'all') {
               buttonText = t('sidebar.clearAllWindows');
-              titleText = t('sidebar.confirmClearActiveTitle');
             } else if (currentTab === 'local') {
               buttonText = t('sidebar.clearLocalWindows');
-              titleText = t('sidebar.confirmClearLocalTitle');
             } else if (currentTab === 'ssh') {
               buttonText = t('sidebar.clearSSHWindows');
-              titleText = t('sidebar.confirmClearSSHTitle');
             }
 
             return (
@@ -815,29 +741,29 @@ export function Sidebar({
         onOpenChange={setIsConfirmDialogOpen}
         title={
           currentTab === 'active'
-            ? '确认清空工作区'
+            ? t('sidebar.confirmClearActiveTitle')
             : currentTab === 'archived'
-            ? '确认清空已归档终端'
+            ? t('sidebar.confirmClearArchivedTitle')
             : currentTab === 'all'
-            ? '确认清空全部终端'
+            ? t('sidebar.confirmClearAllTitle')
             : currentTab === 'local'
-            ? '确认清空本地终端'
+            ? t('sidebar.confirmClearLocalTitle')
             : currentTab === 'ssh'
-            ? '确认清空远程终端'
-            : '确认清空终端'
+            ? t('sidebar.confirmClearSSHTitle')
+            : t('sidebar.confirmClearActiveTitle')
         }
         description={
           currentTab === 'active'
-            ? `确定要删除工作区中的全部 ${activeWindows.length} 个终端吗？此操作不可撤销。`
+            ? t('sidebar.confirmClearActiveDescription', { count: activeWindows.length })
             : currentTab === 'archived'
-            ? `确定要删除全部 ${archivedWindows.length} 个已归档终端吗？此操作不可撤销。`
+            ? t('sidebar.confirmClearArchivedDescription', { count: archivedWindows.length })
             : currentTab === 'all'
-            ? `确定要删除全部 ${windows.length} 个终端吗？此操作不可撤销。`
+            ? t('sidebar.confirmClearAllDescription', { count: persistableWindows.length })
             : currentTab === 'local'
-            ? `确定要删除全部 ${localActiveWindows.length} 个本地终端吗？此操作不可撤销。`
+            ? t('sidebar.confirmClearLocalDescription', { count: localActiveWindows.length })
             : currentTab === 'ssh'
-            ? `确定要删除全部 ${sshActiveWindows.length} 个远程终端吗？此操作不可撤销。`
-            : '确定要删除这些终端吗？此操作不可撤销。'
+            ? t('sidebar.confirmClearSSHDescription', { count: sshActiveWindows.length })
+            : t('sidebar.confirmClearActiveDescription', { count: 0 })
         }
         confirmText={t('common.delete')}
         cancelText={t('common.cancel')}

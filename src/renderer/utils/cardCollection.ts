@@ -5,6 +5,7 @@ import { Window, WindowStatus } from '../types/window';
 import { getAllWindowIds } from './groupLayoutHelpers';
 import { getAllPanes } from './layoutHelpers';
 import { getPersistableWindows, getStandaloneSSHProfileId } from './sshWindowBindings';
+import { isInactiveTerminalPaneStatus } from './windowLifecycle';
 
 type CardCollectionOptions = {
   sshEnabled?: boolean;
@@ -73,18 +74,18 @@ function groupMatchesWindow(
 function getWindowStatusFlags(window: Window): {
   running: boolean;
   waiting: boolean;
-  paused: boolean;
+  inactive: boolean;
 } {
   let running = false;
   let waiting = false;
-  let paused = false;
+  let inactive = false;
 
   for (const pane of getAllPanes(window.layout)) {
     running ||= pane.status === WindowStatus.Running;
     waiting ||= pane.status === WindowStatus.WaitingForInput;
-    paused ||= pane.status === WindowStatus.Paused;
+    inactive ||= isInactiveTerminalPaneStatus(pane.status);
 
-    if (running && waiting && paused) {
+    if (running && waiting && inactive) {
       break;
     }
   }
@@ -92,7 +93,7 @@ function getWindowStatusFlags(window: Window): {
   return {
     running,
     waiting,
-    paused,
+    inactive,
   };
 }
 
@@ -158,14 +159,14 @@ export function getStatusCardCounts(
   const counts = {
     running: 0,
     waiting: 0,
-    paused: 0,
+    inactive: 0,
   };
 
   for (const window of activeVisibleWindows) {
     const flags = getStatusFlags(window);
     if (flags.running) counts.running += 1;
     if (flags.waiting) counts.waiting += 1;
-    if (flags.paused) counts.paused += 1;
+    if (flags.inactive) counts.inactive += 1;
   }
 
   for (const group of groups) {
@@ -175,7 +176,7 @@ export function getStatusCardCounts(
 
     let hasRunning = false;
     let hasWaiting = false;
-    let hasPaused = false;
+    let hasInactive = false;
 
     for (const windowId of getAllWindowIds(group.layout)) {
       const window = context.windowsById.get(windowId);
@@ -186,16 +187,16 @@ export function getStatusCardCounts(
       const flags = getStatusFlags(window);
       hasRunning ||= flags.running;
       hasWaiting ||= flags.waiting;
-      hasPaused ||= flags.paused;
+      hasInactive ||= flags.inactive;
 
-      if (hasRunning && hasWaiting && hasPaused) {
+      if (hasRunning && hasWaiting && hasInactive) {
         break;
       }
     }
 
     if (hasRunning) counts.running += 1;
     if (hasWaiting) counts.waiting += 1;
-    if (hasPaused) counts.paused += 1;
+    if (hasInactive) counts.inactive += 1;
   }
 
   return counts;

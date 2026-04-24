@@ -328,7 +328,7 @@ describe('CardGrid SSH profile cards', () => {
     expect(onConnectSSHProfile).toHaveBeenCalledWith(profile);
   });
 
-  it('archives a bound SSH runtime window from the profile card and shows it in archived view', async () => {
+  it('archives a bound SSH runtime window from the profile card without cascading to ephemeral clones', async () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();
     const runtimeWindow = createStandaloneSSHWindow(profile);
@@ -353,12 +353,14 @@ describe('CardGrid SSH profile cards', () => {
     await user.click(screen.getByRole('button', { name: '归档窗口' }));
 
     await waitFor(() => {
-      expect(closeWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
-      expect(deleteWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
+      expect(deleteWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
       expect(useWindowStore.getState().windows[0]?.archived).toBe(true);
       expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(true);
     });
+
+    expect(closeWindowMock).not.toHaveBeenCalledWith(ephemeralClone.id);
+    expect(deleteWindowMock).not.toHaveBeenCalledWith(ephemeralClone.id);
 
     rerender(
       <DndProvider backend={HTML5Backend}>
@@ -374,7 +376,7 @@ describe('CardGrid SSH profile cards', () => {
     expect(await screen.findByRole('button', { name: '取消归档' })).toBeInTheDocument();
   });
 
-  it('stops a bound SSH runtime window by destroying both the root window and its ephemeral clones', async () => {
+  it('stops a bound SSH runtime window without destroying independent ephemeral clones', async () => {
     const user = userEvent.setup();
     const profile = createSSHProfile();
     const runtimeWindow = createStandaloneSSHWindow(profile);
@@ -394,13 +396,14 @@ describe('CardGrid SSH profile cards', () => {
     await user.click(screen.getByRole('button', { name: '销毁' }));
 
     await waitFor(() => {
-      expect(closeWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
-      expect(deleteWindowMock).toHaveBeenCalledWith(ephemeralClone.id);
       expect(closeWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
       expect(deleteWindowMock).toHaveBeenCalledWith(runtimeWindow.id);
       expect(useWindowStore.getState().windows.some((window) => window.id === ephemeralClone.id)).toBe(true);
       expect(useWindowStore.getState().windows.some((window) => window.id === runtimeWindow.id)).toBe(true);
     });
+
+    expect(closeWindowMock).not.toHaveBeenCalledWith(ephemeralClone.id);
+    expect(deleteWindowMock).not.toHaveBeenCalledWith(ephemeralClone.id);
   });
 
   it('deletes a bound SSH card by removing both the runtime window and the SSH profile', async () => {

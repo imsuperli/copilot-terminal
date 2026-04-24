@@ -337,7 +337,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByText('Prod SSH')).not.toBeInTheDocument();
   });
 
-  it('destroys the window when the last terminal pane exits even when browser siblings exist', async () => {
+  it('destroys the session but keeps the window when the last terminal pane exits even when browser siblings exist', async () => {
     const user = userEvent.setup();
     const localWindow = createLocalWindowWithBrowserSibling();
     const onReturn = vi.fn();
@@ -366,7 +366,7 @@ describe('TerminalView SSH toolbar', () => {
       expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(localWindow.id);
     });
     expect(window.electronAPI.closePane).not.toHaveBeenCalled();
-    expect(onReturn).toHaveBeenCalledTimes(1);
+    expect(onReturn).not.toHaveBeenCalled();
     expect(useWindowStore.getState().windows.some((window) => window.id === localWindow.id)).toBe(true);
   });
 
@@ -396,7 +396,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(screen.queryByText('Prod SSH')).not.toBeInTheDocument();
   });
 
-  it('only shows remote tabs for the same owner family and keeps their original order', () => {
+  it('shows remote tabs for the same ssh target and keeps their original order', () => {
     const ownerWindow = createSSHWindow({
       id: 'win-ssh-1',
       paneId: 'pane-ssh-1',
@@ -444,10 +444,11 @@ describe('TerminalView SSH toolbar', () => {
     const remoteTabOrder = screen
       .getAllByRole('button')
       .map((button) => button.getAttribute('aria-label'))
-      .filter((label): label is string => label === 'Prod SSH A' || label === 'Prod SSH B');
+      .filter((label): label is string => (
+        label === 'Prod SSH A' || label === 'Prod SSH B' || label === 'Prod SSH C'
+      ));
 
-    expect(remoteTabOrder).toEqual(['Prod SSH A', 'Prod SSH B']);
-    expect(screen.queryByRole('button', { name: 'Prod SSH C' })).not.toBeInTheDocument();
+    expect(remoteTabOrder).toEqual(['Prod SSH A', 'Prod SSH B', 'Prod SSH C']);
   });
 
   it('renders remote tabs in a fixed window header instead of an overlay', () => {
@@ -590,7 +591,6 @@ describe('TerminalView SSH toolbar', () => {
     const clonedWindow = useWindowStore.getState().windows[2];
     expect(clonedWindow).toMatchObject({
       ephemeral: true,
-      sshTabOwnerWindowId: 'win-ssh-1',
     });
     expect(onWindowSwitch).toHaveBeenCalledWith(clonedWindow.id);
     expect(useWindowStore.getState().windows).toHaveLength(3);
@@ -772,7 +772,7 @@ describe('TerminalView SSH toolbar', () => {
     });
 
     expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1', 'win-ssh-2']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
   it('keeps a non-ephemeral ssh window record when stopped and returns when no runnable window remains', async () => {
@@ -892,7 +892,7 @@ describe('TerminalView SSH toolbar', () => {
     expect(window.electronAPI.switchToUnifiedView).not.toHaveBeenCalled();
     expect(onWindowSwitch).toHaveBeenCalledWith('win-ssh-1');
     expect(onReturn).not.toHaveBeenCalled();
-    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1', 'win-ssh-2']);
+    expect(useWindowStore.getState().windows.map((window) => window.id)).toEqual(['win-ssh-1']);
   });
 
   it('does not leave a placeholder window behind when cloning fails', async () => {

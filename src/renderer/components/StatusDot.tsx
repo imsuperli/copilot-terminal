@@ -1,8 +1,9 @@
 import React from 'react';
-import { Activity, Keyboard, Pause } from 'lucide-react';
+import { Activity, Circle, Keyboard } from 'lucide-react';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { WindowStatus } from '../types/window';
 import { idePopupTooltipClassName } from './ui/ide-popup';
+import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 
 export interface StatusDotProps {
   status: WindowStatus;
@@ -36,10 +37,12 @@ function getStatusIconColor(status: WindowStatus): string {
       return 'text-[rgb(var(--success))]';
     case WindowStatus.WaitingForInput:
       return 'text-[rgb(var(--primary))]';
-    case WindowStatus.Paused:
+    case WindowStatus.Completed:
       return 'text-[rgb(var(--muted-foreground))]';
     default:
-      return 'text-[rgb(var(--border))]';
+      return isInactiveTerminalPaneStatus(status)
+        ? 'text-[rgb(var(--muted-foreground))]'
+        : 'text-[rgb(var(--border))]';
   }
 }
 
@@ -118,8 +121,8 @@ export const StatusDot: React.FC<StatusDotProps> = ({
     return renderIcon(Keyboard);
   }
 
-  if (status === WindowStatus.Paused) {
-    return renderIcon(Pause);
+  if (isInactiveTerminalPaneStatus(status)) {
+    return renderIcon(Circle);
   }
 
   // 其他状态继续使用圆点

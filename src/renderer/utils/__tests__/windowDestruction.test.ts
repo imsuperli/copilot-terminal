@@ -52,7 +52,7 @@ describe('destroyWindowResourcesKeepRecord', () => {
     expect(storedWindow).toBeDefined();
     expect(storedWindow?.layout.type).toBe('pane');
     if (storedWindow?.layout.type === 'pane') {
-      expect(storedWindow.layout.pane.status).toBe(WindowStatus.Paused);
+      expect(storedWindow.layout.pane.status).toBe(WindowStatus.Completed);
       expect(storedWindow.layout.pane.pid).toBeNull();
       expect(storedWindow.layout.pane.sessionId).toBeUndefined();
     }

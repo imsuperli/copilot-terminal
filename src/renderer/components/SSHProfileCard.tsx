@@ -23,7 +23,7 @@ interface SSHProfileCardProps {
   isConnecting?: boolean;
   onConnect?: (profile: SSHProfile) => void;
   onOpenWindow?: (window: Window) => void;
-  onPauseWindow?: (window: Window) => void;
+  onDestroyWindowSession?: (window: Window) => void;
   onStartWindow?: (window: Window) => void;
   onArchiveWindow?: (window: Window) => void;
   onUnarchiveWindow?: (window: Window) => void;
@@ -39,7 +39,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   isConnecting = false,
   onConnect,
   onOpenWindow,
-  onPauseWindow,
+  onDestroyWindowSession,
   onStartWindow,
   onArchiveWindow,
   onUnarchiveWindow,
@@ -56,7 +56,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
     [window],
   );
   const isWindowRunning = runtimeStatus === WindowStatus.Running || runtimeStatus === WindowStatus.WaitingForInput;
-  const topBorderColor = getStatusColorValue(runtimeStatus ?? WindowStatus.Paused);
+  const topBorderColor = getStatusColorValue(runtimeStatus ?? WindowStatus.Completed);
   const statusTooltip = useMemo(() => {
     if (!runtimeStatus) {
       return null;
@@ -131,7 +131,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
   const handlePrimaryAction = useCallback(() => {
     if (window) {
       if (isWindowRunning) {
-        onPauseWindow?.(window);
+        onDestroyWindowSession?.(window);
       } else {
         onStartWindow?.(window);
       }
@@ -139,7 +139,7 @@ export const SSHProfileCard = React.memo<SSHProfileCardProps>(({
     }
 
     onConnect?.(profile);
-  }, [isWindowRunning, onConnect, onPauseWindow, onStartWindow, profile, window]);
+  }, [isWindowRunning, onConnect, onDestroyWindowSession, onStartWindow, profile, window]);
 
   return (
     <div

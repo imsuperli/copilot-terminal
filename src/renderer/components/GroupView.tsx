@@ -14,10 +14,11 @@ import type { WindowCardDragItem, DropResult } from './dnd';
 import { AppTooltip } from './ui/AppTooltip';
 import { startWindowPanes } from '../utils/paneSessionActions';
 import type { SSHProfile } from '../../shared/types/ssh';
-import { getOwnedEphemeralSSHWindowIds, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
+import { isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { CUSTOM_TITLEBAR_ACTIONS_SLOT_ID } from './CustomTitleBar';
+import { getStartablePanes } from '../utils/windowLifecycle';
 
 const LazyQuickSwitcher = lazy(async () => ({
   default: (await import('./QuickSwitcher')).QuickSwitcher,
@@ -27,8 +28,8 @@ const LazySettingsPanel = lazy(async () => ({
   default: (await import('./SettingsPanel')).SettingsPanel,
 }));
 
-function getPausedPanes(panes: Pane[]): Pane[] {
-  return panes.filter((pane) => pane.status === WindowStatus.Paused);
+function getStartableTerminalPanes(window: Window): Pane[] {
+  return getStartablePanes(window);
 }
 
 export interface GroupViewProps {
@@ -79,6 +80,7 @@ export const GroupView: React.FC<GroupViewProps> = ({
 
   const setActiveWindowInGroup = useWindowStore((state) => state.setActiveWindowInGroup);
   const archiveGroup = useWindowStore((state) => state.archiveGroup);
+  const archiveWindow = useWindowStore((state) => state.archiveWindow);
   const addWindowToGroupLayout = useWindowStore((state) => state.addWindowToGroupLayout);
   const removeWindowFromGroupLayout = useWindowStore((state) => state.removeWindowFromGroupLayout);
   const rearrangeWindowInGroupLayout = useWindowStore((state) => state.rearrangeWindowInGroupLayout);
@@ -97,40 +99,39 @@ export const GroupView: React.FC<GroupViewProps> = ({
   ));
   const groupWindowRuntime = useMemo(() => {
     const windowById = new Map<string, Window>();
-    const pausedPanesByWindowId = new Map<string, Pane[]>();
+    const startablePanesByWindowId = new Map<string, Pane[]>();
 
     for (const terminalWindow of groupWindows) {
       windowById.set(terminalWindow.id, terminalWindow);
 
-      const panes = getAllPanes(terminalWindow.layout);
-      const pausedPanes = getPausedPanes(panes);
-      if (pausedPanes.length > 0) {
-        pausedPanesByWindowId.set(terminalWindow.id, pausedPanes);
+      const startablePanes = getStartableTerminalPanes(terminalWindow);
+      if (startablePanes.length > 0) {
+        startablePanesByWindowId.set(terminalWindow.id, startablePanes);
       }
     }
 
     return {
       windowById,
-      pausedPanesByWindowId,
+      startablePanesByWindowId,
     };
   }, [groupWindows]);
-  const groupPausedPanesByWindowId = groupWindowRuntime.pausedPanesByWindowId;
+  const groupStartablePanesByWindowId = groupWindowRuntime.startablePanesByWindowId;
   const groupWindowById = groupWindowRuntime.windowById;
 
-  const startPausedPanesForWindow = useCallback(
-    async (targetWindow: Window, pausedPanes: Pane[]) => {
-      if (pausedPanes.length > 0) {
-        await startWindowPanes(targetWindow, useWindowStore.getState().updatePane, pausedPanes);
+  const startStartablePanesForWindow = useCallback(
+    async (targetWindow: Window, targetPanes: Pane[]) => {
+      if (targetPanes.length > 0) {
+        await startWindowPanes(targetWindow, useWindowStore.getState().updatePane, targetPanes);
       }
     },
     [],
   );
 
-  // 自动启动组内所有暂停的窗口
+  // 自动启动组内所有无活动会话的窗口
   useEffect(() => {
     const autoStartWindows = async () => {
       for (const win of groupWindows) {
-        await startPausedPanesForWindow(win, groupPausedPanesByWindowId.get(win.id) ?? []);
+        await startStartablePanesForWindow(win, groupStartablePanesByWindowId.get(win.id) ?? []);
       }
     };
 
@@ -169,13 +170,6 @@ export const GroupView: React.FC<GroupViewProps> = ({
     }
   }, []);
 
-  const destroyOwnedEphemeralWindows = useCallback(async (windowId: string) => {
-    const ownedWindowIds = getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, windowId);
-    if (ownedWindowIds.length > 0) {
-      await destroyWindowIds(ownedWindowIds);
-    }
-  }, [destroyWindowIds]);
-
   // 处理快速切换器选择
   const handleQuickSwitcherSelect = useCallback(
     (windowId: string) => {
@@ -202,10 +196,48 @@ export const GroupView: React.FC<GroupViewProps> = ({
   );
 
   // 处理归档组
-  const handleArchiveGroup = useCallback(() => {
-    archiveGroup(group.id);
-    onReturn();
-  }, [group.id, archiveGroup, onReturn]);
+  const handleArchiveGroup = useCallback(async () => {
+    const state = useWindowStore.getState();
+    const currentGroup = state.getGroupById(group.id);
+    const currentLayout = currentGroup?.layout ?? group.layout;
+    const persistableWindowIds = getAllWindowIds(currentLayout).filter((windowId) => {
+      const targetWindow = state.getWindowById(windowId);
+      return Boolean(targetWindow && !targetWindow.ephemeral);
+    });
+
+    try {
+      await destroyWindowIds(getAllWindowIds(currentLayout));
+
+      if (persistableWindowIds.length === 0) {
+        onReturn();
+        return;
+      }
+
+      const nextState = useWindowStore.getState();
+      const activePersistableWindowIds = persistableWindowIds.filter((windowId) => Boolean(nextState.getWindowById(windowId)));
+      if (activePersistableWindowIds.length === 0) {
+        onReturn();
+        return;
+      }
+
+      if (activePersistableWindowIds.length === 1) {
+        archiveWindow(activePersistableWindowIds[0]);
+        onReturn();
+        return;
+      }
+
+      if (nextState.getGroupById(group.id)) {
+        archiveGroup(group.id);
+      } else {
+        activePersistableWindowIds.forEach((windowId) => {
+          archiveWindow(windowId);
+        });
+      }
+      onReturn();
+    } catch (error) {
+      console.error('Failed to archive group:', error);
+    }
+  }, [archiveGroup, archiveWindow, destroyWindowIds, group, onReturn]);
 
   // 处理拖拽窗口到组内
   const handleWindowDrop = useCallback(
@@ -242,14 +274,14 @@ export const GroupView: React.FC<GroupViewProps> = ({
         // 添加窗口到当前组
         addWindowToGroupLayout(group.id, targetWindowId, dragWindowId, direction);
 
-        // 自动启动拖入窗口的所有暂停窗格
+        // 自动启动拖入窗口的所有可启动窗格
         const dragWin = useWindowStore.getState().getWindowById(dragWindowId);
         if (dragWin) {
-          await startPausedPanesForWindow(dragWin, getPausedPanes(getAllPanes(dragWin.layout)));
+          await startStartablePanesForWindow(dragWin, getStartableTerminalPanes(dragWin));
         }
       }
     },
-    [addWindowToGroupLayout, findGroupByWindowId, group.id, groupWindowIdSet, rearrangeWindowInGroupLayout, removeWindowFromGroupLayout, startPausedPanesForWindow]
+    [addWindowToGroupLayout, findGroupByWindowId, group.id, groupWindowIdSet, rearrangeWindowInGroupLayout, removeWindowFromGroupLayout, startStartablePanesForWindow]
   );
 
   // 从组中移除窗口（保持运行）
@@ -285,11 +317,9 @@ export const GroupView: React.FC<GroupViewProps> = ({
     const targetWindow = groupWindowById.get(windowId) ?? null;
 
     try {
-      if (targetWindow && isEphemeralSSHCloneWindow(targetWindow)) {
-        await destroyWindowIds([windowId]);
-      } else {
-        await destroyOwnedEphemeralWindows(windowId);
-        await destroyWindowIds([windowId]);
+      await destroyWindowIds([windowId]);
+      if (!targetWindow || !isEphemeralSSHCloneWindow(targetWindow)) {
+        removeWindowFromGroupLayout(group.id, windowId);
       }
     } catch (error) {
       console.error('Failed to destroy window:', error);
@@ -311,32 +341,19 @@ export const GroupView: React.FC<GroupViewProps> = ({
         }
       }
     }, 0);
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, group.id, groupWindowById, groupWindowIds, onReturn, onWindowSwitch]);
+  }, [destroyWindowIds, group.id, groupWindowById, groupWindowIds, onReturn, onWindowSwitch, removeWindowFromGroupLayout]);
 
   // 批量启动组内所有窗口
   const handleStartAll = useCallback(async () => {
     for (const win of groupWindows) {
-      await startPausedPanesForWindow(win, groupPausedPanesByWindowId.get(win.id) ?? []);
+      await startStartablePanesForWindow(win, groupStartablePanesByWindowId.get(win.id) ?? []);
     }
-  }, [groupPausedPanesByWindowId, groupWindows, startPausedPanesForWindow]);
+  }, [groupStartablePanesByWindowId, groupWindows, startStartablePanesForWindow]);
 
   // 批量销毁组内所有窗口
   const handleDestroyAll = useCallback(async () => {
-    const allWindows = useWindowStore.getState().windows;
-    const windowsById = new Map(allWindows.map((win) => [win.id, win]));
-    const windowIdsToDestroy = new Set<string>();
-
-    for (const windowId of groupWindowIds) {
-      windowIdsToDestroy.add(windowId);
-      const win = windowsById.get(windowId);
-      if (win && !isEphemeralSSHCloneWindow(win)) {
-        getOwnedEphemeralSSHWindowIds(allWindows, windowId)
-          .forEach((ownedWindowId) => windowIdsToDestroy.add(ownedWindowId));
-      }
-    }
-
     try {
-      await destroyWindowIds([...windowIdsToDestroy]);
+      await destroyWindowIds(groupWindowIds);
       onReturn();
     } catch (error) {
       console.error('Failed to destroy all windows in group:', error);

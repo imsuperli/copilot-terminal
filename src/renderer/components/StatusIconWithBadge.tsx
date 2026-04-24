@@ -1,6 +1,7 @@
 import React from 'react';
-import { Activity, Keyboard, Pause, Circle } from 'lucide-react';
+import { Activity, Circle, Keyboard } from 'lucide-react';
 import { WindowStatus } from '../types/window';
+import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 
 export interface StatusIconWithBadgeProps {
   status: WindowStatus;
@@ -18,16 +19,16 @@ function getStatusIconColor(status: WindowStatus): string {
       return 'text-[rgb(var(--success))]';
     case WindowStatus.WaitingForInput:
       return 'text-[rgb(var(--primary))]';
-    case WindowStatus.Paused:
+    case WindowStatus.Completed:
       return 'text-[rgb(var(--muted-foreground))]';
     case WindowStatus.Error:
       return 'text-[rgb(var(--error))]';
-    case WindowStatus.Completed:
-      return 'text-[rgb(var(--muted-foreground))]';
     case WindowStatus.Restoring:
       return 'text-[rgb(var(--warning))]';
     default:
-      return 'text-[rgb(var(--muted-foreground))]';
+      return isInactiveTerminalPaneStatus(status)
+        ? 'text-[rgb(var(--muted-foreground))]'
+        : 'text-[rgb(var(--muted-foreground))]';
   }
 }
 
@@ -56,10 +57,9 @@ function getStatusIcon(status: WindowStatus): typeof Activity {
       return Activity;
     case WindowStatus.WaitingForInput:
       return Keyboard;
-    case WindowStatus.Paused:
-      return Pause;
-    case WindowStatus.Error:
     case WindowStatus.Completed:
+      return Circle;
+    case WindowStatus.Error:
     case WindowStatus.Restoring:
     default:
       return Circle;

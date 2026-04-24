@@ -24,6 +24,7 @@ import {
   extractLatestOsc7RemoteCwd,
   updateSSHCwdTrackerFromRuntimeCwd,
 } from '../utils/sshCwdTracking';
+import { isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 import '../styles/xterm.css';
 
 const completedReplaySessions = new Set<string>();
@@ -59,12 +60,10 @@ function getStatusBorderColor(status: WindowStatus): string {
       return 'border-t-[rgb(var(--success))]';
     case WindowStatus.WaitingForInput:
       return 'border-t-[rgb(var(--primary))]';
-    case WindowStatus.Paused:
-      return 'border-t-[rgb(var(--border))]';
-    case WindowStatus.Error:
-      return 'border-t-[rgb(var(--error))]';
     case WindowStatus.Completed:
       return 'border-t-[rgb(var(--muted-foreground))]';
+    case WindowStatus.Error:
+      return 'border-t-[rgb(var(--error))]';
     case WindowStatus.Restoring:
       return 'border-t-[rgb(var(--warning))]';
     default:
@@ -109,12 +108,10 @@ function getStatusRingColor(status: WindowStatus): string {
       return 'ring-[rgb(var(--success))]';
     case WindowStatus.WaitingForInput:
       return 'ring-[rgb(var(--primary))]';
-    case WindowStatus.Paused:
-      return 'ring-[rgb(var(--border))]';
-    case WindowStatus.Error:
-      return 'ring-[rgb(var(--error))]';
     case WindowStatus.Completed:
       return 'ring-[rgb(var(--muted-foreground))]';
+    case WindowStatus.Error:
+      return 'ring-[rgb(var(--error))]';
     case WindowStatus.Restoring:
       return 'ring-[rgb(var(--warning))]';
     default:
@@ -617,12 +614,14 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     });
   }, [syncPtySize]);
 
-  // 监听窗格状态变化：从 Paused 恢复时重置尺寸缓存，强制下次 resize
+  // 监听窗格状态变化：从无活动会话状态恢复时重置尺寸缓存，强制下次 resize
   useEffect(() => {
     const prevStatus = lastStatusRef.current;
     const currentStatus = pane.status;
+    const currentInactive = isInactiveTerminalPaneStatus(currentStatus);
+    const previousInactive = isInactiveTerminalPaneStatus(prevStatus);
 
-    if (currentStatus === WindowStatus.Paused && prevStatus !== WindowStatus.Paused) {
+    if (currentInactive && !previousInactive) {
       historyReplayTokenRef.current += 1;
       isHistoryLoadedRef.current = true;
       bufferedLiveDataRef.current = [];
@@ -645,9 +644,9 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
       terminalRef.current?.reset();
     }
 
-    // 从 Paused 状态恢复到 Running/WaitingForInput 时，重置尺寸缓存
+    // 从无活动会话状态恢复到 Running/WaitingForInput 时，重置尺寸缓存
     if (
-      prevStatus === WindowStatus.Paused &&
+      previousInactive &&
       (currentStatus === WindowStatus.Running || currentStatus === WindowStatus.WaitingForInput || currentStatus === WindowStatus.Restoring)
     ) {
       forceResizeToContainer();
@@ -1275,7 +1274,11 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
     const previousSession = lastSessionRef.current;
     const previousPid = previousSession.pid;
     const nextPid = pane.pid;
-    const resumedFromPaused = previousSession.status === WindowStatus.Paused && previousPid === null && nextPid !== null;
+    const resumedFromPaused = (
+      isInactiveTerminalPaneStatus(previousSession.status)
+      && previousPid === null
+      && nextPid !== null
+    );
     const shouldReplayFreshSession = (
       terminalRef.current !== null
       && nextPid !== null
@@ -1288,8 +1291,7 @@ export const TerminalPane: React.FC<TerminalPaneProps> = ({
           previousPid !== null
           && nextPid !== previousPid
           && (
-            previousSession.status === WindowStatus.Paused
-            || previousSession.status === WindowStatus.Completed
+            isInactiveTerminalPaneStatus(previousSession.status)
             || previousSession.status === WindowStatus.Error
             || previousSession.status === WindowStatus.Restoring
           )

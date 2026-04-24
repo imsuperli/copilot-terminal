@@ -1054,7 +1054,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
 
     return {
       ...restPane,
-      status: WindowStatus.Paused,
+      status: WindowStatus.Completed,
       pid: null,
     };
   }
@@ -2052,7 +2052,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
           id: newPaneId,
           cwd: paneCwd,
           command: paneCommand,
-          status: WindowStatus.Paused,
+          status: WindowStatus.Completed,
           pid: null,
           tmuxScopeId,
         };
@@ -3064,7 +3064,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       id: paneId,
       cwd: (parsed.options.startDirectory as string | undefined) || request.cwd || process.cwd(),
       command: 'shell',
-      status: WindowStatus.Paused,
+      status: WindowStatus.Completed,
       pid: null,
     };
 
@@ -3180,7 +3180,7 @@ export class TmuxCompatService extends EventEmitter implements ITmuxCompatServic
       id: paneId,
       cwd: (parsed.options.startDirectory as string | undefined) || request.cwd || process.cwd(),
       command: 'shell',
-      status: WindowStatus.Paused,
+      status: WindowStatus.Completed,
       pid: null,
     };
 

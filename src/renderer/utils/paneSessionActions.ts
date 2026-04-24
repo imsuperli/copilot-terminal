@@ -5,6 +5,7 @@ import { Pane, Window, WindowStatus } from '../types/window';
 import { dispatchAppError } from './appNotice';
 import { getAllPanes } from './layoutHelpers';
 import { isSSHPasswordPromptCancelled, runSSHActionWithPasswordRetry } from './sshConnectionRetry';
+import { canStartPaneSession } from './windowLifecycle';
 
 type PaneStartResult = StartWindowResult | StartSSHPaneResult;
 
@@ -180,9 +181,9 @@ export async function startPaneForWindow(targetWindow: Window, pane: Pane): Prom
 export async function startWindowPanes(
   targetWindow: Window,
   updatePane: (windowId: string, paneId: string, updates: Partial<Pane>) => void,
-  panesToStart: Pane[] = getAllPanes(targetWindow.layout).filter((pane) => !isSessionlessPane(pane)),
+  panesToStart: Pane[] = getAllPanes(targetWindow.layout).filter((pane) => canStartPaneSession(pane)),
 ): Promise<void> {
-  const terminalPanes = panesToStart.filter((pane) => !isSessionlessPane(pane));
+  const terminalPanes = panesToStart.filter((pane) => canStartPaneSession(pane));
   if (terminalPanes.length === 0) {
     return;
   }
@@ -205,7 +206,11 @@ export async function startWindowPanes(
         if (!isSSHPasswordPromptCancelled(error)) {
           dispatchAppError(error instanceof Error ? error.message : `Failed to start pane ${pane.id}`);
         }
-        updatePane(targetWindow.id, pane.id, { status: WindowStatus.Paused });
+        updatePane(targetWindow.id, pane.id, {
+          status: WindowStatus.Error,
+          pid: null,
+          sessionId: undefined,
+        });
       }
     }),
   );

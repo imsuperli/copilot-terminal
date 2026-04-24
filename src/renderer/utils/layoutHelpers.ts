@@ -8,8 +8,9 @@ import {
   Pane,
   WindowStatus,
 } from '../types/window';
+import { getInactiveWindowStatus, isLegacyPausedStatus } from './windowLifecycle';
 
-type PauseCollapseResult = {
+type DestroyedSessionCollapseResult = {
   layout: LayoutNode;
   activePaneId: string;
 };
@@ -60,7 +61,7 @@ export function createSinglePaneWindow(
     id: paneId,
     cwd,
     command,
-    status: WindowStatus.Paused,
+    status: WindowStatus.Completed,
     pid: null,
   };
 
@@ -327,7 +328,7 @@ export function isTmuxAgentPane(pane: Pane): boolean {
   return hasStrongTmuxAgentMarker(pane) || hasWeakTmuxAgentMarker(pane);
 }
 
-function sanitizePaneForPause(pane: Pane): Pane {
+function sanitizePaneForDestroyedSession(pane: Pane): Pane {
   const {
     sessionId,
     lastOutput,
@@ -345,7 +346,7 @@ function sanitizePaneForPause(pane: Pane): Pane {
 
   return {
     ...restPane,
-    status: WindowStatus.Paused,
+    status: WindowStatus.Completed,
     pid: null,
   };
 }
@@ -424,10 +425,10 @@ function getPaneToKeep(panes: Pane[]): Pane {
     || panes[0];
 }
 
-export function collapseTmuxAgentPanesForPause(
+export function collapseTmuxAgentPanesForDestroyedSession(
   layout: LayoutNode,
   activePaneId?: string,
-): PauseCollapseResult | null {
+): DestroyedSessionCollapseResult | null {
   let nextLayout = layout;
   let nextActivePaneId = activePaneId;
   let didCollapse = false;
@@ -445,7 +446,7 @@ export function collapseTmuxAgentPanesForPause(
     }
 
     const paneToKeep = getPaneToKeep(match.panes);
-    const sanitizedPane = sanitizePaneForPause(paneToKeep);
+    const sanitizedPane = sanitizePaneForDestroyedSession(paneToKeep);
     nextLayout = replaceLayoutNodeAtPath(nextLayout, match.path, {
       type: 'pane',
       id: sanitizedPane.id,
@@ -477,7 +478,7 @@ export function collapseTmuxAgentPanesForPause(
   }
 
   const paneToKeep = getPaneToKeep(fallbackMatch.panes);
-  const sanitizedPane = sanitizePaneForPause(paneToKeep);
+  const sanitizedPane = sanitizePaneForDestroyedSession(paneToKeep);
   const collapsedLayout = replaceLayoutNodeAtPath(layout, fallbackMatch.path, {
     type: 'pane',
     id: sanitizedPane.id,
@@ -599,16 +600,20 @@ export function updateSplitSizes(
  * 获取窗口的聚合状态（基于所有窗格的状态）
  */
 export function getAggregatedStatus(layout: LayoutNode): WindowStatus {
-  // 防御性检查：如果 layout 为 undefined 或 null，返回暂停状态
+  // 防御性检查：如果 layout 为 undefined 或 null，返回非运行状态
   if (!layout) {
     console.warn('[getAggregatedStatus] Layout is undefined or null');
-    return WindowStatus.Paused;
+    return WindowStatus.Completed;
   }
 
   return getAggregatedStatusFromPanes(getAllPanes(layout));
 }
 
 export function getAggregatedStatusFromPanes(panes: Pane[]): WindowStatus {
+  if (panes.length === 0) {
+    return WindowStatus.Completed;
+  }
+
   // 如果有任何窗格在运行，则窗口状态为运行中
   if (panes.some(p => p.status === WindowStatus.Running)) {
     return WindowStatus.Running;
@@ -629,18 +634,14 @@ export function getAggregatedStatusFromPanes(panes: Pane[]): WindowStatus {
     return WindowStatus.Error;
   }
 
-  // 如果所有窗格都已完成，则窗口状态为已完成
-  if (panes.every(p => p.status === WindowStatus.Completed)) {
+  // 兼容旧数据：Paused 视为无活动会话
+  if (panes.every((pane) => (
+    pane.status === WindowStatus.Completed || isLegacyPausedStatus(pane.status)
+  ))) {
     return WindowStatus.Completed;
   }
 
-  // 如果所有窗格都暂停，则窗口状态为暂停
-  if (panes.every(p => p.status === WindowStatus.Paused)) {
-    return WindowStatus.Paused;
-  }
-
-  // 默认返回暂停
-  return WindowStatus.Paused;
+  return getInactiveWindowStatus(panes);
 }
 
 /**

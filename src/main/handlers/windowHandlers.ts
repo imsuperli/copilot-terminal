@@ -57,19 +57,19 @@ export function registerWindowHandlers(ctx: HandlerContext) {
       // 读取项目配置文件（copilot.json）
       const projectConfig = readProjectConfig(safePath);
 
-      // 创建 Pane 对象（使用安全路径）
+      // 创建 Pane 对象（初始为无活动会话，等待显式启动）
       const pane: Pane = {
         id: paneId,
         cwd: safePath,
         command: command,
-        status: WindowStatus.Paused as WindowStatus,
+        status: WindowStatus.Completed as WindowStatus,
         pid: null,
         backend: 'local' as const,
         capabilities: getPaneCapabilities({
           id: paneId,
           cwd: safePath,
           command: command,
-          status: WindowStatus.Paused as WindowStatus,
+          status: WindowStatus.Completed as WindowStatus,
           pid: null,
           backend: 'local' as const,
         }),
@@ -99,7 +99,7 @@ export function registerWindowHandlers(ctx: HandlerContext) {
     }
   });
 
-  // 启动暂停的窗口（恢复 PTY 进程）
+  // 启动无活动会话的窗口（恢复 PTY 进程）
   ipcMain.handle('start-window', async (_event, { windowId, paneId, name, workingDirectory, command, initialCols, initialRows }: { windowId: string; paneId?: string; name: string; workingDirectory: string; command?: string; initialCols?: number; initialRows?: number }) => {
     try {
       if (!processManager) {

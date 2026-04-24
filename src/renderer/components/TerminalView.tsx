@@ -57,16 +57,14 @@ import {
   startClonedWindowFromSourcePane,
 } from '../utils/windowSessionActions';
 import {
-  getOwnedEphemeralSSHWindowIds,
   getPersistableWindows,
-  getSSHSessionFamilyWindows,
-  getSSHSessionOwnerWindowId,
   getStandaloneSSHWindowsForTarget,
   isEphemeralSSHCloneWindow,
 } from '../utils/sshWindowBindings';
 import { preventMouseButtonFocus } from '../utils/buttonFocus';
 import { destroyWindowResourcesKeepRecord } from '../utils/windowDestruction';
 import { idePopupIconButtonClassName } from './ui/ide-popup';
+import { getInactiveWindowStatus, getStartablePanes, isInactiveTerminalPaneStatus } from '../utils/windowLifecycle';
 
 const CHAT_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
 const CODE_PANE_DEFAULT_SPLIT_SIZES: [number, number] = [0.7, 0.3];
@@ -180,25 +178,22 @@ function getAggregatedStatusFromPanes(panes: Pane[]): WindowStatus {
   let hasRestoring = false;
   let hasWaiting = false;
   let hasError = false;
-  let allCompleted = true;
-  let allPaused = true;
+  let hasCompleted = false;
 
   for (const pane of panes) {
     hasRunning ||= pane.status === WindowStatus.Running;
     hasRestoring ||= pane.status === WindowStatus.Restoring;
     hasWaiting ||= pane.status === WindowStatus.WaitingForInput;
     hasError ||= pane.status === WindowStatus.Error;
-    allCompleted &&= pane.status === WindowStatus.Completed;
-    allPaused &&= pane.status === WindowStatus.Paused;
+    hasCompleted ||= isInactiveTerminalPaneStatus(pane.status);
   }
 
   if (hasRunning) return WindowStatus.Running;
   if (hasRestoring) return WindowStatus.Restoring;
   if (hasWaiting) return WindowStatus.WaitingForInput;
   if (hasError) return WindowStatus.Error;
-  if (allCompleted) return WindowStatus.Completed;
-  if (allPaused) return WindowStatus.Paused;
-  return WindowStatus.Paused;
+  if (hasCompleted) return WindowStatus.Completed;
+  return getInactiveWindowStatus(panes);
 }
 
 function getWindowKindFromPanes(window: Window, panes: Pane[]): NonNullable<Window['kind']> {
@@ -350,10 +345,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     () => isEphemeralSSHCloneWindow(terminalWindow),
     [terminalWindow],
   );
-  const sidebarActiveWindowId = useMemo(
-    () => getSSHSessionOwnerWindowId(terminalWindow) ?? terminalWindow.id,
-    [terminalWindow],
-  );
+  const sidebarActiveWindowId = terminalWindow.id;
   const showRemoteWindowTabs = useMemo(
     () => isStandaloneSshWindow,
     [isStandaloneSshWindow],
@@ -536,14 +528,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
 
     try {
-      const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
-        useWindowStore.getState().windows,
-        terminalWindow.id,
-      );
-      if (ownedEphemeralWindowIds.length > 0) {
-        await destroyRemoteWindows(ownedEphemeralWindowIds);
-      }
-
       const { windows } = useWindowStore.getState();
       const activeWindows = getPersistableWindows(windows).filter((window) => (
         !window.archived
@@ -595,8 +579,8 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             console.error('Failed to destroy ephemeral remote window after pane exit:', error);
           });
         } else {
-          void handleDeleteWindow().catch((error) => {
-            console.error('Failed to destroy window after pane exit:', error);
+          void destroyWindowResourcesKeepRecord(terminalWindow.id).catch((error) => {
+            console.error('Failed to destroy window session after pane exit:', error);
           });
         }
       } else {
@@ -612,7 +596,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       onStopAndRemoveFromGroup,
       isEphemeralRemoteTab,
       destroyCurrentEphemeralRemoteWindow,
-      handleDeleteWindow,
+      destroyWindowResourcesKeepRecord,
       closePaneInWindow,
     ]
   );
@@ -914,21 +898,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
 
-      const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
-        useWindowStore.getState().windows,
-        terminalWindow.id,
-      );
-
-      if (ownedEphemeralWindowIds.length > 0) {
-        await destroyRemoteWindows(ownedEphemeralWindowIds);
-      }
-
-      // 鍏抽棴绐楀彛锛堢粓姝㈡墍鏈?PTY 杩涚▼锛?
-      await window.electronAPI.closeWindow(terminalWindow.id);
+      await destroyWindowResourcesKeepRecord(terminalWindow.id);
     } catch (error) {
       console.error('Failed to stop window session:', error);
     }
-  }, [destroyCurrentEphemeralRemoteWindow, destroyRemoteWindows, isEphemeralRemoteTab, terminalWindow]);
+  }, [destroyCurrentEphemeralRemoteWindow, isEphemeralRemoteTab, terminalWindow]);
 
   // 处理启动窗口
   const handleStartWindow = useCallback(async () => {
@@ -977,12 +951,10 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-    const ownerWindowId = getSSHSessionOwnerWindowId(sourceWindow) ?? sourceWindow.id;
-    const clonedWindowDraft: Window = {
-      ...createWindowDraftFromSourcePane(sourceWindow, sourcePane),
-      ephemeral: true,
-      sshTabOwnerWindowId: ownerWindowId,
-    };
+      const clonedWindowDraft: Window = {
+        ...createWindowDraftFromSourcePane(sourceWindow, sourcePane),
+        ephemeral: true,
+      };
 
     try {
       const result = await startClonedWindowFromSourcePane({
@@ -1010,11 +982,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
       return;
     }
 
-    const closeWindowFamily = !isEphemeralSSHCloneWindow(targetWindow)
-      && getSSHSessionOwnerWindowId(targetWindow) === targetWindow.id;
-    const closingWindowIds = closeWindowFamily
-      ? getSSHSessionFamilyWindows(allWindows, windowId).map((window) => window.id)
-      : [windowId];
+    const closingWindowIds = [windowId];
     const closingWindowIdSet = new Set(closingWindowIds);
     const scopedWindows = getStandaloneSSHWindowsForTarget(allWindows, terminalWindow.id);
     const currentWindowWillClose = closingWindowIdSet.has(terminalWindow.id);
@@ -1074,14 +1042,6 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
     }
 
     try {
-      const ownedEphemeralWindowIds = getOwnedEphemeralSSHWindowIds(
-        useWindowStore.getState().windows,
-        terminalWindow.id,
-      );
-      if (ownedEphemeralWindowIds.length > 0) {
-        await destroyRemoteWindows(ownedEphemeralWindowIds);
-      }
-
       // 鑾峰彇鎵€鏈夋湭褰掓。鐨勭獥鍙?
       const { windows } = useWindowStore.getState();
       const activeWindows = getPersistableWindows(windows).filter((window) => (
@@ -1108,7 +1068,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         // 绛夊緟鍒囨崲瀹屾垚鍚庡啀鍏抽棴鍜屽綊妗ｅ綋鍓嶇獥鍙?
         setTimeout(async () => {
           try {
-            await window.electronAPI.closeWindow(terminalWindow.id);
+            await destroyWindowResourcesKeepRecord(terminalWindow.id);
             archiveWindow(terminalWindow.id);
           } catch (error) {
             console.error('Failed to close and archive window:', error);
@@ -1116,7 +1076,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         }, 100);
       } else {
         // 娌℃湁鍏朵粬绐楀彛锛屽叧闂苟褰掓。鍚庤繑鍥炰富鐣岄潰
-        await window.electronAPI.closeWindow(terminalWindow.id);
+        await destroyWindowResourcesKeepRecord(terminalWindow.id);
         archiveWindow(terminalWindow.id);
         onReturn();
       }
@@ -1188,12 +1148,12 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
         return;
       }
 
-      // 自动启动拖入窗口的所有暂停窗格
+      // 自动启动拖入窗口的所有可启动窗格
       const dragWin = useWindowStore.getState().getWindowById(dragWindowId);
       if (dragWin) {
-        const pausedPanes = getAllPanes(dragWin.layout).filter((pane) => pane.status === WindowStatus.Paused);
-        if (pausedPanes.length > 0) {
-          await startWindowPanes(dragWin, useWindowStore.getState().updatePane, pausedPanes);
+        const startablePanes = getStartablePanes(dragWin);
+        if (startablePanes.length > 0) {
+          await startWindowPanes(dragWin, useWindowStore.getState().updatePane, startablePanes);
         }
       }
     },

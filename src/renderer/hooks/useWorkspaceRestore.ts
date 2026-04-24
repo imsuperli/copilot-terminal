@@ -24,7 +24,7 @@ function isWorkspacePayload(value: unknown): value is Workspace {
  * 功能：
  * - 监听主进程的 workspace-loaded 事件
  * - 订阅建立后主动拉取当前工作区，避免错过启动时的一次性事件
- * - 立即渲染卡片（状态：Paused，不启动 PTY 进程）
+ * - 立即渲染卡片（无活动会话，不启动 PTY 进程）
  */
 export const useWorkspaceRestore = () => {
   const addWindow = useWindowStore((state) => state.addWindow);
@@ -41,7 +41,7 @@ export const useWorkspaceRestore = () => {
     autoSaveTimerRef.current = setTimeout(() => {
       setAutoSaveEnabled(true);
       autoSaveTimerRef.current = null;
-      console.log('[useWorkspaceRestore] Auto-save enabled, windows in paused state');
+      console.log('[useWorkspaceRestore] Auto-save enabled, windows restored without live sessions');
     }, 2000);
   }, []);
 

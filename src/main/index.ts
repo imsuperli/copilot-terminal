@@ -817,9 +817,9 @@ app.whenReady().then(async () => {
     // 恢复工作区窗口（不自动启动 PTY 进程）
     if (mainWindow && workspace.windows.length > 0) {
       mainWindow.webContents.once('did-finish-load', async () => {
-        // 通知渲染进程工作区已加载（显示为暂停状态，不启动进程）
+        // 通知渲染进程工作区已加载（显示为未启动状态，不启动进程）
         mainWindow?.webContents.send('workspace-loaded', workspace);
-        console.log('[Main] Workspace loaded, windows in paused state (not auto-started)');
+        console.log('[Main] Workspace loaded, windows restored without auto-starting sessions');
         // 注意：不再为所有窗口启动 git 监听，只在窗口激活时才监听
       });
     }

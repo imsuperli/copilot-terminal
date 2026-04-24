@@ -3,7 +3,7 @@ import { useI18n } from '../i18n';
 import { useWindowStore } from '../stores/windowStore';
 import { Window } from '../types/window';
 import { getSSHCredentialCleanupAvailability } from '../utils/sshWindowDeletion';
-import { getSSHSessionFamilyWindows, isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
+import { isEphemeralSSHCloneWindow } from '../utils/sshWindowBindings';
 
 interface DeleteWindowDialogState {
   open: boolean;
@@ -71,12 +71,7 @@ export function useDeleteWindowDialog(): {
     setError('');
 
     try {
-      const sshFamilyWindowIds = getSSHSessionFamilyWindows(windows, targetWindow.id, {
-        includeArchived: true,
-      }).map((window) => window.id);
-      const windowIdsToDelete = isEphemeralSSHCloneWindow(targetWindow)
-        ? [targetWindow.id]
-        : (sshFamilyWindowIds.length > 0 ? sshFamilyWindowIds : [targetWindow.id]);
+      const windowIdsToDelete = [targetWindow.id];
 
       for (const windowId of windowIdsToDelete) {
         const deleteResponse = await window.electronAPI.deleteWindow(windowId);

@@ -19,7 +19,7 @@ export function createChatPaneDraft(
     kind: 'chat',
     cwd: '',
     command: '',
-    status: WindowStatus.Paused,
+    status: WindowStatus.Completed,
     pid: null,
     chat: {
       messages: options?.messages ?? [],

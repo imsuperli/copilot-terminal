@@ -45,7 +45,7 @@ function createWindow(id: string, status: WindowStatus = WindowStatus.Running): 
         cwd: `/workspace/${id}`,
         command: 'bash',
         status,
-        pid: status === WindowStatus.Paused ? null : 1000,
+        pid: status === WindowStatus.Completed ? null : 1000,
         backend: 'local',
       },
     },
@@ -115,8 +115,50 @@ describe('GroupView', () => {
 
     const windows = useWindowStore.getState().windows;
     expect(windows.map((window) => window.id)).toEqual([runningWindow.id, waitingWindow.id]);
-    expect(windows.every((window) => window.layout.type === 'pane' && window.layout.pane.status === WindowStatus.Paused)).toBe(true);
+    expect(windows.every((window) => window.layout.type === 'pane' && window.layout.pane.status === WindowStatus.Completed)).toBe(true);
     expect(useWindowStore.getState().groups).toEqual([group]);
+    expect(onReturn).toHaveBeenCalledTimes(1);
+  });
+
+  it('archives persistable group windows after destroying sessions, even when an ephemeral ssh clone is present', async () => {
+    const user = userEvent.setup();
+    const onReturn = vi.fn();
+    const ownerWindow = createWindow('win-a', WindowStatus.Running);
+    const cloneWindow = {
+      ...createWindow('win-b', WindowStatus.Running),
+      ephemeral: true,
+      kind: 'ssh' as const,
+    };
+    const group = createGroup([ownerWindow.id, cloneWindow.id]);
+
+    useWindowStore.setState({
+      windows: [ownerWindow, cloneWindow],
+      groups: [group],
+      activeGroupId: group.id,
+    });
+
+    render(
+      <GroupView
+        group={group}
+        onReturn={onReturn}
+        onWindowSwitch={vi.fn()}
+        isActive
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '归档组' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(ownerWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(ownerWindow.id);
+      expect(window.electronAPI.closeWindow).toHaveBeenCalledWith(cloneWindow.id);
+      expect(window.electronAPI.deleteWindow).toHaveBeenCalledWith(cloneWindow.id);
+    });
+
+    const storedOwner = useWindowStore.getState().windows.find((window) => window.id === ownerWindow.id);
+    expect(storedOwner?.archived).toBe(true);
+    expect(useWindowStore.getState().windows.some((window) => window.id === cloneWindow.id)).toBe(false);
+    expect(useWindowStore.getState().groups).toHaveLength(0);
     expect(onReturn).toHaveBeenCalledTimes(1);
   });
 });

@@ -36,7 +36,7 @@ export const zhCNMessages = {
   'status.completed': '已完成',
   'status.error': '出错',
   'status.restoring': '恢复中',
-  'status.paused': '已暂停',
+  'status.paused': '未启动',
   'status.archived': '归档',
   'status.notStarted': '未启动',
   'status.noOutput': '无输出',
@@ -44,7 +44,7 @@ export const zhCNMessages = {
   'emptyState.title': '欢迎使用 Copilot-Terminal',
   'emptyState.description': '创建你的第一个终端窗口开始工作',
 
-  'statusBar.ariaLabel': '窗格状态统计：运行中 {running} 个，等待输入 {waiting} 个，暂停 {paused} 个',
+  'statusBar.ariaLabel': '窗格状态统计：运行中 {running} 个，等待输入 {waiting} 个，未启动 {paused} 个',
 
   'sidebar.section.statusSummary': '状态统计',
   'sidebar.section.windowManagement': '终端管理',
@@ -72,10 +72,14 @@ export const zhCNMessages = {
   'sidebar.clearArchived': '清空归档',
   'sidebar.confirmClearActiveTitle': '清空工作区',
   'sidebar.confirmClearArchivedTitle': '清空所有归档终端',
+  'sidebar.confirmClearAllTitle': '清空全部终端',
   'sidebar.confirmClearLocalTitle': '清空所有本地终端',
   'sidebar.confirmClearSSHTitle': '清空所有远程终端',
   'sidebar.confirmClearActiveDescription': '确定要删除工作区中的全部 {count} 个终端吗？此操作不可恢复。',
   'sidebar.confirmClearArchivedDescription': '确定要删除所有 {count} 个归档窗口吗？此操作不可恢复。',
+  'sidebar.confirmClearAllDescription': '确定要删除全部 {count} 个终端吗？此操作不可恢复。',
+  'sidebar.confirmClearLocalDescription': '确定要删除全部 {count} 个本地终端吗？此操作不可恢复。',
+  'sidebar.confirmClearSSHDescription': '确定要删除全部 {count} 个远程终端吗？此操作不可恢复。',
 
   'archived.emptyTitle': '暂无归档终端',
 
@@ -1365,7 +1369,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'status.completed': 'Completed',
   'status.error': 'Error',
   'status.restoring': 'Restoring',
-  'status.paused': 'Paused',
+  'status.paused': 'Not started',
   'status.archived': 'Archived',
   'status.notStarted': 'Not started',
   'status.noOutput': 'No output',
@@ -1373,7 +1377,7 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'emptyState.title': 'Welcome to Copilot-Terminal',
   'emptyState.description': 'Create your first terminal window to get started',
 
-  'statusBar.ariaLabel': 'Pane status summary: {running} running, {waiting} waiting, {paused} paused',
+  'statusBar.ariaLabel': 'Pane status summary: {running} running, {waiting} waiting, {paused} not started',
 
   'sidebar.section.statusSummary': 'Status Summary',
   'sidebar.section.windowManagement': 'Terminal Management',
@@ -1401,10 +1405,14 @@ export const enUSMessages: Record<TranslationKey, string> = {
   'sidebar.clearArchived': 'Clear archived',
   'sidebar.confirmClearActiveTitle': 'Clear workspace',
   'sidebar.confirmClearArchivedTitle': 'Clear all archived terminals',
+  'sidebar.confirmClearAllTitle': 'Clear all terminals',
   'sidebar.confirmClearLocalTitle': 'Clear all local terminals',
   'sidebar.confirmClearSSHTitle': 'Clear all remote terminals',
   'sidebar.confirmClearActiveDescription': 'Delete all {count} terminals from the workspace? This action cannot be undone.',
   'sidebar.confirmClearArchivedDescription': 'Delete all {count} archived windows? This action cannot be undone.',
+  'sidebar.confirmClearAllDescription': 'Delete all {count} terminals? This action cannot be undone.',
+  'sidebar.confirmClearLocalDescription': 'Delete all {count} local terminals? This action cannot be undone.',
+  'sidebar.confirmClearSSHDescription': 'Delete all {count} remote terminals? This action cannot be undone.',
 
   'archived.emptyTitle': 'No archived terminals yet',
 

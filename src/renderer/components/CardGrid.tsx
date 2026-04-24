@@ -27,7 +27,6 @@ import { getCurrentWindowTerminalPane } from '../utils/windowWorkingDirectory';
 import { createGroup, getAllWindowIds } from '../utils/groupLayoutHelpers';
 import {
   buildStandaloneSSHWindowMap,
-  getOwnedEphemeralSSHWindowIds,
   getPersistableWindows,
   getStandaloneSSHProfileId,
   isEphemeralSSHCloneWindow,
@@ -108,7 +107,7 @@ interface CardGridProps {
  * - 同时显示窗口和组
  * - 支持搜索组名称和组内窗口
  * - 支持组的各种操作（创建、编辑、删除、归档）
- * - 支持批量启动/暂停组内所有窗口
+ * - 支持批量启动/销毁组内所有窗口
  */
 export const CardGrid = React.memo<CardGridProps>(({
   onEnterTerminal,
@@ -132,7 +131,6 @@ export const CardGrid = React.memo<CardGridProps>(({
   const archiveWindow = useWindowStore((state) => state.archiveWindow);
   const unarchiveWindow = useWindowStore((state) => state.unarchiveWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
-  const pauseWindowState = useWindowStore((state) => state.pauseWindowState);
 
   // 组相关的 store 方法
   const groups = useWindowStore((state) => state.groups);
@@ -296,7 +294,7 @@ export const CardGrid = React.memo<CardGridProps>(({
       const statusMap: Record<string, WindowStatus> = {
         'status:running': WindowStatus.Running,
         'status:waiting': WindowStatus.WaitingForInput,
-        'status:paused': WindowStatus.Paused,
+        'status:inactive': WindowStatus.Completed,
       };
       const targetStatus = statusMap[currentTab];
       if (!targetStatus) return [];
@@ -574,27 +572,13 @@ export const CardGrid = React.memo<CardGridProps>(({
     }
   }, []);
 
-  const destroyOwnedEphemeralWindows = useCallback(async (windowId: string) => {
-    const ownedWindowIds = getOwnedEphemeralSSHWindowIds(useWindowStore.getState().windows, windowId);
-    if (ownedWindowIds.length > 0) {
-      await destroyWindowIds(ownedWindowIds);
-    }
-  }, [destroyWindowIds]);
-
-  const handlePauseWindow = useCallback(async (win: Window) => {
+  const handleDestroyWindowSession = useCallback(async (win: Window) => {
     try {
-      if (isEphemeralSSHCloneWindow(win)) {
-        await destroyWindowIds([win.id]);
-        return;
-      }
-
-      await destroyOwnedEphemeralWindows(win.id);
-
       await destroyWindowIds([win.id]);
     } catch (error) {
       console.error('Failed to destroy window:', error);
     }
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds]);
+  }, [destroyWindowIds]);
 
   const handleArchiveWindow = useCallback(async (win: Window) => {
     try {
@@ -602,16 +586,13 @@ export const CardGrid = React.memo<CardGridProps>(({
         return;
       }
 
-      await destroyOwnedEphemeralWindows(win.id);
-
-      // 先关闭窗口（如果有运行中的进程）
-      await window.electronAPI.closeWindow(win.id);
+      await destroyWindowResourcesKeepRecord(win.id);
       // 归档窗口
       archiveWindow(win.id);
     } catch (error) {
       console.error('Failed to archive window:', error);
     }
-  }, [archiveWindow, destroyOwnedEphemeralWindows]);
+  }, [archiveWindow]);
 
   const handleUnarchiveWindow = useCallback(async (win: Window) => {
     try {
@@ -741,46 +722,39 @@ export const CardGrid = React.memo<CardGridProps>(({
     }
   }, [groupWindowIdsByGroupId, startWindow, windowById]);
 
-  const handlePauseAllWindows = useCallback(async (group: WindowGroup) => {
+  const handleDestroyAllWindowSessions = useCallback(async (group: WindowGroup) => {
     try {
       const windowIds = groupWindowIdsByGroupId.get(group.id) ?? [];
-      const windowsToPause = windowIds
+      const windowsToDestroy = windowIds
         .map((windowId) => windowById.get(windowId))
         .filter((window): window is Window => Boolean(window));
 
-      // 并发暂停所有窗口
+      // 并发销毁所有窗口会话
       await Promise.all(
-        windowsToPause.map(async (win) => {
+        windowsToDestroy.map(async (win) => {
           try {
-            if (isEphemeralSSHCloneWindow(win)) {
-              await destroyWindowIds([win.id]);
-              return;
-            }
-
-            await destroyOwnedEphemeralWindows(win.id);
-            await window.electronAPI.closeWindow(win.id);
-            pauseWindowState(win.id);
+            await destroyWindowIds([win.id]);
           } catch (error) {
-            console.error(`Failed to pause window ${win.id}:`, error);
+            console.error(`Failed to destroy window ${win.id}:`, error);
           }
         })
       );
     } catch (error) {
-      console.error('Failed to pause all windows in group:', error);
+      console.error('Failed to destroy all windows in group:', error);
     }
-  }, [destroyOwnedEphemeralWindows, destroyWindowIds, groupWindowIdsByGroupId, pauseWindowState, windowById]);
+  }, [destroyWindowIds, groupWindowIdsByGroupId, windowById]);
 
   const handleArchiveGroup = useCallback(async (group: WindowGroup) => {
     try {
-      // 先暂停组内所有窗口
-      await handlePauseAllWindows(group);
+      // 先销毁组内所有窗口会话
+      await handleDestroyAllWindowSessions(group);
 
       // 调用 archiveGroup 方法（会自动归档组内所有窗口）
       archiveGroup(group.id);
     } catch (error) {
       console.error('Failed to archive group:', error);
     }
-  }, [archiveGroup, handlePauseAllWindows]);
+  }, [archiveGroup, handleDestroyAllWindowSessions]);
 
   const handleUnarchiveGroup = useCallback(async (group: WindowGroup) => {
     try {
@@ -919,7 +893,7 @@ export const CardGrid = React.memo<CardGridProps>(({
                         onOpenFolder={handleOpenFolder}
                         onDelete={handleDeleteWindow}
                         onStart={handleStartWindow}
-                        onPause={handlePauseWindow}
+                        onDestroySession={handleDestroyWindowSession}
                         onArchive={handleArchiveWindow}
                         onUnarchive={handleUnarchiveWindow}
                         onOpenInIDE={handleOpenInIDE}
@@ -943,7 +917,7 @@ export const CardGrid = React.memo<CardGridProps>(({
                         onClick={handleGroupClick}
                         onDelete={handleDeleteGroup}
                         onStartAll={handleStartAllWindows}
-                        onPauseAll={handlePauseAllWindows}
+                        onDestroyAllSessions={handleDestroyAllWindowSessions}
                         onArchive={handleArchiveGroup}
                         onUnarchive={handleUnarchiveGroup}
                         onEdit={handleEditGroup}
@@ -963,7 +937,7 @@ export const CardGrid = React.memo<CardGridProps>(({
                     isConnecting={connectingSSHProfileId === profile.id}
                     onConnect={handleConnectSSHProfile}
                     onOpenWindow={() => handleConnectSSHProfile(profile)}
-                    onPauseWindow={handlePauseWindow}
+                    onDestroyWindowSession={handleDestroyWindowSession}
                     onStartWindow={() => handleConnectSSHProfile(profile)}
                     onArchiveWindow={handleArchiveWindow}
                     onUnarchiveWindow={handleUnarchiveWindow}

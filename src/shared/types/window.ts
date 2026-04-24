@@ -13,7 +13,7 @@ export enum WindowStatus {
   Completed = 'completed',       // 已完成
   Error = 'error',               // 出错
   Restoring = 'restoring',       // 恢复中（启动时）
-  Paused = 'paused'              // 暂停（未启动）
+  Paused = 'paused'              // 兼容旧数据；新逻辑不再使用
 }
 
 export type PaneBackend = 'local' | 'ssh';
@@ -234,7 +234,7 @@ export interface Window {
   claudeContextPercentage?: number; // Claude 上下文占比（运行态）
   claudeCost?: number;           // Claude 成本统计（运行态）
   ephemeral?: boolean;           // 运行态临时窗口，不参与持久化/恢复
-  sshTabOwnerWindowId?: string;  // 临时 SSH tab 归属的持久化窗口 ID
+  sshTabOwnerWindowId?: string;  // 兼容旧数据；新逻辑不再依赖 owner 绑定
 }
 
 /**

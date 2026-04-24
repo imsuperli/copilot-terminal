@@ -59,6 +59,7 @@ import {
 } from './utils/appearance';
 import { notifyTerminalSettingsUpdated } from './utils/terminalSettingsEvents';
 import { useShallow } from 'zustand/react/shallow';
+import { canStartPaneSession, hasLiveTerminalSession, isInactiveTerminalPaneStatus } from './utils/windowLifecycle';
 
 const QUICK_NAV_DOUBLE_SHIFT_INTERVAL_MS = 150;
 const STARTUP_MASK_HOLD_MS = 40;
@@ -67,7 +68,6 @@ const LazyQuickNavPanel = lazy(async () => ({
   default: (await import('./components/QuickNavPanel')).QuickNavPanel,
 }));
 const UNLOADABLE_HIDDEN_WINDOW_STATUSES = new Set<WindowStatus>([
-  WindowStatus.Paused,
   WindowStatus.Completed,
   WindowStatus.Error,
 ]);
@@ -101,52 +101,48 @@ function resolveSSHProfileEntryCommand(profile: SSHProfile): string {
   return profile.remoteCommand || '';
 }
 
-function getAggregatedStatusFromFlags(flags: {
-  hasCompleted: boolean;
-  hasError: boolean;
-  hasPaused: boolean;
-  hasRestoring: boolean;
-  hasRunning: boolean;
-  hasWaiting: boolean;
-  paneCount: number;
-}): WindowStatus {
-  if (flags.hasRunning) return WindowStatus.Running;
-  if (flags.hasRestoring) return WindowStatus.Restoring;
-  if (flags.hasWaiting) return WindowStatus.WaitingForInput;
-  if (flags.hasError) return WindowStatus.Error;
-  if (flags.paneCount > 0 && flags.hasCompleted && !flags.hasPaused) return WindowStatus.Completed;
-  if (flags.paneCount === 0 || flags.hasPaused) return WindowStatus.Paused;
-  return WindowStatus.Paused;
-}
-
 function selectMountedWindowLifecycleRecordKeys(state: { windows: Window[] }): string[] {
   return state.windows.map((window) => {
     const panes = getAllPanes(window.layout);
     let terminalPaneCount = 0;
-    const flags = {
-      hasCompleted: false,
-      hasError: false,
-      hasPaused: false,
-      hasRestoring: false,
-      hasRunning: false,
-      hasWaiting: false,
-      paneCount: panes.length,
-    };
+    let status = WindowStatus.Completed;
 
     for (const pane of panes) {
       if (pane.kind !== 'browser') {
         terminalPaneCount += 1;
       }
 
-      flags.hasRunning ||= pane.status === WindowStatus.Running;
-      flags.hasRestoring ||= pane.status === WindowStatus.Restoring;
-      flags.hasWaiting ||= pane.status === WindowStatus.WaitingForInput;
-      flags.hasError ||= pane.status === WindowStatus.Error;
-      flags.hasCompleted ||= pane.status === WindowStatus.Completed;
-      flags.hasPaused ||= pane.status === WindowStatus.Paused;
-    }
+      if (pane.status === WindowStatus.Running) {
+        status = WindowStatus.Running;
+        break;
+      }
 
-    const status = getAggregatedStatusFromFlags(flags);
+      if (pane.status === WindowStatus.Restoring) {
+        status = WindowStatus.Restoring;
+        continue;
+      }
+
+      if (status !== WindowStatus.Restoring && pane.status === WindowStatus.WaitingForInput) {
+        status = WindowStatus.WaitingForInput;
+        continue;
+      }
+
+      if (
+        status !== WindowStatus.Restoring
+        && status !== WindowStatus.WaitingForInput
+        && pane.status === WindowStatus.Error
+      ) {
+        status = WindowStatus.Error;
+        continue;
+      }
+
+      if (
+        status === WindowStatus.Completed
+        && !isInactiveTerminalPaneStatus(pane.status)
+      ) {
+        status = pane.status;
+      }
+    }
 
     return `${window.id}:${status}:${terminalPaneCount}`;
   });
@@ -887,7 +883,7 @@ function AppContent() {
         }
 
         for (const pane of panes) {
-          if (pane.status !== WindowStatus.Paused) {
+          if (!canStartPaneSession(pane)) {
             continue;
           }
 
@@ -944,7 +940,7 @@ function AppContent() {
     if (reusableWindow) {
       const reusablePanes = getAllPanes(reusableWindow.layout).filter((pane) => pane.ssh?.profileId === profile.id);
       const shouldSyncReusableWindow = reusablePanes.length > 0
-        && reusablePanes.every((pane) => pane.status === WindowStatus.Paused);
+        && reusablePanes.every((pane) => !hasLiveTerminalSession(pane));
 
       if (shouldSyncReusableWindow) {
         const nextRemoteCwd = resolveSSHProfileEntryCwd(profile);

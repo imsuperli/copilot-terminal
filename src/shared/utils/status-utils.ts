@@ -4,19 +4,19 @@ import { WindowGroup, GroupLayoutNode } from '../types/window-group';
 /**
  * 获取窗口状态的优先级
  *
- * 优先级规则：Running > WaitingForInput > Paused > Completed
+ * 优先级规则：Running > WaitingForInput > Restoring > Error > Inactive
  *
  * @param status 窗口状态
  * @returns 状态优先级（数值越大优先级越高）
  */
 export function getStatusPriority(status: WindowStatus): number {
   const priorities: Record<WindowStatus, number> = {
-    [WindowStatus.Running]: 4,
-    [WindowStatus.WaitingForInput]: 3,
-    [WindowStatus.Paused]: 2,
+    [WindowStatus.Running]: 5,
+    [WindowStatus.WaitingForInput]: 4,
+    [WindowStatus.Restoring]: 3,
+    [WindowStatus.Error]: 2,
     [WindowStatus.Completed]: 1,
-    [WindowStatus.Error]: 1,
-    [WindowStatus.Restoring]: 2
+    [WindowStatus.Paused]: 1
   };
 
   return priorities[status] ?? 0;

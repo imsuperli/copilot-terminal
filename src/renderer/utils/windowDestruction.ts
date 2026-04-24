@@ -18,11 +18,21 @@ async function destroyWindowResources(windowId: string): Promise<void> {
 export async function destroyWindowResourcesKeepRecord(windowId: string): Promise<void> {
   await destroyWindowResources(windowId);
 
-  const { getWindowById, pauseWindowState } = useWindowStore.getState();
+  const { getWindowById, clearWindowRuntimeSession } = useWindowStore.getState();
   const targetWindow = getWindowById(windowId);
   if (!targetWindow) {
     return;
   }
 
-  pauseWindowState(windowId);
+  if (targetWindow.ephemeral) {
+    useWindowStore.getState().removeWindow(windowId);
+    return;
+  }
+
+  clearWindowRuntimeSession(windowId);
+}
+
+export async function destroyWindowResourcesAndRemoveRecord(windowId: string): Promise<void> {
+  await destroyWindowResources(windowId);
+  useWindowStore.getState().removeWindow(windowId);
 }

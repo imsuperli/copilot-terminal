@@ -53,7 +53,7 @@ export function createBrowserPaneDraft(paneId: string, url: string = DEFAULT_BRO
     kind: 'browser',
     cwd: '',
     command: '',
-    status: WindowStatus.Paused,
+    status: WindowStatus.Completed,
     pid: null,
     browser: {
       url: sanitizeBrowserUrl(url),

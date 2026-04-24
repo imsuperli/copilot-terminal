@@ -21,7 +21,7 @@ export function createCodePaneDraft(
     kind: 'code',
     cwd: rootPath,
     command: '',
-    status: WindowStatus.Paused,
+    status: WindowStatus.Completed,
     pid: null,
     code: {
       rootPath,

@@ -1,11 +1,11 @@
 import React, { useCallback, useMemo } from 'react';
-import { Activity, Keyboard, Pause } from 'lucide-react';
+import { Activity, Circle, Keyboard } from 'lucide-react';
 import { useWindowStore } from '../stores/windowStore';
 import { useI18n } from '../i18n';
 import { SSHProfile } from '../../shared/types/ssh';
 import { getStatusCardCounts } from '../utils/cardCollection';
 
-export type StatusFilterTab = 'status:running' | 'status:waiting' | 'status:paused';
+export type StatusFilterTab = 'status:running' | 'status:waiting' | 'status:inactive';
 
 interface StatusBarProps {
   currentTab?: string;
@@ -42,7 +42,7 @@ export const StatusBar = React.memo(function StatusBar({
       t('statusBar.ariaLabel', {
         running: statusCounts.running,
         waiting: statusCounts.waiting,
-        paused: statusCounts.paused,
+        paused: statusCounts.inactive,
       }),
     [statusCounts, t]
   );
@@ -52,15 +52,15 @@ export const StatusBar = React.memo(function StatusBar({
     onTabChange?.(currentTab === tab ? 'active' : tab);
   }, [currentTab, onTabChange]);
 
-  const pausedToneClassName = 'text-[rgb(var(--muted-foreground))]';
-  const pausedActiveClassName =
+  const inactiveToneClassName = 'text-[rgb(var(--muted-foreground))]';
+  const inactiveActiveClassName =
     'bg-[color-mix(in_srgb,rgb(var(--secondary))_84%,transparent)] border-[rgb(var(--border))]';
   const idleButtonClassName = `border-[rgb(var(--border))] bg-[color-mix(in_srgb,rgb(var(--card))_76%,transparent)] hover:bg-[rgb(var(--accent))]`;
   const items = useMemo<{ tab: StatusFilterTab; icon: typeof Activity; colorClass: string; activeClass: string; label: string; count: number }[]>(() => [
     { tab: 'status:running', icon: Activity, colorClass: 'text-green-500', activeClass: 'bg-green-500/10 border-green-500/50', label: t('status.running'), count: statusCounts.running },
     { tab: 'status:waiting', icon: Keyboard, colorClass: 'text-[rgb(var(--primary))]', activeClass: 'bg-[rgb(var(--primary))]/10 border-[rgb(var(--primary))]/40', label: t('status.waitingInput'), count: statusCounts.waiting },
-    { tab: 'status:paused', icon: Pause, colorClass: pausedToneClassName, activeClass: pausedActiveClassName, label: t('status.paused'), count: statusCounts.paused },
-  ], [pausedActiveClassName, pausedToneClassName, statusCounts.paused, statusCounts.running, statusCounts.waiting, t]);
+    { tab: 'status:inactive', icon: Circle, colorClass: inactiveToneClassName, activeClass: inactiveActiveClassName, label: t('status.notStarted'), count: statusCounts.inactive },
+  ], [inactiveActiveClassName, inactiveToneClassName, statusCounts.inactive, statusCounts.running, statusCounts.waiting, t]);
 
   return (
     <div

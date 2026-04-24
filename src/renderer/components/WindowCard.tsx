@@ -31,7 +31,7 @@ interface WindowCardProps {
   onOpenFolder?: (window: Window) => void;
   onDelete?: (windowId: string) => void;
   onStart?: (window: Window) => void;
-  onPause?: (window: Window) => void;
+  onDestroySession?: (window: Window) => void;
   onArchive?: (window: Window) => void;
   onUnarchive?: (window: Window) => void;
   onOpenInIDE?: (ide: string, window: Window) => void;
@@ -125,7 +125,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
   onOpenFolder,
   onDelete,
   onStart,
-  onPause,
+  onDestroySession,
   onArchive,
   onUnarchive,
   onOpenInIDE,
@@ -379,11 +379,11 @@ export const WindowCard = React.memo<WindowCardProps>(({
 
       {/* 底部按钮栏 - 两行布局 */}
       <div className={`${idePopupListCardFooterClassName} flex flex-shrink-0 flex-col gap-1.5 px-4 py-2`}>
-        {/* 第一行：启动/暂停按钮（左侧） + 操作按钮（右侧） */}
+        {/* 第一行：启动/销毁按钮（左侧） + 操作按钮（右侧） */}
         <div className="flex items-center justify-between">
-          {/* 左侧：启动/暂停按钮 */}
+          {/* 左侧：启动/销毁按钮 */}
           <div>
-            {aggregatedStatus === WindowStatus.Paused && (
+            {aggregatedStatus === WindowStatus.Completed && (
               <Tooltip.Provider>
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>
@@ -423,7 +423,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                 <Tooltip.Root delayDuration={300}>
                   <Tooltip.Trigger asChild>
                     <button
-                      onClick={(e) => handleButtonClick(e, () => onPause?.(window))}
+                      onClick={(e) => handleButtonClick(e, () => onDestroySession?.(window))}
                       className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap`}
                       aria-label={t('windowCard.stop')}
                     >
