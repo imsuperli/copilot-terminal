@@ -235,4 +235,30 @@ describe('StatusPoller', () => {
 
     expect(mainWindow.webContents.send).not.toHaveBeenCalled();
   });
+
+  it('pushes exit statuses immediately and stops tracking the pane', async () => {
+    poller.addPane('win-1', 'pane-1', 1001);
+
+    const statusChangeCallback = detector.subscribeStatusChange.mock.calls[0]?.[0];
+    expect(statusChangeCallback).toBeTypeOf('function');
+
+    statusChangeCallback?.(1001, WindowStatus.Error);
+
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith(
+      'pane-status-changed',
+      expect.objectContaining({
+        windowId: 'win-1',
+        paneId: 'pane-1',
+        status: WindowStatus.Error,
+        timestamp: expect.any(String),
+      }),
+    );
+    expect(poller.getTrackedPaneCount()).toBe(0);
+
+    poller.startPolling();
+    vi.advanceTimersByTime(5000);
+    await flushPromises();
+
+    expect(detector.detectStatus).not.toHaveBeenCalled();
+  });
 });

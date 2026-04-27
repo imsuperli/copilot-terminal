@@ -208,4 +208,54 @@ describe('App terminal mounting', () => {
     expect(screen.getByTestId(`terminal-${windowOne.id}`)).toHaveAttribute('data-active', 'false');
     expect(screen.getByTestId(`terminal-${windowTwo.id}`)).toHaveAttribute('data-active', 'true');
   });
+
+  it('clears pane runtime when the main process reports an exited pane', () => {
+    const terminalWindow = createSinglePaneWindow('SSH Window', '/srv/app', '');
+    const paneId = terminalWindow.activePaneId;
+
+    if (terminalWindow.layout.type !== 'pane') {
+      throw new Error('expected single pane layout');
+    }
+
+    terminalWindow.layout.pane = {
+      ...terminalWindow.layout.pane,
+      status: WindowStatus.WaitingForInput,
+      pid: 2201,
+      sessionId: 'ssh-session-1',
+      backend: 'ssh',
+      ssh: {
+        profileId: 'profile-1',
+        host: '10.0.0.21',
+        user: 'root',
+      },
+    };
+
+    useWindowStore.setState({
+      windows: [terminalWindow],
+      activeWindowId: terminalWindow.id,
+      mruList: [terminalWindow.id],
+      sidebarExpanded: false,
+      sidebarWidth: 200,
+    });
+
+    render(<App />);
+
+    const handler = vi.mocked(window.electronAPI.onPaneStatusChanged).mock.calls[0]?.[0];
+    expect(handler).toBeTypeOf('function');
+
+    act(() => {
+      handler?.({}, {
+        windowId: terminalWindow.id,
+        paneId,
+        status: WindowStatus.Error,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    expect(useWindowStore.getState().getPaneById(terminalWindow.id, paneId)).toMatchObject({
+      status: WindowStatus.Error,
+      pid: null,
+    });
+    expect(useWindowStore.getState().getPaneById(terminalWindow.id, paneId)?.sessionId).toBeUndefined();
+  });
 });

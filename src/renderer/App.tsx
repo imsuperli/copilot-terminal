@@ -271,6 +271,7 @@ function AppContent() {
   const syncWindow = useWindowStore((state) => state.syncWindow);
   const removeWindow = useWindowStore((state) => state.removeWindow);
   const updatePane = useWindowStore((state) => state.updatePane);
+  const updatePaneRuntime = useWindowStore((state) => state.updatePaneRuntime);
   const updateWindow = useWindowStore((state) => state.updateWindow);
   const updateWindowRuntime = useWindowStore((state) => state.updateWindowRuntime);
   const updateClaudeModel = useWindowStore((state) => state.updateClaudeModel);
@@ -715,12 +716,22 @@ function AppContent() {
   // 订阅主进程推送的窗格状态变化事件
   useEffect(() => {
     const unsubscribe = subscribeToPaneStatusChange((windowId, paneId, status) => {
-      updatePane(windowId, paneId, { status });
+      updatePaneRuntime(windowId, paneId, (
+        isInactiveTerminalPaneStatus(status)
+          ? {
+              status,
+              pid: null,
+              sessionId: undefined,
+              lastOutput: undefined,
+              tmuxScopeId: undefined,
+            }
+          : { status }
+      ));
     });
     return () => {
       unsubscribe();
     };
-  }, [updatePane]);
+  }, [updatePaneRuntime]);
 
   useEffect(() => {
     if (!window.electronAPI?.onSSHHostKeyPrompt) {

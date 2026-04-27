@@ -130,8 +130,12 @@ export class StatusDetectorImpl implements IStatusDetector {
    * 检测进程是否存活（使用 signal 0 探测）
    */
   isProcessAlive(pid: number): boolean {
+    if (this.exitCodes.has(pid)) {
+      return false;
+    }
+
     if (this.virtualPids.has(pid)) {
-      return !this.exitCodes.has(pid);
+      return true;
     }
 
     try {

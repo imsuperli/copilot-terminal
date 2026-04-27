@@ -27,6 +27,9 @@ export class StatusPoller {
   constructor(statusDetector: IStatusDetector, mainWindow: BrowserWindow) {
     this.statusDetector = statusDetector;
     this.mainWindow = mainWindow;
+    this.statusDetector.subscribeStatusChange((pid, status) => {
+      this.handleTrackedPidStatusChange(pid, status);
+    });
   }
 
   /**
@@ -167,6 +170,10 @@ export class StatusPoller {
       tracked.lastCheckTime = now;
 
       this.statusDetector.detectStatus(tracked.pid).then((newStatus) => {
+        if (this.trackedPanes.get(paneId) !== tracked) {
+          return;
+        }
+
         if (newStatus !== tracked.lastStatus) {
           tracked.lastStatus = newStatus;
           this.notifyStatusChange(tracked.windowId, paneId, newStatus);
@@ -174,6 +181,10 @@ export class StatusPoller {
         // 重置失败计数
         tracked.failureCount = 0;
       }).catch((error) => {
+        if (this.trackedPanes.get(paneId) !== tracked) {
+          return;
+        }
+
         // 检测失败时记录错误，下次轮询重试
         if (process.env.NODE_ENV === 'development') {
           console.error(`[StatusPoller] Failed to detect status for pid ${tracked.pid}:`, error);
@@ -186,6 +197,22 @@ export class StatusPoller {
           this.notifyStatusChange(tracked.windowId, paneId, WindowStatus.Error);
         }
       });
+    }
+  }
+
+  private handleTrackedPidStatusChange(pid: number, status: WindowStatus): void {
+    for (const [paneId, tracked] of this.trackedPanes.entries()) {
+      if (tracked.pid !== pid) {
+        continue;
+      }
+
+      tracked.lastStatus = status;
+      tracked.failureCount = 0;
+      this.notifyStatusChange(tracked.windowId, paneId, status);
+
+      if (status === WindowStatus.Completed || status === WindowStatus.Error) {
+        this.trackedPanes.delete(paneId);
+      }
     }
   }
 

@@ -54,6 +54,14 @@ describe('StatusDetectorImpl', () => {
       // No onProcessExit call — simulates crash/SIGKILL
       expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.Error);
     });
+
+    it('does not revive an exited pid even if process.kill succeeds later', async () => {
+      detector.trackPid(mockPid, { virtual: true });
+      detector.onProcessExit(mockPid, 0);
+      vi.spyOn(process, 'kill').mockReturnValue(true as any);
+
+      expect(await detector.detectStatus(mockPid)).toBe(WindowStatus.Completed);
+    });
   });
 
   describe('detectStatus', () => {
