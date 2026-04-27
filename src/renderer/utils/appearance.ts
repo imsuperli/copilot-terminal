@@ -69,41 +69,41 @@ const APPEARANCE_PRESET_DEFINITIONS: Record<AppearanceSkinPresetId, AppearancePr
   },
   midnight: {
     app: {
-      background: '5 7 10',
-      foreground: '242 242 242',
-      card: '17 19 23',
-      secondary: '23 25 31',
-      muted: '33 36 43',
-      mutedForeground: '161 161 170',
-      accent: '41 43 52',
-      border: '53 56 67',
-      primary: '114 137 218',
-      primaryForeground: '5 7 10',
-      sidebar: '11 13 17',
-      titlebar: '27 30 37',
-      titlebarForeground: '236 236 236',
+      background: '8 6 15',
+      foreground: '243 239 255',
+      card: '19 16 31',
+      secondary: '28 23 44',
+      muted: '42 35 62',
+      mutedForeground: '176 166 214',
+      accent: '63 49 94',
+      border: '89 73 128',
+      primary: '176 126 255',
+      primaryForeground: '18 13 29',
+      sidebar: '12 10 22',
+      titlebar: '24 20 38',
+      titlebarForeground: '244 239 255',
     },
     terminal: {
-      background: '#05070a',
-      foreground: '#d7d7d7',
-      cursor: '#7289da',
-      cursorAccent: '#05070a',
-      selection: 'rgba(114, 137, 218, 0.28)',
-      black: '#05070a',
-      red: '#ff6b8b',
-      green: '#5ff0a6',
+      background: '#080611',
+      foreground: '#e7e0ff',
+      cursor: '#b07eff',
+      cursorAccent: '#080611',
+      selection: 'rgba(176, 126, 255, 0.28)',
+      black: '#080611',
+      red: '#ff6f91',
+      green: '#72e6a3',
       yellow: '#f4d88a',
-      blue: '#7289da',
-      magenta: '#d99cff',
-      cyan: '#65d6e8',
-      white: '#d7d7d7',
-      brightBlack: '#7a7f8c',
-      brightRed: '#ff8fa7',
-      brightGreen: '#86ffc4',
-      brightYellow: '#fff09b',
-      brightBlue: '#8fa3ff',
-      brightMagenta: '#eabaff',
-      brightCyan: '#8ceaf4',
+      blue: '#9f8bff',
+      magenta: '#d8a8ff',
+      cyan: '#7dd3fc',
+      white: '#e7e0ff',
+      brightBlack: '#8e87aa',
+      brightRed: '#ff92b0',
+      brightGreen: '#98ffc1',
+      brightYellow: '#fff0ad',
+      brightBlue: '#bbb0ff',
+      brightMagenta: '#e8c4ff',
+      brightCyan: '#a7e7ff',
       brightWhite: '#ffffff',
     },
   },
@@ -149,42 +149,42 @@ const APPEARANCE_PRESET_DEFINITIONS: Record<AppearanceSkinPresetId, AppearancePr
   },
   paper: {
     app: {
-      background: '235 229 216',
-      foreground: '37 33 28',
-      card: '245 240 230',
-      secondary: '232 224 211',
-      muted: '218 208 193',
-      mutedForeground: '94 83 70',
-      accent: '211 196 174',
-      border: '188 173 150',
-      primary: '133 91 43',
-      primaryForeground: '252 248 241',
-      sidebar: '226 217 202',
-      titlebar: '213 200 181',
-      titlebarForeground: '37 33 28',
+      background: '246 247 249',
+      foreground: '38 44 54',
+      card: '255 255 255',
+      secondary: '241 244 248',
+      muted: '230 235 241',
+      mutedForeground: '96 107 121',
+      accent: '220 229 241',
+      border: '203 211 223',
+      primary: '53 116 240',
+      primaryForeground: '255 255 255',
+      sidebar: '240 243 247',
+      titlebar: '233 237 244',
+      titlebarForeground: '34 41 52',
     },
     terminal: {
-      background: '#f3eadc',
-      foreground: '#2d2923',
-      cursor: '#5f3f1e',
-      cursorAccent: '#f3eadc',
-      selection: 'rgba(133, 91, 43, 0.24)',
-      black: '#2d2923',
-      red: '#b24535',
-      green: '#4f7f3a',
-      yellow: '#9c6f20',
-      blue: '#3f6f99',
-      magenta: '#8a5a8f',
-      cyan: '#3f7d75',
-      white: '#ded3c3',
-      brightBlack: '#776c5f',
-      brightRed: '#cf604f',
-      brightGreen: '#669a4d',
-      brightYellow: '#b9852b',
-      brightBlue: '#5a88b5',
-      brightMagenta: '#a871ad',
-      brightCyan: '#589a90',
-      brightWhite: '#fff8ec',
+      background: '#ffffff',
+      foreground: '#1f2329',
+      cursor: '#3574f0',
+      cursorAccent: '#ffffff',
+      selection: 'rgba(53, 116, 240, 0.18)',
+      black: '#1f2329',
+      red: '#c75450',
+      green: '#4e8f4d',
+      yellow: '#aa7a21',
+      blue: '#3574f0',
+      magenta: '#8b5cf6',
+      cyan: '#1f8f9d',
+      white: '#d5dbe3',
+      brightBlack: '#7b8695',
+      brightRed: '#df6b67',
+      brightGreen: '#6aa76a',
+      brightYellow: '#c3912f',
+      brightBlue: '#5a93ff',
+      brightMagenta: '#a57cff',
+      brightCyan: '#3aa7b7',
+      brightWhite: '#f5f7fb',
     },
   },
   custom: {
@@ -316,6 +316,9 @@ export function applyAppearanceToDocument(appearance: AppearanceSettings): void 
   const cardHoverBottomOpacity = clampOpacity(cardTopOpacity + 0.18, 0.36, 0.88);
   rootStyle.setProperty('--appearance-titlebar-background', resolveTitlebarBackground(appearance, titlebarOpacity));
   rootStyle.setProperty('--appearance-titlebar-backdrop-filter', resolveTitlebarBackdropFilter(appearance));
+  rootStyle.setProperty('--appearance-remote-tab-active-background', resolveRemoteTabActiveBackground(appearance));
+  rootStyle.setProperty('--appearance-remote-tab-hover-background', resolveRemoteTabHoverBackground(appearance));
+  rootStyle.setProperty('--appearance-remote-tab-separator-color', resolveRemoteTabSeparatorColor(appearance));
   rootStyle.setProperty('--appearance-pane-background', rgbaWithTerminalBackground(paneOpacity));
   rootStyle.setProperty('--appearance-pane-background-strong', rgbaWithTerminalBackground(paneStrongOpacity));
   rootStyle.setProperty('--appearance-pane-chrome-background', rgbaWithTerminalBackground(paneChromeOpacity));
@@ -424,6 +427,28 @@ function buildAppearanceBackdropLayers(appearance: AppearanceSettings): Appearan
     ];
   }
 
+  if (presetId === 'midnight') {
+    return [
+      ...(motionEnabled
+        ? [{
+            className: 'absolute inset-[-10%] will-change-transform',
+            style: {
+              background: 'radial-gradient(circle at 16% 18%, rgba(176, 126, 255, 0.28), transparent 30%), radial-gradient(circle at 82% 16%, rgba(124, 92, 255, 0.20), transparent 32%)',
+              opacity: 'var(--appearance-skin-motion-opacity, 0)',
+              animation: 'appearance-skin-drift var(--appearance-skin-motion-duration, 18s) ease-in-out infinite alternate',
+              mixBlendMode: 'screen' as const,
+            },
+          }]
+        : []),
+      {
+        className: 'absolute inset-0',
+        style: {
+          background: 'linear-gradient(180deg, rgba(10, 6, 22, 0.05) 0%, rgba(17, 10, 33, 0.40) 100%)',
+        },
+      },
+    ];
+  }
+
   if (presetId === 'paper') {
     return [
       {
@@ -514,6 +539,34 @@ function resolveTitlebarBackdropFilter(appearance: AppearanceSettings): string {
   return hasImageBackdrop(appearance)
     ? 'saturate(140%) blur(12px)'
     : 'none';
+}
+
+function resolveRemoteTabActiveBackground(appearance: AppearanceSettings): string {
+  if (hasImageBackdrop(appearance)) {
+    const opacity = appearance.readabilityMode === 'readability' ? 0.88 : appearance.readabilityMode === 'immersive' ? 0.66 : 0.76;
+    return `rgba(var(--titlebar), ${opacity.toFixed(3)})`;
+  }
+
+  return 'rgb(var(--card))';
+}
+
+function resolveRemoteTabHoverBackground(appearance: AppearanceSettings): string {
+  if (hasImageBackdrop(appearance)) {
+    const opacity = appearance.readabilityMode === 'readability' ? 0.74 : appearance.readabilityMode === 'immersive' ? 0.52 : 0.62;
+    return `rgba(var(--titlebar), ${opacity.toFixed(3)})`;
+  }
+
+  return 'rgb(var(--accent))';
+}
+
+function resolveRemoteTabSeparatorColor(appearance: AppearanceSettings): string {
+  if (hasImageBackdrop(appearance)) {
+    return 'rgba(var(--titlebar-foreground), 0.18)';
+  }
+
+  return appearance.skin.presetId === 'paper'
+    ? 'rgba(var(--border), 0.92)'
+    : 'rgba(var(--border), 0.72)';
 }
 
 function resolvePaneOpacity(appearance: AppearanceSettings): number {

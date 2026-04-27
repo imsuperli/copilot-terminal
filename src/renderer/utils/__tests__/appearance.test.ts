@@ -20,6 +20,42 @@ describe('renderer appearance utilities', () => {
     expect(style.getPropertyValue('--terminal-background-effective')).toContain('rgba(var(--terminal-background-rgb');
     expect(style.getPropertyValue('--appearance-skin-motion-duration')).toBe('0s');
     expect(style.getPropertyValue('--appearance-skin-motion-opacity')).toBe('0');
+    expect(style.getPropertyValue('--appearance-remote-tab-active-background')).toBe('rgb(var(--card))');
+    expect(style.getPropertyValue('--appearance-remote-tab-hover-background')).toBe('rgb(var(--accent))');
+    expect(style.getPropertyValue('--appearance-remote-tab-separator-color')).toBe('rgba(var(--border), 0.72)');
+  });
+
+  it('applies the violet midnight palette tokens', () => {
+    applyAppearanceToDocument({
+      ...DEFAULT_APPEARANCE_SETTINGS,
+      skin: {
+        ...DEFAULT_APPEARANCE_SETTINGS.skin,
+        presetId: 'midnight',
+      },
+    });
+
+    const style = document.documentElement.style;
+    expect(style.getPropertyValue('--background')).toBe('8 6 15');
+    expect(style.getPropertyValue('--primary')).toBe('176 126 255');
+    expect(style.getPropertyValue('--titlebar')).toBe('24 20 38');
+    expect(style.getPropertyValue('--terminal-background')).toBe('#080611');
+    expect(style.getPropertyValue('--terminal-cursor')).toBe('#b07eff');
+  });
+
+  it('applies a crisp white palette for the paper preset', () => {
+    applyAppearanceToDocument({
+      ...DEFAULT_APPEARANCE_SETTINGS,
+      skin: {
+        ...DEFAULT_APPEARANCE_SETTINGS.skin,
+        presetId: 'paper',
+      },
+    });
+
+    const style = document.documentElement.style;
+    expect(style.getPropertyValue('--background')).toBe('246 247 249');
+    expect(style.getPropertyValue('--card')).toBe('255 255 255');
+    expect(style.getPropertyValue('--titlebar')).toBe('233 237 244');
+    expect(style.getPropertyValue('--terminal-background')).toBe('#ffffff');
   });
 
   it('builds one global skin background style', () => {

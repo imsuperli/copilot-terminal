@@ -190,7 +190,10 @@ describe('WindowCard', () => {
     const user = userEvent.setup();
     render(<WindowCard window={createWindow()} onClick={onClick} onDestroySession={onDestroySession} />);
 
-    await user.click(screen.getByRole('button', { name: '销毁' }));
+    const stopButton = screen.getByRole('button', { name: '销毁' });
+    expect(stopButton.querySelector('svg')).toHaveClass('text-red-500');
+
+    await user.click(stopButton);
 
     expect(onDestroySession).toHaveBeenCalledTimes(1);
     expect(onClick).not.toHaveBeenCalled();

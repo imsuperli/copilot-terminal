@@ -126,7 +126,7 @@ describe('SettingsPanel', () => {
 
     await user.click(screen.getByRole('tab', { name: '外观' }));
 
-    expect(await screen.findByText('暖纸质感')).toBeInTheDocument();
+    expect(await screen.findByText('IDEA 白昼')).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: '可读性模式' })).toHaveTextContent('高可读');
     expect(screen.getByRole('combobox', { name: '终端透明度' })).toHaveTextContent('94%');
     expect(screen.getByRole('combobox', { name: '背景遮罩' })).toHaveTextContent('62%');
@@ -261,7 +261,7 @@ describe('SettingsPanel', () => {
             presetId: 'midnight',
             kind: 'image',
             imagePath: 'C:\\Wallpapers\\nebula.png',
-            gradient: 'radial-gradient(circle at 15% 12%, rgba(57, 114, 255, 0.30), transparent 28%), radial-gradient(circle at 82% 18%, rgba(245, 158, 11, 0.18), transparent 24%), linear-gradient(135deg, #05070a 0%, #111317 48%, #060607 100%)',
+            gradient: 'radial-gradient(circle at 16% 14%, rgba(182, 106, 255, 0.32), transparent 30%), radial-gradient(circle at 82% 20%, rgba(104, 110, 255, 0.20), transparent 28%), linear-gradient(140deg, #090611 0%, #171126 50%, #0c0716 100%)',
             dim: 0.16,
             blur: 0,
             motion: 'none',
@@ -304,7 +304,7 @@ describe('SettingsPanel', () => {
             presetId: 'paper',
             kind: 'image',
             imagePath: 'C:\\Wallpapers\\paper.png',
-            gradient: 'radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.42), transparent 24%), radial-gradient(circle at 84% 20%, rgba(184, 137, 71, 0.14), transparent 26%), linear-gradient(135deg, #efe4d1 0%, #dac9ae 48%, #f6eee2 100%)',
+            gradient: 'radial-gradient(circle at 14% 16%, rgba(255, 255, 255, 0.90), transparent 24%), radial-gradient(circle at 82% 18%, rgba(83, 149, 255, 0.14), transparent 28%), linear-gradient(135deg, #f8fafc 0%, #eef3fb 52%, #ffffff 100%)',
             dim: 0.16,
             blur: 0,
             motion: 'none',
@@ -328,7 +328,7 @@ describe('SettingsPanel', () => {
           presetId: 'paper',
           kind: 'gradient',
           imagePath: 'C:\\Wallpapers\\paper.png',
-          gradient: expect.stringContaining('#efe4d1'),
+          gradient: expect.stringContaining('#f8fafc'),
         }),
       }),
     });

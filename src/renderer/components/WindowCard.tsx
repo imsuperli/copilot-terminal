@@ -427,7 +427,7 @@ export const WindowCard = React.memo<WindowCardProps>(({
                       className={`flex items-center gap-1.5 pl-2 pr-3 py-1.5 text-xs text-[rgb(var(--error))] ${cardButtonClassName} focus:outline-none focus:ring-2 focus:ring-[rgb(var(--error))] whitespace-nowrap`}
                       aria-label={t('windowCard.stop')}
                     >
-                      <Square size={14} fill="currentColor" />
+                      <Square size={14} fill="currentColor" className="text-red-500" />
                       <span>{t('windowCard.stop')}</span>
                     </button>
                   </Tooltip.Trigger>
